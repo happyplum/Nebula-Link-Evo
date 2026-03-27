@@ -1,0 +1,21 @@
+id: extract-data
+name: Extract Data from DOM
+description: Extract structured data from web page elements using selectors
+version: 1.0.0
+steps:
+  - action: navigate
+    params:
+      url: "{{url}}"
+      waitUntil: networkidle
+    description: Navigate to target URL
+  - action: wait
+    params:
+      duration: 1000
+    description: Wait for page to stabilize
+  - action: type
+    params:
+      selector: "{{dataSelector}}"
+      text: "{{outputPath}}"
+      options:
+        clear: true
+    description: Type output path for data extraction
