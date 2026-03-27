@@ -1,0 +1,39 @@
+{
+  "name": "playwright-server",
+  "version": "1.0.0",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -b",
+    "start": "node dist/server.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@fastify/autoload": "catalog:",
+    "@fastify/cors": "catalog:",
+    "@fastify/swagger": "catalog:",
+    "@fastify/swagger-ui": "catalog:",
+    "@fastify/type-provider-typebox": "catalog:",
+    "@fastify/websocket": "catalog:",
+    "@sinclair/typebox": "catalog:",
+    "axios": "catalog:",
+    "dotenv": "catalog:",
+    "fastify": "catalog:",
+    "fastify-plugin": "catalog:",
+    "playwright": "^1.41.0",
+    "ws": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/ws": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
