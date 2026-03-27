@@ -1,0 +1,48 @@
+{
+  "name": "@nebula-link-evo/shared",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Shared types and utilities for Nebula-Link Evo",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./types": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/types/index.js"
+    },
+    "./types/sse-events": {
+      "types": "./dist/types/sse-events.d.ts",
+      "import": "./dist/types/sse-events.js"
+    },
+    "./types/vision-marker": {
+      "types": "./dist/types/vision-marker.d.ts",
+      "import": "./dist/types/vision-marker.js"
+    },
+    "./types/action": {
+      "types": "./dist/types/action.d.ts",
+      "import": "./dist/types/action.js"
+    },
+    "./utils": {
+      "types": "./dist/utils/index.d.ts",
+      "import": "./dist/utils/index.js"
+    },
+    "./test-utils": {
+      "types": "./dist/test-utils/index.d.ts",
+      "import": "./dist/test-utils/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsc -b -w",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "typescript": "catalog:"
+  }
+}
