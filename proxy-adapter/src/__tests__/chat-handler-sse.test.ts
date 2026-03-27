@@ -1,0 +1,217 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ChatHandler } from '../conversation/chat-handler.js';
+import { ConversationManager } from '../conversation/manager.js';
+import { DebugWebSocketManager } from '../websocket-manager.js';
+import type { DecisionClient } from '../clients/decision/base.js';
+import type { ResolvedConfig } from '../config/schema.js';
+import { MCPSDKClient } from '../clients/mcp/sdk-client.js';
+import { SessionEventsDAO } from '../conversation/session-events-dao.js';
+import { SessionEventHub } from '../services/session-event-hub.js';
+
+const mockConfig: ResolvedConfig = {
+  _resolved: {
+    providers: {
+      kimi: {
+        apiKey: 'test-key',
+        baseUrl: 'https://api.moonshot.cn/v1',
+        models: {
+          'moonshot-v1-vision-preview': {
+            type: 'vision',
+            capabilities: ['vision', 'decision'],
+            temperature: 0.4,
+            maxTokens: 2000,
+          },
+        },
+      },
+    },
+  },
+  version: '1.0',
+  providers: {},
+  mcp: { enabled: false, servers: {} },
+  defaults: {
+    vision: { provider: 'kimi', model: 'moonshot-v1-vision-preview' },
+    decision: { provider: 'kimi', model: 'moonshot-v1-vision-preview' },
+  },
+} as unknown as ResolvedConfig;
+
+describe('ChatHandler SSE integration', () => {
+  let conversationManager: ConversationManager;
+  let wsManager: DebugWebSocketManager;
+  let mcpClient: MCPSDKClient;
+  let sessionId: string;
+
+  beforeEach(() => {
+    sessionId = `test-session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    conversationManager = new ConversationManager(':memory:');
+    conversationManager.initialize();
+    conversationManager.createSession({
+      id: sessionId,
+      title: 'SSE test session',
+      provider: 'kimi',
+      model: 'moonshot-v1-vision-preview',
+    });
+
+    wsManager = DebugWebSocketManager.getInstance();
+    wsManager.setTaskCommandHandler(() => {});
+
+    mcpClient = new MCPSDKClient(mockConfig);
+    vi.spyOn(mcpClient, 'initialize').mockResolvedValue(undefined);
+    vi.spyOn(mcpClient, 'isEnabled').mockReturnValue(true);
+    vi.spyOn(mcpClient, 'getAvailableTools').mockReturnValue([]);
+    vi.spyOn(mcpClient, 'callTool').mockResolvedValue({ ok: true, source: 'mcp' });
+  });
+
+  it('emits required SSE event types with write-first behavior', async () => {
+    const callLog: string[] = [];
+    const appendEvent = vi
+      .fn()
+      .mockImplementation(async (_sessionId: string, type: string) => {
+        callLog.push(`append:${type}`);
+        return 1;
+      });
+    const publish = vi.fn().mockImplementation((_sessionId: string, event: { type: string }) => {
+      callLog.push(`publish:${event.type}`);
+    });
+
+    const sessionEventsDAO = {
+      appendEvent,
+    } as unknown as SessionEventsDAO;
+
+    const sessionEventHub = {
+      publish,
+    } as unknown as SessionEventHub;
+
+    let streamRound = 0;
+    const mockDecisionClient: DecisionClient = {
+      provider: 'kimi',
+      model: 'moonshot-v1-vision-preview',
+      decide: vi.fn(),
+      decideStream: vi.fn().mockImplementation((_context, callbacks) => {
+        streamRound += 1;
+
+        if (streamRound === 1) {
+          callbacks.onThinking('Need tool first');
+          callbacks.onToken('Working');
+          callbacks.onToolCall({
+            id: 'call_1',
+            type: 'function',
+            function: {
+              name: 'browser-control.browser_snapshot',
+              arguments: '{}',
+            },
+          });
+        } else {
+          callbacks.onToken('Done');
+        }
+
+        callbacks.onDone();
+      }),
+    } as unknown as DecisionClient;
+
+    const chatHandler = new ChatHandler(
+      conversationManager,
+      mockConfig,
+      wsManager,
+      mcpClient,
+      sessionEventsDAO,
+      sessionEventHub
+    );
+    (chatHandler as any).getDecisionClient = () => mockDecisionClient;
+
+    await chatHandler.handleChatSend('test-client', {
+      sessionId,
+      message: 'Run with tools',
+    });
+
+    const appendedTypes = appendEvent.mock.calls.map((call) => call[1] as string);
+    expect(appendedTypes).toContain('assistant.thinking');
+    expect(appendedTypes).toContain('assistant.delta');
+    expect(appendedTypes).toContain('assistant.tool_call');
+    expect(appendedTypes).toContain('assistant.tool_result');
+    expect(appendedTypes).toContain('assistant.completed');
+    expect(appendedTypes).not.toContain('run.error');
+
+    const appendCount = new Map<string, number>();
+    const publishCount = new Map<string, number>();
+
+    for (const entry of callLog) {
+      const [op, type] = entry.split(':');
+      if (op === 'append') {
+        appendCount.set(type, (appendCount.get(type) ?? 0) + 1);
+        continue;
+      }
+
+      publishCount.set(type, (publishCount.get(type) ?? 0) + 1);
+      expect((publishCount.get(type) ?? 0)).toBeLessThanOrEqual(appendCount.get(type) ?? 0);
+    }
+  });
+
+  it('emits events in expected execution order', async () => {
+    const appendEvent = vi.fn().mockResolvedValue(1);
+    const publish = vi.fn();
+
+    const sessionEventsDAO = {
+      appendEvent,
+    } as unknown as SessionEventsDAO;
+
+    const sessionEventHub = {
+      publish,
+    } as unknown as SessionEventHub;
+
+    let streamRound = 0;
+    const mockDecisionClient: DecisionClient = {
+      provider: 'kimi',
+      model: 'moonshot-v1-vision-preview',
+      decide: vi.fn(),
+      decideStream: vi.fn().mockImplementation((_context, callbacks) => {
+        streamRound += 1;
+        callbacks.onThinking('step thinking');
+        callbacks.onToken(`chunk-${streamRound}`);
+
+        if (streamRound === 1) {
+          callbacks.onToolCall({
+            id: 'call_2',
+            type: 'function',
+            function: {
+              name: 'browser-control.browser_snapshot',
+              arguments: '{}',
+            },
+          });
+        }
+
+        callbacks.onDone();
+      }),
+    } as unknown as DecisionClient;
+
+    const chatHandler = new ChatHandler(
+      conversationManager,
+      mockConfig,
+      wsManager,
+      mcpClient,
+      sessionEventsDAO,
+      sessionEventHub
+    );
+    (chatHandler as any).getDecisionClient = () => mockDecisionClient;
+
+    await chatHandler.handleChatSend('test-client', {
+      sessionId,
+      message: 'verify order',
+    });
+
+    const types = appendEvent.mock.calls.map((call) => call[1] as string);
+
+    const startedIndex = types.indexOf('assistant.started');
+    const thinkingIndex = types.indexOf('assistant.thinking');
+    const deltaIndex = types.indexOf('assistant.delta');
+    const toolCallIndex = types.indexOf('assistant.tool_call');
+    const toolResultIndex = types.indexOf('assistant.tool_result');
+    const completedIndex = types.lastIndexOf('assistant.completed');
+
+    expect(startedIndex).toBeGreaterThanOrEqual(0);
+    expect(thinkingIndex).toBeGreaterThan(startedIndex);
+    expect(deltaIndex).toBeGreaterThan(thinkingIndex);
+    expect(toolCallIndex).toBeGreaterThan(deltaIndex);
+    expect(toolResultIndex).toBeGreaterThan(toolCallIndex);
+    expect(completedIndex).toBeGreaterThan(toolResultIndex);
+  });
+});

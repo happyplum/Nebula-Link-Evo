@@ -1,0 +1,10 @@
+export const TIMEOUTS = {
+  INSTANT: 100,
+  VERY_SHORT: 200,
+  SHORT: 300,
+  MEDIUM: 500,
+  LONG: 1000,
+  XLONG: 2000,
+  XXLONG: 3000,
+  EXTRA_LONG: 10000,
+} as const;

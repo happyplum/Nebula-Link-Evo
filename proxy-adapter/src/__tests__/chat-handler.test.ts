@@ -1,0 +1,349 @@
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { ChatHandler } from '../conversation/chat-handler.js';
+import { ConversationManager } from '../conversation/manager.js';
+import { DebugWebSocketManager } from '../websocket-manager.js';
+import type { DecisionClient } from '../clients/decision/base.js';
+import type { ResolvedConfig } from '../config/schema.js';
+import { MCPSDKClient } from '../clients/mcp/sdk-client.js';
+import { ChatSessionController } from '../services/chat-session-controller.js';
+
+function createDeferredPromise<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T | PromiseLike<T>) => void;
+} {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((innerResolve) => {
+    resolve = innerResolve;
+  });
+
+  return { promise, resolve };
+}
+
+const mockConfig: ResolvedConfig = {
+  _resolved: {
+    providers: {
+      kimi: {
+        apiKey: 'test-key',
+        baseUrl: 'https://api.moonshot.cn/v1',
+        models: {
+          'moonshot-v1-vision-preview': {
+            type: 'vision',
+            capabilities: ['vision', 'decision'],
+            temperature: 0.4,
+            maxTokens: 2000,
+          },
+        },
+      },
+    },
+  },
+  version: '1.0',
+  providers: {},
+  mcp: { enabled: false, servers: {} },
+  defaults: {
+    vision: { provider: 'kimi', model: 'moonshot-v1-vision-preview' },
+    decision: { provider: 'kimi', model: 'moonshot-v1-vision-preview' },
+  },
+} as unknown as ResolvedConfig;
+
+describe('ChatHandler', () => {
+  let chatHandler: ChatHandler;
+  let conversationManager: ConversationManager;
+  let wsManager: DebugWebSocketManager;
+  let mockDecisionClient: DecisionClient;
+  let mcpClient: MCPSDKClient;
+
+  const mockClientId = 'test-client-123';
+  let mockSessionId: string;
+
+  beforeEach(() => {
+    mockSessionId = `test-session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+    conversationManager = new ConversationManager(':memory:');
+    conversationManager.initialize();
+
+    conversationManager.createSession({
+      id: mockSessionId,
+      title: 'Test Chat Session',
+      provider: 'kimi',
+      model: 'moonshot-v1-vision-preview',
+      systemPrompt: 'You are a helpful assistant.',
+    });
+
+    wsManager = DebugWebSocketManager.getInstance();
+    wsManager.setTaskCommandHandler(() => {});
+
+    mcpClient = new MCPSDKClient(mockConfig);
+    vi.spyOn(mcpClient, 'initialize').mockResolvedValue(undefined);
+    vi.spyOn(mcpClient, 'isEnabled').mockReturnValue(true);
+    vi.spyOn(mcpClient, 'getAvailableTools').mockReturnValue([]);
+    vi.spyOn(mcpClient, 'callTool').mockResolvedValue({ result: 'success' });
+
+    mockDecisionClient = {
+      provider: 'kimi',
+      model: 'moonshot-v1-vision-preview',
+      decide: vi.fn(),
+      decideStream: vi.fn().mockImplementation((context, callbacks) => {
+        setTimeout(() => {
+          callbacks.onToken('Hello');
+        }, 10);
+        setTimeout(() => {
+          callbacks.onToken(' world');
+        }, 20);
+        setTimeout(() => {
+          callbacks.onUsage({ total_tokens: 5, prompt_tokens: 2, completion_tokens: 3 });
+          callbacks.onDone();
+        }, 30);
+      }),
+    } as unknown as DecisionClient;
+
+    chatHandler = new ChatHandler(conversationManager, mockConfig, wsManager, mcpClient);
+    // Override getDecisionClient to return mock
+    (chatHandler as any).getDecisionClient = () => mockDecisionClient;
+  });
+
+  describe('setMCPClient', () => {
+    it('should set MCP client', () => {
+      const newMCPClient = new MCPSDKClient(mockConfig);
+      vi.spyOn(newMCPClient, 'initialize').mockResolvedValue(undefined);
+      vi.spyOn(newMCPClient, 'isEnabled').mockReturnValue(true);
+      vi.spyOn(newMCPClient, 'getAvailableTools').mockReturnValue([
+        {
+          name: 'browser-control.browser_click',
+          description: 'Click on element',
+          inputSchema: { type: 'object' },
+        },
+      ]);
+
+      chatHandler.setMCPClient(newMCPClient);
+
+      expect((chatHandler as any).mcpClient).toBe(newMCPClient);
+    });
+
+    it('should replace existing MCP client', () => {
+      const originalMCP = (chatHandler as any).mcpClient;
+
+      const newMCPClient = new MCPSDKClient(mockConfig);
+      vi.spyOn(newMCPClient, 'initialize').mockResolvedValue(undefined);
+      vi.spyOn(newMCPClient, 'isEnabled').mockReturnValue(false);
+      vi.spyOn(newMCPClient, 'getAvailableTools').mockReturnValue([]);
+
+      chatHandler.setMCPClient(newMCPClient);
+
+      expect((chatHandler as any).mcpClient).toBe(newMCPClient);
+      expect((chatHandler as any).mcpClient).not.toBe(originalMCP);
+    });
+  });
+
+  describe('constructor', () => {
+    it('should initialize with required dependencies', () => {
+      expect(chatHandler).toBeInstanceOf(ChatHandler);
+      expect((chatHandler as any).conversationManager).toBe(conversationManager);
+      expect((chatHandler as any).config).toBe(mockConfig);
+      expect((chatHandler as any).wsManager).toBe(wsManager);
+    });
+
+    it('should initialize with MCP client when provided', () => {
+      const testMCPClient = new MCPSDKClient(mockConfig);
+      vi.spyOn(testMCPClient, 'initialize').mockResolvedValue(undefined);
+      vi.spyOn(testMCPClient, 'isEnabled').mockReturnValue(true);
+      vi.spyOn(testMCPClient, 'getAvailableTools').mockReturnValue([]);
+
+      const testChatHandler = new ChatHandler(
+        conversationManager,
+        mockConfig,
+        wsManager,
+        testMCPClient
+      );
+
+      expect((testChatHandler as any).mcpClient).toBe(testMCPClient);
+    });
+
+    it('should initialize without MCP client when not provided', () => {
+      const testChatHandler = new ChatHandler(
+        conversationManager,
+        mockConfig,
+        wsManager
+      );
+
+      expect((testChatHandler as any).mcpClient).toBeNull();
+    });
+
+    it('should initialize tool loop counter to zero', () => {
+      expect((chatHandler as any).toolLoopCount).toBe(0);
+      expect((chatHandler as any).maxToolLoops).toBe(10);
+    });
+  });
+
+  describe('handleChatSend', () => {
+    it('should save user message to conversation', async () => {
+      await chatHandler.handleChatSend(mockClientId, {
+        sessionId: mockSessionId,
+        message: 'Hello, AI assistant!',
+      });
+
+      const messages = conversationManager.getMessages(mockSessionId);
+      // System message + user message + AI response
+      expect(messages.length).toBeGreaterThanOrEqual(2);
+      expect(messages[1].role).toBe('user');
+      expect(messages[1].content).toBe('Hello, AI assistant!');
+    });
+
+
+
+
+
+    it('should throw error for non-existent session', async () => {
+      await expect(
+        chatHandler.handleChatSend(mockClientId, {
+          sessionId: 'non-existent-session',
+          message: 'Test',
+        })
+      ).rejects.toThrow();
+    });
+  });
+
+  describe('abort behavior', () => {
+    it('should stop execution when aborted', async () => {
+      const sessionController = ChatSessionController.getInstance();
+      
+      // Start execution
+      const promise = chatHandler.handleChatSend(mockClientId, {
+        sessionId: mockSessionId,
+        message: 'test'
+      });
+      
+      // Abort immediately
+      await sessionController.interrupt(mockSessionId);
+      
+      // Should complete without error but stop execution
+      await expect(promise).resolves.not.toThrow();
+    });
+  });
+
+  describe('resumeSession', () => {
+    it('should create the abort controller before awaiting persisted state updates', async () => {
+      const updateStatus = createDeferredPromise<void>();
+      const executeSpy = vi
+        .spyOn(
+          chatHandler as unknown as {
+            executeAIResponse: (...args: unknown[]) => Promise<void>;
+          },
+          'executeAIResponse'
+        )
+        .mockResolvedValue(undefined);
+      const getSessionStateSpy = vi.spyOn(conversationManager, 'getSessionState').mockResolvedValue({
+        sessionId: mockSessionId,
+        status: 'blocked',
+        version: 1,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        lastActiveAt: new Date().toISOString(),
+        agentState: {
+          schema_version: 1,
+          blockReason: 'api_error',
+          waitingFor: 'api_retry',
+        },
+      });
+      const updateSessionStatusSpy = vi
+        .spyOn(conversationManager, 'updateSessionStatus')
+        .mockReturnValue(updateStatus.promise);
+
+      const abortController = new AbortController();
+      const resumeSpy = vi.fn();
+      const createAbortControllerSpy = vi.fn().mockReturnValue(abortController);
+      const cleanupSpy = vi.fn();
+      const mockSessionController = {
+        resume: resumeSpy,
+        createAbortController: createAbortControllerSpy,
+        cleanup: cleanupSpy,
+      } as unknown as ChatSessionController;
+      vi.spyOn(ChatSessionController, 'getInstance').mockReturnValue(mockSessionController);
+
+      const resumePromise = chatHandler.resumeSession(mockClientId, mockSessionId);
+      await Promise.resolve();
+
+      expect(getSessionStateSpy).toHaveBeenCalledWith(mockSessionId);
+      expect(resumeSpy).toHaveBeenCalledWith(mockSessionId, 'blocked');
+      expect(createAbortControllerSpy).toHaveBeenCalledWith(mockSessionId, {
+        activateSession: false,
+      });
+      expect(updateSessionStatusSpy).toHaveBeenCalledWith(mockSessionId, 'running', {
+        schema_version: 1,
+      });
+      expect(executeSpy).not.toHaveBeenCalled();
+
+      updateStatus.resolve(undefined);
+      await resumePromise;
+
+      expect(executeSpy).toHaveBeenCalledWith(
+        mockClientId,
+        mockSessionId,
+        expect.objectContaining({ id: mockSessionId }),
+        0,
+        undefined,
+        abortController.signal
+      );
+      expect(cleanupSpy).toHaveBeenCalledWith(mockSessionId);
+    });
+  });
+
+
+  describe('sendSessionUpdate', () => {
+    it('should broadcast chat_session_update message', () => {
+      const broadcastSpy = vi.spyOn(wsManager, 'broadcast');
+
+      chatHandler.sendSessionUpdate();
+
+      expect(broadcastSpy).toHaveBeenCalledWith({
+        type: 'chat_session_update',
+        sessions: expect.any(Array),
+        timestamp: expect.any(String),
+      });
+    });
+
+    it('should include all sessions in update', () => {
+      const broadcastSpy = vi.spyOn(wsManager, 'broadcast');
+
+      chatHandler.sendSessionUpdate();
+
+      const call = broadcastSpy.mock.calls[broadcastSpy.mock.calls.length - 1];
+      const sessions = call[0]?.sessions as Array<{ id: string }>;
+      expect(sessions.length).toBeGreaterThan(0);
+      const testSession = sessions.find((s) => s.id === mockSessionId);
+      expect(testSession).toBeDefined();
+      expect(testSession?.id).toBe(mockSessionId);
+    });
+  });
+
+  describe('WebSocket message handling integration', () => {
+    it('should handle chat_send message from WebSocket client', async () => {
+      const handleMessageSpy = vi.spyOn(chatHandler, 'handleMessage').mockResolvedValue();
+
+      wsManager.setChatHandler(chatHandler);
+
+      const mockWs = { send: vi.fn() } as any;
+      wsManager['clients'].set(mockClientId, mockWs);
+
+      wsManager['handleClientMessage'](mockClientId, {
+        type: 'chat_send',
+        sessionId: mockSessionId,
+        message: 'Test from WebSocket',
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(handleMessageSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'chat_send',
+          sessionId: mockSessionId,
+          message: 'Test from WebSocket',
+        }),
+        mockWs
+      );
+
+      wsManager['clients'].delete(mockClientId);
+    });
+  });
+
+
+});

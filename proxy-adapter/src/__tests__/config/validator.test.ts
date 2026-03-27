@@ -1,0 +1,1793 @@
+import { describe, it, expect } from 'vitest';
+import {
+  validateConfig,
+  validateProviderModel,
+  canProviderDo,
+} from '../../config/validator.js';
+import type { ResolvedConfig } from '../../config/schema.js';
+
+describe('validateConfig', () => {
+  describe('valid configuration', () => {
+    it('should pass with valid separation mode config', () => {
+      const config: ResolvedConfig = {
+        version: '1.0.0',
+        providers: {
+          'vision-provider': {
+            name: 'vision-provider',
+            enabled: true,
+            apiKey: 'test-key',
+            baseUrl: 'https://api.vision.com',
+            mcp: [],
+            models: {
+              'vision-model': {
+                type: 'vision',
+                capabilities: ['vision'],
+              },
+            },
+          },
+          'decision-provider': {
+            name: 'decision-provider',
+            enabled: true,
+            apiKey: 'test-key',
+            baseUrl: 'https://api.decision.com',
+            mcp: [],
+            models: {
+              'decision-model': {
+                type: 'decision',
+                capabilities: ['decision'],
+              },
+            },
+          },
+        },
+        mcp: {
+          enabled: false,
+          servers: {},
+        },
+        defaults: {
+          mode: 'separation',
+          vision: { provider: 'vision-provider', model: 'vision-model' },
+          decision: { provider: 'decision-provider', model: 'decision-model' },
+        },
+        settings: {
+          timeout: 30000,
+          maxRetries: 3,
+          temperature: 0.7,
+          maxTokens: 2000,
+          maxSteps: 10,
+        },
+        _resolved: {
+          providers: {
+            'vision-provider': {
+              name: 'vision-provider',
+              enabled: true,
+              apiKey: 'resolved-key',
+              baseUrl: 'https://api.vision.com',
+              mcp: [],
+              models: {
+                'vision-model': {
+                  type: 'vision',
+                  capabilities: ['vision'],
+                },
+              },
+            },
+            'decision-provider': {
+              name: 'decision-provider',
+              enabled: true,
+              apiKey: 'resolved-key',
+              baseUrl: 'https://api.decision.com',
+              mcp: [],
+              models: {
+                'decision-model': {
+                  type: 'decision',
+                  capabilities: ['decision'],
+                },
+              },
+            },
+          },
+          settings: {
+            timeout: 30000,
+            maxRetries: 3,
+            temperature: 0.7,
+            maxTokens: 2000,
+            maxSteps: 10,
+          },
+        },
+      };
+
+      const result = validateConfig(config);
+      expect(result.valid).toBe(true);
+      expect(result.errors).toEqual([]);
+      expect(result.warnings).toEqual([]);
+    });
+
+    it('should pass with valid unified mode config', () => {
+      const config: ResolvedConfig = {
+        version: '1.0.0',
+        providers: {
+          'unified-provider': {
+            name: 'unified-provider',
+            enabled: true,
+            apiKey: 'test-key',
+            baseUrl: 'https://api.unified.com',
+            mcp: [],
+            models: {
+              'unified-model': {
+                type: 'multimodal',
+                capabilities: ['vision', 'decision'],
+              },
+            },
+          },
+        },
+        mcp: {
+          enabled: false,
+          servers: {},
+        },
+        defaults: {
+          mode: 'unified',
+          vision: { provider: 'unified-provider', model: 'unified-model' },
+          decision: { provider: 'unified-provider', model: 'unified-model' },
+        },
+        settings: {
+          timeout: 30000,
+          maxRetries: 3,
+          temperature: 0.7,
+          maxTokens: 2000,
+          maxSteps: 10,
+        },
+        _resolved: {
+          providers: {
+            'unified-provider': {
+              name: 'unified-provider',
+              enabled: true,
+              apiKey: 'resolved-key',
+              baseUrl: 'https://api.unified.com',
+              mcp: [],
+              models: {
+                'unified-model': {
+                  type: 'multimodal',
+                  capabilities: ['vision', 'decision'],
+                },
+              },
+            },
+          },
+          settings: {
+            timeout: 30000,
+            maxRetries: 3,
+            temperature: 0.7,
+            maxTokens: 2000,
+            maxSteps: 10,
+          },
+        },
+      };
+
+      const result = validateConfig(config);
+      expect(result.valid).toBe(true);
+      expect(result.errors).toEqual([]);
+      expect(result.warnings).toEqual([]);
+    });
+  });
+
+  describe('provider validation', () => {
+    it('should error when provider missing apiKey', () => {
+      const config: ResolvedConfig = {
+        version: '1.0.0',
+        providers: {
+          'test-provider': {
+            name: 'test-provider',
+            enabled: true,
+            apiKey: '',
+            baseUrl: 'https://api.test.com',
+            mcp: [],
+            models: {
+              'test-model': {
+                type: 'vision',
+                capabilities: ['vision'],
+              },
+            },
+          },
+        },
+        mcp: { enabled: false, servers: {} },
+        defaults: {
+          mode: 'separation',
+          vision: { provider: 'test-provider', model: 'test-model' },
+          decision: { provider: 'test-provider', model: 'test-model' },
+        },
+        settings: {
+          timeout: 30000,
+          maxRetries: 3,
+          temperature: 0.7,
+          maxTokens: 2000,
+          maxSteps: 10,
+        },
+        _resolved: {
+          providers: {},
+          settings: {
+            timeout: 30000,
+            maxRetries: 3,
+            temperature: 0.7,
+            maxTokens: 2000,
+            maxSteps: 10,
+          },
+        },
+      };
+
+      const result = validateConfig(config);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContain('Provider test-provider: missing apiKey');
+    });
+
+    it('should error when provider missing baseUrl', () => {
+      const config: ResolvedConfig = {
+        version: '1.0.0',
+        providers: {
+          'test-provider': {
+            name: 'test-provider',
+            enabled: true,
+            apiKey: 'test-key',
+            baseUrl: '',
+            mcp: [],
+            models: {
+              'test-model': {
+                type: 'vision',
+                capabilities: ['vision'],
+              },
+            },
+          },
+        },
+        mcp: { enabled: false, servers: {} },
+        defaults: {
+          mode: 'separation',
+          vision: { provider: 'test-provider', model: 'test-model' },
+          decision: { provider: 'test-provider', model: 'test-model' },
+        },
+        settings: {
+          timeout: 30000,
+          maxRetries: 3,
+          temperature: 0.7,
+          maxTokens: 2000,
+          maxSteps: 10,
+        },
+        _resolved: {
+          providers: {},
+          settings: {
+            timeout: 30000,
+            maxRetries: 3,
+            temperature: 0.7,
+            maxTokens: 2000,
+            maxSteps: 10,
+          },
+        },
+      };
+
+      const result = validateConfig(config);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContain('Provider test-provider: missing baseUrl');
+    });
+
+    it('should error when provider has no models', () => {
+      const config: ResolvedConfig = {
+        version: '1.0.0',
+        providers: {
+          'test-provider': {
+            name: 'test-provider',
+            enabled: true,
+            apiKey: 'test-key',
+            baseUrl: 'https://api.test.com',
+            mcp: [],
+            models: {},
+          },
+        },
+        mcp: { enabled: false, servers: {} },
+        defaults: {
+          mode: 'separation',
+          vision: { provider: 'test-provider', model: 'test-model' },
+          decision: { provider: 'test-provider', model: 'test-model' },
+        },
+        settings: {
+          timeout: 30000,
+          maxRetries: 3,
+          temperature: 0.7,
+          maxTokens: 2000,
+          maxSteps: 10,
+        },
+        _resolved: {
+          providers: {},
+          settings: {
+            timeout: 30000,
+            maxRetries: 3,
+            temperature: 0.7,
+            maxTokens: 2000,
+            maxSteps: 10,
+          },
+        },
+      };
+
+      const result = validateConfig(config);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContain('Provider test-provider: no models defined');
+    });
+
+    it('should warn when no providers enabled', () => {
+      const config: ResolvedConfig = {
+        version: '1.0.0',
+        providers: {
+          'test-provider': {
+            name: 'test-provider',
+            enabled: false,
+            apiKey: 'test-key',
+            baseUrl: 'https://api.test.com',
+            mcp: [],
+            models: {},
+          },
+        },
+        mcp: { enabled: false, servers: {} },
+        defaults: {
+          mode: 'separation',
+          vision: { provider: 'test', model: 'test' },
+          decision: { provider: 'test', model: 'test' },
+        },
+        settings: {
+          timeout: 30000,
+          maxRetries: 3,
+          temperature: 0.7,
+          maxTokens: 2000,
+          maxSteps: 10,
+        },
+        _resolved: {
+          providers: {},
+          settings: {
+            timeout: 30000,
+            maxRetries: 3,
+            temperature: 0.7,
+            maxTokens: 2000,
+            maxSteps: 10,
+          },
+        },
+      };
+
+      const result = validateConfig(config);
+      expect(result.warnings).toContain('No providers enabled');
+    });
+
+    it('should error when model missing type', () => {
+      const config: ResolvedConfig = {
+        version: '1.0.0',
+        providers: {
+          'test-provider': {
+            name: 'test-provider',
+            enabled: true,
+            apiKey: 'test-key',
+            baseUrl: 'https://api.test.com',
+            mcp: [],
+            models: {
+              'test-model': {
+                type: '' as any,
+                capabilities: ['vision'],
+              },
+            },
+          },
+        },
+        mcp: { enabled: false, servers: {} },
+        defaults: {
+          mode: 'separation',
+          vision: { provider: 'test-provider', model: 'test-model' },
+          decision: { provider: 'test-provider', model: 'test-model' },
+        },
+        settings: {
+          timeout: 30000,
+          maxRetries: 3,
+          temperature: 0.7,
+          maxTokens: 2000,
+          maxSteps: 10,
+        },
+        _resolved: {
+          providers: {},
+          settings: {
+            timeout: 30000,
+            maxRetries: 3,
+            temperature: 0.7,
+            maxTokens: 2000,
+            maxSteps: 10,
+          },
+        },
+      };
+
+      const result = validateConfig(config);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContain(
+        'Provider test-provider model test-model: missing type'
+      );
+    });
+
+    it('should error when model missing capabilities', () => {
+      const config: ResolvedConfig = {
+        version: '1.0.0',
+        providers: {
+          'test-provider': {
+            name: 'test-provider',
+            enabled: true,
+            apiKey: 'test-key',
+            baseUrl: 'https://api.test.com',
+            mcp: [],
+            models: {
+              'test-model': {
+                type: 'vision',
+                capabilities: [],
+              },
+            },
+          },
+        },
+        mcp: { enabled: false, servers: {} },
+        defaults: {
+          mode: 'separation',
+          vision: { provider: 'test-provider', model: 'test-model' },
+          decision: { provider: 'test-provider', model: 'test-model' },
+        },
+        settings: {
+          timeout: 30000,
+          maxRetries: 3,
+          temperature: 0.7,
+          maxTokens: 2000,
+          maxSteps: 10,
+        },
+        _resolved: {
+          providers: {},
+          settings: {
+            timeout: 30000,
+            maxRetries: 3,
+            temperature: 0.7,
+            maxTokens: 2000,
+            maxSteps: 10,
+          },
+        },
+      };
+
+      const result = validateConfig(config);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContain(
+        'Provider test-provider model test-model: missing capabilities'
+      );
+    });
+  });
+
+  describe('separation mode validation', () => {
+    it('should error when separation mode missing vision.provider', () => {
+      const config: ResolvedConfig = {
+        version: '1.0.0',
+        providers: {
+          'vision-provider': {
+            name: 'vision-provider',
+            enabled: true,
+            apiKey: 'test-key',
+            baseUrl: 'https://api.vision.com',
+            mcp: [],
+            models: {
+              'vision-model': {
+                type: 'vision',
+                capabilities: ['vision'],
+              },
+            },
+          },
+        },
+        mcp: { enabled: false, servers: {} },
+        defaults: {
+          mode: 'separation',
+          vision: { provider: '', model: 'vision-model' },
+          decision: { provider: 'vision-provider', model: 'vision-model' },
+        },
+        settings: {
+          timeout: 30000,
+          maxRetries: 3,
+          temperature: 0.7,
+          maxTokens: 2000,
+          maxSteps: 10,
+        },
+        _resolved: {
+          providers: {},
+          settings: {
+            timeout: 30000,
+            maxRetries: 3,
+            temperature: 0.7,
+            maxTokens: 2000,
+            maxSteps: 10,
+          },
+        },
+      };
+
+      const result = validateConfig(config);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContain('Separation mode requires vision.provider');
+    });
+
+    it('should error when separation mode missing vision.model', () => {
+      const config: ResolvedConfig = {
+        version: '1.0.0',
+        providers: {
+          'vision-provider': {
+            name: 'vision-provider',
+            enabled: true,
+            apiKey: 'test-key',
+            baseUrl: 'https://api.vision.com',
+            mcp: [],
+            models: {
+              'vision-model': {
+                type: 'vision',
+                capabilities: ['vision'],
+              },
+            },
+          },
+        },
+        mcp: { enabled: false, servers: {} },
+        defaults: {
+          mode: 'separation',
+          vision: { provider: 'vision-provider', model: '' },
+          decision: { provider: 'vision-provider', model: 'vision-model' },
+        },
+        settings: {
+          timeout: 30000,
+          maxRetries: 3,
+          temperature: 0.7,
+          maxTokens: 2000,
+          maxSteps: 10,
+        },
+        _resolved: {
+          providers: {},
+          settings: {
+            timeout: 30000,
+            maxRetries: 3,
+            temperature: 0.7,
+            maxTokens: 2000,
+            maxSteps: 10,
+          },
+        },
+      };
+
+      const result = validateConfig(config);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContain('Separation mode requires vision.model');
+    });
+
+    it('should error when separation mode missing decision.provider', () => {
+      const config: ResolvedConfig = {
+        version: '1.0.0',
+        providers: {
+          'decision-provider': {
+            name: 'decision-provider',
+            enabled: true,
+            apiKey: 'test-key',
+            baseUrl: 'https://api.decision.com',
+            mcp: [],
+            models: {
+              'decision-model': {
+                type: 'decision',
+                capabilities: ['decision'],
+              },
+            },
+          },
+        },
+        mcp: { enabled: false, servers: {} },
+        defaults: {
+          mode: 'separation',
+          vision: { provider: 'decision-provider', model: 'decision-model' },
+          decision: { provider: '', model: 'decision-model' },
+        },
+        settings: {
+          timeout: 30000,
+          maxRetries: 3,
+          temperature: 0.7,
+          maxTokens: 2000,
+          maxSteps: 10,
+        },
+        _resolved: {
+          providers: {},
+          settings: {
+            timeout: 30000,
+            maxRetries: 3,
+            temperature: 0.7,
+            maxTokens: 2000,
+            maxSteps: 10,
+          },
+        },
+      };
+
+      const result = validateConfig(config);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContain('Separation mode requires decision.provider');
+    });
+
+    it('should error when separation mode missing decision.model', () => {
+      const config: ResolvedConfig = {
+        version: '1.0.0',
+        providers: {
+          'decision-provider': {
+            name: 'decision-provider',
+            enabled: true,
+            apiKey: 'test-key',
+            baseUrl: 'https://api.decision.com',
+            mcp: [],
+            models: {
+              'decision-model': {
+                type: 'decision',
+                capabilities: ['decision'],
+              },
+            },
+          },
+        },
+        mcp: { enabled: false, servers: {} },
+        defaults: {
+          mode: 'separation',
+          vision: { provider: 'decision-provider', model: 'decision-model' },
+          decision: { provider: 'decision-provider', model: '' },
+        },
+        settings: {
+          timeout: 30000,
+          maxRetries: 3,
+          temperature: 0.7,
+          maxTokens: 2000,
+          maxSteps: 10,
+        },
+        _resolved: {
+          providers: {},
+          settings: {
+            timeout: 30000,
+            maxRetries: 3,
+            temperature: 0.7,
+            maxTokens: 2000,
+            maxSteps: 10,
+          },
+        },
+      };
+
+      const result = validateConfig(config);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContain('Separation mode requires decision.model');
+    });
+
+    it('should warn when default vision provider is disabled', () => {
+      const config: ResolvedConfig = {
+        version: '1.0.0',
+        providers: {
+          'vision-provider': {
+            name: 'vision-provider',
+            enabled: false,
+            apiKey: 'test-key',
+            baseUrl: 'https://api.vision.com',
+            mcp: [],
+            models: {
+              'vision-model': {
+                type: 'vision',
+                capabilities: ['vision'],
+              },
+            },
+          },
+          'decision-provider': {
+            name: 'decision-provider',
+            enabled: true,
+            apiKey: 'test-key',
+            baseUrl: 'https://api.decision.com',
+            mcp: [],
+            models: {
+              'decision-model': {
+                type: 'decision',
+                capabilities: ['decision'],
+              },
+            },
+          },
+        },
+        mcp: { enabled: false, servers: {} },
+        defaults: {
+          mode: 'separation',
+          vision: { provider: 'vision-provider', model: 'vision-model' },
+          decision: { provider: 'decision-provider', model: 'decision-model' },
+        },
+        settings: {
+          timeout: 30000,
+          maxRetries: 3,
+          temperature: 0.7,
+          maxTokens: 2000,
+          maxSteps: 10,
+        },
+        _resolved: {
+          providers: {},
+          settings: {
+            timeout: 30000,
+            maxRetries: 3,
+            temperature: 0.7,
+            maxTokens: 2000,
+            maxSteps: 10,
+          },
+        },
+      };
+
+      const result = validateConfig(config);
+      expect(result.warnings).toContain(
+        'Default vision provider vision-provider is disabled'
+      );
+    });
+
+    it('should warn when default decision provider is disabled', () => {
+      const config: ResolvedConfig = {
+        version: '1.0.0',
+        providers: {
+          'vision-provider': {
+            name: 'vision-provider',
+            enabled: true,
+            apiKey: 'test-key',
+            baseUrl: 'https://api.vision.com',
+            mcp: [],
+            models: {
+              'vision-model': {
+                type: 'vision',
+                capabilities: ['vision'],
+              },
+            },
+          },
+          'decision-provider': {
+            name: 'decision-provider',
+            enabled: false,
+            apiKey: 'test-key',
+            baseUrl: 'https://api.decision.com',
+            mcp: [],
+            models: {
+              'decision-model': {
+                type: 'decision',
+                capabilities: ['decision'],
+              },
+            },
+          },
+        },
+        mcp: { enabled: false, servers: {} },
+        defaults: {
+          mode: 'separation',
+          vision: { provider: 'vision-provider', model: 'vision-model' },
+          decision: { provider: 'decision-provider', model: 'decision-model' },
+        },
+        settings: {
+          timeout: 30000,
+          maxRetries: 3,
+          temperature: 0.7,
+          maxTokens: 2000,
+          maxSteps: 10,
+        },
+        _resolved: {
+          providers: {},
+          settings: {
+            timeout: 30000,
+            maxRetries: 3,
+            temperature: 0.7,
+            maxTokens: 2000,
+            maxSteps: 10,
+          },
+        },
+      };
+
+      const result = validateConfig(config);
+      expect(result.warnings).toContain(
+        'Default decision provider decision-provider is disabled'
+      );
+    });
+  });
+
+  describe('unified mode validation', () => {
+    it('should error when unified mode missing decision.provider', () => {
+      const config: ResolvedConfig = {
+        version: '1.0.0',
+        providers: {
+          'unified-provider': {
+            name: 'unified-provider',
+            enabled: true,
+            apiKey: 'test-key',
+            baseUrl: 'https://api.unified.com',
+            mcp: [],
+            models: {
+              'unified-model': {
+                type: 'multimodal',
+                capabilities: ['vision', 'decision'],
+              },
+            },
+          },
+        },
+        mcp: { enabled: false, servers: {} },
+        defaults: {
+          mode: 'unified',
+          vision: { provider: 'unified-provider', model: 'unified-model' },
+          decision: { provider: '', model: 'unified-model' },
+        },
+        settings: {
+          timeout: 30000,
+          maxRetries: 3,
+          temperature: 0.7,
+          maxTokens: 2000,
+          maxSteps: 10,
+        },
+        _resolved: {
+          providers: {},
+          settings: {
+            timeout: 30000,
+            maxRetries: 3,
+            temperature: 0.7,
+            maxTokens: 2000,
+            maxSteps: 10,
+          },
+        },
+      };
+
+      const result = validateConfig(config);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContain('Unified mode requires decision.provider');
+    });
+
+    it('should error when unified mode missing decision.model', () => {
+      const config: ResolvedConfig = {
+        version: '1.0.0',
+        providers: {
+          'unified-provider': {
+            name: 'unified-provider',
+            enabled: true,
+            apiKey: 'test-key',
+            baseUrl: 'https://api.unified.com',
+            mcp: [],
+            models: {
+              'unified-model': {
+                type: 'multimodal',
+                capabilities: ['vision', 'decision'],
+              },
+            },
+          },
+        },
+        mcp: { enabled: false, servers: {} },
+        defaults: {
+          mode: 'unified',
+          vision: { provider: 'unified-provider', model: 'unified-model' },
+          decision: { provider: 'unified-provider', model: '' },
+        },
+        settings: {
+          timeout: 30000,
+          maxRetries: 3,
+          temperature: 0.7,
+          maxTokens: 2000,
+          maxSteps: 10,
+        },
+        _resolved: {
+          providers: {},
+          settings: {
+            timeout: 30000,
+            maxRetries: 3,
+            temperature: 0.7,
+            maxTokens: 2000,
+            maxSteps: 10,
+          },
+        },
+      };
+
+      const result = validateConfig(config);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContain('Unified mode requires decision.model');
+    });
+
+    it('should error when unified mode model does not support decision capability', () => {
+      const config: ResolvedConfig = {
+        version: '1.0.0',
+        providers: {
+          'unified-provider': {
+            name: 'unified-provider',
+            enabled: true,
+            apiKey: 'test-key',
+            baseUrl: 'https://api.unified.com',
+            mcp: [],
+            models: {
+              'vision-only-model': {
+                type: 'vision',
+                capabilities: ['vision'],
+              },
+            },
+          },
+        },
+        mcp: { enabled: false, servers: {} },
+        defaults: {
+          mode: 'unified',
+          vision: { provider: 'unified-provider', model: 'vision-only-model' },
+          decision: { provider: 'unified-provider', model: 'vision-only-model' },
+        },
+        settings: {
+          timeout: 30000,
+          maxRetries: 3,
+          temperature: 0.7,
+          maxTokens: 2000,
+          maxSteps: 10,
+        },
+        _resolved: {
+          providers: {},
+          settings: {
+            timeout: 30000,
+            maxRetries: 3,
+            temperature: 0.7,
+            maxTokens: 2000,
+            maxSteps: 10,
+          },
+        },
+      };
+
+      const result = validateConfig(config);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContain(
+        'Model vision-only-model does not support decision capability'
+      );
+    });
+  });
+
+  describe('unknown mode validation', () => {
+    it('should error for unknown mode', () => {
+      const config: ResolvedConfig = {
+        version: '1.0.0',
+        providers: {},
+        mcp: { enabled: false, servers: {} },
+        defaults: {
+          mode: 'unknown' as any,
+          vision: { provider: 'test', model: 'test' },
+          decision: { provider: 'test', model: 'test' },
+        },
+        settings: {
+          timeout: 30000,
+          maxRetries: 3,
+          temperature: 0.7,
+          maxTokens: 2000,
+          maxSteps: 10,
+        },
+        _resolved: {
+          providers: {},
+          settings: {
+            timeout: 30000,
+            maxRetries: 3,
+            temperature: 0.7,
+            maxTokens: 2000,
+            maxSteps: 10,
+          },
+        },
+      };
+
+      const result = validateConfig(config);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContain('Unknown mode: unknown');
+    });
+  });
+
+  describe('missing defaults', () => {
+    it('should error when defaults configuration is missing', () => {
+      const config: ResolvedConfig = {
+        version: '1.0.0',
+        providers: {},
+        mcp: { enabled: false, servers: {} },
+        defaults: null as any,
+        settings: {
+          timeout: 30000,
+          maxRetries: 3,
+          temperature: 0.7,
+          maxTokens: 2000,
+          maxSteps: 10,
+        },
+        _resolved: {
+          providers: {},
+          settings: {
+            timeout: 30000,
+            maxRetries: 3,
+            temperature: 0.7,
+            maxTokens: 2000,
+            maxSteps: 10,
+          },
+        },
+      };
+
+      const result = validateConfig(config);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContain('Missing defaults configuration');
+    });
+  });
+
+  describe('MCP server validation', () => {
+    it('should error when MCP server missing command', () => {
+      const config: ResolvedConfig = {
+        version: '1.0.0',
+        providers: {
+          'test-provider': {
+            name: 'test-provider',
+            enabled: true,
+            apiKey: 'test-key',
+            baseUrl: 'https://api.test.com',
+            mcp: [],
+            models: {
+              'test-model': {
+                type: 'vision',
+                capabilities: ['vision'],
+              },
+            },
+          },
+        },
+        mcp: {
+          enabled: true,
+          servers: {
+            'test-server': {
+              enabled: true,
+              command: '',
+              args: ['test.js'],
+              env: {},
+            },
+          },
+        },
+        defaults: {
+          mode: 'separation',
+          vision: { provider: 'test-provider', model: 'test-model' },
+          decision: { provider: 'test-provider', model: 'test-model' },
+        },
+        settings: {
+          timeout: 30000,
+          maxRetries: 3,
+          temperature: 0.7,
+          maxTokens: 2000,
+          maxSteps: 10,
+        },
+        _resolved: {
+          providers: {},
+          settings: {
+            timeout: 30000,
+            maxRetries: 3,
+            temperature: 0.7,
+            maxTokens: 2000,
+            maxSteps: 10,
+          },
+        },
+      };
+
+      const result = validateConfig(config);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContain('MCP server test-server: missing command');
+    });
+
+    it('should warn when MCP server has no args', () => {
+      const config: ResolvedConfig = {
+        version: '1.0.0',
+        providers: {
+          'test-provider': {
+            name: 'test-provider',
+            enabled: true,
+            apiKey: 'test-key',
+            baseUrl: 'https://api.test.com',
+            mcp: [],
+            models: {
+              'test-model': {
+                type: 'vision',
+                capabilities: ['vision'],
+              },
+            },
+          },
+        },
+        mcp: {
+          enabled: true,
+          servers: {
+            'test-server': {
+              enabled: true,
+              command: 'node',
+              args: [],
+              env: {},
+            },
+          },
+        },
+        defaults: {
+          mode: 'separation',
+          vision: { provider: 'test-provider', model: 'test-model' },
+          decision: { provider: 'test-provider', model: 'test-model' },
+        },
+        settings: {
+          timeout: 30000,
+          maxRetries: 3,
+          temperature: 0.7,
+          maxTokens: 2000,
+          maxSteps: 10,
+        },
+        _resolved: {
+          providers: {},
+          settings: {
+            timeout: 30000,
+            maxRetries: 3,
+            temperature: 0.7,
+            maxTokens: 2000,
+            maxSteps: 10,
+          },
+        },
+      };
+
+      const result = validateConfig(config);
+      expect(result.warnings).toContain('MCP server test-server: no args specified');
+    });
+
+    it('should not validate disabled MCP servers', () => {
+      const config: ResolvedConfig = {
+        version: '1.0.0',
+        providers: {
+          'test-provider': {
+            name: 'test-provider',
+            enabled: true,
+            apiKey: 'test-key',
+            baseUrl: 'https://api.test.com',
+            mcp: [],
+            models: {
+              'test-model': {
+                type: 'vision',
+                capabilities: ['vision'],
+              },
+            },
+          },
+        },
+        mcp: {
+          enabled: true,
+          servers: {
+            'disabled-server': {
+              enabled: false,
+              command: '',
+              args: [],
+              env: {},
+            },
+          },
+        },
+        defaults: {
+          mode: 'separation',
+          vision: { provider: 'test-provider', model: 'test-model' },
+          decision: { provider: 'test-provider', model: 'test-model' },
+        },
+        settings: {
+          timeout: 30000,
+          maxRetries: 3,
+          temperature: 0.7,
+          maxTokens: 2000,
+          maxSteps: 10,
+        },
+        _resolved: {
+          providers: {},
+          settings: {
+            timeout: 30000,
+            maxRetries: 3,
+            temperature: 0.7,
+            maxTokens: 2000,
+            maxSteps: 10,
+          },
+        },
+      };
+
+      const result = validateConfig(config);
+      expect(result.errors).not.toContain(
+        'MCP server disabled-server: missing command'
+      );
+    });
+  });
+
+  describe('resolved provider validation', () => {
+    it('should error when provider apiKey not resolved', () => {
+      const config: ResolvedConfig = {
+        version: '1.0.0',
+        providers: {
+          'test-provider': {
+            name: 'test-provider',
+            enabled: true,
+            apiKey: 'test-key',
+            baseUrl: 'https://api.test.com',
+            mcp: [],
+            models: {
+              'test-model': {
+                type: 'vision',
+                capabilities: ['vision'],
+              },
+            },
+          },
+        },
+        mcp: { enabled: false, servers: {} },
+        defaults: {
+          mode: 'separation',
+          vision: { provider: 'test-provider', model: 'test-model' },
+          decision: { provider: 'test-provider', model: 'test-model' },
+        },
+        settings: {
+          timeout: 30000,
+          maxRetries: 3,
+          temperature: 0.7,
+          maxTokens: 2000,
+          maxSteps: 10,
+        },
+        _resolved: {
+          providers: {
+            'test-provider': {
+              name: 'test-provider',
+              enabled: true,
+              apiKey: '',
+              baseUrl: 'https://api.test.com',
+              mcp: [],
+              models: {
+                'test-model': {
+                  type: 'vision',
+                  capabilities: ['vision'],
+                },
+              },
+            },
+          },
+          settings: {
+            timeout: 30000,
+            maxRetries: 3,
+            temperature: 0.7,
+            maxTokens: 2000,
+            maxSteps: 10,
+          },
+        },
+      };
+
+      const result = validateConfig(config);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContain('Provider test-provider: apiKey not resolved');
+    });
+  });
+});
+
+describe('validateProviderModel', () => {
+  describe('valid provider/model combinations', () => {
+    it('should return valid for existing enabled provider and model', () => {
+      const config: ResolvedConfig = {
+        version: '1.0.0',
+        providers: {
+          'test-provider': {
+            name: 'test-provider',
+            enabled: true,
+            apiKey: 'test-key',
+            baseUrl: 'https://api.test.com',
+            mcp: [],
+            models: {
+              'test-model': {
+                type: 'vision',
+                capabilities: ['vision'],
+              },
+            },
+          },
+        },
+        mcp: { enabled: false, servers: {} },
+        defaults: {
+          mode: 'separation',
+          vision: { provider: 'test-provider', model: 'test-model' },
+          decision: { provider: 'test-provider', model: 'test-model' },
+        },
+        settings: {
+          timeout: 30000,
+          maxRetries: 3,
+          temperature: 0.7,
+          maxTokens: 2000,
+          maxSteps: 10,
+        },
+        _resolved: {
+          providers: {},
+          settings: {
+            timeout: 30000,
+            maxRetries: 3,
+            temperature: 0.7,
+            maxTokens: 2000,
+            maxSteps: 10,
+          },
+        },
+      };
+
+      const result = validateProviderModel(
+        config,
+        'test-provider',
+        'test-model'
+      );
+      expect(result.valid).toBe(true);
+      expect(result.errors).toEqual([]);
+    });
+  });
+
+  describe('invalid provider/model combinations', () => {
+    it('should error for non-existent provider', () => {
+      const config: ResolvedConfig = {
+        version: '1.0.0',
+        providers: {},
+        mcp: { enabled: false, servers: {} },
+        defaults: {
+          mode: 'separation',
+          vision: { provider: 'test', model: 'test' },
+          decision: { provider: 'test', model: 'test' },
+        },
+        settings: {
+          timeout: 30000,
+          maxRetries: 3,
+          temperature: 0.7,
+          maxTokens: 2000,
+          maxSteps: 10,
+        },
+        _resolved: {
+          providers: {},
+          settings: {
+            timeout: 30000,
+            maxRetries: 3,
+            temperature: 0.7,
+            maxTokens: 2000,
+            maxSteps: 10,
+          },
+        },
+      };
+
+      const result = validateProviderModel(
+        config,
+        'non-existent-provider',
+        'test-model'
+      );
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContain(
+        'Provider non-existent-provider not found'
+      );
+    });
+
+    it('should error for disabled provider', () => {
+      const config: ResolvedConfig = {
+        version: '1.0.0',
+        providers: {
+          'test-provider': {
+            name: 'test-provider',
+            enabled: false,
+            apiKey: 'test-key',
+            baseUrl: 'https://api.test.com',
+            mcp: [],
+            models: {
+              'test-model': {
+                type: 'vision',
+                capabilities: ['vision'],
+              },
+            },
+          },
+        },
+        mcp: { enabled: false, servers: {} },
+        defaults: {
+          mode: 'separation',
+          vision: { provider: 'test-provider', model: 'test-model' },
+          decision: { provider: 'test-provider', model: 'test-model' },
+        },
+        settings: {
+          timeout: 30000,
+          maxRetries: 3,
+          temperature: 0.7,
+          maxTokens: 2000,
+          maxSteps: 10,
+        },
+        _resolved: {
+          providers: {},
+          settings: {
+            timeout: 30000,
+            maxRetries: 3,
+            temperature: 0.7,
+            maxTokens: 2000,
+            maxSteps: 10,
+          },
+        },
+      };
+
+      const result = validateProviderModel(
+        config,
+        'test-provider',
+        'test-model'
+      );
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContain('Provider test-provider is disabled');
+    });
+
+    it('should error for non-existent model', () => {
+      const config: ResolvedConfig = {
+        version: '1.0.0',
+        providers: {
+          'test-provider': {
+            name: 'test-provider',
+            enabled: true,
+            apiKey: 'test-key',
+            baseUrl: 'https://api.test.com',
+            mcp: [],
+            models: {
+              'test-model': {
+                type: 'vision',
+                capabilities: ['vision'],
+              },
+            },
+          },
+        },
+        mcp: { enabled: false, servers: {} },
+        defaults: {
+          mode: 'separation',
+          vision: { provider: 'test-provider', model: 'test-model' },
+          decision: { provider: 'test-provider', model: 'test-model' },
+        },
+        settings: {
+          timeout: 30000,
+          maxRetries: 3,
+          temperature: 0.7,
+          maxTokens: 2000,
+          maxSteps: 10,
+        },
+        _resolved: {
+          providers: {},
+          settings: {
+            timeout: 30000,
+            maxRetries: 3,
+            temperature: 0.7,
+            maxTokens: 2000,
+            maxSteps: 10,
+          },
+        },
+      };
+
+      const result = validateProviderModel(
+        config,
+        'test-provider',
+        'non-existent-model'
+      );
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContain(
+        'Model non-existent-model not found in provider test-provider'
+      );
+    });
+  });
+});
+
+describe('canProviderDo', () => {
+  describe('capability checks', () => {
+    it('should return true for vision capability', () => {
+      const config: ResolvedConfig = {
+        version: '1.0.0',
+        providers: {
+          'test-provider': {
+            name: 'test-provider',
+            enabled: true,
+            apiKey: 'test-key',
+            baseUrl: 'https://api.test.com',
+            mcp: [],
+            models: {
+              'vision-model': {
+                type: 'vision',
+                capabilities: ['vision'],
+              },
+            },
+          },
+        },
+        mcp: { enabled: false, servers: {} },
+        defaults: {
+          mode: 'separation',
+          vision: { provider: 'test-provider', model: 'vision-model' },
+          decision: { provider: 'test-provider', model: 'vision-model' },
+        },
+        settings: {
+          timeout: 30000,
+          maxRetries: 3,
+          temperature: 0.7,
+          maxTokens: 2000,
+          maxSteps: 10,
+        },
+        _resolved: {
+          providers: {},
+          settings: {
+            timeout: 30000,
+            maxRetries: 3,
+            temperature: 0.7,
+            maxTokens: 2000,
+            maxSteps: 10,
+          },
+        },
+      };
+
+      const result = canProviderDo(
+        'test-provider',
+        'vision-model',
+        'vision',
+        config
+      );
+      expect(result).toBe(true);
+    });
+
+    it('should return true for decision capability', () => {
+      const config: ResolvedConfig = {
+        version: '1.0.0',
+        providers: {
+          'test-provider': {
+            name: 'test-provider',
+            enabled: true,
+            apiKey: 'test-key',
+            baseUrl: 'https://api.test.com',
+            mcp: [],
+            models: {
+              'decision-model': {
+                type: 'decision',
+                capabilities: ['decision'],
+              },
+            },
+          },
+        },
+        mcp: { enabled: false, servers: {} },
+        defaults: {
+          mode: 'separation',
+          vision: { provider: 'test-provider', model: 'decision-model' },
+          decision: { provider: 'test-provider', model: 'decision-model' },
+        },
+        settings: {
+          timeout: 30000,
+          maxRetries: 3,
+          temperature: 0.7,
+          maxTokens: 2000,
+          maxSteps: 10,
+        },
+        _resolved: {
+          providers: {},
+          settings: {
+            timeout: 30000,
+            maxRetries: 3,
+            temperature: 0.7,
+            maxTokens: 2000,
+            maxSteps: 10,
+          },
+        },
+      };
+
+      const result = canProviderDo(
+        'test-provider',
+        'decision-model',
+        'decision',
+        config
+      );
+      expect(result).toBe(true);
+    });
+
+    it('should return true for multimodal model with both capabilities', () => {
+      const config: ResolvedConfig = {
+        version: '1.0.0',
+        providers: {
+          'test-provider': {
+            name: 'test-provider',
+            enabled: true,
+            apiKey: 'test-key',
+            baseUrl: 'https://api.test.com',
+            mcp: [],
+            models: {
+              'multimodal-model': {
+                type: 'multimodal',
+                capabilities: ['vision', 'decision'],
+              },
+            },
+          },
+        },
+        mcp: { enabled: false, servers: {} },
+        defaults: {
+          mode: 'separation',
+          vision: { provider: 'test-provider', model: 'multimodal-model' },
+          decision: { provider: 'test-provider', model: 'multimodal-model' },
+        },
+        settings: {
+          timeout: 30000,
+          maxRetries: 3,
+          temperature: 0.7,
+          maxTokens: 2000,
+          maxSteps: 10,
+        },
+        _resolved: {
+          providers: {},
+          settings: {
+            timeout: 30000,
+            maxRetries: 3,
+            temperature: 0.7,
+            maxTokens: 2000,
+            maxSteps: 10,
+          },
+        },
+      };
+
+      const visionResult = canProviderDo(
+        'test-provider',
+        'multimodal-model',
+        'vision',
+        config
+      );
+      const decisionResult = canProviderDo(
+        'test-provider',
+        'multimodal-model',
+        'decision',
+        config
+      );
+      expect(visionResult).toBe(true);
+      expect(decisionResult).toBe(true);
+    });
+  });
+
+  describe('negative cases', () => {
+    it('should return false for non-existent provider', () => {
+      const config: ResolvedConfig = {
+        version: '1.0.0',
+        providers: {},
+        mcp: { enabled: false, servers: {} },
+        defaults: {
+          mode: 'separation',
+          vision: { provider: 'test', model: 'test' },
+          decision: { provider: 'test', model: 'test' },
+        },
+        settings: {
+          timeout: 30000,
+          maxRetries: 3,
+          temperature: 0.7,
+          maxTokens: 2000,
+          maxSteps: 10,
+        },
+        _resolved: {
+          providers: {},
+          settings: {
+            timeout: 30000,
+            maxRetries: 3,
+            temperature: 0.7,
+            maxTokens: 2000,
+            maxSteps: 10,
+          },
+        },
+      };
+
+      const result = canProviderDo(
+        'non-existent-provider',
+        'test-model',
+        'vision',
+        config
+      );
+      expect(result).toBe(false);
+    });
+
+    it('should return false for disabled provider', () => {
+      const config: ResolvedConfig = {
+        version: '1.0.0',
+        providers: {
+          'test-provider': {
+            name: 'test-provider',
+            enabled: false,
+            apiKey: 'test-key',
+            baseUrl: 'https://api.test.com',
+            mcp: [],
+            models: {
+              'test-model': {
+                type: 'vision',
+                capabilities: ['vision'],
+              },
+            },
+          },
+        },
+        mcp: { enabled: false, servers: {} },
+        defaults: {
+          mode: 'separation',
+          vision: { provider: 'test-provider', model: 'test-model' },
+          decision: { provider: 'test-provider', model: 'test-model' },
+        },
+        settings: {
+          timeout: 30000,
+          maxRetries: 3,
+          temperature: 0.7,
+          maxTokens: 2000,
+          maxSteps: 10,
+        },
+        _resolved: {
+          providers: {},
+          settings: {
+            timeout: 30000,
+            maxRetries: 3,
+            temperature: 0.7,
+            maxTokens: 2000,
+            maxSteps: 10,
+          },
+        },
+      };
+
+      const result = canProviderDo(
+        'test-provider',
+        'test-model',
+        'vision',
+        config
+      );
+      expect(result).toBe(false);
+    });
+
+    it('should return false for non-existent model', () => {
+      const config: ResolvedConfig = {
+        version: '1.0.0',
+        providers: {
+          'test-provider': {
+            name: 'test-provider',
+            enabled: true,
+            apiKey: 'test-key',
+            baseUrl: 'https://api.test.com',
+            mcp: [],
+            models: {
+              'test-model': {
+                type: 'vision',
+                capabilities: ['vision'],
+              },
+            },
+          },
+        },
+        mcp: { enabled: false, servers: {} },
+        defaults: {
+          mode: 'separation',
+          vision: { provider: 'test-provider', model: 'test-model' },
+          decision: { provider: 'test-provider', model: 'test-model' },
+        },
+        settings: {
+          timeout: 30000,
+          maxRetries: 3,
+          temperature: 0.7,
+          maxTokens: 2000,
+          maxSteps: 10,
+        },
+        _resolved: {
+          providers: {},
+          settings: {
+            timeout: 30000,
+            maxRetries: 3,
+            temperature: 0.7,
+            maxTokens: 2000,
+            maxSteps: 10,
+          },
+        },
+      };
+
+      const result = canProviderDo(
+        'test-provider',
+        'non-existent-model',
+        'vision',
+        config
+      );
+      expect(result).toBe(false);
+    });
+
+    it('should return false when model does not support capability', () => {
+      const config: ResolvedConfig = {
+        version: '1.0.0',
+        providers: {
+          'test-provider': {
+            name: 'test-provider',
+            enabled: true,
+            apiKey: 'test-key',
+            baseUrl: 'https://api.test.com',
+            mcp: [],
+            models: {
+              'vision-model': {
+                type: 'vision',
+                capabilities: ['vision'],
+              },
+            },
+          },
+        },
+        mcp: { enabled: false, servers: {} },
+        defaults: {
+          mode: 'separation',
+          vision: { provider: 'test-provider', model: 'vision-model' },
+          decision: { provider: 'test-provider', model: 'vision-model' },
+        },
+        settings: {
+          timeout: 30000,
+          maxRetries: 3,
+          temperature: 0.7,
+          maxTokens: 2000,
+          maxSteps: 10,
+        },
+        _resolved: {
+          providers: {},
+          settings: {
+            timeout: 30000,
+            maxRetries: 3,
+            temperature: 0.7,
+            maxTokens: 2000,
+            maxSteps: 10,
+          },
+        },
+      };
+
+      const result = canProviderDo(
+        'test-provider',
+        'vision-model',
+        'decision',
+        config
+      );
+      expect(result).toBe(false);
+    });
+  });
+});
