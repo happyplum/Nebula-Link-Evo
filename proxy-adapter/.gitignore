@@ -1,0 +1,5 @@
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite
+
+test-results

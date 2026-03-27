@@ -1,0 +1,167 @@
+import type { ResolvedConfig } from './schema.js';
+
+export interface ValidationResult {
+  valid: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
+export function validateConfig(config: ResolvedConfig): ValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  const enabledProviders = Object.entries(config.providers).filter(([_, p]) => p.enabled);
+
+  if (enabledProviders.length === 0) {
+    warnings.push('No providers enabled');
+  }
+
+  for (const [name, provider] of Object.entries(config.providers)) {
+    if (!provider.enabled) continue;
+
+    if (!provider.apiKey) {
+      errors.push(`Provider ${name}: missing apiKey`);
+    }
+
+    if (!provider.baseUrl) {
+      errors.push(`Provider ${name}: missing baseUrl`);
+    }
+
+    if (Object.keys(provider.models).length === 0) {
+      errors.push(`Provider ${name}: no models defined`);
+    }
+
+    for (const [modelName, model] of Object.entries(provider.models)) {
+      if (!model.type) {
+        errors.push(`Provider ${name} model ${modelName}: missing type`);
+      }
+
+      if (!model.capabilities || model.capabilities.length === 0) {
+        errors.push(`Provider ${name} model ${modelName}: missing capabilities`);
+      }
+    }
+  }
+
+  if (!config.defaults) {
+    errors.push('Missing defaults configuration');
+  } else {
+    const mode = config.defaults.mode;
+
+    if (mode === 'separation') {
+      if (!config.defaults.vision?.provider) {
+        errors.push('Separation mode requires vision.provider');
+      }
+      if (!config.defaults.vision?.model) {
+        errors.push('Separation mode requires vision.model');
+      }
+      if (!config.defaults.decision?.provider) {
+        errors.push('Separation mode requires decision.provider');
+      }
+      if (!config.defaults.decision?.model) {
+        errors.push('Separation mode requires decision.model');
+      }
+
+      const visionProvider = config.providers[config.defaults.vision.provider];
+      if (visionProvider && !visionProvider.enabled) {
+        warnings.push(`Default vision provider ${config.defaults.vision.provider} is disabled`);
+      }
+
+      const decisionProvider = config.providers[config.defaults.decision.provider];
+      if (decisionProvider && !decisionProvider.enabled) {
+        warnings.push(`Default decision provider ${config.defaults.decision.provider} is disabled`);
+      }
+    } else if (mode === 'unified') {
+      if (!config.defaults.decision?.provider) {
+        errors.push('Unified mode requires decision.provider');
+      }
+      if (!config.defaults.decision?.model) {
+        errors.push('Unified mode requires decision.model');
+      }
+
+      const decisionProvider = config.providers[config.defaults.decision.provider];
+      if (decisionProvider?.enabled) {
+        const model = decisionProvider.models[config.defaults.decision.model];
+        if (model && !model.capabilities.includes('decision')) {
+          errors.push(
+            `Model ${config.defaults.decision.model} does not support decision capability`
+          );
+        }
+      }
+    } else {
+      errors.push(`Unknown mode: ${mode}`);
+    }
+  }
+
+  if (config.mcp?.enabled) {
+    for (const [name, server] of Object.entries(config.mcp.servers)) {
+      if (!server.enabled) continue;
+
+      if (!server.command) {
+        errors.push(`MCP server ${name}: missing command`);
+      }
+
+      if (!server.args || server.args.length === 0) {
+        warnings.push(`MCP server ${name}: no args specified`);
+      }
+    }
+  }
+
+  if (config._resolved) {
+    for (const [name, provider] of Object.entries(config._resolved.providers)) {
+      if (!provider.apiKey) {
+        errors.push(`Provider ${name}: apiKey not resolved`);
+      }
+    }
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    warnings,
+  };
+}
+
+export function validateProviderModel(
+  config: ResolvedConfig,
+  provider: string,
+  model: string
+): { valid: boolean; errors: string[] } {
+  const errors: string[] = [];
+
+  const providerConfig = config.providers[provider];
+  if (!providerConfig) {
+    errors.push(`Provider ${provider} not found`);
+    return { valid: false, errors };
+  }
+
+  if (!providerConfig.enabled) {
+    errors.push(`Provider ${provider} is disabled`);
+  }
+
+  const modelConfig = providerConfig.models[model];
+  if (!modelConfig) {
+    errors.push(`Model ${model} not found in provider ${provider}`);
+    return { valid: false, errors };
+  }
+
+  return { valid: errors.length === 0, errors };
+}
+
+export function canProviderDo(
+  provider: string,
+  model: string,
+  capability: 'vision' | 'decision',
+  config: ResolvedConfig
+): boolean {
+  const providerConfig = config.providers[provider];
+  if (!providerConfig || !providerConfig.enabled) {
+    return false;
+  }
+
+  const modelConfig = providerConfig.models[model];
+  if (!modelConfig) {
+    return false;
+  }
+
+  return modelConfig.capabilities.includes(capability);
+}
