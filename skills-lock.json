@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "fastify-best-practices": {
+      "source": "mcollina/skills",
+      "sourceType": "github",
+      "computedHash": "c5e2b33d8e41e8a24eeed4c42918ddf6b81e8c49d37bb87d1e8a5962b67b8f85"
+    }
+  }
+}

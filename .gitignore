@@ -1,0 +1,78 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# Compiled TypeScript files in source directories (not in dist)
+shared/**/*.js
+shared/**/*.d.ts
+!shared/**/*.config.js
+!shared/**/*.test.js
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Test files
+screenshot_test.png
+test_*.py
+*.bak
+coverage/
+
+# YOLO Model (可下载)
+yolov8n.pt
+*.pt
+
+# Database files
+*.sqlite
+
+# Project specific
+.temp/
+.tmp/
+
+# Backup files
+*.bak
+*.backup
+
+# Windows temporary files
+*.nul
+
+# PowerShell scripts
+*.ps1
+
+# Test and diagnostic scripts
+**/test-*.ps1
+test-task.json
+
+.trae/documents
+nul
+.trae/specs
+proxy-adapter/tests/output/
+$null
+.sisyphus
+.serena
+.worktrees/
+**/*.sqlite-shm
+**/*.sqlite-wal
+
+proxy-adapter/test-conversations-persistence.sqlite-shm
