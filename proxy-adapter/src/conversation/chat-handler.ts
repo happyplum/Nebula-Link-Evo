@@ -1,17 +1,18 @@
 import { ConversationManager } from './manager.js';
-import type { DecisionClient } from '../clients/decision/base.js';
-import type { StreamCallbacks, ToolCall, UsageStats } from '../clients/decision/stream.js';
 import { DebugWebSocketManager } from '../websocket-manager.js';
 import { MCPSDKClient } from '../clients/mcp/sdk-client.js';
-import { createDecisionClientFactory, DecisionClientFactory } from '../clients/decision/index.js';
 import type { ResolvedConfig } from '../config/schema.js';
 import { ChatSessionController } from '../services/chat-session-controller.js';
-import type { AgentState, Session, Message } from './types.js';
-import type { DecisionContext } from '../clients/types.js';
+import type { AgentState, Session, Message, SessionStatus } from './types.js';
 import type { SessionEvent, SessionEventType } from '../../../shared/types/sse-events.js';
 import { SessionEventsDAO } from './session-events-dao.js';
 import { DatabaseManager } from './db.js';
 import { SessionEventHub } from '../services/session-event-hub.js';
+import { streamText, stepCountIs, tool } from 'ai';
+import type { ModelMessage } from 'ai';
+import type { LanguageModelV3 } from '@ai-sdk/provider';
+import { z } from 'zod';
+import { getModel } from '../clients/vercel-ai/provider.js';
 import WebSocket from 'ws';
 
 interface ChatSendParams {
@@ -29,38 +30,22 @@ interface ChatMessageData {
   screenshot?: string;
 }
 
-interface ParsedAction {
-  type: string;
-  params: Record<string, unknown>;
-  reasoning?: string;
-}
-
 interface ToolInputSchema {
   type: string;
   properties?: Record<string, unknown>;
   required?: string[];
 }
 
-interface ChatDecisionContext extends DecisionContext {
-  sessionId: string;
-  messages: Message[];
-  provider: string;
-  model: string;
-  systemPrompt: string;
+interface MCPObjectSchema {
+  type?: string;
+  properties?: Record<string, unknown>;
+  required?: string[];
 }
 
-interface MCPToolCall {
-  id: string;
-  type: string;
-  function: {
-    name: string;
-    arguments: string;
-  };
-}
+type TerminalReason = 'stop' | 'max_steps_reached' | 'tool_error' | 'abort' | 'pause';
 
 class ChatHandler {
   private conversationManager: ConversationManager;
-  private decisionClientFactory: DecisionClientFactory;
   private config: ResolvedConfig;
   private wsManager: DebugWebSocketManager;
   private mcpClient: MCPSDKClient | null = null;
@@ -68,7 +53,6 @@ class ChatHandler {
   private sessionEventHub: SessionEventHub;
   private maxToolLoops = 10;
   private toolLoopCount = 0;
-  private pendingToolCalls: MCPToolCall[] = [];
   private sessionEventQueue: Promise<void> = Promise.resolve();
 
   constructor(
@@ -81,11 +65,13 @@ class ChatHandler {
   ) {
     this.conversationManager = conversationManager;
     this.config = config;
-    this.decisionClientFactory = createDecisionClientFactory();
     this.wsManager = wsManager;
     this.mcpClient = mcpClient || null;
     this.sessionEventsDAO = sessionEventsDAO || this.resolveSessionEventsDAO();
     this.sessionEventHub = sessionEventHub || SessionEventHub.getInstance();
+    const configuredMaxSteps =
+      this.config._resolved?.settings?.maxSteps ?? this.config.settings?.maxSteps ?? this.maxToolLoops;
+    this.maxToolLoops = configuredMaxSteps > 0 ? configuredMaxSteps : this.maxToolLoops;
   }
 
   private resolveSessionEventsDAO(): SessionEventsDAO | undefined {
@@ -150,8 +136,8 @@ class ChatHandler {
     return this.sessionEventHub;
   }
 
-  private getDecisionClient(provider: string, model: string): DecisionClient | null {
-    return this.decisionClientFactory.create(this.config, provider, model);
+  private getDecisionClient(provider: string, model: string): LanguageModelV3 {
+    return getModel(this.config, provider, model);
   }
 
   setMCPClient(client: MCPSDKClient): void {
@@ -245,7 +231,6 @@ class ChatHandler {
     }
 
     this.toolLoopCount = 0;
-    this.pendingToolCalls = [];
 
     const sessionController = ChatSessionController.getInstance();
     const abortController = sessionController.createAbortController(sessionId);
@@ -286,8 +271,17 @@ class ChatHandler {
     }
 
     const persistedState = await this.conversationManager.getSessionState(sessionId);
+    const currentStatus = persistedState?.status ?? 'idle';
+    if (!this.isResumable(currentStatus)) {
+      throw new Error(
+        `Cannot resume session ${sessionId}: status "${currentStatus}" is not resumable. Allowed statuses: paused, completed, cancelled, blocked, interrupted.`
+      );
+    }
+
     const sessionController = ChatSessionController.getInstance();
-    sessionController.resume(sessionId, persistedState?.status);
+    if (currentStatus === 'paused' || currentStatus === 'blocked') {
+      sessionController.resume(sessionId, currentStatus);
+    }
 
     const abortController = sessionController.createAbortController(sessionId, {
       activateSession: false,
@@ -314,7 +308,7 @@ class ChatHandler {
   }
 
   private async executeAIResponse(
-    clientId: string,
+    _clientId: string,
     sessionId: string,
     session: ChatSessionData,
     iteration: number = 0,
@@ -326,233 +320,213 @@ class ChatHandler {
       return;
     }
 
-    if (iteration >= this.maxToolLoops) {
-      throw new Error('Maximum tool use loop exceeded');
-    }
-
     this.toolLoopCount = iteration;
+    const runId = this.createRunId();
+    const messageId = this.createMessageId();
     let accumulatedContent = '';
-    let usageHandler: UsageStats | null = null;
-    const messageId = `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    let totalUsage: Record<string, unknown> | undefined;
+    const emittedToolCalls: Array<Record<string, unknown>> = [];
+    let streamError: unknown;
+    let pauseRequested = false;
+    let stepHadToolResult = false;
+    let finishReason: string | undefined;
+
     await this.emitSessionEvent(sessionId, 'assistant.started', {
       sessionId,
+      runId,
       messageId,
     });
 
     const contextWindow = this.conversationManager.getContextWindow(sessionId);
-    const messages = contextWindow.messages;
-
+    const messages = this.toModelMessages(contextWindow.messages);
     const systemPrompt = this.getSystemPrompt(session);
+    const sessionController = ChatSessionController.getInstance();
+
+    const maxSteps = this.maxToolLoops;
+    const streamOptions: Parameters<typeof streamText>[0] & { maxSteps: number } = {
+      model: this.getDecisionClient(session.provider, session.model),
+      system: systemPrompt,
+      messages,
+      tools: this.createSDKTools() as Parameters<typeof streamText>[0]['tools'],
+      abortSignal: signal,
+      maxSteps,
+      stopWhen: stepCountIs(maxSteps),
+    };
 
     console.log(
       `[ChatHandler] executeAIResponse, screenshot param length: ${screenshot?.length || 0}`
     );
 
-    // Agent模式：不预注入页面信息，让AI主动调用MCP工具获取
-    // 只提供空的初始上下文，AI需要通过mcp_call获取页面信息
-    const chatContext = {
-      sessionId,
-      messages,
-      provider: session.provider,
-      model: session.model,
-      systemPrompt,
-      // DecisionContext fields - 初始为空，AI需要主动获取
-      screenshot: screenshot || '',
-      dom: {
-        url: 'unknown',
-        title: 'Unknown',
-        elements: [],
-        viewport: { width: 1920, height: 1080 },
-      },
-      elements: [],
-      instruction: messages[messages.length - 1]?.content || '',
-      previousActions: [],
-      // 提供MCP工具列表供AI选择
-      mcpTools: this.mcpClient ? this.mcpClient.getAvailableTools() : [],
-    };
+    try {
+      console.log(`[ChatHandler] Using SDK model: ${session.provider}/${session.model}`);
+      const result = await streamText(streamOptions);
 
-    this.pendingToolCalls = [];
+      for await (const streamPart of result.fullStream) {
+        const part = streamPart as { type: string; [key: string]: unknown };
 
-    // Some mocks implement decideStream with timers and return void.
-    // Wait for onDone to finish to prevent cross-test timer leakage and ordering flakiness.
-    let resolveStreamDone: (() => void) | null = null;
-    let streamDoneResolved = false;
-    const streamDone = new Promise<void>((resolve) => {
-      resolveStreamDone = resolve;
-    });
-    const resolveStreamDoneOnce = (): void => {
-      if (streamDoneResolved) return;
-      streamDoneResolved = true;
-      resolveStreamDone?.();
-    };
+        if (part.type === 'text-delta' && typeof part.text === 'string') {
+          accumulatedContent += part.text;
+          await this.emitSessionEvent(sessionId, 'assistant.delta', {
+            sessionId,
+            runId,
+            messageId,
+            text: part.text,
+          });
+          continue;
+        }
 
-    const callbacks: StreamCallbacks = {
-      onToken: (text: string) => {
-        accumulatedContent += text;
-        void this.emitSessionEvent(sessionId, 'assistant.delta', {
-          sessionId,
-          messageId,
-          text,
-        });
-      },
-      onThinking: (text: string) => {
-        void this.emitSessionEvent(sessionId, 'assistant.thinking', {
-          sessionId,
-          messageId,
-          text,
-        });
-      },
-      onToolCall: (call: ToolCall) => {
-        this.pendingToolCalls.push(call);
-        void this.emitSessionEvent(sessionId, 'assistant.tool_call', {
-          sessionId,
-          messageId,
-          toolCall: call,
-        });
-      },
-      onUsage: (usage: UsageStats) => {
-        usageHandler = usage;
-      },
-      onDone: async () => {
-        try {
-          await this.flushSessionEvents();
-          const sessionController = ChatSessionController.getInstance();
+        if (
+          (part.type === 'reasoning' || part.type === 'reasoning-delta') &&
+          typeof part.text === 'string'
+        ) {
+          await this.emitSessionEvent(sessionId, 'assistant.thinking', {
+            sessionId,
+            runId,
+            messageId,
+            text: part.text,
+          });
+          continue;
+        }
+
+        if (part.type === 'tool-call') {
+          const toolCallId = typeof part.toolCallId === 'string' ? part.toolCallId : undefined;
+          const toolName = typeof part.toolName === 'string' ? part.toolName : 'unknown.tool';
+          const toolInput = this.normalizeToRecord(part.input);
+          const toolCall = {
+            id: toolCallId,
+            type: 'function',
+            function: {
+              name: toolName,
+              arguments: JSON.stringify(toolInput),
+            },
+            input: toolInput,
+          };
+          emittedToolCalls.push(toolCall);
+
+          await this.emitSessionEvent(sessionId, 'assistant.tool_call', {
+            sessionId,
+            runId,
+            messageId,
+            toolCallId,
+            toolCall,
+          });
+          continue;
+        }
+
+        if (part.type === 'tool-result') {
+          stepHadToolResult = true;
+          const toolCallId = typeof part.toolCallId === 'string' ? part.toolCallId : undefined;
+          const toolName = typeof part.toolName === 'string' ? part.toolName : 'unknown.tool';
+          const toolInput = this.normalizeToRecord(part.input);
+          const output = part.output;
 
           this.conversationManager.addMessage(sessionId, {
-            role: 'assistant',
-            content: accumulatedContent,
+            role: 'tool',
+            content: this.stringifyToolResult(output),
             metadata: {
-              usage: usageHandler,
-              provider: session.provider,
-              model: session.model,
-              tool_calls: this.pendingToolCalls.length > 0 ? this.pendingToolCalls : undefined,
+              tool_call_id: toolCallId,
+              tool_name: toolName,
+              tool_args: toolInput,
+              runId,
             },
           });
 
-          // Check pauseAfterGeneration
+          await this.emitSessionEvent(sessionId, 'assistant.tool_result', {
+            sessionId,
+            runId,
+            messageId,
+            toolCallId,
+            result: this.stringifyToolResult(output),
+          });
+          continue;
+        }
+
+        if (part.type === 'finish-step') {
+          await this.flushSessionEvents();
+
           if (sessionController.shouldPause(sessionId, 'afterGeneration')) {
             sessionController.markAsPaused(sessionId);
-            await this.emitSessionEvent(sessionId, 'assistant.completed', {
-              sessionId,
-              messageId,
-            });
-            this.sendSessionUpdate();
-            return;
+            pauseRequested = true;
+            break;
           }
 
-          // 检查是否有API级别的tool_calls
-          if (this.pendingToolCalls.length > 0 && this.mcpClient && this.mcpClient.isEnabled()) {
-            await this.handleToolCalls(clientId, sessionId, session, messageId);
-
-            // Check pauseAfterExecution
-            if (sessionController.shouldPause(sessionId, 'afterExecution')) {
-              sessionController.markAsPaused(sessionId);
-              await this.emitSessionEvent(sessionId, 'assistant.completed', {
-                sessionId,
-                messageId,
-              });
-              this.sendSessionUpdate();
-              return;
-            }
-
-            await this.executeAIResponse(
-              clientId,
-              sessionId,
-              session,
-              iteration + 1,
-              screenshot,
-              signal
-            );
-            return;
+          if (stepHadToolResult && sessionController.shouldPause(sessionId, 'afterExecution')) {
+            sessionController.markAsPaused(sessionId);
+            pauseRequested = true;
+            break;
           }
 
-          // 解析AI返回的JSON指令，检查是否包含mcp_call
-          console.log(
-            `[ChatHandler] Parsing action from content: ${accumulatedContent.substring(0, 200)}...`
-          );
-          const parsedAction = this.parseActionFromContent(accumulatedContent);
-          console.log(`[ChatHandler] Parsed action: ${JSON.stringify(parsedAction)}`);
-
-          if (
-            parsedAction &&
-            parsedAction.type === 'mcp_call' &&
-            this.mcpClient &&
-            this.mcpClient.isEnabled()
-          ) {
-            console.log(`[ChatHandler] Executing MCP call: ${JSON.stringify(parsedAction.params)}`);
-            const toolResult = await this.executeMCPCallAction(parsedAction);
-
-            // 将工具结果添加到对话历史
-            this.conversationManager.addMessage(sessionId, {
-              role: 'tool',
-              content: JSON.stringify(toolResult),
-              metadata: {
-                tool_name: `${parsedAction.params.server}.${parsedAction.params.tool}`,
-                tool_args: parsedAction.params.args,
-              },
-            });
-            await this.emitSessionEvent(sessionId, 'assistant.tool_result', {
-              sessionId,
-              messageId,
-              result: this.stringifyToolResult(toolResult),
-            });
-
-            // Check pauseAfterExecution
-            if (sessionController.shouldPause(sessionId, 'afterExecution')) {
-              sessionController.markAsPaused(sessionId);
-              await this.emitSessionEvent(sessionId, 'assistant.completed', {
-                sessionId,
-                messageId,
-              });
-              this.sendSessionUpdate();
-              return;
-            }
-
-            // 继续让AI处理工具结果
-            await this.executeAIResponse(
-              clientId,
-              sessionId,
-              session,
-              iteration + 1,
-              screenshot,
-              signal
-            );
-            return;
-          }
-
-          await this.emitSessionEvent(sessionId, 'assistant.completed', {
-            sessionId,
-            messageId,
-          });
-          this.sendSessionUpdate();
-        } finally {
-          resolveStreamDoneOnce();
+          stepHadToolResult = false;
+          continue;
         }
-      },
-    };
 
-    try {
-      const decisionClient = this.getDecisionClient(session.provider, session.model);
-      if (!decisionClient) {
-        const availableProviders = Object.keys(this.config._resolved?.providers || {}).join(', ');
-        throw new Error(
-          `Provider '${session.provider}' 未启用或模型 '${session.model}' 不可用。可用 providers: ${availableProviders || '无'}`
-        );
-      }
-      if (!decisionClient.decideStream) {
-        throw new Error(
-          `Provider '${session.provider}' does not support streaming decisions for model '${session.model}'`
-        );
-      }
-      console.log(`[ChatHandler] Using decision client: ${session.provider}/${session.model}`);
-      await decisionClient.decideStream(
-        chatContext as unknown as ChatDecisionContext,
-        callbacks,
-        signal
-      );
+        if (part.type === 'finish') {
+          finishReason = typeof part.finishReason === 'string' ? part.finishReason : undefined;
+          totalUsage = this.normalizeToRecord(part.totalUsage);
+          continue;
+        }
 
-      await streamDone;
+        if (part.type === 'error') {
+          streamError = part.error;
+          break;
+        }
+
+        if (part.type === 'abort') {
+          console.log(`[ChatHandler] Stream aborted for session ${sessionId}`);
+          return;
+        }
+      }
+
+      if (streamError) {
+        throw streamError;
+      }
+
+      if (signal?.aborted) {
+        console.log(`[ChatHandler] Execution aborted for session ${sessionId}`);
+        return;
+      }
+
+      this.conversationManager.addMessage(sessionId, {
+        role: 'assistant',
+        content: accumulatedContent,
+        metadata: {
+          usage: totalUsage,
+          provider: session.provider,
+          model: session.model,
+          runId,
+          tool_calls: emittedToolCalls.length > 0 ? emittedToolCalls : undefined,
+        },
+      });
+
+      const terminalReason: TerminalReason = pauseRequested
+        ? 'pause'
+        : this.mapFinishReasonToTerminalReason(finishReason);
+
+      await this.flushSessionEvents();
+      await this.emitSessionEvent(sessionId, 'assistant.completed', {
+        sessionId,
+        runId,
+        messageId,
+        terminal_reason: terminalReason,
+      });
+      const completionStatus: SessionStatus = pauseRequested ? 'paused' : 'completed';
+      const latestState = await this.conversationManager.getSessionState(sessionId);
+      const nextAgentState = {
+        ...(latestState?.agentState ?? { schema_version: 1 as const }),
+        terminalReason,
+      };
+      await this.conversationManager.updateSessionStatus(sessionId, completionStatus, nextAgentState);
+      this.sendSessionUpdate();
+
+      if (pauseRequested) {
+        return;
+      }
     } catch (error) {
+      if (signal?.aborted || this.isAbortLikeError(error)) {
+        console.log(`[ChatHandler] Execution aborted for session ${sessionId}`);
+        return;
+      }
+
       const errorMessage = error instanceof Error ? error.message : String(error);
       const errorStack = error instanceof Error ? error.stack : undefined;
       console.error('[ChatHandler] Failed to stream AI response', {
@@ -566,171 +540,190 @@ class ChatHandler {
       await this.flushSessionEvents();
       await this.emitSessionEvent(sessionId, 'run.error', {
         sessionId,
+        runId,
         error: errorMessage,
       });
-      resolveStreamDoneOnce();
     }
   }
 
-  private async handleToolCalls(
-    _clientId: string,
-    sessionId: string,
-    _session: ChatSessionData,
-    messageId: string
-  ): Promise<void> {
-    for (const toolCall of this.pendingToolCalls) {
-      try {
-        const toolResult = await this.executeToolCall(toolCall);
+  private mapFinishReasonToTerminalReason(finishReason?: string): TerminalReason {
+    if (finishReason === 'max-steps' || finishReason === 'tool-calls') {
+      return 'max_steps_reached';
+    }
 
-        this.conversationManager.addMessage(sessionId, {
-          role: 'tool',
-          content: JSON.stringify(toolResult),
-          metadata: {
-            tool_call_id: toolCall.id,
-            tool_name: toolCall.function.name,
-            tool_args: toolCall.function.arguments,
-          },
-        });
-        await this.emitSessionEvent(sessionId, 'assistant.tool_result', {
-          sessionId,
-          messageId,
-          result: this.stringifyToolResult(toolResult),
-        });
-      } catch (error) {
-        const result = { error: (error as Error).message };
-        this.conversationManager.addMessage(sessionId, {
-          role: 'tool',
-          content: JSON.stringify(result),
-          metadata: {
-            tool_call_id: toolCall.id,
-            tool_name: toolCall.function.name,
-            error: true,
-          },
-        });
-        await this.emitSessionEvent(sessionId, 'assistant.tool_result', {
-          sessionId,
-          messageId,
-          result: this.stringifyToolResult(result),
-        });
+    return 'stop';
+  }
+
+  private isResumable(status: SessionStatus): boolean {
+    if (status === 'running' || status === 'idle') {
+      return false;
+    }
+
+    return true;
+  }
+
+  private createMessageId(): string {
+    return `msg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+  }
+
+  private createRunId(): string {
+    return `run_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+  }
+
+  private toModelMessages(messages: Message[]): ModelMessage[] {
+    const converted: ModelMessage[] = [];
+
+    for (const message of messages) {
+      if (message.role === 'system') {
+        continue;
       }
+
+      if (message.role === 'user' || message.role === 'assistant') {
+        converted.push({
+          role: message.role,
+          content: message.content,
+        });
+        continue;
+      }
+
+      const toolName =
+        message.metadata && typeof message.metadata.tool_name === 'string'
+          ? message.metadata.tool_name
+          : 'tool';
+      converted.push({
+        role: 'user',
+        content: `工具调用结果 (${toolName}): ${message.content}`,
+      });
+    }
+
+    return converted;
+  }
+
+  private createSDKTools(): Record<string, unknown> {
+    const tools: Record<string, unknown> = {};
+
+    if (!this.mcpClient || !this.mcpClient.isEnabled()) {
+      return tools;
+    }
+
+    for (const mcpTool of this.mcpClient.getAvailableTools()) {
+      const fullToolName = mcpTool.name;
+      tools[fullToolName] = tool({
+        description: mcpTool.description || fullToolName,
+        inputSchema: this.buildInputSchema(mcpTool.inputSchema),
+        execute: async (rawArgs: unknown) => {
+          if (!this.mcpClient || !this.mcpClient.isEnabled()) {
+            throw new Error('MCP is not enabled or not available');
+          }
+
+          const args = this.normalizeToRecord(rawArgs);
+          const [serverName, actualToolName] = this.parseToolName(fullToolName);
+          this.assertToolIsSafe(actualToolName);
+          return await this.mcpClient.callTool(serverName, actualToolName, args);
+        },
+      });
+    }
+
+    return tools;
+  }
+
+  private buildInputSchema(schema: unknown): z.ZodTypeAny {
+    const jsonSchema = schema as MCPObjectSchema;
+    if (jsonSchema?.type !== 'object' || !jsonSchema.properties) {
+      return z.object({}).passthrough();
+    }
+
+    const required = new Set(jsonSchema.required || []);
+    const shape: Record<string, z.ZodTypeAny> = {};
+
+    for (const [key, property] of Object.entries(jsonSchema.properties)) {
+      const propertySchema = this.buildPropertySchema(property);
+      shape[key] = required.has(key) ? propertySchema : propertySchema.optional();
+    }
+
+    return z.object(shape).passthrough();
+  }
+
+  private buildPropertySchema(property: unknown): z.ZodTypeAny {
+    if (!property || typeof property !== 'object') {
+      return z.unknown();
+    }
+
+    const definition = property as {
+      type?: string;
+      enum?: unknown[];
+      items?: unknown;
+    };
+
+    if (Array.isArray(definition.enum) && definition.enum.every((value) => typeof value === 'string')) {
+      const enumValues = definition.enum as string[];
+      return z.string().refine((value) => enumValues.includes(value), {
+        message: `Expected one of: ${enumValues.join(', ')}`,
+      });
+    }
+
+    switch (definition.type) {
+      case 'string':
+        return z.string();
+      case 'number':
+      case 'integer':
+        return z.number();
+      case 'boolean':
+        return z.boolean();
+      case 'array':
+        return z.array(this.buildPropertySchema(definition.items));
+      case 'object':
+        return z.record(z.string(), z.unknown());
+      default:
+        return z.unknown();
     }
   }
 
-  private async executeToolCall(toolCall: MCPToolCall): Promise<unknown> {
-    if (!this.mcpClient || !this.mcpClient.isEnabled()) {
-      throw new Error('MCP is not enabled or not available');
+  private normalizeToRecord(value: unknown): Record<string, unknown> {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      return value as Record<string, unknown>;
     }
 
-    const toolName = toolCall.function.name;
-    const args = JSON.parse(toolCall.function.arguments) as Record<string, unknown>;
+    return {};
+  }
 
-    const [serverName, ...nameParts] = toolName.split('.');
+  private parseToolName(fullToolName: string): [serverName: string, toolName: string] {
+    const [serverName, ...nameParts] = fullToolName.split('.');
     if (!serverName || nameParts.length === 0) {
-      throw new Error(`Invalid tool name format: ${toolName}`);
+      throw new Error(`Invalid tool name format: ${fullToolName}`);
     }
 
-    const actualToolName = nameParts.join('.');
+    return [serverName, nameParts.join('.')];
+  }
 
+  private assertToolIsSafe(toolName: string): void {
     const dangerousToolPatterns = ['delete', 'remove', 'destroy', 'drop', 'truncate'];
     const isDangerous = dangerousToolPatterns.some((pattern) =>
-      actualToolName.toLowerCase().includes(pattern)
+      toolName.toLowerCase().includes(pattern)
     );
 
     if (isDangerous) {
-      throw new Error(
-        `Dangerous tool "${actualToolName}" requires confirmation and is not allowed`
-      );
+      throw new Error(`Dangerous tool "${toolName}" requires confirmation and is not allowed`);
     }
-
-    return await this.mcpClient.callTool(serverName, actualToolName, args);
   }
 
-  private parseActionFromContent(content: string): ParsedAction | null {
-    // 尝试从内容中提取JSON块
-    const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
-    if (jsonMatch) {
-      try {
-        const parsed = JSON.parse(jsonMatch[1]) as Record<string, unknown>;
-        return this.normalizeAction(parsed);
-      } catch (e) {
-        console.warn('Failed to parse JSON from content:', e);
-      }
+  private isAbortLikeError(error: unknown): boolean {
+    if (!error || typeof error !== 'object') {
+      return false;
     }
 
-    // 尝试直接解析整个内容为JSON
-    try {
-      const parsed = JSON.parse(content.trim()) as Record<string, unknown>;
-      return this.normalizeAction(parsed);
-    } catch {
-      // 不是JSON格式
-    }
-
-    return null;
-  }
-
-  private normalizeAction(parsed: Record<string, unknown>): ParsedAction | null {
-    if (!parsed) return null;
-
-    if (typeof parsed.type === 'string') {
-      return {
-        type: parsed.type,
-        params: (parsed.params as Record<string, unknown>) || {},
-        reasoning: typeof parsed.reasoning === 'string' ? parsed.reasoning : undefined,
-      };
-    }
-
-    if (parsed.action === 'mcp_call') {
-      let server = (parsed.server as string) || 'browser-control';
-      let tool = parsed.tool as string;
-      const args = (parsed.args as Record<string, unknown>) || {};
-
-      if (tool && tool.includes('.')) {
-        const parts = tool.split('.');
-        if (parts.length >= 2) {
-          tool = parts.pop() || tool;
-        }
-      }
-
-      server = server.replace(/_/g, '-');
-
-      return {
-        type: 'mcp_call',
-        params: { server, tool, args },
-        reasoning: typeof parsed.reasoning === 'string' ? parsed.reasoning : undefined,
-      };
-    }
-
-    if (typeof parsed.action === 'string') {
-      return {
-        type: parsed.action,
-        params:
-          (parsed.params as Record<string, unknown>) ||
-          ({ target: parsed.target, value: parsed.value } as Record<string, unknown>),
-        reasoning: typeof parsed.reasoning === 'string' ? parsed.reasoning : undefined,
-      };
-    }
-
-    return null;
-  }
-
-  private async executeMCPCallAction(action: ParsedAction): Promise<unknown> {
-    if (!this.mcpClient || !this.mcpClient.isEnabled()) {
-      throw new Error('MCP is not enabled or not available');
-    }
-
-    const { server, tool, args = {} } = action.params as {
-      server: string;
-      tool: string;
-      args: Record<string, unknown>;
+    const abortError = error as {
+      name?: unknown;
+      code?: unknown;
+      message?: unknown;
     };
-    console.log(
-      `[Agent] Executing MCP call: server=${server}, tool=${tool}, args=${JSON.stringify(args)}`
+
+    return (
+      abortError.name === 'AbortError' ||
+      abortError.code === 'ERR_CANCELED' ||
+      abortError.message === 'canceled' ||
+      abortError.message === 'interrupted'
     );
-
-    // 如果server不是browser-control，自动修正
-    const actualServer = server === 'default' ? 'browser-control' : server;
-
-    return await this.mcpClient.callTool(actualServer, tool, args);
   }
 
   sendSessionUpdate(): void {

@@ -109,6 +109,7 @@ class ConversationManager {
   }
 
   addMessage(sessionId: string, message: AddMessageParams): Message {
+    // Single-writer contract: this path must durably persist to SQLite before returning.
     const session = this.getSession(sessionId);
     if (!session) {
       throw new Error(`Session ${sessionId} not found`);

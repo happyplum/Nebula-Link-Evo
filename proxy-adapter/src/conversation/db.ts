@@ -382,6 +382,8 @@ class DatabaseManager {
       throw new Error('Database not initialized');
     }
 
+    // Message persistence is synchronous via DatabaseSync (no buffering/batching in this path).
+
     const id = params.id || randomUUID();
     const now = new Date().toISOString();
     const metadata = params.metadata ? JSON.stringify(params.metadata) : null;

@@ -1,3 +1,13 @@
+/**
+ * @deprecated Legacy SSE stream processor for old DecisionClient-based streaming.
+ *
+ * The chat-handler now uses Vercel AI SDK `streamText()` + `fullStream` directly.
+ * This module is retained only because `base-impl.ts` (task-execution path) still
+ * references `StreamProcessor`, `ToolCall`, and `UsageStats` types.
+ *
+ * Do NOT import this module from any new code.
+ * TODO: Remove once the task-execution path is fully migrated to AI SDK streaming.
+ */
 import type { AxiosResponse } from 'axios';
 
 export interface ToolCall {
