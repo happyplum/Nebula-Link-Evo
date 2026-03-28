@@ -28,8 +28,6 @@ export type {
 } from './types/sse-events.js';
 export {
   eventToSSEFormat,
-  toLegacyEventType,
-  LEGACY_EVENT_MAP,
 } from './types/sse-events.js';
 
 // Utilities module

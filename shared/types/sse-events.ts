@@ -89,6 +89,8 @@ export interface MessageCreatedEvent {
   seq?: number;
   /** Session identifier */
   sessionId: string;
+  /** Runtime execution identifier that produced this event */
+  runId?: string;
   /** Message identifier */
   messageId: string;
   /** Message content */
@@ -104,6 +106,8 @@ export interface AssistantStartedEvent {
   seq?: number;
   /** Session identifier */
   sessionId: string;
+  /** Runtime execution identifier that produced this event */
+  runId?: string;
   /** Message identifier */
   messageId: string;
 }
@@ -117,6 +121,8 @@ export interface AssistantDeltaEvent {
   seq?: number;
   /** Session identifier */
   sessionId: string;
+  /** Runtime execution identifier that produced this event */
+  runId?: string;
   /** Message identifier */
   messageId: string;
   /** Text chunk */
@@ -132,8 +138,12 @@ export interface AssistantCompletedEvent {
   seq?: number;
   /** Session identifier */
   sessionId: string;
+  /** Runtime execution identifier that produced this event */
+  runId?: string;
   /** Message identifier */
   messageId: string;
+  /** Terminal reason for assistant run completion */
+  terminal_reason?: 'stop' | 'max_steps_reached' | 'tool_error' | 'abort' | 'pause';
 }
 
 /**
@@ -145,6 +155,8 @@ export interface AssistantThinkingEvent {
   seq?: number;
   /** Session identifier */
   sessionId: string;
+  /** Runtime execution identifier that produced this event */
+  runId?: string;
   /** Message identifier */
   messageId: string;
   /** Thinking content */
@@ -160,8 +172,12 @@ export interface AssistantToolCallEvent {
   seq?: number;
   /** Session identifier */
   sessionId: string;
+  /** Runtime execution identifier that produced this event */
+  runId?: string;
   /** Message identifier */
   messageId: string;
+  /** Unique tool invocation identifier within a run */
+  toolCallId?: string;
   /** Tool call details */
   toolCall: ToolCall;
 }
@@ -175,8 +191,12 @@ export interface AssistantToolResultEvent {
   seq?: number;
   /** Session identifier */
   sessionId: string;
+  /** Runtime execution identifier that produced this event */
+  runId?: string;
   /** Message identifier */
   messageId: string;
+  /** Unique tool invocation identifier within a run */
+  toolCallId?: string;
   /** Tool execution result */
   result: string;
 }
@@ -190,6 +210,8 @@ export interface RunErrorEvent {
   seq?: number;
   /** Session identifier */
   sessionId: string;
+  /** Runtime execution identifier that produced this event */
+  runId?: string;
   /** Error message */
   error: string;
 }
@@ -248,32 +270,4 @@ export function eventToSSEFormat(
     data: JSON.stringify(event),
     id: eventId,
   };
-}
-
-// ========== LEGACY COMPATIBILITY ==========
-
-/**
- * Maps new event types to legacy chat_stream event names.
- * Provides backward compatibility for existing clients.
- */
-export const LEGACY_EVENT_MAP: Record<SessionEventType, string> = {
-  'session.snapshot': 'chat_stream_start',
-  'message.created': 'chat_stream_start',
-  'assistant.started': 'chat_stream_start',
-  'assistant.delta': 'chat_stream_token',
-  'assistant.completed': 'chat_stream_end',
-  'assistant.thinking': 'chat_stream_thinking',
-  'assistant.tool_call': 'chat_stream_tool_call',
-  'assistant.tool_result': 'chat_stream_tool_result',
-  'run.error': 'chat_stream_error',
-};
-
-/**
- * Converts event type to legacy event name.
- *
- * @param eventType - The new event type
- * @returns Legacy event name
- */
-export function toLegacyEventType(eventType: SessionEventType): string {
-  return LEGACY_EVENT_MAP[eventType] || eventType;
 }
