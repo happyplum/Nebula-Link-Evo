@@ -1,4 +1,4 @@
-import { showSuccess, showError } from './ui.js';
+import { showSuccess, showError, showWarning, updateStatus } from './ui.js';
 
 // 类型定义
 interface ChatMessage {
@@ -47,6 +47,9 @@ interface WebSocketData {
       name: string;
     };
   };
+  toolCallId?: string;
+  result?: string;
+  data?: any;
   error?: string;
   messages?: Array<{
     id: string;
@@ -331,7 +334,7 @@ class ChatManager {
         this.setSessionStatus('interrupted');
         showSuccess('会话已打断');
       } else {
-        const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+        const error = await this.safeJsonResponse<{ error?: string }>(response);
         showError(`打断失败：${error.error}`);
       }
     } catch (error) {
@@ -359,7 +362,7 @@ class ChatManager {
         this.setSessionStatus('paused');
         showSuccess('会话已暂停');
       } else {
-        const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+        const error = await this.safeJsonResponse<{ error?: string }>(response);
         showError(`暂停失败：${error.error}`);
       }
     } catch (error) {
@@ -389,7 +392,7 @@ class ChatManager {
         this.setSessionStatus('running');
         showSuccess('会话已继续');
       } else {
-        const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+        const error = await this.safeJsonResponse<{ error?: string }>(response);
         showError(`继续失败：${error.error}`);
       }
     } catch (error) {
@@ -413,7 +416,7 @@ class ChatManager {
         this.setSessionStatus('cancelled');
         showSuccess('会话已取消');
       } else {
-        const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+        const error = await this.safeJsonResponse<{ error?: string }>(response);
         showError(`取消失败：${error.error}`);
       }
     } catch (error) {
@@ -446,12 +449,32 @@ class ChatManager {
     }
   }
 
+  /** Safely parse JSON from a fetch Response, handling non-OK status codes and non-JSON bodies. */
+  private async safeJsonResponse<T = unknown>(response: Response): Promise<T> {
+    if (!response.ok) {
+      if (response.status === 429) {
+        showWarning('请求过于频繁，请稍后再试');
+      } else if (response.status === 503) {
+        showError('服务暂时不可用，请稍后再试');
+      }
+      try {
+        return await response.json() as T;
+      } catch {
+        return { error: `HTTP ${response.status}` } as T;
+      }
+    }
+    return response.json() as Promise<T>;
+  }
+
   private statusFilter: string = '';
 
   async loadSessions(): Promise<void> {
     try {
       const res = await fetch('/api/chat/sessions');
-      if (!res.ok) throw new Error('Failed to fetch sessions');
+      if (!res.ok) {
+        await this.safeJsonResponse(res);
+        throw new Error('Failed to fetch sessions');
+      }
       const data = await res.json();
       // Backend now returns an array directly instead of {success: true, sessions: []}
       if (Array.isArray(data)) {
@@ -969,6 +992,8 @@ class ChatManager {
     message: string,
     screenshot?: string | null
   ): Promise<void> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
     try {
       const response = await fetch(`${this.streamApiBase}/sessions/${sessionId}/messages`, {
         method: 'POST',
@@ -977,16 +1002,23 @@ class ChatManager {
           content: message,
           screenshot,
         }),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await this.safeJsonResponse<{ error?: string }>(response);
         throw new Error(errorData.error || 'Failed to trigger message task');
       }
       // Status and message streaming are purely handled via the already active SSE loop
     } catch (error) {
-      console.error('Failed to send chat message:', error);
-      showError(`发送失败：${(error as Error).message}`);
+      clearTimeout(timeoutId);
+      if ((error as Error).name === 'AbortError') {
+        showError('请求超时，请检查网络连接后重试');
+      } else {
+        console.error('Failed to send chat message:', error);
+        showError(`发送失败：${(error as Error).message}`);
+      }
     }
   }
 
@@ -998,10 +1030,17 @@ class ChatManager {
 
     const url = new URL(`${this.streamApiBase}/sessions/${sessionId}/stream`, window.location.origin);
     const state = this.ensureSessionState(sessionId);
-    const lastEventId = allowResume ? state.lastEventId || localStorage.getItem(`sse_lastEventId_${sessionId}`) || '' : '';
+    let lastEventId = allowResume ? state.lastEventId || localStorage.getItem(`sse_lastEventId_${sessionId}`) || '' : '';
+
     if (!allowResume) {
       state.lastEventId = '';
       state.highestEventSeq = -1;
+      localStorage.removeItem(`sse_lastEventId_${sessionId}`);
+    }
+
+    if (lastEventId && !/^\d+$/.test(lastEventId)) {
+      lastEventId = '';
+      state.lastEventId = '';
       localStorage.removeItem(`sse_lastEventId_${sessionId}`);
     }
     if (lastEventId) {
@@ -1014,6 +1053,7 @@ class ChatManager {
       this.eventSource.onopen = () => {
         console.log('SSE connection established');
         this.reconnectAttempts = 0;
+        updateStatus(true, 'connected', 'SSE 已连接');
       };
 
       const handleEvent = (event: MessageEvent<string>) => {
@@ -1044,6 +1084,7 @@ class ChatManager {
 
       this.eventSource.onerror = () => {
         console.error('SSE connection error');
+        updateStatus(false, 'reconnecting', 'SSE 重连中...');
         this.reconnect();
       };
     } catch (error) {
@@ -1163,6 +1204,8 @@ class ChatManager {
       eventType = 'chat_stream_thinking';
     } else if (eventType === 'assistant.tool_call') {
       eventType = 'chat_stream_tool_call';
+    } else if (eventType === 'assistant.tool_result') {
+      eventType = 'chat_stream_tool_result';
     } else if (eventType === 'run.error') {
       eventType = 'chat_stream_error';
     }
@@ -1195,7 +1238,7 @@ class ChatManager {
       `[data-id="${data.messageId}"]`
     ) as HTMLElement | null;
 
-    if (!msgDiv && data.messageId && (eventType === 'chat_stream_token' || eventType === 'chat_stream_thinking' || eventType === 'chat_stream_tool_call' || eventType === 'chat_stream_end' || eventType === 'chat_stream_error')) {
+    if (!msgDiv && data.messageId && (eventType === 'chat_stream_token' || eventType === 'chat_stream_thinking' || eventType === 'chat_stream_tool_call' || eventType === 'chat_stream_tool_result' || eventType === 'chat_stream_end' || eventType === 'chat_stream_error')) {
       this.mergeSessionMessages(
         sessionId,
         [{
@@ -1286,12 +1329,34 @@ class ChatManager {
           'background: var(--bg-card); border-left: 2px solid var(--accent-info); padding: 4px 8px; margin: 4px 0; font-family: monospace; font-size: 11px; border-radius: 4px; color: var(--text-primary);';
         const toolName = data.toolCall?.function?.name || 'Unknown Tool';
         toolCallDiv.textContent = `🔧 使用工具: ${toolName}`;
+        if (data.toolCallId) {
+          toolCallDiv.dataset.toolCallId = data.toolCallId;
+        }
 
         const contentDiv = msgDiv.querySelector('.msg-content');
         if (contentDiv && contentDiv.parentElement) {
           contentDiv.parentElement.insertBefore(toolCallDiv, contentDiv.nextSibling);
         }
         this.scrollToBottom();
+      }
+    }
+
+    if (eventType === 'chat_stream_tool_result') {
+      if (msgDiv && data.toolCallId) {
+        const toolCallDiv = msgDiv.querySelector(`.tool-call-message[data-tool-call-id="${data.toolCallId}"]`) as HTMLElement | null;
+        if (toolCallDiv) {
+          const resultDiv = document.createElement('div');
+          resultDiv.className = 'tool-result-message';
+          resultDiv.style.cssText =
+            'background: var(--bg-card); border-left: 2px solid var(--accent-success); padding: 4px 8px; margin: 4px 0; font-family: monospace; font-size: 11px; border-radius: 4px; color: var(--text-primary);';
+          const truncatedResult = data.result ? data.result.substring(0, 100) + (data.result.length > 100 ? '...' : '') : '✅ 完成';
+          resultDiv.textContent = `🔧 结果: ${truncatedResult}`;
+
+          if (toolCallDiv.parentElement) {
+            toolCallDiv.parentElement.insertBefore(resultDiv, toolCallDiv.nextSibling);
+          }
+          this.scrollToBottom();
+        }
       }
     }
 
