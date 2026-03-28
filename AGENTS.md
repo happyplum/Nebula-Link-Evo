@@ -1,56 +1,72 @@
 # Nebula-Link Evo - Agent Knowledge Base
 
-## Overview
-Monorepo with four workspace packages:
-- `debug-ui` - standalone Vite Debug UI. Dev server runs on `5173`, production assets build to `debug-ui/dist`.
-- `proxy-adapter` - Fastify backend on `3000` for AI orchestration, chat, debug APIs, and production `/debug/` static serving.
-- `playwright-server` - browser automation service on `3001`.
-- `shared` - workspace package for shared types and utilities consumed across services.
+**Generated:** 2026-03-28
+**Commit:** 862f182
+**Branch:** main
 
-## Workspace Flow
-- `pnpm dev` - build `shared`, then run `debug-ui`, `proxy-adapter`, and `playwright-server` in parallel.
-- `pnpm build` - build `shared`, `debug-ui`, `playwright-server`, then `proxy-adapter`.
-- `start-dev.bat` - Windows dev launcher for ports `3000`, `3001`, `5173`.
-- `start.bat` - Windows production-style launcher; `proxy-adapter` serves `debug-ui/dist` at `/debug/`.
-- `stop.bat` - stop listeners on `3000`, `3001`, and `5173`.
+## Overview
+Monorepo: browser automation system with AI orchestration. Four pnpm workspace packages — debug-ui (Vite frontend), proxy-adapter (Fastify backend :3000), playwright-server (browser service :3001), shared (types/utils).
+
+## Structure
+```
+.
+├── debug-ui/              # Standalone Vite frontend for /debug
+├── proxy-adapter/         # Fastify backend: AI orchestration, chat, APIs
+├── playwright-server/     # Browser automation HTTP/WS service
+├── shared/                # Workspace package: @nebula-link-evo/shared
+├── config/                # Cross-service config (not a package)
+└── docs/                  # Documentation
+```
 
 ## Where To Look
-| Domain | Path | Notes |
-|---|---|---|
-| Debug UI package | `debug-ui/` | Standalone frontend source, build config, Vitest tests |
-| Debug UI logic | `debug-ui/js/` | `chat.ts`, `config.ts`, `liveview.ts`, `playwright.ts`, `websocket.ts` |
-| Backend entry | `proxy-adapter/src/server.ts` | Env load, route registration, `/debug*` dev proxy, production static serving |
-| Task execution core | `proxy-adapter/src/services/` | `TaskService`, `TaskOrchestrator`, `ActionExecutor`, `StepRunner` |
-| Debug backend routes | `proxy-adapter/src/plugins/routes/debug/index.ts` | `/debug/api/*` and legacy `/debug/ws` alias |
-| Browser service | `playwright-server/src/services/browser-service.ts` | Singleton facade over lifecycle, DOM, actions |
-| Browser lifecycle | `playwright-server/src/services/browser-lifecycle.ts` | Browser/page open-close-navigate-screenshot state |
-| Shared types | `shared/types/` | Action, SSE, task history/context, vision marker types |
-| Shared utils | `shared/utils/` | UUID, selector generation, metrics |
+| Task | Location | Notes |
+|------|----------|-------|
+| Frontend source | `debug-ui/js/` | chat.ts, liveview.ts, playwright.ts, websocket.ts |
+| Backend entry | `proxy-adapter/src/server.ts` | Env load, routes, dev proxy, prod static |
+| Task execution | `proxy-adapter/src/services/` | TaskService, Orchestrator, StepRunner |
+| AI providers | `proxy-adapter/src/clients/` | Decision + vision factories, Vercel AI SDK |
+| Chat/session API | `proxy-adapter/src/plugins/routes/api/chat/` | Sessions, stream, control |
+| Browser control | `playwright-server/src/services/` | BrowserService singleton |
+| Shared types | `shared/types/` | Action, SSE, task, vision marker |
+| Shared utils | `shared/utils/` | UUID, selector, metrics |
 
-## Current Architecture
-- `debug-ui` owns all frontend source. Do not reintroduce frontend files under `proxy-adapter/src/static/debug/`.
-- `proxy-adapter` owns HTTP APIs, WebSocket endpoints, and production static serving of `debug-ui/dist`.
-- `playwright-server` owns browser control and low-level Playwright interactions.
-- `shared` is the cross-package contract surface. Use `@nebula-link-evo/shared`, not the removed `@shared/*` alias.
+## Commands
+```bash
+pnpm dev              # Build shared, then parallel: debug-ui + proxy-adapter + playwright-server
+pnpm build            # Build shared → debug-ui → playwright-server → proxy-adapter
+pnpm test             # Run all tests across packages
+pnpm lint             # ESLint across debug-ui/js, proxy-adapter/src, playwright-server/src
+pnpm lint:fix         # ESLint with auto-fix
+pnpm format           # Prettier write
+pnpm format:check     # Prettier check
+start-dev.bat         # Windows: dev mode (ports 3000, 3001, 5173)
+start.bat             # Windows: production build + serve
+stop.bat              # Windows: kill listeners on 3000, 3001, 5173
+```
 
-## Project Conventions
-- Local TypeScript imports use the `.js` extension.
-- Code style: 2-space indent, single quotes, strict typing.
-- Prefer service/facade patterns over large route handlers.
-- Keep route handlers thin; move stateful logic into services.
-- Debug UI is plain TypeScript plus DOM APIs, not a framework app.
+## Architecture
+- `debug-ui` owns all frontend. Vite dev server in dev, `proxy-adapter` serves `debug-ui/dist` in prod.
+- `proxy-adapter` owns HTTP APIs, WebSocket, AI orchestration. Talks to playwright-server over HTTP.
+- `playwright-server` owns Playwright/browser control. No business logic from proxy-adapter.
+- `shared` is the cross-package contract. Import as `@nebula-link-evo/shared`.
+
+## Conventions
+- TypeScript with `.js` extension for local imports.
+- 2-space indent, single quotes, strict typing.
+- Service/facade patterns over large route handlers. Route handlers are thin.
+- Framework-free frontend (plain TypeScript + DOM APIs).
+- TypeBox for Fastify schema validation. Zod for runtime validation in clients.
 
 ## Anti-Patterns
-- Do not commit secrets or environment-specific credentials.
-- Do not use `any`, `@ts-ignore`, or ad-hoc type suppression.
-- Do not hardcode browser selectors when semantic/AI-derived targeting exists.
-- Do not kill processes broadly; stop by known port or PID.
-- Do not couple package builds back together by re-embedding `debug-ui` into `proxy-adapter`.
+- No `any`, `@ts-ignore`, or type suppression.
+- No hardcoded browser selectors when AI-derived targeting exists.
+- No broad process kills; target by port or PID.
+- No re-embedding `debug-ui` source into `proxy-adapter`.
+- No stale `@shared/*` alias — use `@nebula-link-evo/shared`.
+- No secrets or env-specific credentials in code.
 
 ## Child AGENTS
-- `debug-ui/AGENTS.md` - frontend package commands and runtime model.
-- `debug-ui/js/AGENTS.md` - module-level guidance for frontend logic.
-- `proxy-adapter/AGENTS.md` - backend package scope and commands.
-- `proxy-adapter/src/AGENTS.md` - source tree map for services, plugins, clients, and tests.
-- `playwright-server/AGENTS.md` - browser automation package overview.
-- `shared/AGENTS.md` - shared exports and source-only test helper caveats.
+- `debug-ui/AGENTS.md` — frontend package
+- `proxy-adapter/AGENTS.md` — backend package
+- `playwright-server/AGENTS.md` — browser service
+- `shared/AGENTS.md` — shared workspace package

@@ -1,26 +1,26 @@
-# Conversation Storage Guidelines
+# Conversation Storage
 
-## 1. Where to Look
-| Domain | Path |
-| :--- | :--- |
-| Database Layer | `db.ts` |
-| Session Manager | `manager.ts` |
-| Compressor | `compressor.ts` |
-| Types | `types.ts` |
+## Overview
+SQLite-backed session and message persistence with context compression.
 
-## 2. Database
-- **SQLite**: Local storage using `node:sqlite`
-- **Schema**: `sessions` (metadata) + `messages` (role-based content)
-- **Indexing**: Optimized for `updated_at` and `session_id`
+## Where To Look
+| File | Purpose |
+|------|---------|
+| `db.ts` | DatabaseManager — schema, queries, migrations |
+| `manager.ts` | ConversationManager — session lifecycle CRUD |
+| `chat-handler.ts` | SDK-dominant multi-step runner |
+| `compressor.ts` | Context compression/summarization |
+| `session-events-dao.ts` | Batch event persistence |
+| `session-state-dao.ts` | Optimistic-lock session state |
+| `types.ts` | Conversation-specific types |
+| `migrations/` | Schema migration files |
 
-## 3. Key Operations
-- Session lifecycle, message addition, context windowing
-- Session compression and summary generation
-- Message metadata support (tool calls, extra context)
+## Key Patterns
+- **SQLite** via `node:sqlite`. Schema: `sessions` (metadata) + `messages` (role-based content).
+- **Single-writer persistence**: durable storage before SSE publish.
+- **Replay/resume** via `afterSeq` cursor parameter.
 
-## 4. Anti-Patterns
-- No SQL injection; use parameterized queries
-- No direct DB access in business logic; use `ConversationManager`
-- Never use string interpolation for queries
-
-See parent AGENTS.md for conventions and patterns.
+## Anti-Patterns
+- No SQL injection — parameterized queries only.
+- No direct DB access in business logic — use `ConversationManager`.
+- No string interpolation for queries.

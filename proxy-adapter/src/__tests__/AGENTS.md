@@ -1,33 +1,35 @@
-# Proxy Adapter Tests Guidelines
+# Tests
 
 ## Overview
-This tree holds Vitest unit/integration coverage plus Playwright-based end-to-end tests for backend and Debug UI flows.
+Vitest unit/integration coverage plus Playwright e2e tests for backend and Debug UI flows.
 
 ## Test Topology
 | Area | Path | Notes |
-|---|---|---|
-| Unit tests | `unit/`, `services/`, `plugins/` | Isolated module/service behavior |
-| Integration tests | `integration/` | Real route/proxy/http behavior such as proxy-loop prevention |
-| E2E tests | `e2e/` | Browser-driven Debug UI and workflow coverage |
-| Conversation/config | `conversation/`, `config/` | Persistence and config behavior |
-| AI/provider tests | `vercel-ai/`, client-related tests | Provider integration and adapters |
+|------|------|-------|
+| Unit | `unit/`, `services/`, `plugins/` | Isolated module/service behavior |
+| Integration | `integration/` | Real route/proxy/HTTP behavior (proxy-loop prevention) |
+| Integration (chat) | `integration/chat/` | 15+ contract test files for chat/session API |
+| E2E | `e2e/`, `e2e/debug-ui/` | Browser-driven Debug UI and workflow coverage |
+| Conversation | `conversation/` | Persistence and config behavior |
+| Config | `config/` | Config loading/validation |
+| AI/provider | `vercel-ai/`, client tests | Provider integration |
 | Helpers/fixtures | `helpers/`, `fixtures/` | Shared test setup |
 
-## Working Rules
-- Prefer real request lifecycles (`app.inject()`, fetch against local servers, websocket clients) for route/proxy regressions.
-- Avoid tautological tests that only restate constants or path strings.
-- Use shared source-level helpers from `shared/test-utils/` carefully; they are not part of the normal shared build output.
-- Keep e2e tests aligned with the extracted `debug-ui/` package and current `/ws/debug` canonical endpoint.
-
 ## Commands
-- `pnpm test` - Vitest suite
-- `pnpm test:coverage` - Vitest with coverage
-- `pnpm test:e2e` - Playwright e2e suite
-- `pnpm test:debug` - debug page smoke check
+```bash
+pnpm test          # Vitest suite
+pnpm test:coverage # Vitest with coverage
+pnpm test:e2e      # Playwright e2e
+pnpm test:debug    # Debug page smoke check
+```
+
+## Working Rules
+- Prefer real request lifecycles (`app.inject()`, fetch, websocket clients) for route/proxy regressions.
+- No tautological tests that restate constants or path strings.
+- Use `shared/test-utils/` carefully — not part of normal shared build output.
+- Keep e2e aligned with extracted `debug-ui/` and current `/ws/debug` canonical endpoint.
 
 ## Anti-Patterns
-- No live external AI/API calls in automated tests unless the test is explicitly designed for that.
-- No fake integration tests that never mount Fastify or exercise the real HTTP path.
-- No duplicated fixture setup when a shared helper already exists.
-
-See parent `src/AGENTS.md` for backend source layout.
+- No live external AI/API calls unless explicitly designed for it.
+- No fake integration tests that never mount Fastify.
+- No duplicated fixture setup when shared helper exists.

@@ -1,58 +1,26 @@
-# Route Handlers Guidelines
+# Route Handlers
 
-## OVERVIEW
-Fastify route handlers for browser control. Maps HTTP requests to BrowserManager actions.
+## Overview
+Fastify route modules for browser control. Map HTTP/WS requests to BrowserService actions.
 
-## STRUCTURE
+## Structure
 ```
-playwright-server/src/plugins/routes/
-├── browser.ts        # Browser lifecycle endpoints
-├── action.ts         # Page action endpoints (click, type, scroll)
-├── dom.ts            # DOM query endpoints
-├── cdp.ts            # CDP WebSocket passthrough
-├── stream.ts         # Screencast WebSocket streaming
-└── health.ts         # Health check endpoint
-```
-
-## ROUTE REFERENCE
-| Prefix | File | Methods | Purpose |
-|--------|------|---------|---------|
-| `/browser/*` | `browser.ts` | POST | Open, close, navigate, screenshot, status |
-| `/action/*` | `action.ts` | POST | Click, type, scroll commands |
-| `/dom/*` | `dom.ts` | GET | Simplified DOM tree, element state |
-| `/cdp` | `cdp.ts` | WS | Chrome DevTools Protocol tunnel |
-| `/stream/*` | `stream.ts` | WS | Real-time screencast streaming |
-| `/health` | `health.ts` | GET | Service health check |
-
-## REQUEST/RESPONSE PATTERNS
-```typescript
-// Example: POST /action/click
-interface ClickRequest {
-  x: number;
-  y: number;
-}
-
-interface ClickResponse {
-  success: boolean;
-  message: string;
-}
+plugins/routes/
+├── browser.ts        # /browser/* — open, close, navigate, screenshot, status
+├── action.ts         # /action/* — click, type, scroll
+├── dom.ts            # /dom/* — simplified DOM tree, element state
+├── execute.ts        # /execute/* — script execution
+├── cdp.ts            # /cdp — CDP WebSocket passthrough
+├── stream.ts         # /stream/* — screencast WebSocket streaming
+└── health.ts         # /health — service health check
 ```
 
-## CONVENTIONS
-- **Fastify plugins**: Encapsulated route handlers
-- **JSON Schema validation**: TypeBox schemas for request validation
-- **Error handling**: Defer to global error handler plugin
-- **Async handlers**: All route handlers are async
+## Conventions
+- Encapsulated Fastify plugins with TypeBox schema validation.
+- Async handlers throughout. Errors thrown, caught by global handler.
+- Delegate to BrowserService — no direct Playwright calls in routes.
 
-## DEPENDENCIES
-- BrowserManager: Browser actions delegation
-- TypeBox: Request/response type definitions
-- Fastify: Route registration and validation
-
-## ANTI-PATTERNS
-- ❌ No direct Playwright calls — use BrowserManager
-- ❌ No business logic in routes — delegate to services
-- ❌ No synchronous blocking — async throughout
-- ❌ No manual error responses — throw errors, let handler manage
-
-See parent `src/AGENTS.md` for conventions.
+## Anti-Patterns
+- No direct Playwright calls — use BrowserService.
+- No business logic in routes — delegate to services.
+- No synchronous blocking — async throughout.

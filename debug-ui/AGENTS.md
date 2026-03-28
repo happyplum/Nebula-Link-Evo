@@ -1,38 +1,40 @@
-# Debug UI Package Guidelines
+# Debug UI Package
 
 ## Overview
-`debug-ui/` is the standalone frontend package for `/debug`. It runs as a Vite app in development and builds static assets that `proxy-adapter` serves in production.
+Standalone Vite frontend for `/debug`. Dev server on `:5173`, production assets served by `proxy-adapter` at `/debug/`.
 
 ## Commands
-- `pnpm dev` - start Vite on `http://localhost:5173`
-- `pnpm build` - emit production assets to `debug-ui/dist`
-- `pnpm preview` - preview built assets on `4173`
-- `pnpm test` - run Vitest in jsdom
-- `pnpm type-check` - run `tsc --noEmit`
-
-## Runtime Model
-- Development: Vite serves `/debug/` and proxies `/api`, `/debug/api`, and `/ws` to `http://localhost:3000`.
-- Production: `proxy-adapter` serves `debug-ui/dist` at `http://localhost:3000/debug/`.
-- Frontend modules use same-origin paths such as `/api`, `/debug/api`, `/ws/debug`, and `/ws/chat`.
+```bash
+pnpm dev          # Vite dev server :5173
+pnpm build        # Build to dist/
+pnpm test         # Vitest in jsdom
+pnpm type-check   # tsc --noEmit
+```
 
 ## Where To Look
 | Area | Path | Notes |
-|---|---|---|
-| Vite config | `vite.config.ts` | `base: '/debug/'`, dev proxies, asset layout |
-| HTML shell | `index.html` | Main DOM container and script entry |
-| Styles | `css/` | Variables, layout, utilities, components |
-| Frontend logic | `js/` | Chat, config, live view, Playwright control, WebSocket logic |
-| Frontend tests | `js/__tests__/` | jsdom unit tests for UI and websocket behavior |
+|------|------|-------|
+| Vite config | `vite.config.ts` | base `/debug/`, dev proxies to `:3000` |
+| HTML shell | `index.html` | DOM container, script entry |
+| Styles | `css/` | Variables, layout, components |
+| Frontend logic | `js/` | Chat, config, liveview, playwright, websocket |
+| Tests | `js/__tests__/` | jsdom unit tests |
+
+## Runtime Model
+- **Dev**: Vite serves `/debug/`, proxies `/api`, `/debug/api`, `/ws` → `:3000`
+- **Prod**: `proxy-adapter` serves `debug-ui/dist` at `/debug/`
+- Modules use same-origin paths: `/api`, `/debug/api`, `/ws/debug`, `/ws/chat`
 
 ## Conventions
-- Keep this package framework-free unless the whole architecture intentionally changes.
-- Put behavioral logic in `js/`; keep `index.html` and `css/` declarative.
-- Preserve `/debug/` base-path compatibility when editing routing or asset references.
-- Coordinate backend contracts with `proxy-adapter/src/plugins/routes/debug/index.ts` and `/ws/*` routes.
+- Framework-free (plain TS + DOM). No React/Vue unless whole architecture changes.
+- Keep `index.html` and `css/` declarative; behavioral logic in `js/`.
+- Preserve `/debug/` base-path in all routing/asset refs.
+- Coordinate backend contracts with `proxy-adapter/src/plugins/routes/debug/` and `/ws/*`.
 
 ## Anti-Patterns
-- Do not move the frontend back under `proxy-adapter/src/static/debug/`.
-- Do not hardcode absolute localhost URLs in module code unless the runtime model changes everywhere.
-- Do not duplicate backend validation in the UI when the server already owns the contract.
+- No frontend code back under `proxy-adapter/src/static/debug/`.
+- No hardcoded `localhost` URLs in module code.
+- No duplicating backend validation in the UI.
 
-See `debug-ui/js/AGENTS.md` for module-level guidance.
+## Child AGENTS
+- `js/AGENTS.md` — module-level guidance

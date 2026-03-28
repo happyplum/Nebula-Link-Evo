@@ -1,29 +1,37 @@
-# Proxy Adapter Source Guidelines
+# Proxy Adapter Source
 
 ## Overview
-`proxy-adapter/src/` contains the backend source for task execution, AI client selection, conversations, debug APIs, and websocket flows.
+Backend source for task execution, AI clients, conversations, debug APIs, and websocket flows.
 
 ## Where To Look
 | Area | Path | Notes |
-|---|---|---|
-| Server bootstrap | `server.ts` | Registers routes, debug proxy, production static serving |
-| Services | `services/` | Task execution, stream persistence, session control, websocket support |
+|------|------|-------|
+| Server bootstrap | `server.ts` | Route registration, debug proxy, prod static |
+| Services | `services/` | Task execution, session control, stream persistence, websocket |
 | Plugins | `plugins/` | Fastify plugins and route modules |
-| Clients | `clients/` | Decision, vision, MCP, and provider factories |
-| Conversation | `conversation/` | SQLite storage, compression, manager logic |
-| Debug helpers | `debug/` | Debug-specific shared types/helpers |
+| Clients | `clients/` | Decision, vision, MCP, Vercel AI SDK |
+| Conversation | `conversation/` | SQLite storage, compression, manager |
+| Config | `config/` | Schema, loader, resolver, validator |
+| Debug helpers | `debug/` | Debug-specific types and helpers |
 | Errors | `errors/` | Typed error classes |
-| Tests | `__tests__/` | Unit, integration, and e2e coverage |
+| Schemas | `schemas/` | TypeBox request/response schemas |
+| Skills | `skills/` | Skill execution manager |
+| Tests | `__tests__/` | Unit, integration, e2e |
 
 ## Working Rules
-- The old monolithic `task-executor.ts` is gone; new work should extend the service-oriented architecture.
-- Route handlers should delegate to services, handlers, or browser clients instead of accumulating orchestration logic.
-- Keep backend/frontend coupling at the HTTP contract boundary; frontend code belongs in `debug-ui/`.
-- Local imports must keep the `.js` extension.
+- Old monolithic `task-executor.ts` is gone — extend service-oriented architecture.
+- Route handlers delegate to services, not orchestration logic.
+- Backend/frontend coupling stays at HTTP contract boundary.
+- Local imports keep `.js` extension.
 
 ## Anti-Patterns
-- Do not revive stale `@shared/*` imports.
-- Do not place production business logic in tests or debug-only helpers.
-- Do not hardcode AI provider configuration in service logic.
+- No stale `@shared/*` imports.
+- No production logic in tests or debug-only helpers.
+- No hardcoded AI provider config in service logic.
 
-See child docs for `services/`, `plugins/`, and `__tests__/`.
+## Child AGENTS
+- `services/AGENTS.md`
+- `clients/AGENTS.md`
+- `conversation/AGENTS.md`
+- `plugins/AGENTS.md`
+- `__tests__/AGENTS.md`

@@ -1,26 +1,27 @@
-# Playwright Server Source Guidelines
+# Playwright Server Source
 
 ## Overview
-`playwright-server/src/` contains the Fastify entrypoint plus the browser service split used by the automation server.
+Fastify entrypoint plus browser service layer for the automation server.
 
 ## Where To Look
 | Area | Path | Notes |
-|---|---|---|
-| Entry | `server.ts` | Registers plugins and route prefixes |
+|------|------|-------|
+| Entry | `server.ts` | Plugin and route prefix registration |
 | Services | `services/` | Browser lifecycle, page actions, DOM extraction, snapshot cache |
 | Routes | `plugins/routes/` | HTTP and websocket endpoints |
-| Schemas | `schemas/` | Request/response validation types |
+| Schemas | `schemas/` | Request/response validation |
 | Screencast | `screencast.ts` | Streaming support |
-| Marker/locator helpers | `marker-injector.ts`, `locator-generator.ts` | Browser-side utility logic |
+| Marker/locator | `marker-injector.ts`, `locator-generator.ts` | Browser-side utilities |
 
 ## Working Rules
-- `BrowserService` is the top-level singleton; extend it before adding new global state.
-- Keep route modules delegating to services instead of using raw Playwright objects directly.
-- DOM extraction, click resolution, and page actions should stay decomposed into service files, not merged back into one large class.
+- `BrowserService` is the top-level singleton; extend it before adding global state.
+- Route modules delegate to services — no raw Playwright objects in routes.
+- DOM extraction, click resolution, page actions stay decomposed into service files.
 
 ## Anti-Patterns
 - No new `browser.ts` monolith.
-- No direct DOM mutation outside controlled browser/page helper flows.
+- No direct DOM mutation outside controlled helper flows.
 - No route-local caches when `snapshot-cache.ts` or service state already owns the data.
 
-See `plugins/routes/AGENTS.md` for route-module specifics.
+## Child AGENTS
+- `plugins/routes/AGENTS.md` — route handler specifics
