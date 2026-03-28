@@ -2,11 +2,49 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatHandler } from '../conversation/chat-handler.js';
 import { ConversationManager } from '../conversation/manager.js';
 import { DebugWebSocketManager } from '../websocket-manager.js';
-import type { DecisionClient } from '../clients/decision/base.js';
 import type { ResolvedConfig } from '../config/schema.js';
 import { MCPSDKClient } from '../clients/mcp/sdk-client.js';
 import { SessionEventsDAO } from '../conversation/session-events-dao.js';
 import { SessionEventHub } from '../services/session-event-hub.js';
+
+type StreamResult = {
+  fullStream: AsyncIterable<{ type: string; [key: string]: unknown }>;
+};
+
+const { streamTextMock, toolMock, stepCountIsMock, getModelMock } = vi.hoisted(() => {
+  const streamText = vi.fn<(...args: unknown[]) => Promise<StreamResult>>();
+  const tool = vi.fn((definition: unknown) => definition);
+  const stepCountIs = vi.fn().mockReturnValue(() => false);
+  const getModel = vi.fn().mockReturnValue({ provider: 'test-provider', modelId: 'test-model' });
+  return {
+    streamTextMock: streamText,
+    toolMock: tool,
+    stepCountIsMock: stepCountIs,
+    getModelMock: getModel,
+  };
+});
+
+vi.mock('ai', () => ({
+  streamText: streamTextMock,
+  tool: toolMock,
+  stepCountIs: stepCountIsMock,
+}));
+
+vi.mock('../clients/vercel-ai/provider.js', () => ({
+  getModel: getModelMock,
+}));
+
+function createStream(parts: Array<{ type: string; [key: string]: unknown }>): StreamResult {
+  return {
+    fullStream: {
+      async *[Symbol.asyncIterator]() {
+        for (const part of parts) {
+          yield part;
+        }
+      },
+    },
+  };
+}
 
 const mockConfig: ResolvedConfig = {
   _resolved: {
@@ -57,7 +95,13 @@ describe('ChatHandler SSE integration', () => {
     mcpClient = new MCPSDKClient(mockConfig);
     vi.spyOn(mcpClient, 'initialize').mockResolvedValue(undefined);
     vi.spyOn(mcpClient, 'isEnabled').mockReturnValue(true);
-    vi.spyOn(mcpClient, 'getAvailableTools').mockReturnValue([]);
+    vi.spyOn(mcpClient, 'getAvailableTools').mockReturnValue([
+      {
+        name: 'browser-control.browser_snapshot',
+        description: 'Get browser snapshot',
+        inputSchema: { type: 'object', properties: {} },
+      },
+    ]);
     vi.spyOn(mcpClient, 'callTool').mockResolvedValue({ ok: true, source: 'mcp' });
   });
 
@@ -81,32 +125,31 @@ describe('ChatHandler SSE integration', () => {
       publish,
     } as unknown as SessionEventHub;
 
-    let streamRound = 0;
-    const mockDecisionClient: DecisionClient = {
-      provider: 'kimi',
-      model: 'moonshot-v1-vision-preview',
-      decide: vi.fn(),
-      decideStream: vi.fn().mockImplementation((_context, callbacks) => {
-        streamRound += 1;
-
-        if (streamRound === 1) {
-          callbacks.onThinking('Need tool first');
-          callbacks.onToken('Working');
-          callbacks.onToolCall({
-            id: 'call_1',
-            type: 'function',
-            function: {
-              name: 'browser-control.browser_snapshot',
-              arguments: '{}',
-            },
-          });
-        } else {
-          callbacks.onToken('Done');
-        }
-
-        callbacks.onDone();
-      }),
-    } as unknown as DecisionClient;
+    streamTextMock.mockResolvedValue(
+      createStream([
+        { type: 'reasoning-delta', text: 'Need tool first' },
+        { type: 'text-delta', text: 'Working' },
+        {
+          type: 'tool-call',
+          toolCallId: 'call_1',
+          toolName: 'browser-control.browser_snapshot',
+          input: {},
+        },
+        {
+          type: 'tool-result',
+          toolCallId: 'call_1',
+          toolName: 'browser-control.browser_snapshot',
+          input: {},
+          output: { ok: true, source: 'mcp' },
+        },
+        {
+          type: 'finish',
+          finishReason: 'stop',
+          rawFinishReason: 'stop',
+          totalUsage: { inputTokens: 4, outputTokens: 2, totalTokens: 6 },
+        },
+      ])
+    );
 
     const chatHandler = new ChatHandler(
       conversationManager,
@@ -116,7 +159,6 @@ describe('ChatHandler SSE integration', () => {
       sessionEventsDAO,
       sessionEventHub
     );
-    (chatHandler as any).getDecisionClient = () => mockDecisionClient;
 
     await chatHandler.handleChatSend('test-client', {
       sessionId,
@@ -158,30 +200,31 @@ describe('ChatHandler SSE integration', () => {
       publish,
     } as unknown as SessionEventHub;
 
-    let streamRound = 0;
-    const mockDecisionClient: DecisionClient = {
-      provider: 'kimi',
-      model: 'moonshot-v1-vision-preview',
-      decide: vi.fn(),
-      decideStream: vi.fn().mockImplementation((_context, callbacks) => {
-        streamRound += 1;
-        callbacks.onThinking('step thinking');
-        callbacks.onToken(`chunk-${streamRound}`);
-
-        if (streamRound === 1) {
-          callbacks.onToolCall({
-            id: 'call_2',
-            type: 'function',
-            function: {
-              name: 'browser-control.browser_snapshot',
-              arguments: '{}',
-            },
-          });
-        }
-
-        callbacks.onDone();
-      }),
-    } as unknown as DecisionClient;
+    streamTextMock.mockResolvedValue(
+      createStream([
+        { type: 'reasoning-delta', text: 'step thinking' },
+        { type: 'text-delta', text: 'chunk-1' },
+        {
+          type: 'tool-call',
+          toolCallId: 'call_2',
+          toolName: 'browser-control.browser_snapshot',
+          input: {},
+        },
+        {
+          type: 'tool-result',
+          toolCallId: 'call_2',
+          toolName: 'browser-control.browser_snapshot',
+          input: {},
+          output: { ok: true, source: 'mcp' },
+        },
+        {
+          type: 'finish',
+          finishReason: 'stop',
+          rawFinishReason: 'stop',
+          totalUsage: { inputTokens: 4, outputTokens: 2, totalTokens: 6 },
+        },
+      ])
+    );
 
     const chatHandler = new ChatHandler(
       conversationManager,
@@ -191,7 +234,6 @@ describe('ChatHandler SSE integration', () => {
       sessionEventsDAO,
       sessionEventHub
     );
-    (chatHandler as any).getDecisionClient = () => mockDecisionClient;
 
     await chatHandler.handleChatSend('test-client', {
       sessionId,

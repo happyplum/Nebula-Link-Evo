@@ -352,17 +352,16 @@ describe('Session Lifecycle E2E (Chat Session Independence)', () => {
     const initial = await dao.get(session.id);
     expect(initial?.status).toBe('idle');
 
-    // Auto-activation on message send (via job queue route)
+    // Auto-activation on message send (via canonical endpoint)
     const sendResponse = await app.inject({
       method: 'POST',
-      url: '/api/chat/message',
-      payload: { sessionId: session.id, message: 'Hello' },
+      url: `/api/chat/sessions/${session.id}/messages`,
+      payload: { content: 'Hello' },
     });
 
-    expect(sendResponse.statusCode).toBe(200);
+    expect(sendResponse.statusCode).toBe(202);
     const sendBody = JSON.parse(sendResponse.payload);
     expect(sendBody.jobId).toBeDefined();
-    expect(sendBody.status).toBe('queued');
 
     // Job queue drives sessions_state: running -> completed
     await waitFor(
@@ -567,10 +566,10 @@ describe('Session Lifecycle E2E (Chat Session Independence)', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/chat/message',
-      payload: { sessionId: session.id, message: 'queue me' },
+      url: `/api/chat/sessions/${session.id}/messages`,
+      payload: { content: 'queue me' },
     });
-    expect(response.statusCode).toBe(200);
+    expect(response.statusCode).toBe(202);
     const body = JSON.parse(response.payload);
     expect(typeof body.jobId).toBe('string');
 
@@ -600,17 +599,16 @@ describe('Session Lifecycle E2E (Chat Session Independence)', () => {
       expect(createBody.session.model).toBe('test-model');
       expect(createBody.session.status).toBe('idle');
 
-      // Continue through message chain
+      // Continue through message chain via canonical endpoint
       const msgRes = await app.inject({
         method: 'POST',
-        url: '/api/chat/message',
-        payload: { sessionId: createBody.session.id, message: 'Hello E2E contract' },
+        url: `/api/chat/sessions/${createBody.session.id}/messages`,
+        payload: { content: 'Hello E2E contract' },
       });
 
-      expect(msgRes.statusCode).toBe(200);
+      expect(msgRes.statusCode).toBe(202);
       const msgBody = JSON.parse(msgRes.payload);
       expect(msgBody.jobId).toBeDefined();
-      expect(msgBody.status).toBe('queued');
     });
 
     it('should reject missing provider with 400 and not persist session', async () => {

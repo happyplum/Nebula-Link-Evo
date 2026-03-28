@@ -642,12 +642,12 @@ describe.skipIf(isCI)('SSE Load Tests', () => {
       // Wait for initial snapshot
       await new Promise((resolve) => setTimeout(resolve, 50));
 
-      // Post messages concurrently
+      // Post messages concurrently via canonical endpoint
       const messagePromises = Array.from({ length: CONCURRENT_MESSAGES }, (_, i) =>
-        fetch(`${baseUrl}/api/chat/message`, {
+        fetch(`${baseUrl}/api/chat/sessions/${session.id}/messages`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId: session.id, message: `Message ${i}` }),
+          body: JSON.stringify({ content: `Message ${i}` }),
         })
       );
 
@@ -660,9 +660,9 @@ describe.skipIf(isCI)('SSE Load Tests', () => {
       expect(result.events.length).toBeGreaterThanOrEqual(1);
       expect(result.events[0]?.event).toBe('session.snapshot');
 
-      // Message posts should succeed (200) or be rejected due to lock (409)
+      // Message posts should succeed (202) or be rejected due to lock (409)
       // Both are acceptable behaviors for concurrent access
-      const successCount = responses.filter((r) => r.status === 200).length;
+      const successCount = responses.filter((r) => r.status === 202).length;
       const conflictCount = responses.filter((r) => r.status === 409).length;
       expect(successCount + conflictCount).toBe(CONCURRENT_MESSAGES);
       expect(successCount).toBeGreaterThanOrEqual(1); // At least one should succeed
