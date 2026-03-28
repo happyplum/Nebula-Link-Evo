@@ -207,6 +207,8 @@ const controlRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       const { id: sessionId } = request.params;
 
       try {
+        // Checkpoint-based recovery: resumes from persisted session state,
+        // not mid-token. Client should reconnect SSE stream for fresh snapshot.
         await chatHandler.resumeSession('http', sessionId);
         return { success: true };
       } catch (err) {

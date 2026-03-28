@@ -6,9 +6,10 @@ import { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import { Type } from '@sinclair/typebox';
 import type { ChatHandler } from '../../../../conversation/chat-handler.js';
 import type { ConversationManager } from '../../../../conversation/manager.js';
+import type { SessionStatus } from '../../../../conversation/types.js';
 import { DatabaseManager } from '../../../../conversation/db.js';
 import { SessionEventHub } from '../../../../services/session-event-hub.js';
-import type { SessionEvent, SessionState } from '@nebula-link-evo/shared';
+import type { SessionEvent, SessionSnapshotEvent, SessionState } from '@nebula-link-evo/shared';
 import { eventToSSEFormat } from '@nebula-link-evo/shared';
 import { getRuntimeSessionState } from './runtime-state.js';
 
@@ -50,6 +51,29 @@ function writeBootstrapEvent(
 
   const eventId = event.seq !== undefined ? String(event.seq) : '';
   writeSSEEvent(reply, event, eventId);
+}
+
+async function buildSnapshotEvent(
+  conversationManager: ConversationManager,
+  sessionId: string,
+  baseStatus?: SessionStatus
+): Promise<SessionSnapshotEvent> {
+  const messages = conversationManager.getMessages(sessionId);
+  const runtimeState = await getRuntimeSessionState(conversationManager, sessionId, baseStatus);
+  return {
+    type: 'session.snapshot',
+    seq: 0,
+    sessionId,
+    messages: messages.map((m) => ({
+      id: m.id,
+      role: m.role,
+      content: m.content,
+      created_at: m.created_at,
+    })),
+    state: runtimeState.status as SessionState,
+    jobId: runtimeState.jobId,
+    agentState: runtimeState.agentState,
+  };
 }
 
 const streamRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
@@ -120,34 +144,29 @@ const streamRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         });
 
         if (!isReconnect) {
-          const messages = conversationManager.getMessages(sessionId);
-          const runtimeState = await getRuntimeSessionState(conversationManager, sessionId, session.status);
-          const snapshotState: SessionState = runtimeState.status as SessionState;
-
-          const snapshotEvent: SessionEvent = {
-            type: 'session.snapshot',
-            seq: 0,
-            sessionId,
-            messages: messages.map((m) => ({
-              id: m.id,
-              role: m.role,
-              content: m.content,
-              created_at: m.created_at,
-            })),
-            state: snapshotState,
-            jobId: runtimeState.jobId,
-            agentState: runtimeState.agentState,
-          };
+          const snapshotEvent = await buildSnapshotEvent(conversationManager, sessionId, session.status);
           writeSSEEvent(reply, snapshotEvent, '0');
 
-          if (shouldReplayFreshEvents(snapshotState)) {
+          if (shouldReplayFreshEvents(snapshotEvent.state)) {
             const events = await sessionEventsDAO.getEventsAfter(sessionId, 0, REPLAY_FETCH_LIMIT);
             for (const event of events) {
               writeBootstrapEvent(reply, event, lastDeliveredSeq);
             }
           }
         } else {
-          const events = await sessionEventsDAO.getEventsAfter(sessionId, lastSeq, REPLAY_FETCH_LIMIT);
+          const minSeq = sessionEventsDAO.getMinSeq(sessionId);
+          const hasGap =
+            (minSeq !== null && lastSeq < minSeq - 1) ||
+            (minSeq === null && lastSeq > 0);
+
+          if (hasGap) {
+            const snapshotEvent = await buildSnapshotEvent(conversationManager, sessionId, session.status);
+            writeSSEEvent(reply, snapshotEvent, '');
+            lastDeliveredSeq.value = minSeq !== null ? minSeq - 1 : 0;
+          }
+
+          const replayFrom = hasGap && minSeq !== null ? minSeq - 1 : lastSeq;
+          const events = await sessionEventsDAO.getEventsAfter(sessionId, replayFrom, REPLAY_FETCH_LIMIT);
           for (const event of events) {
             writeBootstrapEvent(reply, event, lastDeliveredSeq);
           }
