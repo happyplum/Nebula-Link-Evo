@@ -23,7 +23,7 @@ Phase 1: 基础设施与"手眼"打通
 | Debug UI | Vite + TypeScript + DOM APIs | 5173（开发） |
 | Proxy Adapter | Node.js + Fastify + AI APIs | 3000 |
 | Playwright Server | Node.js + Fastify + Playwright | 3001 |
-| Shared | TypeScript workspace package | - |
+| Shared | TypeScript workspace package + SSE event types | - |
 
 ## 快速开始
 
@@ -484,6 +484,12 @@ Invoke-RestMethod -Uri "http://localhost:3001/browser/screenshot" -Method Post -
 
 ```
 nebula-link-evo/
+├── debug-ui/                   # Debug UI 独立包
+│   ├── js/                    # 前端源码
+│   ├── index.html             # 入口页面
+│   ├── dist/                 # 生产构建输出
+│   └── package.json
+│
 ├── playwright-server/          # Playwright HTTP 服务
 │   ├── src/
 │   │   ├── server.ts           # Fastify 服务入口
@@ -493,25 +499,50 @@ nebula-link-evo/
 │   ├── package.json
 │   └── tsconfig.json
 │
-├── proxy-adapter/              # AI API 适配器
+├── proxy-adapter/              # 后端服务
 │   ├── src/
 │   │   ├── server.ts           # Fastify 服务入口
-│   │   ├── kimi-client.ts      # Kimi API 客户端
-│   │   ├── browser-client.ts   # Playwright 客户端
-│   │   ├── task-executor.ts    # 任务执行器
-│   │   └── types.ts            # 类型定义
+│   │   ├── conversation/       # 会话存储和处理器
+│   │   │   ├── chat-handler.ts        # SDK-dominant 多步骤运行器
+│   │   │   ├── manager.ts             # ConversationManager (会话 CRUD)
+│   │   │   ├── db.ts                  # DatabaseManager (SQLite)
+│   │   │   ├── session-events-dao.ts   # 批量事件持久化
+│   │   │   ├── session-state-dao.ts    # 乐观锁会话状态
+│   │   │   └── compressor.ts          # 上下文压缩
+│   │   ├── services/          # 业务逻辑服务
+│   │   │   ├── chat-session-controller.ts  # 暂停/恢复/中断
+│   │   │   ├── session-lock.ts            # 会话互斥锁
+│   │   │   ├── session-event-hub.ts       # SSE 发布/订阅
+│   │   │   └── conversation-job-queue.ts  # 任务队列
+│   │   ├── clients/           # AI 提供商客户端
+│   │   │   ├── vercel-ai/      # Vercel AI SDK 提供商
+│   │   │   ├── mcp/            # MCP 客户端
+│   │   │   └── decision/       # 旧版决策客户端 (已弃用)
+│   │   ├── plugins/routes/     # HTTP 路由
+│   │   │   ├── api/chat/       # 会话端点
+│   │   │   │   ├── sessions.ts         # 会话 CRUD
+│   │   │   │   ├── stream.ts           # SSE 流
+│   │   │   │   └── control.ts          # 恢复/暂停/中断
+│   │   │   └── debug/          # Debug API 端点
+│   │   └── __tests__/         # 测试
+│   │       ├── integration/chat/  # 15 个合约测试文件
+│   │       └── unit/conversation/ # 2 个合约测试文件
 │   ├── package.json
 │   └── tsconfig.json
 │
-├── shared/                     # 共享资源
-│   └── types/                  # 共享类型定义
+├── shared/                     # 共享包
+│   ├── types/                  # 共享类型定义
+│   │   ├── sse-events.ts      # SSE 事件类型
+│   │   └── *.ts              # 其他类型
+│   ├── utils/                  # 共享工具函数
+│   ├── index.ts                # 公共导出
+│   └── package.json
 │
-├── start-services.ps1          # PowerShell 启动脚本
-├── run.bat                     # CMD 启动脚本
-├── quick-start.bat             # 带环境检测的启动脚本
-├── test-e2e.bat                # 端到端测试脚本
-├── .env.example                # 环境变量示例
-└── README.md                   # 本文档
+├── start.bat                   # 生产启动脚本
+├── start-dev.bat              # 开发启动脚本
+├── stop.bat                   # 停止服务脚本
+├── .env.example               # 环境变量示例
+└── README.md                  # 本文档
 ```
 
 ## 启动脚本
@@ -918,6 +949,69 @@ data: {"type":"done"}
 **WebSocket Events**:
 - Events are broadcast to connected debug clients
 - Includes taskId, timestamp, and event data
+
+### Chat Session API
+
+#### Canonical Endpoint
+
+**POST /api/chat/sessions/:sessionId/messages**
+
+Canonical endpoint for sending messages in a chat session. Returns 202 with jobId, runId, sessionId, and messageId.
+
+**Request**:
+```json
+{
+  "content": "Hello, world"
+}
+```
+
+**Response**:
+```json
+{
+  "jobId": "uuid",
+  "runId": "uuid",
+  "sessionId": "uuid",
+  "messageId": "uuid"
+}
+```
+
+#### SSE Events
+
+Server-Sent Events for real-time session updates:
+
+| Event Type | Purpose |
+|-----------|---------|
+| `session.snapshot` | Full session state |
+| `message.created` | New message added |
+| `assistant.started` | Assistant response start |
+| `assistant.delta` | Text increment |
+| `assistant.completed` | Assistant finished |
+| `assistant.thinking` | Internal reasoning |
+| `assistant.tool_call` | Tool invocation |
+| `assistant.tool_result` | Tool execution result |
+| `run.error` | Execution failure |
+
+Events include `sessionId` (required), `messageId` (required on message events), and optional `runId` for runtime grouping.
+
+#### Session Concurrency Model
+
+- **Same-session**: Serialized execution via session lock. Only one run active per session.
+- **Cross-session**: Parallel execution. Multiple sessions can run concurrently.
+
+#### SDK-Dominant Execution
+
+- Client controls loop with `maxSteps` parameter.
+- Backend executes multi-step AI response via Vercel AI SDK streaming.
+- Single-writer persistence: durable storage before SSE publish.
+- Replay/resume via `afterSeq` cursor parameter.
+
+#### Control Endpoints
+
+| Endpoint | Purpose |
+|---------|---------|
+| `POST /api/chat/sessions/:sessionId/resume` | Resume paused session |
+| `POST /api/chat/sessions/:sessionId/pause` | Pause running session |
+| `POST /api/chat/sessions/:sessionId/interrupt` | Interrupt session |
 
 
 
