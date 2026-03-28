@@ -94,8 +94,51 @@ export class SessionEventsDAO {
   }
 
   /**
+   * Append an event with immediate durable write.
+   * This bypasses the batch buffer and throws on write failure.
+   */
+  appendEventSync(
+    sessionId: string,
+    eventType: SessionEventType,
+    payload: Record<string, unknown>,
+    ttlSeconds?: number
+  ): number {
+    this.flushSync();
+
+    const now = new Date();
+    const seq = this.getNextSeq(sessionId);
+    const createdAt = now.toISOString();
+    const payloadStr = JSON.stringify(payload);
+    const ttlExpiresAt = ttlSeconds
+      ? new Date(now.getTime() + ttlSeconds * 1000).toISOString()
+      : null;
+
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const stmt = this.db.prepare(
+        `INSERT INTO session_events (session_id, seq, event_type, payload, created_at, ttl_expires_at)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      );
+      stmt.run(sessionId, seq, eventType, payloadStr, createdAt, ttlExpiresAt);
+      this.db.exec('COMMIT');
+
+      this.metrics.batchSize = 1;
+      this.metrics.flushTime = 0;
+      this.metrics.totalEventsWritten += 1;
+      this.metrics.totalFlushes += 1;
+
+      return seq;
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error instanceof Error ? error : new Error(String(error));
+    }
+  }
+
+  /**
    * Get events after a given sequence number.
    * Returns up to `limit` events in order.
+   * If `lastSeq` is below the minimum available seq (e.g. TTL-deleted gap),
+   * events are returned starting from the earliest available seq.
    */
   async getEventsAfter(
     sessionId: string,
@@ -103,14 +146,29 @@ export class SessionEventsDAO {
     limit: number = MAX_REPLAY_LIMIT
   ): Promise<SessionEvent[]> {
     const clampedLimit = Math.min(limit, MAX_REPLAY_LIMIT);
+    const minSeq = this.getMinSeq(sessionId);
+    const effectiveLastSeq = minSeq !== null && lastSeq < minSeq ? minSeq - 1 : lastSeq;
     const stmt = this.db.prepare(
       `SELECT * FROM session_events
        WHERE session_id = ? AND seq > ?
        ORDER BY seq ASC
        LIMIT ?`
     );
-    const rows = stmt.all(sessionId, lastSeq, clampedLimit) as SessionEventRow[];
+    const rows = stmt.all(sessionId, effectiveLastSeq, clampedLimit) as SessionEventRow[];
     return rows.map((row) => this.rowToEvent(row));
+  }
+
+  /**
+   * Get the minimum available sequence number for a session.
+   * Returns null if no events exist for the session.
+   * Reflects only non-deleted events (TTL cleanup physically removes rows).
+   */
+  getMinSeq(sessionId: string): number | null {
+    const stmt = this.db.prepare(
+      `SELECT MIN(seq) as min_seq FROM session_events WHERE session_id = ?`
+    );
+    const row = stmt.get(sessionId) as { min_seq: number | null };
+    return row.min_seq;
   }
 
   /**
@@ -179,6 +237,25 @@ export class SessionEventsDAO {
     }
     if (this.buffer.length > 0) {
       await this.flushBuffer();
+    }
+  }
+
+  /**
+   * Force flush pending buffered events immediately in the current call stack.
+   */
+  flushSync(): void {
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = null;
+    }
+
+    if (this.flushPromise) {
+      throw new Error('Cannot flush synchronously while async flush is in progress');
+    }
+
+    while (this.buffer.length > 0) {
+      const eventsToFlush = this.buffer.splice(0, this.buffer.length);
+      this.executeBatchSync(eventsToFlush);
     }
   }
 
@@ -267,6 +344,10 @@ export class SessionEventsDAO {
   }
 
   private async executeBatch(events: BufferedEvent[]): Promise<void> {
+    this.executeBatchSync(events);
+  }
+
+  private executeBatchSync(events: BufferedEvent[]): void {
     if (events.length === 0) {
       return;
     }
@@ -274,6 +355,7 @@ export class SessionEventsDAO {
     const flushStart = performance.now();
     const now = new Date();
     const ttlCache = new Map<string, string>();
+    const resolvedEvents: Array<{ event: BufferedEvent; seq: number }> = [];
 
     try {
       this.db.exec('BEGIN IMMEDIATE');
@@ -301,11 +383,14 @@ export class SessionEventsDAO {
           createdAt,
           ttlExpiresAt
         );
-
-        event.resolve(seq);
+        resolvedEvents.push({ event, seq });
       }
 
       this.db.exec('COMMIT');
+
+      for (const resolved of resolvedEvents) {
+        resolved.event.resolve(resolved.seq);
+      }
 
       // Update metrics on success
       const flushEnd = performance.now();
