@@ -339,6 +339,28 @@ class ChatHandler {
 
     const contextWindow = this.conversationManager.getContextWindow(sessionId);
     const messages = this.toModelMessages(contextWindow.messages);
+
+    if (screenshot) {
+      let lastUserIdx = -1;
+      for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].role === 'user') {
+          lastUserIdx = i;
+          break;
+        }
+      }
+      if (lastUserIdx !== -1) {
+        const existing = messages[lastUserIdx];
+        const textContent = typeof existing.content === 'string' ? existing.content : '';
+        messages[lastUserIdx] = {
+          role: 'user',
+          content: [
+            { type: 'image', image: screenshot },
+            { type: 'text', text: textContent },
+          ],
+        };
+      }
+    }
+
     const systemPrompt = this.getSystemPrompt(session);
     const sessionController = ChatSessionController.getInstance();
 

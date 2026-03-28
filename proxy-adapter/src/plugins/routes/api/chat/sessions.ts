@@ -13,7 +13,7 @@ import { SessionLock } from '../../../../services/session-lock.js';
 import { SessionEventHub } from '../../../../services/session-event-hub.js';
 import { DatabaseManager } from '../../../../conversation/db.js';
 import { ServiceUnavailableError } from '../../../../errors/http-errors.js';
-import type { MessageCreatedEvent } from '@nebula-link-evo/shared';
+import { MAX_SCREENSHOT_SIZE_BYTES, type MessageCreatedEvent } from '@nebula-link-evo/shared';
 import { connectivityGateService } from '../../../../services/connectivity-gate-service.js';
 import { TaskService } from '../../../../services/index.js';
 import { validateProviderModel } from '../../../../config/validator.js';
@@ -371,6 +371,14 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         if (!content || content.trim() === '') {
           reply.status(400);
           return { error: 'Message content is required' };
+        }
+
+        if (screenshot) {
+          const decodedBytes = Math.ceil((screenshot.length * 3) / 4);
+          if (decodedBytes > MAX_SCREENSHOT_SIZE_BYTES) {
+            reply.status(400);
+            return { error: `Screenshot exceeds maximum size of ${MAX_SCREENSHOT_SIZE_BYTES} bytes` };
+          }
         }
 
         // Fail-close gate: Check connectivity before allowing new messages
