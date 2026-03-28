@@ -108,3 +108,29 @@ export {
   getFailedSteps,
   getSuccessRate,
 } from './task-history.js';
+
+// SSE event types
+export type {
+  SessionEvent,
+  SessionEventType,
+  SessionSnapshotEvent,
+  MessageCreatedEvent,
+  AssistantStartedEvent,
+  AssistantDeltaEvent,
+  AssistantCompletedEvent,
+  AssistantThinkingEvent,
+  AssistantToolCallEvent,
+  AssistantToolResultEvent,
+  RunErrorEvent,
+  SSEFormattedEvent,
+  SessionState,
+  SessionAgentState,
+  ToolCall,
+} from './sse-events.js';
+
+export {
+  eventToSSEFormat,
+} from './sse-events.js';
+
+// Constants
+export { MAX_SCREENSHOT_SIZE_BYTES } from './constants.js';

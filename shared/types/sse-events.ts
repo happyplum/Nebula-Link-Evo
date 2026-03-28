@@ -9,6 +9,18 @@
 
 /**
  * Tool call information for assistant events.
+ *
+ * Wire format for JSON serialization:
+ * ```json
+ * {
+ *   "function": { "name": "string" },
+ *   "arguments": "...",
+ *   "id": "..."
+ * }
+ * ```
+ *
+ * The `function` field contains the tool name. Additional fields are captured
+ * by the index signature to support arbitrary tool call metadata.
  */
 export interface ToolCall {
   /** Tool function name */

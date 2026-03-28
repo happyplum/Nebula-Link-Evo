@@ -8,6 +8,9 @@
 // Types module
 export * from './types/index.js';
 
+// Constants
+export { MAX_SCREENSHOT_SIZE_BYTES } from './types/constants.js';
+
 // SSE Events - export all interfaces and types
 export type {
   SessionEvent,
