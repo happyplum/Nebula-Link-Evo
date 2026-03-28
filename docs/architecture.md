@@ -5,17 +5,17 @@
 ## 系统架构
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        Browser / Chromium                              │
-└───────────────────────────────┬───────────────────────────────────────┘
-                                │
-┌───────────────────────────────▼───────────────────────────────────────┐
+┌─────────────────────────────────────────────────────────────────┐
+│                     Browser / Chromium                              │
+└─────────────────────────────┬───────────────────────────────────────┘
+                              │ Playwright API
+┌─────────────────────────────▼───────────────────────────────────────┐
 │                   playwright-server (:3001)                          │
 │  BrowserService → BrowserLifecycle → Playwright (Chromium)           │
 │  职责：浏览器控制、截图、DOM 提取、页面操作执行                        │
-└───────────────────────────────┬───────────────────────────────────────┘
-                                │ HTTP
-┌───────────────────────────────▼───────────────────────────────────────┐
+└─────────────────────────────▲───────────────────────────────────────┘
+                              │ HTTP
+┌─────────────────────────────┴───────────────────────────────────────┐
 │                    proxy-adapter (:3000)                              │
 │  ┌──────────┐  ┌──────────┐  ┌──────────────┐  ┌──────────────────┐  │
 │  │ Task API │  │ Chat API │  │ Debug API    │  │ WebSocket        │  │
@@ -147,9 +147,11 @@ playwright-server (:3001)
 
 **注册顺序:**
 ```
-1. await app.register(chatSocketRoutes, { prefix: '/ws' })
-2. await app.register(debugSocketRoutes, { prefix: '/ws' })
-3. await app.register(debugRoutes, { prefix: '/debug' })
+1. await app.register(chatRoutes, { prefix: '/chat' })        // 遗留: /chat/ws
+2. await app.register(chatSocketRoutes, { prefix: '/ws' })     // /ws/chat
+3. await app.register(debugSocketRoutes, { prefix: '/ws' })    // /ws/debug
+4. await app.register(apiChatRoutes, { prefix: '/api/chat' })  // /api/chat/*
+5. await app.register(debugRoutes, { prefix: '/debug' })       // /debug/api/*, /debug/ws
 ```
 
 ## 数据持久化
