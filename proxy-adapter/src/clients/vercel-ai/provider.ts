@@ -1,6 +1,8 @@
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import type { LanguageModelV3 } from '@ai-sdk/provider';
+import { MockLanguageModelV3 } from 'ai/test';
+import { simulateReadableStream } from 'ai';
 import { getProviderModel } from '../../config/resolver.js';
 import type { ResolvedConfig } from '../../config/schema.js';
 
@@ -13,6 +15,35 @@ export function getModel(
   provider: string,
   model: string
 ): LanguageModelV3 {
+  // Test-only mock provider — bypass config resolution
+  if (provider === 'test-provider') {
+    if (process.env.NODE_ENV !== 'test') {
+      throw new Error('test-provider is only available in test environment');
+    }
+    return new MockLanguageModelV3({
+      doStream: async () => {
+        return {
+          stream: simulateReadableStream({
+            chunks: [
+              { type: 'text-delta', textDelta: 'Hello' },
+              { type: 'text-delta', textDelta: ' ' },
+              { type: 'text-delta', textDelta: 'world' },
+              { type: 'text-delta', textDelta: '!' },
+              {
+                type: 'finish',
+                finishReason: { unified: 'stop', raw: undefined },
+                usage: {
+                  promptTokens: 10,
+                  completionTokens: 4,
+                },
+              },
+            ],
+          }),
+        } as any;
+      },
+    }) as unknown as LanguageModelV3;
+  }
+
   const resolved = getProviderModel(config, provider, model);
 
   if (!resolved) {
