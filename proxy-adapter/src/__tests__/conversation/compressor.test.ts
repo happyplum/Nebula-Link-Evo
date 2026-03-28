@@ -193,6 +193,76 @@ describe('SessionCompressor', () => {
     });
   });
 
+  describe('unified memory contract', () => {
+    it('should update sessions.summary after compression', async () => {
+      const summaryText = 'AI-generated summary of conversation';
+      mockAiClient.generateSummary.mockResolvedValue(summaryText);
+
+      const session = manager.createSession({
+        title: 'Contract Test',
+        provider: 'test',
+        model: 'test-model',
+      });
+
+      for (let i = 0; i < 25; i++) {
+        manager.addMessage(session.id, { role: 'user', content: `Message ${i}` });
+      }
+
+      await compressor.compress(session.id, mockAiClient as any);
+
+      const updatedSession = db.getSession(session.id);
+      expect(updatedSession?.summary).toBe(summaryText);
+    });
+
+    it('should not update summary when compression is skipped', async () => {
+      const session = manager.createSession({
+        title: 'No Compress',
+        provider: 'test',
+        model: 'test-model',
+      });
+
+      for (let i = 0; i < 3; i++) {
+        manager.addMessage(session.id, { role: 'user', content: `Message ${i}` });
+      }
+
+      await compressor.compress(session.id, mockAiClient as any);
+
+      const updatedSession = db.getSession(session.id);
+      expect(updatedSession?.summary).toBeNull();
+    });
+
+    it('should catch and log updateSession failures without rethrowing', async () => {
+      const summaryText = 'Summary text';
+      mockAiClient.generateSummary.mockResolvedValue(summaryText);
+
+      const session = manager.createSession({
+        title: 'Failure Test',
+        provider: 'test',
+        model: 'test-model',
+      });
+
+      for (let i = 0; i < 25; i++) {
+        manager.addMessage(session.id, { role: 'user', content: `Message ${i}` });
+      }
+
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.spyOn(db, 'updateSession').mockImplementation(() => {
+        throw new Error('DB write failed');
+      });
+
+      await expect(
+        compressor.compress(session.id, mockAiClient as any)
+      ).resolves.toBeUndefined();
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        'Failed to update session summary:',
+        expect.any(Error)
+      );
+
+      errorSpy.mockRestore();
+    });
+  });
+
   describe('constructor', () => {
     it('should use default configuration values', () => {
       const defaultCompressor = new SessionCompressor(db);

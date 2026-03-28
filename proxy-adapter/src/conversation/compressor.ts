@@ -69,6 +69,12 @@ class SessionCompressor {
       content: summary,
       metadata: { type: 'summary' },
     });
+
+    try {
+      this.db.updateSession(sessionId, { summary });
+    } catch (err) {
+      console.error('Failed to update session summary:', err);
+    }
   }
 
   getCompressedContext(sessionId: string): CompressedContext {
