@@ -75,35 +75,32 @@ export function createDefaultConfig(): Config {
     version: '2.0',
     description: 'Nebula-Link Evo AI 配置',
     providers: {
-      kimi: {
-        name: 'Kimi (Moonshot)',
-        enabled: true,
-        apiKey: '{KIMI_API_KEY}',
-        baseUrl: 'https://api.moonshot.cn/v1',
-        mcp: ['browser-control'],
-        models: {
-          'moonshot-v1-vision-k2.5': {
-            type: 'decision',
-            capabilities: ['decision'],
-            temperature: 0.2,
-            maxTokens: 1000,
-          },
-        },
-      },
       glm: {
-        name: '智谱 GLM',
         enabled: true,
         apiKey: '{GLM_API_KEY}',
         baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
-        mcp: ['browser-control', 'file-access'],
-        models: {
-          'glm-4.5v': {
-            type: 'vision',
-            capabilities: ['vision'],
-            temperature: 0.7,
-            maxTokens: 2000,
-          },
-        },
+      },
+      kimi: {
+        enabled: false,
+        apiKey: '{KIMI_API_KEY}',
+        baseUrl: 'https://api.moonshot.cn/v1',
+      },
+      openai: {
+        enabled: false,
+        npmPackage: '@ai-sdk/openai',
+        apiKey: '{OPENAI_API_KEY}',
+        baseUrl: 'https://api.openai.com/v1',
+      },
+      anthropic: {
+        enabled: false,
+        npmPackage: '@ai-sdk/anthropic',
+        apiKey: '{ANTHROPIC_API_KEY}',
+        baseUrl: 'https://api.anthropic.com/v1',
+      },
+      nvidia: {
+        enabled: true,
+        apiKey: '{NVIDIA_API_KEY}',
+        baseUrl: 'https://integrate.api.nvidia.com/v1',
       },
     },
     mcp: {
@@ -112,14 +109,13 @@ export function createDefaultConfig(): Config {
     },
     defaults: {
       mode: 'separation',
-      vision: {
-        provider: 'glm',
-        model: 'glm-4.5v',
-      },
-      decision: {
-        provider: 'kimi',
-        model: 'moonshot-v1-vision-k2.5',
-      },
+      decision: 'glm/glm-4.7-flash',
+      vision: 'glm/glm-4.6v-flash',
+    },
+    visionTool: {
+      maxCallsPerStep: 5,
+      timeoutMs: 30000,
+      screenshotQuality: 80,
     },
     settings: {
       timeout: 30000,

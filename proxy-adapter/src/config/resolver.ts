@@ -1,4 +1,10 @@
-import { Config, ResolvedConfig, Provider, ModelConfig } from './schema.js';
+import {
+  Config,
+  ResolvedConfig,
+  ResolvedProvider,
+  ModelConfig,
+  ModelSelector,
+} from './schema.js';
 
 export interface ResolverOptions {
   env?: Record<string, string>;
@@ -28,7 +34,7 @@ export function resolveConfig(
   }
   const defaults = options?.defaults || {};
 
-  const resolvedProviders: Record<string, Provider & { apiKey: string }> = {};
+  const resolvedProviders: Record<string, ResolvedProvider> = {};
 
   for (const [key, provider] of Object.entries(config.providers)) {
     if (!provider.enabled) {
@@ -41,25 +47,16 @@ export function resolveConfig(
       continue;
     }
 
-    const resolvedProvider: Provider & { apiKey: string } = {
+    const resolvedProvider: ResolvedProvider = {
       ...provider,
       apiKey: apiKeyResult.value!,
+      models: {},
     };
 
-    const resolvedModels: Record<
-      string,
-      ModelConfig & { resolvedTemperature?: number; resolvedMaxTokens?: number }
-    > = {};
-
-    for (const [modelKey, model] of Object.entries(provider.models)) {
-      resolvedModels[modelKey] = {
-        ...model,
-        resolvedTemperature: model.temperature,
-        resolvedMaxTokens: model.maxTokens,
-      };
+    if (!resolvedProvider.npmPackage) {
+      resolvedProvider.npmPackage = '@ai-sdk/openai-compatible';
     }
 
-    resolvedProvider.models = resolvedModels;
     resolvedProviders[key] = resolvedProvider;
   }
 
@@ -71,17 +68,23 @@ export function resolveConfig(
     maxSteps: resolveSetting(config.settings.maxSteps, env, defaults, 1),
   };
 
-  if (result.errors.length > 0) {
-    result.success = false;
-  }
-
   const resolvedConfig: ResolvedConfig = {
     ...config,
+    defaults: {
+      mode: config.defaults.mode,
+      decision: parseProviderModelString(config.defaults.decision, 'decision', result),
+      vision: parseProviderModelString(config.defaults.vision, 'vision', result),
+    },
+    settings: resolvedSettings,
     _resolved: {
       providers: resolvedProviders,
       settings: resolvedSettings,
     },
   };
+
+  if (result.errors.length > 0) {
+    result.success = false;
+  }
 
   return { config: resolvedConfig, result };
 }
@@ -100,9 +103,10 @@ function resolveVariable(
   const varPattern = /\{([^}:]+)(?::([^}]*))?\}/g;
   let hasMatch = false;
   let result = value;
-  let match;
+  let match: RegExpExecArray | null;
 
-  while ((match = varPattern.exec(value)) !== null) {
+  match = varPattern.exec(value);
+  while (match !== null) {
     hasMatch = true;
     const varName = match[1];
     const defaultValue = match[2] !== undefined ? match[2] : undefined;
@@ -118,6 +122,8 @@ function resolveVariable(
         error: `Required environment variable ${varName} is not set`,
       };
     }
+
+    match = varPattern.exec(value);
   }
 
   if (!hasMatch) {
@@ -152,18 +158,18 @@ export function getProviderModel(
   config: ResolvedConfig,
   providerName: string,
   modelName: string
-): { provider: Provider & { apiKey: string }; model: ModelConfig } | null {
+): { provider: ResolvedProvider; model: ModelConfig } | null {
   const provider = config._resolved.providers[providerName];
   if (!provider) {
     return null;
   }
 
-  const model = provider.models[modelName];
-  if (!model) {
-    return null;
-  }
+  const model: ModelConfig = {
+    type: 'multimodal',
+    capabilities: ['vision', 'decision'],
+  };
 
-  return { provider, model };
+  return { provider, model: provider.models[modelName] || model };
 }
 
 export function getDefaultVisionModel(
@@ -172,21 +178,32 @@ export function getDefaultVisionModel(
   if (config.defaults.mode === 'unified') {
     return null;
   }
-  return {
-    provider: config.defaults.vision.provider,
-    model: config.defaults.vision.model,
-  };
+  return config.defaults.vision;
 }
 
 export function getDefaultDecisionModel(
   config: ResolvedConfig
 ): { provider: string; model: string } | null {
-  return {
-    provider: config.defaults.decision.provider,
-    model: config.defaults.decision.model,
-  };
+  return config.defaults.decision;
 }
 
 export function isUnifiedMode(config: ResolvedConfig): boolean {
   return config.defaults.mode === 'unified';
+}
+
+function parseProviderModelString(
+  value: string,
+  key: 'decision' | 'vision',
+  result: ResolveResult
+): ModelSelector {
+  const slashIndex = value.indexOf('/');
+  const provider = slashIndex > 0 ? value.slice(0, slashIndex).trim() : '';
+  const model = slashIndex > 0 ? value.slice(slashIndex + 1).trim() : '';
+
+  if (!provider || !model) {
+    result.errors.push(`defaults.${key} must use \"provider/model\" format`);
+    return { provider: '', model: '' };
+  }
+
+  return { provider, model };
 }

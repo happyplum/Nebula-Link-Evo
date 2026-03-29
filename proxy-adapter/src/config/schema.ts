@@ -25,16 +25,24 @@ export interface Config {
   $schema?: string;
   version: string;
   description?: string;
-  providers: Record<string, Provider>;
+  providers: Record<string, FlatProvider>;
   mcp: MCPConfig;
   defaults: DefaultsConfig;
-  settings: SettingsConfig;
+  visionTool?: VisionToolConfig;
+  settings: RawSettingsConfig;
 }
 
-export interface Provider {
-  name: string;
+export interface FlatProvider {
+  name?: string;
   enabled: boolean;
   apiKey: string;
+  baseUrl?: string;
+  npmPackage?: string;
+  mcp?: string[];
+}
+
+export interface Provider extends FlatProvider {
+  name: string;
   baseUrl: string;
   mcp: string[];
   models: Record<string, ModelConfig>;
@@ -63,13 +71,33 @@ export interface MCPServerConfig {
 
 export interface DefaultsConfig {
   mode: 'separation' | 'unified';
-  vision: ModelSelector;
-  decision: ModelSelector;
+  vision: string;
+  decision: string;
 }
 
 export interface ModelSelector {
   provider: string;
   model: string;
+}
+
+export interface ResolvedDefaultsConfig {
+  mode: 'separation' | 'unified';
+  vision: ModelSelector;
+  decision: ModelSelector;
+}
+
+export interface VisionToolConfig {
+  maxCallsPerStep: number;
+  timeoutMs: number;
+  screenshotQuality: number;
+}
+
+export interface RawSettingsConfig {
+  timeout: number | string;
+  maxRetries: number | string;
+  temperature: number | string;
+  maxTokens: number | string;
+  maxSteps: number | string;
 }
 
 export interface SettingsConfig {
@@ -80,14 +108,16 @@ export interface SettingsConfig {
   maxSteps: number;
 }
 
-export interface ResolvedConfig extends Config {
+export interface ResolvedConfig extends Omit<Config, 'defaults' | 'settings'> {
+  defaults: ResolvedDefaultsConfig;
+  settings: SettingsConfig;
   _resolved: {
     providers: Record<string, ResolvedProvider>;
     settings: SettingsConfig;
   };
 }
 
-export interface ResolvedProvider extends Provider {
+export interface ResolvedProvider extends FlatProvider {
   apiKey: string;
   models: Record<
     string,
