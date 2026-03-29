@@ -3,7 +3,7 @@ import Fastify from 'fastify';
 import { ConversationManager } from '../conversation/manager.js';
 import { ChatHandler } from '../conversation/chat-handler.js';
 import { DebugWebSocketManager } from '../websocket-manager.js';
-import type { DecisionClient } from '../clients/decision/base.js';
+import type { DecisionClient } from '../clients/types.js';
 import type { ResolvedConfig } from '../config/schema.js';
 import apiChatRoutes from '../plugins/routes/api/chat/index.js';
 import errorHandler from '../plugins/03-error-handler.plugin.js';
@@ -94,7 +94,7 @@ describe('Chat Routes', () => {
     } as unknown as DecisionClient;
 
     chatHandler = new ChatHandler(manager, mockConfig, wsManager);
-    (chatHandler as any).getDecisionClient = () => mockDecisionClient;
+    (chatHandler as any).resolveDecisionModel = () => mockDecisionClient;
 
     app.register(swaggerPlugin);
     app.register(errorHandler);

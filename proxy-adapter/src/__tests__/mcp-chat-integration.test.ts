@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ChatHandler } from '../conversation/chat-handler.js';
 import { ConversationManager } from '../conversation/manager.js';
-import type { DecisionClient } from '../clients/decision/base.js';
+import type { DecisionClient } from '../clients/types.js';
 import type { DecisionContext } from '../clients/types.js';
 import { DebugWebSocketManager } from '../websocket-manager.js';
 import { MCPSDKClient, MCPTool } from '../clients/mcp/sdk-client.js';
@@ -87,7 +87,7 @@ describe('MCP Chat Integration', () => {
     vi.spyOn(mcpClient, 'callTool').mockResolvedValue(mockToolResult);
 
     chatHandler = new ChatHandler(conversationManager, mockConfig, wsManager, mcpClient);
-    (chatHandler as any).getDecisionClient = () => decisionClient as DecisionClient;
+    (chatHandler as any).resolveDecisionModel = () => decisionClient as DecisionClient;
 
     session = conversationManager.createSession({
       id: 'test-session',

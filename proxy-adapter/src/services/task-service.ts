@@ -7,8 +7,6 @@
  */
 
 import { loadConfig, validateConfig } from '../config/index.js';
-import { createClientFactory, ClientFactory } from '../clients/index.js';
-import type { VisionClient, DecisionClient } from '../clients/types.js';
 import { MCPSDKClient } from '../clients/mcp/sdk-client.js';
 import type {
   TaskRequest,
@@ -20,12 +18,14 @@ import { ActionExecutor } from './action-executor.js';
 import { StepRunner } from './step-runner.js';
 import { TaskOrchestrator } from './task-orchestrator.js';
 import { streamTask } from '../clients/vercel-ai/streaming.js';
+import { ProviderRegistry } from './provider/registry.js';
+import type { ProviderConfig } from './provider/types.js';
 import type { ModelMessage } from 'ai';
 
 export class TaskService {
   private config: ResolvedConfig | null = null;
   private configPath: string = '';
-  private clientFactory: ClientFactory | null = null;
+  private registry: ProviderRegistry | null = null;
   private mcpClient: MCPSDKClient | null = null;
   private wsManager: DebugWebSocketManager;
   private actionExecutor: ActionExecutor;
@@ -55,7 +55,17 @@ export class TaskService {
       }
     }
 
-    this.clientFactory = createClientFactory(this.config);
+    const configProviders: Record<string, ProviderConfig> = {};
+    for (const [key, provider] of Object.entries(this.config._resolved.providers)) {
+      if (provider.enabled) {
+        configProviders[key] = {
+          apiKey: provider.apiKey,
+          baseUrl: provider.baseUrl || undefined,
+          npmPackage: provider.npmPackage,
+        };
+      }
+    }
+    this.registry = new ProviderRegistry(configProviders);
 
     this.mcpClient = new MCPSDKClient(this.config);
     try {
@@ -67,8 +77,13 @@ export class TaskService {
 
     this.stepRunner = new StepRunner({
       actionExecutor: this.actionExecutor,
-      clientFactory: this.clientFactory,
+      registry: this.registry,
+      defaults: {
+        decision: `${this.config.defaults.decision.provider}/${this.config.defaults.decision.model}`,
+        vision: `${this.config.defaults.vision.provider}/${this.config.defaults.vision.model}`,
+      },
       getMCPTools: () => this.getMCPTools(),
+      visionTool: this.config.visionTool,
     });
 
     this.taskOrchestrator = new TaskOrchestrator({
@@ -93,6 +108,10 @@ export class TaskService {
 
   getConfigPath(): string {
     return this.configPath;
+  }
+
+  getRegistry(): ProviderRegistry | null {
+    return this.registry;
   }
 
   getMCPStatus() {
@@ -212,9 +231,14 @@ export class TaskService {
     const startTime = Date.now();
     console.log('[AI Test] Starting connectivity test...');
 
-    const testScreenshot =
-      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
-    const testViewport = { width: 1, height: 1 };
+    const defaults = this.config?.defaults;
+    if (!defaults || !this.registry) {
+      return {
+        vision: { status: 'not_configured', responseTime: 0, error: 'No config or registry' },
+        decision: { status: 'not_configured', responseTime: 0, error: 'No config or registry' },
+        totalResponseTime: Date.now() - startTime,
+      };
+    }
 
     let visionResult: {
       status: string;
@@ -225,23 +249,24 @@ export class TaskService {
       intro?: string;
     };
     const visionStart = Date.now();
+    const visionProvider = defaults.vision.provider;
+    const visionModel = defaults.vision.model;
     try {
-      const visionClient = this.clientFactory?.createVisionClient();
-      if (!visionClient) {
+      if (!this.registry.isAvailable(visionProvider)) {
         console.log('[AI Test] Vision: not configured');
         visionResult = {
           status: 'not_configured',
           responseTime: Date.now() - visionStart,
-          error: 'No vision client available',
+          error: 'No vision provider available',
         };
       } else {
-        console.log(`[AI Test] Testing Vision: ${visionClient.provider}/${visionClient.model}`);
-        await visionClient.detect(testScreenshot, testViewport);
-        const intro = await this.getModelIntro(visionClient);
+        console.log(`[AI Test] Testing Vision: ${visionProvider}/${visionModel}`);
+        await this.registry.resolve(visionProvider, visionModel);
+        const intro = await this.getModelIntro(visionProvider, visionModel);
         visionResult = {
           status: 'connected',
-          provider: visionClient.provider,
-          model: visionClient.model,
+          provider: visionProvider,
+          model: visionModel,
           responseTime: Date.now() - visionStart,
           error: null,
           intro,
@@ -269,24 +294,23 @@ export class TaskService {
       intro?: string;
     };
     const decisionStart = Date.now();
+    const decisionProvider = defaults.decision.provider;
+    const decisionModel = defaults.decision.model;
     try {
-      const decisionClient = this.clientFactory?.createDecisionClient();
-      if (!decisionClient) {
+      if (!this.registry.isAvailable(decisionProvider)) {
         console.log('[AI Test] Decision: not configured');
         decisionResult = {
           status: 'not_configured',
           responseTime: Date.now() - decisionStart,
-          error: 'No decision client available',
+          error: 'No decision provider available',
         };
       } else {
-        console.log(
-          `[AI Test] Testing Decision: ${decisionClient.provider}/${decisionClient.model}`
-        );
-        const intro = await this.getModelIntro(decisionClient);
+        console.log(`[AI Test] Testing Decision: ${decisionProvider}/${decisionModel}`);
+        const intro = await this.getModelIntro(decisionProvider, decisionModel);
         decisionResult = {
           status: 'connected',
-          provider: decisionClient.provider,
-          model: decisionClient.model,
+          provider: decisionProvider,
+          model: decisionModel,
           responseTime: Date.now() - decisionStart,
           error: null,
           intro,
@@ -324,29 +348,24 @@ export class TaskService {
     };
     return names[provider] || provider;
   }
-  /**
-   * Shared interface for clients with provider and model properties
-   */
-  private async getModelIntro(
-    client: VisionClient | DecisionClient
-  ): Promise<string> {
 
+  private async getModelIntro(provider: string, model: string): Promise<string> {
     try {
       const config = this.config;
-      if (!config?._resolved?.providers?.[client.provider]) {
-        return `我是 ${client.model} 决策模型，由 ${this.getProviderDisplayName(client.provider)} 提供。`;
+      if (!config?._resolved?.providers?.[provider]) {
+        return `我是 ${model} 决策模型，由 ${this.getProviderDisplayName(provider)} 提供。`;
       }
-      const providerConfig = config._resolved.providers[client.provider] as import('../config/schema.js').Provider;
+      const providerConfig = config._resolved.providers[provider];
       const apiKey = providerConfig?.apiKey;
       const baseUrl = providerConfig?.baseUrl || 'https://api.moonshot.cn/v1';
       if (!apiKey || apiKey.startsWith('{')) {
-        return `我是 ${client.model} 决策模型，由 ${this.getProviderDisplayName(client.provider)} 提供。`;
+        return `我是 ${model} 决策模型，由 ${this.getProviderDisplayName(provider)} 提供。`;
       }
       const axios = (await import('axios')).default;
       const response = await axios.post(
         `${baseUrl}/chat/completions`,
         {
-          model: client.model,
+          model,
           messages: [
             {
               role: 'user',
@@ -364,10 +383,10 @@ export class TaskService {
           timeout: 10000,
         }
       );
-      const intro = response.data.choices[0]?.message?.content || `我是 ${client.model} 决策模型。`;
+      const intro = response.data.choices[0]?.message?.content || `我是 ${model} 决策模型。`;
       return intro.trim();
     } catch {
-      return `我是 ${client.model} 决策模型，由 ${this.getProviderDisplayName(client.provider)} 提供。`;
+      return `我是 ${model} 决策模型，由 ${this.getProviderDisplayName(provider)} 提供。`;
     }
   }
 

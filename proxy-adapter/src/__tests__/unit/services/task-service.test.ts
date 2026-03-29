@@ -62,13 +62,6 @@ vi.mock('../../../config/index.js', () => ({
   }),
 }));
 
-vi.mock('../../../clients/index.js', () => ({
-  createClientFactory: vi.fn().mockReturnValue({
-    createVisionClient: vi.fn(),
-    createDecisionClient: vi.fn(),
-  }),
-}));
-
 vi.mock('../../../websocket-manager.js', () => ({
   DebugWebSocketManager: {
     getInstance: vi.fn().mockReturnValue({
@@ -121,10 +114,9 @@ describe('TaskService', () => {
       expect(taskService.getMCPSDKClient()).not.toBeNull();
     });
 
-    it('should create client factory', async () => {
+    it('should create provider registry', async () => {
       await taskService.initialize();
-      const clientsModule = await import('../../../clients/index.js');
-      expect(clientsModule.createClientFactory).toHaveBeenCalled();
+      expect(taskService.getRegistry()).not.toBeNull();
     });
   });
 

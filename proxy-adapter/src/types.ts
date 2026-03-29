@@ -55,6 +55,12 @@ export interface TaskRequest {
     maxSteps?: number;
     screenshotOnError?: boolean;
     params?: Record<string, string>;
+    session?: {
+      provider: string | null;
+      model: string | null;
+      vision_provider: string | null;
+      vision_model: string | null;
+    };
   };
 }
 
