@@ -15,8 +15,8 @@
   },
   "defaults": {
     "mode": "separation",
-    "decision": "glm/glm-4.7-flash",
-    "vision": "glm/glm-4.6v-flash"
+    "decision": "nvidia/nemotron-3-super-120b-a12b",
+    "vision": "nvidia/qwen/qwen3.5-122b-a10b"
   },
   "visionTool": {
     "maxCallsPerStep": 5,
