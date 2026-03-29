@@ -20,9 +20,9 @@
   },
   "dependencies": {
     "@nebula-link-evo/shared": "workspace:*",
-    "@ai-sdk/anthropic": "^3.0.50",
     "@ai-sdk/openai-compatible": "^2.0.31",
     "@ai-sdk/provider": "^3.0.8",
+    "execa": "^9.0.0",
     "@fastify/autoload": "catalog:",
     "@fastify/cors": "catalog:",
     "@fastify/middie": "catalog:",
