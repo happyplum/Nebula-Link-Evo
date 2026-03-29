@@ -15,7 +15,7 @@
   },
   "defaults": {
     "mode": "separation",
-    "decision": "nvidia/nemotron-3-super-120b-a12b",
+    "decision": "nvidia/nvidia/nemotron-3-super-120b-a12b",
     "vision": "nvidia/qwen/qwen3.5-122b-a10b"
   },
   "visionTool": {
