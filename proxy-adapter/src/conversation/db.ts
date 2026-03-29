@@ -6,6 +6,7 @@ import { SessionEventsCleanup } from '../services/session-events-cleanup.js';
 import { up as migrate004 } from './migrations/004-sessions-state.js';
 import { up as migrate005 } from './migrations/005-migrate-existing-sessions.js';
 import { up as migrate006 } from './migrations/006-session-events.js';
+import { up as migrate007 } from './migrations/007-add-vision-model-columns.js';
 import type {
   Session,
   SessionStatus,
@@ -104,6 +105,7 @@ class DatabaseManager {
     migrate004(this.db);
     migrate005(this.db);
     migrate006(this.db);
+    migrate007(this.db);
   }
 
   private sleep(ms: number): void {
@@ -272,10 +274,10 @@ class DatabaseManager {
     const now = new Date().toISOString();
 
     const stmt = this.db.prepare(
-      `INSERT INTO sessions (id, title, created_at, updated_at, summary, message_count, provider, model)
-       VALUES (?, ?, ?, ?, NULL, 0, ?, ?)`
+      `INSERT INTO sessions (id, title, created_at, updated_at, summary, message_count, provider, model, vision_provider, vision_model)
+       VALUES (?, ?, ?, ?, NULL, 0, ?, ?, ?, ?)`
     );
-    stmt.run(id, params.title, now, now, params.provider, params.model);
+    stmt.run(id, params.title, now, now, params.provider, params.model, params.vision_provider ?? null, params.vision_model ?? null);
 
     return this.getSession(id) as Session;
   }
@@ -301,6 +303,8 @@ class DatabaseManager {
       message_count: row.message_count,
       provider: row.provider,
       model: row.model,
+      vision_provider: row.vision_provider,
+      vision_model: row.vision_model,
       status: row.status as SessionStatus | undefined,
     };
   }
@@ -328,6 +332,14 @@ class DatabaseManager {
     if (params.model !== undefined) {
       updates.push('model = ?');
       values.push(params.model);
+    }
+    if (params.vision_provider !== undefined) {
+      updates.push('vision_provider = ?');
+      values.push(params.vision_provider);
+    }
+    if (params.vision_model !== undefined) {
+      updates.push('vision_model = ?');
+      values.push(params.vision_model);
     }
 
     if (updates.length === 0) {
@@ -373,6 +385,8 @@ class DatabaseManager {
       message_count: row.message_count,
       provider: row.provider,
       model: row.model,
+      vision_provider: row.vision_provider,
+      vision_model: row.vision_model,
       status: row.status as SessionStatus | undefined,
     }));
   }
@@ -852,6 +866,8 @@ interface SessionRow {
   message_count: number;
   provider: string;
   model: string;
+  vision_provider: string | null;
+  vision_model: string | null;
   status: string | null;
 }
 

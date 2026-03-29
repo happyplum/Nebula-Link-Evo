@@ -33,6 +33,8 @@ const SessionResponseSchema = Type.Object({
   message_count: Type.Number(),
   provider: Type.String(),
   model: Type.String(),
+  vision_provider: Type.Union([Type.String(), Type.Null()]),
+  vision_model: Type.Union([Type.String(), Type.Null()]),
   status: Type.Optional(SessionStatusSchema),
   jobId: Type.Optional(Type.String()),
   agentState: Type.Optional(AgentStateSchema),
@@ -44,6 +46,8 @@ const CreateSessionBodySchema = Type.Object({
   title: Type.Optional(Type.String()),
   provider: Type.String({ minLength: 1 }),
   model: Type.String({ minLength: 1 }),
+  vision_provider: Type.Optional(Type.String()),
+  vision_model: Type.Optional(Type.String()),
 });
 
 const CreateSessionResponseSchema = Type.Object({
@@ -71,6 +75,21 @@ const AsyncMessageResponseSchema = Type.Object({
   runId: Type.String(),
   sessionId: Type.String(),
   messageId: Type.String(),
+});
+
+const UpdateModelsBodySchema = Type.Object({
+  decision: Type.Optional(Type.Object({
+    provider: Type.String({ minLength: 1 }),
+    model: Type.String({ minLength: 1 }),
+  })),
+  vision: Type.Optional(Type.Object({
+    provider: Type.String({ minLength: 1 }),
+    model: Type.String({ minLength: 1 }),
+  })),
+});
+
+const UpdateModelsResponseSchema = Type.Object({
+  session: SessionResponseSchema,
 });
 
 const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
@@ -110,7 +129,7 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
     async (request, reply) => {
       try {
-        const { title = '新会话', provider, model } = request.body || {};
+        const { title = '新会话', provider, model, vision_provider, vision_model } = request.body || {};
         const config = TaskService.getInstance().getConfig();
         if (config === null) {
           reply.status(500);
@@ -129,6 +148,8 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           title,
           provider,
           model,
+          vision_provider,
+          vision_model,
         });
 
         await conversationManager.createSessionState({
@@ -242,6 +263,80 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         request.log.error({ error: errorMessage, sessionId }, 'Failed to get session');
+        reply.status(500);
+        return { error: errorMessage };
+      }
+    }
+  );
+
+  // PATCH /:id/models - Update session model configuration
+  fastify.patch<{ Params: { id: string }; Body: Static<typeof UpdateModelsBodySchema> }>(
+    '/:id/models',
+    {
+      schema: {
+        description: 'Update model configuration for a session. Change takes effect on the next step.',
+        tags: ['Chat'],
+        params: Type.Object({ id: Type.String() }),
+        body: UpdateModelsBodySchema,
+        response: {
+          200: UpdateModelsResponseSchema,
+          400: ErrorResponseSchema,
+          404: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const { id: sessionId } = request.params;
+      const { decision, vision } = request.body || {};
+
+      if (!decision && !vision) {
+        reply.status(400);
+        return { error: 'At least one of "decision" or "vision" must be provided' };
+      }
+
+      try {
+        const session = conversationManager.getSession(sessionId);
+        if (!session) {
+          reply.status(404);
+          return { error: `Session ${sessionId} not found` };
+        }
+
+        const registry = TaskService.getInstance().getRegistry();
+        if (!registry) {
+          reply.status(500);
+          return { error: 'Provider registry unavailable' };
+        }
+
+        // Validate providers exist in registry
+        if (decision && !registry.isAvailable(decision.provider)) {
+          reply.status(400);
+          return { error: `Unknown decision provider: '${decision.provider}'` };
+        }
+        if (vision && !registry.isAvailable(vision.provider)) {
+          reply.status(400);
+          return { error: `Unknown vision provider: '${vision.provider}'` };
+        }
+
+        const updateParams: import('../../../../conversation/types.js').UpdateSessionParams = {};
+        if (decision) {
+          updateParams.provider = decision.provider;
+          updateParams.model = decision.model;
+        }
+        if (vision) {
+          updateParams.vision_provider = vision.provider;
+          updateParams.vision_model = vision.model;
+        }
+
+        const updated = conversationManager.updateSession(sessionId, updateParams);
+        if (!updated) {
+          reply.status(404);
+          return { error: `Session ${sessionId} not found` };
+        }
+
+        return { session: updated };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        request.log.error({ error: errorMessage, sessionId }, 'Failed to update session models');
         reply.status(500);
         return { error: errorMessage };
       }
