@@ -14,7 +14,7 @@ import errorHandler from '../../../plugins/03-error-handler.plugin.js';
 import { ConversationManager } from '../../../conversation/manager.js';
 import { ChatHandler } from '../../../conversation/chat-handler.js';
 import { DebugWebSocketManager } from '../../../websocket-manager.js';
-import type { DecisionClient } from '../../../clients/decision/base.js';
+import type { DecisionClient } from '../../../clients/types.js';
 import type { ResolvedConfig } from '../../../config/schema.js';
 
 const { mockConfig, mockGetConfig } = vi.hoisted(() => {
@@ -101,7 +101,7 @@ describe('T9: Legacy execution path removal contract', () => {
     } as unknown as DecisionClient;
 
     chatHandler = new ChatHandler(manager, mockConfig, wsManager);
-    (chatHandler as unknown as Record<string, unknown>).getDecisionClient = () => mockDecisionClient;
+    (chatHandler as unknown as Record<string, unknown>).resolveDecisionModel = () => mockDecisionClient;
 
     handleChatSendSpy = vi.spyOn(chatHandler, 'handleChatSend').mockResolvedValue(undefined);
     executeAIResponseSpy = vi.spyOn(

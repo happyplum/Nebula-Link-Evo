@@ -26,20 +26,6 @@ export function validateConfig(config: ResolvedConfig): ValidationResult {
     if (!provider.baseUrl) {
       errors.push(`Provider ${name}: missing baseUrl`);
     }
-
-    if (Object.keys(provider.models).length === 0) {
-      errors.push(`Provider ${name}: no models defined`);
-    }
-
-    for (const [modelName, model] of Object.entries(provider.models)) {
-      if (!model.type) {
-        errors.push(`Provider ${name} model ${modelName}: missing type`);
-      }
-
-      if (!model.capabilities || model.capabilities.length === 0) {
-        errors.push(`Provider ${name} model ${modelName}: missing capabilities`);
-      }
-    }
   }
 
   if (!config.defaults) {
@@ -79,13 +65,8 @@ export function validateConfig(config: ResolvedConfig): ValidationResult {
       }
 
       const decisionProvider = config.providers[config.defaults.decision.provider];
-      if (decisionProvider?.enabled) {
-        const model = decisionProvider.models[config.defaults.decision.model];
-        if (model && !model.capabilities.includes('decision')) {
-          errors.push(
-            `Model ${config.defaults.decision.model} does not support decision capability`
-          );
-        }
+      if (decisionProvider && !decisionProvider.enabled) {
+        warnings.push(`Default decision provider ${config.defaults.decision.provider} is disabled`);
       }
     } else {
       errors.push(`Unknown mode: ${mode}`);
@@ -138,10 +119,8 @@ export function validateProviderModel(
     errors.push(`Provider ${provider} is disabled`);
   }
 
-  const modelConfig = providerConfig.models[model];
-  if (!modelConfig) {
+  if (!model || model.trim().length === 0) {
     errors.push(`Model ${model} not found in provider ${provider}`);
-    return { valid: false, errors };
   }
 
   return { valid: errors.length === 0, errors };
@@ -158,10 +137,5 @@ export function canProviderDo(
     return false;
   }
 
-  const modelConfig = providerConfig.models[model];
-  if (!modelConfig) {
-    return false;
-  }
-
-  return modelConfig.capabilities.includes(capability);
+  return model.trim().length > 0 && (capability === 'vision' || capability === 'decision');
 }
