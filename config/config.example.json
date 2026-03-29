@@ -1,114 +1,44 @@
 {
-  "$schema": "https://opencode.ai/config.json",
-  "version": "1.0",
+  "version": "2.0",
   "description": "Nebula-Link Evo AI 配置",
   "providers": {
     "kimi": {
-      "name": "Kimi (Moonshot)",
-      "enabled": true,
-      "apiKey": "{KIMI_API_KEY}",
       "baseUrl": "https://api.moonshot.cn/v1",
-      "mcp": [
-        "browser-control"
-      ],
-      "models": {
-        "moonshot-v1-vision-k2.5": {
-          "type": "decision",
-          "capabilities": [
-            "decision"
-          ],
-          "temperature": 0.2,
-          "maxTokens": 1000
-        }
-      }
+      "apiKey": "{KIMI_API_KEY}",
+      "enabled": true
     },
     "glm": {
-      "name": "智谱 GLM",
-      "enabled": true,
-      "apiKey": "{GLM_API_KEY}",
       "baseUrl": "https://open.bigmodel.cn/api/paas/v4",
-      "mcp": [
-        "browser-control",
-        "file-access"
-      ],
-      "models": {
-        "glm-4.5v": {
-          "type": "vision",
-          "capabilities": [
-            "vision"
-          ],
-          "temperature": 0.7,
-          "maxTokens": 2000
-        }
-      }
+      "apiKey": "{GLM_API_KEY}",
+      "enabled": true
     },
     "nvidia": {
-      "name": "NVIDIA",
-      "enabled": false,
-      "apiKey": "{NVIDIA_API_KEY}",
       "baseUrl": "https://integrate.api.nvidia.com/v1",
-      "mcp": [
-        "browser-control"
-      ],
-      "models": {
-        "nv-llama": {
-          "type": "multimodal",
-          "capabilities": [
-            "vision",
-            "decision"
-          ],
-          "temperature": 0.2,
-          "maxTokens": 2000
-        }
-      }
+      "apiKey": "{NVIDIA_API_KEY}",
+      "enabled": false
     },
     "openai": {
-      "name": "OpenAI",
-      "enabled": false,
-      "apiKey": "{OPENAI_API_KEY}",
+      "npmPackage": "@ai-sdk/openai",
       "baseUrl": "https://api.openai.com/v1",
-      "mcp": [
-        "browser-control"
-      ],
-      "models": {
-        "gpt-4o": {
-          "type": "multimodal",
-          "capabilities": [
-            "vision",
-            "decision"
-          ],
-          "temperature": 0.2,
-          "maxTokens": 2000
-        },
-        "gpt-4o-mini": {
-          "type": "vision",
-          "capabilities": [
-            "vision"
-          ],
-          "temperature": 0.3,
-          "maxTokens": 1000
-        }
-      }
+      "apiKey": "{OPENAI_API_KEY}",
+      "enabled": false
     },
     "anthropic": {
-      "name": "Anthropic Claude",
-      "enabled": false,
-      "apiKey": "{ANTHROPIC_API_KEY}",
+      "npmPackage": "@ai-sdk/anthropic",
       "baseUrl": "https://api.anthropic.com/v1",
-      "mcp": [
-        "browser-control"
-      ],
-      "models": {
-        "claude-3-haiku-20250714": {
-          "type": "vision",
-          "capabilities": [
-            "vision"
-          ],
-          "temperature": 0.3,
-          "maxTokens": 1000
-        }
-      }
+      "apiKey": "{ANTHROPIC_API_KEY}",
+      "enabled": false
     }
+  },
+  "defaults": {
+    "mode": "separation",
+    "decision": "kimi/moonshot-v1-vision-k2.5",
+    "vision": "glm/glm-4.5v"
+  },
+  "visionTool": {
+    "maxCallsPerStep": 5,
+    "timeoutMs": 30000,
+    "screenshotQuality": 80
   },
   "mcp": {
     "enabled": true,
@@ -126,21 +56,11 @@
       }
     }
   },
-  "defaults": {
-    "mode": "separation",
-    "vision": {
-      "provider": "glm",
-      "model": "glm-4.5v"
-    },
-    "decision": {
-      "provider": "kimi",
-      "model": "moonshot-v1-vision-k2.5"
-    }
-  },
   "settings": {
     "timeout": "{TIMEOUT:30000}",
     "maxRetries": "{MAX_RETRIES:3}",
     "temperature": 0.2,
-    "maxTokens": 1000
+    "maxTokens": 1000,
+    "maxSteps": 3
   }
 }

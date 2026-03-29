@@ -7,23 +7,6 @@
       "apiKey": "{GLM_API_KEY}",
       "enabled": true
     },
-    "kimi": {
-      "baseUrl": "https://api.moonshot.cn/v1",
-      "apiKey": "{KIMI_API_KEY}",
-      "enabled": false
-    },
-    "openai": {
-      "npmPackage": "@ai-sdk/openai",
-      "baseUrl": "https://api.openai.com/v1",
-      "apiKey": "{OPENAI_API_KEY}",
-      "enabled": false
-    },
-    "anthropic": {
-      "npmPackage": "@ai-sdk/anthropic",
-      "baseUrl": "https://api.anthropic.com/v1",
-      "apiKey": "{ANTHROPIC_API_KEY}",
-      "enabled": false
-    },
     "nvidia": {
       "baseUrl": "https://integrate.api.nvidia.com/v1",
       "apiKey": "{NVIDIA_API_KEY}",
