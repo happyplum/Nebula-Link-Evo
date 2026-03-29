@@ -8,8 +8,12 @@ import { DatabaseManager } from '../conversation/db.js';
 import { DebugWebSocketManager } from '../websocket-manager.js';
 import { SessionEventHub } from '../services/session-event-hub.js';
 import { SessionLock } from '../services/session-lock.js';
-import type { DecisionClient } from '../clients/decision/base.js';
-import type { StreamCallbacks } from '../clients/decision/stream.js';
+import type { DecisionClient } from '../clients/types.js';
+type StreamCallbacks = {
+  onToken: (text: string) => void;
+  onThinking: (text: string) => void;
+  onDone: () => Promise<void>;
+};
 import type { ResolvedConfig } from '../config/schema.js';
 import apiChatRoutes from '../plugins/routes/api/chat/index.js';
 import errorHandler from '../plugins/03-error-handler.plugin.js';
@@ -252,7 +256,7 @@ describe('SSE integration flow', () => {
       sessionEventHub
     );
 
-    vi.spyOn(chatHandler as unknown as { getDecisionClient: () => DecisionClient }, 'getDecisionClient')
+    vi.spyOn(chatHandler as unknown as { resolveDecisionModel: () => DecisionClient }, 'resolveDecisionModel')
       .mockReturnValue(mockDecisionClient);
 
     app = Fastify({ logger: false }).withTypeProvider<TypeBoxTypeProvider>();
@@ -453,7 +457,7 @@ describe('SSE integration flow', () => {
       model: 'moonshot-v1-vision-preview',
     });
 
-    vi.spyOn(chatHandler as unknown as { getDecisionClient: () => DecisionClient }, 'getDecisionClient')
+    vi.spyOn(chatHandler as unknown as { resolveDecisionModel: () => DecisionClient }, 'resolveDecisionModel')
       .mockReturnValue({
         provider: 'kimi',
         model: 'moonshot-v1-vision-preview',

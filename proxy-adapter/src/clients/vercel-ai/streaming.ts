@@ -7,6 +7,8 @@ import type { ModelMessage } from 'ai';
 import type { ActionExecutor } from '../../services/action-executor.js';
 import type { TaskOrchestrator } from '../../services/task-orchestrator.js';
 import type { ResolvedConfig } from '../../config/schema.js';
+import { ProviderRegistry } from '../../services/provider/registry.js';
+import type { ProviderConfig } from '../../services/provider/types.js';
 import { getModel } from './provider.js';
 import { createCoreTools } from './core-tools.js';
 import { createLoadSkillTool } from './skills-tool.js';
@@ -39,7 +41,21 @@ export async function streamTask(options: StreamTaskOptions): Promise<void> {
 
   try {
     // Get the AI model
-    const aiModel = getModel(config, provider, model);
+    const providers: Record<string, ProviderConfig> = {};
+    for (const [key, providerConfig] of Object.entries(config._resolved.providers)) {
+      if (!providerConfig.enabled) {
+        continue;
+      }
+
+      providers[key] = {
+        apiKey: providerConfig.apiKey,
+        baseUrl: providerConfig.baseUrl || undefined,
+        npmPackage: providerConfig.npmPackage,
+      };
+    }
+
+    const registry = new ProviderRegistry(providers);
+    const aiModel = await getModel(registry, provider, model);
 
     // Create tools
     const coreTools = createCoreTools(executor);

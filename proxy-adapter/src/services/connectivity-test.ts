@@ -1,9 +1,7 @@
 import axios, { AxiosRequestConfig } from 'axios';
 import crypto from 'crypto';
-import type { GLMDecisionConfig } from '../clients/decision/glm.js';
-import type { KimiDecisionConfig } from '../clients/decision/kimi.js';
 import { loadConfig } from '../config/index.js';
-import type { Provider } from '../config/schema.js';
+import type { FlatProvider } from '../config/schema.js';
 
 export interface ConnectivityTestRequest {
   provider?: string;
@@ -46,7 +44,7 @@ export async function testConnectivity(
     // Note: apiKey and baseUrl must be in request or have config defaults
     let provider: string;
     let modelId: string;
-    let providerConfig: Provider | undefined;
+    let providerConfig: FlatProvider | undefined;
     let baseUrl: string | undefined;
     let apiKey: string | undefined;
 
@@ -80,7 +78,7 @@ export async function testConnectivity(
     // Get baseUrl and apiKey from request or provider config
     if (request.baseUrl) {
       baseUrl = request.baseUrl;
-    } else if (providerConfig) {
+    } else if (providerConfig?.baseUrl) {
       baseUrl = providerConfig.baseUrl;
     } else {
       return {
@@ -93,7 +91,7 @@ export async function testConnectivity(
 
     if (request.apiKey) {
       apiKey = request.apiKey;
-    } else if (providerConfig) {
+    } else if (providerConfig?.apiKey) {
       apiKey = providerConfig.apiKey;
     } else {
       return {

@@ -1,21 +1,20 @@
-import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
-import { createAnthropic } from '@ai-sdk/anthropic';
 import type { LanguageModelV3 } from '@ai-sdk/provider';
 import { MockLanguageModelV3 } from 'ai/test';
 import { simulateReadableStream } from 'ai';
-import { getProviderModel } from '../../config/resolver.js';
-import type { ResolvedConfig } from '../../config/schema.js';
+import type { ProviderRegistry } from '../../services/provider/registry.js';
+import { resolveSessionModels, type ResolvedModels } from '../../services/provider/resolver.js';
+import { ProviderError, PROVIDER_ERRORS } from '../../services/provider/errors.js';
 
 /**
  * Get a language model instance for the specified provider and model.
- * Integrates with the project's config system to retrieve API keys and base URLs.
+ * Delegates resolution to ProviderRegistry.
  */
-export function getModel(
-  config: ResolvedConfig,
+export async function getModel(
+  registry: ProviderRegistry,
   provider: string,
-  model: string
-): LanguageModelV3 {
-  // Test-only mock provider — bypass config resolution
+  model: string,
+): Promise<LanguageModelV3> {
+  // Test-only mock provider — bypass registry resolution
   if (provider === 'test-provider') {
     if (process.env.NODE_ENV !== 'test') {
       throw new Error('test-provider is only available in test environment');
@@ -44,76 +43,57 @@ export function getModel(
     }) as unknown as LanguageModelV3;
   }
 
-  const resolved = getProviderModel(config, provider, model);
+  return registry.resolve(provider, model);
+}
 
-  if (!resolved) {
-    throw new Error(
-      `Provider '${provider}' or model '${model}' not found in configuration`
-    );
-  }
+/** Session fields used for model resolution. */
+interface SessionModelFields {
+  provider: string | null;
+  model: string | null;
+  vision_provider: string | null;
+  vision_model: string | null;
+}
 
-  const { provider: providerConfig } = resolved;
+/** Config-level defaults for model selectors (e.g., "glm/glm-4.7-flash"). */
+interface ConfigDefaults {
+  decision: string;
+  vision: string;
+}
 
-  switch (provider) {
-    case 'kimi': {
-      const kimi = createOpenAICompatible({
-        name: 'kimi',
-        baseURL: providerConfig.baseUrl,
-        apiKey: providerConfig.apiKey,
-      });
-      return kimi.languageModel(model);
-    }
+/**
+ * Resolve the decision model for a session using the provider registry.
+ */
+export async function getDecisionModel(
+  session: SessionModelFields,
+  registry: ProviderRegistry,
+  defaults: ConfigDefaults,
+): Promise<LanguageModelV3> {
+  const { decision } = await resolveSessionModels(session, registry, defaults);
+  return decision;
+}
 
-    case 'anthropic': {
-      const anthropic = createAnthropic({
-        apiKey: providerConfig.apiKey,
-        baseURL: providerConfig.baseUrl,
-      });
-      return anthropic.chat(model);
-    }
-
-    case 'openai': {
-      const openai = createOpenAICompatible({
-        name: 'openai',
-        baseURL: providerConfig.baseUrl,
-        apiKey: providerConfig.apiKey,
-      });
-      return openai.languageModel(model);
-    }
-
-    case 'nvidia': {
-      const nvidia = createOpenAICompatible({
-        name: 'nvidia',
-        baseURL: providerConfig.baseUrl,
-        apiKey: providerConfig.apiKey,
-      });
-      return nvidia.languageModel(model);
-    }
-
-    case 'glm': {
-      const glm = createOpenAICompatible({
-        name: 'glm',
-        baseURL: providerConfig.baseUrl,
-        apiKey: providerConfig.apiKey,
-      });
-      return glm.languageModel(model);
-    }
-
-    default:
-      throw new Error(`Unsupported provider: ${provider}`);
-  }
+/**
+ * Resolve the vision model for a session using the provider registry.
+ */
+export async function getVisionModel(
+  session: SessionModelFields,
+  registry: ProviderRegistry,
+  defaults: ConfigDefaults,
+): Promise<LanguageModelV3> {
+  const { vision } = await resolveSessionModels(session, registry, defaults);
+  return vision;
 }
 
 /**
  * Create a model client wrapper with lazy initialization.
  */
 export function createModelClient(
-  config: ResolvedConfig,
+  registry: ProviderRegistry,
   provider: string,
-  model: string
+  model: string,
 ) {
   return {
-    getModel: () => getModel(config, provider, model),
+    getModel: () => getModel(registry, provider, model),
     provider,
     model,
   };

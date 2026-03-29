@@ -12,7 +12,7 @@ import { SkillManager } from '../skills/manager.js';
 import { DebugWebSocketManager } from '../websocket-manager.js';
 import { HistoryManager, TaskHistory, Step } from '../debug/history.js';
 import type { ActionExecutor, ActionResult } from './action-executor.js';
-import type { StepRunner } from './step-runner.js';
+import type { StepRunner, StepSessionModelConfig } from './step-runner.js';
 import type { Skill } from '../skills/schema.js';
 
 
@@ -241,6 +241,7 @@ const endTime = new Date().toISOString();
   ): Promise<TaskResponse> {
     const config = this.getConfig();
     const maxSteps = (context.maxSteps as number) || config?.settings?.maxSteps || 1;
+    const session = context.session as StepSessionModelConfig | undefined;
 
     try {
       await browserClient.openBrowser();
@@ -255,6 +256,7 @@ const endTime = new Date().toISOString();
             instruction: instruction || '',
             maxSteps,
             previousActions,
+            session,
           },
           step
         );

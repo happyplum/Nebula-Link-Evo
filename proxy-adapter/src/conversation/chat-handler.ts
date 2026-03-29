@@ -13,6 +13,8 @@ import type { ModelMessage } from 'ai';
 import type { LanguageModelV3 } from '@ai-sdk/provider';
 import { z } from 'zod';
 import { getModel } from '../clients/vercel-ai/provider.js';
+import { ProviderRegistry } from '../services/provider/registry.js';
+import type { ProviderConfig } from '../services/provider/types.js';
 import WebSocket from 'ws';
 
 interface ChatSendParams {
@@ -51,6 +53,7 @@ class ChatHandler {
   private mcpClient: MCPSDKClient | null = null;
   private sessionEventsDAO?: SessionEventsDAO;
   private sessionEventHub: SessionEventHub;
+  private providerRegistry: ProviderRegistry;
   private maxToolLoops = 10;
   private toolLoopCount = 0;
   private sessionEventQueue: Promise<void> = Promise.resolve();
@@ -69,9 +72,27 @@ class ChatHandler {
     this.mcpClient = mcpClient || null;
     this.sessionEventsDAO = sessionEventsDAO || this.resolveSessionEventsDAO();
     this.sessionEventHub = sessionEventHub || SessionEventHub.getInstance();
+    this.providerRegistry = this.createProviderRegistry(config);
     const configuredMaxSteps =
       this.config._resolved?.settings?.maxSteps ?? this.config.settings?.maxSteps ?? this.maxToolLoops;
     this.maxToolLoops = configuredMaxSteps > 0 ? configuredMaxSteps : this.maxToolLoops;
+  }
+
+  private createProviderRegistry(config: ResolvedConfig): ProviderRegistry {
+    const providers: Record<string, ProviderConfig> = {};
+    for (const [key, provider] of Object.entries(config._resolved.providers)) {
+      if (!provider.enabled) {
+        continue;
+      }
+
+      providers[key] = {
+        apiKey: provider.apiKey,
+        baseUrl: provider.baseUrl || undefined,
+        npmPackage: provider.npmPackage,
+      };
+    }
+
+    return new ProviderRegistry(providers);
   }
 
   private resolveSessionEventsDAO(): SessionEventsDAO | undefined {
@@ -136,8 +157,8 @@ class ChatHandler {
     return this.sessionEventHub;
   }
 
-  private getDecisionClient(provider: string, model: string): LanguageModelV3 {
-    return getModel(this.config, provider, model);
+  private async resolveDecisionModel(provider: string, model: string): Promise<LanguageModelV3> {
+    return getModel(this.providerRegistry, provider, model);
   }
 
   setMCPClient(client: MCPSDKClient): void {
@@ -363,10 +384,11 @@ class ChatHandler {
 
     const systemPrompt = this.getSystemPrompt(session);
     const sessionController = ChatSessionController.getInstance();
+    const decisionModel = await this.resolveDecisionModel(session.provider, session.model);
 
     const maxSteps = this.maxToolLoops;
     const streamOptions: Parameters<typeof streamText>[0] & { maxSteps: number } = {
-      model: this.getDecisionClient(session.provider, session.model),
+      model: decisionModel,
       system: systemPrompt,
       messages,
       tools: this.createSDKTools() as Parameters<typeof streamText>[0]['tools'],
@@ -446,9 +468,12 @@ class ChatHandler {
             role: 'tool',
             content: this.stringifyToolResult(output),
             metadata: {
+              phase: 'tool_result',
               tool_call_id: toolCallId,
               tool_name: toolName,
               tool_args: toolInput,
+              provider: session.provider,
+              model: session.model,
               runId,
             },
           });
@@ -512,6 +537,7 @@ class ChatHandler {
         role: 'assistant',
         content: accumulatedContent,
         metadata: {
+          phase: 'chat-decision',
           usage: totalUsage,
           provider: session.provider,
           model: session.model,

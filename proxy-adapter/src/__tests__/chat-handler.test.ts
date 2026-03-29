@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ChatHandler } from '../conversation/chat-handler.js';
 import { ConversationManager } from '../conversation/manager.js';
 import { DebugWebSocketManager } from '../websocket-manager.js';
-import type { DecisionClient } from '../clients/decision/base.js';
+import type { DecisionClient } from '../clients/types.js';
 import type { ResolvedConfig } from '../config/schema.js';
 import { MCPSDKClient } from '../clients/mcp/sdk-client.js';
 import { ChatSessionController } from '../services/chat-session-controller.js';
@@ -97,8 +97,8 @@ describe('ChatHandler', () => {
     } as unknown as DecisionClient;
 
     chatHandler = new ChatHandler(conversationManager, mockConfig, wsManager, mcpClient);
-    // Override getDecisionClient to return mock
-    (chatHandler as any).getDecisionClient = () => mockDecisionClient;
+    // Override resolveDecisionModel to return mock
+    (chatHandler as any).resolveDecisionModel = () => mockDecisionClient;
   });
 
   describe('setMCPClient', () => {
@@ -342,6 +342,73 @@ describe('ChatHandler', () => {
       );
 
       wsManager['clients'].delete(mockClientId);
+    });
+  });
+
+  describe('metadata enrichment', () => {
+    it('should enrich assistant message metadata with phase, provider, model, and runId', async () => {
+      const executeSpy = vi
+        .spyOn(
+          chatHandler as unknown as {
+            executeAIResponse: (...args: unknown[]) => Promise<void>;
+          },
+          'executeAIResponse'
+        )
+        .mockImplementation(async () => {
+          // Manually add an assistant message to test metadata
+          await conversationManager.addMessage(mockSessionId, {
+            role: 'assistant',
+            content: 'Test response',
+            metadata: {
+              phase: 'chat-decision',
+              provider: 'kimi',
+              model: 'moonshot-v1-vision-preview',
+              runId: 'test-run-id',
+            },
+          });
+        });
+
+      await chatHandler.handleChatSend(mockClientId, {
+        sessionId: mockSessionId,
+        message: 'Hello',
+      });
+
+      const messages = conversationManager.getMessages(mockSessionId);
+      const assistantMessage = messages.find((m) => m.role === 'assistant');
+
+      expect(assistantMessage).toBeDefined();
+      expect(assistantMessage?.metadata).toHaveProperty('phase', 'chat-decision');
+      expect(assistantMessage?.metadata).toHaveProperty('provider', 'kimi');
+      expect(assistantMessage?.metadata).toHaveProperty('model', 'moonshot-v1-vision-preview');
+      expect(assistantMessage?.metadata).toHaveProperty('runId');
+
+      executeSpy.mockRestore();
+    });
+
+    it('should enrich tool message metadata with phase, tool_name, provider, model, and runId', async () => {
+      await conversationManager.addMessage(mockSessionId, {
+        role: 'tool',
+        content: 'Tool result',
+        metadata: {
+          phase: 'tool_result',
+          tool_call_id: 'call-123',
+          tool_name: 'browser_snapshot',
+          tool_args: {},
+          provider: 'kimi',
+          model: 'moonshot-v1-vision-preview',
+          runId: 'test-run-id',
+        },
+      });
+
+      const messages = conversationManager.getMessages(mockSessionId);
+      const toolMessage = messages.find((m) => m.role === 'tool');
+
+      expect(toolMessage).toBeDefined();
+      expect(toolMessage?.metadata).toHaveProperty('phase', 'tool_result');
+      expect(toolMessage?.metadata).toHaveProperty('tool_name', 'browser_snapshot');
+      expect(toolMessage?.metadata).toHaveProperty('provider', 'kimi');
+      expect(toolMessage?.metadata).toHaveProperty('model', 'moonshot-v1-vision-preview');
+      expect(toolMessage?.metadata).toHaveProperty('runId');
     });
   });
 

@@ -33,25 +33,6 @@ vi.mock('../websocket-manager.js', () => ({
 vi.mock('../browser-client.js', () => ({
   browserClient: {},
 }));
-vi.mock('../clients/index.js', () => ({
-  createClientFactory: vi.fn().mockReturnValue({
-    createDecisionClient: vi.fn().mockReturnValue({
-      provider: 'test',
-      model: 'test-model',
-      decide: vi.fn(),
-      getApiEndpoint: vi.fn().mockReturnValue('https://example.com/chat/completions'),
-      getHeaders: vi.fn().mockReturnValue({
-        Authorization: 'Bearer test-key',
-        'Content-Type': 'application/json',
-      }),
-      getRequestBody: vi.fn().mockImplementation((messages: unknown[]) => ({
-        model: 'test-model',
-        messages,
-      })),
-      getCapabilities: vi.fn().mockReturnValue([]),
-    }),
-  }),
-}));
 vi.mock('../conversation/index.js', () => ({
   ConversationManager: vi.fn().mockImplementation(function() {
     return {

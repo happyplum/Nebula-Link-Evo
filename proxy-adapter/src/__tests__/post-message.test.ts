@@ -5,7 +5,7 @@ import { ChatHandler } from '../conversation/chat-handler.js';
 import { DebugWebSocketManager } from '../websocket-manager.js';
 import { SessionLock } from '../services/session-lock.js';
 import { DatabaseManager } from '../conversation/db.js';
-import type { DecisionClient } from '../clients/decision/base.js';
+import type { DecisionClient } from '../clients/types.js';
 import type { ResolvedConfig } from '../config/schema.js';
 import apiChatRoutes from '../plugins/routes/api/chat/index.js';
 import errorHandler from '../plugins/03-error-handler.plugin.js';
@@ -60,7 +60,7 @@ describe('POST /sessions/:id/messages', () => {
     } as unknown as DecisionClient;
 
     chatHandler = new ChatHandler(manager, mockConfig, wsManager);
-    (chatHandler as any).getDecisionClient = () => mockDecisionClient;
+    (chatHandler as any).resolveDecisionModel = () => mockDecisionClient;
 
     sessionLock = SessionLock.getInstance();
     sessionLock.clear();

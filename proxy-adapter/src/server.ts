@@ -12,7 +12,6 @@ import { DebugWebSocketManager } from './websocket-manager.js';
 import { browserClient } from './browser-client.js';
 import { ConversationManager, ChatHandler } from './conversation/index.js';
 import { DatabaseManager } from './conversation/db.js';
-import { createClientFactory } from './clients/index.js';
 import { createCompressionClient } from './clients/compression.js';
 import { ChatSessionController } from './services/chat-session-controller.js';
 import { SessionEventHub } from './services/session-event-hub.js';
@@ -25,6 +24,7 @@ import chatRoutes from './plugins/routes/chat/index.js';
 import apiChatRoutes from './plugins/routes/api/chat/index.js';
 import chatSocketRoutes from './plugins/routes/ws/chat-socket.js';
 import debugSocketRoutes from './plugins/routes/ws/debug-socket.js';
+import { runPreflight } from './services/provider/preflight.js';
 
 
 const __filename = fileURLToPath(import.meta.url);
@@ -112,6 +112,14 @@ async function start() {
     // This must happen before route registration to ensure config is available
     await taskService.initialize();
 
+    // Run provider preflight checks
+    const registry = taskService.getRegistry();
+    const preflightConfig = taskService.getConfig();
+    if (registry && preflightConfig) {
+      const providerKeys = Object.keys(preflightConfig._resolved?.providers ?? {});
+      runPreflight(registry, providerKeys);
+    }
+
     // Get config for chat handler
     const config = taskService.getConfig();
     if (!config) {
@@ -123,8 +131,7 @@ async function start() {
     conversationManager = new ConversationManager(dbPath);
     await conversationManager.initialize();
 
-    const clientFactory = createClientFactory(config);
-    const compressionClient = createCompressionClient(clientFactory.createDecisionClient());
+    const compressionClient = createCompressionClient(null);
     if (compressionClient) {
       conversationManager.setAiClient(compressionClient);
     } else {

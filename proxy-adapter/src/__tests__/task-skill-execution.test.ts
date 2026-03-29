@@ -24,10 +24,6 @@ vi.mock('../config/index.js', () => ({
     result: { errors: [] },
   })),
   validateConfig: vi.fn(() => ({ valid: true, warnings: [], errors: [] })),
-  createClientFactory: vi.fn(() => ({
-    createDecisionClient: vi.fn(),
-    createVisionClient: vi.fn(),
-  })),
 }));
 describe('TaskExecutor - Skill Execution', () => {
   beforeEach(async () => {
