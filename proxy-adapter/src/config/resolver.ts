@@ -5,6 +5,7 @@ import {
   ModelConfig,
   ModelSelector,
 } from './schema.js';
+import { normalizeNpmPackage } from '../services/provider/errors.js';
 
 export interface ResolverOptions {
   env?: Record<string, string>;
@@ -53,9 +54,7 @@ export function resolveConfig(
       models: {},
     };
 
-    if (!resolvedProvider.npmPackage) {
-      resolvedProvider.npmPackage = '@ai-sdk/openai-compatible';
-    }
+    resolvedProvider.npmPackage = normalizeNpmPackage(resolvedProvider.npmPackage);
 
     resolvedProviders[key] = resolvedProvider;
   }

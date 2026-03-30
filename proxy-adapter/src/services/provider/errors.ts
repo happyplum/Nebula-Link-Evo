@@ -53,9 +53,53 @@ export const BUILTIN_PROVIDERS = {
 export const DEFAULT_NPM_PACKAGE = '@ai-sdk/openai-compatible';
 
 /**
+ * Regex allowing only @ai-sdk/<name> packages with lowercase alphanumeric + hyphens.
+ */
+export const PACKAGE_NAME_RE = /^@ai-sdk\/[a-z0-9-]+$/;
+
+/**
  * Separator used in provider model strings (e.g., "provider/model").
  */
 export const PROVIDER_MODEL_SEPARATOR = '/';
+
+/**
+ * Normalizes a raw npm package input into a fully-qualified @ai-sdk/* package name.
+ *
+ * Resolution rules:
+ * 1. undefined / null / empty → DEFAULT_NPM_PACKAGE
+ * 2. Already-qualified @ai-sdk/* → validated, pass-through
+ * 3. Bare short name (e.g. 'openai') → '@ai-sdk/{name}' → validated
+ * 4. Any other value → ProviderError(CONFIG_INVALID)
+ */
+export function normalizeNpmPackage(raw?: string | null): string {
+  if (raw === undefined || raw === null || raw.trim() === '') {
+    return DEFAULT_NPM_PACKAGE;
+  }
+
+  const trimmed = raw.trim();
+
+  if (trimmed.startsWith('@ai-sdk/')) {
+    if (!PACKAGE_NAME_RE.test(trimmed)) {
+      throw new ProviderError(
+        PROVIDER_ERRORS.CONFIG_INVALID,
+        trimmed,
+        `Invalid @ai-sdk package name: "${trimmed}"`,
+      );
+    }
+    return trimmed;
+  }
+
+  const qualified = `@ai-sdk/${trimmed}`;
+  if (PACKAGE_NAME_RE.test(qualified)) {
+    return qualified;
+  }
+
+  throw new ProviderError(
+    PROVIDER_ERRORS.CONFIG_INVALID,
+    trimmed,
+    `Invalid provider package: "${trimmed}". Must be an @ai-sdk/* package or a short name like "openai".`,
+  );
+}
 
 /**
  * Parses a provider model string into structured provider and model components.
