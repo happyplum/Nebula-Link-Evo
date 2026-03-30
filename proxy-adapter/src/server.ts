@@ -117,7 +117,7 @@ async function start() {
     const preflightConfig = taskService.getConfig();
     if (registry && preflightConfig) {
       const providerKeys = Object.keys(preflightConfig._resolved?.providers ?? {});
-      runPreflight(registry, providerKeys);
+      await runPreflight(registry, providerKeys);
     }
 
     // Get config for chat handler
