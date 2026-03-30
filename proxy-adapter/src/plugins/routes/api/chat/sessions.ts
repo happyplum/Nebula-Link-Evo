@@ -13,6 +13,7 @@ import { SessionLock } from '../../../../services/session-lock.js';
 import { SessionEventHub } from '../../../../services/session-event-hub.js';
 import { DatabaseManager } from '../../../../conversation/db.js';
 import { ServiceUnavailableError } from '../../../../errors/http-errors.js';
+import { ProviderError } from '../../../../services/provider/errors.js';
 import { MAX_SCREENSHOT_SIZE_BYTES, type MessageCreatedEvent } from '@nebula-link-evo/shared';
 import { connectivityGateService } from '../../../../services/connectivity-gate-service.js';
 import { TaskService } from '../../../../services/index.js';
@@ -139,6 +140,21 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         if (!result.valid) {
           reply.status(400);
           return { error: result.errors.join('; ') };
+        }
+
+        // Check provider availability after config validation passes
+        const registry = TaskService.getInstance().getRegistry();
+        if (registry && !registry.isAvailable(provider)) {
+          const errorDetail = registry.getAvailabilityError(provider);
+          throw new ServiceUnavailableError(
+            `Provider '${provider}' is currently unavailable${errorDetail ? `: ${errorDetail}` : ''}`
+          );
+        }
+        if (vision_provider && registry && !registry.isAvailable(vision_provider)) {
+          const errorDetail = registry.getAvailabilityError(vision_provider);
+          throw new ServiceUnavailableError(
+            `Provider '${vision_provider}' is currently unavailable${errorDetail ? `: ${errorDetail}` : ''}`
+          );
         }
 
         const sessionId = randomUUID();
@@ -307,14 +323,26 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           return { error: 'Provider registry unavailable' };
         }
 
-        // Validate providers exist in registry
-        if (decision && !registry.isAvailable(decision.provider)) {
+        // Validate providers exist in config
+        if (decision && !registry.listProviders().includes(decision.provider)) {
           reply.status(400);
           return { error: `Unknown decision provider: '${decision.provider}'` };
         }
-        if (vision && !registry.isAvailable(vision.provider)) {
+        if (vision && !registry.listProviders().includes(vision.provider)) {
           reply.status(400);
           return { error: `Unknown vision provider: '${vision.provider}'` };
+        }
+
+        // Check provider availability (configured but unavailable)
+        if (decision && !registry.isAvailable(decision.provider)) {
+          const errorDetail = registry.getAvailabilityError(decision.provider);
+          reply.status(503);
+          return { error: `Provider '${decision.provider}' is currently unavailable${errorDetail ? `: ${errorDetail}` : ''}` };
+        }
+        if (vision && !registry.isAvailable(vision.provider)) {
+          const errorDetail = registry.getAvailabilityError(vision.provider);
+          reply.status(503);
+          return { error: `Provider '${vision.provider}' is currently unavailable${errorDetail ? `: ${errorDetail}` : ''}` };
         }
 
         const updateParams: import('../../../../conversation/types.js').UpdateSessionParams = {};
