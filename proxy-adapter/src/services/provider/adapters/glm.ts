@@ -1,23 +1,44 @@
 import crypto from 'crypto';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
+import type { LanguageModelV3 } from '@ai-sdk/provider';
+import type { ProviderConfig } from '../types.js';
+import { ProviderError, PROVIDER_ERRORS } from '../errors.js';
 
 export interface GLMProviderConfig {
   apiKey: string;
   baseUrl?: string;
 }
 
- export function createGLMProvider(config: GLMProviderConfig): unknown {
-  const jwtToken = generateJWTToken(config.apiKey);
+/** Callable that produces a LanguageModelV3 for a given model ID. */
+type ProviderFn = (modelId: string) => LanguageModelV3;
 
+/**
+ * Creates a GLM provider adapter with JWT token authentication.
+ *
+ * @param config - Provider configuration containing apiKey (format: id.secret)
+ * @returns A function that creates LanguageModelV3 instances for given model IDs
+ * @throws {ProviderError} If apiKey is missing or has invalid format
+ */
+export function createGLMAdapter(config: ProviderConfig): ProviderFn {
+  if (!config.apiKey) {
+    throw new ProviderError(
+      PROVIDER_ERRORS.INIT_FAILED,
+      'glm',
+      'GLM provider requires an apiKey',
+    );
+  }
+
+  const jwtToken = generateJWTToken(config.apiKey);
   const baseUrl: string = config.baseUrl || 'https://open.bigmodel.cn/api/paas/v4';
 
-  const providerArgs = {
+  const provider = createOpenAICompatible({
     name: 'glm',
     baseURL: baseUrl,
     apiKey: jwtToken,
-  };
+  });
 
-  return createOpenAICompatible(providerArgs);
+  // Return a function that creates language models (matching ProviderFn type)
+  return (modelId: string) => provider.languageModel(modelId);
 }
 
  function generateJWTToken(apiKey: string): string {

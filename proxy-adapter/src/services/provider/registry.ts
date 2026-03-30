@@ -7,9 +7,19 @@ import {
   BUILTIN_PROVIDERS,
 } from './errors.js';
 import { loadProviderPackage } from './loader.js';
+import { createGLMAdapter } from './adapters/glm.js';
 
 /** Callable that produces a LanguageModelV3 for a given model ID. */
 type ProviderFn = (modelId: string) => LanguageModelV3;
+
+/**
+ * Alias-specific adapters that bypass the generic package+factory path.
+ * These adapters are explicitly wired for providers that require custom
+ * initialization logic (e.g., JWT signing for GLM).
+ */
+const ALIAS_ADAPTERS: Record<string, (config: ProviderConfig) => ProviderFn> = {
+  glm: createGLMAdapter,
+};
 
 /**
  * Reverse mapping from npm package names to factory function names.
@@ -117,6 +127,13 @@ export class ProviderRegistry {
     providerKey: string,
     providerConfig: ProviderConfig,
   ): Promise<ProviderFn> {
+    // 1. Check alias-specific adapters first
+    const aliasAdapter = ALIAS_ADAPTERS[providerKey];
+    if (aliasAdapter) {
+      return aliasAdapter(providerConfig);
+    }
+
+    // 2. Generic normalized-package path (existing logic)
     const npmPackage = normalizeNpmPackage(providerConfig.npmPackage);
     const factoryName = resolveFactoryName(npmPackage);
     const moduleNs = await loadProviderPackage(npmPackage);
