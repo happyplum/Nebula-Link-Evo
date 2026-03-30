@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createGLMAdapter } from './glm.js';
 import type { ProviderConfig } from '../types.js';
-import { ProviderError, PROVIDER_ERRORS } from '../errors.js';
+import { ProviderError } from '../errors.js';
 
 describe('GLM Adapter', () => {
   it('should generate valid JWT token format', () => {
@@ -29,7 +29,7 @@ describe('GLM Adapter', () => {
       expect.unreachable();
     } catch (error) {
       expect(error).toBeInstanceOf(ProviderError);
-      expect((error as ProviderError).code).toBe('PROVIDER_INIT_FAILED');
+      expect((error as ProviderError).code).toBe('PROVIDER_CONFIG_INVALID');
       expect((error as ProviderError).provider).toBe('glm');
       expect((error as ProviderError).details).toContain('Invalid GLM API key format');
     }
@@ -45,7 +45,7 @@ describe('GLM Adapter', () => {
       expect.unreachable();
     } catch (error) {
       expect(error).toBeInstanceOf(ProviderError);
-      expect((error as ProviderError).code).toBe('PROVIDER_INIT_FAILED');
+      expect((error as ProviderError).code).toBe('PROVIDER_CONFIG_INVALID');
       expect((error as ProviderError).provider).toBe('glm');
       expect((error as ProviderError).details).toBe('GLM provider requires an apiKey');
     }

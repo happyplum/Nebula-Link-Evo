@@ -22,7 +22,7 @@ type ProviderFn = (modelId: string) => LanguageModelV3;
 export function createGLMAdapter(config: ProviderConfig): ProviderFn {
   if (!config.apiKey) {
     throw new ProviderError(
-      PROVIDER_ERRORS.INIT_FAILED,
+      PROVIDER_ERRORS.CONFIG_INVALID,
       'glm',
       'GLM provider requires an apiKey',
     );
@@ -45,7 +45,7 @@ export function createGLMAdapter(config: ProviderConfig): ProviderFn {
   const parts = apiKey.split('.');
   if (parts.length !== 2) {
     throw new ProviderError(
-      PROVIDER_ERRORS.INIT_FAILED,
+      PROVIDER_ERRORS.CONFIG_INVALID,
       'glm',
       'Invalid GLM API key format. Expected format: id.secret',
     );
