@@ -1,36 +1,44 @@
 import type { ProviderRegistry } from './registry.js';
 
 /**
- * Runs startup provider preflight check to validate configured providers are available.
+ * Runs startup provider preflight check by probing each enabled provider
+ * through real load (normalization, importability, factory discovery, initialization).
  *
- * @param registry - ProviderRegistry instance with isAvailable() method
- * @param providerKeys - Array of provider keys to check availability for
- * @throws Error if all providers are unavailable with message containing "no providers available"
+ * @param registry - ProviderRegistry instance with probeProvider() and isAvailable() methods
+ * @param providerKeys - Array of provider keys to probe
+ * @throws Error if zero providers are available after probing
  *
  * Behavior:
+ * - Probes each provider via registry.probeProvider() which attempts real load
  * - ALL available: No warnings, no errors
- * - SOME unavailable: Logs warning for each unavailable provider, does NOT throw
+ * - SOME unavailable: Logs warning with provider-specific error for each, does NOT throw
  * - ALL unavailable: Throws Error("No providers available. Server cannot start.")
  */
-export function runPreflight(
+export async function runPreflight(
   registry: ProviderRegistry,
   providerKeys: string[],
-): void {
-  const unavailableProviders: string[] = [];
+): Promise<void> {
+  // Probe all enabled providers (errors recorded internally, not thrown)
+  for (const key of providerKeys) {
+    await registry.probeProvider(key);
+  }
 
+  // Collect unavailable providers after probing
+  const unavailableProviders: string[] = [];
   for (const key of providerKeys) {
     if (!registry.isAvailable(key)) {
       unavailableProviders.push(key);
     }
   }
 
-  // If no providers are available, throw error
+  // Zero available → fatal
   if (unavailableProviders.length === providerKeys.length) {
     throw new Error('No providers available. Server cannot start.');
   }
 
-  // If some providers are unavailable, log warnings
+  // Partial — warn per provider with error detail
   for (const key of unavailableProviders) {
-    console.warn(`Provider "${key}" is not available`);
+    const error = registry.getAvailabilityError(key) ?? 'unknown error';
+    console.warn(`Provider "${key}" is not available: ${error}`);
   }
 }

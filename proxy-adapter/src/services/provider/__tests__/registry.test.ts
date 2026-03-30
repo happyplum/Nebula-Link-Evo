@@ -168,7 +168,7 @@ describe('ProviderRegistry', () => {
   // ── isAvailable ──────────────────────────────────────────────────
 
   describe('isAvailable', () => {
-    it('should return true for configured provider', () => {
+    it('should return true for configured provider before probing', () => {
       const registry = new ProviderRegistry({
         'openai-compatible': createTestConfig(),
       });
@@ -178,6 +178,137 @@ describe('ProviderRegistry', () => {
     it('should return false for unconfigured provider', () => {
       const registry = new ProviderRegistry({});
       expect(registry.isAvailable('unknown')).toBe(false);
+    });
+
+    it('should return false after probing fails', async () => {
+      mockLoadPackage.mockRejectedValue(new Error('module not found'));
+
+      const registry = new ProviderRegistry({
+        'openai-compatible': createTestConfig(),
+      });
+
+      await registry.probeProvider('openai-compatible');
+      expect(registry.isAvailable('openai-compatible')).toBe(false);
+    });
+
+    it('should return true after probing succeeds', async () => {
+      const provider = mockProviderFn();
+      const factory = vi.fn().mockReturnValue(provider);
+      mockLoadPackage.mockResolvedValue(mockModuleNamespace(factory));
+
+      const registry = new ProviderRegistry({
+        'openai-compatible': createTestConfig(),
+      });
+
+      await registry.probeProvider('openai-compatible');
+      expect(registry.isAvailable('openai-compatible')).toBe(true);
+    });
+  });
+
+  // ── probeProvider ────────────────────────────────────────────────
+
+  describe('probeProvider', () => {
+    it('should record success when provider loads', async () => {
+      const provider = mockProviderFn();
+      const factory = vi.fn().mockReturnValue(provider);
+      mockLoadPackage.mockResolvedValue(mockModuleNamespace(factory));
+
+      const registry = new ProviderRegistry({
+        'openai-compatible': createTestConfig(),
+      });
+
+      await registry.probeProvider('openai-compatible');
+
+      expect(registry.isAvailable('openai-compatible')).toBe(true);
+      expect(registry.getAvailabilityError('openai-compatible')).toBeUndefined();
+      // Provider cached so resolve() won't reload
+      await registry.resolve('openai-compatible', 'gpt-4o');
+      expect(mockLoadPackage).toHaveBeenCalledTimes(1);
+    });
+
+    it('should record failure when provider load throws', async () => {
+      mockLoadPackage.mockRejectedValue(new Error('module not found'));
+
+      const registry = new ProviderRegistry({
+        'openai-compatible': createTestConfig(),
+      });
+
+      await registry.probeProvider('openai-compatible');
+
+      expect(registry.isAvailable('openai-compatible')).toBe(false);
+      expect(registry.getAvailabilityError('openai-compatible')).toBe('module not found');
+    });
+
+    it('should record failure for unknown provider key', async () => {
+      const registry = new ProviderRegistry({});
+
+      await registry.probeProvider('unknown');
+
+      expect(registry.isAvailable('unknown')).toBe(false);
+      expect(registry.getAvailabilityError('unknown')).toContain('not found in configuration');
+    });
+
+    it('should extract ProviderError details', async () => {
+      // Module loads but missing factory export
+      mockLoadPackage.mockResolvedValue({ someOtherExport: vi.fn() });
+
+      const registry = new ProviderRegistry({
+        'openai-compatible': createTestConfig(),
+      });
+
+      await registry.probeProvider('openai-compatible');
+
+      expect(registry.isAvailable('openai-compatible')).toBe(false);
+      const err = registry.getAvailabilityError('openai-compatible');
+      expect(err).toContain('PROVIDER_INIT_FAILED');
+      expect(err).toContain('createOpenAICompatible');
+    });
+
+    it('should not throw — errors captured as availability state', async () => {
+      mockLoadPackage.mockRejectedValue(new Error('catastrophic'));
+
+      const registry = new ProviderRegistry({
+        'openai-compatible': createTestConfig(),
+      });
+
+      await expect(
+        registry.probeProvider('openai-compatible'),
+      ).resolves.toBeUndefined();
+    });
+  });
+
+  // ── getAvailabilityError ─────────────────────────────────────────
+
+  describe('getAvailabilityError', () => {
+    it('should return undefined for unprobed provider', () => {
+      const registry = new ProviderRegistry({
+        'openai-compatible': createTestConfig(),
+      });
+      expect(registry.getAvailabilityError('openai-compatible')).toBeUndefined();
+    });
+
+    it('should return undefined for successfully probed provider', async () => {
+      const provider = mockProviderFn();
+      const factory = vi.fn().mockReturnValue(provider);
+      mockLoadPackage.mockResolvedValue(mockModuleNamespace(factory));
+
+      const registry = new ProviderRegistry({
+        'openai-compatible': createTestConfig(),
+      });
+
+      await registry.probeProvider('openai-compatible');
+      expect(registry.getAvailabilityError('openai-compatible')).toBeUndefined();
+    });
+
+    it('should return error message for failed provider', async () => {
+      mockLoadPackage.mockRejectedValue(new Error('timeout'));
+
+      const registry = new ProviderRegistry({
+        'openai-compatible': createTestConfig(),
+      });
+
+      await registry.probeProvider('openai-compatible');
+      expect(registry.getAvailabilityError('openai-compatible')).toBe('timeout');
     });
   });
 

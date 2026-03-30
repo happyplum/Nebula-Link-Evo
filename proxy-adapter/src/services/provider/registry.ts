@@ -12,6 +12,13 @@ import { createGLMAdapter } from './adapters/glm.js';
 /** Callable that produces a LanguageModelV3 for a given model ID. */
 type ProviderFn = (modelId: string) => LanguageModelV3;
 
+/** Probed availability state for a provider alias. */
+export interface AvailabilityStatus {
+  available: boolean;
+  /** Human-readable reason when unavailable. */
+  error?: string;
+}
+
 /**
  * Alias-specific adapters that bypass the generic package+factory path.
  * These adapters are explicitly wired for providers that require custom
@@ -75,6 +82,8 @@ function resolveFactoryName(npmPackage: string): string {
 export class ProviderRegistry {
   private readonly config: Record<string, ProviderConfig>;
   private readonly cache = new Map<string, ProviderFn>();
+  /** Probed availability state — populated by probeProvider(). */
+  private readonly availability = new Map<string, AvailabilityStatus>();
 
   constructor(config: Record<string, ProviderConfig>) {
     this.config = config;
@@ -103,8 +112,58 @@ export class ProviderRegistry {
     return provider(modelId);
   }
 
+  /**
+   * Checks whether a provider is available.
+   * After probing, returns the probed availability state.
+   * Before probing, falls back to config-presence check for backward compat.
+   */
   isAvailable(providerKey: string): boolean {
+    const probed = this.availability.get(providerKey);
+    if (probed !== undefined) {
+      return probed.available;
+    }
     return providerKey in this.config;
+  }
+
+  /**
+   * Returns the probed availability error for a provider, or undefined
+   * if the provider is available or has not been probed.
+   */
+  getAvailabilityError(providerKey: string): string | undefined {
+    return this.availability.get(providerKey)?.error;
+  }
+
+  /**
+   * Probes a single provider by attempting real load (normalization, import, factory discovery, init).
+   * Records success or failure in the availability map.
+   * Does NOT throw — errors are captured as availability state.
+   */
+  async probeProvider(providerKey: string): Promise<void> {
+    const providerConfig = this.config[providerKey];
+    if (!providerConfig) {
+      this.availability.set(providerKey, {
+        available: false,
+        error: `Provider '${providerKey}' not found in configuration`,
+      });
+      return;
+    }
+
+    try {
+      const provider = await this.loadProvider(providerKey, providerConfig);
+      this.cache.set(providerKey, provider);
+      this.availability.set(providerKey, { available: true });
+    } catch (err) {
+      const message =
+        err instanceof ProviderError
+          ? `${err.code}: ${String(err.details ?? err.message)}`
+          : err instanceof Error
+            ? err.message
+            : String(err);
+      this.availability.set(providerKey, {
+        available: false,
+        error: message,
+      });
+    }
   }
 
   listProviders(): string[] {
