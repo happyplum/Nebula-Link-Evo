@@ -4,6 +4,7 @@ import { ServiceUnavailableError } from '../errors/http-errors.js';
 import { DatabaseManager } from '../conversation/db.js';
 import type { AgentState } from '../conversation/types.js';
 import { StreamPersistWorker } from './stream-persist-worker.js';
+import { ProviderError } from './provider/errors.js';
 
 type BlockReason = NonNullable<AgentState['blockReason']>;
 type WaitingFor = NonNullable<AgentState['waitingFor']>;
@@ -160,6 +161,20 @@ export class ConversationJobQueue {
             });
             return;
           } catch (error) {
+            // Provider init failures are non-retryable — block immediately
+            if (error instanceof ProviderError) {
+              await this.syncSessionState(payload.sessionId, {
+                status: 'blocked',
+                jobId: id,
+                agentState: {
+                  schema_version: 1,
+                  blockReason: 'api_error',
+                  lastError: `Provider '${error.provider}' initialization failed: ${toErrorMessage(error)}`,
+                },
+              });
+              return;
+            }
+
             const blocked = extractBlockedAgentState(error);
             if (blocked) {
               await this.syncSessionState(payload.sessionId, {

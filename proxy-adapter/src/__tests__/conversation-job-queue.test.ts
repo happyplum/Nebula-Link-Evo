@@ -3,6 +3,7 @@ import { ConversationJobQueue } from '../services/conversation-job-queue.js';
 import { StreamPersistWorker } from '../services/stream-persist-worker.js';
 import { ConversationManager } from '../conversation/manager.js';
 import { ServiceUnavailableError } from '../errors/http-errors.js';
+import { ProviderError } from '../services/provider/errors.js';
 
 describe('ConversationJobQueue', () => {
   let queue: ConversationJobQueue;
@@ -258,6 +259,106 @@ describe('ConversationJobQueue', () => {
     expect(state?.agentState?.retryCount).toBe(3);
     const lastError = (state?.agentState as unknown as { lastError?: string } | undefined)?.lastError;
     expect(lastError).toBe('boom-3');
+    await manager.close();
+  });
+
+  it('should block immediately on ProviderError without retry', async () => {
+    const manager = new ConversationManager(':memory:');
+    manager.initialize();
+    const session = manager.createSession({
+      title: 'Provider Error',
+      provider: 'test',
+      model: 'test-model',
+    });
+
+    const providerError = new ProviderError(
+      'PROVIDER_INIT_FAILED',
+      'openai-compatible',
+      'factory is not a function',
+    );
+
+    const execute = vi.fn().mockRejectedValue(providerError);
+    const jobId = await queue.enqueue({ sessionId: session.id, execute });
+
+    await Promise.resolve();
+    await Promise.resolve();
+    await vi.runAllTimersAsync();
+
+    // Execute called exactly once — no retries
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(queue.getStatus(jobId)?.status).toBe('completed');
+
+    const state = await manager.getSessionState(session.id);
+    expect(state?.status).toBe('blocked');
+    expect(state?.agentState?.blockReason).toBe('api_error');
+    expect(state?.agentState?.schema_version).toBe(1);
+    const agentState = state?.agentState as Record<string, unknown> | undefined;
+    expect(agentState?.lastError).toContain('openai-compatible');
+    expect(agentState?.lastError).toContain('Provider Error');
+    // retryCount should be absent (undefined) — no retry happened
+    expect(agentState?.retryCount).toBeUndefined();
+    await manager.close();
+  });
+
+  it('should include provider alias and details in ProviderError lastError', async () => {
+    const manager = new ConversationManager(':memory:');
+    manager.initialize();
+    const session = manager.createSession({
+      title: 'Provider Error Details',
+      provider: 'test',
+      model: 'test-model',
+    });
+
+    const providerError = new ProviderError(
+      'PROVIDER_CONFIG_INVALID',
+      'kimi',
+      { missing: 'apiKey' },
+    );
+
+    const execute = vi.fn().mockRejectedValue(providerError);
+    await queue.enqueue({ sessionId: session.id, execute });
+
+    await Promise.resolve();
+    await Promise.resolve();
+    await vi.runAllTimersAsync();
+
+    const state = await manager.getSessionState(session.id);
+    const agentState = state?.agentState as Record<string, unknown> | undefined;
+    expect(agentState?.lastError).toContain('kimi');
+    expect(agentState?.lastError).toContain('initialization failed');
+    expect(state?.agentState?.schema_version).toBe(1);
+    await manager.close();
+  });
+
+  it('should still retry non-ProviderError errors (3 attempts then blocked)', async () => {
+    const manager = new ConversationManager(':memory:');
+    manager.initialize();
+    const session = manager.createSession({
+      title: 'Non-Provider Retry',
+      provider: 'test',
+      model: 'test-model',
+    });
+
+    let attempts = 0;
+    const execute = vi.fn().mockImplementation(async () => {
+      attempts++;
+      throw new Error(`generic-${attempts}`);
+    });
+
+    const jobId = await queue.enqueue({ sessionId: session.id, execute });
+
+    await Promise.resolve();
+    await Promise.resolve();
+    await vi.runAllTimersAsync();
+
+    expect(attempts).toBe(3);
+    expect(queue.getStatus(jobId)?.status).toBe('failed');
+
+    const state = await manager.getSessionState(session.id);
+    expect(state?.status).toBe('blocked');
+    expect(state?.agentState?.blockReason).toBe('job_error');
+    expect(state?.agentState?.retryCount).toBe(3);
+    expect(state?.agentState?.schema_version).toBe(1);
     await manager.close();
   });
 });
