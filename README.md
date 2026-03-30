@@ -51,7 +51,7 @@ Browser ←→ Debug UI (:5173 dev / :3000/debug prod)
 | Frontend | TypeScript + DOM APIs (framework-free) |
 | Backend | Node.js + Fastify 5 |
 | Browser | Playwright + Chromium |
-| AI | Vercel AI SDK (GLM, OpenAI, Anthropic, Kimi, NVIDIA) |
+| AI | Vercel AI SDK (@ai-sdk/openai-compatible, @ai-sdk/openai, GLM JWT adapter) |
 | Protocol | MCP (Model Context Protocol) |
 | Storage | SQLite (sessions, messages, events) |
 
@@ -120,3 +120,20 @@ docs/               # Documentation
 - [AI Operation Flow](docs/reference/ai-operation-flow.md) — AI 执行模型
 - [API Reference (Chat & Debug)](docs/reference/debug-page-integration-api-reference.md) — Proxy Adapter API
 - [Playwright Server API](docs/playwright-server-api.md) — 浏览器服务 API
+
+## Product Spec
+
+### AI Provider System
+
+**Provider loading contract** (provider-contract-correction plan, 2026-03-30):
+
+- Provider aliases and SDK package identities are normalized before any I/O occurs.
+- `normalizeNpmPackage()`: bare names (e.g., `openai`) → `@ai-sdk/openai`; omitted → `@ai-sdk/openai-compatible`; invalid → `ProviderError(CONFIG_INVALID)`.
+- `parseProviderModel('provider/model/variant')`: preserves all model segments after the first slash.
+- Registry discovers factory exports by name (KNOWN_FACTORIES reverse map), with deriveFactoryName as best-effort fallback for unknown packages.
+- GLM uses a dedicated JWT adapter (`createGLMAdapter`) wired via ALIAS_ADAPTERS; other aliases use the generic `@ai-sdk/*` package path.
+- Startup preflight probes each provider for real readiness (async); warns on partial failures, blocks only when all unavailable.
+- Provider initialization failures (`ProviderError`) are immediately blocked at runtime (no retry); non-provider errors retain the 3-retry `job_error` path.
+- API boundary separates unknown providers (400) from unavailable providers (503 with error detail).
+
+**Error taxonomy**: CONFIG_INVALID (config-time validation) → INSTALL_FAILED (import resolution) → INIT_FAILED (factory invocation).
