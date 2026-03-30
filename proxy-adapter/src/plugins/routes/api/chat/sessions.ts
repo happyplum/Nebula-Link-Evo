@@ -13,7 +13,6 @@ import { SessionLock } from '../../../../services/session-lock.js';
 import { SessionEventHub } from '../../../../services/session-event-hub.js';
 import { DatabaseManager } from '../../../../conversation/db.js';
 import { ServiceUnavailableError } from '../../../../errors/http-errors.js';
-import { ProviderError } from '../../../../services/provider/errors.js';
 import { MAX_SCREENSHOT_SIZE_BYTES, type MessageCreatedEvent } from '@nebula-link-evo/shared';
 import { connectivityGateService } from '../../../../services/connectivity-gate-service.js';
 import { TaskService } from '../../../../services/index.js';
@@ -182,6 +181,10 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           },
         };
       } catch (error) {
+        if (error instanceof ServiceUnavailableError) {
+          reply.status(503);
+          return { error: error.message };
+        }
         const errorMessage = error instanceof Error ? error.message : String(error);
         request.log.error({ error: errorMessage }, 'Failed to create session');
         reply.status(500);

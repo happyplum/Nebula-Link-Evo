@@ -7,7 +7,7 @@
  * - Schema validation for provider configuration
  * - Registry for provider resolution and caching
  * - Model resolution for decision and vision models
- * - Built-in provider factories
+ * - Alias adapter factories
  * - Dynamic provider package installation and loading
  * - Vision tool for screenshot analysis
  * - Preflight checks for provider availability
@@ -67,4 +67,4 @@ export { createVisionTool } from './vision-tool.js';
 export { runPreflight } from './preflight.js';
 
 // Adapters
-export { createGLMProvider } from './adapters/glm.js';
+export { createGLMAdapter } from './adapters/glm.js';

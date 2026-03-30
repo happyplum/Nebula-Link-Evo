@@ -44,7 +44,11 @@ export function createGLMAdapter(config: ProviderConfig): ProviderFn {
  function generateJWTToken(apiKey: string): string {
   const parts = apiKey.split('.');
   if (parts.length !== 2) {
-    throw new Error('Invalid GLM API key format. Expected format: id.secret');
+    throw new ProviderError(
+      PROVIDER_ERRORS.INIT_FAILED,
+      'glm',
+      'Invalid GLM API key format. Expected format: id.secret',
+    );
   }
   const [id, secret] = parts;
   const header = { alg: 'HS256', sign_type: 'SIGN' };
