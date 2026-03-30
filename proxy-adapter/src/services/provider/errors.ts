@@ -1,11 +1,22 @@
 /**
  * Represents an error specific to AI provider operations.
  *
- * Error Codes:
+ * Error taxonomy (three distinct failure categories):
+ *
+ * **CONFIG_INVALID** — Bad configuration supplied at load time.
+ *   Triggers: malformed package names, missing required fields,
+ *   invalid provider/model strings. Caught before any I/O occurs.
+ *
+ * **INSTALL_FAILED** — Package import resolution failed at runtime.
+ *   Triggers: dynamic `import()` of the npm package rejected
+ *   (module not found, export missing, top-level throw).
+ *
+ * **INIT_FAILED** — Package loaded but factory unusable.
+ *   Triggers: expected factory function not exported, factory
+ *   threw during invocation, or returned client is null/undefined.
+ *
+ * Other codes:
  * - NOT_FOUND: Provider or model not found in configuration
- * - INSTALL_FAILED: Failed to install provider package
- * - INIT_FAILED: Failed to initialize provider client
- * - CONFIG_INVALID: Provider configuration is invalid
  * - VISION_UNAVAILABLE: Vision capability not available
  * - RATE_LIMITED: Provider rate limit exceeded
  */
@@ -128,22 +139,13 @@ export function parseProviderModel(input: string): { provider: string; model: st
     );
   }
 
-  // Split on the first separator only
-  const parts = trimmed.split(PROVIDER_MODEL_SEPARATOR, 2);
+  // Split on first '/' only: everything after it is the model (including further '/' segments)
+  const slashIndex = trimmed.indexOf(PROVIDER_MODEL_SEPARATOR);
 
-  if (parts.length < 2) {
-    // This should theoretically be caught by the separator check above,
-    // but we keep it as a safety check for multiple slashes handling.
-    throw new ProviderError(
-      PROVIDER_ERRORS.CONFIG_INVALID,
-      'unknown',
-      'Provider model string is invalid'
-    );
-  }
+  const provider = slashIndex > 0 ? trimmed.slice(0, slashIndex).trim() : '';
+  const model = slashIndex > 0 ? trimmed.slice(slashIndex + 1).trim() : '';
 
-  const [provider, model] = parts;
-
-  if (!provider || typeof provider !== 'string' || provider.trim().length === 0) {
+  if (!provider) {
     throw new ProviderError(
       PROVIDER_ERRORS.CONFIG_INVALID,
       'unknown',
@@ -151,7 +153,7 @@ export function parseProviderModel(input: string): { provider: string; model: st
     );
   }
 
-  if (!model || typeof model !== 'string' || model.trim().length === 0) {
+  if (!model) {
     throw new ProviderError(
       PROVIDER_ERRORS.CONFIG_INVALID,
       'unknown',
@@ -159,14 +161,5 @@ export function parseProviderModel(input: string): { provider: string; model: st
     );
   }
 
-  // Normalize: provider/model/variant -> provider/model (ignore variant part for parsing)
-  // Example: "openai/gpt-4o/variant" -> { provider: "openai", model: "gpt-4o/variant" }
-  // However, the requirement says "glm/glm-4.7-flash" -> { provider: "glm", model: "glm-4.7-flash" }
-  // and "openai/gpt-4o" -> { provider: "openai", model: "gpt-4o" }
-  // The requirement says: multiple `/` -> first split only.
-  // This implies we ignore extra slashes or variants.
-  // Example: "openai/gpt-4o/variant" -> { provider: "openai", model: "gpt-4o/variant" }
-  // This logic handles the "first split only" requirement via `split(separator, 2)`.
-
-  return { provider: provider.trim(), model: model.trim() };
+  return { provider, model };
 }

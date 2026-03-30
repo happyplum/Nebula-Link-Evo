@@ -19,11 +19,10 @@ describe('parseProviderModel', () => {
     expect(result2.model).toBe('gpt-4o');
   });
 
-  it('handles multiple slashes (split with limit 2)', () => {
-    // split('/', 2) takes first 2 parts from full split
+  it('preserves model segments after the first slash', () => {
     const result3 = parseProviderModel('openai/gpt-4o/variant');
     expect(result3.provider).toBe('openai');
-    expect(result3.model).toBe('gpt-4o');
+    expect(result3.model).toBe('gpt-4o/variant');
   });
 
   it('trims whitespace', () => {
