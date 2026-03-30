@@ -1,3 +1,9 @@
+/**
+ * @deprecated This module is deprecated. The registry now uses normalized
+ * package loading with named factory discovery (registry.ts → loadProvider).
+ * Kept for reference; Task 4 will restore GLM through the new factory path.
+ */
+
 import type { ProviderConfig } from './types.js';
 import { ProviderError, PROVIDER_ERRORS } from './errors.js';
 import { BUILTIN_PROVIDERS } from './errors.js';
