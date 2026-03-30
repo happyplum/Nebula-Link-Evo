@@ -6,18 +6,12 @@ import {
   createTestConfig,
 } from './helpers/mock-factory.js';
 
-vi.mock('../built-in.js', () => ({
-  createBuiltinProvider: vi.fn(),
-}));
-
 vi.mock('../loader.js', () => ({
   loadProviderPackage: vi.fn(),
 }));
 
-import { createBuiltinProvider } from '../built-in.js';
 import { loadProviderPackage } from '../loader.js';
 
-const mockCreateBuiltin = vi.mocked(createBuiltinProvider);
 const mockLoadPackage = vi.mocked(loadProviderPackage);
 
 /** Returns a mock provider function: (modelId) => LanguageModelV3 */
@@ -27,6 +21,14 @@ function mockProviderFn() {
   );
 }
 
+/**
+ * Creates a mock module namespace with a named factory export.
+ * `factoryName` defaults to `createOpenAICompatible` (matching @ai-sdk/openai-compatible).
+ */
+function mockModuleNamespace(factory: ReturnType<typeof vi.fn>, factoryName = 'createOpenAICompatible') {
+  return { [factoryName]: factory };
+}
+
 describe('ProviderRegistry', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -34,10 +36,11 @@ describe('ProviderRegistry', () => {
 
   // ── resolve ──────────────────────────────────────────────────────
 
-  describe('resolve — built-in provider', () => {
-    it('should resolve via createBuiltinProvider and return LanguageModel', async () => {
+  describe('resolve — default provider', () => {
+    it('should resolve via loadProviderPackage using default npm package', async () => {
       const provider = mockProviderFn();
-      mockCreateBuiltin.mockReturnValue(provider);
+      const factory = vi.fn().mockReturnValue(provider);
+      mockLoadPackage.mockResolvedValue(mockModuleNamespace(factory));
 
       const registry = new ProviderRegistry({
         'openai-compatible': createTestConfig(),
@@ -45,8 +48,10 @@ describe('ProviderRegistry', () => {
 
       const model = await registry.resolve('openai-compatible', 'gpt-4o');
 
-      expect(mockCreateBuiltin).toHaveBeenCalledWith(
-        'openai-compatible',
+      // Normalizes undefined npmPackage to @ai-sdk/openai-compatible
+      expect(mockLoadPackage).toHaveBeenCalledWith('@ai-sdk/openai-compatible');
+      // Discovers createOpenAICompatible export
+      expect(factory).toHaveBeenCalledWith(
         expect.objectContaining({ apiKey: 'test-api-key' }),
       );
       expect(provider).toHaveBeenCalledWith('gpt-4o');
@@ -54,11 +59,13 @@ describe('ProviderRegistry', () => {
     });
   });
 
-  describe('resolve — dynamic provider', () => {
-    it('should resolve via loadProviderPackage and return LanguageModel', async () => {
+  describe('resolve — explicit npm package', () => {
+    it('should resolve via loadProviderPackage with named factory discovery', async () => {
       const provider = mockProviderFn();
       const factory = vi.fn().mockReturnValue(provider);
-      mockLoadPackage.mockResolvedValue(factory);
+      mockLoadPackage.mockResolvedValue(
+        mockModuleNamespace(factory, 'createAnthropic'),
+      );
 
       const registry = new ProviderRegistry({
         anthropic: createTestConfig({ npmPackage: '@ai-sdk/anthropic' }),
@@ -73,19 +80,26 @@ describe('ProviderRegistry', () => {
       expect(provider).toHaveBeenCalledWith('claude-3');
       expect(model.modelId).toBe('claude-3');
     });
+  });
 
-    it('should use DEFAULT_NPM_PACKAGE when npmPackage is omitted', async () => {
+  describe('resolve — short package name normalization', () => {
+    it('should normalize short name to @ai-sdk/* and resolve', async () => {
       const provider = mockProviderFn();
       const factory = vi.fn().mockReturnValue(provider);
-      mockLoadPackage.mockResolvedValue(factory);
+      mockLoadPackage.mockResolvedValue(
+        mockModuleNamespace(factory, 'createOpenAI'),
+      );
 
       const registry = new ProviderRegistry({
-        custom: createTestConfig(),
+        openai: createTestConfig({ npmPackage: 'openai' }),
       });
 
-      await registry.resolve('custom', 'custom-model');
+      await registry.resolve('openai', 'gpt-4');
 
-      expect(mockLoadPackage).toHaveBeenCalledWith('@ai-sdk/openai-compatible');
+      // 'openai' normalizes to '@ai-sdk/openai'
+      expect(mockLoadPackage).toHaveBeenCalledWith('@ai-sdk/openai');
+      // Factory name derived: @ai-sdk/openai → createOpenAI
+      expect(factory).toHaveBeenCalled();
     });
   });
 
@@ -105,10 +119,33 @@ describe('ProviderRegistry', () => {
     });
   });
 
+  describe('resolve — missing factory export', () => {
+    it('should throw ProviderError INIT_FAILED when factory export is missing', async () => {
+      // Module has no matching factory export
+      mockLoadPackage.mockResolvedValue({ someOtherExport: vi.fn() });
+
+      const registry = new ProviderRegistry({
+        'openai-compatible': createTestConfig(),
+      });
+
+      try {
+        await registry.resolve('openai-compatible', 'gpt-4o');
+        expect.unreachable('should have thrown');
+      } catch (e) {
+        expect(e).toBeInstanceOf(ProviderError);
+        const err = e as ProviderError;
+        expect(err.code).toBe(PROVIDER_ERRORS.INIT_FAILED);
+        expect(err.provider).toBe('openai-compatible');
+        expect(String(err.details)).toContain('createOpenAICompatible');
+      }
+    });
+  });
+
   describe('resolve — caching', () => {
     it('should cache provider and not reload on second call', async () => {
       const provider = mockProviderFn();
-      mockCreateBuiltin.mockReturnValue(provider);
+      const factory = vi.fn().mockReturnValue(provider);
+      mockLoadPackage.mockResolvedValue(mockModuleNamespace(factory));
 
       const registry = new ProviderRegistry({
         'openai-compatible': createTestConfig(),
@@ -117,7 +154,11 @@ describe('ProviderRegistry', () => {
       await registry.resolve('openai-compatible', 'gpt-4o');
       await registry.resolve('openai-compatible', 'gpt-4o-mini');
 
-      expect(mockCreateBuiltin).toHaveBeenCalledTimes(1);
+      // Module loaded only once (cached after first success)
+      expect(mockLoadPackage).toHaveBeenCalledTimes(1);
+      // Factory called only once
+      expect(factory).toHaveBeenCalledTimes(1);
+      // Provider function called twice with different model IDs
       expect(provider).toHaveBeenCalledTimes(2);
       expect(provider).toHaveBeenNthCalledWith(1, 'gpt-4o');
       expect(provider).toHaveBeenNthCalledWith(2, 'gpt-4o-mini');

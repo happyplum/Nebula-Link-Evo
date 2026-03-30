@@ -55,6 +55,10 @@ export const BUILTIN_PROVIDERS = {
     npmPackage: '@ai-sdk/openai-compatible',
     factory: 'createOpenAICompatible',
   },
+  'openai': {
+    npmPackage: '@ai-sdk/openai',
+    factory: 'createOpenAI',
+  },
 
 } as const;
 
