@@ -7,16 +7,13 @@
  */
 
 import { execa } from 'execa';
-import { ProviderError, PROVIDER_ERRORS } from './errors.js';
+import { ProviderError, PROVIDER_ERRORS, PACKAGE_NAME_RE } from './errors.js';
 
 /**
  * Type alias for a loaded provider module factory.
  * Exact shape varies per @ai-sdk/* package.
  */
 export type ProviderFactory = unknown;
-
-/** Regex allowing only @ai-sdk/<name> packages with lowercase alphanumeric + hyphens. */
-const PACKAGE_NAME_RE = /^@ai-sdk\/[a-z0-9-]+$/;
 
 /** Cache of already loaded provider modules. */
 const moduleCache = new Map<string, ProviderFactory>();
