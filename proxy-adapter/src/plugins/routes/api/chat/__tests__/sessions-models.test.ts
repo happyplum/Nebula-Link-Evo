@@ -46,7 +46,7 @@ const { mockConfig, mockGetConfig, mockRegistry } = vi.hoisted(() => {
   const registry = {
     isAvailable: vi.fn((key: string) => key === 'kimi' || key === 'openai'),
     listProviders: vi.fn(() => ['kimi', 'openai']),
-    getAvailabilityError: vi.fn(() => undefined),
+    getAvailabilityError: vi.fn((key: string) => undefined as string | undefined),
   };
 
   return {
@@ -227,5 +227,38 @@ describe('PATCH /api/chat/sessions/:id/models', () => {
 
     expect(res.statusCode).toBe(500);
     expect(res.json().error).toContain('registry');
+  });
+
+  it('returns 503 when provider exists but is unavailable', async () => {
+    mockRegistry.isAvailable.mockImplementation((key: string) => key !== 'openai');
+    mockRegistry.getAvailabilityError.mockImplementation((key: string) =>
+      key === 'openai' ? 'Provider initialization failed: factory not found' : undefined
+    );
+
+    const session = createSession();
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/chat/sessions/${session.id}/models`,
+      payload: { decision: { provider: 'openai', model: 'gpt-4o' } },
+    });
+    expect(res.statusCode).toBe(503);
+    expect(res.json().error).toContain('unavailable');
+    expect(res.json().error).toContain('openai');
+  });
+
+  it('returns 503 when vision provider exists but is unavailable', async () => {
+    mockRegistry.isAvailable.mockImplementation((key: string) => key !== 'openai');
+    mockRegistry.getAvailabilityError.mockImplementation((key: string) =>
+      key === 'openai' ? 'Module load failed' : undefined
+    );
+
+    const session = createSession();
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/chat/sessions/${session.id}/models`,
+      payload: { vision: { provider: 'openai', model: 'gpt-4o-vision' } },
+    });
+    expect(res.statusCode).toBe(503);
+    expect(res.json().error).toContain('unavailable');
   });
 });

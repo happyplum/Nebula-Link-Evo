@@ -361,4 +361,40 @@ describe('ConversationJobQueue', () => {
     expect(state?.agentState?.schema_version).toBe(1);
     await manager.close();
   });
+
+  it('reproduces original symptom: ProviderError blocks immediately without job_error retry loop', async () => {
+    const manager = new ConversationManager(':memory:');
+    manager.initialize();
+    const session = manager.createSession({
+      title: 'Original Symptom Repro',
+      provider: 'openai-compatible',
+      model: 'gpt-4o',
+    });
+
+    const providerError = new ProviderError(
+      'PROVIDER_INIT_FAILED',
+      'openai-compatible',
+      { message: 'createOpenAICompatible is not a function' },
+    );
+
+    const execute = vi.fn().mockRejectedValue(providerError);
+    const jobId = await queue.enqueue({ sessionId: session.id, execute });
+
+    await Promise.resolve();
+    await Promise.resolve();
+    await vi.runAllTimersAsync();
+
+    expect(execute).toHaveBeenCalledTimes(1);
+
+    const state = await manager.getSessionState(session.id);
+    expect(state?.status).toBe('blocked');
+    expect(state?.agentState?.blockReason).toBe('api_error');
+    expect(state?.agentState?.schema_version).toBe(1);
+    const agentState = state?.agentState as Record<string, unknown> | undefined;
+    expect(agentState?.blockReason).not.toBe('job_error');
+    expect(agentState?.retryCount).toBeUndefined();
+    expect(agentState?.lastError).toContain('openai-compatible');
+    expect(agentState?.lastError).toContain('initialization failed');
+    await manager.close();
+  });
 });
