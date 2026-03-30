@@ -45,6 +45,8 @@ const { mockConfig, mockGetConfig, mockRegistry } = vi.hoisted(() => {
 
   const registry = {
     isAvailable: vi.fn((key: string) => key === 'kimi' || key === 'openai'),
+    listProviders: vi.fn(() => ['kimi', 'openai']),
+    getAvailabilityError: vi.fn(() => undefined),
   };
 
   return {
