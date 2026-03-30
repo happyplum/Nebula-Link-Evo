@@ -1,11 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import {
   parseProviderModel,
+  normalizeNpmPackage,
   ProviderError,
   PROVIDER_ERRORS,
   PROVIDER_MODEL_SEPARATOR,
   BUILTIN_PROVIDERS,
   DEFAULT_NPM_PACKAGE,
+  PACKAGE_NAME_RE,
 } from './errors.js';
 
 describe('parseProviderModel', () => {
@@ -103,5 +105,88 @@ describe('Constants', () => {
 
   it('exports PROVIDER_MODEL_SEPARATOR', () => {
     expect(PROVIDER_MODEL_SEPARATOR).toBe('/');
+  });
+
+  it('exports PACKAGE_NAME_RE', () => {
+    expect(PACKAGE_NAME_RE.test('@ai-sdk/openai')).toBe(true);
+    expect(PACKAGE_NAME_RE.test('@ai-sdk/openai-compatible')).toBe(true);
+    expect(PACKAGE_NAME_RE.test('@ai-sdk/anthropic')).toBe(true);
+    expect(PACKAGE_NAME_RE.test('@other-scope/openai')).toBe(false);
+    expect(PACKAGE_NAME_RE.test('@ai-sdk/UPPERCASE')).toBe(false);
+    expect(PACKAGE_NAME_RE.test('@ai-sdk/package with space')).toBe(false);
+  });
+});
+
+describe('normalizeNpmPackage', () => {
+  it('undefined → DEFAULT_NPM_PACKAGE', () => {
+    expect(normalizeNpmPackage(undefined)).toBe('@ai-sdk/openai-compatible');
+  });
+
+  it('null → DEFAULT_NPM_PACKAGE', () => {
+    expect(normalizeNpmPackage(null)).toBe('@ai-sdk/openai-compatible');
+  });
+
+  it('empty string → DEFAULT_NPM_PACKAGE', () => {
+    expect(normalizeNpmPackage('')).toBe('@ai-sdk/openai-compatible');
+  });
+
+  it('whitespace string → DEFAULT_NPM_PACKAGE', () => {
+    expect(normalizeNpmPackage('   ')).toBe('@ai-sdk/openai-compatible');
+  });
+
+  it('@ai-sdk/openai-compatible → pass-through', () => {
+    expect(normalizeNpmPackage('@ai-sdk/openai-compatible')).toBe('@ai-sdk/openai-compatible');
+  });
+
+  it('@ai-sdk/openai → pass-through', () => {
+    expect(normalizeNpmPackage('@ai-sdk/openai')).toBe('@ai-sdk/openai');
+  });
+
+  it('bare "openai" → @ai-sdk/openai', () => {
+    expect(normalizeNpmPackage('openai')).toBe('@ai-sdk/openai');
+  });
+
+  it('bare "anthropic" → @ai-sdk/anthropic', () => {
+    expect(normalizeNpmPackage('anthropic')).toBe('@ai-sdk/anthropic');
+  });
+
+  it('invalid package "not@valid" → throws ProviderError CONFIG_INVALID', () => {
+    try {
+      normalizeNpmPackage('not@valid');
+      expect.unreachable('should have thrown');
+    } catch (e) {
+      expect(e).toBeInstanceOf(ProviderError);
+      expect((e as ProviderError).code).toBe('PROVIDER_CONFIG_INVALID');
+    }
+  });
+
+  it('invalid package "http://evil.com" → throws ProviderError CONFIG_INVALID', () => {
+    try {
+      normalizeNpmPackage('http://evil.com');
+      expect.unreachable('should have thrown');
+    } catch (e) {
+      expect(e).toBeInstanceOf(ProviderError);
+      expect((e as ProviderError).code).toBe('PROVIDER_CONFIG_INVALID');
+    }
+  });
+
+  it('non-@ai-sdk scope "@other-scope/openai" → throws ProviderError CONFIG_INVALID', () => {
+    try {
+      normalizeNpmPackage('@other-scope/openai');
+      expect.unreachable('should have thrown');
+    } catch (e) {
+      expect(e).toBeInstanceOf(ProviderError);
+      expect((e as ProviderError).code).toBe('PROVIDER_CONFIG_INVALID');
+    }
+  });
+
+  it('@ai-sdk/UPPERCASE → throws ProviderError CONFIG_INVALID', () => {
+    try {
+      normalizeNpmPackage('@ai-sdk/UPPERCASE');
+      expect.unreachable('should have thrown');
+    } catch (e) {
+      expect(e).toBeInstanceOf(ProviderError);
+      expect((e as ProviderError).code).toBe('PROVIDER_CONFIG_INVALID');
+    }
   });
 });
