@@ -144,6 +144,55 @@ function copyElementVisibilityAndContent(sourceId: string, targetId: string): vo
   target.className = source.className;
 }
 
+/**
+ * Incremental message sync: only append new messages and update the
+ * streaming tail — avoids full innerHTML replacement during streaming.
+ */
+function incrementalMessageSync(sourceId: string, targetId: string): void {
+  const source = document.getElementById(sourceId) as HTMLElement | null;
+  const target = document.getElementById(targetId) as HTMLElement | null;
+  if (!source || !target) {
+    return;
+  }
+
+  target.style.display = source.style.display;
+  target.className = source.className;
+
+  const sourceChildren = source.children;
+  const targetChildren = target.children;
+
+  // Append new message nodes that target doesn't have yet
+  for (let i = targetChildren.length; i < sourceChildren.length; i++) {
+    const clone = sourceChildren[i]!.cloneNode(true) as HTMLElement;
+    target.appendChild(clone);
+  }
+
+  // Update the last message's content (the one being streamed)
+  if (sourceChildren.length > 0) {
+    const lastIdx = sourceChildren.length - 1;
+    const sourceMsg = sourceChildren[lastIdx] as HTMLElement;
+    const targetMsg = targetChildren[lastIdx] as HTMLElement;
+    if (sourceMsg && targetMsg && sourceMsg.dataset.id === targetMsg.dataset.id) {
+      // Update only the mutable parts — msg-content and thinking-content
+      const sourceContent = sourceMsg.querySelector('.msg-content');
+      const targetContent = targetMsg.querySelector('.msg-content');
+      if (sourceContent && targetContent) {
+        targetContent.innerHTML = sourceContent.innerHTML;
+      }
+      const sourceThinking = sourceMsg.querySelector('.thinking-content');
+      const targetThinking = targetMsg.querySelector('.thinking-content');
+      if (sourceThinking && targetThinking) {
+        targetThinking.innerHTML = sourceThinking.innerHTML;
+      }
+      const sourceThinkingDisplay = sourceMsg.querySelector('.thinking-block');
+      const targetThinkingBlock = targetMsg.querySelector('.thinking-block');
+      if (sourceThinkingDisplay && targetThinkingBlock) {
+        targetThinkingBlock.className = sourceThinkingDisplay.className;
+      }
+    }
+  }
+}
+
 function copyButtonState(sourceId: string, targetId: string): void {
   const source = document.getElementById(sourceId) as HTMLButtonElement | null;
   const target = document.getElementById(targetId) as HTMLButtonElement | null;
@@ -164,8 +213,15 @@ function syncChatPageFromSidebar(): void {
   copySelectState(sidebarSyncSource.modelSelector, chatPageIds.modelSelector);
   copyInputValue(sidebarSyncSource.input, chatPageIds.input);
   copyCheckboxState(sidebarSyncSource.cotToggle, chatPageIds.cotToggle);
-  copyElementVisibilityAndContent(sidebarSyncSource.messages, chatPageIds.messages);
-  copyElementVisibilityAndContent(sidebarSyncSource.screenshotPreview, chatPageIds.screenshotPreview);
+
+  const chatMgr = getChatManager();
+  if (chatMgr?.isStreaming) {
+    // Incremental sync during streaming — avoids full innerHTML reflow
+    incrementalMessageSync(sidebarSyncSource.messages, chatPageIds.messages);
+  } else {
+    copyElementVisibilityAndContent(sidebarSyncSource.messages, chatPageIds.messages);
+    copyElementVisibilityAndContent(sidebarSyncSource.screenshotPreview, chatPageIds.screenshotPreview);
+  }
 
   const sourceControlBar = document.getElementById(sidebarSyncSource.controlBar) as HTMLElement | null;
   const targetControlBar = document.getElementById(chatPageIds.controlBar) as HTMLElement | null;
