@@ -123,6 +123,12 @@ docs/               # Documentation
 
 ## Product Spec
 
+### Debug Chat Rendering
+
+- `sendMessage()` performs optimistic incremental append (no full message-list DOM wipe).
+- `assistant.started` / stream fallback placeholders append incrementally instead of forcing `renderCurrentSessionMessages()`.
+- `message.created` confirms optimistic user messages by transitioning temp DOM `data-id` to server ID, avoiding duplicate user bubbles.
+
 ### AI Provider System
 
 **Provider loading contract** (provider-contract-correction plan, 2026-03-30):
