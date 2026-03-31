@@ -842,7 +842,7 @@ select {
 
 .chat-bubble-container {
   max-width: 75%;
-  min-width: 15vw;
+  min-width: 2rem;
   position: relative;
   display: flex;
   flex-direction: column;
