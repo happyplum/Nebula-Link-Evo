@@ -206,8 +206,18 @@ export class ProviderRegistry {
       );
     }
 
-    const provider = (factory as (config: ProviderConfig) => unknown)(
-      providerConfig,
+    // Bridge ProviderConfig → SDK-expected params ({name, baseURL, apiKey, headers})
+    const sdkParams: Record<string, unknown> = {
+      name: providerKey,
+      baseURL: providerConfig.baseUrl,
+      apiKey: providerConfig.apiKey,
+    };
+    if (providerConfig.headers) {
+      sdkParams.headers = providerConfig.headers;
+    }
+
+    const provider = (factory as (params: Record<string, unknown>) => unknown)(
+      sdkParams,
     );
     if (typeof provider !== 'function') {
       throw new ProviderError(
