@@ -63,7 +63,8 @@ async function buildSnapshotEvent(
   const messages = conversationManager.getMessages(sessionId);
   const runtimeState = await getRuntimeSessionState(conversationManager, sessionId, baseStatus);
 
-  const thinkingMap = sessionEventsDAO?.getThinkingForSession(sessionId) ?? new Map<string, string>();
+  const assistantIds = messages.filter((m) => m.role === 'assistant').map((m) => m.id);
+  const thinkingMap = sessionEventsDAO?.getThinkingForSession(sessionId, assistantIds) ?? new Map<string, string>();
 
   return {
     type: 'session.snapshot',
@@ -175,6 +176,8 @@ const streamRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           if (shouldReplayFreshEvents(snapshotEvent.state)) {
             const events = await sessionEventsDAO.getEventsAfter(sessionId, 0, REPLAY_FETCH_LIMIT);
             for (const event of events) {
+              // Skip incremental events already materialized into the snapshot
+              if (event.type === 'assistant.thinking') continue;
               writeBootstrapEvent(reply, event, lastDeliveredSeq);
             }
           }
