@@ -1403,7 +1403,7 @@ class ChatManager {
               requestAnimationFrame(() => {
                 capturedContent.innerHTML = this.formatContent(capturedMsg.content);
                 this.rafScheduled = false;
-                this.scrollToBottom();
+                this.maintainScrollPosition();
               });
             }
           }
@@ -1458,7 +1458,7 @@ class ChatManager {
             }
           }
         }
-        this.scrollToBottom();
+        this.maintainScrollPosition();
       }
     }
 
@@ -1478,7 +1478,7 @@ class ChatManager {
         if (contentDiv && contentDiv.parentElement) {
           contentDiv.parentElement.insertBefore(toolCallDiv, contentDiv.nextSibling);
         }
-        this.scrollToBottom();
+        this.maintainScrollPosition();
       }
     }
 
@@ -1496,7 +1496,7 @@ class ChatManager {
           if (toolCallDiv.parentElement) {
             toolCallDiv.parentElement.insertBefore(resultDiv, toolCallDiv.nextSibling);
           }
-          this.scrollToBottom();
+          this.maintainScrollPosition();
         }
       }
     }
@@ -1511,7 +1511,7 @@ class ChatManager {
           contentDiv.innerHTML = this.formatContent(msg.content);
         }
       }
-      this.scrollToBottom();
+      this.maintainScrollPosition();
       if (msgDiv) {
         const indicator = msgDiv.querySelector('.typing-indicator') as HTMLElement | null;
         if (indicator) indicator.remove();
@@ -1531,12 +1531,25 @@ class ChatManager {
       showError(`Chat Error: ${data.error}`);
     }
 
-    this.scrollToBottom();
+    this.maintainScrollPosition();
+  }
+
+  private isNearBottom(): boolean {
+    if (!this.messageContainer) return true;
+    const { scrollTop, scrollHeight, clientHeight } = this.messageContainer;
+    return scrollHeight - scrollTop - clientHeight < 60;
   }
 
   scrollToBottom(): void {
     if (this.messageContainer) {
       this.messageContainer.scrollTop = this.messageContainer.scrollHeight;
+    }
+  }
+
+  /** Only scroll to bottom if user hasn't scrolled up. */
+  maintainScrollPosition(): void {
+    if (this.isNearBottom()) {
+      this.scrollToBottom();
     }
   }
 
