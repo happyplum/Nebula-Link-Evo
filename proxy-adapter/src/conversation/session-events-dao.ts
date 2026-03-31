@@ -215,6 +215,32 @@ export class SessionEventsDAO {
   }
 
   /**
+   * Get concatenated thinking content for each assistant message in a session.
+   * Queries assistant.thinking events and groups text by messageId.
+   */
+  getThinkingForSession(sessionId: string): Map<string, string> {
+    const stmt = this.db.prepare(
+      `SELECT payload FROM session_events
+       WHERE session_id = ? AND event_type = 'assistant.thinking'
+       ORDER BY seq ASC`
+    );
+    const rows = stmt.all(sessionId) as Array<{ payload: string }>;
+    const thinkingMap = new Map<string, string>();
+
+    for (const row of rows) {
+      try {
+        const payload = JSON.parse(row.payload) as { messageId: string; text: string };
+        const existing = thinkingMap.get(payload.messageId) || '';
+        thinkingMap.set(payload.messageId, existing + payload.text);
+      } catch {
+        // Skip malformed payloads
+      }
+    }
+
+    return thinkingMap;
+  }
+
+  /**
    * Delete expired events based on TTL.
    * Returns the number of deleted rows.
    */

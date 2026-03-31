@@ -6,6 +6,7 @@ import { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import { Type } from '@sinclair/typebox';
 import type { ChatHandler } from '../../../../conversation/chat-handler.js';
 import type { ConversationManager } from '../../../../conversation/manager.js';
+import type { SessionEventsDAO } from '../../../../conversation/session-events-dao.js';
 import type { SessionStatus } from '../../../../conversation/types.js';
 import { DatabaseManager } from '../../../../conversation/db.js';
 import { SessionEventHub } from '../../../../services/session-event-hub.js';
@@ -56,20 +57,39 @@ function writeBootstrapEvent(
 async function buildSnapshotEvent(
   conversationManager: ConversationManager,
   sessionId: string,
+  sessionEventsDAO: SessionEventsDAO | null,
   baseStatus?: SessionStatus
 ): Promise<SessionSnapshotEvent> {
   const messages = conversationManager.getMessages(sessionId);
   const runtimeState = await getRuntimeSessionState(conversationManager, sessionId, baseStatus);
+
+  const thinkingMap = sessionEventsDAO?.getThinkingForSession(sessionId) ?? new Map<string, string>();
+
   return {
     type: 'session.snapshot',
     seq: 0,
     sessionId,
-    messages: messages.map((m) => ({
-      id: m.id,
-      role: m.role,
-      content: m.content,
-      created_at: m.created_at,
-    })),
+    messages: messages.map((m) => {
+      const result: {
+        id: string;
+        role: string;
+        content: string;
+        thinking?: string;
+        created_at: string;
+      } = {
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        created_at: m.created_at,
+      };
+
+      const thinking = thinkingMap.get(m.id);
+      if (thinking) {
+        result.thinking = thinking;
+      }
+
+      return result;
+    }),
     state: runtimeState.status as SessionState,
     jobId: runtimeState.jobId,
     agentState: runtimeState.agentState,
@@ -144,7 +164,12 @@ const streamRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         });
 
         if (!isReconnect) {
-          const snapshotEvent = await buildSnapshotEvent(conversationManager, sessionId, session.status);
+          const snapshotEvent = await buildSnapshotEvent(
+            conversationManager,
+            sessionId,
+            sessionEventsDAO,
+            session.status
+          );
           writeSSEEvent(reply, snapshotEvent, '0');
 
           if (shouldReplayFreshEvents(snapshotEvent.state)) {
@@ -160,7 +185,12 @@ const streamRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
             (minSeq === null && lastSeq > 0);
 
           if (hasGap) {
-            const snapshotEvent = await buildSnapshotEvent(conversationManager, sessionId, session.status);
+            const snapshotEvent = await buildSnapshotEvent(
+              conversationManager,
+              sessionId,
+              sessionEventsDAO,
+              session.status
+            );
             writeSSEEvent(reply, snapshotEvent, '');
             lastDeliveredSeq.value = minSeq !== null ? minSeq - 1 : 0;
           }
@@ -168,6 +198,8 @@ const streamRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           const replayFrom = hasGap && minSeq !== null ? minSeq - 1 : lastSeq;
           const events = await sessionEventsDAO.getEventsAfter(sessionId, replayFrom, REPLAY_FETCH_LIMIT);
           for (const event of events) {
+            // Skip incremental events already materialized into the snapshot
+            if (hasGap && event.type === 'assistant.thinking') continue;
             writeBootstrapEvent(reply, event, lastDeliveredSeq);
           }
         }
