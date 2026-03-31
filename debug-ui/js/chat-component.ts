@@ -7,6 +7,7 @@ interface ChatManagerApi {
   captureScreenshot: () => Promise<void> | void;
   clearScreenshot: () => void;
   setStatusFilter: (filter: string) => void;
+  readonly isStreaming: boolean;
 }
 
 declare global {
@@ -63,6 +64,8 @@ let chatPageContainer: HTMLElement | null = null;
 let hiddenLayoutElements: HTMLElement[] = [];
 let sidebarObserver: MutationObserver | null = null;
 let eventCleanupCallbacks: Array<() => void> = [];
+let lastSyncTime = 0;
+const SYNC_THROTTLE_MS = 200;
 
 function hideMainLayout(): void {
   hiddenLayoutElements = [];
@@ -193,6 +196,12 @@ function observeSidebarUpdates(): void {
   }
 
   sidebarObserver = new MutationObserver(() => {
+    const chatMgr = getChatManager();
+    const now = Date.now();
+    if (chatMgr?.isStreaming && (now - lastSyncTime) < SYNC_THROTTLE_MS) {
+      return; // Throttle during streaming
+    }
+    lastSyncTime = now;
     syncChatPageFromSidebar();
   });
 

@@ -34,6 +34,85 @@ interface ScreenshotResponse {
   screenshot?: string;
 }
 
+function showNamePrompt(title: string, defaultValue: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    
+    const container = document.createElement('div');
+    container.className = 'modal-container';
+    container.style.maxWidth = '400px';
+    
+    const header = document.createElement('div');
+    header.className = 'modal-header';
+    
+    const titleEl = document.createElement('h3');
+    titleEl.textContent = title;
+    
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'modal-close';
+    closeBtn.innerHTML = '&times;';
+    closeBtn.onclick = () => {
+      document.body.removeChild(overlay);
+      resolve(null);
+    };
+    
+    header.appendChild(titleEl);
+    header.appendChild(closeBtn);
+    
+    const body = document.createElement('div');
+    body.className = 'modal-body';
+    
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = defaultValue;
+    input.className = 'text-12 w-full';
+    input.style.marginBottom = '16px';
+    
+    const footer = document.createElement('div');
+    footer.style.display = 'flex';
+    footer.style.justifyContent = 'flex-end';
+    footer.style.gap = '8px';
+    
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = '取消';
+    cancelBtn.onclick = () => {
+      document.body.removeChild(overlay);
+      resolve(null);
+    };
+    
+    const okBtn = document.createElement('button');
+    okBtn.textContent = '确定';
+    okBtn.className = 'primary';
+    okBtn.onclick = () => {
+      document.body.removeChild(overlay);
+      resolve(input.value);
+    };
+    
+    input.onkeydown = (e) => {
+      if (e.key === 'Enter') {
+        okBtn.click();
+      } else if (e.key === 'Escape') {
+        cancelBtn.click();
+      }
+    };
+    
+    footer.appendChild(cancelBtn);
+    footer.appendChild(okBtn);
+    
+    body.appendChild(input);
+    body.appendChild(footer);
+    
+    container.appendChild(header);
+    container.appendChild(body);
+    overlay.appendChild(container);
+    
+    document.body.appendChild(overlay);
+    input.focus();
+    input.select();
+  });
+}
+
 interface WebSocketData {
   type: string;
   seq?: number;
@@ -104,6 +183,12 @@ class ChatManager {
   private hasMoreMessages: boolean = true;
   private messageOffset: number = 0;
   private readonly LOAD_MORE_LIMIT: number = 50;
+  private _isStreaming = false;
+  private rafScheduled = false;
+
+  get isStreaming(): boolean {
+    return this._isStreaming;
+  }
 
   private ensureSessionState(sessionId: string): {
     messages: ChatMessage[];
@@ -469,6 +554,7 @@ class ChatManager {
   private statusFilter: string = '';
 
   async loadSessions(): Promise<void> {
+    const previousSessionId = this.currentSessionId;
     try {
       const res = await fetch('/api/chat/sessions');
       if (!res.ok) {
@@ -480,6 +566,10 @@ class ChatManager {
       if (Array.isArray(data)) {
         this.sessions = data;
         this.renderSessionList();
+        // Auto-load data if a session was auto-selected (not user-selected)
+        if (!previousSessionId && this.currentSessionId) {
+          await this.switchSession(this.currentSessionId);
+        }
       }
     } catch (e) {
       console.error('Failed to load sessions', e);
@@ -540,14 +630,17 @@ class ChatManager {
     this.renderSessionList();
   }
 
-  async createSession(): Promise<void> {
+  async createSession(title?: string): Promise<void> {
     if (!this.isConnectivityOk) {
       showError('连通性测试失败，请在配置面板重新测试');
       return;
     }
 
-    // 移除了会导致测试死锁的 prompt
-    const title = `新会话 ${new Date().toLocaleTimeString()}`;
+    let finalTitle = title;
+    if (!finalTitle) {
+      const name = await showNamePrompt('请输入会话名称', '新会话');
+      finalTitle = name || `新会话 ${new Date().toLocaleTimeString()}`;
+    }
 
     try {
       // 从配置 API 获取默认的 provider 和 model
@@ -572,7 +665,7 @@ class ChatManager {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: title || '新会话',
+          title: finalTitle || '新会话',
           provider: provider,
           model: model,
         }),
@@ -632,6 +725,8 @@ class ChatManager {
   async switchSession(sessionId: string): Promise<void> {
     this.closeSSE();
     const switchEpoch = ++this.sessionSwitchEpoch;
+    this._isStreaming = false;
+    this.rafScheduled = false;
 
     if (!sessionId) {
       this.currentSessionId = null;
@@ -978,7 +1073,9 @@ class ChatManager {
     }
 
     this.mergeSessionMessages(this.currentSessionId, [msg], false);
-    this.renderCurrentSessionMessages(this.currentSessionId);
+    // Incremental append — avoid full DOM wipe
+    this.appendMessage(msg);
+    this.scrollToBottom();
 
     this.input.value = '';
     const screenshotToSend = this.currentScreenshot;
@@ -1163,6 +1260,7 @@ class ChatManager {
         id: message.id,
         role: message.role,
         content: message.content || '',
+        thinking: message.thinking,
         created_at: message.created_at,
       }));
       this.mergeSessionMessages(sessionId, snapshotMessages, true);
@@ -1180,17 +1278,38 @@ class ChatManager {
 
     if (eventType === 'message.created') {
       if (data.messageId) {
+        const role = data.role || 'user';
+        const content = data.content || '';
+        const optimisticMessage = role === 'user'
+          ? state.messages.find(
+            (message) => message.id.startsWith('temp-') && message.role === 'user' && message.content === content
+          )
+          : undefined;
+
         this.mergeSessionMessages(
           sessionId,
           [{
             id: data.messageId,
-            role: data.role || 'user',
-            content: data.content || '',
+            role,
+            content,
             created_at: Date.now(),
           }],
           true
         );
-        this.renderCurrentSessionMessages(sessionId);
+
+        if (optimisticMessage) {
+          const optimisticDiv = this.messageContainer.querySelector(`[data-id="${optimisticMessage.id}"]`) as HTMLElement | null;
+          if (optimisticDiv) {
+            optimisticDiv.dataset.id = data.messageId;
+          }
+        } else if (!this.messageContainer.querySelector(`[data-id="${data.messageId}"]`)) {
+          this.appendMessage({
+            id: data.messageId,
+            role,
+            content,
+            created_at: Date.now(),
+          });
+        }
       }
       return;
     }
@@ -1212,7 +1331,9 @@ class ChatManager {
 
     if (eventType === 'chat_stream_start') {
       this.setSessionStatus('running');
+      this._isStreaming = true;
     } else if (eventType === 'chat_stream_end' || eventType === 'chat_stream_error') {
+      this._isStreaming = false;
       setTimeout(() => {
         if (this.sessionStatus === 'running') {
           this.setSessionStatus('idle');
@@ -1221,17 +1342,28 @@ class ChatManager {
     }
 
     if (eventType === 'chat_stream_start' && data.messageId) {
+      const assistantMessage: ChatMessage = {
+        id: data.messageId,
+        role: 'assistant',
+        content: '',
+        created_at: Date.now(),
+      };
       this.mergeSessionMessages(
         sessionId,
-        [{
-          id: data.messageId,
-          role: 'assistant',
-          content: '',
-          created_at: Date.now(),
-        }],
+        [assistantMessage],
         true
       );
-      this.renderCurrentSessionMessages(sessionId);
+      // Incremental append — avoid full re-render
+      if (!this.messageContainer.querySelector(`[data-id="${data.messageId}"]`)) {
+        this.appendMessage(assistantMessage);
+      }
+
+      const existingMessage = state.messages.find((message) => message.id === data.messageId);
+      const existingMessageDiv = this.messageContainer.querySelector(`[data-id="${data.messageId}"]`) as HTMLElement | null;
+      const existingContentDiv = existingMessageDiv?.querySelector('.msg-content') as HTMLElement | null;
+      if (existingMessage?.content && existingContentDiv && !existingContentDiv.innerHTML) {
+        existingContentDiv.innerHTML = this.formatContent(existingMessage.content);
+      }
     }
 
     let msgDiv = this.messageContainer.querySelector(
@@ -1239,17 +1371,20 @@ class ChatManager {
     ) as HTMLElement | null;
 
     if (!msgDiv && data.messageId && (eventType === 'chat_stream_token' || eventType === 'chat_stream_thinking' || eventType === 'chat_stream_tool_call' || eventType === 'chat_stream_tool_result' || eventType === 'chat_stream_end' || eventType === 'chat_stream_error')) {
+      const fallbackAssistantMessage: ChatMessage = {
+        id: data.messageId,
+        role: 'assistant',
+        content: '',
+        created_at: Date.now(),
+      };
       this.mergeSessionMessages(
         sessionId,
-        [{
-          id: data.messageId,
-          role: 'assistant',
-          content: '',
-          created_at: Date.now(),
-        }],
+        [fallbackAssistantMessage],
         true
       );
-      this.renderCurrentSessionMessages(sessionId);
+      if (!this.messageContainer.querySelector(`[data-id="${data.messageId}"]`)) {
+        this.appendMessage(fallbackAssistantMessage);
+      }
       msgDiv = this.messageContainer.querySelector(`[data-id="${data.messageId}"]`) as HTMLElement | null;
     }
 
@@ -1263,10 +1398,18 @@ class ChatManager {
           const msg = state.messages.find((message) => message.id === data.messageId);
           if (msg) {
             msg.content = (msg.content || '') + data.text;
-            contentDiv.innerHTML = this.formatContent(msg.content);
+            if (!this.rafScheduled) {
+              this.rafScheduled = true;
+              const capturedContent = contentDiv;
+              const capturedMsg = msg;
+              requestAnimationFrame(() => {
+                capturedContent.innerHTML = this.formatContent(capturedMsg.content);
+                this.rafScheduled = false;
+                this.scrollToBottom();
+              });
+            }
           }
         }
-        this.scrollToBottom();
       }
     }
 
@@ -1361,6 +1504,16 @@ class ChatManager {
     }
 
     if (eventType === 'chat_stream_end') {
+      // Flush any pending rAF content immediately
+      this.rafScheduled = false;
+      if (data.messageId && msgDiv) {
+        const contentDiv = msgDiv.querySelector('.msg-content') as HTMLElement | null;
+        const msg = state.messages.find((message) => message.id === data.messageId);
+        if (contentDiv && msg?.content) {
+          contentDiv.innerHTML = this.formatContent(msg.content);
+        }
+      }
+      this.scrollToBottom();
       if (msgDiv) {
         const indicator = msgDiv.querySelector('.typing-indicator') as HTMLElement | null;
         if (indicator) indicator.remove();
@@ -1368,6 +1521,7 @@ class ChatManager {
     }
 
     if (eventType === 'chat_stream_error') {
+      this.rafScheduled = false;
       if (msgDiv) {
         const indicator = msgDiv.querySelector('.typing-indicator') as HTMLElement | null;
         if (indicator) indicator.remove();
