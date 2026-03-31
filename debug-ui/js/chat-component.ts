@@ -15,6 +15,7 @@ declare global {
     chatComponent?: {
       show: () => void;
       hide: () => void;
+      syncChatPageFromSidebar: () => void;
     };
   }
 }
@@ -193,6 +194,16 @@ function incrementalMessageSync(sourceId: string, targetId: string): void {
   }
 }
 
+/** If target (chat page) was near bottom before sync, scroll it to bottom. */
+function syncScrollPosition(_sourceId: string, targetId: string): void {
+  const target = document.getElementById(targetId);
+  if (!target) return;
+  const nearBottom = target.scrollHeight - target.scrollTop - target.clientHeight < 60;
+  if (nearBottom) {
+    target.scrollTop = target.scrollHeight;
+  }
+}
+
 function copyButtonState(sourceId: string, targetId: string): void {
   const source = document.getElementById(sourceId) as HTMLButtonElement | null;
   const target = document.getElementById(targetId) as HTMLButtonElement | null;
@@ -218,6 +229,8 @@ function syncChatPageFromSidebar(): void {
   if (chatMgr?.isStreaming) {
     // Incremental sync during streaming — avoids full innerHTML reflow
     incrementalMessageSync(sidebarSyncSource.messages, chatPageIds.messages);
+    // Keep chat page scrolled to bottom when user was near bottom
+    syncScrollPosition(sidebarSyncSource.messages, chatPageIds.messages);
   } else {
     copyElementVisibilityAndContent(sidebarSyncSource.messages, chatPageIds.messages);
     copyElementVisibilityAndContent(sidebarSyncSource.screenshotPreview, chatPageIds.screenshotPreview);
