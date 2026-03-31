@@ -215,25 +215,61 @@ export class SessionEventsDAO {
   }
 
   /**
-   * Get concatenated thinking content for each assistant message in a session.
-   * Queries assistant.thinking events and groups text by messageId.
+   * Map thinking content to real message IDs by positional ordering.
+   *
+   * Events use temp IDs (msg_xxx) but messages in the DB have real UUIDs.
+   * We correlate by position: Nth assistant.started → Nth assistant message.
    */
-  getThinkingForSession(sessionId: string): Map<string, string> {
-    const stmt = this.db.prepare(
+  getThinkingForSession(
+    sessionId: string,
+    assistantMessageIds: string[]
+  ): Map<string, string> {
+    const thinkingMap = new Map<string, string>();
+    if (assistantMessageIds.length === 0) return thinkingMap;
+
+    // 1. Get assistant.started events in seq order → extract temp messageIds
+    const startedStmt = this.db.prepare(
+      `SELECT payload FROM session_events
+       WHERE session_id = ? AND event_type = 'assistant.started'
+       ORDER BY seq ASC`
+    );
+    const startedRows = startedStmt.all(sessionId) as Array<{ payload: string }>;
+    const tempMessageIds: string[] = [];
+    for (const row of startedRows) {
+      try {
+        const payload = JSON.parse(row.payload) as { messageId: string };
+        tempMessageIds.push(payload.messageId);
+      } catch {
+        // Skip malformed
+      }
+    }
+
+    if (tempMessageIds.length === 0) return thinkingMap;
+
+    // 2. Get all thinking events grouped by temp messageId
+    const thinkingStmt = this.db.prepare(
       `SELECT payload FROM session_events
        WHERE session_id = ? AND event_type = 'assistant.thinking'
        ORDER BY seq ASC`
     );
-    const rows = stmt.all(sessionId) as Array<{ payload: string }>;
-    const thinkingMap = new Map<string, string>();
-
-    for (const row of rows) {
+    const thinkingRows = thinkingStmt.all(sessionId) as Array<{ payload: string }>;
+    const thinkingByTextId = new Map<string, string>();
+    for (const row of thinkingRows) {
       try {
         const payload = JSON.parse(row.payload) as { messageId: string; text: string };
-        const existing = thinkingMap.get(payload.messageId) || '';
-        thinkingMap.set(payload.messageId, existing + payload.text);
+        const existing = thinkingByTextId.get(payload.messageId) || '';
+        thinkingByTextId.set(payload.messageId, existing + payload.text);
       } catch {
-        // Skip malformed payloads
+        // Skip malformed
+      }
+    }
+
+    // 3. Map by position: Nth tempMessageId → Nth real UUID
+    const mapLen = Math.min(tempMessageIds.length, assistantMessageIds.length);
+    for (let i = 0; i < mapLen; i++) {
+      const thinking = thinkingByTextId.get(tempMessageIds[i]);
+      if (thinking) {
+        thinkingMap.set(assistantMessageIds[i], thinking);
       }
     }
 

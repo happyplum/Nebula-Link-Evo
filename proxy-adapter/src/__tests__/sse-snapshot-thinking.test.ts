@@ -180,14 +180,20 @@ describe('SSE snapshot thinking reconstruction', () => {
     });
 
     const dao = db.getSessionEventsDAO();
+    // Simulate production: assistant.started uses temp ID, thinking events use same temp ID
+    const tempMessageId = 'msg_1234567890_testid';
+    dao.appendEventSync(session.id, 'assistant.started', {
+      sessionId: session.id,
+      messageId: tempMessageId,
+    });
     dao.appendEventSync(session.id, 'assistant.thinking', {
       sessionId: session.id,
-      messageId: assistantMessage.id,
+      messageId: tempMessageId,
       text: 'first chunk ',
     });
     dao.appendEventSync(session.id, 'assistant.thinking', {
       sessionId: session.id,
-      messageId: assistantMessage.id,
+      messageId: tempMessageId,
       text: 'second chunk',
     });
 
@@ -207,5 +213,41 @@ describe('SSE snapshot thinking reconstruction', () => {
     expect(assistantSnapshotMessage?.thinking).toBe('first chunk second chunk');
     expect(userSnapshotMessage).toBeDefined();
     expect(userSnapshotMessage && 'thinking' in userSnapshotMessage).toBe(false);
+  });
+
+  it('maps thinking to correct message when multiple assistant messages exist', async () => {
+    const session = conversationManager.createSession({
+      title: 'Multi Thinking',
+      provider: 'kimi',
+      model: 'moonshot-v1-vision-preview',
+    });
+
+    conversationManager.addMessage(session.id, { role: 'user', content: 'Q1' });
+    const msg1 = conversationManager.addMessage(session.id, { role: 'assistant', content: 'A1' });
+    conversationManager.addMessage(session.id, { role: 'user', content: 'Q2' });
+    const msg2 = conversationManager.addMessage(session.id, { role: 'assistant', content: 'A2' });
+
+    const dao = db.getSessionEventsDAO();
+    // First assistant.started → first thinking
+    dao.appendEventSync(session.id, 'assistant.started', { messageId: 'msg_1' });
+    dao.appendEventSync(session.id, 'assistant.thinking', { messageId: 'msg_1', text: 'think1 ' });
+    dao.appendEventSync(session.id, 'assistant.thinking', { messageId: 'msg_1', text: 'more1' });
+    // Second assistant.started → second thinking
+    dao.appendEventSync(session.id, 'assistant.started', { messageId: 'msg_2' });
+    dao.appendEventSync(session.id, 'assistant.thinking', { messageId: 'msg_2', text: 'think2' });
+
+    const events = await collectSSEEvents(`${baseUrl}/api/chat/sessions/${session.id}/stream`, {
+      maxEvents: 1,
+    });
+
+    const payload = JSON.parse(events[0].data) as {
+      messages: Array<{ id: string; role: string; thinking?: string }>;
+    };
+
+    const snapMsg1 = payload.messages.find((m) => m.id === msg1.id);
+    const snapMsg2 = payload.messages.find((m) => m.id === msg2.id);
+
+    expect(snapMsg1?.thinking).toBe('think1 more1');
+    expect(snapMsg2?.thinking).toBe('think2');
   });
 });
