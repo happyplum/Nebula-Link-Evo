@@ -219,10 +219,8 @@ class ChatManager {
       return value;
     }
     if (typeof value === 'string') {
-      const asNumber = Number.parseInt(value, 10);
-      if (Number.isFinite(asNumber)) {
-        return asNumber;
-      }
+      // Date.parse handles both ISO strings and numeric strings correctly.
+      // parseInt would truncate "2026-03-31T..." to 2026 — wrong.
       const asDate = Date.parse(value);
       if (Number.isFinite(asDate)) {
         return asDate;
@@ -857,25 +855,25 @@ class ChatManager {
       contentHtml += `<div class="mb-2"><img src="data:image/png;base64,${msg.screenshot}" class="max-w-full rounded border border-border"></div>`;
     }
 
-    if (msg.thinking) {
-      contentHtml += `
-          <div class="thinking-block expanded" data-id="${msg.id}">
-              <div class="thinking-header" onclick="this.parentElement.classList.toggle('expanded')">
-                  <span>💭 思考过程</span>
-              </div>
-              <div class="thinking-content">${this.formatContent(msg.thinking)}</div>
-          </div>
-      `;
-    }
-
     contentHtml += this.formatContent(msg.content);
 
     const avatar = msg.role === 'user' ? '👤' : '🤖';
     const timestamp = msg.timestamp || msg.created_at || Date.now();
+
+    const thinkingHtml = msg.thinking
+      ? `<div class="thinking-block expanded" data-id="${msg.id}">
+              <div class="thinking-header" onclick="this.parentElement.classList.toggle('expanded')">
+                  <span>💭 思考过程</span>
+              </div>
+              <div class="thinking-content">${this.formatContent(msg.thinking)}</div>
+          </div>`
+      : '';
+
     div.innerHTML = `
             <div class="chat-avatar">${avatar}</div>
             <div class="chat-bubble-container">
                 <div class="chat-meta">${new Date(timestamp).toLocaleTimeString()}</div>
+                ${thinkingHtml}
                 <div class="msg-content">${contentHtml}</div>
             </div>
         `;
