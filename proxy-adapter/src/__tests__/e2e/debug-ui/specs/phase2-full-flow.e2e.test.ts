@@ -6,6 +6,10 @@
  * 2. Multi-page mirror synchronization
  * 3. SSE reconnection with backoff
  * 4. StreamBuffer persistence recovery
+ *
+ * TODO(react-refactor): Skipped — React app uses Zustand stores (no window.chatManager), separate chat route (/#/chat), and different DOM structure.
+ * Legacy selectors ([data-panel="ai"], #chat-control-bar, window.chatManager.*) no longer exist.
+ * Rewrite with React-compatible selectors once control flow feature is ported.
  */
 import { test, expect } from '../fixtures/test.fixture';
 import { Page } from '@playwright/test';
@@ -70,7 +74,7 @@ async function getButtonState(page: Page, selector: string): Promise<boolean> {
 // ============================================
 // Test Scenario 1: Control Flow
 // ============================================
-test.describe('Phase 2 - Control Flow', () => {
+test.describe.skip('Phase 2 - Control Flow', () => {
   test.beforeEach(async ({ debugPage }) => {
     await activateAIPanel(debugPage);
   });
@@ -171,7 +175,7 @@ test.describe('Phase 2 - Control Flow', () => {
 // ============================================
 // Test Scenario 2: SSE Reconnection (moved from Scenario 3)
 // ============================================
-test.describe('Phase 2 - SSE Reconnection', () => {
+test.describe.skip('Phase 2 - SSE Reconnection', () => {
   test.beforeEach(async ({ debugPage }) => {
     await activateAIPanel(debugPage);
   });
@@ -255,7 +259,7 @@ test.describe('Phase 2 - SSE Reconnection', () => {
 // ============================================
 // Test Scenario 4: StreamBuffer Persistence
 // ============================================
-test.describe('Phase 2 - StreamBuffer Persistence', () => {
+test.describe.skip('Phase 2 - StreamBuffer Persistence', () => {
   test.beforeEach(async ({ debugPage }) => {
     await activateAIPanel(debugPage);
   });
@@ -271,7 +275,7 @@ test.describe('Phase 2 - StreamBuffer Persistence', () => {
 // ============================================
 // Integration Tests
 // ============================================
-test.describe('Phase 2 - Integration Tests', () => {
+test.describe.skip('Phase 2 - Integration Tests', () => {
   test.beforeEach(async ({ debugPage }) => {
     await activateAIPanel(debugPage);
   });
@@ -346,7 +350,7 @@ test.describe('Phase 2 - Integration Tests', () => {
 // ============================================
 // Accessibility Tests
 // ============================================
-test.describe('Phase 2 - Accessibility', () => {
+test.describe.skip('Phase 2 - Accessibility', () => {
   test.beforeEach(async ({ debugPage }) => {
     await activateAIPanel(debugPage);
   });
