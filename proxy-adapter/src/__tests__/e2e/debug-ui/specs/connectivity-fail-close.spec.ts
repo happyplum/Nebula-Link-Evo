@@ -3,10 +3,13 @@
  *
  * Tests the fail-close mechanism that prevents new messages when connectivity
  * test fails, and ensures proper blocking/unblocking behavior.
+ *
+ * TODO(react-refactor): Skipped — Connectivity test UI doesn't exist in React app. Legacy selectors ([data-panel="ai"], #configDisplay, #connectivity-test-btn) no longer exist.
+ * Rewrite with React-compatible selectors once connectivity test feature is ported.
  */
 import { test, expect } from '@playwright/test';
 
-test.describe('Connectivity Fail-Close', () => {
+test.describe.skip('Connectivity Fail-Close', () => {
   test.beforeEach(async ({ page }) => {
     // Navigate to Debug UI and ensure page is loaded
     await page.goto('http://localhost:3000/debug');

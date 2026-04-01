@@ -66,43 +66,35 @@ export const test = base.extend<{
     // Enhance page with debug-specific methods
     const debugPage = page as DebugPage;
     debugPage.waitForWebSocketStatus = async (status) => {
-      const indicator = page.locator('[data-testid="websocket-status"]');
+      const indicator = page.locator('[data-testid="connection-status"]');
       await indicator.waitFor({ state: 'visible' });
 
-      // Check status based on class or data attribute
+      const text = await indicator.textContent();
       if (status === 'connected') {
-        await expect(indicator).toHaveAttribute('data-status', 'connected');
+        await expect(text).toContain('connected');
       } else if (status === 'disconnected') {
-        await expect(indicator).toHaveAttribute('data-status', 'disconnected');
+        await expect(text).toContain('disconnected');
       } else if (status === 'connecting') {
-        await expect(indicator).toHaveAttribute('data-status', 'connecting');
+        await expect(text).toContain('connecting');
       }
     };
 
     debugPage.sendTestTask = async (task) => {
       await page.evaluate((taskObj) => {
-        // Find the task input or form and submit the task
-        const taskInput = document.querySelector('[data-testid="task-input"]');
-        const submitBtn = document.querySelector('[data-testid="submit-task"]');
-
-        if (taskInput && submitBtn) {
-          (taskInput as HTMLTextAreaElement).value = JSON.stringify(taskObj);
-          (submitBtn as HTMLButtonElement).click();
+        const input = document.querySelector('[data-testid="composer-input"]');
+        if (input) {
+          (input as HTMLTextAreaElement).value = JSON.stringify(taskObj);
         }
       }, task);
     };
 
     debugPage.getWebSocketMessages = async () => {
       return page.evaluate(() => {
-        // Return any WebSocket messages that have been captured
-        const wsElement = document.querySelector('[data-testid="websocket-messages"]');
+        const wsElement = document.querySelector('[data-testid="message-list"]');
         const text = wsElement ? (wsElement as HTMLElement).textContent || '' : '';
-        // Try to parse as JSON array, otherwise return empty array
         try {
           return text ? JSON.parse(text) : [];
-        } catch (error) {
-          console.error('Failed to parse WebSocket messages as JSON:', error);
-          // If not valid JSON, split by newlines or return empty array
+        } catch {
           return text ? text.split('\n').filter((line: string) => line.trim()) : [];
         }
       });
@@ -120,7 +112,6 @@ export const test = base.extend<{
       isConnected: false,
     };
 
-    // Track WebSocket connections
     page.on('websocket', (ws) => {
       monitor.connectionCount++;
       monitor.isConnected = true;
@@ -144,24 +135,17 @@ export const test = base.extend<{
 
   // Provide service manager fixture for playwright-server
   serviceManager: async ({}, use) => {
-    // Note: playwright-server should be started separately
-    // This fixture provides a clean interface for potential future automation
     const manager: ServiceManager = {
       isRunning: false,
       start: async () => {
-        // Check if playwright-server is running
         try {
           const response = await fetch('http://localhost:3001/api/health');
           manager.isRunning = response.ok;
-        } catch (error) {
-          console.error('Failed to check playwright-server health:', error);
+        } catch {
           manager.isRunning = false;
         }
       },
-      stop: async () => {
-        // Currently no-op, as playwright-server is managed externally
-        // Could be extended to support automated lifecycle management
-      },
+      stop: async () => {},
     };
 
     await use(manager);

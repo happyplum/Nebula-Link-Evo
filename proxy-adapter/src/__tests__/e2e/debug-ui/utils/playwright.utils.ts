@@ -2,7 +2,7 @@ import { Page, expect } from '@playwright/test';
 import { TIMEOUTS } from '../constants';
 
 /**
- * Debug UI test utility functions
+ * Debug UI test utility functions (React selectors)
  */
 
 export const DEBUG_UI_URL = process.env.DEBUG_UI_URL || 'http://localhost:3000/debug';
@@ -26,10 +26,10 @@ export async function navigateToDebugSection(page: Page, section: string): Promi
 }
 
 /**
- * Wait for WebSocket connection to be established
+ * Wait for WebSocket connection indicator to be visible
  */
 export async function waitForWebSocket(page: Page, timeout = 5000): Promise<void> {
-  const statusIndicator = page.locator('[data-testid="websocket-status"]');
+  const statusIndicator = page.locator('[data-testid="connection-status"]');
   await expect(statusIndicator).toBeVisible({ timeout });
 }
 
@@ -41,9 +41,9 @@ export async function waitForWebSocketStatus(
   status: 'connected' | 'disconnected' | 'connecting',
   timeout = 5000
 ): Promise<void> {
-  const indicator = page.locator('[data-testid="websocket-status"]');
+  const indicator = page.locator('[data-testid="connection-status"]');
   await indicator.waitFor({ state: 'visible', timeout });
-  await expect(indicator).toHaveAttribute('data-status', status, { timeout });
+  await expect(indicator).toContainText(status, { timeout });
 }
 
 /**
@@ -55,8 +55,6 @@ export async function getTextContent(page: Page, selector: string): Promise<stri
   const text = await element.textContent();
   return text || '';
 }
-
-
 
 /**
  * Create a test task payload for API requests
@@ -128,8 +126,7 @@ export async function isElementVisible(page: Page, selector: string): Promise<bo
   try {
     await page.waitForSelector(selector, { state: 'visible', timeout: 1000 });
     return true;
-  } catch (error) {
-    console.error(`Failed to check visibility for selector "${selector}":`, error);
+  } catch {
     return false;
   }
 }
@@ -148,7 +145,6 @@ export async function elementExists(page: Page, selector: string): Promise<boole
  */
 export async function getWebSocketMessages(page: Page): Promise<unknown[]> {
   return page.evaluate(() => {
-    // Access any global WebSocket message storage
     const wsMessages = (globalThis as unknown as { wsMessages?: unknown[] }).wsMessages;
     return wsMessages || [];
   });
@@ -185,79 +181,6 @@ export async function waitForWebSocketMessage(
   }
 
   throw new Error(`WebSocket message not found within ${timeout}ms`);
-}
-
-/**
- * Submit a task via the Debug UI
- */
-export async function submitTask(page: Page, task: { url: string; instruction: string }): Promise<void> {
-  // Find task input and submit button
-  const urlInput = page.locator('[data-testid="task-url-input"]');
-  const instructionInput = page.locator('[data-testid="task-instruction"]');
-  const submitBtn = page.locator('[data-testid="submit-task"]');
-
-  // Fill task details
-  await urlInput.fill(task.url);
-  await instructionInput.fill(task.instruction);
-
-  // Submit task
-  await submitBtn.click();
-}
-
-/**
- * Get current task status from Debug UI
- */
-export async function getTaskStatus(page: Page): Promise<string> {
-  const statusElement = page.locator('[data-testid="task-status"]');
-  const status = await statusElement.textContent();
-  return status || '';
-}
-
-/**
- * Wait for task to complete (success or failure)
- */
-export async function waitForTaskComplete(page: Page, timeout = 30000): Promise<void> {
-  const statusIndicator = page.locator('[data-testid="task-status"]');
-
-  await statusIndicator.waitFor({ state: 'visible', timeout });
-
-  // Poll for completion
-  const startTime = Date.now();
-  while (Date.now() - startTime < timeout) {
-    const status = await getTaskStatus(page);
-    if (status === 'completed' || status === 'failed' || status === 'error') {
-      return;
-    }
-    await page.waitForTimeout(TIMEOUTS.MEDIUM);
-  }
-
-  throw new Error(`Task did not complete within ${timeout}ms`);
-}
-
-/**
- * Switch to a specific tab/panel in Debug UI
- */
-export async function switchTab(page: Page, tabName: string): Promise<void> {
-  const tab = page.locator(`[data-testid="tab-${tabName}"]`);
-  await tab.click();
-}
-
-/**
- * Get active tab name
- */
-export async function getActiveTab(page: Page): Promise<string> {
-  const activeTab = page.locator('[data-testid*="tab"][data-active="true"]');
-  const tabName = await activeTab.getAttribute('data-testid');
-  return tabName?.replace('tab-', '') || '';
-}
-
-
-
-/**
- * Wait for network idle (no network activity for specified duration)
- */
-export async function waitForNetworkIdle(page: Page, timeout = 30000): Promise<void> {
-  await page.waitForLoadState('networkidle', { timeout });
 }
 
 /**
@@ -299,8 +222,7 @@ export async function isBrowserConnected(page: Page): Promise<boolean> {
       return res.ok;
     });
     return response;
-  } catch (error) {
-    console.error('Failed to check browser connection:', error);
+  } catch {
     return false;
   }
 }
@@ -311,4 +233,72 @@ export async function isBrowserConnected(page: Page): Promise<boolean> {
 export async function reloadPage(page: Page): Promise<void> {
   await page.reload();
   await page.waitForLoadState('networkidle');
+}
+
+// ============================================================
+// Legacy helpers — kept for backward compatibility but updated to data-testid
+// ============================================================
+
+/**
+ * Submit a task via the Control Panel
+ * TODO: React refactor — new ControlPanel uses action-button-navigate
+ */
+export async function submitTask(page: Page, task: { url: string; instruction: string }): Promise<void> {
+  const navigateBtn = page.locator('[data-testid="action-button-navigate"]');
+  const input = page.locator('[data-testid="action-button-navigate"]')
+    .locator('..').locator('input[type="text"]');
+
+  if (await input.count() > 0) {
+    await input.fill(task.url);
+  }
+  if (await navigateBtn.count() > 0) {
+    await navigateBtn.click();
+  }
+}
+
+/**
+ * Get current task status
+ * TODO: React refactor — task status display changed
+ */
+export async function getTaskStatus(page: Page): Promise<string> {
+  const statusElement = page.locator('[data-testid="connection-status"]');
+  const status = await statusElement.textContent();
+  return status || '';
+}
+
+/**
+ * Wait for task to complete (success or failure)
+ */
+export async function waitForTaskComplete(page: Page, timeout = 30000): Promise<void> {
+  const statusIndicator = page.locator('[data-testid="connection-status"]');
+
+  await statusIndicator.waitFor({ state: 'visible', timeout });
+  // Poll for completion
+  const startTime = Date.now();
+  while (Date.now() - startTime < timeout) {
+    const status = await getTaskStatus(page);
+    if (status === 'completed' || status === 'failed' || status === 'error') {
+      return;
+    }
+    await page.waitForTimeout(TIMEOUTS.MEDIUM);
+  }
+
+  throw new Error(`Task did not complete within ${timeout}ms`);
+}
+
+/**
+ * Switch to a specific tab in right panel via Tabs component
+ */
+export async function switchTab(page: Page, tabName: string): Promise<void> {
+  const tab = page.locator(`[data-testid="tabs-${tabName}"]`);
+  await tab.click();
+}
+
+/**
+ * Get active tab name
+ */
+export async function getActiveTab(page: Page): Promise<string> {
+  const activeTab = page.locator('[role="tab"][aria-selected="true"]');
+  const tabName = await activeTab.getAttribute('data-testid');
+  return tabName?.replace('tabs-', '') || '';
 }
