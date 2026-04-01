@@ -5,7 +5,7 @@
 **Branch:** main
 
 ## Overview
-Monorepo: browser automation system with AI orchestration. Four pnpm workspace packages — debug-ui (Vite frontend), proxy-adapter (Fastify backend :3000), playwright-server (browser service :3001), shared (types/utils).
+Monorepo: browser automation system with AI orchestration. Four pnpm workspace packages — debug-ui (React 19 + Vite frontend), proxy-adapter (Fastify backend :3000), playwright-server (browser service :3001), shared (types/utils).
 
 ## Structure
 ```
@@ -21,7 +21,7 @@ Monorepo: browser automation system with AI orchestration. Four pnpm workspace p
 ## Where To Look
 | Task | Location | Notes |
 |------|----------|-------|
-| Frontend source | `debug-ui/js/` | chat.ts, liveview.ts, playwright.ts, websocket.ts |
+| Frontend source | `debug-ui/src/` | React app: app/, features/, shared/ |
 | Backend entry | `proxy-adapter/src/server.ts` | Env load, routes, dev proxy, prod static |
 | Task execution | `proxy-adapter/src/services/` | TaskService, Orchestrator, StepRunner |
 | AI providers | `proxy-adapter/src/clients/` | Decision + vision factories, Vercel AI SDK |
@@ -45,7 +45,7 @@ stop.bat              # Windows: kill listeners on 3000, 3001, 5173
 ```
 
 ## Architecture
-- `debug-ui` owns all frontend. Vite dev server in dev, `proxy-adapter` serves `debug-ui/dist` in prod.
+- `debug-ui` owns all frontend. React 19 + Vite. Vite dev server in dev, `proxy-adapter` serves `debug-ui/dist` in prod.
 - `proxy-adapter` owns HTTP APIs, WebSocket, AI orchestration. Talks to playwright-server over HTTP.
 - `playwright-server` owns Playwright/browser control. No business logic from proxy-adapter.
 - `shared` is the cross-package contract. Import as `@nebula-link-evo/shared`.
@@ -54,7 +54,7 @@ stop.bat              # Windows: kill listeners on 3000, 3001, 5173
 - TypeScript with `.js` extension for local imports.
 - 2-space indent, single quotes, strict typing.
 - Service/facade patterns over large route handlers. Route handlers are thin.
-- Framework-free frontend (plain TypeScript + DOM APIs).
+- React 19 frontend with hooks, CSS Modules, Zustand stores, TanStack Query.
 - TypeBox for Fastify schema validation. Zod for runtime validation in clients.
 
 ## Anti-Patterns

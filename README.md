@@ -36,7 +36,7 @@ Browser ←→ Debug UI (:5173 dev / :3000/debug prod)
 
 ### 实时观测与控制
 
-**Debug UI**：6 个面板实时监控系统状态，包括 Monitor（监控）、Control（控制）、AI（AI 对话）、History（历史）、Interactions（交互）、DOM Elements（DOM 元素）。
+**Debug UI**：基于 React 19 的 6 个面板实时监控系统状态，包括 Monitor（监控）、Control（控制）、AI（AI 对话）、History（历史）、Interactions（交互）、DOM Elements（DOM 元素）。
 
 **双画布系统**：MJPEG 30FPS 实时视频流和带标注的截图画面，同步显示浏览器状态和 AI 分析结果。
 
@@ -48,7 +48,7 @@ Browser ←→ Debug UI (:5173 dev / :3000/debug prod)
 
 | Layer | Tech |
 |-------|------|
-| Frontend | TypeScript + DOM APIs (framework-free) |
+| Frontend | React 19 + TypeScript + Vite + CSS Modules |
 | Backend | Node.js + Fastify 5 |
 | Browser | Playwright + Chromium |
 | AI | Vercel AI SDK (@ai-sdk/openai-compatible, @ai-sdk/openai, GLM JWT adapter) |
@@ -98,7 +98,8 @@ curl http://localhost:3000/api/health
 ## Project Structure
 
 ```
-debug-ui/           # Frontend (TypeScript + DOM)
+debug-ui/           # Frontend (React 19 + TypeScript + Vite)
+debug-ui-legacy/    # Legacy frontend (preserved temporarily for reference, do not modify)
 proxy-adapter/      # Backend (Fastify, AI orchestration)
 playwright-server/  # Browser service (Playwright)
 shared/             # Shared types & utils (@nebula-link-evo/shared)
