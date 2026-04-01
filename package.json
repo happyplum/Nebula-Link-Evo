@@ -4,16 +4,18 @@
   "scripts": {
     "dev": "pnpm --filter shared build && pnpm -r --parallel --filter debug-ui --filter proxy-adapter --filter playwright-server dev",
     "build": "pnpm --filter shared build && pnpm --filter debug-ui build && pnpm --filter playwright-server build && pnpm --filter proxy-adapter build",
-    "lint": "eslint debug-ui/js proxy-adapter/src playwright-server/src",
-    "lint:fix": "eslint debug-ui/js proxy-adapter/src playwright-server/src --fix",
-    "format": "prettier --write \"debug-ui/**/*.ts\" \"proxy-adapter/src/**/*.ts\" \"playwright-server/src/**/*.ts\"",
-    "format:check": "prettier --check \"debug-ui/**/*.ts\" \"proxy-adapter/src/**/*.ts\" \"playwright-server/src/**/*.ts\"",
+    "lint": "eslint debug-ui/src proxy-adapter/src playwright-server/src",
+    "lint:fix": "eslint debug-ui/src proxy-adapter/src playwright-server/src --fix",
+    "format": "prettier --write \"debug-ui/src/**/*.{ts,tsx}\" \"proxy-adapter/src/**/*.ts\" \"playwright-server/src/**/*.ts\"",
+    "format:check": "prettier --check \"debug-ui/src/**/*.{ts,tsx}\" \"proxy-adapter/src/**/*.ts\" \"playwright-server/src/**/*.ts\"",
     "test": "pnpm -r test",
     "test:coverage": "pnpm -r test:coverage"
   },
   "devDependencies": {
     "@eslint/js": "^9.18.0",
     "eslint": "^9.18.0",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
     "prettier": "^3.4.2",
     "typescript": "catalog:",
     "typescript-eslint": "^8.20.0"
