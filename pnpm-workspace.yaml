@@ -1,5 +1,6 @@
 packages:
   - debug-ui
+  - debug-ui-legacy
   - shared
   - proxy-adapter
   - playwright-server
