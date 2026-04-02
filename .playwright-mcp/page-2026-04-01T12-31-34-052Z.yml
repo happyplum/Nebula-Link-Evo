@@ -1,0 +1,9 @@
+- generic [ref=e62]:
+  - combobox [ref=e64] [cursor=pointer]:
+    - option "Select a session..." [disabled] [selected]
+  - generic [ref=e66]: No messages yet. Start a conversation!
+  - generic [ref=e70]: Ready
+  - generic [ref=e71]:
+    - textbox "Waiting..." [disabled] [ref=e72]
+    - button "Send message" [disabled] [ref=e73]:
+      - img "Send" [ref=e74]

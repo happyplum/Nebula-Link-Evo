@@ -1,0 +1,6 @@
+- generic [ref=e116]:
+  - img "Error" [ref=e118]
+  - heading "Something went wrong" [level=2] [ref=e120]
+  - paragraph [ref=e121]: An unexpected error occurred while rendering this component.
+  - generic [ref=e122]: "Error: Maximum update depth exceeded. This can happen when a component repeatedly calls setState inside componentWillUpdate or componentDidUpdate. React limits the number of nested updates to prevent infinite loops."
+  - button "Try Again" [ref=e123] [cursor=pointer]

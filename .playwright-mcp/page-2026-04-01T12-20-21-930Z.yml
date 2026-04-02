@@ -1,0 +1,58 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - button "🎮" [ref=e5] [cursor=pointer]
+    - button "⚙️" [active] [ref=e6] [cursor=pointer]
+    - button "📋" [ref=e7] [cursor=pointer]
+    - button "💬" [ref=e8] [cursor=pointer]
+  - complementary [ref=e9]:
+    - heading "🌌 Nebula Debug" [level=1] [ref=e11]
+    - generic [ref=e12]:
+      - generic [ref=e13]:
+        - generic [ref=e17]: "WS: connected"
+        - generic [ref=e21]: "PW: unhealthy"
+      - heading "Configuration" [level=2] [ref=e59]
+      - generic [ref=e60]:
+        - generic [ref=e61]:
+          - heading "System Health" [level=2] [ref=e62]
+          - generic [ref=e65]: Issues Detected
+        - generic [ref=e66]:
+          - generic [ref=e67]:
+            - generic [ref=e68]: Playwright Service
+            - generic [ref=e72]: Disconnected
+          - generic [ref=e73]:
+            - generic [ref=e74]: WebSocket Connections
+            - generic [ref=e75]: 2 active
+          - generic [ref=e76]:
+            - generic [ref=e77]: MCP Status
+            - generic [ref=e81]: 1 servers
+      - generic [ref=e82]:
+        - heading "System Configuration" [level=2] [ref=e83]
+        - generic [ref=e84]:
+          - generic [ref=e85]:
+            - generic [ref=e86]: Mode
+            - generic [ref=e87]: separation
+          - generic [ref=e88]:
+            - generic [ref=e89]: Vision Model
+            - generic [ref=e90]: nvidia / qwen/qwen3.5-122b-a10b
+          - generic [ref=e91]:
+            - generic [ref=e92]: Decision Model
+            - generic [ref=e93]: nvidia / nvidia/nemotron-3-super-120b-a12b
+      - generic [ref=e94]:
+        - generic [ref=e95]:
+          - heading "MCP Servers" [level=2] [ref=e96]
+          - generic [ref=e99]: Enabled
+        - list [ref=e100]:
+          - listitem [ref=e101]:
+            - generic [ref=e105]: browser-control
+            - generic [ref=e107]: 21 tools
+  - main [ref=e43]:
+    - heading "Live View" [level=2] [ref=e45]
+    - 'button "Picker: off" [ref=e49]'
+  - complementary [ref=e50]:
+    - generic [ref=e52]:
+      - tablist [ref=e53]:
+        - tab "Decisions" [selected] [ref=e54] [cursor=pointer]
+        - tab "Interactions" [ref=e55] [cursor=pointer]
+        - tab "AI Log" [ref=e56] [cursor=pointer]
+      - tabpanel "Decisions" [ref=e57]:
+        - generic [ref=e58]: Placeholder for decisions
