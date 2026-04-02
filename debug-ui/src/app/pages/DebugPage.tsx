@@ -2,11 +2,13 @@ import { useNavigate } from 'react-router-dom';
 import { useLayoutStore, selectActiveActivityIcon, selectActiveRightTab, type ActivityIcon, type RightPanelTab } from '@/features/layout/store/layout.store.js';
 import { useRuntimeStore, selectConnectionStatus, selectPlaywrightStatus } from '@/features/runtime/store/runtime.store.js';
 import { useDebugSocket } from '@/features/runtime/hooks/useDebugSocket.js';
+import { MonitorSidebarShell } from '@/features/runtime/components/MonitorSidebarShell.js';
+import { MonitorMainShell } from '@/features/runtime/components/MonitorMainShell.js';
 import { ControlPanel } from '@/features/playwright-control/components/ControlPanel.js';
 import { SelectedElementCard } from '@/features/playwright-control/components/SelectedElementCard.js';
-import { HistoryTable } from '@/features/history/components/HistoryTable.js';
-import { InteractionsTable } from '@/features/history/components/InteractionsTable.js';
+import { HistoryShell, InteractionsShell } from '@/features/history/components/index.js';
 import { LiveViewCanvas } from '@/features/liveview/components/LiveViewCanvas.js';
+import { AiToolbarShell, ChatMessageAreaShell, ChatComposerShell } from '@/features/chat/components/index.js';
 import { StatusIndicator } from '@/shared/ui/StatusIndicator.js';
 import { Tabs } from '@/shared/ui/Tabs.js';
 import { testIds } from '@/shared/testing/testids.js';
@@ -61,7 +63,7 @@ export default function DebugPage() {
   const renderSidebarContent = () => {
     switch (activeIcon) {
       case 'monitor':
-        return <div style={{ padding: '8px', color: 'var(--text-muted)' }}>Monitor panel</div>;
+        return <MonitorSidebarShell />;
       case 'control':
         return (
           <>
@@ -70,16 +72,17 @@ export default function DebugPage() {
           </>
         );
       case 'ai':
-        return <div style={{ padding: '8px', color: 'var(--text-muted)' }}>AI panel</div>;
-      case 'history':
         return (
-          <>
-            <HistoryTable />
-            <InteractionsTable />
-          </>
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            <AiToolbarShell />
+            <ChatMessageAreaShell />
+            <ChatComposerShell />
+          </div>
         );
+      case 'history':
+        return <HistoryShell />;
       case 'interactions':
-        return <div style={{ padding: '8px', color: 'var(--text-muted)' }}>Interactions panel</div>;
+        return <InteractionsShell />;
       default:
         return null;
     }
@@ -130,12 +133,18 @@ export default function DebugPage() {
 
       {/* Main Area */}
       <main className={styles.main} data-testid={testIds.debugMain}>
-        <div className={styles.mainHeader}>
-          <h2 className={styles.mainTitle}>Live View</h2>
-        </div>
-        <div className={styles.mainContent}>
-          <LiveViewCanvas />
-        </div>
+        {activeIcon === 'monitor' ? (
+          <MonitorMainShell />
+        ) : (
+          <>
+            <div className={styles.mainHeader}>
+              <h2 className={styles.mainTitle}>Live View</h2>
+            </div>
+            <div className={styles.mainContent}>
+              <LiveViewCanvas />
+            </div>
+          </>
+        )}
       </main>
 
       {/* Right Panel */}

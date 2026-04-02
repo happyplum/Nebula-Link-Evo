@@ -1,0 +1,101 @@
+- generic [active]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - heading "选择人员" [level=2] [ref=e4]
+      - button [ref=e5] [cursor=pointer]
+    - generic [ref=e7]:
+      - generic [ref=e8]:
+        - generic [ref=e10] [cursor=pointer]:
+          - img [ref=e11]
+          - generic [ref=e12]: 快速选择
+        - generic [ref=e13]:
+          - generic [ref=e14]:
+            - img [ref=e15]
+            - generic [ref=e16]: 内部人员
+          - generic [ref=e17]: "156"
+        - generic [ref=e18]:
+          - generic [ref=e19]:
+            - img [ref=e20]
+            - generic [ref=e21]: 企业人员
+          - generic [ref=e22]: "243"
+        - generic [ref=e23]:
+          - generic [ref=e24]:
+            - img [ref=e25]
+            - generic [ref=e26]: 公寓人员
+          - generic [ref=e27]: "89"
+        - generic [ref=e28]:
+          - generic [ref=e29]:
+            - img [ref=e30]
+            - generic [ref=e31]: 住宅人员
+          - generic [ref=e32]: "312"
+        - generic [ref=e33]:
+          - generic [ref=e34]:
+            - img [ref=e35]
+            - generic [ref=e36]: 三方人员
+          - generic [ref=e37]: "67"
+        - generic [ref=e38] [cursor=pointer]:
+          - generic [ref=e39]:
+            - img [ref=e40]
+            - generic [ref=e41]: 人员标签
+          - generic [ref=e42]: "10"
+      - generic [ref=e43]:
+        - generic [ref=e44]:
+          - img [ref=e45]
+          - textbox "搜索姓名、工号、企业名称、房号、地址、联系方式进行查询" [ref=e46]
+        - generic [ref=e49]:
+          - generic [ref=e50]:
+            - generic [ref=e51] [cursor=pointer]:
+              - img [ref=e52]
+              - img [ref=e54]
+              - generic [ref=e55]: "931"
+              - generic [ref=e56]: 全部人员
+              - generic [ref=e57]: 包含全部人员
+            - generic [ref=e58]:
+              - img [ref=e60]
+              - generic [ref=e61]: "156"
+              - generic [ref=e62]: 内部人员
+              - generic [ref=e63]: 包含内部人员
+            - generic [ref=e64]:
+              - img [ref=e66]
+              - generic [ref=e67]: "243"
+              - generic [ref=e68]: 企业人员
+              - generic [ref=e69]: 已入驻企业员工和管理员
+            - generic [ref=e70]:
+              - img [ref=e72]
+              - generic [ref=e73]: "89"
+              - generic [ref=e74]: 公寓人员
+              - generic [ref=e75]: 承租人、同住人、户主
+            - generic [ref=e76]:
+              - img [ref=e78]
+              - generic [ref=e79]: "312"
+              - generic [ref=e80]: 住宅人员
+              - generic [ref=e81]: 住宅区所有住户
+            - generic [ref=e82]:
+              - img [ref=e84]
+              - generic [ref=e85]: "67"
+              - generic [ref=e86]: 三方人员
+              - generic [ref=e87]: 合作伙伴、外包团队等
+          - generic [ref=e88]:
+            - heading "使用提示" [level=3] [ref=e89]
+            - list [ref=e90]:
+              - listitem [ref=e91]: • 点击上方卡片可快速选择对应类别的人员
+              - listitem [ref=e92]: • 使用左侧菜单可按类别详细选择
+              - listitem [ref=e93]: • 搜索功能支持多条件配置，快速定位人员
+              - listitem [ref=e94]: • 人员标签功能可按标签批量选择人员组
+      - generic [ref=e95]:
+        - generic [ref=e96]:
+          - generic [ref=e97]:
+            - generic [ref=e98]: 已选项目
+            - generic [ref=e99]: 共 0 项
+          - button "清空" [ref=e100] [cursor=pointer]:
+            - img [ref=e101]
+            - generic [ref=e102]: 清空
+        - generic [ref=e103]:
+          - img [ref=e104]
+          - textbox "搜索条件进行查询" [ref=e105]
+        - button "确认选择" [ref=e108] [cursor=pointer]
+  - generic [ref=e109]:
+    - generic "Toggle devtools panel" [ref=e110] [cursor=pointer]:
+      - img [ref=e111]
+    - generic "Toggle Component Inspector" [ref=e116] [cursor=pointer]:
+      - img [ref=e117]

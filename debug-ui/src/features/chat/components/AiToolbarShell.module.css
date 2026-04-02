@@ -1,0 +1,67 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+}
+
+.sessionRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sessionSelect {
+  flex: 1;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  outline: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.stateControls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+}
+
+.btn:hover {
+  color: var(--text-primary);
+  border-color: var(--border-hover);
+  background: var(--bg-elevated);
+}
+
+.btnStop {
+  color: var(--accent-warning);
+  border-color: var(--accent-warning-subtle);
+}
+
+.btnStop:hover {
+  color: var(--accent-warning);
+  background: var(--accent-warning-subtle);
+  border-color: var(--accent-warning);
+}
