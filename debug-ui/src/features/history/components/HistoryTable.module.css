@@ -1,0 +1,98 @@
+.container {
+  width: 100%;
+  overflow-x: auto;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+}
+
+.loading,
+.error,
+.empty {
+  display: flex;
+  justify-content: center;
+  padding: 3rem;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.875rem;
+}
+
+.table th {
+  padding: 0.75rem 1rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border-glass);
+  color: var(--text-primary);
+}
+
+.row {
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.row:hover {
+  background: var(--bg-elevated);
+}
+
+.row:last-child td {
+  border-bottom: none;
+}
+
+.instructionCell {
+  max-width: 300px;
+}
+
+.instruction {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timeCell {
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.stepCell {
+  font-variant-numeric: tabular-nums;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.completed {
+  background: var(--accent-success-subtle);
+  color: var(--accent-success);
+}
+
+.failed {
+  background: var(--accent-error-subtle);
+  color: var(--accent-error);
+}
+
+.running {
+  background: var(--accent-info-subtle);
+  color: var(--accent-info);
+}
