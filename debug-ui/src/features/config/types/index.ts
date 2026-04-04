@@ -78,6 +78,7 @@ export interface KeyStatus {
   displayName?: string;
   status: 'valid' | 'not_set';
   keyPreview: string;
+  error?: string;
 }
 
 export interface VerifyKeysResponse {
