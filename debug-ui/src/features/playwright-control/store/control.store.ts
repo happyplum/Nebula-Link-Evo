@@ -1,10 +1,32 @@
 import { create } from 'zustand';
 
+export interface BBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface SelectedElement {
   selector: string;
   tag: string;
   text?: string;
   attributes?: Record<string, string>;
+  markerNumber?: number;
+  bbox?: BBox;
+  dataNebulaId?: string;
+}
+
+export interface DomElement {
+  markerNumber: number;
+  tag: string;
+  id?: string;
+  text?: string;
+  bbox?: BBox;
+  isVisible?: boolean;
+  isInteractable?: boolean;
+  dataNebulaId?: string;
+  locatorBundle?: Record<string, string>;
 }
 
 export interface ConsoleMessage {
@@ -24,6 +46,13 @@ interface PlaywrightControlState {
   isExecutingAction: boolean;
   lastActionError: string | null;
   viewport: Viewport | null;
+  browserOpen: boolean;
+  browserUrl: string;
+  markerToggle: boolean;
+  snapshotId: string | null;
+  domElements: DomElement[];
+  elementPickerEnabled: boolean;
+  highlightedElementId: string | null;
 
   setSelectedElement: (element: SelectedElement | null) => void;
   clearSelectedElement: () => void;
@@ -31,8 +60,23 @@ interface PlaywrightControlState {
   setExecutingAction: (executing: boolean) => void;
   setActionError: (error: string | null) => void;
   setViewport: (viewport: Viewport | null) => void;
+  setBrowserOpen: (open: boolean) => void;
+  setBrowserUrl: (url: string) => void;
+  setMarkerToggle: (v: boolean) => void;
+  setSnapshotId: (id: string | null) => void;
+  setDomElements: (els: DomElement[]) => void;
+  setElementPickerEnabled: (v: boolean) => void;
+  setHighlightedElementId: (id: string | null) => void;
   reset: () => void;
 }
+
+const persistedMarkerToggle = (() => {
+  try {
+    return localStorage.getItem('showMarkerNumbers') === 'true';
+  } catch {
+    return false;
+  }
+})();
 
 const initialState = {
   selectedElement: null as SelectedElement | null,
@@ -40,6 +84,13 @@ const initialState = {
   isExecutingAction: false,
   lastActionError: null as string | null,
   viewport: null as Viewport | null,
+  browserOpen: false,
+  browserUrl: '',
+  markerToggle: persistedMarkerToggle,
+  snapshotId: null as string | null,
+  domElements: [] as DomElement[],
+  elementPickerEnabled: false,
+  highlightedElementId: null as string | null,
 };
 
 export const useControlStore = create<PlaywrightControlState>()((set) => ({
@@ -51,6 +102,18 @@ export const useControlStore = create<PlaywrightControlState>()((set) => ({
   setExecutingAction: (executing) => set({ isExecutingAction: executing }),
   setActionError: (error) => set({ lastActionError: error }),
   setViewport: (viewport) => set({ viewport }),
+  setBrowserOpen: (open) => set({ browserOpen: open }),
+  setBrowserUrl: (url) => set({ browserUrl: url }),
+  setMarkerToggle: (v) => {
+    try {
+      localStorage.setItem('showMarkerNumbers', String(v));
+    } catch { /* storage unavailable */ }
+    set({ markerToggle: v });
+  },
+  setSnapshotId: (id) => set({ snapshotId: id }),
+  setDomElements: (els) => set({ domElements: els }),
+  setElementPickerEnabled: (v) => set({ elementPickerEnabled: v }),
+  setHighlightedElementId: (id) => set({ highlightedElementId: id }),
   reset: () => set(initialState),
 }));
 
@@ -64,3 +127,12 @@ export const selectIsExecutingAction = (s: PlaywrightControlState) =>
 export const selectLastActionError = (s: PlaywrightControlState) =>
   s.lastActionError;
 export const selectViewport = (s: PlaywrightControlState) => s.viewport;
+export const selectBrowserOpen = (s: PlaywrightControlState) => s.browserOpen;
+export const selectBrowserUrl = (s: PlaywrightControlState) => s.browserUrl;
+export const selectMarkerToggle = (s: PlaywrightControlState) => s.markerToggle;
+export const selectSnapshotId = (s: PlaywrightControlState) => s.snapshotId;
+export const selectDomElements = (s: PlaywrightControlState) => s.domElements;
+export const selectElementPickerEnabled = (s: PlaywrightControlState) =>
+  s.elementPickerEnabled;
+export const selectHighlightedElementId = (s: PlaywrightControlState) =>
+  s.highlightedElementId;
