@@ -8,11 +8,13 @@ import { apiClient } from '@/shared/api/client.js';
 import {
   DEBUG_INTERACTIONS,
   DEBUG_INTERACTION_STATS,
+  DEBUG_FAILURE_SAMPLE,
   DEBUG_TASKS,
   debugTaskDetail,
 } from '@/shared/api/endpoints.js';
 import { queryKeys } from '@/shared/query/query-keys.js';
 import type {
+  FailureSampleResponse,
   Interaction,
   InteractionFilters,
   InteractionStats,
@@ -81,5 +83,18 @@ export function useTaskDetail(id: string) {
     queryKey: queryKeys.tasks.detail(id),
     queryFn: () => apiClient.get<TaskDetail>(debugTaskDetail(id)),
     enabled: !!id,
+  });
+}
+
+/** GET /debug/api/failure-sample?path=<path> — failure screenshot, DOM, and error context. */
+export function useFailureSample(path: string | null) {
+  return useQuery({
+    queryKey: queryKeys.interactions.failureSample(path!),
+    queryFn: () =>
+      apiClient.get<FailureSampleResponse>(DEBUG_FAILURE_SAMPLE, {
+        path: path!,
+      }),
+    enabled: !!path,
+    staleTime: 5 * 60 * 1000,
   });
 }
