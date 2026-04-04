@@ -9,6 +9,8 @@ interface RuntimeState {
   playwrightStatus: ServiceStatus;
   playwrightIsOpen: boolean;
   playwrightUrl: string | null;
+  snapshotVersion: number;
+  lastScreenshotDataUrl: string | null;
 
   setConnectionStatus: (status: ConnectionStatus) => void;
   setReconnectAttempt: (attempt: number) => void;
@@ -17,6 +19,9 @@ interface RuntimeState {
   setPlaywrightStatus: (status: ServiceStatus) => void;
   setPlaywrightIsOpen: (isOpen: boolean) => void;
   setPlaywrightUrl: (url: string | null) => void;
+  setSnapshotVersion: (version: number) => void;
+  incrementSnapshotVersion: () => void;
+  setLastScreenshotDataUrl: (url: string | null) => void;
   reset: () => void;
 }
 
@@ -26,6 +31,8 @@ const initialState = {
   playwrightStatus: 'unknown' as ServiceStatus,
   playwrightIsOpen: false,
   playwrightUrl: null as string | null,
+  snapshotVersion: 0,
+  lastScreenshotDataUrl: null as string | null,
 };
 
 export const useRuntimeStore = create<RuntimeState>()((set) => ({
@@ -39,6 +46,9 @@ export const useRuntimeStore = create<RuntimeState>()((set) => ({
   setPlaywrightStatus: (status) => set({ playwrightStatus: status }),
   setPlaywrightIsOpen: (isOpen) => set({ playwrightIsOpen: isOpen }),
   setPlaywrightUrl: (url) => set({ playwrightUrl: url }),
+  setSnapshotVersion: (version) => set({ snapshotVersion: version }),
+  incrementSnapshotVersion: () => set((s) => ({ snapshotVersion: s.snapshotVersion + 1 })),
+  setLastScreenshotDataUrl: (url) => set({ lastScreenshotDataUrl: url }),
   reset: () => set(initialState),
 }));
 
@@ -48,3 +58,5 @@ export const selectReconnectAttempt = (s: RuntimeState) => s.reconnectAttempt;
 export const selectPlaywrightStatus = (s: RuntimeState) => s.playwrightStatus;
 export const selectPlaywrightIsOpen = (s: RuntimeState) => s.playwrightIsOpen;
 export const selectPlaywrightUrl = (s: RuntimeState) => s.playwrightUrl;
+export const selectSnapshotVersion = (s: RuntimeState) => s.snapshotVersion;
+export const selectLastScreenshotDataUrl = (s: RuntimeState) => s.lastScreenshotDataUrl;
