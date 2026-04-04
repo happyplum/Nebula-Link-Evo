@@ -7,6 +7,8 @@ import { testIds } from '@/shared/testing/testids.js';
 vi.mock('../../store/chat.store.js', () => ({
   useChatStore: vi.fn(),
   selectActiveMessages: (s: any) => s.activeSessionId ? (s.messagesBySession[s.activeSessionId] || []) : [],
+  selectActiveSessionId: (s: any) => s.activeSessionId,
+  selectShowThinking: (s: any) => s.showThinking,
 }));
 
 describe('MessageList', () => {
@@ -15,7 +17,15 @@ describe('MessageList', () => {
   });
 
   it('renders empty state when no messages', () => {
-    (useChatStore as any).mockImplementation(() => []);
+    (useChatStore as any).mockImplementation((selector: any) =>
+      selector({
+        activeSessionId: 'session-1',
+        showThinking: false,
+        messagesBySession: { 'session-1': [] },
+        visibleMessageCounts: {},
+        expandVisibleMessages: vi.fn(),
+      }),
+    );
 
     render(<MessageList />);
     
@@ -28,8 +38,16 @@ describe('MessageList', () => {
       { id: '1', role: 'user', content: 'Hello' },
       { id: '2', role: 'assistant', content: 'Hi there' },
     ];
-    
-    (useChatStore as any).mockImplementation(() => messages);
+
+    (useChatStore as any).mockImplementation((selector: any) =>
+      selector({
+        activeSessionId: 'session-1',
+        showThinking: false,
+        messagesBySession: { 'session-1': messages },
+        visibleMessageCounts: { 'session-1': 50 },
+        expandVisibleMessages: vi.fn(),
+      }),
+    );
 
     render(<MessageList />);
     

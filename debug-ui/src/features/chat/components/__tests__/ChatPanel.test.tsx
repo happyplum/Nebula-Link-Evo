@@ -1,34 +1,27 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { ChatPanel } from '../ChatPanel.js';
-import { useChatStore } from '../../store/chat.store.js';
 import { testIds } from '@/shared/testing/testids.js';
 
-// Mock the store
-vi.mock('../../store/chat.store.js', () => ({
-  useChatStore: vi.fn(),
-  selectSessions: (s: any) => s.sessions,
-  selectActiveSessionId: (s: any) => s.activeSessionId,
-  selectActiveMessages: (s: any) => s.activeSessionId ? (s.messagesBySession[s.activeSessionId] || []) : [],
-  selectStreamingState: (s: any) => s.streamingState,
+vi.mock('../SessionSelector.js', () => ({
+  SessionSelector: () => <div data-testid={testIds.sessionSelector} />,
+}));
+
+vi.mock('../MessageList.js', () => ({
+  MessageList: () => <div data-testid={testIds.messageList} />,
+}));
+
+vi.mock('../StatusBar.js', () => ({
+  StatusBar: () => <div data-testid={testIds.statusBar} />,
+}));
+
+vi.mock('../Composer.js', () => ({
+  Composer: () => <input data-testid={testIds.composerInput} />,
 }));
 
 describe('ChatPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    
-    // Default mock implementation
-    (useChatStore as any).mockImplementation((selector: any) => {
-      const state = {
-        sessions: [],
-        activeSessionId: null,
-        messagesBySession: {},
-        streamingState: 'idle',
-        setActiveSession: vi.fn(),
-        addOptimisticMessage: vi.fn(),
-      };
-      return selector(state);
-    });
   });
 
   it('renders all sub-components', () => {
