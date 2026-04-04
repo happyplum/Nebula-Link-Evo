@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLayoutStore, selectActiveActivityIcon, selectActiveRightTab, type ActivityIcon, type RightPanelTab } from '@/features/layout/store/layout.store.js';
 import { useRuntimeStore, selectConnectionStatus, selectPlaywrightStatus } from '@/features/runtime/store/runtime.store.js';
@@ -6,12 +7,14 @@ import { MonitorSidebarShell } from '@/features/runtime/components/MonitorSideba
 import { MonitorMainShell } from '@/features/runtime/components/MonitorMainShell.js';
 import { ControlPanel } from '@/features/playwright-control/components/ControlPanel.js';
 import { SelectedElementCard } from '@/features/playwright-control/components/SelectedElementCard.js';
+import { DomElementsTable } from '@/features/playwright-control/components/DomElementsTable.js';
 import { HistoryShell, InteractionsShell } from '@/features/history/components/index.js';
 import { LiveViewCanvas } from '@/features/liveview/components/LiveViewCanvas.js';
-import { AiToolbarShell, ChatMessageAreaShell, ChatComposerShell } from '@/features/chat/components/index.js';
+import ChatPage from './ChatPage.js';
 import { StatusIndicator } from '@/shared/ui/StatusIndicator.js';
 import { Tabs } from '@/shared/ui/Tabs.js';
 import { testIds } from '@/shared/testing/testids.js';
+import { ConfigPanel, HealthStatusCard, McpStatusList, McpToolsModal, ApiKeysStatus, ConnectivityTest, AiTest } from '@/features/config/components/index.js';
 import styles from './DebugPage.module.css';
 
 interface ActivityDef {
@@ -57,6 +60,8 @@ export default function DebugPage() {
   const connectionStatus = useRuntimeStore(selectConnectionStatus);
   const playwrightStatus = useRuntimeStore(selectPlaywrightStatus);
 
+  const [selectedMcpServer, setSelectedMcpServer] = useState<string | null>(null);
+
   // Initialize WebSocket connection
   useDebugSocket();
 
@@ -73,10 +78,8 @@ export default function DebugPage() {
         );
       case 'ai':
         return (
-          <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-            <AiToolbarShell />
-            <ChatMessageAreaShell />
-            <ChatComposerShell />
+          <div className={styles.aiSidebar} style={{ width: '100%', height: '100%', overflow: 'hidden' }}>
+            <ChatPage />
           </div>
         );
       case 'history':
@@ -116,17 +119,7 @@ export default function DebugPage() {
           <h1 className={styles.sidebarTitle}>🌌 Nebula Debug</h1>
         </div>
         <div className={styles.sidebarContent}>
-          <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <StatusIndicator status={connectionStatus === 'connected' ? 'online' : (connectionStatus === 'connecting' || connectionStatus === 'reconnecting') ? 'loading' : 'offline'} />
-              <span data-testid={testIds.connectionStatus} style={{ fontSize: '12px' }}>WS: {connectionStatus}</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <StatusIndicator status={playwrightStatus === 'ready' ? 'online' : playwrightStatus === 'unhealthy' ? 'error' : 'offline'} />
-              <span data-testid={testIds.playwrightStatus} style={{ fontSize: '12px' }}>PW: {playwrightStatus}</span>
-            </div>
-          </div>
-          <h2 style={{ fontSize: '14px', margin: '0 0 8px 0' }}>{SIDEBAR_TITLES[activeIcon]}</h2>
+          <h2 className={styles.sectionTitle}>{SIDEBAR_TITLES[activeIcon]}</h2>
           {renderSidebarContent()}
         </div>
       </aside>
@@ -152,24 +145,35 @@ export default function DebugPage() {
         <div className={styles.rightPanelContent}>
           <Tabs 
             tabs={[
-              { id: 'dom-elements', label: 'DOM Elements' },
-              { id: 'config', label: 'Config' }
+              { id: 'dom-elements', label: '📍 DOM Elements' },
+              { id: 'config', label: '⚙️ 配置' }
             ]}
             activeTab={activeRightTab}
             onTabChange={(id) => setActiveRightTab(id as RightPanelTab)}
           >
             {activeRightTab === 'dom-elements' ? (
-              <div data-testid={testIds.rightPanelTabDomElements} style={{ padding: '16px', color: 'var(--text-muted)' }}>
-                <h3 style={{ fontSize: '14px', margin: '0 0 8px 0' }}>DOM Elements</h3>
+              <div className={styles.domElementsContent} data-testid={testIds.rightPanelTabDomElements}>
+                <DomElementsTable />
+                <SelectedElementCard />
               </div>
             ) : (
-              <div data-testid={testIds.rightPanelTabConfig} style={{ padding: '16px', color: 'var(--text-muted)' }}>
-                <h3 style={{ fontSize: '14px', margin: '0 0 8px 0' }}>Config</h3>
+              <div className={styles.configContent} data-testid={testIds.configContent}>
+                <ConfigPanel />
+                <HealthStatusCard />
+                <McpStatusList onSelectServer={setSelectedMcpServer} />
+                <ApiKeysStatus />
+                <ConnectivityTest />
+                <AiTest />
               </div>
             )}
           </Tabs>
         </div>
       </aside>
+
+      <McpToolsModal
+        serverName={selectedMcpServer}
+        onClose={() => setSelectedMcpServer(null)}
+      />
     </div>
   );
 }
