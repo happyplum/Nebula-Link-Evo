@@ -10,7 +10,12 @@ import path from 'node:path';
 
 // Mock useDebugSocket to prevent actual WebSocket connections
 vi.mock('@/features/runtime/hooks/useDebugSocket.js', () => ({
-  useDebugSocket: vi.fn(),
+  useDebugSocket: vi.fn(() => ({
+    sendMessage: vi.fn(),
+    disconnect: vi.fn(),
+    reconnect: vi.fn(),
+    onMessage: vi.fn(() => vi.fn()),
+  })),
 }));
 
 // Mock useDebugSession to prevent actual API calls
@@ -82,6 +87,11 @@ describe('DebugPage Navigation Parity Test', () => {
     document.head.appendChild(styleElement);
   });
 
+  beforeEach(() => {
+    mockNavigate.mockClear();
+    useLayoutStore.setState({ activeActivityIcon: 'monitor' });
+  });
+
   it('asserts 6 activity buttons render with correct data-testid values', () => {
     renderWithProviders(<DebugPage />);
 
@@ -137,19 +147,19 @@ describe('DebugPage Navigation Parity Test', () => {
     const interactionsButton = screen.getByTestId(testIds.activityBtnInteractions);
 
     // Click each button and verify store state changes
-    monitorButton.click();
+    fireEvent.click(monitorButton);
     expect(useLayoutStore.getState().activeActivityIcon).toBe('monitor');
 
-    controlButton.click();
+    fireEvent.click(controlButton);
     expect(useLayoutStore.getState().activeActivityIcon).toBe('control');
 
-    aiButton.click();
+    fireEvent.click(aiButton);
     expect(useLayoutStore.getState().activeActivityIcon).toBe('ai');
 
-    historyButton.click();
+    fireEvent.click(historyButton);
     expect(useLayoutStore.getState().activeActivityIcon).toBe('history');
 
-    interactionsButton.click();
+    fireEvent.click(interactionsButton);
     expect(useLayoutStore.getState().activeActivityIcon).toBe('interactions');
   });
 

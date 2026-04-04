@@ -10,7 +10,12 @@ import path from 'node:path';
 
 // Mock useDebugSocket to prevent actual WebSocket connections
 vi.mock('@/features/runtime/hooks/useDebugSocket.js', () => ({
-  useDebugSocket: vi.fn(),
+  useDebugSocket: vi.fn(() => ({
+    sendMessage: vi.fn(),
+    disconnect: vi.fn(),
+    reconnect: vi.fn(),
+    onMessage: vi.fn(() => vi.fn()),
+  })),
 }));
 
 // Mock useDebugSession to prevent actual API calls
@@ -84,6 +89,7 @@ describe('Right Panel Shell Parity Test', () => {
 
   beforeEach(() => {
     // Reset store to default state before each test
+    useLayoutStore.setState({ activeActivityIcon: 'monitor' });
     useLayoutStore.setState({ activeRightTab: 'dom-elements' });
   });
 
@@ -120,7 +126,7 @@ describe('Right Panel Shell Parity Test', () => {
 
     // Verify Config tab content now renders
     await waitFor(() => {
-      expect(rightPanelContent.getByTestId(testIds.rightPanelTabConfig)).toBeInTheDocument();
+      expect(rightPanelContent.getByTestId(testIds.configContent)).toBeInTheDocument();
     });
   });
 
@@ -166,7 +172,7 @@ describe('Right Panel Shell Parity Test', () => {
 
     // Now Config tab content should be rendered
     await waitFor(() => {
-      const configTab = rightPanelContent.getByTestId(testIds.rightPanelTabConfig);
+      const configTab = rightPanelContent.getByTestId(testIds.configContent);
 
       // Check for placeholder phrases within Config tab only
       const placeholderPhrases = ['placeholder', 'coming soon', 'TODO', 'TODO:', 'Coming Soon', 'Placeholder'];
@@ -177,7 +183,7 @@ describe('Right Panel Shell Parity Test', () => {
     });
   });
 
-  it('asserts DOM Elements tab renders h3 header', () => {
+  it('asserts DOM Elements tab renders expected content', () => {
     renderWithProviders(<DebugPage />);
 
     const rightPanel = screen.getByTestId(testIds.debugRightPanel);
@@ -185,12 +191,10 @@ describe('Right Panel Shell Parity Test', () => {
 
     const domElementsTab = rightPanelContent.getByTestId(testIds.rightPanelTabDomElements);
 
-    // Verify h3 header with "DOM Elements" text
-    const header = within(domElementsTab).getByRole('heading', { level: 3 });
-    expect(header).toHaveTextContent('DOM Elements');
+    expect(within(domElementsTab).getByTestId(testIds.domElementsTable)).toBeInTheDocument();
   });
 
-  it('asserts Config tab renders h3 header', async () => {
+  it('asserts Config tab renders expected config content', async () => {
     renderWithProviders(<DebugPage />);
 
     const rightPanel = screen.getByTestId(testIds.debugRightPanel);
@@ -202,11 +206,9 @@ describe('Right Panel Shell Parity Test', () => {
 
     // Now Config tab content should be rendered
     await waitFor(() => {
-      const configTab = rightPanelContent.getByTestId(testIds.rightPanelTabConfig);
-
-      // Verify h3 header with "Config" text
-      const header = within(configTab).getByRole('heading', { level: 3 });
-      expect(header).toHaveTextContent('Config');
+      const configTab = rightPanelContent.getByTestId(testIds.configContent);
+      expect(within(configTab).getByTestId(testIds.configPanel)).toBeInTheDocument();
+      expect(within(configTab).getByTestId(testIds.healthStatusCard)).toBeInTheDocument();
     });
   });
 });

@@ -3,9 +3,33 @@ import { render } from '@testing-library/react';
 import ChatPage from './ChatPage.js';
 import { testIds } from '@/shared/testing/testids.js';
 
-// Mock ChatPanel to simplify layout testing and avoid infinite loop
+vi.mock('@/features/chat/store/chat.store.js', () => ({
+  useChatStore: vi.fn((selector: (s: any) => unknown) =>
+    selector({
+      streamingState: 'idle',
+      activeSessionId: null,
+      showThinking: false,
+      selectedModel: 'decision',
+      addSession: vi.fn(),
+      removeSession: vi.fn(),
+      setActiveSession: vi.fn(),
+      setStreamingState: vi.fn(),
+      setShowThinking: vi.fn(),
+      setSelectedModel: vi.fn(),
+    }),
+  ),
+  selectShowThinking: (s: any) => s.showThinking,
+  selectSelectedModel: (s: any) => s.selectedModel,
+  selectStreamingState: (s: any) => s.streamingState,
+  selectActiveSessionId: (s: any) => s.activeSessionId,
+}));
+
+// Mock chat sub-components used by ChatPage
 vi.mock('@/features/chat/components/index.js', () => ({
-  ChatPanel: () => <div data-testid={testIds.chatPanel}>Mock ChatPanel</div>,
+  SessionSelector: () => <div data-testid={testIds.sessionSelector}>SessionSelector</div>,
+  MessageList: () => <div data-testid={testIds.messageList}>MessageList</div>,
+  StatusBar: () => <div data-testid={testIds.statusBar}>StatusBar</div>,
+  Composer: () => <textarea data-testid={testIds.composerInput} />,
 }));
 
 describe('ChatPage Layout', () => {
