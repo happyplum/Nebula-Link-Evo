@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useRuntimeStore } from '@/features/runtime/store/runtime.store.js';
+import { queryClient } from '@/shared/query/query-client.js';
+import { queryKeys } from '@/shared/query/query-keys.js';
 
 interface ServiceStatusPayload {
   playwright?: {
@@ -7,6 +9,7 @@ interface ServiceStatusPayload {
     url?: string;
     status?: 'healthy' | 'unhealthy';
   };
+  mcp?: unknown;
 }
 
 interface ParsedMessage {
@@ -20,6 +23,9 @@ const MAX_RECONNECT_ATTEMPTS = 5;
 
 export interface UseDebugSocketReturn {
   sendMessage: (type: string, data?: Record<string, unknown>) => void;
+  pauseTask: () => void;
+  resumeTask: () => void;
+  singleStep: () => void;
   disconnect: () => void;
   reconnect: () => void;
   onMessage: (handler: (data: unknown) => void) => () => void;
@@ -69,6 +75,12 @@ export function useDebugSocket(): UseDebugSocketReturn {
             services.playwright.status === 'healthy' ? 'ready' : 'unhealthy',
           );
         }
+      }
+      
+      // M5: Sync MCP WebSocket updates to UI by invalidating React Query cache
+      if (services.mcp) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.mcp.status });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.mcp.tools });
       }
     }
   }, []);
@@ -149,12 +161,21 @@ export function useDebugSocket(): UseDebugSocketReturn {
 
   const sendMessage = useCallback(
     (type: string, data?: Record<string, unknown>) => {
+      const whitelist = ['pause', 'resume', 'step', 'start', 'stop', 'cancel', 'status', 'ping', 'config'];
+      if (!whitelist.includes(type)) {
+        console.warn(`WebSocket command '${type}' is not in whitelist.`);
+        return;
+      }
       const ws = wsRef.current;
       if (!ws || ws.readyState !== WebSocket.OPEN) return;
       ws.send(JSON.stringify({ type, ...data }));
     },
     [],
   );
+
+  const pauseTask = useCallback(() => sendMessage('pause'), [sendMessage]);
+  const resumeTask = useCallback(() => sendMessage('resume'), [sendMessage]);
+  const singleStep = useCallback(() => sendMessage('step'), [sendMessage]);
 
   const disconnect = useCallback(() => {
     isManualCloseRef.current = true;
@@ -201,5 +222,5 @@ export function useDebugSocket(): UseDebugSocketReturn {
     };
   }, [clearReconnectTimer, connect]);
 
-  return { sendMessage, disconnect, reconnect, onMessage };
+  return { sendMessage, pauseTask, resumeTask, singleStep, disconnect, reconnect, onMessage };
 }
