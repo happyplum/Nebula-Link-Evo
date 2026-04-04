@@ -49,7 +49,7 @@ describe('MonitorMainShell Parity Test', () => {
     // Verify header title
     const header = screen.getByTestId(testIds.monitorMainHeader);
     expect(within(header).getByText('📸 实时监控')).toBeInTheDocument();
-    expect(within(header).getByTestId(testIds.monitorMainStatusBadge)).toHaveTextContent('未连接');
+    expect(within(header).getByTestId(testIds.monitorMainStatusBadge)).toHaveTextContent('连接中...');
 
     // Verify task strip text
     const taskStrip = screen.getByTestId(testIds.monitorMainTaskStrip);
@@ -65,7 +65,7 @@ describe('MonitorMainShell Parity Test', () => {
 
     // Verify command input placeholder
     const commandInput = screen.getByTestId(testIds.monitorMainCommandInput);
-    expect(commandInput).toHaveAttribute('placeholder', '输入指令...');
+    expect(commandInput).toHaveAttribute('placeholder', '输入指令 (pause/resume/step)...');
     expect(screen.getByTestId(testIds.monitorMainExecuteBtn)).toHaveTextContent('执行');
 
     // Verify log panel empty state
