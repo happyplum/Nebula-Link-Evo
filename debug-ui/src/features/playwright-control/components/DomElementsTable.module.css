@@ -5,94 +5,125 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  max-height: 400px;
+  flex: 1;
 }
 
-.header {
+.toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--border-glass);
   background-color: var(--bg-elevated);
 }
 
-.title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0;
+.toggleLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 12px;
 }
-
+.toggleCheckbox {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--text-secondary);
+}
+.fetchButton {
+  background: none;
+  border: 1px solid var(--border-glass);
+  color: var(--text-secondary);
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.fetchButton:hover:not(:disabled) {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+.fetchButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 .tableContainer {
   overflow-y: auto;
   flex: 1;
 }
-
+.error {
+  padding: 8px 16px;
+  color: var(--accent-error);
+  background-color: var(--accent-error-subtle);
+  margin: 8px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+}
+.empty {
+  padding: 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-style: italic;
+}
+.loading {
+  padding: 16px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+/* Row styles */
 .table {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
-  font-size: 13px;
+  font-size: 12px;
 }
-
 .th {
   position: sticky;
   top: 0;
   background-color: var(--bg-elevated);
   color: var(--text-muted);
   font-weight: 500;
-  padding: 8px 12px;
+  padding: 6px 12px;
   border-bottom: 1px solid var(--border-glass);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   font-size: 11px;
   z-index: 1;
 }
-
 .tr {
   border-bottom: 1px solid var(--border-glass);
   cursor: pointer;
   transition: background-color 0.15s ease;
 }
-
 .tr:hover {
   background-color: var(--bg-tertiary);
 }
-
 .tr.selected {
   background-color: var(--accent-primary-subtle);
 }
-
 .td {
-  padding: 8px 12px;
+  padding: 6px 12px;
   color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 150px;
+  max-width: 120px;
 }
-
-.tag {
+.marker {
   color: var(--accent-primary);
-  font-family: monospace;
+  font-family: var(--font-mono);
   font-weight: bold;
+  min-width: 24px;
 }
-
-.id {
+.idCell {
   color: var(--accent-warning);
-  font-family: monospace;
+  font-family: var(--font-mono);
 }
-
-.class {
-  color: var(--accent-info);
-  font-family: monospace;
+.bboxCell {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
 }
-
-.text {
-  color: var(--text-primary);
-}
-
 .boolean {
   display: inline-flex;
   align-items: center;
@@ -101,56 +132,17 @@
   height: 20px;
   border-radius: 50%;
 }
-
-.boolean.true {
+.boolTrue {
   color: var(--accent-success);
   background-color: var(--accent-success-subtle);
 }
-
-.boolean.false {
+.boolFalse {
   color: var(--text-muted);
   background-color: var(--bg-tertiary);
 }
-
 .empty {
-  padding: 32px;
+  padding: 24px;
   text-align: center;
   color: var(--text-muted);
   font-style: italic;
-}
-
-.loading {
-  padding: 32px;
-  text-align: center;
-  color: var(--text-secondary);
-}
-
-.error {
-  padding: 16px;
-  color: var(--accent-error);
-  background-color: var(--accent-error-subtle);
-  margin: 16px;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-}
-
-.refreshButton {
-  background: none;
-  border: 1px solid var(--border-glass);
-  color: var(--text-secondary);
-  padding: 4px 8px;
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.refreshButton:hover:not(:disabled) {
-  background-color: var(--bg-tertiary);
-  color: var(--text-primary);
-}
-
-.refreshButton:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
