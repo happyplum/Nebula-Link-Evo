@@ -14,7 +14,7 @@ export function McpStatusList({ onSelectServer }: McpStatusListProps) {
   if (isLoading) {
     return (
       <div className={styles.container} data-testid={testIds.mcpStatusList}>
-        <LoadingSpinner size="md" label="Loading MCP status..." />
+        <LoadingSpinner size="md" label="加载中..." />
       </div>
     );
   }
@@ -22,7 +22,7 @@ export function McpStatusList({ onSelectServer }: McpStatusListProps) {
   if (error) {
     return (
       <div className={`${styles.container} ${styles.error}`} data-testid={testIds.mcpStatusList}>
-        <p>Failed to load MCP status</p>
+        <p>加载 MCP 状态失败</p>
       </div>
     );
   }
@@ -30,7 +30,7 @@ export function McpStatusList({ onSelectServer }: McpStatusListProps) {
   if (!mcpStatus) {
     return (
       <div className={styles.container} data-testid={testIds.mcpStatusList}>
-        <p className={styles.empty}>No MCP data available</p>
+        <p className={styles.empty}>无 MCP 数据</p>
       </div>
     );
   }
@@ -39,10 +39,10 @@ export function McpStatusList({ onSelectServer }: McpStatusListProps) {
     return (
       <div className={styles.container} data-testid={testIds.mcpStatusList}>
         <div className={styles.header}>
-          <h2 className={styles.title}>MCP Servers</h2>
-          <StatusIndicator status="offline" label="Disabled" />
+          <h2 className={styles.title}>MCP 服务</h2>
+          <StatusIndicator status="offline" label="已禁用" />
         </div>
-        <p className={styles.empty}>Model Context Protocol is disabled in configuration.</p>
+        <p className={styles.empty}>MCP 未在配置中启用。</p>
       </div>
     );
   }
@@ -50,38 +50,43 @@ export function McpStatusList({ onSelectServer }: McpStatusListProps) {
   return (
     <div className={styles.container} data-testid={testIds.mcpStatusList}>
       <div className={styles.header}>
-        <h2 className={styles.title}>MCP Servers</h2>
-        <StatusIndicator status="online" label="Enabled" />
+        <h2 className={styles.title}>MCP 服务</h2>
+        <StatusIndicator status="online" label="已启用" />
       </div>
       
       {mcpStatus.servers.length === 0 ? (
-        <p className={styles.empty}>No MCP servers configured or discovered.</p>
+        <p className={styles.empty}>无已启用的 MCP 服务器。</p>
       ) : (
         <ul className={styles.list}>
           {mcpStatus.servers.map((server) => (
-            <li key={server.name} className={styles.listItem}>
+            <li
+              key={server.name}
+              className={styles.listItem}
+              data-testid={testIds.mcpServerItem}
+            >
               <div className={styles.serverInfo}>
-                <StatusIndicator 
-                  status={server.running ? 'online' : 'error'} 
+                <StatusIndicator
+                  status={server.running ? 'online' : 'error'}
                   size="sm"
                 />
-                <span className={styles.serverName}>{server.name}</span>
+                <div className={styles.serverMeta}>
+                  <span className={styles.serverName}>{server.name}</span>
+                  <span className={styles.serverStatus}>
+                    {server.running ? '运行中' : '已停止'} · {server.toolsCount} 工具
+                  </span>
+                </div>
               </div>
               
-              <div className={styles.serverActions}>
-                <span className={styles.toolsCount}>
-                  {server.toolsCount} {server.toolsCount === 1 ? 'tool' : 'tools'}
-                </span>
-                {server.running && server.toolsCount > 0 && onSelectServer && (
-                  <button 
-                    type="button"
-                    className={styles.viewButton}
-                    onClick={() => onSelectServer(server.name)}
-                  >
-                    View Tools
-                  </button>
-                )}
-              </div>
+              {server.running && server.toolsCount > 0 && onSelectServer && (
+                <button
+                  type="button"
+                  className={styles.viewButton}
+                  data-testid={testIds.mcpServerViewBtn}
+                  onClick={() => onSelectServer(server.name)}
+                >
+                  查看工具
+                </button>
+              )}
             </li>
           ))}
         </ul>

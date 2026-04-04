@@ -19,8 +19,6 @@ export function McpToolsModal({ serverName, onClose }: McpToolsModalProps) {
   const [argsInput, setArgsInput] = useState<string>('{}');
   const [callResult, setCallResult] = useState<{ success: boolean; data?: unknown; error?: string } | null>(null);
 
-  // Filter tools for the selected server
-  // The API returns tool names in the format "serverName.toolName"
   const serverTools = mcpTools?.tools.filter(tool => 
     serverName && tool.name.startsWith(`${serverName}.`)
   ) || [];
@@ -28,14 +26,13 @@ export function McpToolsModal({ serverName, onClose }: McpToolsModalProps) {
   const handleExecute = async (fullToolName: string) => {
     if (!serverName) return;
     
-    // Extract the actual tool name by removing the server prefix
     const actualToolName = fullToolName.substring(serverName.length + 1);
     
     let parsedArgs: Record<string, unknown> = {};
     try {
       parsedArgs = JSON.parse(argsInput);
-    } catch (e) {
-      setCallResult({ success: false, error: 'Invalid JSON arguments' });
+    } catch {
+      setCallResult({ success: false, error: 'JSON 参数格式错误' });
       return;
     }
 
@@ -56,7 +53,7 @@ export function McpToolsModal({ serverName, onClose }: McpToolsModalProps) {
     } catch (err) {
       setCallResult({
         success: false,
-        error: err instanceof Error ? err.message : 'Unknown error occurred'
+        error: err instanceof Error ? err.message : '未知错误'
       });
     }
   };
@@ -71,20 +68,20 @@ export function McpToolsModal({ serverName, onClose }: McpToolsModalProps) {
     <Modal 
       open={!!serverName} 
       onClose={onClose} 
-      title={`Tools for ${serverName}`}
+      title={`${serverName} 工具`}
     >
       <div className={styles.container} data-testid={testIds.mcpToolsModal}>
         {isLoading ? (
           <div className={styles.centerContent}>
-            <LoadingSpinner size="md" label="Loading tools..." />
+            <LoadingSpinner size="md" label="加载中..." />
           </div>
         ) : error ? (
           <div className={styles.error}>
-            Failed to load tools
+            加载工具失败
           </div>
         ) : serverTools.length === 0 ? (
           <div className={styles.empty}>
-            No tools available for this server.
+            该服务器暂无可用工具。
           </div>
         ) : (
           <div className={styles.toolsList}>
@@ -103,13 +100,13 @@ export function McpToolsModal({ serverName, onClose }: McpToolsModalProps) {
                       <h3 className={styles.toolName}>{actualToolName}</h3>
                       <span className={styles.expandIcon}>{isSelected ? '▼' : '▶'}</span>
                     </div>
-                    <p className={styles.toolDescription}>{tool.description}</p>
+                    <p className={styles.toolDescription}>{tool.description || '无描述'}</p>
                   </button>
                   
                   {isSelected && (
                     <div className={styles.toolDetails}>
                       <div className={styles.schemaSection}>
-                        <h4 className={styles.sectionTitle}>Input Schema</h4>
+                        <h4 className={styles.sectionTitle}>输入参数</h4>
                         {tool.inputSchema?.properties && Object.keys(tool.inputSchema.properties).length > 0 ? (
                           <ul className={styles.schemaList}>
                             {Object.entries(tool.inputSchema.properties).map(([propName, propDetails]) => (
@@ -126,17 +123,17 @@ export function McpToolsModal({ serverName, onClose }: McpToolsModalProps) {
                             ))}
                           </ul>
                         ) : (
-                          <p className={styles.noSchema}>No input parameters required.</p>
+                          <p className={styles.noSchema}>无输入参数。</p>
                         )}
                       </div>
                       
                       <div className={styles.executeSection}>
-                        <h4 className={styles.sectionTitle}>Execute Tool</h4>
+                        <h4 className={styles.sectionTitle}>执行工具</h4>
                         <textarea
                           className={styles.argsInput}
                           value={argsInput}
                           onChange={(e) => setArgsInput(e.target.value)}
-                          placeholder="Enter JSON arguments..."
+                          placeholder="输入 JSON 参数..."
                           rows={4}
                         />
                         <button
@@ -145,13 +142,13 @@ export function McpToolsModal({ serverName, onClose }: McpToolsModalProps) {
                           onClick={() => handleExecute(tool.name)}
                           disabled={mcpCall.isPending}
                         >
-                          {mcpCall.isPending ? 'Executing...' : 'Execute'}
+                          {mcpCall.isPending ? '执行中...' : '执行'}
                         </button>
                       </div>
                       
                       {callResult && (
                         <div className={`${styles.resultSection} ${callResult.success ? styles.resultSuccess : styles.resultError}`}>
-                          <h4 className={styles.sectionTitle}>Result</h4>
+                          <h4 className={styles.sectionTitle}>执行结果</h4>
                           <pre className={styles.resultOutput}>
                             {callResult.success 
                               ? JSON.stringify(callResult.data, null, 2) 
