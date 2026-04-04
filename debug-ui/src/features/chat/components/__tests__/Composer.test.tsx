@@ -6,6 +6,7 @@ import { testIds } from '@/shared/testing/testids.js';
 
 vi.mock('../../store/chat.store.js', () => ({
   useChatStore: vi.fn(),
+  selectScreenshotData: (s: any) => s.screenshotData,
   selectStreamingState: (s: any) => s.streamingState,
   selectActiveSessionId: (s: any) => s.activeSessionId,
 }));
@@ -15,12 +16,17 @@ describe('Composer', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    
-    (useChatStore as any).mockImplementation((selector: any) => {
-      if (selector.name === 'selectStreamingState') return 'idle';
-      if (selector.name === 'selectActiveSessionId') return 'session-1';
-      return mockAddOptimisticMessage;
-    });
+
+    const state = {
+      streamingState: 'idle',
+      activeSessionId: 'session-1',
+      screenshotData: null,
+      addOptimisticMessage: mockAddOptimisticMessage,
+      setScreenshotData: vi.fn(),
+      clearScreenshotData: vi.fn(),
+    };
+
+    (useChatStore as any).mockImplementation((selector: any) => selector(state));
   });
 
   it('renders input and send button', () => {
@@ -30,11 +36,16 @@ describe('Composer', () => {
   });
 
   it('disables input when streaming', () => {
-    (useChatStore as any).mockImplementation((selector: any) => {
-      if (selector.name === 'selectStreamingState') return 'streaming';
-      if (selector.name === 'selectActiveSessionId') return 'session-1';
-      return mockAddOptimisticMessage;
-    });
+    (useChatStore as any).mockImplementation((selector: any) =>
+      selector({
+        streamingState: 'streaming',
+        activeSessionId: 'session-1',
+        screenshotData: null,
+        addOptimisticMessage: mockAddOptimisticMessage,
+        setScreenshotData: vi.fn(),
+        clearScreenshotData: vi.fn(),
+      }),
+    );
 
     render(<Composer />);
     expect(screen.getByTestId(testIds.composerInput)).toBeDisabled();
@@ -42,11 +53,16 @@ describe('Composer', () => {
   });
 
   it('disables input when no active session', () => {
-    (useChatStore as any).mockImplementation((selector: any) => {
-      if (selector.name === 'selectStreamingState') return 'idle';
-      if (selector.name === 'selectActiveSessionId') return null;
-      return mockAddOptimisticMessage;
-    });
+    (useChatStore as any).mockImplementation((selector: any) =>
+      selector({
+        streamingState: 'idle',
+        activeSessionId: null,
+        screenshotData: null,
+        addOptimisticMessage: mockAddOptimisticMessage,
+        setScreenshotData: vi.fn(),
+        clearScreenshotData: vi.fn(),
+      }),
+    );
 
     render(<Composer />);
     expect(screen.getByTestId(testIds.composerInput)).toBeDisabled();
