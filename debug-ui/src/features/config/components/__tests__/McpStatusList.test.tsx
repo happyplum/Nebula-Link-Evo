@@ -28,7 +28,7 @@ describe('McpStatusList', () => {
     } as any);
 
     render(<McpStatusList />);
-    expect(screen.getByText('Failed to load MCP status')).toBeInTheDocument();
+    expect(screen.getByText('加载 MCP 状态失败')).toBeInTheDocument();
   });
 
   it('renders empty state when no data', () => {
@@ -39,7 +39,7 @@ describe('McpStatusList', () => {
     } as any);
 
     render(<McpStatusList />);
-    expect(screen.getByText('No MCP data available')).toBeInTheDocument();
+    expect(screen.getByText('无 MCP 数据')).toBeInTheDocument();
   });
 
   it('renders disabled state', () => {
@@ -53,8 +53,8 @@ describe('McpStatusList', () => {
     } as any);
 
     render(<McpStatusList />);
-    expect(screen.getByText('Disabled')).toBeInTheDocument();
-    expect(screen.getByText('Model Context Protocol is disabled in configuration.')).toBeInTheDocument();
+    expect(screen.getByText('已禁用')).toBeInTheDocument();
+    expect(screen.getByText('MCP 未在配置中启用。')).toBeInTheDocument();
   });
 
   it('renders empty servers list', () => {
@@ -68,8 +68,8 @@ describe('McpStatusList', () => {
     } as any);
 
     render(<McpStatusList />);
-    expect(screen.getByText('Enabled')).toBeInTheDocument();
-    expect(screen.getByText('No MCP servers configured or discovered.')).toBeInTheDocument();
+    expect(screen.getByText('已启用')).toBeInTheDocument();
+    expect(screen.getByText('无已启用的 MCP 服务器。')).toBeInTheDocument();
   });
 
   it('renders servers list and handles view tools click', () => {
@@ -89,12 +89,12 @@ describe('McpStatusList', () => {
     render(<McpStatusList onSelectServer={onSelectServer} />);
     
     expect(screen.getByText('server-1')).toBeInTheDocument();
-    expect(screen.getByText('5 tools')).toBeInTheDocument();
+    expect(screen.getByText('运行中 · 5 工具')).toBeInTheDocument();
     
     expect(screen.getByText('server-2')).toBeInTheDocument();
-    expect(screen.getByText('0 tools')).toBeInTheDocument();
+    expect(screen.getByText('已停止 · 0 工具')).toBeInTheDocument();
 
-    const viewButton = screen.getByText('View Tools');
+    const viewButton = screen.getByText('查看工具');
     fireEvent.click(viewButton);
     
     expect(onSelectServer).toHaveBeenCalledWith('server-1');
