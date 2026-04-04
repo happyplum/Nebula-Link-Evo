@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { testIds } from '@/shared/testing/testids.js';
 import { PageInteractionShell } from '../PageInteractionShell.js';
 
@@ -82,20 +82,36 @@ describe('PageInteractionShell Parity Test', () => {
     expect(options[1]).toHaveTextContent('CSS 选择器');
   });
 
-  it('renders element operations section with marker ID and CSS selector inputs', () => {
+  it('renders element operations section with marker ID input in default marker mode', () => {
     render(<PageInteractionShell />);
 
+    // Default selectorMode is 'marker' — marker ID input is in DOM
     const markerId = screen.getByTestId(testIds.controlPageInteractionMarkerId);
     expect(markerId).toBeInTheDocument();
     expect(markerId).toHaveAttribute('type', 'number');
     expect(markerId).toHaveAttribute('placeholder', '元素序号 (#)');
     expect(markerId).toBeDisabled();
 
+    // CSS selector input should NOT be in DOM in marker mode
+    expect(screen.queryByTestId(testIds.controlPageInteractionCssSelector)).not.toBeInTheDocument();
+  });
+
+  it('switches to CSS selector input when selector mode is changed to css', () => {
+    render(<PageInteractionShell />);
+
+    // Switch to CSS mode
+    const selectorMode = screen.getByTestId(testIds.controlPageInteractionSelectorMode);
+    fireEvent.change(selectorMode, { target: { value: 'css' } });
+
+    // CSS selector input should now be in DOM
     const cssSelector = screen.getByTestId(testIds.controlPageInteractionCssSelector);
     expect(cssSelector).toBeInTheDocument();
     expect(cssSelector).toHaveAttribute('type', 'text');
     expect(cssSelector).toHaveAttribute('placeholder', 'CSS 选择器');
     expect(cssSelector).toBeDisabled();
+
+    // Marker ID input should NOT be in DOM in CSS mode
+    expect(screen.queryByTestId(testIds.controlPageInteractionMarkerId)).not.toBeInTheDocument();
   });
 
   it('renders element operations section with action type select and param input', () => {
@@ -167,10 +183,10 @@ describe('PageInteractionShell Parity Test', () => {
     expect(scrollBtn).toBeDisabled();
   });
 
-  it('renders all 14 testids correctly', () => {
+  it('renders all always-present testids correctly (13 testids in default marker mode)', () => {
     render(<PageInteractionShell />);
 
-    const expectedTestids = [
+    const alwaysPresent = [
       testIds.controlPageInteraction,
       testIds.controlPageInteractionElementPicker,
       testIds.controlPageInteractionCoordX,
@@ -178,7 +194,6 @@ describe('PageInteractionShell Parity Test', () => {
       testIds.controlPageInteractionCoordClick,
       testIds.controlPageInteractionSelectorMode,
       testIds.controlPageInteractionMarkerId,
-      testIds.controlPageInteractionCssSelector,
       testIds.controlPageInteractionActionType,
       testIds.controlPageInteractionActionParam,
       testIds.controlPageInteractionExecute,
@@ -187,7 +202,7 @@ describe('PageInteractionShell Parity Test', () => {
       testIds.controlPageInteractionScroll,
     ];
 
-    expectedTestids.forEach((testid) => {
+    alwaysPresent.forEach((testid) => {
       expect(screen.getByTestId(testid)).toBeInTheDocument();
     });
   });

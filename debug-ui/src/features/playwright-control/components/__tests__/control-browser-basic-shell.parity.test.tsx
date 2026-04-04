@@ -41,7 +41,8 @@ describe('P2-09: Control Browser Basic Shell - Parity', () => {
     const openBtn = screen.getByTestId(testIds.controlBrowserBasicOpenBtn);
     expect(openBtn).toBeInTheDocument();
     expect(openBtn).toHaveTextContent('打开');
-    expect(openBtn).toBeDisabled();
+    // Phase 3 runtime wiring: open button disabled only when browserOpen || isExecuting (both false)
+    expect(openBtn).not.toBeDisabled();
   });
 
   it('renders close button with correct testid and label', () => {
@@ -81,7 +82,8 @@ describe('P2-09: Control Browser Basic Shell - Parity', () => {
     const reconnectBtn = screen.getByTestId(testIds.controlBrowserBasicReconnectBtn);
     expect(reconnectBtn).toBeInTheDocument();
     expect(reconnectBtn).toHaveTextContent('重新连接视频流');
-    expect(reconnectBtn).toBeDisabled();
+    // Phase 3 runtime wiring: reconnect disabled only when isExecuting (false by default)
+    expect(reconnectBtn).not.toBeDisabled();
   });
 
   it('renders all 10 structural elements with correct testids', () => {
