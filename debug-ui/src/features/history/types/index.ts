@@ -59,6 +59,27 @@ export interface TaskDetail extends TaskRecord {
   steps: TaskStep[];
 }
 
+/** Failure sample detail from GET /debug/api/failure-sample?path=<path> */
+export interface FailureSampleData {
+  path: string;
+  screenshot: string;
+  dom: string;
+  context: {
+    timestamp: string;
+    url: string;
+    action: string;
+    error: {
+      message: string;
+      stack?: string;
+    };
+  };
+}
+
+export interface FailureSampleResponse {
+  success: boolean;
+  data: FailureSampleData | null;
+}
+
 /** Local UI filter params for interactions list */
 export interface InteractionFilters {
   actionType?: string;
