@@ -14,6 +14,13 @@ import {
 import { useDebugSocket } from '@/features/runtime/hooks/index.js';
 import type { ImageFitRect } from '@/features/liveview/lib/index.js';
 import { testIds } from '@/shared/testing/testids.js';
+import {
+  useControlStore,
+  selectSelectedElement,
+  selectDomElements,
+  selectMarkerToggle,
+  type SelectedElement,
+} from '@/features/playwright-control/store/control.store.js';
 import styles from './LiveViewCanvas.module.css';
 
 const STREAM_URL = '/debug/api/playwright/screenshot/stream';
@@ -148,13 +155,20 @@ export function LiveViewCanvas({
   const markersRef = useRef<Marker[]>([]);
   const overlayBBoxRef = useRef<OverlayBBox | null>(null);
 
-  const [pickerActive, setPickerActive] = useState(false);
   const [markers, setMarkers] = useState<Marker[]>([]);
   const [overlayBBox, setOverlayBBox] = useState<OverlayBBox | null>(null);
 
   const isPlaywrightConnected = useRuntimeStore(selectPlaywrightIsOpen);
   const connectionStatus = useRuntimeStore(selectConnectionStatus);
   const { onMessage } = useDebugSocket();
+  const elementPickerEnabled = useControlStore((s) => s.elementPickerEnabled);
+  const setElementPickerEnabled = useControlStore((s) => s.setElementPickerEnabled);
+  const selectedElement = useControlStore(selectSelectedElement);
+  const domElements = useControlStore(selectDomElements);
+  const markerToggle = useControlStore(selectMarkerToggle);
+  const selectedElementRef = useRef<SelectedElement | null>(null);
+  const domElementsRef = useRef(domElements);
+  const markerToggleRef = useRef(markerToggle);
 
   useEffect(() => {
     markersRef.current = markers;
@@ -163,6 +177,18 @@ export function LiveViewCanvas({
   useEffect(() => {
     overlayBBoxRef.current = overlayBBox;
   }, [overlayBBox]);
+
+  useEffect(() => {
+    selectedElementRef.current = selectedElement;
+  }, [selectedElement]);
+
+  useEffect(() => {
+    domElementsRef.current = domElements;
+  }, [domElements]);
+
+  useEffect(() => {
+    markerToggleRef.current = markerToggle;
+  }, [markerToggle]);
 
   const drawRenderFrame = useCallback(() => {
     const renderCtx = renderCtxRef.current;
@@ -276,7 +302,64 @@ export function LiveViewCanvas({
       overlayCtx.restore();
     }
 
-    if (pickerActive && pickerCursorRef.current) {
+    // DOM row highlight: draw selected element bbox from control store
+    const currentSelected = selectedElementRef.current;
+    if (fit && currentSelected?.bbox) {
+      const selTopLeft = pageToCanvasCoords(currentSelected.bbox.x, currentSelected.bbox.y, fit);
+      const selBottomRight = pageToCanvasCoords(
+        currentSelected.bbox.x + currentSelected.bbox.width,
+        currentSelected.bbox.y + currentSelected.bbox.height,
+        fit,
+      );
+      overlayCtx.save();
+      overlayCtx.strokeStyle = 'rgba(34, 197, 94, 0.9)';
+      overlayCtx.lineWidth = 2.5;
+      overlayCtx.setLineDash([]);
+      overlayCtx.strokeRect(
+        selTopLeft.x,
+        selTopLeft.y,
+        selBottomRight.x - selTopLeft.x,
+        selBottomRight.y - selTopLeft.y,
+      );
+      // Light fill for visibility
+      overlayCtx.fillStyle = 'rgba(34, 197, 94, 0.08)';
+      overlayCtx.fillRect(
+        selTopLeft.x,
+        selTopLeft.y,
+        selBottomRight.x - selTopLeft.x,
+        selBottomRight.y - selTopLeft.y,
+      );
+      overlayCtx.restore();
+    }
+
+    if (markerToggleRef.current && fit) {
+      overlayCtx.save();
+      overlayCtx.font = 'bold 12px monospace';
+      overlayCtx.textAlign = 'center';
+      overlayCtx.textBaseline = 'middle';
+      for (const el of domElementsRef.current) {
+        if (!el.bbox || !el.isVisible) continue;
+        const topLeft = pageToCanvasCoords(el.bbox.x, el.bbox.y, fit);
+        const bottomRight = pageToCanvasCoords(el.bbox.x + el.bbox.width, el.bbox.y + el.bbox.height, fit);
+        
+        // Draw small background for text readability
+        const w = 18;
+        const h = 14;
+        overlayCtx.fillStyle = 'rgba(239, 68, 68, 0.9)'; // Red
+        overlayCtx.fillRect(topLeft.x, topLeft.y, w, h);
+        
+        overlayCtx.fillStyle = '#ffffff';
+        overlayCtx.fillText(String(el.markerNumber), topLeft.x + w / 2, topLeft.y + h / 2 + 1);
+        
+        // Light border
+        overlayCtx.strokeStyle = 'rgba(239, 68, 68, 0.5)';
+        overlayCtx.lineWidth = 1;
+        overlayCtx.strokeRect(topLeft.x, topLeft.y, bottomRight.x - topLeft.x, bottomRight.y - topLeft.y);
+      }
+      overlayCtx.restore();
+    }
+
+    if (elementPickerEnabled && pickerCursorRef.current) {
       drawCrosshair(
         overlayCtx,
         pickerCursorRef.current.canvasX,
@@ -286,7 +369,7 @@ export function LiveViewCanvas({
         1.5,
       );
     }
-  }, [drawCrosshair, pickerActive]);
+  }, [drawCrosshair, elementPickerEnabled]);
 
   useEffect(() => {
     const renderCanvas = renderCanvasRef.current;
@@ -355,6 +438,32 @@ export function LiveViewCanvas({
       return undefined;
     }
 
+    const startPolling = async () => {
+      if (cancelled) return;
+      try {
+        const response = await fetch('/debug/api/playwright/screenshot');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.screenshot) {
+            const imgBlob = await fetch(`data:image/jpeg;base64,${data.screenshot}`).then(r => r.blob());
+            const bitmap = await createImageBitmap(imgBlob);
+            if (!cancelled && streamVersion === streamVersionRef.current) {
+              if (currentBitmapRef.current) currentBitmapRef.current.close();
+              currentBitmapRef.current = bitmap;
+              drawRenderFrame();
+            } else {
+              bitmap.close();
+            }
+          }
+        }
+      } catch (e) {
+        // ignore errors in polling
+      }
+      if (!cancelled && streamVersion === streamVersionRef.current) {
+        setTimeout(startPolling, 500);
+      }
+    };
+
     const startStream = async () => {
       const abortController = new AbortController();
       streamAbortRef.current = abortController;
@@ -362,6 +471,7 @@ export function LiveViewCanvas({
       try {
         const response = await fetch(STREAM_URL, { signal: abortController.signal });
         if (!response.ok || !response.body) {
+          startPolling();
           return;
         }
 
@@ -388,6 +498,7 @@ export function LiveViewCanvas({
         if (error instanceof Error && error.name === 'AbortError') {
           return;
         }
+        startPolling();
       }
     };
 
@@ -437,7 +548,7 @@ export function LiveViewCanvas({
 
   const handleOverlayClick = useCallback(
     (event: ReactMouseEvent<HTMLCanvasElement>) => {
-      if (!pickerActive) {
+      if (!elementPickerEnabled) {
         return;
       }
 
@@ -465,12 +576,12 @@ export function LiveViewCanvas({
 
       onCoordinateCapture?.(pageCoords);
     },
-    [onCoordinateCapture, pickerActive, pushMarker],
+    [onCoordinateCapture, elementPickerEnabled, pushMarker],
   );
 
   const handleOverlayMouseMove = useCallback(
     (event: ReactMouseEvent<HTMLCanvasElement>) => {
-      if (!pickerActive) {
+      if (!elementPickerEnabled) {
         pickerCursorRef.current = null;
         return;
       }
@@ -498,7 +609,7 @@ export function LiveViewCanvas({
         pageY: pageCoords.y,
       };
     },
-    [pickerActive],
+    [elementPickerEnabled],
   );
 
   const handleOverlayMouseLeave = useCallback(() => {
@@ -506,10 +617,10 @@ export function LiveViewCanvas({
   }, []);
 
   useEffect(() => {
-    if (!pickerActive) {
+    if (!elementPickerEnabled) {
       pickerCursorRef.current = null;
     }
-  }, [pickerActive]);
+  }, [elementPickerEnabled]);
 
   useEffect(() => {
     return () => {
@@ -541,15 +652,16 @@ export function LiveViewCanvas({
       ref={containerRef}
       className={containerClassName}
       data-testid={testIds.liveviewCanvas}
-      data-picker-active={pickerActive}
+      data-picker-active={elementPickerEnabled}
       data-marker-count={markers.length}
       data-has-overlay={overlayBBox ? 'true' : 'false'}
+      data-has-dom-highlight={selectedElement?.bbox ? 'true' : 'false'}
       data-connection-status={connectionStatus}
     >
       <canvas ref={renderCanvasRef} className={styles.renderCanvas} />
       <canvas
         ref={overlayCanvasRef}
-        className={`${styles.overlayCanvas} ${pickerActive ? styles.overlayCanvasInteractive : ''}`}
+        className={`${styles.overlayCanvas} ${elementPickerEnabled ? styles.overlayCanvasInteractive : ''}`}
         onClick={handleOverlayClick}
         onMouseMove={handleOverlayMouseMove}
         onMouseLeave={handleOverlayMouseLeave}
@@ -557,11 +669,11 @@ export function LiveViewCanvas({
       <button
         type='button'
         className={styles.pickerToggle}
-        aria-pressed={pickerActive}
+        aria-pressed={elementPickerEnabled}
         data-testid='liveview-picker-toggle'
-        onClick={() => setPickerActive((prev) => !prev)}
+        onClick={() => setElementPickerEnabled(!elementPickerEnabled)}
       >
-        {pickerActive ? 'Picker: on' : 'Picker: off'}
+        {elementPickerEnabled ? 'Picker: on' : 'Picker: off'}
       </button>
     </div>
   );
