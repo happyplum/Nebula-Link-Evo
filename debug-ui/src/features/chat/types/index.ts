@@ -26,4 +26,4 @@ export interface ChatSession {
   status?: 'idle' | 'running' | 'paused' | 'blocked' | 'completed';
 }
 
-export type StreamingState = 'idle' | 'streaming' | 'paused' | 'error';
+export type StreamingState = 'idle' | 'streaming' | 'paused' | 'blocked' | 'error';
