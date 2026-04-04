@@ -1,5 +1,6 @@
 import React from 'react';
 import type { ChatMessage } from '../types/index.js';
+import { useChatStore, selectShowThinking } from '../store/chat.store.js';
 import { ThinkingBlock } from './ThinkingBlock.js';
 import { testIds } from '@/shared/testing/testids.js';
 import styles from './MessageBubble.module.css';
@@ -10,6 +11,7 @@ export interface MessageBubbleProps {
 
 export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
   const isUser = message.role === 'user';
+  const showThinking = useChatStore(selectShowThinking);
 
   return (
     <div 
@@ -18,7 +20,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
       data-role={message.role}
     >
       <div className={styles.bubble}>
-        {message.thinking && (
+        {showThinking && message.thinking && (
           <ThinkingBlock 
             content={message.thinking} 
             isStreaming={message.isStreaming} 

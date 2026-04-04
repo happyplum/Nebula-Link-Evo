@@ -1,37 +1,108 @@
+/* MessageBubble — matches legacy .chat-message styling */
 .container {
   display: flex;
-  flex-direction: column;
+  align-items: flex-start;
   margin-bottom: 16px;
-  max-width: 85%;
+  max-width: 100%;
+  animation: fadeIn 0.15s ease-out forwards;
 }
 
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* User message — right-aligned */
 .user {
-  align-self: flex-end;
+  flex-direction: row-reverse;
 }
 
 .assistant {
-  align-self: flex-start;
+  flex-direction: row;
 }
 
+.avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  background: var(--bg-tertiary);
+  backdrop-filter: var(--blur-md);
+  flex-shrink: 0;
+  border: 1px solid var(--border-glass);
+  box-shadow: var(--shadow-sm);
+}
+
+.user .avatar {
+  margin-left: 12px;
+}
+
+.assistant .avatar {
+  margin-right: 12px;
+}
+
+.bubbleContainer {
+  max-width: 75%;
+  min-width: 2rem;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.user .bubbleContainer {
+  align-items: flex-end;
+}
+
+.assistant .bubbleContainer {
+  align-items: flex-start;
+}
+
+/* Bubble */
 .bubble {
   padding: 12px 16px;
   border-radius: var(--radius-md);
   font-size: 14px;
   line-height: 1.5;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
   word-break: break-word;
+  white-space: pre-wrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  min-width: 100%;
 }
 
 .user .bubble {
-  background: var(--accent-primary);
+  background: var(--accent-gradient);
   color: white;
-  border-bottom-right-radius: 4px;
+  border-top-right-radius: 4px;
 }
 
 .assistant .bubble {
-  background: var(--bg-elevated);
+  background: var(--bg-card);
+  backdrop-filter: var(--blur-md);
+  border: 1px solid var(--border-glass);
+  border-top-left-radius: 4px;
   color: var(--text-primary);
-  border: 1px solid var(--border-color);
-  border-bottom-left-radius: 4px;
+}
+
+/* Meta — legacy: .chat-meta */
+.meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  margin-bottom: 2px;
+}
+
+.user .meta {
+  padding-right: 2px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.assistant .meta {
+  padding-left: 2px;
 }
 
 .content {
@@ -52,7 +123,7 @@
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
-  font-family: monospace;
+  font-family: 'JetBrains Mono', monospace;
 }
 
 .toolCallName {
