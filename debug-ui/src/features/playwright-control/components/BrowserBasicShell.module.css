@@ -19,6 +19,14 @@
   flex-shrink: 0;
 }
 
+.statusIndicator.connected {
+  background: var(--accent-success, #22c55e);
+}
+
+.statusIndicator.disconnected {
+  background: var(--text-muted);
+}
+
 .statusText {
   font-size: 12px;
   color: var(--text-secondary);
