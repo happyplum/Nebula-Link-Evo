@@ -189,6 +189,12 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
         es.close();
         esRef.current = null;
 
+        if (reconnectAttemptRef.current >= 5) {
+          setError('Connection failed after 5 attempts.');
+          useChatStore.getState().setStreamingState('error');
+          return;
+        }
+
         const delay = backoffDelay(reconnectAttemptRef.current);
         reconnectAttemptRef.current += 1;
 
