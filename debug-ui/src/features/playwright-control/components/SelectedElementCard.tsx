@@ -25,15 +25,39 @@ export const SelectedElementCard: React.FC = () => {
       </div>
       
       <div className={styles.content}>
+        {selectedElement.markerNumber !== undefined && (
+          <div className={styles.row}>
+            <span className={styles.label}>Marker</span>
+            <span className={styles.value}>#{selectedElement.markerNumber}</span>
+          </div>
+        )}
+
         <div className={styles.row}>
           <span className={styles.label}>Selector</span>
           <span className={styles.value}>{selectedElement.selector}</span>
         </div>
+
+        {selectedElement.dataNebulaId && (
+          <div className={styles.row}>
+            <span className={styles.label}>data-nebula-id</span>
+            <span className={styles.value}>{selectedElement.dataNebulaId}</span>
+          </div>
+        )}
         
         {selectedElement.text && (
           <div className={styles.row}>
             <span className={styles.label}>Text</span>
             <span className={styles.value}>{selectedElement.text}</span>
+          </div>
+        )}
+
+        {selectedElement.bbox && (
+          <div className={styles.row}>
+            <span className={styles.label}>BBox</span>
+            <span className={styles.value}>
+              x={selectedElement.bbox.x}, y={selectedElement.bbox.y}, 
+              w={selectedElement.bbox.width}, h={selectedElement.bbox.height}
+            </span>
           </div>
         )}
         
@@ -44,7 +68,7 @@ export const SelectedElementCard: React.FC = () => {
               {Object.entries(selectedElement.attributes).map(([key, value]) => (
                 <div key={key} className={styles.attribute}>
                   <span className={styles.attrName}>{key}=</span>
-                  <span className={styles.attrValue}>"{value}"</span>
+                  <span className={styles.attrValue}>&quot;{value}&quot;</span>
                 </div>
               ))}
             </div>
