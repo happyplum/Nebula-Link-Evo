@@ -28,6 +28,8 @@ export const testIds = {
   configPanel: 'config-panel',
   healthStatusCard: 'health-status-card',
   mcpStatusList: 'mcp-status-list',
+  mcpServerItem: 'mcp-server-item',
+  mcpServerViewBtn: 'mcp-server-view-btn',
   mcpToolsModal: 'mcp-tools-modal',
   historyTable: 'history-table',
   interactionsTable: 'interactions-table',
@@ -81,6 +83,8 @@ export const testIds = {
   chatComposerSendBtn: 'chat-composer-send-btn',
   // LiveView
   liveviewCanvas: 'liveview-canvas',
+  liveviewDomHighlight: 'liveview-dom-highlight',
+  liveviewPickerCursor: 'liveview-picker-cursor',
   // Control Operation Logs
   controlOperationLogs: 'control-operation-logs',
   controlOperationLogsContainer: 'control-operation-logs-container',
@@ -160,6 +164,22 @@ export const testIds = {
   interactionsShellTableRegion: 'interactions-shell-table-region',
   interactionsShellTableEmpty: 'interactions-shell-table-empty',
   interactionsShellModalAnchor: 'interactions-shell-modal-anchor',
+  // Config — new components
+  configApiKeysStatus: 'config-api-keys-status',
+  configConnectivityTest: 'config-connectivity-test',
+  configAiTest: 'config-ai-test',
+  configContent: 'config-content',
+  // DOM Elements
+  domElementsMarkerToggle: 'dom-elements-marker-toggle',
+  domElementsGetDomBtn: 'dom-elements-get-dom-btn',
+  domElementsContainer: 'dom-elements-container',
+  domElementsEmptyState: 'dom-elements-empty-state',
+  // Failure Sample
+  failureSampleModal: 'failure-sample-modal',
+  failureSampleScreenshot: 'failure-sample-screenshot',
+  failureSampleContext: 'failure-sample-context',
+  failureSampleDom: 'failure-sample-dom',
+  failureSampleViewBtn: 'failure-sample-view-btn',
 } as const;
 
 export type TestId = (typeof testIds)[keyof typeof testIds];

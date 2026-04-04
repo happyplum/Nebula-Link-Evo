@@ -32,6 +32,7 @@ export const DEBUG_PLAYWRIGHT_ACTION = '/debug/api/playwright/action' as const;
 // Debug API — DOM & Interactions
 export const DEBUG_DOM = '/debug/api/dom' as const;
 export const DEBUG_INTERACTIONS = '/debug/api/interactions' as const;
+export const DEBUG_FAILURE_SAMPLE = '/debug/api/failure-sample' as const;
 export const DEBUG_INTERACTION_STATS = '/debug/api/interactions/stats' as const;
 export const DEBUG_HEALTH = '/debug/api/health' as const;
 
