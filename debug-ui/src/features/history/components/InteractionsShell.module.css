@@ -84,6 +84,42 @@
   font-size: 13px;
 }
 
+/* Table */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.table th {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-muted);
+  font-weight: 500;
+  position: sticky;
+  top: 0;
+  background: var(--bg-card);
+}
+
+.table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+.tableRow:hover {
+  background: var(--bg-secondary);
+}
+
+.statusSuccess {
+  color: var(--color-success, #22c55e);
+}
+
+.statusFailure {
+  color: var(--color-error, #ef4444);
+}
+
 /* Modal Anchor — hidden, no visual content */
 .modalAnchor {
   display: none;

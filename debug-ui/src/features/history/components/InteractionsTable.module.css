@@ -12,9 +12,9 @@
 
 .select {
   padding: 0.5rem 2rem 0.5rem 1rem;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-md);
   color: var(--text-primary);
   font-size: 0.875rem;
   appearance: none;
@@ -23,19 +23,24 @@
   background-position: right 0.5rem center;
   background-size: 1em;
   cursor: pointer;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  color-scheme: dark;
 }
 
 .select:focus {
   outline: none;
   border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px var(--accent-primary-subtle), var(--shadow-glow);
 }
 
 .container {
   width: 100%;
   overflow-x: auto;
-  background: var(--bg-secondary);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  backdrop-filter: var(--blur-md);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-glass);
+  box-shadow: var(--shadow-sm);
 }
 
 .loading,
@@ -44,9 +49,10 @@
   display: flex;
   justify-content: center;
   padding: 3rem;
-  background: var(--bg-secondary);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  backdrop-filter: var(--blur-md);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-glass);
   color: var(--text-muted);
 }
 
