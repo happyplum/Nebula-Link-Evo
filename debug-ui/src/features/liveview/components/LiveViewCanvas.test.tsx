@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { LiveViewCanvas } from './LiveViewCanvas.js';
+import { useControlStore } from '@/features/playwright-control/store/control.store.js';
 
 const onMessageMock = vi.fn();
 const runtimeState = {
@@ -51,6 +52,7 @@ describe('LiveViewCanvas', () => {
     vi.clearAllMocks();
     runtimeState.connectionStatus = 'connected';
     runtimeState.playwrightIsOpen = true;
+    useControlStore.getState().reset();
 
     onMessageMock.mockImplementation((handler: (payload: unknown) => void) => {
       (globalThis as { __liveviewMessageHandler?: (payload: unknown) => void }).__liveviewMessageHandler =
