@@ -58,7 +58,7 @@ describe('HistoryTable', () => {
     } as any);
 
     render(<HistoryTable />);
-    expect(screen.getByText('No tasks found')).toBeInTheDocument();
+    expect(screen.getByText('暂无任务记录')).toBeInTheDocument();
   });
 
   it('renders tasks and truncates long instructions', () => {
