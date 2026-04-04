@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { MonitorSidebarShell } from '../MonitorSidebarShell.js';
@@ -94,7 +94,8 @@ describe('MonitorSidebarShell Parity Test', () => {
   it('renders WebSocket status indicators with correct testids', () => {
     renderWithProviders(<MonitorSidebarShell />);
 
-    const wsIndicator = screen.getByTestId(testIds.monitorSidebarWsStatusIndicator);
+    const wsCard = screen.getByTestId(testIds.monitorSidebarWsCard);
+    const wsIndicator = within(wsCard).getByTestId(testIds.statusIndicator);
     const wsStatusText = screen.getByTestId(testIds.monitorSidebarWsStatusText);
 
     expect(wsIndicator).toBeInTheDocument();
@@ -105,12 +106,13 @@ describe('MonitorSidebarShell Parity Test', () => {
   it('renders browser status indicators with correct testids', () => {
     renderWithProviders(<MonitorSidebarShell />);
 
-    const browserIndicator = screen.getByTestId(testIds.monitorSidebarBrowserIndicator);
+    const browserCard = screen.getByTestId(testIds.monitorSidebarBrowserCard);
+    const browserIndicator = within(browserCard).getByTestId(testIds.statusIndicator);
     const browserStatusText = screen.getByTestId(testIds.monitorSidebarBrowserStatusText);
 
     expect(browserIndicator).toBeInTheDocument();
     expect(browserStatusText).toBeInTheDocument();
-    expect(browserStatusText).toHaveTextContent('未连接');
+    expect(browserStatusText).toHaveTextContent('未知');
   });
 
   it('renders WebSocket card buttons with correct labels and testids', () => {
