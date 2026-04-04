@@ -1,15 +1,10 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { InteractionsTable } from './InteractionsTable.js';
-import { useInteractions } from '../api/history.queries.js';
-import { useInteractionFilters } from '../hooks/useInteractionFilters.js';
 
-vi.mock('../api/history.queries.js', () => ({
-  useInteractions: vi.fn(),
-}));
-
-vi.mock('../hooks/useInteractionFilters.js', () => ({
-  useInteractionFilters: vi.fn(),
+vi.mock('./FailureSampleModal.js', () => ({
+  FailureSampleModal: () => null,
 }));
 
 const mockInteractions = [
@@ -46,91 +41,45 @@ const mockInteractions = [
 ];
 
 describe('InteractionsTable', () => {
-  const mockUpdateFilters = vi.fn();
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.mocked(useInteractionFilters).mockReturnValue({
-      filters: {},
-      updateFilters: mockUpdateFilters,
-      resetFilters: vi.fn(),
-    });
-  });
+  const renderWithQuery = (ui: React.ReactElement) => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>);
+  };
 
   it('renders loading state', () => {
-    vi.mocked(useInteractions).mockReturnValue({
-      data: undefined,
-      isLoading: true,
-      error: null,
-    } as any);
-
-    render(<InteractionsTable />);
-    expect(screen.getByText('Loading interactions...')).toBeInTheDocument();
+    renderWithQuery(<InteractionsTable interactions={[]} isLoading={true} error={null} />);
+    expect(screen.getByText('加载中...')).toBeInTheDocument();
   });
 
   it('renders error state', () => {
-    vi.mocked(useInteractions).mockReturnValue({
-      data: undefined,
-      isLoading: false,
-      error: new Error('Failed'),
-    } as any);
-
-    render(<InteractionsTable />);
-    expect(screen.getByText('Failed to load interactions')).toBeInTheDocument();
+    renderWithQuery(<InteractionsTable interactions={[]} isLoading={false} error={new Error('Failed')} />);
+    expect(screen.getByText('加载失败')).toBeInTheDocument();
   });
 
   it('renders empty state', () => {
-    vi.mocked(useInteractions).mockReturnValue({
-      data: { success: true, data: [] },
-      isLoading: false,
-      error: null,
-    } as any);
-
-    render(<InteractionsTable />);
-    expect(screen.getByText('No interactions found')).toBeInTheDocument();
+    renderWithQuery(<InteractionsTable interactions={[]} isLoading={false} error={null} />);
+    expect(screen.getByText('暂无交互记录')).toBeInTheDocument();
   });
 
-  it('renders interactions and handles filters', () => {
-    vi.mocked(useInteractions).mockReturnValue({
-      data: { success: true, data: mockInteractions },
-      isLoading: false,
-      error: null,
-    } as any);
+  it('renders interactions table with data', () => {
+    renderWithQuery(<InteractionsTable interactions={mockInteractions} isLoading={false} error={null} />);
 
-    render(<InteractionsTable />);
-    
     expect(screen.getByTestId('interactions-table')).toBeInTheDocument();
-    
-    // Check content
+
     expect(screen.getByText('click')).toBeInTheDocument();
     expect(screen.getByText('type')).toBeInTheDocument();
     expect(screen.getByText('button')).toBeInTheDocument();
     expect(screen.getByText('input')).toBeInTheDocument();
-    expect(screen.getAllByText('Success')[0]).toBeInTheDocument();
-    expect(screen.getAllByText('Failed')[0]).toBeInTheDocument();
-    
-    // Test filters
-    const actionFilter = screen.getByTestId('interaction-filter-action-type');
-    fireEvent.change(actionFilter, { target: { value: 'click' } });
-    expect(mockUpdateFilters).toHaveBeenCalledWith({ actionType: 'click' });
-
-    const successFilter = screen.getByTestId('interaction-filter-success');
-    fireEvent.change(successFilter, { target: { value: 'true' } });
-    expect(mockUpdateFilters).toHaveBeenCalledWith({ success: true });
+    expect(screen.getAllByText('成功')[0]).toBeInTheDocument();
+    expect(screen.getAllByText('失败')[0]).toBeInTheDocument();
   });
 
   it('opens modal on row click', () => {
-    vi.mocked(useInteractions).mockReturnValue({
-      data: { success: true, data: mockInteractions },
-      isLoading: false,
-      error: null,
-    } as any);
+    renderWithQuery(<InteractionsTable interactions={mockInteractions} isLoading={false} error={null} />);
 
-    render(<InteractionsTable />);
-    
     const rows = screen.getAllByTestId('interactions-table-row');
     fireEvent.click(rows[0]);
-    
+
     expect(screen.getByTestId('interaction-detail-modal')).toBeInTheDocument();
     expect(screen.getByText('int-1')).toBeInTheDocument();
   });

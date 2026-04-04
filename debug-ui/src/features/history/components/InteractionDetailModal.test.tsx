@@ -3,6 +3,10 @@ import { describe, it, expect, vi } from 'vitest';
 import { InteractionDetailModal } from './InteractionDetailModal.js';
 import type { Interaction } from '../types/index.js';
 
+vi.mock('./FailureSampleModal.js', () => ({
+  FailureSampleModal: () => null,
+}));
+
 const mockInteraction: Interaction = {
   id: 'int-123',
   timestamp: 1711929600000,
@@ -36,7 +40,7 @@ describe('InteractionDetailModal', () => {
     expect(screen.getByText('int-123')).toBeInTheDocument();
     expect(screen.getByText('click')).toBeInTheDocument();
     expect(screen.getByText('button')).toBeInTheDocument();
-    expect(screen.getByText('Success')).toBeInTheDocument();
+    expect(screen.getByText('成功')).toBeInTheDocument();
   });
 
   it('renders error block when interaction failed', () => {
@@ -51,9 +55,9 @@ describe('InteractionDetailModal', () => {
       <InteractionDetailModal interaction={failedInteraction} onClose={vi.fn()} />
     );
 
-    expect(screen.getByText('Failed')).toBeInTheDocument();
-    expect(screen.getByText('Error Details')).toBeInTheDocument();
-    expect(screen.getByText('Code: TIMEOUT')).toBeInTheDocument();
+    expect(screen.getByText('失败')).toBeInTheDocument();
+    expect(screen.getByText('错误详情')).toBeInTheDocument();
+    expect(screen.getByText('错误码: TIMEOUT')).toBeInTheDocument();
     expect(screen.getByText('Element not found')).toBeInTheDocument();
   });
 });

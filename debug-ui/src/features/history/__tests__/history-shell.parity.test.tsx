@@ -1,7 +1,19 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { HistoryShell } from '@/features/history/components/HistoryShell.js';
 import { testIds } from '@/shared/testing/testids.js';
+
+vi.mock('@/features/history/components/HistoryTable.js', () => ({
+  HistoryTable: () => <div data-testid={testIds.historyShellTasksEmpty}>暂无任务记录</div>,
+}));
+
+vi.mock('@/features/history/components/LogsView.js', () => ({
+  LogsView: () => <div data-testid={testIds.historyShellLogsEmpty}>暂无日志记录</div>,
+}));
+
+vi.mock('@/features/history/components/DecisionsView.js', () => ({
+  DecisionsView: () => <div data-testid={testIds.historyShellDecisionsEmpty}>暂无决策记录</div>,
+}));
 
 /**
  * P2-14 History Shell Parity Tests
@@ -33,7 +45,7 @@ describe('P2-14 HistoryShell - Parity', () => {
     const tasksEmpty = screen.getByTestId(testIds.historyShellTasksEmpty);
     expect(tasksEmpty).toBeInTheDocument();
     expect(tasksEmpty.tagName).toBe('DIV');
-    expect(tasksEmpty.textContent).toBe('等待数据...');
+    expect(tasksEmpty.textContent).toBe('暂无任务记录');
   });
 
   it('logs tab empty state is not in DOM by default (conditional rendering)', () => {

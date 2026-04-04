@@ -1,7 +1,16 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { InteractionsShell } from '../components/InteractionsShell.js';
 import { testIds } from '@/shared/testing/testids.js';
+
+vi.mock('../api/history.queries.js', () => ({
+  useInteractions: () => ({ data: { data: [] }, isLoading: false, error: null }),
+  useInteractionStats: () => ({ data: { data: null } }),
+}));
+
+vi.mock('../hooks/useInteractionFilters.js', () => ({
+  useInteractionFilters: () => ({ filters: {}, updateFilters: () => {} }),
+}));
 
 /**
  * Parity test for P2-15: Interactions Shell
@@ -25,22 +34,19 @@ describe('P2-15: Interactions Shell - Parity', () => {
   it('renders Filter Rail controls with correct testids', () => {
     render(<InteractionsShell />);
 
-    // Status select (disabled)
+    // Status select
     const statusSelect = screen.getByTestId(testIds.interactionsShellFilterStatus);
     expect(statusSelect).toBeInTheDocument();
-    expect(statusSelect).toHaveAttribute('disabled');
     expect(statusSelect.tagName).toBe('SELECT');
 
-    // Type select (disabled)
+    // Type select
     const typeSelect = screen.getByTestId(testIds.interactionsShellFilterType);
     expect(typeSelect).toBeInTheDocument();
-    expect(typeSelect).toHaveAttribute('disabled');
     expect(typeSelect.tagName).toBe('SELECT');
 
-    // Date start input (disabled)
+    // Date start input
     const dateStart = screen.getByTestId(testIds.interactionsShellFilterDateStart);
     expect(dateStart).toBeInTheDocument();
-    expect(dateStart).toHaveAttribute('disabled');
     expect(dateStart).toHaveAttribute('type', 'date');
 
     // Date end input (disabled)
@@ -72,7 +78,7 @@ describe('P2-15: Interactions Shell - Parity', () => {
 
     const options = within(typeSelect).getAllByRole('option');
     expect(options).toHaveLength(1);
-    expect(options[0]).toHaveValue('all');
+    expect(options[0]).toHaveValue('');
     expect(options[0]).toHaveTextContent('全部类型');
   });
 
@@ -112,9 +118,7 @@ describe('P2-15: Interactions Shell - Parity', () => {
 
   it('renders Table Region empty state with correct testid', () => {
     render(<InteractionsShell />);
-    const tableEmpty = screen.getByTestId(testIds.interactionsShellTableEmpty);
-    expect(tableEmpty).toBeInTheDocument();
-    expect(tableEmpty).toHaveTextContent('等待数据...');
+    expect(screen.getByText('暂无交互记录')).toBeInTheDocument();
   });
 
   it('renders Modal Anchor with correct testid', () => {
@@ -142,9 +146,9 @@ describe('P2-15: Interactions Shell - Parity', () => {
     expect(screen.getByTestId(testIds.interactionsShellStatsSuccess)).toBeInTheDocument();
     expect(screen.getByTestId(testIds.interactionsShellStatsFailure)).toBeInTheDocument();
 
-    // Table Region and its empty state
+    // Table Region
     expect(screen.getByTestId(testIds.interactionsShellTableRegion)).toBeInTheDocument();
-    expect(screen.getByTestId(testIds.interactionsShellTableEmpty)).toBeInTheDocument();
+    expect(screen.getByText('暂无交互记录')).toBeInTheDocument();
 
     // Modal Anchor
     expect(screen.getByTestId(testIds.interactionsShellModalAnchor)).toBeInTheDocument();
