@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTaskHistory } from '../api/history.queries.js';
 import { formatDateTime } from '@/shared/lib/date.js';
 import { StatusIndicator } from '@/shared/ui/StatusIndicator.js';
+import { testIds } from '@/shared/testing/testids.js';
 import { TaskDetailModal } from './TaskDetailModal.js';
 import styles from './HistoryTable.module.css';
 
@@ -32,7 +33,7 @@ export function HistoryTable({ limit = 50 }: HistoryTableProps) {
   const tasks = data?.tasks || [];
 
   if (tasks.length === 0) {
-    return <div className={styles.empty}>No tasks found</div>;
+    return <div className={styles.empty} data-testid={testIds.historyShellTasksEmpty}>暂无任务记录</div>;
   }
 
   return (

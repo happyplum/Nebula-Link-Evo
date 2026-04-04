@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { Tabs } from '@/shared/ui/Tabs.js';
 import { testIds } from '@/shared/testing/testids.js';
+import { HistoryTable } from './HistoryTable.js';
+import { LogsView } from './LogsView.js';
+import { DecisionsView } from './DecisionsView.js';
 import styles from './HistoryShell.module.css';
 
 type HistoryTab = 'tasks' | 'logs' | 'decisions';
@@ -22,21 +25,9 @@ export function HistoryShell() {
         onTabChange={(id) => setActiveTab(id as HistoryTab)}
       >
         <div className={styles.tabContent} data-testid={testIds.historyShellTabContent}>
-          {activeTab === 'tasks' && (
-            <div className={styles.emptyState} data-testid={testIds.historyShellTasksEmpty}>
-              等待数据...
-            </div>
-          )}
-          {activeTab === 'logs' && (
-            <div className={styles.emptyState} data-testid={testIds.historyShellLogsEmpty}>
-              等待数据...
-            </div>
-          )}
-          {activeTab === 'decisions' && (
-            <div className={styles.emptyState} data-testid={testIds.historyShellDecisionsEmpty}>
-              等待数据...
-            </div>
-          )}
+          {activeTab === 'tasks' && <HistoryTable />}
+          {activeTab === 'logs' && <LogsView />}
+          {activeTab === 'decisions' && <DecisionsView />}
         </div>
       </Tabs>
     </div>

@@ -1,9 +1,11 @@
 .container {
   width: 100%;
   overflow-x: auto;
-  background: var(--bg-secondary);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  backdrop-filter: var(--blur-md);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-glass);
+  box-shadow: var(--shadow-sm);
 }
 
 .loading,
@@ -12,9 +14,10 @@
   display: flex;
   justify-content: center;
   padding: 3rem;
-  background: var(--bg-secondary);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  backdrop-filter: var(--blur-md);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-glass);
   color: var(--text-muted);
 }
 
