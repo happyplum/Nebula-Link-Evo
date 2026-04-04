@@ -16,3 +16,26 @@
   font-size: 14px;
   text-align: center;
 }
+
+.loadMore {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0;
+}
+
+.loadMoreButton {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.loadMoreButton:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border-color: var(--accent-primary);
+}

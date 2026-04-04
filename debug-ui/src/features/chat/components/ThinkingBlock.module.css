@@ -1,9 +1,11 @@
 .container {
   margin: 8px 0;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  background: var(--bg-tertiary);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  backdrop-filter: var(--blur-md);
   overflow: hidden;
+  box-shadow: var(--shadow-sm);
 }
 
 .header {
@@ -39,8 +41,9 @@
   font-size: 13px;
   color: var(--text-secondary);
   white-space: pre-wrap;
-  border-top: 1px solid var(--border-color);
-  font-family: monospace;
+  border-top: 1px solid var(--border-glass);
+  font-family: 'JetBrains Mono', monospace;
   max-height: 300px;
   overflow-y: auto;
+  line-height: 1.5;
 }
