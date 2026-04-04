@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import type { ChatMessage, ChatSession, StreamingState } from '@/features/chat/types/index.js';
 
 const EMPTY_MESSAGES: ChatMessage[] = [];
+const DEFAULT_PAGE_SIZE = 50;
 
 interface ChatState {
   // Sessions
@@ -17,6 +18,13 @@ interface ChatState {
   // UI state
   isLoadingSessions: boolean;
   isLoadingMessages: boolean;
+  // Shared UI state (synced across ChatPanel and ChatPage)
+  showThinking: boolean;
+  selectedModel: string;
+  screenshotData: string | null;
+  connectivityResult: { ok: boolean; latencyMs: number; message: string } | null;
+  // Pagination
+  visibleMessageCounts: Record<string, number>;
 
   // Session actions
   setSessions: (sessions: ChatSession[]) => void;
@@ -44,6 +52,17 @@ interface ChatState {
   setIsLoadingSessions: (loading: boolean) => void;
   setIsLoadingMessages: (loading: boolean) => void;
 
+  // Shared UI actions
+  setShowThinking: (show: boolean) => void;
+  setSelectedModel: (model: string) => void;
+  setScreenshotData: (data: string | null) => void;
+  clearScreenshotData: () => void;
+  setConnectivityResult: (result: { ok: boolean; latencyMs: number; message: string } | null) => void;
+
+  // Pagination actions
+  expandVisibleMessages: (sessionId: string) => void;
+  resetVisibleMessages: (sessionId: string) => void;
+
   // Reset
   reset: () => void;
 }
@@ -57,6 +76,11 @@ const initialState = {
   streamingThinking: '',
   isLoadingSessions: false,
   isLoadingMessages: false,
+  showThinking: true,
+  selectedModel: 'decision',
+  screenshotData: null as string | null,
+  connectivityResult: null as { ok: boolean; latencyMs: number; message: string } | null,
+  visibleMessageCounts: {} as Record<string, number>,
 };
 
 export const useChatStore = create<ChatState>()((set) => ({
@@ -70,10 +94,12 @@ export const useChatStore = create<ChatState>()((set) => ({
 
   removeSession: (sessionId) =>
     set((s) => {
-      const { [sessionId]: _removed, ...rest } = s.messagesBySession;
+      const { [sessionId]: _msgRemoved, ...msgRest } = s.messagesBySession;
+      const { [sessionId]: _visRemoved, ...visRest } = s.visibleMessageCounts;
       return {
         sessions: s.sessions.filter((session) => session.id !== sessionId),
-        messagesBySession: rest,
+        messagesBySession: msgRest,
+        visibleMessageCounts: visRest,
         activeSessionId: s.activeSessionId === sessionId ? null : s.activeSessionId,
       };
     }),
@@ -206,6 +232,28 @@ export const useChatStore = create<ChatState>()((set) => ({
   setIsLoadingSessions: (loading) => set({ isLoadingSessions: loading }),
   setIsLoadingMessages: (loading) => set({ isLoadingMessages: loading }),
 
+  // Shared UI actions
+  setShowThinking: (show) => set({ showThinking: show }),
+  setSelectedModel: (model) => set({ selectedModel: model }),
+  setScreenshotData: (data) => set({ screenshotData: data }),
+  clearScreenshotData: () => set({ screenshotData: null }),
+  setConnectivityResult: (result) => set({ connectivityResult: result }),
+
+  // Pagination actions
+  expandVisibleMessages: (sessionId) =>
+    set((s) => ({
+      visibleMessageCounts: {
+        ...s.visibleMessageCounts,
+        [sessionId]: (s.visibleMessageCounts[sessionId] ?? DEFAULT_PAGE_SIZE) + DEFAULT_PAGE_SIZE,
+      },
+    })),
+
+  resetVisibleMessages: (sessionId) =>
+    set((s) => {
+      const { [sessionId]: _removed, ...rest } = s.visibleMessageCounts;
+      return { visibleMessageCounts: rest };
+    }),
+
   // Reset
   reset: () => set(initialState),
 }));
@@ -223,3 +271,9 @@ export const selectStreamingContent = (s: ChatState) => s.streamingContent;
 export const selectStreamingThinking = (s: ChatState) => s.streamingThinking;
 export const selectIsLoadingSessions = (s: ChatState) => s.isLoadingSessions;
 export const selectIsLoadingMessages = (s: ChatState) => s.isLoadingMessages;
+export const selectShowThinking = (s: ChatState) => s.showThinking;
+export const selectSelectedModel = (s: ChatState) => s.selectedModel;
+export const selectScreenshotData = (s: ChatState) => s.screenshotData;
+export const selectConnectivityResult = (s: ChatState) => s.connectivityResult;
+export const selectVisibleMessageCount = (sessionId: string) => (s: ChatState) =>
+  s.visibleMessageCounts[sessionId] ?? DEFAULT_PAGE_SIZE;
