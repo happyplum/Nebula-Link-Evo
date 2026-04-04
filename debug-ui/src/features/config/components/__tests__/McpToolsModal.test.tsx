@@ -54,7 +54,7 @@ describe('McpToolsModal', () => {
     } as any);
 
     render(<McpToolsModal serverName="test-server" onClose={() => {}} />);
-    expect(screen.getByText('Failed to load tools')).toBeInTheDocument();
+    expect(screen.getByText('加载工具失败')).toBeInTheDocument();
   });
 
   it('renders empty state when no tools for server', () => {
@@ -69,7 +69,7 @@ describe('McpToolsModal', () => {
     } as any);
 
     render(<McpToolsModal serverName="test-server" onClose={() => {}} />);
-    expect(screen.getByText('No tools available for this server.')).toBeInTheDocument();
+    expect(screen.getByText('该服务器暂无可用工具。')).toBeInTheDocument();
   });
 
   it('renders tools list and handles execution', async () => {
@@ -107,15 +107,15 @@ describe('McpToolsModal', () => {
     fireEvent.click(screen.getByText('my-tool'));
 
     // Schema should be visible
-    expect(screen.getByText('Input Schema')).toBeInTheDocument();
+    expect(screen.getByText('输入参数')).toBeInTheDocument();
     expect(screen.getByText('param1')).toBeInTheDocument();
     expect(screen.getByText('string')).toBeInTheDocument();
 
     // Execute section should be visible
-    const textarea = screen.getByPlaceholderText('Enter JSON arguments...');
+    const textarea = screen.getByPlaceholderText('输入 JSON 参数...');
     fireEvent.change(textarea, { target: { value: '{"param1": "value1"}' } });
 
-    const executeButton = screen.getByText('Execute');
+    const executeButton = screen.getByText('执行');
     fireEvent.click(executeButton);
 
     expect(mockMutateAsync).toHaveBeenCalledWith({
@@ -125,7 +125,7 @@ describe('McpToolsModal', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText('Result')).toBeInTheDocument();
+      expect(screen.getByText('执行结果')).toBeInTheDocument();
       expect(screen.getByText(/Success!/)).toBeInTheDocument();
     });
   });
@@ -145,13 +145,13 @@ describe('McpToolsModal', () => {
     
     fireEvent.click(screen.getByText('my-tool'));
 
-    const textarea = screen.getByPlaceholderText('Enter JSON arguments...');
+    const textarea = screen.getByPlaceholderText('输入 JSON 参数...');
     fireEvent.change(textarea, { target: { value: 'invalid json' } });
 
-    const executeButton = screen.getByText('Execute');
+    const executeButton = screen.getByText('执行');
     fireEvent.click(executeButton);
 
     expect(mockMutateAsync).not.toHaveBeenCalled();
-    expect(screen.getByText('Invalid JSON arguments')).toBeInTheDocument();
+    expect(screen.getByText('JSON 参数格式错误')).toBeInTheDocument();
   });
 });
