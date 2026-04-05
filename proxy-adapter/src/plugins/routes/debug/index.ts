@@ -4,6 +4,9 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { TaskService } from '../../../services/index.js';
 import { DatabaseManager } from '../../../conversation/db.js';
+import { getServiceEndpointsCached } from '../../../config/services.js';
+
+const PLAYWRIGHT_URL = getServiceEndpointsCached().playwright.url;
 const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
   const taskService = TaskService.getInstance();
   const wsManager = (fastify as any).wsManager;
@@ -359,6 +362,56 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         return { success: false, error: (error as Error).message };
       }
     }
+  );
+
+  fastify.get(
+    '/api/playwright/screenshot/stream',
+    {
+      schema: {
+        description: 'Proxy browser live stream',
+        tags: ['Debug'],
+      },
+    },
+    async (request, reply) => {
+      const abortController = new AbortController();
+      request.raw.on('close', () => abortController.abort());
+
+      const upstream = await fetch(`${PLAYWRIGHT_URL}/browser/stream`, {
+        signal: abortController.signal,
+      });
+
+      if (!upstream.ok || !upstream.body) {
+        reply.status(502);
+        return { success: false, error: 'LiveView stream unavailable' };
+      }
+
+      reply.hijack();
+      reply.raw.writeHead(200, {
+        'Content-Type': upstream.headers.get('content-type') ?? 'multipart/x-mixed-replace; boundary=frame',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+      });
+
+      const reader = upstream.body.getReader();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            break;
+          }
+          if (value) {
+            reply.raw.write(Buffer.from(value));
+          }
+        }
+      } catch (error) {
+        if (!(error instanceof Error && error.name === 'AbortError')) {
+          request.log.error({ err: error }, 'Failed to proxy screenshot stream');
+        }
+      } finally {
+        reader.releaseLock();
+        reply.raw.end();
+      }
+    },
   );
 
   fastify.get(
