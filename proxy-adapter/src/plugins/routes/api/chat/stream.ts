@@ -14,28 +14,13 @@ import type { SessionEvent, SessionSnapshotEvent, SessionState } from '@nebula-l
 import { eventToSSEFormat } from '@nebula-link-evo/shared';
 import { getRuntimeSessionState } from './runtime-state.js';
 
-const REPLAY_FETCH_LIMIT = 10000;
-
-function writeSSEEvent(reply: { raw: { write: (chunk: string) => void } }, event: SessionEvent, eventId: string): void {
+function writeSSEEvent(
+  reply: { raw: { write: (chunk: string) => void } },
+  event: SessionEvent,
+  eventId: string
+): void {
   const formatted = eventToSSEFormat(event, eventId);
   reply.raw.write(`event: ${formatted.event}\nid: ${eventId}\ndata: ${formatted.data}\n\n`);
-}
-
-function shouldReplayFreshEvents(state: SessionState): boolean {
-  return state === 'running' || state === 'blocked';
-}
-
-function parseLastEventSeq(lastEventId?: string): { isReconnect: boolean; lastSeq: number } {
-  if (lastEventId === undefined) {
-    return { isReconnect: false, lastSeq: 0 };
-  }
-
-  const parsedSeq = Number.parseInt(lastEventId, 10);
-  if (!Number.isFinite(parsedSeq) || parsedSeq < 0) {
-    return { isReconnect: false, lastSeq: 0 };
-  }
-
-  return { isReconnect: true, lastSeq: parsedSeq };
 }
 
 function writeBootstrapEvent(
@@ -64,7 +49,8 @@ async function buildSnapshotEvent(
   const runtimeState = await getRuntimeSessionState(conversationManager, sessionId, baseStatus);
 
   const assistantIds = messages.filter((m) => m.role === 'assistant').map((m) => m.id);
-  const thinkingMap = sessionEventsDAO?.getThinkingForSession(sessionId, assistantIds) ?? new Map<string, string>();
+  const thinkingMap =
+    sessionEventsDAO?.getThinkingForSession(sessionId, assistantIds) ?? new Map<string, string>();
 
   return {
     type: 'session.snapshot',
@@ -98,38 +84,31 @@ async function buildSnapshotEvent(
 }
 
 const streamRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
-  const conversationManager = (fastify as typeof fastify & { conversationManager: ConversationManager })
-    .conversationManager;
+  const conversationManager = (
+    fastify as typeof fastify & { conversationManager: ConversationManager }
+  ).conversationManager;
   const chatHandler = (fastify as typeof fastify & { chatHandler?: ChatHandler }).chatHandler;
 
-  // GET /:id/stream - SSE streaming endpoint with replay support
+  // GET /:id/stream - SSE streaming endpoint with full snapshot bootstrap
   fastify.get<{ Params: { id: string } }>(
     '/:id/stream',
     {
       schema: {
-        description: 'SSE stream for session events with replay support',
+        description: 'SSE stream for full snapshot bootstrap and live session events',
         tags: ['Chat', 'SSE'],
         params: Type.Object({
           id: Type.String(),
-        }),
-        querystring: Type.Object({
-          lastEventId: Type.Optional(Type.String()),
         }),
       },
     },
     async (request, reply) => {
       const { id: sessionId } = request.params;
-      const query = request.query as { lastEventId?: string };
 
       const session = conversationManager.getSession(sessionId);
       if (!session) {
         reply.status(404);
         return { success: false, error: 'Session not found' };
       }
-
-      const lastEventIdHeader = request.headers['last-event-id'];
-      const lastEventId = query.lastEventId ?? (lastEventIdHeader as string | undefined);
-      const { isReconnect, lastSeq } = parseLastEventSeq(lastEventId);
 
       const sessionEventsDAO =
         typeof chatHandler?.getSessionEventsDAO === 'function'
@@ -139,7 +118,7 @@ const streamRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         typeof chatHandler?.getSessionEventHub === 'function'
           ? chatHandler.getSessionEventHub()
           : SessionEventHub.getInstance();
-      const lastDeliveredSeq = { value: isReconnect ? lastSeq : 0 };
+      const lastDeliveredSeq = { value: 0 };
       const bufferedEvents: SessionEvent[] = [];
       let bootstrapComplete = false;
 
@@ -164,48 +143,13 @@ const streamRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           Connection: 'keep-alive',
         });
 
-        if (!isReconnect) {
-          const snapshotEvent = await buildSnapshotEvent(
-            conversationManager,
-            sessionId,
-            sessionEventsDAO,
-            session.status
-          );
-          writeSSEEvent(reply, snapshotEvent, '0');
-
-          if (shouldReplayFreshEvents(snapshotEvent.state)) {
-            const events = await sessionEventsDAO.getEventsAfter(sessionId, 0, REPLAY_FETCH_LIMIT);
-            for (const event of events) {
-              // Skip incremental events already materialized into the snapshot
-              if (event.type === 'assistant.thinking') continue;
-              writeBootstrapEvent(reply, event, lastDeliveredSeq);
-            }
-          }
-        } else {
-          const minSeq = sessionEventsDAO.getMinSeq(sessionId);
-          const hasGap =
-            (minSeq !== null && lastSeq < minSeq - 1) ||
-            (minSeq === null && lastSeq > 0);
-
-          if (hasGap) {
-            const snapshotEvent = await buildSnapshotEvent(
-              conversationManager,
-              sessionId,
-              sessionEventsDAO,
-              session.status
-            );
-            writeSSEEvent(reply, snapshotEvent, '');
-            lastDeliveredSeq.value = minSeq !== null ? minSeq - 1 : 0;
-          }
-
-          const replayFrom = hasGap && minSeq !== null ? minSeq - 1 : lastSeq;
-          const events = await sessionEventsDAO.getEventsAfter(sessionId, replayFrom, REPLAY_FETCH_LIMIT);
-          for (const event of events) {
-            // Skip incremental events already materialized into the snapshot
-            if (hasGap && event.type === 'assistant.thinking') continue;
-            writeBootstrapEvent(reply, event, lastDeliveredSeq);
-          }
-        }
+        const snapshotEvent = await buildSnapshotEvent(
+          conversationManager,
+          sessionId,
+          sessionEventsDAO,
+          session.status
+        );
+        writeSSEEvent(reply, snapshotEvent, '0');
 
         bootstrapComplete = true;
         for (const event of bufferedEvents) {
@@ -224,11 +168,14 @@ const streamRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         }
       }, 15000);
 
-      const timeout = setTimeout(() => {
-        clearInterval(heartbeatInterval);
-        unsubscribe();
-        reply.raw.end();
-      }, 5 * 60 * 1000);
+      const timeout = setTimeout(
+        () => {
+          clearInterval(heartbeatInterval);
+          unsubscribe();
+          reply.raw.end();
+        },
+        5 * 60 * 1000
+      );
 
       request.raw.on('close', () => {
         clearInterval(heartbeatInterval);

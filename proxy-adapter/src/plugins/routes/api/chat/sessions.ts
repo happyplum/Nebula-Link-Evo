@@ -17,11 +17,7 @@ import { MAX_SCREENSHOT_SIZE_BYTES, type MessageCreatedEvent } from '@nebula-lin
 import { connectivityGateService } from '../../../../services/connectivity-gate-service.js';
 import { TaskService } from '../../../../services/index.js';
 import { validateProviderModel } from '../../../../config/validator.js';
-import {
-  AgentStateSchema,
-  SessionStatusSchema,
-  getRuntimeSessionState,
-} from './runtime-state.js';
+import { AgentStateSchema, SessionStatusSchema, getRuntimeSessionState } from './runtime-state.js';
 
 // Schemas
 const SessionResponseSchema = Type.Object({
@@ -57,11 +53,10 @@ const CreateSessionResponseSchema = Type.Object({
 
 const MessageResponseSchema = Type.Object({
   id: Type.String(),
-  session_id: Type.String(),
   role: Type.String(),
   content: Type.String(),
+  thinking: Type.Optional(Type.String()),
   created_at: Type.String(),
-  metadata: Type.Union([Type.Record(Type.String(), Type.Unknown()), Type.Null()]),
 });
 
 const MessageListResponseSchema = Type.Array(MessageResponseSchema);
@@ -78,14 +73,18 @@ const AsyncMessageResponseSchema = Type.Object({
 });
 
 const UpdateModelsBodySchema = Type.Object({
-  decision: Type.Optional(Type.Object({
-    provider: Type.String({ minLength: 1 }),
-    model: Type.String({ minLength: 1 }),
-  })),
-  vision: Type.Optional(Type.Object({
-    provider: Type.String({ minLength: 1 }),
-    model: Type.String({ minLength: 1 }),
-  })),
+  decision: Type.Optional(
+    Type.Object({
+      provider: Type.String({ minLength: 1 }),
+      model: Type.String({ minLength: 1 }),
+    })
+  ),
+  vision: Type.Optional(
+    Type.Object({
+      provider: Type.String({ minLength: 1 }),
+      model: Type.String({ minLength: 1 }),
+    })
+  ),
 });
 
 const UpdateModelsResponseSchema = Type.Object({
@@ -93,8 +92,9 @@ const UpdateModelsResponseSchema = Type.Object({
 });
 
 const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
-  const conversationManager = (fastify as typeof fastify & { conversationManager: ConversationManager })
-    .conversationManager;
+  const conversationManager = (
+    fastify as typeof fastify & { conversationManager: ConversationManager }
+  ).conversationManager;
   const chatHandler = (fastify as typeof fastify & { chatHandler: ChatHandler }).chatHandler;
   const persistWorker = new StreamPersistWorker();
   const jobQueue = new ConversationJobQueue(persistWorker);
@@ -129,7 +129,13 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
     async (request, reply) => {
       try {
-        const { title = '新会话', provider, model, vision_provider, vision_model } = request.body || {};
+        const {
+          title = '新会话',
+          provider,
+          model,
+          vision_provider,
+          vision_model,
+        } = request.body || {};
         const config = TaskService.getInstance().getConfig();
         if (config === null) {
           reply.status(500);
@@ -293,7 +299,8 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     '/:id/models',
     {
       schema: {
-        description: 'Update model configuration for a session. Change takes effect on the next step.',
+        description:
+          'Update model configuration for a session. Change takes effect on the next step.',
         tags: ['Chat'],
         params: Type.Object({ id: Type.String() }),
         body: UpdateModelsBodySchema,
@@ -340,12 +347,16 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         if (decision && !registry.isAvailable(decision.provider)) {
           const errorDetail = registry.getAvailabilityError(decision.provider);
           reply.status(503);
-          return { error: `Provider '${decision.provider}' is currently unavailable${errorDetail ? `: ${errorDetail}` : ''}` };
+          return {
+            error: `Provider '${decision.provider}' is currently unavailable${errorDetail ? `: ${errorDetail}` : ''}`,
+          };
         }
         if (vision && !registry.isAvailable(vision.provider)) {
           const errorDetail = registry.getAvailabilityError(vision.provider);
           reply.status(503);
-          return { error: `Provider '${vision.provider}' is currently unavailable${errorDetail ? `: ${errorDetail}` : ''}` };
+          return {
+            error: `Provider '${vision.provider}' is currently unavailable${errorDetail ? `: ${errorDetail}` : ''}`,
+          };
         }
 
         const updateParams: import('../../../../conversation/types.js').UpdateSessionParams = {};
@@ -448,7 +459,33 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         }
 
         const messages = conversationManager.getMessages(sessionId, { limit, offset });
-        return messages;
+
+        const db = DatabaseManager.getInstance();
+        const sessionEventsDAO = db.getSessionEventsDAO();
+        const assistantIds = messages.filter((m) => m.role === 'assistant').map((m) => m.id);
+        const thinkingMap =
+          sessionEventsDAO.getThinkingForSession(sessionId, assistantIds) ??
+          new Map<string, string>();
+
+        return messages.map((m) => {
+          const result: {
+            id: string;
+            role: string;
+            content: string;
+            created_at: string;
+            thinking?: string;
+          } = {
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            created_at: m.created_at,
+          };
+          const thinking = thinkingMap.get(m.id);
+          if (thinking) {
+            result.thinking = thinking;
+          }
+          return result;
+        });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         request.log.error({ error: errorMessage, sessionId }, 'Failed to get messages');
@@ -503,7 +540,9 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           const decodedBytes = Math.ceil((screenshot.length * 3) / 4);
           if (decodedBytes > MAX_SCREENSHOT_SIZE_BYTES) {
             reply.status(400);
-            return { error: `Screenshot exceeds maximum size of ${MAX_SCREENSHOT_SIZE_BYTES} bytes` };
+            return {
+              error: `Screenshot exceeds maximum size of ${MAX_SCREENSHOT_SIZE_BYTES} bytes`,
+            };
           }
         }
 
@@ -540,7 +579,11 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
             messageId,
             content: content.trim(),
           };
-          const createdSeq = await sessionEventsDAO.appendEvent(sessionId, 'message.created', eventPayload);
+          const createdSeq = await sessionEventsDAO.appendEvent(
+            sessionId,
+            'message.created',
+            eventPayload
+          );
           sessionEventHub.publish(sessionId, {
             type: 'message.created',
             seq: createdSeq,
@@ -564,7 +607,8 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           });
         } catch (innerError) {
           sessionLock.release(sessionId, runId);
-          const errorMessage = innerError instanceof Error ? innerError.message : String(innerError);
+          const errorMessage =
+            innerError instanceof Error ? innerError.message : String(innerError);
           const errorPayload = {
             sessionId,
             error: errorMessage,
