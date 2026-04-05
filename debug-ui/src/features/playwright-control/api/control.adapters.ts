@@ -7,9 +7,14 @@ import {
   DEBUG_DOM,
   DEBUG_PLAYWRIGHT_ACTION,
   DEBUG_PLAYWRIGHT_CLOSE,
+  DEBUG_PLAYWRIGHT_CLICK,
+  DEBUG_PLAYWRIGHT_CLICK_BY_MARKER,
+  DEBUG_PLAYWRIGHT_ELEMENT_AT,
+  DEBUG_PLAYWRIGHT_EXECUTE_BY_MARKER,
   DEBUG_PLAYWRIGHT_NAVIGATE,
   DEBUG_PLAYWRIGHT_OPEN,
   DEBUG_PLAYWRIGHT_SCREENSHOT,
+  DEBUG_PLAYWRIGHT_SCROLL,
   DEBUG_PLAYWRIGHT_STATUS,
 } from '@/shared/api/endpoints.js';
 
@@ -53,6 +58,27 @@ export interface EvaluateResponse {
   error?: string;
 }
 
+export interface ElementAtResponse {
+  success: boolean;
+  element?: {
+    selector: string;
+    tag: string;
+    id?: string;
+    class?: string;
+    type?: string;
+    name?: string;
+    placeholder?: string;
+    text?: string;
+    href?: string;
+    src?: string;
+    alt?: string;
+    bbox?: { x: number; y: number; width: number; height: number };
+    isVisible: boolean;
+    isInteractable: boolean;
+  };
+  error?: string;
+}
+
 export interface DomSnapshotElementInfo {
   tag: string;
   bbox: { x: number; y: number; width: number; height: number };
@@ -66,6 +92,7 @@ export interface DomSnapshotElementInfo {
 export interface DomSnapshotResponse {
   success: boolean;
   dom?: {
+    version?: string;
     annotated_screenshot_base64?: string;
     elements_map?:
       | [number, DomSnapshotElementInfo][]
@@ -86,10 +113,59 @@ export async function executeAction(
   action: string,
   args?: Record<string, unknown>,
 ): Promise<ActionResponse> {
-  return apiClient.post<ActionResponse>(DEBUG_PLAYWRIGHT_ACTION, {
-    action,
-    ...args,
-  });
+  const x = typeof args?.x === 'number' ? args.x : undefined;
+  const y = typeof args?.y === 'number' ? args.y : undefined;
+  const selector =
+    typeof args?.selector === 'string'
+      ? args.selector
+      : typeof args?.cssSelector === 'string'
+        ? args.cssSelector
+        : undefined;
+  const markerId = typeof args?.markerId === 'number' ? args.markerId : undefined;
+  const snapshotId = typeof args?.snapshotId === 'string' ? args.snapshotId : undefined;
+  const param = typeof args?.param === 'string' ? args.param : undefined;
+  const url = typeof args?.url === 'string' ? args.url : undefined;
+
+  if (action === 'navigate' && url) {
+    return navigateToUrl(url);
+  }
+
+  if (action === 'click' && x !== undefined && y !== undefined) {
+    return apiClient.post<ActionResponse>(DEBUG_PLAYWRIGHT_CLICK, { x, y });
+  }
+
+  if (action === 'scroll' && x !== undefined && y !== undefined) {
+    return apiClient.post<ActionResponse>(DEBUG_PLAYWRIGHT_SCROLL, { x, y });
+  }
+
+  if (markerId !== undefined && snapshotId) {
+    if (action === 'click') {
+      return apiClient.post<ActionResponse>(DEBUG_PLAYWRIGHT_CLICK_BY_MARKER, {
+        snapshot_id: snapshotId,
+        nebula_id: markerId,
+      });
+    }
+
+    return apiClient.post<ActionResponse>(DEBUG_PLAYWRIGHT_EXECUTE_BY_MARKER, {
+      snapshot_id: snapshotId,
+      nebula_id: markerId,
+      action,
+      ...(param ? { param } : {}),
+    });
+  }
+
+  if (selector) {
+    return apiClient.post<ActionResponse>(DEBUG_PLAYWRIGHT_ACTION, {
+      selector,
+      action,
+      ...(param ? { param } : {}),
+    });
+  }
+
+  return {
+    success: false,
+    error: 'Missing required action target',
+  };
 }
 
 /** Run JavaScript expression in the browser context */
@@ -145,5 +221,12 @@ export async function navigateToUrl(url: string): Promise<ActionResponse> {
 
 /** Fetch DOM snapshot with annotated screenshot and elements map */
 export async function fetchDomSnapshot(): Promise<DomSnapshotResponse> {
-  return apiClient.get<DomSnapshotResponse>(DEBUG_DOM);
+  return apiClient.get<DomSnapshotResponse>(DEBUG_DOM, { version: '2.0' });
+}
+
+export async function getElementAt(x: number, y: number): Promise<ElementAtResponse> {
+  return apiClient.get<ElementAtResponse>(DEBUG_PLAYWRIGHT_ELEMENT_AT, {
+    x: String(x),
+    y: String(y),
+  });
 }

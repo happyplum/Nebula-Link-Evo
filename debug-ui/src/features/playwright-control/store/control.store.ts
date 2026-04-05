@@ -18,7 +18,7 @@ export interface SelectedElement {
 }
 
 export interface DomElement {
-  markerNumber: number;
+  markerNumber?: number;
   tag: string;
   id?: string;
   text?: string;
@@ -40,6 +40,11 @@ export interface Viewport {
   height: number;
 }
 
+export interface CapturedCoordinates {
+  x: number;
+  y: number;
+}
+
 interface PlaywrightControlState {
   selectedElement: SelectedElement | null;
   consoleMessages: ConsoleMessage[];
@@ -53,10 +58,12 @@ interface PlaywrightControlState {
   domElements: DomElement[];
   elementPickerEnabled: boolean;
   highlightedElementId: string | null;
+  capturedCoordinates: CapturedCoordinates | null;
 
   setSelectedElement: (element: SelectedElement | null) => void;
   clearSelectedElement: () => void;
   setConsoleMessages: (messages: ConsoleMessage[]) => void;
+  addConsoleMessage: (message: ConsoleMessage) => void;
   setExecutingAction: (executing: boolean) => void;
   setActionError: (error: string | null) => void;
   setViewport: (viewport: Viewport | null) => void;
@@ -67,6 +74,7 @@ interface PlaywrightControlState {
   setDomElements: (els: DomElement[]) => void;
   setElementPickerEnabled: (v: boolean) => void;
   setHighlightedElementId: (id: string | null) => void;
+  setCapturedCoordinates: (coords: CapturedCoordinates | null) => void;
   reset: () => void;
 }
 
@@ -91,6 +99,7 @@ const initialState = {
   domElements: [] as DomElement[],
   elementPickerEnabled: false,
   highlightedElementId: null as string | null,
+  capturedCoordinates: null as CapturedCoordinates | null,
 };
 
 export const useControlStore = create<PlaywrightControlState>()((set) => ({
@@ -99,6 +108,10 @@ export const useControlStore = create<PlaywrightControlState>()((set) => ({
   setSelectedElement: (element) => set({ selectedElement: element }),
   clearSelectedElement: () => set({ selectedElement: null }),
   setConsoleMessages: (messages) => set({ consoleMessages: messages }),
+  addConsoleMessage: (message) =>
+    set((state) => ({
+      consoleMessages: [...state.consoleMessages, message].slice(-200),
+    })),
   setExecutingAction: (executing) => set({ isExecutingAction: executing }),
   setActionError: (error) => set({ lastActionError: error }),
   setViewport: (viewport) => set({ viewport }),
@@ -107,32 +120,30 @@ export const useControlStore = create<PlaywrightControlState>()((set) => ({
   setMarkerToggle: (v) => {
     try {
       localStorage.setItem('showMarkerNumbers', String(v));
-    } catch { /* storage unavailable */ }
+    } catch {
+      /* storage unavailable */
+    }
     set({ markerToggle: v });
   },
   setSnapshotId: (id) => set({ snapshotId: id }),
   setDomElements: (els) => set({ domElements: els }),
   setElementPickerEnabled: (v) => set({ elementPickerEnabled: v }),
   setHighlightedElementId: (id) => set({ highlightedElementId: id }),
+  setCapturedCoordinates: (coords) => set({ capturedCoordinates: coords }),
   reset: () => set(initialState),
 }));
 
 // Selectors for optimized component subscriptions
-export const selectSelectedElement = (s: PlaywrightControlState) =>
-  s.selectedElement;
-export const selectConsoleMessages = (s: PlaywrightControlState) =>
-  s.consoleMessages;
-export const selectIsExecutingAction = (s: PlaywrightControlState) =>
-  s.isExecutingAction;
-export const selectLastActionError = (s: PlaywrightControlState) =>
-  s.lastActionError;
+export const selectSelectedElement = (s: PlaywrightControlState) => s.selectedElement;
+export const selectConsoleMessages = (s: PlaywrightControlState) => s.consoleMessages;
+export const selectIsExecutingAction = (s: PlaywrightControlState) => s.isExecutingAction;
+export const selectLastActionError = (s: PlaywrightControlState) => s.lastActionError;
 export const selectViewport = (s: PlaywrightControlState) => s.viewport;
 export const selectBrowserOpen = (s: PlaywrightControlState) => s.browserOpen;
 export const selectBrowserUrl = (s: PlaywrightControlState) => s.browserUrl;
 export const selectMarkerToggle = (s: PlaywrightControlState) => s.markerToggle;
 export const selectSnapshotId = (s: PlaywrightControlState) => s.snapshotId;
 export const selectDomElements = (s: PlaywrightControlState) => s.domElements;
-export const selectElementPickerEnabled = (s: PlaywrightControlState) =>
-  s.elementPickerEnabled;
-export const selectHighlightedElementId = (s: PlaywrightControlState) =>
-  s.highlightedElementId;
+export const selectElementPickerEnabled = (s: PlaywrightControlState) => s.elementPickerEnabled;
+export const selectHighlightedElementId = (s: PlaywrightControlState) => s.highlightedElementId;
+export const selectCapturedCoordinates = (s: PlaywrightControlState) => s.capturedCoordinates;
