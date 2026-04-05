@@ -32,12 +32,22 @@ export class BrowserLifecycle {
     lastCdpPort: null,
   };
 
+  /** Clean up stale state when browser disconnects unexpectedly */
+  private handleDisconnect = (): void => {
+    this.state.browser = null;
+    this.state.context = null;
+    this.state.page = null;
+    this.state.cdpPort = 0;
+  };
+
   getState(): Readonly<BrowserState> {
     return this.state;
   }
 
   isOpen(): boolean {
-    return this.state.browser !== null && this.state.page !== null;
+    return (
+      this.state.browser !== null && this.state.browser.isConnected() && this.state.page !== null
+    );
   }
 
   getPage(): Page | null {
@@ -60,9 +70,16 @@ export class BrowserLifecycle {
     const { headless = false, viewport = { width: 1920, height: 1080 }, cdpPort } = options;
     const nextCdpPort = cdpPort ?? 0;
 
+    // Detect stale reference from manually closed browser and clean up
+    if (this.state.browser && !this.state.browser.isConnected()) {
+      this.handleDisconnect();
+    }
+
     if (this.state.browser) {
-      const headlessChanged = this.state.lastHeadless !== null && headless !== this.state.lastHeadless;
-      const cdpPortChanged = this.state.lastCdpPort !== null && nextCdpPort !== this.state.lastCdpPort;
+      const headlessChanged =
+        this.state.lastHeadless !== null && headless !== this.state.lastHeadless;
+      const cdpPortChanged =
+        this.state.lastCdpPort !== null && nextCdpPort !== this.state.lastCdpPort;
       const viewportChanged =
         this.state.lastViewport !== null &&
         (viewport.width !== this.state.lastViewport.width ||
@@ -114,6 +131,7 @@ export class BrowserLifecycle {
       headless,
       args: launchArgs,
     });
+    this.state.browser.on('disconnected', this.handleDisconnect);
     this.state.context = await this.state.browser.newContext({
       viewport,
       deviceScaleFactor: 1,
@@ -127,7 +145,10 @@ export class BrowserLifecycle {
 
   async close(): Promise<void> {
     if (this.state.browser) {
-      await this.state.browser.close();
+      this.state.browser.off('disconnected', this.handleDisconnect);
+      if (this.state.browser.isConnected()) {
+        await this.state.browser.close();
+      }
       this.state.browser = null;
       this.state.context = null;
       this.state.page = null;
@@ -138,12 +159,17 @@ export class BrowserLifecycle {
     }
   }
 
-  async navigate(url: string, waitUntil: 'load' | 'domcontentloaded' | 'networkidle' = 'networkidle'): Promise<void> {
+  async navigate(
+    url: string,
+    waitUntil: 'load' | 'domcontentloaded' | 'networkidle' = 'networkidle'
+  ): Promise<void> {
     if (!this.state.page) throw new Error('Browser not opened');
     await this.state.page.goto(url, { waitUntil, timeout: 30000 });
   }
 
-  async screenshot(fullPage: boolean = false): Promise<{ screenshot: string; viewport: { width: number; height: number } }> {
+  async screenshot(
+    fullPage: boolean = false
+  ): Promise<{ screenshot: string; viewport: { width: number; height: number } }> {
     if (!this.state.page) throw new Error('Browser not opened');
 
     const screenshot = await this.state.page.screenshot({
