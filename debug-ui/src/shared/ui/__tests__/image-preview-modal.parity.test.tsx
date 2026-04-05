@@ -12,13 +12,7 @@ describe('ImagePreviewModal Parity Test', () => {
   };
 
   it('renders nothing when open=false', () => {
-    render(
-      <ImagePreviewModal
-        open={false}
-        onClose={() => {}}
-        src="test.jpg"
-      />
-    );
+    render(<ImagePreviewModal open={false} onClose={() => {}} src="test.jpg" />);
 
     expect(screen.queryByTestId('image-preview-modal')).not.toBeInTheDocument();
   });
@@ -47,33 +41,21 @@ describe('ImagePreviewModal Parity Test', () => {
   });
 
   it('alt defaults to Preview when not provided', () => {
-    render(
-      <ImagePreviewModal
-        open={true}
-        onClose={() => {}}
-        src="test.jpg"
-      />
-    );
+    render(<ImagePreviewModal open={true} onClose={() => {}} src="test.jpg" />);
 
     const img = screen.getByTestId('image-preview-img') as HTMLImageElement;
     expect(img.alt).toBe('Preview');
   });
 
-  it('title prop is displayed', () => {
+  it('title prop does not render visible text in lightbox mode', () => {
     render(<ImagePreviewModal {...defaultProps} title="Image Preview" />);
 
-    expect(screen.getByText('Image Preview')).toBeInTheDocument();
+    expect(screen.queryByText('Image Preview')).not.toBeInTheDocument();
   });
 
   it('calls onClose when Escape key is pressed', () => {
     const onClose = vi.fn();
-    render(
-      <ImagePreviewModal
-        open={true}
-        onClose={onClose}
-        src="test.jpg"
-      />
-    );
+    render(<ImagePreviewModal open={true} onClose={onClose} src="test.jpg" />);
 
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -81,31 +63,19 @@ describe('ImagePreviewModal Parity Test', () => {
 
   it('calls onClose when overlay is clicked', () => {
     const onClose = vi.fn();
-    render(
-      <ImagePreviewModal
-        open={true}
-        onClose={onClose}
-        src="test.jpg"
-      />
-    );
+    render(<ImagePreviewModal open={true} onClose={onClose} src="test.jpg" />);
 
-    const overlay = screen.getByTestId('modal-overlay');
+    const overlay = screen.getByTestId('image-preview-overlay');
     fireEvent.click(overlay);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('does not call onClose when image container is clicked', () => {
     const onClose = vi.fn();
-    render(
-      <ImagePreviewModal
-        open={true}
-        onClose={onClose}
-        src="test.jpg"
-      />
-    );
+    render(<ImagePreviewModal open={true} onClose={onClose} src="test.jpg" />);
 
-    const modal = screen.getByTestId('modal-content');
-    fireEvent.click(modal);
+    const container = screen.getByTestId('image-preview-modal');
+    fireEvent.click(container);
     expect(onClose).not.toHaveBeenCalled();
   });
 

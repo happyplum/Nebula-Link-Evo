@@ -119,6 +119,7 @@ export const testIds = {
   monitorSidebarBrowserScreenshotBtn: 'monitor-sidebar-browser-screenshot-btn',
   monitorSidebarScreenshotCard: 'monitor-sidebar-screenshot-card',
   monitorSidebarSnapshotLabel: 'monitor-sidebar-snapshot-label',
+  monitorSidebarSnapshotError: 'monitor-sidebar-snapshot-error',
   monitorSidebarSnapshotImg: 'monitor-sidebar-snapshot-img',
   monitorSidebarSnapshotRefreshBtn: 'monitor-sidebar-snapshot-refresh-btn',
   // Monitor Main

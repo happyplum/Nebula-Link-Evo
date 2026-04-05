@@ -8,9 +8,10 @@ export interface ModalProps {
   onClose: () => void;
   title?: string;
   children: ReactNode;
+  maxWidth?: number;
 }
 
-export function Modal({ open, onClose, title, children }: ModalProps) {
+export function Modal({ open, onClose, title, children, maxWidth }: ModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -27,7 +28,7 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
         const focusableElements = contentRef.current.querySelectorAll<HTMLElement>(
           'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
         );
-        
+
         if (focusableElements.length === 0) {
           e.preventDefault();
           return;
@@ -51,7 +52,7 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
     };
 
     document.addEventListener('keydown', handleKeyDown);
-    
+
     // Focus the first focusable element or the content itself
     if (contentRef.current) {
       const focusableElements = contentRef.current.querySelectorAll<HTMLElement>(
@@ -84,9 +85,9 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
 
   return createPortal(
     // biome-ignore lint/a11y/noStaticElementInteractions: <explanation>
-    <div 
-      className={styles.overlay} 
-      ref={overlayRef} 
+    <div
+      className={styles.overlay}
+      ref={overlayRef}
       onClick={handleOverlayClick}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -96,25 +97,37 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
       role="presentation"
       data-testid="modal-overlay"
     >
-      <div 
-        className={styles.content} 
+      <div
+        className={styles.content}
         ref={contentRef}
+        style={maxWidth ? { maxWidth } : undefined}
         role="dialog"
         aria-modal="true"
-        aria-labelledby={title ? "modal-title" : undefined}
+        aria-labelledby={title ? 'modal-title' : undefined}
         tabIndex={-1}
         data-testid="modal-content"
       >
         {title && (
           <div className={styles.header}>
-            <h2 id="modal-title" className={styles.title}>{title}</h2>
-            <button 
+            <h2 id="modal-title" className={styles.title}>
+              {title}
+            </h2>
+            <button
               type="button"
-              className={styles.closeButton} 
+              className={styles.closeButton}
               onClick={onClose}
               aria-label="Close modal"
             >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <title>Close</title>
                 <line x1="18" y1="6" x2="6" y2="18"></line>
                 <line x1="6" y1="6" x2="18" y2="18"></line>
