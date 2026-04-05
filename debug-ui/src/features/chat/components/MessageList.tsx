@@ -1,5 +1,12 @@
-import React, { useEffect, useRef, useCallback } from 'react';
-import { useChatStore, selectActiveMessages, selectActiveSessionId } from '../store/chat.store.js';
+import React, { useEffect, useRef, useCallback, useMemo } from 'react';
+import {
+  useChatStore,
+  selectActiveMessages,
+  selectActiveSessionId,
+  selectStreamingState,
+  selectStreamingContent,
+  selectStreamingThinking,
+} from '../store/chat.store.js';
 import { MessageBubble } from './MessageBubble.js';
 import { testIds } from '@/shared/testing/testids.js';
 import styles from './MessageList.module.css';
@@ -9,6 +16,23 @@ const DEFAULT_PAGE_SIZE = 50;
 export const MessageList: React.FC = () => {
   const messages = useChatStore(selectActiveMessages);
   const activeSessionId = useChatStore(selectActiveSessionId);
+  const streamingState = useChatStore(selectStreamingState);
+  const streamingContent = useChatStore(selectStreamingContent);
+  const streamingThinking = useChatStore(selectStreamingThinking);
+
+  const isStreaming = streamingState === 'streaming';
+
+  const streamingMessage = useMemo(() => {
+    if (!isStreaming || (!streamingContent && !streamingThinking)) return null;
+    return {
+      id: '__streaming__',
+      role: 'assistant' as const,
+      content: streamingContent || '',
+      thinking: streamingThinking || undefined,
+      isStreaming: true,
+      timestamp: Date.now(),
+    };
+  }, [isStreaming, streamingContent, streamingThinking]);
   const visibleCount = useChatStore((s) =>
     activeSessionId ? (s.visibleMessageCounts[activeSessionId] ?? DEFAULT_PAGE_SIZE) : DEFAULT_PAGE_SIZE,
   );
@@ -50,7 +74,7 @@ export const MessageList: React.FC = () => {
     }
   }, [activeSessionId, expandVisibleMessages]);
 
-  if (messages.length === 0) {
+  if (messages.length === 0 && !streamingMessage) {
     return (
       <div className={styles.container} data-testid={testIds.messageList}>
         <div className={styles.emptyState}>
@@ -81,6 +105,9 @@ export const MessageList: React.FC = () => {
       {visibleMessages.map((message) => (
         <MessageBubble key={message.id} message={message} />
       ))}
+      {streamingMessage && (
+        <MessageBubble key={streamingMessage.id} message={streamingMessage} />
+      )}
     </div>
   );
 };

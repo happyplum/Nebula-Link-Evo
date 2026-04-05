@@ -22,7 +22,7 @@ export const SessionSelector: React.FC = () => {
         data-testid={testIds.sessionSelector}
       >
         <option value="" disabled>
-          Select a session...
+          选择会话...
         </option>
         {sessions.map((session) => (
           <option key={session.id} value={session.id}>

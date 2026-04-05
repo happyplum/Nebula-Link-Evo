@@ -1,48 +1,38 @@
+/* ThinkingBlock — matches legacy .thinking-block */
 .container {
   margin: 8px 0;
-  border: 1px solid var(--border-glass);
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  background: var(--bg-card);
-  backdrop-filter: var(--blur-md);
+  background: var(--bg-secondary);
   overflow: hidden;
-  box-shadow: var(--shadow-sm);
 }
 
 .header {
-  display: flex;
-  align-items: center;
-  padding: 8px 12px;
+  padding: 6px 12px;
+  background: var(--bg-tertiary);
+  border: none;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 11px;
+  color: var(--text-muted);
   cursor: pointer;
   user-select: none;
-  font-size: 12px;
-  color: var(--text-muted);
-  background: var(--bg-elevated);
-  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
 }
 
 .header:hover {
-  background: var(--bg-secondary);
-}
-
-.icon {
-  width: 16px;
-  height: 16px;
-  margin-right: 8px;
-  fill: currentColor;
-  transition: transform 0.2s;
-}
-
-.iconExpanded {
-  transform: rotate(90deg);
+  background: var(--bg-elevated);
 }
 
 .content {
   padding: 12px;
-  font-size: 13px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
   color: var(--text-secondary);
   white-space: pre-wrap;
-  border-top: 1px solid var(--border-glass);
-  font-family: 'JetBrains Mono', monospace;
   max-height: 300px;
   overflow-y: auto;
   line-height: 1.5;

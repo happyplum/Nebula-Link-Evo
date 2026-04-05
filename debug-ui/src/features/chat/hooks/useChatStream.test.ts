@@ -66,10 +66,7 @@ beforeEach(() => {
     const es = createMockEventSource(url);
     // The hook calls es.addEventListener — patch on the mock instance
     const anyEs = es as unknown as { addEventListener: unknown; close: unknown };
-    anyEs.addEventListener = (
-      type: string,
-      handler: (e: MessageEvent) => void,
-    ) => {
+    anyEs.addEventListener = (type: string, handler: (e: MessageEvent) => void) => {
       if (!es.listeners.has(type)) es.listeners.set(type, new Set());
       es.listeners.get(type)!.add(handler);
     };
@@ -88,12 +85,11 @@ beforeEach(() => {
 // --- Helpers ---
 function renderStreamHook(
   sessionId: string | null = 'session-1',
-  opts?: { enabled?: boolean; allowResume?: boolean },
+  opts?: { enabled?: boolean; allowResume?: boolean }
 ) {
-  return renderHook(
-    ({ sessionId: sid, ...rest }) => useChatStream({ sessionId: sid, ...rest }),
-    { initialProps: { sessionId, enabled: true, allowResume: true, ...opts } },
-  );
+  return renderHook(({ sessionId: sid, ...rest }) => useChatStream({ sessionId: sid, ...rest }), {
+    initialProps: { sessionId, enabled: true, allowResume: true, ...opts },
+  });
 }
 
 function openConnection() {
@@ -120,22 +116,16 @@ beforeEach(() => {
   nextRafId = 1;
   rafIdMap.clear();
 
-  vi.stubGlobal(
-    'requestAnimationFrame',
-    (cb: () => void) => {
-      const id = nextRafId++;
-      rafCallbacks.push(cb);
-      rafIdMap.set(id, cb);
-      return id;
-    },
-  );
-  vi.stubGlobal(
-    'cancelAnimationFrame',
-    (id: number) => {
-      rafIdMap.delete(id);
-      rafCallbacks = rafCallbacks.filter((cb) => !rafIdMap.has(id) || cb !== rafIdMap.get(id));
-    },
-  );
+  vi.stubGlobal('requestAnimationFrame', (cb: () => void) => {
+    const id = nextRafId++;
+    rafCallbacks.push(cb);
+    rafIdMap.set(id, cb);
+    return id;
+  });
+  vi.stubGlobal('cancelAnimationFrame', (id: number) => {
+    rafIdMap.delete(id);
+    rafCallbacks = rafCallbacks.filter((cb) => !rafIdMap.has(id) || cb !== rafIdMap.get(id));
+  });
 });
 
 function flushRAF() {
@@ -162,9 +152,7 @@ describe('useChatStream', () => {
     it('connects to the correct SSE URL', () => {
       renderStreamHook('session-1');
       expect(mockEsInstance).toBeTruthy();
-      expect(mockEsInstance.url).toBe(
-        '/api/chat/sessions/session-1/stream',
-      );
+      expect(mockEsInstance.url).toBe('/api/chat/sessions/session-1/stream');
     });
 
     it('sets isConnected to true on open', () => {
@@ -229,6 +217,34 @@ describe('useChatStream', () => {
       expect(msgs).toHaveLength(2);
       expect(msgs[0].id).toBe('m1');
       expect(msgs[1].content).toBe('hi');
+    });
+
+    it('applies snapshot even after prior higher-seq live events', () => {
+      renderStreamHook('s1');
+      openConnection();
+
+      emitEvent('message.created', {
+        type: 'message.created',
+        sessionId: 's1',
+        seq: 42,
+        messageId: 'm-live',
+        content: 'live first',
+      });
+
+      emitEvent('session.snapshot', {
+        type: 'session.snapshot',
+        sessionId: 's1',
+        seq: 0,
+        messages: [
+          { id: 'm-gap', role: 'assistant', content: 'from snapshot', created_at: '2026-01-01' },
+        ],
+        state: 'running',
+      });
+
+      const msgs = useChatStore.getState().messagesBySession['s1'];
+      expect(msgs).toHaveLength(1);
+      expect(msgs[0].id).toBe('m-gap');
+      expect(msgs[0].content).toBe('from snapshot');
     });
   });
 
@@ -366,27 +382,31 @@ describe('useChatStream', () => {
       renderStreamHook('s1');
       openConnection();
 
-      // First event with seq=1
-      emitEvent('session.snapshot', {
-        type: 'session.snapshot',
+      emitEvent('assistant.started', {
+        type: 'assistant.started',
         sessionId: 's1',
         seq: 1,
-        messages: [{ id: 'm1', role: 'user', content: 'first', created_at: '2026-01-01' }],
-        state: 'idle',
+        messageId: 'a1',
       });
-      expect(useChatStore.getState().messagesBySession['s1']).toHaveLength(1);
+
+      emitEvent('assistant.delta', {
+        type: 'assistant.delta',
+        sessionId: 's1',
+        seq: 2,
+        text: 'first',
+      });
+      flushRAF();
+      expect(useChatStore.getState().streamingContent).toBe('first');
 
       // Duplicate with same seq
-      emitEvent('session.snapshot', {
-        type: 'session.snapshot',
+      emitEvent('assistant.delta', {
+        type: 'assistant.delta',
         sessionId: 's1',
-        seq: 1,
-        messages: [{ id: 'm2', role: 'user', content: 'duplicate', created_at: '2026-01-01' }],
-        state: 'idle',
+        seq: 2,
+        text: 'duplicate',
       });
-      // Should still be 1 — deduplicated
-      expect(useChatStore.getState().messagesBySession['s1']).toHaveLength(1);
-      expect(useChatStore.getState().messagesBySession['s1'][0].content).toBe('first');
+      flushRAF();
+      expect(useChatStore.getState().streamingContent).toBe('first');
     });
 
     it('processes events without seq field', () => {
