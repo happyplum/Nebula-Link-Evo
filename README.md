@@ -32,7 +32,7 @@ Browser ←→ Debug UI (:5173 dev / :3000/debug prod)
 
 **工具与扩展**：6 个核心工具、Skills（YAML 工作流）和 MCP（Model Context Protocol，从 stdio 服务器自动发现），提供丰富的扩展能力。
 
-**上下文管理**：消息数超过 20 时自动压缩上下文，SSE 流式传输支持 lastEventId 断线重连，后台任务队列支持 3 次重试和 10 分钟空闲清理。
+**上下文管理**：消息数超过 20 时自动压缩上下文，Chat SSE 每次建连都会先发送完整 `session.snapshot` 再继续 live stream，后台任务队列支持 3 次重试和 10 分钟空闲清理。
 
 ### 实时观测与控制
 
@@ -46,32 +46,36 @@ Browser ←→ Debug UI (:5173 dev / :3000/debug prod)
 
 ## Tech Stack
 
-| Layer | Tech |
-|-------|------|
-| Frontend | React 19 + TypeScript + Vite + CSS Modules |
-| Backend | Node.js + Fastify 5 |
-| Browser | Playwright + Chromium |
-| AI | Vercel AI SDK (@ai-sdk/openai-compatible, @ai-sdk/openai, GLM JWT adapter) |
-| Protocol | MCP (Model Context Protocol) |
-| Storage | SQLite (sessions, messages, events) |
+| Layer    | Tech                                                                       |
+| -------- | -------------------------------------------------------------------------- |
+| Frontend | React 19 + TypeScript + Vite + CSS Modules                                 |
+| Backend  | Node.js + Fastify 5                                                        |
+| Browser  | Playwright + Chromium                                                      |
+| AI       | Vercel AI SDK (@ai-sdk/openai-compatible, @ai-sdk/openai, GLM JWT adapter) |
+| Protocol | MCP (Model Context Protocol)                                               |
+| Storage  | SQLite (sessions, messages, events)                                        |
 
 ## Quick Start
 
 **环境要求**：
+
 - Node.js >= 22.5.0
 - pnpm >= 8
 
 **安装依赖**：
+
 ```bash
 pnpm install
 ```
 
 **安装 Playwright 浏览器**：
+
 ```bash
 cd playwright-server && pnpm exec playwright install chromium
 ```
 
 **配置环境变量**：
+
 ```bash
 # 复制示例文件
 copy .env.example .env
@@ -79,18 +83,21 @@ copy .env.example .env
 ```
 
 **启动开发模式**：
+
 ```bash
 pnpm dev
 # 同时启动 debug-ui (5173)、proxy-adapter (3000)、playwright-server (3001)
 ```
 
 **启动生产模式**：
+
 ```bash
 pnpm build
 start.bat
 ```
 
 **验证安装**：
+
 ```bash
 curl http://localhost:3000/api/health
 ```
@@ -108,12 +115,12 @@ docs/               # Documentation
 
 ## Development Commands
 
-| Command | Description |
-|---------|-------------|
-| `pnpm dev` | Start all services in dev mode |
-| `pnpm build` | Production build |
-| `pnpm test` | Run all tests |
-| `pnpm lint` | ESLint check |
+| Command      | Description                    |
+| ------------ | ------------------------------ |
+| `pnpm dev`   | Start all services in dev mode |
+| `pnpm build` | Production build               |
+| `pnpm test`  | Run all tests                  |
+| `pnpm lint`  | ESLint check                   |
 
 ## Documentation
 
@@ -129,6 +136,15 @@ docs/               # Documentation
 - `sendMessage()` performs optimistic incremental append (no full message-list DOM wipe).
 - `assistant.started` / stream fallback placeholders append incrementally instead of forcing `renderCurrentSessionMessages()`.
 - `message.created` confirms optimistic user messages by transitioning temp DOM `data-id` to server ID, avoiding duplicate user bubbles.
+- `/#/chat` uses SSE as the only history and live source; it must not call `GET /api/chat/sessions/:id/messages` to hydrate visible chat history.
+- Every chat SSE connection must bootstrap with a full `session.snapshot`, then continue with live events only; no `lastEventId` / `Last-Event-ID` resume contract remains in the product behavior.
+- `session.snapshot` is responsible for carrying restorable assistant thinking/history, so reconnects and page re-entry rebuild from snapshot rather than cursor-based replay.
+
+### Debug UI Monitor Sidebar
+
+- `刷新 DOM 截图` must render the latest annotated screenshot when backend returns either raw JPEG base64 or gzip-compressed JPEG bytes.
+- If annotated screenshot decode fails or backend returns empty screenshot data, the DOM screenshot card must show a visible inline error instead of only the `暂无截图` placeholder.
+- DOM snapshot v2 element normalization must accept backend `Record<string, ElementLocator>` fields `id` and `locator_bundle` while preserving existing frontend element typing.
 
 ### AI Provider System
 
