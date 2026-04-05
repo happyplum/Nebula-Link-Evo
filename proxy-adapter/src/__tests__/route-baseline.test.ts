@@ -595,23 +595,12 @@ describe('Route Baseline: API Chat Routes', () => {
       expect(body).toHaveProperty('error');
     });
 
-    it('should support lastEventId for replay', async () => {
+    it('should always bootstrap stream clients with session.snapshot', async () => {
       app.conversationManager.getSession = vi.fn().mockReturnValue({
         id: 'session-123',
         status: 'running',
       });
       app.conversationManager.getSessionState = vi.fn().mockResolvedValue({ status: 'running' });
-
-      const sessionEventsDAO = DatabaseManager.getInstance().getSessionEventsDAO();
-      vi.spyOn(sessionEventsDAO, 'getEventsAfter').mockResolvedValue([
-        {
-          type: 'assistant.delta',
-          seq: 2,
-          sessionId: 'session-123',
-          messageId: 'msg-2',
-          text: 'Replay me',
-        },
-      ]);
 
       await app.listen({ port: 0, host: '127.0.0.1' });
       const address = app.server.address();
@@ -620,13 +609,12 @@ describe('Route Baseline: API Chat Routes', () => {
       }
 
       const response = await collectSSEEvents(
-        `http://127.0.0.1:${address.port}/api/chat/sessions/session-123/stream?lastEventId=0`,
+        `http://127.0.0.1:${address.port}/api/chat/sessions/session-123/stream`,
         { maxEvents: 1 }
       );
 
       expect(response.statusCode).toBe(200);
-      expect(response.events.find((event) => event.event === 'session.snapshot')).toBeUndefined();
-      expect(response.events.find((event) => event.event === 'assistant.delta')).toBeDefined();
+      expect(response.events[0]?.event).toBe('session.snapshot');
     });
   });
 });

@@ -21,7 +21,12 @@ async function collectSSEEvents(
     maxEvents?: number;
     headers?: Record<string, string>;
   } = {}
-): Promise<{ statusCode: number; headers: Record<string, string>; events: ParsedSSEEvent[]; rawBody: string }> {
+): Promise<{
+  statusCode: number;
+  headers: Record<string, string>;
+  events: ParsedSSEEvent[];
+  rawBody: string;
+}> {
   const { timeoutMs = 1500, maxEvents = 1, headers: requestHeaders } = options;
 
   return new Promise((resolve, reject) => {
@@ -263,7 +268,7 @@ describe('SSE Stream Endpoint', () => {
       expect(payload.messages[1].content).toBe('Assistant reply');
     });
 
-    it('should replay persisted running-session thinking and tool events on a fresh stream', async () => {
+    it('should bootstrap running sessions with snapshot state only', async () => {
       const session = conversationManager.createSession({
         title: 'Fresh Replay Test',
         provider: 'kimi',
@@ -271,29 +276,14 @@ describe('SSE Stream Endpoint', () => {
       });
 
       conversationManager.addMessage(session.id, { role: 'user', content: 'Open the page' });
+      conversationManager.addMessage(session.id, { role: 'assistant', content: 'Working on it' });
       await conversationManager.createSessionState({
         sessionId: session.id,
         status: 'running',
       });
 
-      const sessionEventsDAO = db.getSessionEventsDAO();
-      await sessionEventsDAO.appendEvent(session.id, 'assistant.started', { messageId: 'msg-assistant-1' });
-      await sessionEventsDAO.appendEvent(session.id, 'assistant.thinking', {
-        messageId: 'msg-assistant-1',
-        text: 'Thinking about navigation',
-      });
-      await sessionEventsDAO.appendEvent(session.id, 'assistant.tool_call', {
-        messageId: 'msg-assistant-1',
-        toolCall: {
-          function: {
-            name: 'browser_navigate',
-          },
-        },
-      });
-      await sessionEventsDAO.flush();
-
       const response = await collectSSEEvents(`${baseUrl}/api/chat/sessions/${session.id}/stream`, {
-        maxEvents: 4,
+        maxEvents: 1,
         timeoutMs: 2000,
       });
 
@@ -302,8 +292,7 @@ describe('SSE Stream Endpoint', () => {
 
       const snapshotPayload = JSON.parse(response.events[0]!.data);
       expect(snapshotPayload.state).toBe('running');
-      expect(response.events.map((event) => event.event)).toContain('assistant.thinking');
-      expect(response.events.map((event) => event.event)).toContain('assistant.tool_call');
+      expect(snapshotPayload.messages).toHaveLength(2);
     });
 
     it('should not lose live events published during fresh-stream bootstrap', async () => {
@@ -319,144 +308,34 @@ describe('SSE Stream Endpoint', () => {
         status: 'running',
       });
 
-      const sessionEventsDAO = db.getSessionEventsDAO();
-      await sessionEventsDAO.appendEvent(session.id, 'assistant.started', {
-        sessionId: session.id,
-        messageId: 'msg-assistant-1',
-      });
-      await sessionEventsDAO.flush();
-
       const liveBootstrapEvent: SessionEvent = {
         type: 'assistant.delta',
-        seq: 2,
+        seq: 1,
         sessionId: session.id,
         messageId: 'msg-assistant-1',
         text: 'still streaming',
       };
 
-      vi.spyOn(sessionEventsDAO, 'getEventsAfter').mockImplementation(async () => {
+      const originalGetMessages = conversationManager.getMessages.bind(conversationManager);
+      vi.spyOn(conversationManager, 'getMessages').mockImplementation((targetSessionId: string) => {
+        const messages = originalGetMessages(targetSessionId);
         eventHub.publish(session.id, liveBootstrapEvent);
-        return [
-          {
-            type: 'assistant.started',
-            seq: 1,
-            sessionId: session.id,
-            messageId: 'msg-assistant-1',
-          },
-        ];
+        return messages;
       });
 
       const response = await collectSSEEvents(`${baseUrl}/api/chat/sessions/${session.id}/stream`, {
-        maxEvents: 3,
+        maxEvents: 2,
         timeoutMs: 2000,
       });
 
       expect(response.statusCode).toBe(200);
       expect(response.events.map((event) => event.event)).toEqual([
         'session.snapshot',
-        'assistant.started',
         'assistant.delta',
       ]);
 
-      const liveEvent = response.events[2];
+      const liveEvent = response.events[1];
       expect(JSON.parse(liveEvent!.data).text).toBe('still streaming');
-    });
-
-    it('should handle reconnect with lastEventId query param', async () => {
-      const session = conversationManager.createSession({
-        title: 'Replay Test',
-        provider: 'kimi',
-        model: 'moonshot-v1-vision-preview',
-      });
-
-      const sessionEventsDAO = db.getSessionEventsDAO();
-      await sessionEventsDAO.appendEvent(session.id, 'message.created', { messageId: 'msg-1' });
-      await sessionEventsDAO.appendEvent(session.id, 'assistant.delta', { messageId: 'msg-2', text: 'Hello' });
-      await sessionEventsDAO.flush();
-
-      const response = await collectSSEEvents(
-        `${baseUrl}/api/chat/sessions/${session.id}/stream?lastEventId=1`,
-        { maxEvents: 1 }
-      );
-
-      expect(response.statusCode).toBe(200);
-      expect(response.headers['content-type']).toBe('text/event-stream');
-
-      const snapshotEvent = response.events.find((event) => event.event === 'session.snapshot');
-      expect(snapshotEvent).toBeUndefined();
-
-      const replayEvent = response.events.find((event) => event.event === 'assistant.delta');
-      expect(replayEvent).toBeDefined();
-      expect(replayEvent?.id).toBeDefined();
-      expect(replayEvent?.data).toContain('"messageId":"msg-2"');
-    });
-
-    it('should accept Last-Event-ID header for reconnect', async () => {
-      const session = conversationManager.createSession({
-        title: 'Replay Header Test',
-        provider: 'kimi',
-        model: 'moonshot-v1-vision-preview',
-      });
-
-      const sessionEventsDAO = db.getSessionEventsDAO();
-      await sessionEventsDAO.appendEvent(session.id, 'assistant.delta', {
-        messageId: 'msg-1',
-        text: 'Replay me',
-      });
-      await sessionEventsDAO.flush();
-
-      const response = await collectSSEEvents(`${baseUrl}/api/chat/sessions/${session.id}/stream`, {
-        maxEvents: 1,
-        headers: {
-          'Last-Event-ID': '0',
-        },
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(response.events.find((event) => event.event === 'session.snapshot')).toBeUndefined();
-      expect(response.events.find((event) => event.event === 'assistant.delta')).toBeDefined();
-    });
-
-    it('should replay later persisted events after a long disconnect from the last delivered seq', async () => {
-      const session = conversationManager.createSession({
-        title: 'Long Disconnect Replay Test',
-        provider: 'kimi',
-        model: 'moonshot-v1-vision-preview',
-      });
-
-      const sessionEventsDAO = db.getSessionEventsDAO();
-      await sessionEventsDAO.appendEvent(session.id, 'message.created', {
-        messageId: 'msg-1',
-        content: 'Reconnect after offline gap',
-      });
-      await sessionEventsDAO.appendEvent(session.id, 'assistant.started', {
-        messageId: 'msg-2',
-      });
-      await sessionEventsDAO.appendEvent(session.id, 'assistant.delta', {
-        messageId: 'msg-2',
-        text: 'Chunk 1',
-      });
-      await sessionEventsDAO.appendEvent(session.id, 'assistant.delta', {
-        messageId: 'msg-2',
-        text: 'Chunk 2',
-      });
-      await sessionEventsDAO.appendEvent(session.id, 'assistant.completed', {
-        messageId: 'msg-2',
-      });
-      await sessionEventsDAO.flush();
-
-      const response = await collectSSEEvents(
-        `${baseUrl}/api/chat/sessions/${session.id}/stream?lastEventId=2`,
-        { maxEvents: 3, timeoutMs: 2000 }
-      );
-
-      expect(response.statusCode).toBe(200);
-      expect(response.events.map((event) => event.event)).toEqual([
-        'assistant.delta',
-        'assistant.delta',
-        'assistant.completed',
-      ]);
-      expect(response.events.map((event) => event.id)).toEqual(['3', '4', '5']);
     });
   });
 
@@ -544,7 +423,10 @@ describe('SSE Stream Endpoint', () => {
       const sessionEventsDAO = db.getSessionEventsDAO();
 
       await sessionEventsDAO.appendEvent(session.id, 'message.created', { messageId: 'msg-1' });
-      await sessionEventsDAO.appendEvent(session.id, 'assistant.delta', { messageId: 'msg-2', text: 'Reply' });
+      await sessionEventsDAO.appendEvent(session.id, 'assistant.delta', {
+        messageId: 'msg-2',
+        text: 'Reply',
+      });
       await sessionEventsDAO.flush();
 
       const allEvents = await sessionEventsDAO.getEventsAfter(session.id, 0, 10);
