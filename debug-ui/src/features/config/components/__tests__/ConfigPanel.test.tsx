@@ -28,7 +28,7 @@ describe('ConfigPanel', () => {
     } as any);
 
     render(<ConfigPanel />);
-    expect(screen.getByText('Failed to load configuration')).toBeInTheDocument();
+    expect(screen.getByText('配置加载失败')).toBeInTheDocument();
   });
 
   it('renders empty state when no config', () => {
@@ -39,7 +39,7 @@ describe('ConfigPanel', () => {
     } as any);
 
     render(<ConfigPanel />);
-    expect(screen.getByText('No configuration available')).toBeInTheDocument();
+    expect(screen.getByText('暂无配置数据')).toBeInTheDocument();
   });
 
   it('renders config data correctly', () => {
@@ -55,10 +55,12 @@ describe('ConfigPanel', () => {
 
     render(<ConfigPanel />);
     
-    expect(screen.getByText('System Configuration')).toBeInTheDocument();
+    expect(screen.getByText('系统配置')).toBeInTheDocument();
     expect(screen.getByText('development')).toBeInTheDocument();
-    expect(screen.getByText('openai / gpt-4-vision')).toBeInTheDocument();
-    expect(screen.getByText('anthropic / claude-3-opus')).toBeInTheDocument();
+    expect(screen.getByText('视觉模型')).toBeInTheDocument();
+    expect(screen.getByText('决策模型')).toBeInTheDocument();
+    expect(screen.getByText('gpt-4-vision')).toBeInTheDocument();
+    expect(screen.getByText('claude-3-opus')).toBeInTheDocument();
   });
 
   it('renders fallback text for missing config values', () => {
@@ -70,7 +72,7 @@ describe('ConfigPanel', () => {
 
     render(<ConfigPanel />);
     
-    expect(screen.getByText('Unknown')).toBeInTheDocument();
-    expect(screen.getAllByText('Not configured')).toHaveLength(2);
+    expect(screen.getByText('未知')).toBeInTheDocument();
+    expect(screen.getAllByText('未配置')).toHaveLength(4);
   });
 });

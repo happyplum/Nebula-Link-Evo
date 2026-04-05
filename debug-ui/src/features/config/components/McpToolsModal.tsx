@@ -14,20 +14,23 @@ export interface McpToolsModalProps {
 export function McpToolsModal({ serverName, onClose }: McpToolsModalProps) {
   const { data: mcpTools, isLoading, error } = useMcpTools();
   const mcpCall = useMcpCall();
-  
+
   const [selectedTool, setSelectedTool] = useState<string | null>(null);
   const [argsInput, setArgsInput] = useState<string>('{}');
-  const [callResult, setCallResult] = useState<{ success: boolean; data?: unknown; error?: string } | null>(null);
+  const [callResult, setCallResult] = useState<{
+    success: boolean;
+    data?: unknown;
+    error?: string;
+  } | null>(null);
 
-  const serverTools = mcpTools?.tools.filter(tool => 
-    serverName && tool.name.startsWith(`${serverName}.`)
-  ) || [];
+  const serverTools =
+    mcpTools?.tools.filter((tool) => serverName && tool.name.startsWith(`${serverName}.`)) || [];
 
   const handleExecute = async (fullToolName: string) => {
     if (!serverName) return;
-    
+
     const actualToolName = fullToolName.substring(serverName.length + 1);
-    
+
     let parsedArgs: Record<string, unknown> = {};
     try {
       parsedArgs = JSON.parse(argsInput);
@@ -37,23 +40,23 @@ export function McpToolsModal({ serverName, onClose }: McpToolsModalProps) {
     }
 
     setCallResult(null);
-    
+
     try {
       const result = await mcpCall.mutateAsync({
         server: serverName,
         tool: actualToolName,
-        args: parsedArgs
+        args: parsedArgs,
       });
-      
+
       setCallResult({
         success: result.success,
         data: result.result,
-        error: result.error
+        error: result.error,
       });
     } catch (err) {
       setCallResult({
         success: false,
-        error: err instanceof Error ? err.message : '未知错误'
+        error: err instanceof Error ? err.message : '未知错误',
       });
     }
   };
@@ -65,33 +68,28 @@ export function McpToolsModal({ serverName, onClose }: McpToolsModalProps) {
   };
 
   return (
-    <Modal 
-      open={!!serverName} 
-      onClose={onClose} 
-      title={`${serverName} 工具`}
-    >
+    <Modal open={!!serverName} onClose={onClose} title={`${serverName} 工具`} maxWidth={800}>
       <div className={styles.container} data-testid={testIds.mcpToolsModal}>
         {isLoading ? (
           <div className={styles.centerContent}>
             <LoadingSpinner size="md" label="加载中..." />
           </div>
         ) : error ? (
-          <div className={styles.error}>
-            加载工具失败
-          </div>
+          <div className={styles.error}>加载工具失败</div>
         ) : serverTools.length === 0 ? (
-          <div className={styles.empty}>
-            该服务器暂无可用工具。
-          </div>
+          <div className={styles.empty}>该服务器暂无可用工具。</div>
         ) : (
           <div className={styles.toolsList}>
-            {serverTools.map(tool => {
+            {serverTools.map((tool) => {
               const isSelected = selectedTool === tool.name;
               const actualToolName = tool.name.substring(serverName!.length + 1);
-              
+
               return (
-                <div key={tool.name} className={`${styles.toolCard} ${isSelected ? styles.selected : ''}`}>
-                  <button 
+                <div
+                  key={tool.name}
+                  className={`${styles.toolCard} ${isSelected ? styles.selected : ''}`}
+                >
+                  <button
                     type="button"
                     className={styles.toolHeader}
                     onClick={() => handleToolSelect(tool.name)}
@@ -102,31 +100,38 @@ export function McpToolsModal({ serverName, onClose }: McpToolsModalProps) {
                     </div>
                     <p className={styles.toolDescription}>{tool.description || '无描述'}</p>
                   </button>
-                  
+
                   {isSelected && (
                     <div className={styles.toolDetails}>
                       <div className={styles.schemaSection}>
                         <h4 className={styles.sectionTitle}>输入参数</h4>
-                        {tool.inputSchema?.properties && Object.keys(tool.inputSchema.properties).length > 0 ? (
+                        {tool.inputSchema?.properties &&
+                        Object.keys(tool.inputSchema.properties).length > 0 ? (
                           <ul className={styles.schemaList}>
-                            {Object.entries(tool.inputSchema.properties).map(([propName, propDetails]) => (
-                              <li key={propName} className={styles.schemaItem}>
-                                <span className={styles.propName}>
-                                  {propName}
-                                  {tool.inputSchema?.required?.includes(propName) && <span className={styles.required}>*</span>}
-                                </span>
-                                <span className={styles.propType}>{propDetails.type}</span>
-                                {propDetails.description && (
-                                  <span className={styles.propDesc}>- {propDetails.description}</span>
-                                )}
-                              </li>
-                            ))}
+                            {Object.entries(tool.inputSchema.properties).map(
+                              ([propName, propDetails]) => (
+                                <li key={propName} className={styles.schemaItem}>
+                                  <span className={styles.propName}>
+                                    {propName}
+                                    {tool.inputSchema?.required?.includes(propName) && (
+                                      <span className={styles.required}>*</span>
+                                    )}
+                                  </span>
+                                  <span className={styles.propType}>{propDetails.type}</span>
+                                  {propDetails.description && (
+                                    <span className={styles.propDesc}>
+                                      - {propDetails.description}
+                                    </span>
+                                  )}
+                                </li>
+                              )
+                            )}
                           </ul>
                         ) : (
                           <p className={styles.noSchema}>无输入参数。</p>
                         )}
                       </div>
-                      
+
                       <div className={styles.executeSection}>
                         <h4 className={styles.sectionTitle}>执行工具</h4>
                         <textarea
@@ -145,13 +150,15 @@ export function McpToolsModal({ serverName, onClose }: McpToolsModalProps) {
                           {mcpCall.isPending ? '执行中...' : '执行'}
                         </button>
                       </div>
-                      
+
                       {callResult && (
-                        <div className={`${styles.resultSection} ${callResult.success ? styles.resultSuccess : styles.resultError}`}>
+                        <div
+                          className={`${styles.resultSection} ${callResult.success ? styles.resultSuccess : styles.resultError}`}
+                        >
                           <h4 className={styles.sectionTitle}>执行结果</h4>
                           <pre className={styles.resultOutput}>
-                            {callResult.success 
-                              ? JSON.stringify(callResult.data, null, 2) 
+                            {callResult.success
+                              ? JSON.stringify(callResult.data, null, 2)
                               : callResult.error}
                           </pre>
                         </div>

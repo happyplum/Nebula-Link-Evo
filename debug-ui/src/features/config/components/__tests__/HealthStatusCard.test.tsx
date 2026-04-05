@@ -62,9 +62,9 @@ describe('HealthStatusCard', () => {
 
     render(<HealthStatusCard />);
     
-    expect(screen.getByText('System Health')).toBeInTheDocument();
-    expect(screen.getByText('Healthy')).toBeInTheDocument();
-    expect(screen.getByText('Connected')).toBeInTheDocument();
+    expect(screen.getByText('服务状态')).toBeInTheDocument();
+    expect(screen.getByText('正常')).toBeInTheDocument();
+    expect(screen.getByText('已连接')).toBeInTheDocument();
     expect(screen.getByText('2 active')).toBeInTheDocument();
     expect(screen.getByText('1 servers')).toBeInTheDocument();
   });
@@ -89,8 +89,8 @@ describe('HealthStatusCard', () => {
 
     render(<HealthStatusCard />);
     
-    expect(screen.getByText('Issues Detected')).toBeInTheDocument();
-    expect(screen.getByText('Disconnected')).toBeInTheDocument();
+    expect(screen.getByText('异常')).toBeInTheDocument();
+    expect(screen.getByText('未连接')).toBeInTheDocument();
     expect(screen.getByText('0 active')).toBeInTheDocument();
     expect(screen.getByText('Disabled')).toBeInTheDocument();
   });
