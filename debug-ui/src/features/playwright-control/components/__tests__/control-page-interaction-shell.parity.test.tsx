@@ -114,7 +114,7 @@ describe('PageInteractionShell Parity Test', () => {
     expect(screen.queryByTestId(testIds.controlPageInteractionMarkerId)).not.toBeInTheDocument();
   });
 
-  it('renders element operations section with action type select and param input', () => {
+  it('renders element operations section with action type select and shows param input only for actions that need it', () => {
     render(<PageInteractionShell />);
 
     const actionType = screen.getByTestId(testIds.controlPageInteractionActionType);
@@ -138,6 +138,10 @@ describe('PageInteractionShell Parity Test', () => {
     expect(options[5]).toHaveTextContent('悬停');
     expect(options[6].value).toBe('dispatch');
     expect(options[6]).toHaveTextContent('派发事件');
+
+    expect(screen.queryByTestId(testIds.controlPageInteractionActionParam)).not.toBeInTheDocument();
+
+    fireEvent.change(actionType, { target: { value: 'type' } });
 
     const actionParam = screen.getByTestId(testIds.controlPageInteractionActionParam);
     expect(actionParam).toBeInTheDocument();
@@ -183,7 +187,7 @@ describe('PageInteractionShell Parity Test', () => {
     expect(scrollBtn).toBeDisabled();
   });
 
-  it('renders all always-present testids correctly (13 testids in default marker mode)', () => {
+  it('renders all always-present testids correctly (12 testids in default marker mode)', () => {
     render(<PageInteractionShell />);
 
     const alwaysPresent = [
@@ -195,7 +199,6 @@ describe('PageInteractionShell Parity Test', () => {
       testIds.controlPageInteractionSelectorMode,
       testIds.controlPageInteractionMarkerId,
       testIds.controlPageInteractionActionType,
-      testIds.controlPageInteractionActionParam,
       testIds.controlPageInteractionExecute,
       testIds.controlPageInteractionScrollX,
       testIds.controlPageInteractionScrollY,

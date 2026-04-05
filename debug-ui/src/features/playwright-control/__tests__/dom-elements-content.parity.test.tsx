@@ -143,8 +143,8 @@ describe('P4-25-V: DOM Elements Content Parity', () => {
 
     const selectedElementCard = screen.getByTestId(testIds.selectedElementCard);
 
-    expect(selectedElementCard).toHaveTextContent('Selected Element');
-    expect(selectedElementCard).toHaveTextContent('No element selected');
+    expect(selectedElementCard).toHaveTextContent('当前元素');
+    expect(selectedElementCard).toHaveTextContent('尚未选择元素');
   });
 
   it('calls fetchDomSnapshot when Get DOM button is clicked', async () => {
@@ -256,7 +256,7 @@ describe('P4-25-V: DOM Elements Content Parity', () => {
 
     await waitFor(() => {
       const selectedElementCard = screen.getByTestId(testIds.selectedElementCard);
-      expect(selectedElementCard).toHaveTextContent('Selected Element');
+      expect(selectedElementCard).toHaveTextContent('当前元素');
       expect(selectedElementCard).toHaveTextContent('div');
       expect(selectedElementCard).toHaveTextContent('Test 1');
     });

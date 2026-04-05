@@ -10,9 +10,9 @@ export const SelectedElementCard: React.FC = () => {
     return (
       <div className={styles.container} data-testid={testIds.selectedElementCard}>
         <div className={styles.header}>
-          <h3 className={styles.title}>Selected Element</h3>
+          <h3 className={styles.title}>当前元素</h3>
         </div>
-        <div className={styles.empty}>No element selected</div>
+        <div className={styles.empty}>尚未选择元素</div>
       </div>
     );
   }
@@ -20,20 +20,20 @@ export const SelectedElementCard: React.FC = () => {
   return (
     <div className={styles.container} data-testid={testIds.selectedElementCard}>
       <div className={styles.header}>
-        <h3 className={styles.title}>Selected Element</h3>
+        <h3 className={styles.title}>当前元素</h3>
         <span className={styles.tag}>{selectedElement.tag}</span>
       </div>
       
       <div className={styles.content}>
         {selectedElement.markerNumber !== undefined && (
           <div className={styles.row}>
-            <span className={styles.label}>Marker</span>
+            <span className={styles.label}>标记</span>
             <span className={styles.value}>#{selectedElement.markerNumber}</span>
           </div>
         )}
 
         <div className={styles.row}>
-          <span className={styles.label}>Selector</span>
+          <span className={styles.label}>选择器</span>
           <span className={styles.value}>{selectedElement.selector}</span>
         </div>
 
@@ -46,14 +46,14 @@ export const SelectedElementCard: React.FC = () => {
         
         {selectedElement.text && (
           <div className={styles.row}>
-            <span className={styles.label}>Text</span>
+            <span className={styles.label}>文本</span>
             <span className={styles.value}>{selectedElement.text}</span>
           </div>
         )}
 
         {selectedElement.bbox && (
           <div className={styles.row}>
-            <span className={styles.label}>BBox</span>
+            <span className={styles.label}>边界框</span>
             <span className={styles.value}>
               x={selectedElement.bbox.x}, y={selectedElement.bbox.y}, 
               w={selectedElement.bbox.width}, h={selectedElement.bbox.height}
@@ -63,7 +63,7 @@ export const SelectedElementCard: React.FC = () => {
         
         {selectedElement.attributes && Object.keys(selectedElement.attributes).length > 0 && (
           <div className={styles.row}>
-            <span className={styles.label}>Attributes</span>
+            <span className={styles.label}>属性</span>
             <div className={styles.attributes}>
               {Object.entries(selectedElement.attributes).map(([key, value]) => (
                 <div key={key} className={styles.attribute}>

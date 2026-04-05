@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { Accordion } from '@/shared/ui/Accordion.js';
 import { testIds } from '@/shared/testing/testids.js';
 import { useControlStore } from '../store/control.store.js';
@@ -21,6 +22,27 @@ function formatTime(timestamp: number): string {
 export function OperationLogsShell({ open, onToggle }: OperationLogsShellProps) {
   const consoleMessages = useControlStore((s) => s.consoleMessages);
   const setConsoleMessages = useControlStore((s) => s.setConsoleMessages);
+  const logContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = logContainerRef.current;
+    if (el) {
+      el.scrollTop = el.scrollHeight;
+    }
+  });
+
+  const getLevelClassName = (type: string) => {
+    switch (type) {
+      case 'success':
+        return styles.levelSuccess;
+      case 'warning':
+        return styles.levelWarning;
+      case 'error':
+        return styles.levelError;
+      default:
+        return styles.levelInfo;
+    }
+  };
 
   const handleClear = () => {
     setConsoleMessages([]);
@@ -35,14 +57,19 @@ export function OperationLogsShell({ open, onToggle }: OperationLogsShellProps) 
     >
       <div
         className={styles.logContainer}
+        ref={logContainerRef}
         data-testid={testIds.controlOperationLogsContainer}
       >
         {consoleMessages.length === 0 ? (
-          <p className={styles.emptyState}>等待操作...</p>
+          <p className={styles.emptyState}>暂无日志</p>
         ) : (
           consoleMessages.map((msg) => (
             <div key={msg.timestamp} className={styles.logEntry}>
-              [{formatTime(msg.timestamp)}] {msg.type}: {msg.text}
+              <span className={styles.logTimestamp}>[{formatTime(msg.timestamp)}]</span>
+              <span className={`${styles.logLevel} ${getLevelClassName(msg.type)}`}>
+                {msg.type}
+              </span>
+              <span className={styles.logText}>{msg.text}</span>
             </div>
           ))
         )}

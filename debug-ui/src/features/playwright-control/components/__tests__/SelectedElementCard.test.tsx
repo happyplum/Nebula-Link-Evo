@@ -20,7 +20,7 @@ describe('SelectedElementCard', () => {
     render(<SelectedElementCard />);
     
     expect(screen.getByTestId(testIds.selectedElementCard)).toBeInTheDocument();
-    expect(screen.getByText('No element selected')).toBeInTheDocument();
+    expect(screen.getByText('尚未选择元素')).toBeInTheDocument();
   });
 
   it('renders element details when selected', () => {

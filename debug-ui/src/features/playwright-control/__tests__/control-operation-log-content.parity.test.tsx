@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { OperationLogsShell } from '../components/OperationLogsShell.js';
 import type { ConsoleMessage } from '../store/control.store.js';
+import { testIds } from '@/shared/testing/testids.js';
 
 // Mock the Zustand store
 vi.mock('../store/control.store.js', () => ({
@@ -11,11 +12,11 @@ vi.mock('../store/control.store.js', () => ({
 const { useControlStore } = await import('../store/control.store.js');
 
 // Helper to create test messages
-const createTestMessage = (
-  type: string,
-  text: string,
-  timestamp: number
-): ConsoleMessage => ({ type, text, timestamp });
+const createTestMessage = (type: string, text: string, timestamp: number): ConsoleMessage => ({
+  type,
+  text,
+  timestamp,
+});
 
 // Helper to create a timestamp for a specific time
 const createTimestamp = (hours: number, minutes: number, seconds: number): number => {
@@ -45,6 +46,7 @@ describe('OperationLogsShell - Content Parity (P3-20-V)', () => {
         setSelectedElement: vi.fn(),
         clearSelectedElement: vi.fn(),
         setConsoleMessages: mockSetConsoleMessages,
+        addConsoleMessage: vi.fn(),
         setExecutingAction: vi.fn(),
         setActionError: vi.fn(),
         setViewport: vi.fn(),
@@ -58,8 +60,10 @@ describe('OperationLogsShell - Content Parity (P3-20-V)', () => {
         setDomElements: vi.fn(),
         elementPickerEnabled: false,
         highlightedElementId: null,
+        capturedCoordinates: null,
         setElementPickerEnabled: vi.fn(),
         setHighlightedElementId: vi.fn(),
+        setCapturedCoordinates: vi.fn(),
         reset: vi.fn(),
       };
 
@@ -67,11 +71,11 @@ describe('OperationLogsShell - Content Parity (P3-20-V)', () => {
     });
   });
 
-  it('should render empty state with "等待操作..." message', () => {
+  it('should render empty state with "暂无日志" message', () => {
     const onToggle = vi.fn();
     render(<OperationLogsShell open={true} onToggle={onToggle} />);
 
-    expect(screen.getByText('等待操作...')).toBeInTheDocument();
+    expect(screen.getByText('暂无日志')).toBeInTheDocument();
   });
 
   it('should render single log entry with formatted timestamp and type', () => {
@@ -90,6 +94,7 @@ describe('OperationLogsShell - Content Parity (P3-20-V)', () => {
         setSelectedElement: vi.fn(),
         clearSelectedElement: vi.fn(),
         setConsoleMessages: mockSetConsoleMessages,
+        addConsoleMessage: vi.fn(),
         setExecutingAction: vi.fn(),
         setActionError: vi.fn(),
         setViewport: vi.fn(),
@@ -103,8 +108,10 @@ describe('OperationLogsShell - Content Parity (P3-20-V)', () => {
         setDomElements: vi.fn(),
         elementPickerEnabled: false,
         highlightedElementId: null,
+        capturedCoordinates: null,
         setElementPickerEnabled: vi.fn(),
         setHighlightedElementId: vi.fn(),
+        setCapturedCoordinates: vi.fn(),
         reset: vi.fn(),
       };
 
@@ -113,7 +120,10 @@ describe('OperationLogsShell - Content Parity (P3-20-V)', () => {
 
     render(<OperationLogsShell open={true} onToggle={onToggle} />);
 
-    const logEntry = screen.getByText(/\[14:30:45\] INFO: 操作成功/);
+    const logEntry = screen.getByTestId(testIds.controlOperationLogsContainer);
+    expect(logEntry).toHaveTextContent('[14:30:45]');
+    expect(logEntry).toHaveTextContent('INFO');
+    expect(logEntry).toHaveTextContent('操作成功');
     expect(logEntry).toBeInTheDocument();
   });
 
@@ -139,6 +149,7 @@ describe('OperationLogsShell - Content Parity (P3-20-V)', () => {
         setSelectedElement: vi.fn(),
         clearSelectedElement: vi.fn(),
         setConsoleMessages: mockSetConsoleMessages,
+        addConsoleMessage: vi.fn(),
         setExecutingAction: vi.fn(),
         setActionError: vi.fn(),
         setViewport: vi.fn(),
@@ -152,8 +163,10 @@ describe('OperationLogsShell - Content Parity (P3-20-V)', () => {
         setDomElements: vi.fn(),
         elementPickerEnabled: false,
         highlightedElementId: null,
+        capturedCoordinates: null,
         setElementPickerEnabled: vi.fn(),
         setHighlightedElementId: vi.fn(),
+        setCapturedCoordinates: vi.fn(),
         reset: vi.fn(),
       };
 
@@ -162,9 +175,16 @@ describe('OperationLogsShell - Content Parity (P3-20-V)', () => {
 
     render(<OperationLogsShell open={true} onToggle={onToggle} />);
 
-    expect(screen.getByText(/\[10:15:30\] INFO: 开始执行/)).toBeInTheDocument();
-    expect(screen.getByText(/\[10:16:45\] DEBUG: 检查元素/)).toBeInTheDocument();
-    expect(screen.getByText(/\[10:18:00\] SUCCESS: 操作完成/)).toBeInTheDocument();
+    const logContainer = screen.getByTestId(testIds.controlOperationLogsContainer);
+    expect(logContainer).toHaveTextContent('[10:15:30]');
+    expect(logContainer).toHaveTextContent('INFO');
+    expect(logContainer).toHaveTextContent('开始执行');
+    expect(logContainer).toHaveTextContent('[10:16:45]');
+    expect(logContainer).toHaveTextContent('DEBUG');
+    expect(logContainer).toHaveTextContent('检查元素');
+    expect(logContainer).toHaveTextContent('[10:18:00]');
+    expect(logContainer).toHaveTextContent('SUCCESS');
+    expect(logContainer).toHaveTextContent('操作完成');
   });
 
   it('should format timestamp with single-digit hours/minutes/seconds correctly', () => {
@@ -183,6 +203,7 @@ describe('OperationLogsShell - Content Parity (P3-20-V)', () => {
         setSelectedElement: vi.fn(),
         clearSelectedElement: vi.fn(),
         setConsoleMessages: mockSetConsoleMessages,
+        addConsoleMessage: vi.fn(),
         setExecutingAction: vi.fn(),
         setActionError: vi.fn(),
         setViewport: vi.fn(),
@@ -196,8 +217,10 @@ describe('OperationLogsShell - Content Parity (P3-20-V)', () => {
         setDomElements: vi.fn(),
         elementPickerEnabled: false,
         highlightedElementId: null,
+        capturedCoordinates: null,
         setElementPickerEnabled: vi.fn(),
         setHighlightedElementId: vi.fn(),
+        setCapturedCoordinates: vi.fn(),
         reset: vi.fn(),
       };
 
@@ -206,7 +229,10 @@ describe('OperationLogsShell - Content Parity (P3-20-V)', () => {
 
     render(<OperationLogsShell open={true} onToggle={onToggle} />);
 
-    const logEntry = screen.getByText(/\[09:05:03\] ERROR: 测试失败/);
+    const logEntry = screen.getByTestId(testIds.controlOperationLogsContainer);
+    expect(logEntry).toHaveTextContent('[09:05:03]');
+    expect(logEntry).toHaveTextContent('ERROR');
+    expect(logEntry).toHaveTextContent('测试失败');
     expect(logEntry).toBeInTheDocument();
   });
 
@@ -226,6 +252,7 @@ describe('OperationLogsShell - Content Parity (P3-20-V)', () => {
         setSelectedElement: vi.fn(),
         clearSelectedElement: vi.fn(),
         setConsoleMessages: mockSetConsoleMessages,
+        addConsoleMessage: vi.fn(),
         setExecutingAction: vi.fn(),
         setActionError: vi.fn(),
         setViewport: vi.fn(),
@@ -239,8 +266,10 @@ describe('OperationLogsShell - Content Parity (P3-20-V)', () => {
         setDomElements: vi.fn(),
         elementPickerEnabled: false,
         highlightedElementId: null,
+        capturedCoordinates: null,
         setElementPickerEnabled: vi.fn(),
         setHighlightedElementId: vi.fn(),
+        setCapturedCoordinates: vi.fn(),
         reset: vi.fn(),
       };
 
@@ -294,6 +323,7 @@ describe('OperationLogsShell - Content Parity (P3-20-V)', () => {
         setSelectedElement: vi.fn(),
         clearSelectedElement: vi.fn(),
         setConsoleMessages: mockSetConsoleMessages,
+        addConsoleMessage: vi.fn(),
         setExecutingAction: vi.fn(),
         setActionError: vi.fn(),
         setViewport: vi.fn(),
@@ -307,8 +337,10 @@ describe('OperationLogsShell - Content Parity (P3-20-V)', () => {
         setDomElements: vi.fn(),
         elementPickerEnabled: false,
         highlightedElementId: null,
+        capturedCoordinates: null,
         setElementPickerEnabled: vi.fn(),
         setHighlightedElementId: vi.fn(),
+        setCapturedCoordinates: vi.fn(),
         reset: vi.fn(),
       };
 
@@ -317,10 +349,15 @@ describe('OperationLogsShell - Content Parity (P3-20-V)', () => {
 
     render(<OperationLogsShell open={true} onToggle={onToggle} />);
 
-    expect(screen.getByText(/INFO: 信息日志/)).toBeInTheDocument();
-    expect(screen.getByText(/DEBUG: 调试日志/)).toBeInTheDocument();
-    expect(screen.getByText(/ERROR: 错误日志/)).toBeInTheDocument();
-    expect(screen.getByText(/WARN: 警告日志/)).toBeInTheDocument();
+    const logContainer = screen.getByTestId(testIds.controlOperationLogsContainer);
+    expect(logContainer).toHaveTextContent('INFO');
+    expect(logContainer).toHaveTextContent('信息日志');
+    expect(logContainer).toHaveTextContent('DEBUG');
+    expect(logContainer).toHaveTextContent('调试日志');
+    expect(logContainer).toHaveTextContent('ERROR');
+    expect(logContainer).toHaveTextContent('错误日志');
+    expect(logContainer).toHaveTextContent('WARN');
+    expect(logContainer).toHaveTextContent('警告日志');
   });
 
   it('should render Accordion with title "📝 操作日志"', () => {

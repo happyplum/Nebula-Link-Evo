@@ -50,7 +50,6 @@ describe('P3-19-V: Control Page Interaction - Content Parity', () => {
     expect(screen.getByTestId(testIds.controlPageInteractionSelectorMode)).toBeDisabled();
     expect(screen.getByTestId(testIds.controlPageInteractionMarkerId)).toBeDisabled();
     expect(screen.getByTestId(testIds.controlPageInteractionActionType)).toBeDisabled();
-    expect(screen.getByTestId(testIds.controlPageInteractionActionParam)).toBeDisabled();
     expect(screen.getByTestId(testIds.controlPageInteractionExecute)).toBeDisabled();
     expect(screen.getByTestId(testIds.controlPageInteractionScrollX)).toBeDisabled();
     expect(screen.getByTestId(testIds.controlPageInteractionScrollY)).toBeDisabled();
@@ -70,7 +69,6 @@ describe('P3-19-V: Control Page Interaction - Content Parity', () => {
     expect(screen.getByTestId(testIds.controlPageInteractionSelectorMode)).not.toBeDisabled();
     expect(screen.getByTestId(testIds.controlPageInteractionMarkerId)).not.toBeDisabled();
     expect(screen.getByTestId(testIds.controlPageInteractionActionType)).not.toBeDisabled();
-    expect(screen.getByTestId(testIds.controlPageInteractionActionParam)).not.toBeDisabled();
     expect(screen.getByTestId(testIds.controlPageInteractionExecute)).not.toBeDisabled();
     expect(screen.getByTestId(testIds.controlPageInteractionScrollX)).not.toBeDisabled();
     expect(screen.getByTestId(testIds.controlPageInteractionScrollY)).not.toBeDisabled();
@@ -136,6 +134,7 @@ describe('P3-19-V: Control Page Interaction - Content Parity', () => {
     mockExecuteAction.mockResolvedValue({ success: true });
 
     enableBrowser();
+    useControlStore.getState().setSnapshotId('snap-1');
     render(<PageInteractionShell />);
 
     // Default selectorMode is 'marker'
@@ -145,15 +144,12 @@ describe('P3-19-V: Control Page Interaction - Content Parity', () => {
     fireEvent.change(screen.getByTestId(testIds.controlPageInteractionActionType), {
       target: { value: 'click' },
     });
-    fireEvent.change(screen.getByTestId(testIds.controlPageInteractionActionParam), {
-      target: { value: '' },
-    });
     fireEvent.click(screen.getByTestId(testIds.controlPageInteractionExecute));
 
     await waitFor(() => {
       expect(mockExecuteAction).toHaveBeenCalledWith('click', {
-        param: '',
         markerId: 42,
+        snapshotId: 'snap-1',
       });
     });
   });
@@ -176,15 +172,18 @@ describe('P3-19-V: Control Page Interaction - Content Parity', () => {
     const cssInput = screen.getByTestId(testIds.controlPageInteractionCssSelector);
     fireEvent.change(cssInput, { target: { value: '.submit-btn' } });
 
+    fireEvent.change(screen.getByTestId(testIds.controlPageInteractionActionType), {
+      target: { value: 'type' },
+    });
     fireEvent.change(screen.getByTestId(testIds.controlPageInteractionActionParam), {
       target: { value: 'hello' },
     });
     fireEvent.click(screen.getByTestId(testIds.controlPageInteractionExecute));
 
     await waitFor(() => {
-      expect(mockExecuteAction).toHaveBeenCalledWith('click', {
+      expect(mockExecuteAction).toHaveBeenCalledWith('type', {
         param: 'hello',
-        cssSelector: '.submit-btn',
+        selector: '.submit-btn',
       });
     });
   });
@@ -346,6 +345,7 @@ describe('P3-19-V: Control Page Interaction - Content Parity', () => {
     mockExecuteAction.mockResolvedValue({ success: true });
 
     enableBrowser();
+    useControlStore.getState().setSnapshotId('snap-1');
     render(<PageInteractionShell />);
 
     fireEvent.change(screen.getByTestId(testIds.controlPageInteractionMarkerId), {
@@ -363,7 +363,26 @@ describe('P3-19-V: Control Page Interaction - Content Parity', () => {
       expect(mockExecuteAction).toHaveBeenCalledWith('type', {
         param: 'test input',
         markerId: 7,
+        snapshotId: 'snap-1',
       });
+    });
+  });
+
+  it('requires param for type/value/dispatch actions', async () => {
+    enableBrowser();
+    useControlStore.getState().setSnapshotId('snap-1');
+    render(<PageInteractionShell />);
+
+    fireEvent.change(screen.getByTestId(testIds.controlPageInteractionMarkerId), {
+      target: { value: '7' },
+    });
+    fireEvent.change(screen.getByTestId(testIds.controlPageInteractionActionType), {
+      target: { value: 'type' },
+    });
+    fireEvent.click(screen.getByTestId(testIds.controlPageInteractionExecute));
+
+    await waitFor(() => {
+      expect(useControlStore.getState().lastActionError).toBe('当前操作需要参数');
     });
   });
 });
