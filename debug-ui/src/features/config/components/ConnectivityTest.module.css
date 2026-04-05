@@ -1,22 +1,25 @@
 .container {
-  background: var(--bg-card);
+  background: transparent;
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  padding: 1.5rem;
+  border-width: 0 0 1px;
+  border-radius: 0;
+  padding: 12px 0;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 12px;
 }
 
 .title {
   margin: 0;
-  font-size: 1.125rem;
+  font-size: 12px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .testBtn {
-  align-self: flex-start;
+  align-self: stretch;
   padding: 6px 16px;
   font-size: 13px;
   border: 1px solid var(--border-color);
@@ -25,6 +28,11 @@
   color: var(--text-primary);
   cursor: pointer;
   transition: all 0.2s ease;
+}
+
+.idle {
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 .testBtn:hover:not(:disabled) {

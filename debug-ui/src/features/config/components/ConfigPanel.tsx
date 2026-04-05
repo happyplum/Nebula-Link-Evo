@@ -9,7 +9,7 @@ export function ConfigPanel() {
   if (isLoading) {
     return (
       <div className={styles.container} data-testid={testIds.configPanel}>
-        <LoadingSpinner size="md" label="Loading config..." />
+        <LoadingSpinner size="md" label="加载配置中..." />
       </div>
     );
   }
@@ -17,7 +17,7 @@ export function ConfigPanel() {
   if (error) {
     return (
       <div className={`${styles.container} ${styles.error}`} data-testid={testIds.configPanel}>
-        <p>Failed to load configuration</p>
+        <p>配置加载失败</p>
       </div>
     );
   }
@@ -25,33 +25,47 @@ export function ConfigPanel() {
   if (!config) {
     return (
       <div className={styles.container} data-testid={testIds.configPanel}>
-        <p className={styles.empty}>No configuration available</p>
+        <p className={styles.empty}>暂无配置数据</p>
       </div>
     );
   }
 
   return (
     <div className={styles.container} data-testid={testIds.configPanel}>
-      <h2 className={styles.title}>System Configuration</h2>
-      
+      <h2 className={styles.title}>系统配置</h2>
+
       <div className={styles.grid}>
         <div className={styles.item}>
-          <span className={styles.label}>Mode</span>
-          <span className={styles.value}>{config.mode || 'Unknown'}</span>
+          <span className={styles.label}>模式</span>
+          <span className={styles.value}>{config.mode || '未知'}</span>
         </div>
-        
-        <div className={styles.item}>
-          <span className={styles.label}>Vision Model</span>
-          <span className={styles.value}>
-            {config.vision ? `${config.vision.provider} / ${config.vision.model}` : 'Not configured'}
-          </span>
+      </div>
+
+      <div className={styles.group}>
+        <h3 className={styles.groupTitle}>视觉模型</h3>
+        <div className={styles.groupBody}>
+          <div className={styles.item}>
+            <span className={styles.label}>提供商</span>
+            <span className={styles.value}>{config.vision?.provider || '未配置'}</span>
+          </div>
+          <div className={styles.item}>
+            <span className={styles.label}>模型</span>
+            <span className={styles.value}>{config.vision?.model || '未配置'}</span>
+          </div>
         </div>
-        
-        <div className={styles.item}>
-          <span className={styles.label}>Decision Model</span>
-          <span className={styles.value}>
-            {config.decision ? `${config.decision.provider} / ${config.decision.model}` : 'Not configured'}
-          </span>
+      </div>
+
+      <div className={styles.group}>
+        <h3 className={styles.groupTitle}>决策模型</h3>
+        <div className={styles.groupBody}>
+          <div className={styles.item}>
+            <span className={styles.label}>提供商</span>
+            <span className={styles.value}>{config.decision?.provider || '未配置'}</span>
+          </div>
+          <div className={styles.item}>
+            <span className={styles.label}>模型</span>
+            <span className={styles.value}>{config.decision?.model || '未配置'}</span>
+          </div>
         </div>
       </div>
     </div>

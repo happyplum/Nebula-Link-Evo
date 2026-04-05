@@ -63,6 +63,10 @@ export function AiTest() {
         {mutation.isPending ? '测试中...' : '测试 AI 连通性'}
       </button>
 
+      {!mutation.isPending && !result && !hasError && (
+        <div className={styles.testing}>未测试</div>
+      )}
+
       {mutation.isPending && (
         <div className={styles.testing}>正在测试...</div>
       )}

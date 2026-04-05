@@ -36,34 +36,34 @@ export function HealthStatusCard() {
   return (
     <div className={styles.container} data-testid={testIds.healthStatusCard}>
       <div className={styles.header}>
-        <h2 className={styles.title}>System Health</h2>
+        <h2 className={styles.title}>服务状态</h2>
         <StatusIndicator 
           status={isHealthy ? 'online' : 'error'} 
-          label={isHealthy ? 'Healthy' : 'Issues Detected'} 
+          label={isHealthy ? '正常' : '异常'} 
         />
       </div>
       
       <div className={styles.grid}>
         <div className={styles.item}>
-          <span className={styles.label}>Playwright Service</span>
+          <span className={styles.label}>playwright</span>
           <div className={styles.valueRow}>
             <StatusIndicator 
               status={health.services.playwright === 'ok' ? 'online' : 'error'} 
               size="sm"
             />
             <span className={styles.value}>
-              {health.services.playwright === 'ok' ? 'Connected' : 'Disconnected'}
+              {health.services.playwright === 'ok' ? '已连接' : '未连接'}
             </span>
           </div>
         </div>
         
         <div className={styles.item}>
-          <span className={styles.label}>WebSocket Connections</span>
+          <span className={styles.label}>WebSocket 连接</span>
           <span className={styles.value}>{health.websocketConnections} active</span>
         </div>
         
         <div className={styles.item}>
-          <span className={styles.label}>MCP Status</span>
+          <span className={styles.label}>MCP 状态</span>
           <div className={styles.valueRow}>
             <StatusIndicator 
               status={health.mcp.enabled ? 'online' : 'offline'} 
