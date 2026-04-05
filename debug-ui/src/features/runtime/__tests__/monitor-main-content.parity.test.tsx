@@ -6,15 +6,20 @@ import { testIds } from '@/shared/testing/testids.js';
 import fs from 'node:fs';
 import path from 'node:path';
 
+vi.mock('@/features/liveview/components/LiveViewCanvas.js', () => ({
+  LiveViewCanvas: () => <div data-testid="mock-monitor-liveview">LiveViewCanvas</div>,
+}));
+
 /**
  * P3-17-V Monitor Main Content Parity Tests
  *
  * Verifies MonitorMainShell runtime bindings:
  * - Connection status badge: 未连接/已连接/连接中.../重连中...
- * - Task strip: playwrightStatus labels + snapshotVersion display
+ * - Task strip: playwrightStatus labels + legacy current-task placeholder
  * - Quick actions: disabled states based on connection + screenshot data
  * - Command bar: input, placeholder, execute button, disabled when disconnected
  * - Execution log: empty state and log entry rendering
+ * - Liveview overlay URL display
  * - Zustand store isolation between tests
  */
 
@@ -97,17 +102,17 @@ describe('P3-17-V MonitorMainShell - Content Parity', () => {
       expect(screen.getByTestId(testIds.monitorMainTaskStatusText)).toHaveTextContent('异常');
     });
 
-    it('shows "—" for task ID when snapshotVersion is 0', () => {
+    it('shows "无任务" for task ID when no active task is present', () => {
       render(<MonitorMainShell />);
 
-      expect(screen.getByTestId(testIds.monitorMainTaskId)).toHaveTextContent('—');
+      expect(screen.getByTestId(testIds.monitorMainTaskId)).toHaveTextContent('无任务');
     });
 
-    it('shows "#N" for task ID when snapshotVersion > 0', () => {
+    it('keeps legacy "无任务" copy even when snapshotVersion changes', () => {
       useRuntimeStore.getState().setSnapshotVersion(7);
       render(<MonitorMainShell />);
 
-      expect(screen.getByTestId(testIds.monitorMainTaskId)).toHaveTextContent('#7');
+      expect(screen.getByTestId(testIds.monitorMainTaskId)).toHaveTextContent('无任务');
     });
   });
 
@@ -197,10 +202,10 @@ describe('P3-17-V MonitorMainShell - Content Parity', () => {
   });
 
   describe('Execution Log', () => {
-    it('shows empty state "等待日志..." when no log entries', () => {
+    it('shows empty state "暂无日志" when no log entries', () => {
       render(<MonitorMainShell />);
 
-      expect(screen.getByTestId(testIds.monitorMainLogEmpty)).toHaveTextContent('等待日志...');
+      expect(screen.getByTestId(testIds.monitorMainLogEmpty)).toHaveTextContent('暂无日志');
     });
   });
 
@@ -209,6 +214,16 @@ describe('P3-17-V MonitorMainShell - Content Parity', () => {
       render(<MonitorMainShell />);
 
       expect(screen.getByTestId(testIds.monitorMainHeader)).toHaveTextContent('📸 实时监控');
+    });
+
+    it('renders current URL inside liveview header', () => {
+      useRuntimeStore.getState().setPlaywrightUrl('https://example.com/page');
+      render(<MonitorMainShell />);
+
+      expect(screen.getByText('实时画面')).toBeInTheDocument();
+      expect(screen.getByTestId(testIds.monitorMainLiveview)).toHaveTextContent(
+        'https://example.com/page'
+      );
     });
   });
 
@@ -241,6 +256,17 @@ describe('P3-17-V MonitorMainShell - Content Parity', () => {
       expected.forEach((id) => {
         expect(screen.getByTestId(id)).toBeInTheDocument();
       });
+    });
+  });
+
+  describe('Live view wiring', () => {
+    it('renders live view canvas inside the monitor liveview region', () => {
+      render(<MonitorMainShell />);
+
+      expect(screen.getByTestId('mock-monitor-liveview')).toBeInTheDocument();
+      expect(screen.getByTestId(testIds.monitorMainLiveview)).toContainElement(
+        screen.getByTestId('mock-monitor-liveview')
+      );
     });
   });
 });

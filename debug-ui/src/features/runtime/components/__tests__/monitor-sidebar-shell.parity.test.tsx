@@ -9,7 +9,25 @@ import path from 'node:path';
 
 // Mock hooks and components to prevent side effects
 vi.mock('@/features/runtime/hooks/useDebugSocket.js', () => ({
-  useDebugSocket: vi.fn(),
+  useDebugSocket: vi.fn(() => ({
+    sendMessage: vi.fn(),
+    pauseTask: vi.fn(),
+    resumeTask: vi.fn(),
+    singleStep: vi.fn(),
+    disconnect: vi.fn(),
+    reconnect: vi.fn(),
+    onMessage: vi.fn(() => vi.fn()),
+  })),
+}));
+
+vi.mock('@/features/playwright-control/api/control.adapters.js', () => ({
+  takeScreenshot: vi.fn(() => Promise.resolve({ success: true })),
+  fetchDomSnapshot: vi.fn(() => Promise.resolve({ success: true, dom: null })),
+}));
+
+vi.mock('@/features/playwright-control/api/control.adapters.js', () => ({
+  takeScreenshot: vi.fn(() => Promise.resolve({ success: true, screenshot: 'data:image/png;base64,test' })),
+  fetchDomSnapshot: vi.fn(() => Promise.resolve({ success: true, dom: null })),
 }));
 
 vi.mock('@/features/runtime/hooks/useDebugSession.js', () => ({
@@ -153,13 +171,13 @@ describe('MonitorSidebarShell Parity Test', () => {
     const refreshBtn = screen.getByTestId(testIds.monitorSidebarSnapshotRefreshBtn);
 
     expect(snapshotLabel).toBeInTheDocument();
-    expect(snapshotLabel).toHaveTextContent('快照版本: —');
+    expect(snapshotLabel).toHaveTextContent('ID: —');
 
     expect(snapshotImg).toBeInTheDocument();
-    expect(snapshotImg).toHaveTextContent('等待截图...');
+    expect(snapshotImg).toHaveTextContent('暂无截图');
 
     expect(refreshBtn).toBeInTheDocument();
-    expect(refreshBtn).toHaveTextContent('刷新DOM');
+    expect(refreshBtn).toHaveTextContent('刷新 DOM 截图');
   });
 
   it('asserts card titles are present', () => {
@@ -167,7 +185,7 @@ describe('MonitorSidebarShell Parity Test', () => {
 
     expect(screen.getByText('WebSocket 状态')).toBeInTheDocument();
     expect(screen.getByText('浏览器状态')).toBeInTheDocument();
-    expect(screen.getByText('DOM 截图')).toBeInTheDocument();
+    expect(screen.getByText('DOM 截图 (Annotated)')).toBeInTheDocument();
   });
 
   it('asserts at least 5 key structural elements have correct testids', () => {
