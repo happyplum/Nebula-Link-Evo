@@ -21,11 +21,14 @@ import {
   selectMarkerToggle,
   type SelectedElement,
 } from '@/features/playwright-control/store/control.store.js';
+import { getElementAt } from '@/features/playwright-control/api/control.adapters.js';
+import { findDomElementAtPoint } from '@/features/playwright-control/lib/index.js';
 import styles from './LiveViewCanvas.module.css';
 
 const STREAM_URL = '/debug/api/playwright/screenshot/stream';
 const DEFAULT_BOUNDARY = '--frameboundary';
 const MARKER_LIFETIME = 5000;
+const HOVER_DEBOUNCE_MS = 120;
 
 interface Marker {
   canvasX: number;
@@ -147,22 +150,30 @@ export function LiveViewCanvas({
   const overlayCtxRef = useRef<CanvasRenderingContext2D | null>(null);
   const fitRectRef = useRef<ImageFitRect | null>(null);
   const currentBitmapRef = useRef<ImageBitmap | null>(null);
+  const downloadUrlRef = useRef<string | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const streamAbortRef = useRef<AbortController | null>(null);
   const streamVersionRef = useRef(0);
   const overlayRafRef = useRef<number | null>(null);
+  const hoverDebounceRef = useRef<number | null>(null);
   const pickerCursorRef = useRef<PickerCursor | null>(null);
   const markersRef = useRef<Marker[]>([]);
   const overlayBBoxRef = useRef<OverlayBBox | null>(null);
+  const hoveredElementRef = useRef<SelectedElement | null>(null);
 
   const [markers, setMarkers] = useState<Marker[]>([]);
   const [overlayBBox, setOverlayBBox] = useState<OverlayBBox | null>(null);
+  const [hoveredElement, setHoveredElement] = useState<SelectedElement | null>(null);
 
   const isPlaywrightConnected = useRuntimeStore(selectPlaywrightIsOpen);
   const connectionStatus = useRuntimeStore(selectConnectionStatus);
+  const setLastScreenshotDataUrl = useRuntimeStore((s) => s.setLastScreenshotDataUrl);
   const { onMessage } = useDebugSocket();
   const elementPickerEnabled = useControlStore((s) => s.elementPickerEnabled);
   const setElementPickerEnabled = useControlStore((s) => s.setElementPickerEnabled);
+  const setCapturedCoordinates = useControlStore((s) => s.setCapturedCoordinates);
+  const setSelectedElement = useControlStore((s) => s.setSelectedElement);
+  const setHighlightedElementId = useControlStore((s) => s.setHighlightedElementId);
   const selectedElement = useControlStore(selectSelectedElement);
   const domElements = useControlStore(selectDomElements);
   const markerToggle = useControlStore(selectMarkerToggle);
@@ -179,6 +190,10 @@ export function LiveViewCanvas({
   }, [overlayBBox]);
 
   useEffect(() => {
+    hoveredElementRef.current = hoveredElement;
+  }, [hoveredElement]);
+
+  useEffect(() => {
     selectedElementRef.current = selectedElement;
   }, [selectedElement]);
 
@@ -190,6 +205,24 @@ export function LiveViewCanvas({
     markerToggleRef.current = markerToggle;
   }, [markerToggle]);
 
+  const replaceDownloadUrl = useCallback(
+    (nextUrl: string | null, revokeCurrent: boolean) => {
+      const previousUrl = downloadUrlRef.current;
+      if (
+        revokeCurrent &&
+        previousUrl &&
+        previousUrl.startsWith('blob:') &&
+        typeof URL.revokeObjectURL === 'function'
+      ) {
+        URL.revokeObjectURL(previousUrl);
+      }
+
+      downloadUrlRef.current = nextUrl;
+      setLastScreenshotDataUrl(nextUrl);
+    },
+    [setLastScreenshotDataUrl]
+  );
+
   const drawRenderFrame = useCallback(() => {
     const renderCtx = renderCtxRef.current;
     const container = containerRef.current;
@@ -199,7 +232,12 @@ export function LiveViewCanvas({
     }
 
     const containerRect = container.getBoundingClientRect();
-    const fit = getImageFitRect(bitmap.width, bitmap.height, containerRect.width, containerRect.height);
+    const fit = getImageFitRect(
+      bitmap.width,
+      bitmap.height,
+      containerRect.width,
+      containerRect.height
+    );
     if (!fit) {
       return;
     }
@@ -246,7 +284,7 @@ export function LiveViewCanvas({
       y: number,
       size: number,
       color: string,
-      lineWidth: number,
+      lineWidth: number
     ) => {
       ctx.save();
       ctx.strokeStyle = color;
@@ -259,7 +297,7 @@ export function LiveViewCanvas({
       ctx.stroke();
       ctx.restore();
     },
-    [],
+    []
   );
 
   const drawOverlayFrame = useCallback(() => {
@@ -273,7 +311,9 @@ export function LiveViewCanvas({
     overlayCtx.clearRect(0, 0, containerRect.width, containerRect.height);
 
     const now = Date.now();
-    const liveMarkers = markersRef.current.filter((marker) => now - marker.timestamp < MARKER_LIFETIME);
+    const liveMarkers = markersRef.current.filter(
+      (marker) => now - marker.timestamp < MARKER_LIFETIME
+    );
     if (liveMarkers.length !== markersRef.current.length) {
       markersRef.current = liveMarkers;
       setMarkers(liveMarkers);
@@ -282,23 +322,63 @@ export function LiveViewCanvas({
     for (const marker of liveMarkers) {
       const age = now - marker.timestamp;
       const alpha = Math.max(0, 1 - age / MARKER_LIFETIME);
-      drawCrosshair(overlayCtx, marker.canvasX, marker.canvasY, 14, `rgba(255, 60, 60, ${alpha})`, 2);
+      drawCrosshair(
+        overlayCtx,
+        marker.canvasX,
+        marker.canvasY,
+        14,
+        `rgba(255, 60, 60, ${alpha})`,
+        2
+      );
     }
 
     const fit = fitRectRef.current;
     const currentOverlay = overlayBBoxRef.current;
+    const currentHovered = hoveredElementRef.current;
     if (fit && currentOverlay) {
       const topLeft = pageToCanvasCoords(currentOverlay.x, currentOverlay.y, fit);
       const bottomRight = pageToCanvasCoords(
         currentOverlay.x + currentOverlay.width,
         currentOverlay.y + currentOverlay.height,
-        fit,
+        fit
       );
       overlayCtx.save();
       overlayCtx.strokeStyle = 'rgba(59, 130, 246, 0.9)';
       overlayCtx.lineWidth = 2;
       overlayCtx.setLineDash([6, 4]);
-      overlayCtx.strokeRect(topLeft.x, topLeft.y, bottomRight.x - topLeft.x, bottomRight.y - topLeft.y);
+      overlayCtx.strokeRect(
+        topLeft.x,
+        topLeft.y,
+        bottomRight.x - topLeft.x,
+        bottomRight.y - topLeft.y
+      );
+      overlayCtx.restore();
+    }
+
+    if (fit && elementPickerEnabled && currentHovered?.bbox) {
+      const hoverTopLeft = pageToCanvasCoords(currentHovered.bbox.x, currentHovered.bbox.y, fit);
+      const hoverBottomRight = pageToCanvasCoords(
+        currentHovered.bbox.x + currentHovered.bbox.width,
+        currentHovered.bbox.y + currentHovered.bbox.height,
+        fit
+      );
+      overlayCtx.save();
+      overlayCtx.strokeStyle = 'rgba(0, 150, 255, 0.75)';
+      overlayCtx.lineWidth = 2;
+      overlayCtx.setLineDash([]);
+      overlayCtx.strokeRect(
+        hoverTopLeft.x,
+        hoverTopLeft.y,
+        hoverBottomRight.x - hoverTopLeft.x,
+        hoverBottomRight.y - hoverTopLeft.y
+      );
+      overlayCtx.fillStyle = 'rgba(0, 150, 255, 0.12)';
+      overlayCtx.fillRect(
+        hoverTopLeft.x,
+        hoverTopLeft.y,
+        hoverBottomRight.x - hoverTopLeft.x,
+        hoverBottomRight.y - hoverTopLeft.y
+      );
       overlayCtx.restore();
     }
 
@@ -309,7 +389,7 @@ export function LiveViewCanvas({
       const selBottomRight = pageToCanvasCoords(
         currentSelected.bbox.x + currentSelected.bbox.width,
         currentSelected.bbox.y + currentSelected.bbox.height,
-        fit,
+        fit
       );
       overlayCtx.save();
       overlayCtx.strokeStyle = 'rgba(34, 197, 94, 0.9)';
@@ -319,7 +399,7 @@ export function LiveViewCanvas({
         selTopLeft.x,
         selTopLeft.y,
         selBottomRight.x - selTopLeft.x,
-        selBottomRight.y - selTopLeft.y,
+        selBottomRight.y - selTopLeft.y
       );
       // Light fill for visibility
       overlayCtx.fillStyle = 'rgba(34, 197, 94, 0.08)';
@@ -327,7 +407,7 @@ export function LiveViewCanvas({
         selTopLeft.x,
         selTopLeft.y,
         selBottomRight.x - selTopLeft.x,
-        selBottomRight.y - selTopLeft.y,
+        selBottomRight.y - selTopLeft.y
       );
       overlayCtx.restore();
     }
@@ -340,33 +420,57 @@ export function LiveViewCanvas({
       for (const el of domElementsRef.current) {
         if (!el.bbox || !el.isVisible) continue;
         const topLeft = pageToCanvasCoords(el.bbox.x, el.bbox.y, fit);
-        const bottomRight = pageToCanvasCoords(el.bbox.x + el.bbox.width, el.bbox.y + el.bbox.height, fit);
-        
+        const bottomRight = pageToCanvasCoords(
+          el.bbox.x + el.bbox.width,
+          el.bbox.y + el.bbox.height,
+          fit
+        );
+
         // Draw small background for text readability
         const w = 18;
         const h = 14;
         overlayCtx.fillStyle = 'rgba(239, 68, 68, 0.9)'; // Red
         overlayCtx.fillRect(topLeft.x, topLeft.y, w, h);
-        
+
         overlayCtx.fillStyle = '#ffffff';
         overlayCtx.fillText(String(el.markerNumber), topLeft.x + w / 2, topLeft.y + h / 2 + 1);
-        
+
         // Light border
         overlayCtx.strokeStyle = 'rgba(239, 68, 68, 0.5)';
         overlayCtx.lineWidth = 1;
-        overlayCtx.strokeRect(topLeft.x, topLeft.y, bottomRight.x - topLeft.x, bottomRight.y - topLeft.y);
+        overlayCtx.strokeRect(
+          topLeft.x,
+          topLeft.y,
+          bottomRight.x - topLeft.x,
+          bottomRight.y - topLeft.y
+        );
       }
       overlayCtx.restore();
     }
 
     if (elementPickerEnabled && pickerCursorRef.current) {
+      overlayCtx.save();
+      overlayCtx.font = '11px "JetBrains Mono", monospace';
+      const text = `X: ${pickerCursorRef.current.pageX}, Y: ${pickerCursorRef.current.pageY}`;
+      const metrics = overlayCtx.measureText(text);
+      const tx = pickerCursorRef.current.canvasX + 18;
+      const ty = pickerCursorRef.current.canvasY - 18;
+      overlayCtx.fillStyle = 'rgba(20, 20, 30, 0.85)';
+      overlayCtx.strokeStyle = 'rgba(0, 150, 255, 0.5)';
+      overlayCtx.lineWidth = 1;
+      overlayCtx.fillRect(tx - 5, ty - 13, metrics.width + 10, 20);
+      overlayCtx.strokeRect(tx - 5, ty - 13, metrics.width + 10, 20);
+      overlayCtx.fillStyle = '#8fdcff';
+      overlayCtx.fillText(text, tx, ty);
+      overlayCtx.restore();
+
       drawCrosshair(
         overlayCtx,
         pickerCursorRef.current.canvasX,
         pickerCursorRef.current.canvasY,
         20,
         'rgba(56, 189, 248, 0.85)',
-        1.5,
+        1.5
       );
     }
   }, [drawCrosshair, elementPickerEnabled]);
@@ -423,6 +527,7 @@ export function LiveViewCanvas({
         currentBitmapRef.current = null;
       }
       fitRectRef.current = null;
+      replaceDownloadUrl(null, true);
     };
 
     const stopStream = () => {
@@ -445,7 +550,10 @@ export function LiveViewCanvas({
         if (response.ok) {
           const data = await response.json();
           if (data.screenshot) {
-            const imgBlob = await fetch(`data:image/jpeg;base64,${data.screenshot}`).then(r => r.blob());
+            replaceDownloadUrl(`data:image/png;base64,${data.screenshot}`, true);
+            const imgBlob = await fetch(`data:image/png;base64,${data.screenshot}`).then((r) =>
+              r.blob()
+            );
             const bitmap = await createImageBitmap(imgBlob);
             if (!cancelled && streamVersion === streamVersionRef.current) {
               if (currentBitmapRef.current) currentBitmapRef.current.close();
@@ -482,7 +590,11 @@ export function LiveViewCanvas({
           }
 
           const frameBytes = Uint8Array.from(jpegFrame);
-          const bitmap = await createImageBitmap(new Blob([frameBytes], { type: 'image/jpeg' }));
+          const frameBlob = new Blob([frameBytes], { type: 'image/jpeg' });
+          const downloadUrl =
+            typeof URL.createObjectURL === 'function' ? URL.createObjectURL(frameBlob) : null;
+          replaceDownloadUrl(downloadUrl, true);
+          const bitmap = await createImageBitmap(frameBlob);
           if (cancelled || streamVersion !== streamVersionRef.current) {
             bitmap.close();
             break;
@@ -508,7 +620,7 @@ export function LiveViewCanvas({
       cancelled = true;
       stopStream();
     };
-  }, [drawRenderFrame, isPlaywrightConnected]);
+  }, [drawRenderFrame, isPlaywrightConnected, replaceDownloadUrl]);
 
   useEffect(() => {
     const unsubscribe = onMessage((payload) => {
@@ -546,12 +658,45 @@ export function LiveViewCanvas({
     setMarkers((prev) => [...prev, marker]);
   }, []);
 
-  const handleOverlayClick = useCallback(
-    (event: ReactMouseEvent<HTMLCanvasElement>) => {
-      if (!elementPickerEnabled) {
-        return;
+  const buildSelectedElement = useCallback(
+    (
+      pageX: number,
+      pageY: number,
+      element: Awaited<ReturnType<typeof getElementAt>>['element'] | undefined
+    ): SelectedElement | null => {
+      const domMatch = findDomElementAtPoint(domElementsRef.current, pageX, pageY);
+      if (!element && !domMatch) {
+        return null;
       }
 
+      const attributes: Record<string, string> = {
+        ...(element?.id ? { id: element.id } : {}),
+        ...(element?.class ? { class: element.class } : {}),
+        ...(element?.type ? { type: element.type } : {}),
+        ...(element?.name ? { name: element.name } : {}),
+        ...(element?.placeholder ? { placeholder: element.placeholder } : {}),
+        ...(domMatch?.dataNebulaId ? { 'data-nebula-id': domMatch.dataNebulaId } : {}),
+      };
+
+      return {
+        selector:
+          element?.selector ??
+          (domMatch?.dataNebulaId
+            ? `[data-nebula-id="${domMatch.dataNebulaId}"]`
+            : (domMatch?.tag ?? '')),
+        tag: element?.tag ?? domMatch?.tag ?? 'unknown',
+        text: element?.text ?? domMatch?.text,
+        attributes: Object.keys(attributes).length > 0 ? attributes : undefined,
+        markerNumber: domMatch?.markerNumber,
+        bbox: element?.bbox ?? domMatch?.bbox,
+        dataNebulaId: domMatch?.dataNebulaId,
+      };
+    },
+    []
+  );
+
+  const handleOverlayClick = useCallback(
+    (event: ReactMouseEvent<HTMLCanvasElement>) => {
       const fit = fitRectRef.current;
       const overlayCanvas = overlayCanvasRef.current;
       if (!fit || !overlayCanvas) {
@@ -574,15 +719,50 @@ export function LiveViewCanvas({
         timestamp: Date.now(),
       });
 
+      setCapturedCoordinates(pageCoords);
       onCoordinateCapture?.(pageCoords);
+
+      if (!elementPickerEnabled) {
+        setSelectedElement(null);
+        setHighlightedElementId(null);
+        return;
+      }
+
+      void (async () => {
+        try {
+          const response = await getElementAt(pageCoords.x, pageCoords.y);
+          const nextSelected = buildSelectedElement(pageCoords.x, pageCoords.y, response.element);
+          setSelectedElement(nextSelected);
+          setHighlightedElementId(
+            nextSelected?.dataNebulaId ??
+              (nextSelected?.markerNumber !== undefined ? String(nextSelected.markerNumber) : null)
+          );
+        } catch {
+          const nextSelected = buildSelectedElement(pageCoords.x, pageCoords.y, undefined);
+          setSelectedElement(nextSelected);
+          setHighlightedElementId(
+            nextSelected?.dataNebulaId ??
+              (nextSelected?.markerNumber !== undefined ? String(nextSelected.markerNumber) : null)
+          );
+        }
+      })();
     },
-    [onCoordinateCapture, elementPickerEnabled, pushMarker],
+    [
+      buildSelectedElement,
+      elementPickerEnabled,
+      onCoordinateCapture,
+      pushMarker,
+      setCapturedCoordinates,
+      setHighlightedElementId,
+      setSelectedElement,
+    ]
   );
 
   const handleOverlayMouseMove = useCallback(
     (event: ReactMouseEvent<HTMLCanvasElement>) => {
       if (!elementPickerEnabled) {
         pickerCursorRef.current = null;
+        setHoveredElement(null);
         return;
       }
 
@@ -599,6 +779,7 @@ export function LiveViewCanvas({
       const pageCoords = canvasToPageCoords(cssX, cssY, fit);
       if (!pageCoords) {
         pickerCursorRef.current = null;
+        setHoveredElement(null);
         return;
       }
 
@@ -608,17 +789,44 @@ export function LiveViewCanvas({
         pageX: pageCoords.x,
         pageY: pageCoords.y,
       };
+
+      if (hoverDebounceRef.current !== null) {
+        window.clearTimeout(hoverDebounceRef.current);
+      }
+
+      hoverDebounceRef.current = window.setTimeout(() => {
+        void (async () => {
+          try {
+            const response = await getElementAt(pageCoords.x, pageCoords.y);
+            const nextHovered = buildSelectedElement(pageCoords.x, pageCoords.y, response.element);
+            setHoveredElement(nextHovered);
+          } catch {
+            const nextHovered = buildSelectedElement(pageCoords.x, pageCoords.y, undefined);
+            setHoveredElement(nextHovered);
+          }
+        })();
+      }, HOVER_DEBOUNCE_MS);
     },
-    [elementPickerEnabled],
+    [buildSelectedElement, elementPickerEnabled]
   );
 
   const handleOverlayMouseLeave = useCallback(() => {
     pickerCursorRef.current = null;
+    setHoveredElement(null);
+    if (hoverDebounceRef.current !== null) {
+      window.clearTimeout(hoverDebounceRef.current);
+      hoverDebounceRef.current = null;
+    }
   }, []);
 
   useEffect(() => {
     if (!elementPickerEnabled) {
       pickerCursorRef.current = null;
+      setHoveredElement(null);
+      if (hoverDebounceRef.current !== null) {
+        window.clearTimeout(hoverDebounceRef.current);
+        hoverDebounceRef.current = null;
+      }
     }
   }, [elementPickerEnabled]);
 
@@ -636,12 +844,17 @@ export function LiveViewCanvas({
         window.cancelAnimationFrame(overlayRafRef.current);
         overlayRafRef.current = null;
       }
+      if (hoverDebounceRef.current !== null) {
+        window.clearTimeout(hoverDebounceRef.current);
+        hoverDebounceRef.current = null;
+      }
       if (currentBitmapRef.current) {
         currentBitmapRef.current.close();
         currentBitmapRef.current = null;
       }
+      replaceDownloadUrl(null, true);
     };
-  }, []);
+  }, [replaceDownloadUrl]);
 
   const containerClassName = useMemo(() => {
     return className ? `${styles.container} ${className}` : styles.container;
@@ -654,7 +867,7 @@ export function LiveViewCanvas({
       data-testid={testIds.liveviewCanvas}
       data-picker-active={elementPickerEnabled}
       data-marker-count={markers.length}
-      data-has-overlay={overlayBBox ? 'true' : 'false'}
+      data-has-overlay={overlayBBox || hoveredElement ? 'true' : 'false'}
       data-has-dom-highlight={selectedElement?.bbox ? 'true' : 'false'}
       data-connection-status={connectionStatus}
     >
@@ -667,10 +880,10 @@ export function LiveViewCanvas({
         onMouseLeave={handleOverlayMouseLeave}
       />
       <button
-        type='button'
+        type="button"
         className={styles.pickerToggle}
         aria-pressed={elementPickerEnabled}
-        data-testid='liveview-picker-toggle'
+        data-testid="liveview-picker-toggle"
         onClick={() => setElementPickerEnabled(!elementPickerEnabled)}
       >
         {elementPickerEnabled ? 'Picker: on' : 'Picker: off'}
