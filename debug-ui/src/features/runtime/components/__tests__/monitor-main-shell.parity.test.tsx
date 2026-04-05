@@ -1,7 +1,18 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { MonitorMainShell } from '../MonitorMainShell.js';
 import { testIds } from '@/shared/testing/testids.js';
+
+vi.mock('@/features/liveview/components/LiveViewCanvas.js', () => ({
+  LiveViewCanvas: () => <div data-testid="mock-monitor-liveview">LiveViewCanvas</div>,
+}));
+
+vi.mock('@/features/runtime/hooks/index.js', () => ({
+  useDebugSocket: () => ({
+    sendMessage: vi.fn(),
+    onMessage: vi.fn(() => vi.fn()),
+  }),
+}));
 
 describe('MonitorMainShell Parity Test', () => {
   it('asserts MonitorMainShell renders with 6 structural regions', () => {
@@ -49,19 +60,31 @@ describe('MonitorMainShell Parity Test', () => {
     // Verify header title
     const header = screen.getByTestId(testIds.monitorMainHeader);
     expect(within(header).getByText('📸 实时监控')).toBeInTheDocument();
-    expect(within(header).getByTestId(testIds.monitorMainStatusBadge)).toHaveTextContent('连接中...');
+    expect(within(header).getByTestId(testIds.monitorMainStatusBadge)).toHaveTextContent(
+      '连接中...'
+    );
 
     // Verify task strip text
     const taskStrip = screen.getByTestId(testIds.monitorMainTaskStrip);
-    expect(within(taskStrip).getByTestId(testIds.monitorMainTaskStatusText)).toHaveTextContent('空闲');
-    expect(within(taskStrip).getByTestId(testIds.monitorMainTaskId)).toHaveTextContent('—');
+    expect(within(taskStrip).getByTestId(testIds.monitorMainTaskStatusText)).toHaveTextContent(
+      '空闲'
+    );
+    expect(within(taskStrip).getByTestId(testIds.monitorMainTaskId)).toHaveTextContent('无任务');
 
     // Verify quick action buttons
     const quickActions = screen.getByTestId(testIds.monitorMainQuickActions);
-    expect(within(quickActions).getByTestId(testIds.monitorMainStepBtn)).toHaveTextContent('单步执行');
-    expect(within(quickActions).getByTestId(testIds.monitorMainSendCmdBtn)).toHaveTextContent('发送指令');
-    expect(within(quickActions).getByTestId(testIds.monitorMainDownloadBtn)).toHaveTextContent('下载截图');
-    expect(within(quickActions).getByTestId(testIds.monitorMainRefreshBtn)).toHaveTextContent('刷新历史');
+    expect(within(quickActions).getByTestId(testIds.monitorMainStepBtn)).toHaveTextContent(
+      '单步执行'
+    );
+    expect(within(quickActions).getByTestId(testIds.monitorMainSendCmdBtn)).toHaveTextContent(
+      '发送指令'
+    );
+    expect(within(quickActions).getByTestId(testIds.monitorMainDownloadBtn)).toHaveTextContent(
+      '下载截图'
+    );
+    expect(within(quickActions).getByTestId(testIds.monitorMainRefreshBtn)).toHaveTextContent(
+      '刷新历史'
+    );
 
     // Verify command input placeholder
     const commandInput = screen.getByTestId(testIds.monitorMainCommandInput);
@@ -69,7 +92,7 @@ describe('MonitorMainShell Parity Test', () => {
     expect(screen.getByTestId(testIds.monitorMainExecuteBtn)).toHaveTextContent('执行');
 
     // Verify log panel empty state
-    expect(screen.getByTestId(testIds.monitorMainLogEmpty)).toHaveTextContent('等待日志...');
+    expect(screen.getByTestId(testIds.monitorMainLogEmpty)).toHaveTextContent('暂无日志');
   });
 
   it('asserts root container has correct testid', () => {

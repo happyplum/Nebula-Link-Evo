@@ -20,11 +20,20 @@ import path from 'node:path';
 
 // Mock hooks and components to prevent side effects
 vi.mock('@/features/runtime/hooks/useDebugSocket.js', () => ({
-  useDebugSocket: vi.fn(),
+  useDebugSocket: () => ({
+    sendMessage: vi.fn(),
+    pauseTask: vi.fn(),
+    resumeTask: vi.fn(),
+    singleStep: vi.fn(),
+    disconnect: vi.fn(),
+    reconnect: vi.fn(),
+    onMessage: vi.fn(() => vi.fn()),
+  }),
 }));
 
-vi.mock('@/features/runtime/hooks/useDebugSession.js', () => ({
-  useDebugSession: vi.fn(() => ({ data: null, isLoading: false, error: null })),
+vi.mock('@/features/playwright-control/api/control.adapters.js', () => ({
+  takeScreenshot: vi.fn(() => Promise.resolve({ success: true, screenshot: 'data:image/png;base64,test' })),
+  fetchDomSnapshot: vi.fn(() => Promise.resolve({ success: true, dom: null })),
 }));
 
 vi.mock('@tanstack/react-query', async (importOriginal) => {
@@ -146,37 +155,37 @@ describe('P3-16-V MonitorSidebarShell - Content Parity', () => {
   });
 
   describe('DOM Screenshot Card', () => {
-    it('shows "快照版本: —" when snapshotVersion is 0', () => {
+    it('shows "ID: —" when snapshot info is empty', () => {
       useRuntimeStore.getState().setSnapshotVersion(0);
       renderWithProviders(<MonitorSidebarShell />);
 
       const snapshotLabel = screen.getByTestId(testIds.monitorSidebarSnapshotLabel);
-      expect(snapshotLabel).toHaveTextContent('快照版本: —');
+      expect(snapshotLabel).toHaveTextContent('ID: —');
     });
 
-    it('shows correct version when snapshotVersion is 1', () => {
+    it('still shows empty snapshot id when only local version counter changes to 1', () => {
       useRuntimeStore.getState().setSnapshotVersion(1);
       renderWithProviders(<MonitorSidebarShell />);
 
       const snapshotLabel = screen.getByTestId(testIds.monitorSidebarSnapshotLabel);
-      expect(snapshotLabel).toHaveTextContent('快照版本: 1');
+      expect(snapshotLabel).toHaveTextContent('ID: —');
     });
 
-    it('shows correct version when snapshotVersion is 42', () => {
+    it('still shows empty snapshot id when only local version counter changes to 42', () => {
       useRuntimeStore.getState().setSnapshotVersion(42);
       renderWithProviders(<MonitorSidebarShell />);
 
       const snapshotLabel = screen.getByTestId(testIds.monitorSidebarSnapshotLabel);
-      expect(snapshotLabel).toHaveTextContent('快照版本: 42');
+      expect(snapshotLabel).toHaveTextContent('ID: —');
     });
 
-    it('shows "快照版本: —" when snapshotVersion is reset to default', () => {
+    it('shows empty snapshot id when version counter is reset to default', () => {
       useRuntimeStore.getState().setSnapshotVersion(10);
       useRuntimeStore.getState().setSnapshotVersion(0);
       renderWithProviders(<MonitorSidebarShell />);
 
       const snapshotLabel = screen.getByTestId(testIds.monitorSidebarSnapshotLabel);
-      expect(snapshotLabel).toHaveTextContent('快照版本: —');
+      expect(snapshotLabel).toHaveTextContent('ID: —');
     });
   });
 
@@ -191,7 +200,7 @@ describe('P3-16-V MonitorSidebarShell - Content Parity', () => {
 
       expect(screen.getByTestId(testIds.monitorSidebarWsStatusText)).toHaveTextContent('已连接');
       expect(screen.getByTestId(testIds.monitorSidebarBrowserStatusText)).toHaveTextContent('就绪');
-      expect(screen.getByTestId(testIds.monitorSidebarSnapshotLabel)).toHaveTextContent('快照版本: 5');
+      expect(screen.getByTestId(testIds.monitorSidebarSnapshotLabel)).toHaveTextContent('ID: —');
     });
 
     it('verifies store is reset before each test (default state)', () => {
@@ -200,7 +209,7 @@ describe('P3-16-V MonitorSidebarShell - Content Parity', () => {
 
       expect(screen.getByTestId(testIds.monitorSidebarWsStatusText)).toHaveTextContent('未连接');
       expect(screen.getByTestId(testIds.monitorSidebarBrowserStatusText)).toHaveTextContent('未知');
-      expect(screen.getByTestId(testIds.monitorSidebarSnapshotLabel)).toHaveTextContent('快照版本: —');
+      expect(screen.getByTestId(testIds.monitorSidebarSnapshotLabel)).toHaveTextContent('ID: —');
     });
   });
 
@@ -278,13 +287,13 @@ describe('P3-16-V MonitorSidebarShell - Content Parity', () => {
       const refreshBtn = screen.getByTestId(testIds.monitorSidebarSnapshotRefreshBtn);
 
       expect(snapshotLabel).toBeInTheDocument();
-      expect(snapshotLabel).toHaveTextContent('快照版本: —');
+      expect(snapshotLabel).toHaveTextContent('ID: —');
 
       expect(snapshotImg).toBeInTheDocument();
-      expect(snapshotImg).toHaveTextContent('等待截图...');
+      expect(snapshotImg).toHaveTextContent('暂无截图');
 
       expect(refreshBtn).toBeInTheDocument();
-      expect(refreshBtn).toHaveTextContent('刷新DOM');
+      expect(refreshBtn).toHaveTextContent('刷新 DOM 截图');
     });
 
     it('asserts card titles are present', () => {
@@ -292,7 +301,7 @@ describe('P3-16-V MonitorSidebarShell - Content Parity', () => {
 
       expect(screen.getByText('WebSocket 状态')).toBeInTheDocument();
       expect(screen.getByText('浏览器状态')).toBeInTheDocument();
-      expect(screen.getByText('DOM 截图')).toBeInTheDocument();
+      expect(screen.getByText('DOM 截图 (Annotated)')).toBeInTheDocument();
     });
 
     it('asserts at least 5 key structural elements have correct testids', () => {

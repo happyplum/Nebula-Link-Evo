@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { testIds } from '@/shared/testing/testids.js';
-import { useRuntimeStore } from '@/features/runtime/store/runtime.store.js';
-import type { ConnectionStatus, ServiceStatus } from '@/features/runtime/store/runtime.store.js';
+import { LiveViewCanvas } from '@/features/liveview/components/LiveViewCanvas.js';
+import {
+  useRuntimeStore,
+  selectPlaywrightUrl,
+  selectExecutionMessages,
+  type ConnectionStatus,
+  type ServiceStatus,
+} from '@/features/runtime/store/runtime.store.js';
 import { useDebugSocket } from '@/features/runtime/hooks/useDebugSocket.js';
 import styles from './MonitorMainShell.module.css';
 
@@ -18,15 +24,6 @@ const TASK_STATUS_LABEL: Record<ServiceStatus, string> = {
   unknown: '空闲',
 };
 
-interface LogEntry {
-  id: number;
-  timestamp: number;
-  type: string;
-  message: string;
-}
-
-let nextLogId = 0;
-
 function formatTime(ts: number): string {
   const d = new Date(ts);
   const hh = String(d.getHours()).padStart(2, '0');
@@ -35,57 +32,28 @@ function formatTime(ts: number): string {
   return `${hh}:${mm}:${ss}`;
 }
 
-const MAX_LOG_ENTRIES = 200;
-const SILENT_TYPES = new Set(['ping', 'pong', 'ack']);
-
 export function MonitorMainShell() {
   const connectionStatus = useRuntimeStore((s) => s.connectionStatus);
   const playwrightStatus = useRuntimeStore((s) => s.playwrightStatus);
-  const snapshotVersion = useRuntimeStore((s) => s.snapshotVersion);
+  const playwrightUrl = useRuntimeStore(selectPlaywrightUrl);
   const lastScreenshotDataUrl = useRuntimeStore((s) => s.lastScreenshotDataUrl);
   const incrementSnapshotVersion = useRuntimeStore((s) => s.incrementSnapshotVersion);
+  const executionMessages = useRuntimeStore(selectExecutionMessages);
 
-  const { sendMessage, onMessage } = useDebugSocket();
+  const { sendMessage } = useDebugSocket();
   const isConnected = connectionStatus === 'connected';
 
   const [commandInput, setCommandInput] = useState('');
   const commandInputRef = useRef<HTMLInputElement>(null);
 
-  const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
   const logContainerRef = useRef<HTMLDivElement>(null);
 
-  // Subscribe to WS messages → execution log
   useEffect(() => {
-    const unsubscribe = onMessage((data: unknown) => {
-      const msg = data as { type?: string; message?: string; [k: string]: unknown };
-      if (!msg || typeof msg.type !== 'string') return;
-      if (SILENT_TYPES.has(msg.type)) return;
-
-      const message =
-        typeof msg.message === 'string'
-          ? msg.message
-          : JSON.stringify(msg).substring(0, 120);
-
-      setLogEntries((prev) => {
-        const next = [
-          ...prev,
-          { id: nextLogId++, timestamp: Date.now(), type: msg.type!, message },
-        ];
-        return next.length > MAX_LOG_ENTRIES ? next.slice(-MAX_LOG_ENTRIES) : next;
-      });
-    });
-    return unsubscribe;
-  }, [onMessage]);
-
-  // Auto-scroll log to bottom on new entries
-  const logCountRef = useRef(0);
-  logCountRef.current = logEntries.length;
-  useEffect(() => {
-    if (logCountRef.current > 0) {
+    if (executionMessages.length > 0) {
       const el = logContainerRef.current;
       if (el) el.scrollTop = el.scrollHeight;
     }
-  });
+  }, [executionMessages.length]);
 
   const handleStep = useCallback(() => {
     sendMessage('step', { taskId: undefined });
@@ -127,7 +95,7 @@ export function MonitorMainShell() {
         handleExecute();
       }
     },
-    [handleExecute],
+    [handleExecute]
   );
 
   const badgeClass = isConnected ? `${styles.statusBadge} ${styles.connected}` : styles.statusBadge;
@@ -140,18 +108,23 @@ export function MonitorMainShell() {
       <div className={styles.header} data-testid={testIds.monitorMainHeader}>
         <h2 className={styles.headerTitle}>📸 实时监控</h2>
         <span className={badgeClass} data-testid={testIds.monitorMainStatusBadge}>
-          <span className={`${styles.statusDot}${isConnected ? ` ${styles.statusDotOnline}` : ''}`} />
+          <span
+            className={`${styles.statusDot}${isConnected ? ` ${styles.statusDotOnline}` : ''}`}
+          />
           {CONNECTION_LABEL[connectionStatus]}
         </span>
       </div>
 
       {/* LiveViewCanvas slot */}
       <div className={styles.liveviewContainer} data-testid={testIds.monitorMainLiveview}>
-        <div className={styles.liveviewHeader}>
-          实时画面
-          <span className={styles.liveviewHeaderSub}>
-            {snapshotVersion > 0 ? `v${snapshotVersion}` : '—'}
-          </span>
+        <div className={styles.liveviewHeaderBar}>
+          <h3 className={styles.liveviewTitle}>实时画面</h3>
+          <div className={styles.liveviewHeaderMeta}>
+            <span className={styles.liveviewUrl}>{playwrightUrl || '-'}</span>
+          </div>
+        </div>
+        <div className={styles.liveviewCanvasWrap}>
+          <LiveViewCanvas className={styles.liveviewCanvas} />
         </div>
       </div>
 
@@ -162,7 +135,7 @@ export function MonitorMainShell() {
           {TASK_STATUS_LABEL[playwrightStatus]}
         </span>
         <span className={styles.taskId} data-testid={testIds.monitorMainTaskId}>
-          {snapshotVersion > 0 ? `#${snapshotVersion}` : '—'}
+          无任务
         </span>
       </div>
 
@@ -238,14 +211,23 @@ export function MonitorMainShell() {
           ref={logContainerRef}
           data-testid={testIds.monitorMainLogContainer}
         >
-          {logEntries.length === 0 ? (
+          {executionMessages.length === 0 ? (
             <div className={styles.logEmpty} data-testid={testIds.monitorMainLogEmpty}>
-              等待日志...
+              暂无日志
             </div>
           ) : (
-            logEntries.map((entry) => (
-              <div key={entry.id} className={styles.logEntry}>
-                [{formatTime(entry.timestamp)}] {entry.type}: {entry.message}
+            executionMessages.map((entry) => (
+              <div
+                key={`${entry.timestamp}-${entry.type}-${entry.text}`}
+                className={styles.logEntry}
+              >
+                <span className={styles.logTime}>[{formatTime(entry.timestamp)}]</span>
+                <span
+                  className={`${styles.logLevel} ${styles[`logLevel${entry.type.charAt(0).toUpperCase()}${entry.type.slice(1)}`] ?? styles.logLevelInfo}`}
+                >
+                  {entry.type}
+                </span>
+                <span className={styles.logMessage}>{entry.text}</span>
               </div>
             ))
           )}
