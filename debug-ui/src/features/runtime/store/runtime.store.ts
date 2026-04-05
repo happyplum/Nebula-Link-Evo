@@ -3,6 +3,12 @@ import { create } from 'zustand';
 export type ConnectionStatus = 'connected' | 'disconnected' | 'connecting' | 'reconnecting';
 export type ServiceStatus = 'unknown' | 'ready' | 'unhealthy';
 
+export interface ExecutionMessage {
+  type: 'info' | 'success' | 'warning' | 'error';
+  text: string;
+  timestamp: number;
+}
+
 interface RuntimeState {
   connectionStatus: ConnectionStatus;
   reconnectAttempt: number;
@@ -11,6 +17,7 @@ interface RuntimeState {
   playwrightUrl: string | null;
   snapshotVersion: number;
   lastScreenshotDataUrl: string | null;
+  executionMessages: ExecutionMessage[];
 
   setConnectionStatus: (status: ConnectionStatus) => void;
   setReconnectAttempt: (attempt: number) => void;
@@ -22,6 +29,8 @@ interface RuntimeState {
   setSnapshotVersion: (version: number) => void;
   incrementSnapshotVersion: () => void;
   setLastScreenshotDataUrl: (url: string | null) => void;
+  addExecutionMessage: (message: ExecutionMessage) => void;
+  clearExecutionMessages: () => void;
   reset: () => void;
 }
 
@@ -33,6 +42,7 @@ const initialState = {
   playwrightUrl: null as string | null,
   snapshotVersion: 0,
   lastScreenshotDataUrl: null as string | null,
+  executionMessages: [] as ExecutionMessage[],
 };
 
 export const useRuntimeStore = create<RuntimeState>()((set) => ({
@@ -40,8 +50,7 @@ export const useRuntimeStore = create<RuntimeState>()((set) => ({
 
   setConnectionStatus: (status) => set({ connectionStatus: status }),
   setReconnectAttempt: (attempt) => set({ reconnectAttempt: attempt }),
-  incrementReconnectAttempt: () =>
-    set((s) => ({ reconnectAttempt: s.reconnectAttempt + 1 })),
+  incrementReconnectAttempt: () => set((s) => ({ reconnectAttempt: s.reconnectAttempt + 1 })),
   resetReconnectAttempt: () => set({ reconnectAttempt: 0 }),
   setPlaywrightStatus: (status) => set({ playwrightStatus: status }),
   setPlaywrightIsOpen: (isOpen) => set({ playwrightIsOpen: isOpen }),
@@ -49,6 +58,11 @@ export const useRuntimeStore = create<RuntimeState>()((set) => ({
   setSnapshotVersion: (version) => set({ snapshotVersion: version }),
   incrementSnapshotVersion: () => set((s) => ({ snapshotVersion: s.snapshotVersion + 1 })),
   setLastScreenshotDataUrl: (url) => set({ lastScreenshotDataUrl: url }),
+  addExecutionMessage: (message) =>
+    set((s) => ({
+      executionMessages: [...s.executionMessages, message].slice(-200),
+    })),
+  clearExecutionMessages: () => set({ executionMessages: [] }),
   reset: () => set(initialState),
 }));
 
@@ -60,3 +74,4 @@ export const selectPlaywrightIsOpen = (s: RuntimeState) => s.playwrightIsOpen;
 export const selectPlaywrightUrl = (s: RuntimeState) => s.playwrightUrl;
 export const selectSnapshotVersion = (s: RuntimeState) => s.snapshotVersion;
 export const selectLastScreenshotDataUrl = (s: RuntimeState) => s.lastScreenshotDataUrl;
+export const selectExecutionMessages = (s: RuntimeState) => s.executionMessages;
