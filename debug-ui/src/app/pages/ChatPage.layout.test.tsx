@@ -3,6 +3,19 @@ import { render } from '@testing-library/react';
 import ChatPage from './ChatPage.js';
 import { testIds } from '@/shared/testing/testids.js';
 
+vi.mock('@/features/config/api/config.queries.js', () => ({
+  useConfig: () => ({ data: { decision: { provider: 'glm', model: 'glm-4.6v-flash' } } }),
+}));
+
+vi.mock('@/shared/query/hooks.js', () => ({
+  useSessions: () => ({ data: { sessions: [] }, isFetching: false }),
+  useSessionMessages: () => ({ data: { messages: [] }, isFetching: false }),
+}));
+
+vi.mock('@/shared/query/query-client.js', () => ({
+  queryClient: { invalidateQueries: vi.fn().mockResolvedValue(undefined) },
+}));
+
 vi.mock('@/features/chat/store/chat.store.js', () => ({
   useChatStore: vi.fn((selector: (s: any) => unknown) =>
     selector({
@@ -16,6 +29,11 @@ vi.mock('@/features/chat/store/chat.store.js', () => ({
       setStreamingState: vi.fn(),
       setShowThinking: vi.fn(),
       setSelectedModel: vi.fn(),
+      updateSession: vi.fn(),
+      setSessions: vi.fn(),
+      setMessages: vi.fn(),
+      setIsLoadingSessions: vi.fn(),
+      setIsLoadingMessages: vi.fn(),
     }),
   ),
   selectShowThinking: (s: any) => s.showThinking,
@@ -28,7 +46,6 @@ vi.mock('@/features/chat/store/chat.store.js', () => ({
 vi.mock('@/features/chat/components/index.js', () => ({
   SessionSelector: () => <div data-testid={testIds.sessionSelector}>SessionSelector</div>,
   MessageList: () => <div data-testid={testIds.messageList}>MessageList</div>,
-  StatusBar: () => <div data-testid={testIds.statusBar}>StatusBar</div>,
   Composer: () => <textarea data-testid={testIds.composerInput} />,
 }));
 

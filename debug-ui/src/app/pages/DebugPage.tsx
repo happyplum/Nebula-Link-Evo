@@ -1,17 +1,15 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLayoutStore, selectActiveActivityIcon, selectActiveRightTab, type ActivityIcon, type RightPanelTab } from '@/features/layout/store/layout.store.js';
-import { useRuntimeStore, selectConnectionStatus, selectPlaywrightStatus } from '@/features/runtime/store/runtime.store.js';
-import { useDebugSocket } from '@/features/runtime/hooks/useDebugSocket.js';
 import { MonitorSidebarShell } from '@/features/runtime/components/MonitorSidebarShell.js';
 import { MonitorMainShell } from '@/features/runtime/components/MonitorMainShell.js';
-import { ControlPanel } from '@/features/playwright-control/components/ControlPanel.js';
+import { BrowserBasicShell } from '@/features/playwright-control/components/BrowserBasicShell.js';
+import { PageInteractionShell } from '@/features/playwright-control/components/PageInteractionShell.js';
+import { OperationLogsShell } from '@/features/playwright-control/components/OperationLogsShell.js';
 import { SelectedElementCard } from '@/features/playwright-control/components/SelectedElementCard.js';
 import { DomElementsTable } from '@/features/playwright-control/components/DomElementsTable.js';
 import { HistoryShell, InteractionsShell } from '@/features/history/components/index.js';
-import { LiveViewCanvas } from '@/features/liveview/components/LiveViewCanvas.js';
 import ChatPage from './ChatPage.js';
-import { StatusIndicator } from '@/shared/ui/StatusIndicator.js';
 import { Tabs } from '@/shared/ui/Tabs.js';
 import { testIds } from '@/shared/testing/testids.js';
 import { ConfigPanel, HealthStatusCard, McpStatusList, McpToolsModal, ApiKeysStatus, ConnectivityTest, AiTest } from '@/features/config/components/index.js';
@@ -43,11 +41,11 @@ const TESTID_MAP: Record<string, string> = {
 };
 
 const SIDEBAR_TITLES: Record<ActivityIcon, string> = {
-  monitor: 'Monitor',
-  control: 'Control',
+  monitor: '状态',
+  control: '控制',
   ai: 'AI',
-  history: 'History',
-  interactions: 'Interactions',
+  history: '历史',
+  interactions: '交互',
 };
 
 export default function DebugPage() {
@@ -56,14 +54,11 @@ export default function DebugPage() {
   const setActiveIcon = useLayoutStore((s) => s.setActiveActivityIcon);
   const activeRightTab = useLayoutStore(selectActiveRightTab);
   const setActiveRightTab = useLayoutStore((s) => s.setActiveRightTab);
-  
-  const connectionStatus = useRuntimeStore(selectConnectionStatus);
-  const playwrightStatus = useRuntimeStore(selectPlaywrightStatus);
 
   const [selectedMcpServer, setSelectedMcpServer] = useState<string | null>(null);
-
-  // Initialize WebSocket connection
-  useDebugSocket();
+  const [browserBasicOpen, setBrowserBasicOpen] = useState(true);
+  const [pageInteractionOpen, setPageInteractionOpen] = useState(true);
+  const [operationLogsOpen, setOperationLogsOpen] = useState(true);
 
   const renderSidebarContent = () => {
     switch (activeIcon) {
@@ -71,14 +66,15 @@ export default function DebugPage() {
         return <MonitorSidebarShell />;
       case 'control':
         return (
-          <>
-            <ControlPanel />
-            <SelectedElementCard />
-          </>
+          <div className={styles.controlSidebar}>
+            <BrowserBasicShell open={browserBasicOpen} onToggle={() => setBrowserBasicOpen((value) => !value)} icon="🌐" />
+            <PageInteractionShell open={pageInteractionOpen} onToggle={() => setPageInteractionOpen((value) => !value)} />
+            <OperationLogsShell open={operationLogsOpen} onToggle={() => setOperationLogsOpen((value) => !value)} />
+          </div>
         );
       case 'ai':
         return (
-          <div className={styles.aiSidebar} style={{ width: '100%', height: '100%', overflow: 'hidden' }}>
+          <div className={styles.aiSidebar}>
             <ChatPage />
           </div>
         );
@@ -119,25 +115,14 @@ export default function DebugPage() {
           <h1 className={styles.sidebarTitle}>🌌 Nebula Debug</h1>
         </div>
         <div className={styles.sidebarContent}>
-          <h2 className={styles.sectionTitle}>{SIDEBAR_TITLES[activeIcon]}</h2>
+          <h2 className={styles.visuallyHidden}>{SIDEBAR_TITLES[activeIcon]}</h2>
           {renderSidebarContent()}
         </div>
       </aside>
 
       {/* Main Area */}
       <main className={styles.main} data-testid={testIds.debugMain}>
-        {activeIcon === 'monitor' ? (
-          <MonitorMainShell />
-        ) : (
-          <>
-            <div className={styles.mainHeader}>
-              <h2 className={styles.mainTitle}>Live View</h2>
-            </div>
-            <div className={styles.mainContent}>
-              <LiveViewCanvas />
-            </div>
-          </>
-        )}
+        <MonitorMainShell />
       </main>
 
       {/* Right Panel */}
