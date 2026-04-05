@@ -28,6 +28,9 @@ export const DEBUG_PLAYWRIGHT_CLICK = '/debug/api/playwright/click' as const;
 export const DEBUG_PLAYWRIGHT_TYPE = '/debug/api/playwright/type' as const;
 export const DEBUG_PLAYWRIGHT_SCROLL = '/debug/api/playwright/scroll' as const;
 export const DEBUG_PLAYWRIGHT_ACTION = '/debug/api/playwright/action' as const;
+export const DEBUG_PLAYWRIGHT_ELEMENT_AT = '/debug/api/playwright/element-at' as const;
+export const DEBUG_PLAYWRIGHT_CLICK_BY_MARKER = '/debug/api/playwright/click-by-marker' as const;
+export const DEBUG_PLAYWRIGHT_EXECUTE_BY_MARKER = '/debug/api/playwright/execute-by-marker' as const;
 
 // Debug API — DOM & Interactions
 export const DEBUG_DOM = '/debug/api/dom' as const;
