@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Accordion } from '@/shared/ui/Accordion.js';
 import { testIds } from '@/shared/testing/testids.js';
@@ -15,6 +15,7 @@ import {
   takeScreenshot,
   fetchBrowserStatus,
 } from '../api/control.adapters.js';
+import { appendConsoleMessage } from '../lib/index.js';
 import styles from './BrowserBasicShell.module.css';
 
 export interface BrowserBasicShellProps {
@@ -49,12 +50,39 @@ export function BrowserBasicShell({ open, onToggle, icon }: BrowserBasicShellPro
 
   const [urlInput, setUrlInput] = useState('');
 
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        appendConsoleMessage('info', 'Playwright 控制已初始化');
+        const status = await fetchBrowserStatus();
+        if (cancelled) return;
+        if (status.success && status.isOpen) {
+          appendConsoleMessage('success', `浏览器已连接: ${status.url ?? ''}`);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          appendConsoleMessage(
+            'error',
+            `初始化失败: ${err instanceof Error ? err.message : '未知错误'}`
+          );
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
   const handleOpen = useCallback(async () => {
     setExecutingAction(true);
     setActionError(null);
     try {
+      appendConsoleMessage('info', '正在打开浏览器...');
       const res = await openBrowser();
       if (res.success) {
+        appendConsoleMessage('success', '浏览器已打开');
         setBrowserOpen(true);
         const status = await fetchBrowserStatus();
         if (status.success) {
@@ -62,9 +90,11 @@ export function BrowserBasicShell({ open, onToggle, icon }: BrowserBasicShellPro
           setBrowserUrl(status.url ?? '');
         }
       } else {
+        appendConsoleMessage('error', res.error ?? '打开失败');
         setActionError(res.error ?? '打开失败');
       }
     } catch (err) {
+      appendConsoleMessage('error', err instanceof Error ? err.message : '打开失败');
       setActionError(err instanceof Error ? err.message : '打开失败');
     } finally {
       setExecutingAction(false);
@@ -75,14 +105,18 @@ export function BrowserBasicShell({ open, onToggle, icon }: BrowserBasicShellPro
     setExecutingAction(true);
     setActionError(null);
     try {
+      appendConsoleMessage('info', '正在关闭浏览器...');
       const res = await closeBrowser();
       if (res.success) {
+        appendConsoleMessage('success', '浏览器已关闭');
         setBrowserOpen(false);
         setBrowserUrl('');
       } else {
+        appendConsoleMessage('error', res.error ?? '关闭失败');
         setActionError(res.error ?? '关闭失败');
       }
     } catch (err) {
+      appendConsoleMessage('error', err instanceof Error ? err.message : '关闭失败');
       setActionError(err instanceof Error ? err.message : '关闭失败');
     } finally {
       setExecutingAction(false);
@@ -95,14 +129,18 @@ export function BrowserBasicShell({ open, onToggle, icon }: BrowserBasicShellPro
     setExecutingAction(true);
     setActionError(null);
     try {
+      appendConsoleMessage('info', `正在导航到: ${fullUrl}...`);
       const res = await navigateToUrl(fullUrl);
       if (res.success) {
+        appendConsoleMessage('success', '导航成功');
         setBrowserUrl(fullUrl);
         setUrlInput('');
       } else {
+        appendConsoleMessage('error', res.error ?? '导航失败');
         setActionError(res.error ?? '导航失败');
       }
     } catch (err) {
+      appendConsoleMessage('error', err instanceof Error ? err.message : '导航失败');
       setActionError(err instanceof Error ? err.message : '导航失败');
     } finally {
       setExecutingAction(false);
@@ -148,7 +186,7 @@ export function BrowserBasicShell({ open, onToggle, icon }: BrowserBasicShellPro
         void handleNavigate();
       }
     },
-    [handleNavigate, isExecuting, browserOpen],
+    [handleNavigate, isExecuting, browserOpen]
   );
 
   return (
@@ -166,16 +204,10 @@ export function BrowserBasicShell({ open, onToggle, icon }: BrowserBasicShellPro
             className={`${styles.statusIndicator} ${browserOpen ? styles.connected : styles.disconnected}`}
             data-testid={testIds.controlBrowserBasicStatusIndicator}
           />
-          <span
-            className={styles.statusText}
-            data-testid={testIds.controlBrowserBasicStatusText}
-          >
+          <span className={styles.statusText} data-testid={testIds.controlBrowserBasicStatusText}>
             {browserOpen ? '已连接' : '未连接'}
           </span>
-          <span
-            className={styles.currentUrl}
-            data-testid={testIds.controlBrowserBasicCurrentUrl}
-          >
+          <span className={styles.currentUrl} data-testid={testIds.controlBrowserBasicCurrentUrl}>
             {browserUrl || '-'}
           </span>
         </div>

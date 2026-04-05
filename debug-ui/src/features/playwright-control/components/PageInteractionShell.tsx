@@ -1,17 +1,48 @@
-import { useState, useCallback, type FC } from 'react';
+import { useState, useCallback, useEffect, type FC } from 'react';
 import { Accordion } from '@/shared/ui/Accordion.js';
 import { testIds } from '@/shared/testing/testids.js';
-import { useControlStore } from '../store/control.store.js';
+import {
+  useControlStore,
+  selectCapturedCoordinates,
+  selectSelectedElement,
+  selectSnapshotId,
+} from '../store/control.store.js';
 import { executeAction } from '../api/control.adapters.js';
+import { appendConsoleMessage } from '../lib/index.js';
 import styles from './PageInteractionShell.module.css';
 
 type SelectorMode = 'marker' | 'css';
 
-export const PageInteractionShell: FC = () => {
+const ACTIONS_REQUIRING_PARAM = new Set(['type', 'value', 'dispatch']);
+
+function getActionParamPlaceholder(actionType: string): string {
+  switch (actionType) {
+    case 'value':
+      return '设置值';
+    case 'dispatch':
+      return '事件类型';
+    case 'type':
+    default:
+      return '输入文本';
+  }
+}
+
+interface PageInteractionShellProps {
+  open?: boolean;
+  onToggle?: () => void;
+}
+
+export const PageInteractionShell: FC<PageInteractionShellProps> = ({
+  open = true,
+  onToggle = () => {},
+}) => {
   const browserOpen = useControlStore((s) => s.browserOpen);
   const isExecutingAction = useControlStore((s) => s.isExecutingAction);
   const setExecutingAction = useControlStore((s) => s.setExecutingAction);
   const setActionError = useControlStore((s) => s.setActionError);
+  const selectedElement = useControlStore(selectSelectedElement);
+  const capturedCoordinates = useControlStore(selectCapturedCoordinates);
+  const snapshotId = useControlStore(selectSnapshotId);
 
   // Element picker — synced to store for LiveViewCanvas
   const elementPickerEnabled = useControlStore((s) => s.elementPickerEnabled);
@@ -33,17 +64,52 @@ export const PageInteractionShell: FC = () => {
   const [scrollY, setScrollY] = useState('');
 
   const disabled = !browserOpen || isExecutingAction;
+  const actionNeedsParam = ACTIONS_REQUIRING_PARAM.has(actionType);
+
+  useEffect(() => {
+    if (!capturedCoordinates) {
+      return;
+    }
+
+    setCoordX(String(capturedCoordinates.x));
+    setCoordY(String(capturedCoordinates.y));
+  }, [capturedCoordinates]);
+
+  useEffect(() => {
+    if (!selectedElement) {
+      return;
+    }
+
+    if (selectedElement.markerNumber !== undefined) {
+      setSelectorMode('marker');
+      setMarkerId(String(selectedElement.markerNumber));
+    }
+
+    if (selectedElement.selector) {
+      if (selectedElement.markerNumber === undefined) {
+        setSelectorMode('css');
+      }
+      setCssSelector(selectedElement.selector);
+    }
+  }, [selectedElement]);
 
   const handleCoordClick = useCallback(async () => {
     const x = Number(coordX);
     const y = Number(coordY);
     if (isNaN(x) || isNaN(y)) return;
+    appendConsoleMessage('info', `正在点击坐标 (${x}, ${y})...`);
     setExecutingAction(true);
     setActionError(null);
     try {
       const res = await executeAction('click', { x, y });
-      if (!res.success) setActionError(res.error ?? '坐标点击失败');
+      if (!res.success) {
+        appendConsoleMessage('error', res.error ?? '点击失败');
+        setActionError(res.error ?? '坐标点击失败');
+      } else {
+        appendConsoleMessage('success', res.message ?? '点击成功');
+      }
     } catch (e) {
+      appendConsoleMessage('error', e instanceof Error ? e.message : '点击失败');
       setActionError(e instanceof Error ? e.message : '坐标点击异常');
     } finally {
       setExecutingAction(false);
@@ -51,34 +117,85 @@ export const PageInteractionShell: FC = () => {
   }, [coordX, coordY, setExecutingAction, setActionError]);
 
   const handleElementAction = useCallback(async () => {
-    const args: Record<string, unknown> = { param: actionParam };
-    if (selectorMode === 'marker') {
-      args.markerId = Number(markerId);
-    } else {
-      args.cssSelector = cssSelector;
+    if (actionNeedsParam && !actionParam.trim()) {
+      setActionError('当前操作需要参数');
+      return;
     }
+
+    const args: Record<string, unknown> = {};
+    if (actionNeedsParam) {
+      args.param = actionParam;
+    }
+    if (selectorMode === 'marker') {
+      if (!snapshotId) {
+        setActionError('缺少 DOM 快照，请先刷新 DOM');
+        return;
+      }
+      const parsedMarkerId = Number(markerId);
+      if (!Number.isInteger(parsedMarkerId) || parsedMarkerId <= 0) {
+        setActionError('请输入有效的 Marker ID');
+        return;
+      }
+      args.markerId = parsedMarkerId;
+      args.snapshotId = snapshotId;
+    } else {
+      if (!cssSelector.trim()) {
+        setActionError('请输入 CSS 选择器');
+        return;
+      }
+      args.selector = cssSelector;
+    }
+    appendConsoleMessage(
+      'info',
+      selectorMode === 'marker'
+        ? `正在对元素 #${markerId} 执行 ${actionType}...`
+        : `正在对 ${cssSelector} 执行 ${actionType}...`
+    );
     setExecutingAction(true);
     setActionError(null);
     try {
       const res = await executeAction(actionType, args);
-      if (!res.success) setActionError(res.error ?? '元素操作失败');
+      if (!res.success) {
+        appendConsoleMessage('error', res.error ?? '操作失败');
+        setActionError(res.error ?? '元素操作失败');
+      } else {
+        appendConsoleMessage('success', res.message ?? '操作成功');
+      }
     } catch (e) {
+      appendConsoleMessage('error', e instanceof Error ? e.message : '操作失败');
       setActionError(e instanceof Error ? e.message : '元素操作异常');
     } finally {
       setExecutingAction(false);
     }
-  }, [actionType, actionParam, selectorMode, markerId, cssSelector, setExecutingAction, setActionError]);
+  }, [
+    actionNeedsParam,
+    actionType,
+    actionParam,
+    selectorMode,
+    markerId,
+    cssSelector,
+    snapshotId,
+    setExecutingAction,
+    setActionError,
+  ]);
 
   const handleScroll = useCallback(async () => {
     const x = Number(scrollX);
     const y = Number(scrollY);
     if (isNaN(x) || isNaN(y)) return;
+    appendConsoleMessage('info', `正在滚动页面 (${x}, ${y})...`);
     setExecutingAction(true);
     setActionError(null);
     try {
       const res = await executeAction('scroll', { x, y });
-      if (!res.success) setActionError(res.error ?? '页面滚动失败');
+      if (!res.success) {
+        appendConsoleMessage('error', res.error ?? '滚动失败');
+        setActionError(res.error ?? '页面滚动失败');
+      } else {
+        appendConsoleMessage('success', res.message ?? '滚动成功');
+      }
     } catch (e) {
+      appendConsoleMessage('error', e instanceof Error ? e.message : '滚动失败');
       setActionError(e instanceof Error ? e.message : '页面滚动异常');
     } finally {
       setExecutingAction(false);
@@ -87,8 +204,8 @@ export const PageInteractionShell: FC = () => {
 
   return (
     <Accordion
-      open={false}
-      onToggle={() => {}}
+      open={open}
+      onToggle={onToggle}
       title="页面交互"
       icon="🖱️"
       testId={testIds.controlPageInteraction}
@@ -111,9 +228,7 @@ export const PageInteractionShell: FC = () => {
             </label>
           </div>
           <p className={styles.pickerHelper}>
-            {elementPickerEnabled
-              ? '点击实时画面选择元素'
-              : '开启后在实时画面上点击选择元素'}
+            {elementPickerEnabled ? '点击实时画面选择元素' : '开启后在实时画面上点击选择元素'}
           </p>
         </div>
 
@@ -210,15 +325,17 @@ export const PageInteractionShell: FC = () => {
             <option value="dispatch">派发事件</option>
           </select>
 
-          <input
-            type="text"
-            className={styles.textInput}
-            placeholder="输入文本"
-            value={actionParam}
-            onChange={(e) => setActionParam(e.target.value)}
-            disabled={disabled}
-            data-testid={testIds.controlPageInteractionActionParam}
-          />
+          {actionNeedsParam && (
+            <input
+              type="text"
+              className={styles.textInput}
+              placeholder={getActionParamPlaceholder(actionType)}
+              value={actionParam}
+              onChange={(e) => setActionParam(e.target.value)}
+              disabled={disabled}
+              data-testid={testIds.controlPageInteractionActionParam}
+            />
+          )}
 
           <button
             type="button"

@@ -35,7 +35,7 @@ describe('OperationLogsShell Parity Test', () => {
     render(<OperationLogsShell {...defaultProps} />);
 
     const logContainer = screen.getByTestId(testIds.controlOperationLogsContainer);
-    expect(logContainer).toHaveTextContent('等待操作...');
+    expect(logContainer).toHaveTextContent('暂无日志');
   });
 
   it('renders Accordion title "📝 操作日志"', () => {

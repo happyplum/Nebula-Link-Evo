@@ -1,12 +1,12 @@
 .logContainer {
-  max-height: 375px;
+  max-height: 150px;
   overflow-y: auto;
   background-color: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   padding: 8px;
   font-family: var(--font-mono, monospace);
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-secondary);
   min-height: 60px;
 }
@@ -19,10 +19,50 @@
 }
 
 .logEntry {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding: 2px 0;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.logEntry:last-child {
+  border-bottom: none;
+}
+
+.logTimestamp {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.logLevel {
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.levelInfo {
+  color: var(--accent-info);
+}
+
+.levelSuccess {
+  color: var(--accent-success);
+}
+
+.levelWarning {
+  color: var(--accent-warning);
+}
+
+.levelError {
+  color: var(--accent-error);
+}
+
+.logText {
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .clearButton {
@@ -33,7 +73,7 @@
   color: var(--text-primary);
   padding: 8px 12px;
   border-radius: var(--radius-sm);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;

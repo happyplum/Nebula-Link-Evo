@@ -6,40 +6,10 @@ import {
   selectDomElements,
   type DomElement,
 } from '../store/control.store.js';
-import { fetchDomSnapshot, type DomSnapshotElementInfo } from '../api/control.adapters.js';
+import { fetchDomSnapshot } from '../api/control.adapters.js';
+import { normalizeDomElements } from '../lib/index.js';
 import { testIds } from '@/shared/testing/testids.js';
 import styles from './DomElementsTable.module.css';
-
-/** Normalize elements_map from array or record format into DomElement[] */
-function normalizeElements(
-  elementsMap: [number, DomSnapshotElementInfo][] | Record<string, DomSnapshotElementInfo>,
-): DomElement[] {
-  if (Array.isArray(elementsMap)) {
-    return elementsMap.map(([markerNumber, info]) => ({
-      markerNumber,
-      tag: info.tag,
-      id: info['data-nebula-id'],
-      text: info.text,
-      bbox: info.bbox,
-      isVisible: info.isVisible,
-      isInteractable: info.isInteractable,
-      dataNebulaId: info['data-nebula-id'],
-      locatorBundle: info.locatorBundle,
-    }));
-  }
-
-  return Object.entries(elementsMap).map(([id, info], index) => ({
-    markerNumber: index + 1,
-    tag: info.tag,
-    id,
-    text: info.text,
-    bbox: info.bbox,
-    isVisible: info.isVisible ?? true,
-    isInteractable: info.isInteractable ?? true,
-    dataNebulaId: id,
-    locatorBundle: info.locatorBundle,
-  }));
-}
 
 export const DomElementsTable: React.FC = () => {
   const selectedElement = useControlStore(selectSelectedElement);
@@ -67,7 +37,7 @@ export const DomElementsTable: React.FC = () => {
         }
 
         if (elements_map) {
-          const normalized = normalizeElements(elements_map);
+          const normalized = normalizeDomElements(elements_map);
           setDomElements(normalized);
         }
       } else {
@@ -101,7 +71,7 @@ export const DomElementsTable: React.FC = () => {
   };
 
   const isSelected = (el: DomElement) => {
-    if (!selectedElement?.markerNumber) return false;
+    if (selectedElement?.markerNumber === undefined || el.markerNumber === undefined) return false;
     return selectedElement.markerNumber === el.markerNumber;
   };
 
@@ -156,7 +126,7 @@ export const DomElementsTable: React.FC = () => {
                   onClick={() => handleRowClick(el)}
                   data-testid={testIds.domTableRow}
                 >
-                  <td className={`${styles.td} ${styles.marker}`}>{el.markerNumber}</td>
+                  <td className={`${styles.td} ${styles.marker}`}>{el.markerNumber ?? '—'}</td>
                   <td className={`${styles.td} ${styles.tagCell}`}>
                     <code>{el.tag}</code>
                   </td>
