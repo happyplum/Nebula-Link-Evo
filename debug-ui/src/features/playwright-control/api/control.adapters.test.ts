@@ -40,16 +40,14 @@ describe('control.adapters', () => {
       expect(result).toEqual(response);
     });
 
-    it('posts action without extra args', async () => {
-      const response = { success: true };
-      mockPost.mockResolvedValue(response);
-
+    it('returns an error when action target args are missing', async () => {
       const result = await executeAction('reload');
 
-      expect(mockPost).toHaveBeenCalledWith('/debug/api/playwright/action', {
-        action: 'reload',
+      expect(mockPost).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        success: false,
+        error: 'Missing required action target',
       });
-      expect(result.success).toBe(true);
     });
 
     it('propagates error responses', async () => {
