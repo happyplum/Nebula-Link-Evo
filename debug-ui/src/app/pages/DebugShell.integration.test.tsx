@@ -56,22 +56,22 @@ describe('DebugShell Integration', () => {
     expect(screen.getByTestId(testIds.monitorMain)).toBeInTheDocument();
     
     // Check right panel tabs
-    expect(screen.getByRole('tab', { name: 'DOM Elements' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Config' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '📍 DOM Elements' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '⚙️ 配置' })).toBeInTheDocument();
   });
 
   it('switches sidebar content when activity icons are clicked', () => {
     renderWithProviders(<DebugPage />);
     
     // Default is Monitor panel
-    expect(screen.getByText('Monitor')).toBeInTheDocument();
+    expect(screen.getByText('状态')).toBeInTheDocument();
     
     // Click Control
     fireEvent.click(screen.getByTitle('控制'));
-    expect(screen.getByText('Control')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /浏览器基础/i })).toBeInTheDocument();
     
     // Click History
     fireEvent.click(screen.getByTitle('历史'));
-    expect(screen.getByText('History')).toBeInTheDocument();
+    expect(screen.getByTestId(testIds.historyShell)).toBeInTheDocument();
   });
 });

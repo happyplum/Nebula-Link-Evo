@@ -12,7 +12,7 @@
 /* Header — legacy: chat-page-header / sidebar header area */
 .header {
   flex: 0 0 auto;
-  padding: 12px 16px;
+  padding: 16px 20px;
   background: var(--bg-card);
   backdrop-filter: var(--blur-md);
   border-bottom: 1px solid var(--border-color);
@@ -64,14 +64,18 @@
   padding: 6px 10px;
   color: var(--text-primary);
   font-family: inherit;
-  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  transition:
+    border-color 0.3s ease,
+    box-shadow 0.3s ease;
   color-scheme: dark;
 }
 
 .sessionSelectorWrapper :global(select):focus {
   outline: none;
   border-color: var(--accent-primary);
-  box-shadow: 0 0 0 3px var(--accent-primary-subtle), var(--shadow-glow);
+  box-shadow:
+    0 0 0 3px var(--accent-primary-subtle),
+    var(--shadow-glow);
 }
 
 .headerRight {
@@ -132,8 +136,7 @@
 .controlBar {
   flex: 0 0 auto;
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
   padding: 8px 12px;
   background: var(--bg-tertiary);
   border-bottom: 1px solid var(--border-color);
@@ -144,31 +147,17 @@
 .controlBtn {
   flex: 1 1 0;
   min-width: 50px;
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  padding: 6px 8px;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
   white-space: nowrap;
-}
-
-.controlBtn:hover:not(:disabled) {
-  background: var(--bg-elevated);
-  border-color: var(--border-hover);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-sm);
-}
-
-.controlBtn:active:not(:disabled) {
-  transform: translateY(0);
 }
 
 .controlBtn:disabled {
@@ -179,39 +168,18 @@
 /* legacy: bg-error text-white */
 .btnError {
   background: var(--accent-error);
-  border-color: var(--accent-error);
-  color: white;
-}
-
-.btnError:hover:not(:disabled) {
-  background: var(--accent-error);
-  filter: brightness(1.15);
   color: white;
 }
 
 /* legacy: bg-warning text-white */
 .btnWarning {
   background: var(--accent-warning);
-  border-color: var(--accent-warning);
-  color: white;
-}
-
-.btnWarning:hover:not(:disabled) {
-  background: var(--accent-warning);
-  filter: brightness(1.15);
   color: white;
 }
 
 /* legacy: bg-success text-white */
 .btnSuccess {
   background: var(--accent-success);
-  border-color: var(--accent-success);
-  color: white;
-}
-
-.btnSuccess:hover:not(:disabled) {
-  background: var(--accent-success);
-  filter: brightness(1.15);
   color: white;
 }
 
@@ -222,9 +190,24 @@
   border: 1px solid var(--accent-error);
 }
 
-.btnCancel:hover:not(:disabled) {
-  background: var(--accent-error-subtle);
-  border-color: var(--accent-error);
+/* Pausing feedback — legacy: #pausing-feedback */
+.pausingFeedback {
+  padding: 8px 12px;
+  background: rgba(250, 204, 21, 0.15);
+  color: var(--accent-warning);
+  font-size: 12px;
+  text-align: center;
+  border-bottom: 1px solid var(--accent-warning);
+}
+
+/* Blocked banner */
+.blockedBanner {
+  padding: 8px;
+  background: var(--accent-warning);
+  color: #fff;
+  text-align: center;
+  font-size: 12px;
+  z-index: 10;
 }
 
 /* Message region */
@@ -244,7 +227,7 @@
 /* Footer — legacy: chat input area */
 .footer {
   flex: 0 0 auto;
-  padding: 12px 16px;
+  padding: 16px 20px;
   background: var(--bg-card);
   backdrop-filter: var(--blur-md);
   border-top: 1px solid var(--border-color);
@@ -253,9 +236,16 @@
   gap: 8px;
 }
 
+.footerTop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .modelSelectWrapper {
   display: flex;
   gap: 8px;
+  flex: 1;
 }
 
 .modelSelect {

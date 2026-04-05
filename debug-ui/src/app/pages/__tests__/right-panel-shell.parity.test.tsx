@@ -100,8 +100,8 @@ describe('Right Panel Shell Parity Test', () => {
     const rightPanelContent = within(rightPanel);
 
     // Verify both tab buttons exist with correct labels
-    const domElementsTab = rightPanelContent.getByRole('tab', { name: 'DOM Elements' });
-    const configTab = rightPanelContent.getByRole('tab', { name: 'Config' });
+    const domElementsTab = rightPanelContent.getByRole('tab', { name: '📍 DOM Elements' });
+    const configTab = rightPanelContent.getByRole('tab', { name: '⚙️ 配置' });
 
     expect(domElementsTab).toBeInTheDocument();
     expect(configTab).toBeInTheDocument();
@@ -121,7 +121,7 @@ describe('Right Panel Shell Parity Test', () => {
     expect(rightPanelContent.getByTestId(testIds.rightPanelTabDomElements)).toBeInTheDocument();
 
     // Click Config tab to switch
-    const configTab = rightPanelContent.getByRole('tab', { name: 'Config' });
+    const configTab = rightPanelContent.getByRole('tab', { name: '⚙️ 配置' });
     fireEvent.click(configTab);
 
     // Verify Config tab content now renders
@@ -167,7 +167,7 @@ describe('Right Panel Shell Parity Test', () => {
     const rightPanelContent = within(rightPanel);
 
     // Click Config tab to switch
-    const configTabButton = rightPanelContent.getByRole('tab', { name: 'Config' });
+    const configTabButton = rightPanelContent.getByRole('tab', { name: '⚙️ 配置' });
     fireEvent.click(configTabButton);
 
     // Now Config tab content should be rendered
@@ -201,7 +201,7 @@ describe('Right Panel Shell Parity Test', () => {
     const rightPanelContent = within(rightPanel);
 
     // Click Config tab to switch
-    const configTabButton = rightPanelContent.getByRole('tab', { name: 'Config' });
+    const configTabButton = rightPanelContent.getByRole('tab', { name: '⚙️ 配置' });
     fireEvent.click(configTabButton);
 
     // Now Config tab content should be rendered
