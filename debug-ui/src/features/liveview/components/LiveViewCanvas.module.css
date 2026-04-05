@@ -23,7 +23,7 @@
 
 .overlayCanvas {
   z-index: 2;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .overlayCanvasInteractive {

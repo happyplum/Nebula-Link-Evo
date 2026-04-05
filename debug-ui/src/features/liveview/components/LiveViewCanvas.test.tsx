@@ -2,11 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { LiveViewCanvas } from './LiveViewCanvas.js';
 import { useControlStore } from '@/features/playwright-control/store/control.store.js';
+import * as controlAdapters from '@/features/playwright-control/api/control.adapters.js';
 
 const onMessageMock = vi.fn();
 const runtimeState = {
   connectionStatus: 'connected',
   playwrightIsOpen: true,
+  setLastScreenshotDataUrl: vi.fn(),
 };
 
 vi.mock('@/features/runtime/hooks/index.js', () => ({
@@ -37,7 +39,10 @@ vi.mock('@/features/liveview/lib/index.js', () => ({
     imgW,
     imgH,
   }),
-  canvasToPageCoords: (cssX: number, cssY: number) => ({ x: Math.round(cssX), y: Math.round(cssY) }),
+  canvasToPageCoords: (cssX: number, cssY: number) => ({
+    x: Math.round(cssX),
+    y: Math.round(cssY),
+  }),
   pageToCanvasCoords: (pageX: number, pageY: number) => ({ x: pageX, y: pageY }),
 }));
 
@@ -47,19 +52,24 @@ describe('LiveViewCanvas', () => {
   const originalRaf = globalThis.requestAnimationFrame;
   const originalCancelRaf = globalThis.cancelAnimationFrame;
   const originalFetch = globalThis.fetch;
+  const originalCreateObjectURL = globalThis.URL.createObjectURL;
+  const originalRevokeObjectURL = globalThis.URL.revokeObjectURL;
 
   beforeEach(() => {
     vi.clearAllMocks();
     runtimeState.connectionStatus = 'connected';
     runtimeState.playwrightIsOpen = true;
+    runtimeState.setLastScreenshotDataUrl = vi.fn();
     useControlStore.getState().reset();
 
     onMessageMock.mockImplementation((handler: (payload: unknown) => void) => {
-      (globalThis as { __liveviewMessageHandler?: (payload: unknown) => void }).__liveviewMessageHandler =
-        handler;
+      (
+        globalThis as { __liveviewMessageHandler?: (payload: unknown) => void }
+      ).__liveviewMessageHandler = handler;
       return () => {
-        (globalThis as { __liveviewMessageHandler?: (payload: unknown) => void }).__liveviewMessageHandler =
-          undefined;
+        (
+          globalThis as { __liveviewMessageHandler?: (payload: unknown) => void }
+        ).__liveviewMessageHandler = undefined;
       };
     });
 
@@ -83,6 +93,17 @@ describe('LiveViewCanvas', () => {
       body: new ReadableStream<Uint8Array>(),
       headers: { get: () => 'multipart/x-mixed-replace; boundary=frameboundary' },
     }) as unknown as typeof fetch;
+
+    Object.defineProperty(globalThis.URL, 'createObjectURL', {
+      configurable: true,
+      writable: true,
+      value: vi.fn(() => 'blob:liveview-frame'),
+    });
+    Object.defineProperty(globalThis.URL, 'revokeObjectURL', {
+      configurable: true,
+      writable: true,
+      value: vi.fn(),
+    });
 
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
       clearRect: vi.fn(),
@@ -110,7 +131,7 @@ describe('LiveViewCanvas', () => {
           right: 640,
           bottom: 360,
           toJSON: () => ({}),
-        }) as DOMRect,
+        }) as DOMRect
     );
 
     vi.spyOn(HTMLDivElement.prototype, 'getBoundingClientRect').mockImplementation(
@@ -125,7 +146,7 @@ describe('LiveViewCanvas', () => {
           right: 640,
           bottom: 360,
           toJSON: () => ({}),
-        }) as DOMRect,
+        }) as DOMRect
     );
   });
 
@@ -167,6 +188,23 @@ describe('LiveViewCanvas', () => {
     });
   });
 
+  it('captures coordinates when picker is inactive so control sidebar can use coordinate click', async () => {
+    const onCoordinateCapture = vi.fn();
+    const { container } = render(<LiveViewCanvas onCoordinateCapture={onCoordinateCapture} />);
+
+    await waitFor(() => {
+      expect(globalThis.createImageBitmap).toHaveBeenCalledTimes(1);
+    });
+
+    const overlayCanvas = container.querySelectorAll('canvas')[1] as HTMLCanvasElement;
+    fireEvent.click(overlayCanvas, { clientX: 64, clientY: 48 });
+
+    await waitFor(() => {
+      expect(onCoordinateCapture).toHaveBeenCalledWith({ x: 64, y: 48 });
+      expect(useControlStore.getState().capturedCoordinates).toEqual({ x: 64, y: 48 });
+    });
+  });
+
   it('updates overlay state from debug socket messages', async () => {
     const onElementSelect = vi.fn();
     render(<LiveViewCanvas onElementSelect={onElementSelect} />);
@@ -188,12 +226,56 @@ describe('LiveViewCanvas', () => {
     });
   });
 
+  it('shows hover preview in picker mode on mouse move', async () => {
+    vi.spyOn(controlAdapters, 'getElementAt').mockResolvedValue({
+      success: true,
+      element: {
+        selector: '#hover-target',
+        tag: 'button',
+        text: 'Hover me',
+        bbox: { x: 40, y: 30, width: 120, height: 40 },
+        isVisible: true,
+        isInteractable: true,
+      },
+    });
+
+    const { container } = render(<LiveViewCanvas />);
+
+    await waitFor(() => {
+      expect(globalThis.createImageBitmap).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.click(screen.getByTestId('liveview-picker-toggle'));
+    const overlayCanvas = container.querySelectorAll('canvas')[1] as HTMLCanvasElement;
+    fireEvent.mouseMove(overlayCanvas, { clientX: 80, clientY: 60 });
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 180));
+    });
+
+    await waitFor(() => {
+      expect(controlAdapters.getElementAt).toHaveBeenCalledWith(80, 60);
+      expect(screen.getByTestId('liveview-canvas')).toHaveAttribute('data-has-overlay', 'true');
+    });
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.useRealTimers();
     globalThis.createImageBitmap = originalCreateImageBitmap;
     globalThis.ResizeObserver = originalResizeObserver;
     globalThis.requestAnimationFrame = originalRaf;
     globalThis.cancelAnimationFrame = originalCancelRaf;
     globalThis.fetch = originalFetch;
+    Object.defineProperty(globalThis.URL, 'createObjectURL', {
+      configurable: true,
+      writable: true,
+      value: originalCreateObjectURL,
+    });
+    Object.defineProperty(globalThis.URL, 'revokeObjectURL', {
+      configurable: true,
+      writable: true,
+      value: originalRevokeObjectURL,
+    });
   });
 });

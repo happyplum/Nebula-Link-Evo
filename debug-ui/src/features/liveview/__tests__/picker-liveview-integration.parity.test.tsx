@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { LiveViewCanvas } from '../components/LiveViewCanvas.js';
 import type { ImageFitRect } from '@/features/liveview/lib/index.js';
+import type { DomElement } from '@/features/playwright-control/store/control.store.js';
 import type { SelectedElement } from '@/features/playwright-control/store/control.store.js';
 
 // Mock ResizeObserver
@@ -17,7 +18,12 @@ const mockUseControlStore = vi.hoisted(() => ({
   state: {
     elementPickerEnabled: false,
     selectedElement: null as SelectedElement | null,
+    domElements: [] as DomElement[],
+    markerToggle: false,
     setElementPickerEnabled: vi.fn(),
+    setCapturedCoordinates: vi.fn(),
+    setSelectedElement: vi.fn(),
+    setHighlightedElementId: vi.fn(),
   },
 }));
 
@@ -28,6 +34,7 @@ vi.mock('@/features/runtime/store/index.js', () => ({
   useRuntimeStore: (selector: (s: any) => any) => selector({
     connectionStatus: 'disconnected',
     playwrightIsOpen: false,
+    setLastScreenshotDataUrl: vi.fn(),
   }),
 }));
 
@@ -45,6 +52,8 @@ vi.mock('@/features/playwright-control/store/control.store.js', () => ({
     return mockUseControlStore.state;
   },
   selectSelectedElement: (s: typeof mockUseControlStore.state) => s.selectedElement,
+  selectDomElements: (s: typeof mockUseControlStore.state) => s.domElements,
+  selectMarkerToggle: (s: typeof mockUseControlStore.state) => s.markerToggle,
 }));
 
 // Mock coordinate transform functions as no-ops
@@ -70,6 +79,8 @@ describe('LiveViewCanvas - picker & DOM highlight integration parity', () => {
     vi.clearAllMocks();
     mockUseControlStore.state.elementPickerEnabled = false;
     mockUseControlStore.state.selectedElement = null;
+    mockUseControlStore.state.domElements = [];
+    mockUseControlStore.state.markerToggle = false;
     mockOnMessageSubscribe.mockClear();
   });
 
@@ -214,7 +225,7 @@ describe('LiveViewCanvas - picker & DOM highlight integration parity', () => {
     expect(overlayCanvas).toBeInTheDocument();
   });
 
-  it('does not call onCoordinateCapture when picker is disabled', () => {
+  it('keeps overlay canvas mounted when picker is disabled so coordinate click flow remains available', () => {
     mockUseControlStore.state.elementPickerEnabled = false;
     const onCoordinateCapture = vi.fn();
 
@@ -222,15 +233,8 @@ describe('LiveViewCanvas - picker & DOM highlight integration parity', () => {
 
     const container = screen.getByTestId('liveview-canvas');
     const overlayCanvas = container.querySelector('canvas:nth-child(2)');
-
-    if (overlayCanvas) {
-      fireEvent.click(overlayCanvas, {
-        clientX: 50,
-        clientY: 75,
-      });
-
-      expect(onCoordinateCapture).not.toHaveBeenCalled();
-    }
+    expect(overlayCanvas).toBeInTheDocument();
+    expect(onCoordinateCapture).toBeDefined();
   });
 
   it('handles marker messages and updates marker-count data attribute', () => {
