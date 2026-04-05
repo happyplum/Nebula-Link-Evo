@@ -1,5 +1,14 @@
 import { create } from 'zustand';
 
+function getInitialShowThinking(): boolean {
+  if (typeof window === 'undefined') {
+    return true;
+  }
+
+  const stored = window.localStorage.getItem('showThinking');
+  return stored == null ? true : stored === 'true';
+}
+
 import type { ChatMessage, ChatSession, StreamingState } from '@/features/chat/types/index.js';
 
 const EMPTY_MESSAGES: ChatMessage[] = [];
@@ -36,7 +45,7 @@ interface ChatState {
   // Message actions
   setMessages: (sessionId: string, messages: ChatMessage[]) => void;
   addMessage: (sessionId: string, message: ChatMessage) => void;
-  addOptimisticMessage: (sessionId: string, content: string) => string;
+  addOptimisticMessage: (sessionId: string, content: string, screenshot?: string | null) => string;
   reconcileMessage: (sessionId: string, tempId: string, serverMessage: ChatMessage) => void;
   updateMessage: (sessionId: string, messageId: string, update: Partial<ChatMessage>) => void;
   appendToLastAssistantMessage: (sessionId: string, token: string) => void;
@@ -76,7 +85,7 @@ const initialState = {
   streamingThinking: '',
   isLoadingSessions: false,
   isLoadingMessages: false,
-  showThinking: true,
+  showThinking: getInitialShowThinking(),
   selectedModel: 'decision',
   screenshotData: null as string | null,
   connectivityResult: null as { ok: boolean; latencyMs: number; message: string } | null,
@@ -130,12 +139,13 @@ export const useChatStore = create<ChatState>()((set) => ({
       };
     }),
 
-  addOptimisticMessage: (sessionId, content) => {
+  addOptimisticMessage: (sessionId, content, screenshot) => {
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const message: ChatMessage = {
       id: tempId,
       role: 'user',
       content,
+      screenshot: screenshot ?? undefined,
       timestamp: Date.now(),
     };
     set((s) => {
@@ -233,7 +243,12 @@ export const useChatStore = create<ChatState>()((set) => ({
   setIsLoadingMessages: (loading) => set({ isLoadingMessages: loading }),
 
   // Shared UI actions
-  setShowThinking: (show) => set({ showThinking: show }),
+  setShowThinking: (show) => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('showThinking', String(show));
+    }
+    set({ showThinking: show });
+  },
   setSelectedModel: (model) => set({ selectedModel: model }),
   setScreenshotData: (data) => set({ screenshotData: data }),
   clearScreenshotData: () => set({ screenshotData: null }),

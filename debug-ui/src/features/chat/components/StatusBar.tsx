@@ -8,25 +8,25 @@ export const StatusBar: React.FC = () => {
   const streamingState = useChatStore(selectStreamingState);
 
   let status: 'online' | 'offline' | 'loading' | 'error' = 'offline';
-  let label = 'Idle';
+  let label = '空闲';
 
   switch (streamingState) {
     case 'streaming':
       status = 'loading';
-      label = 'Assistant is typing...';
+      label = '生成中...';
       break;
     case 'paused':
       status = 'offline';
-      label = 'Paused';
+      label = '已暂停';
       break;
     case 'error':
       status = 'error';
-      label = 'Error';
+      label = '异常';
       break;
     case 'idle':
     default:
       status = 'online';
-      label = 'Ready';
+      label = '就绪';
       break;
   }
 

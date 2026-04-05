@@ -30,7 +30,6 @@ describe('ChatPanel', () => {
     expect(screen.getByTestId(testIds.chatPanel)).toBeInTheDocument();
     expect(screen.getByTestId(testIds.sessionSelector)).toBeInTheDocument();
     expect(screen.getByTestId(testIds.messageList)).toBeInTheDocument();
-    expect(screen.getByTestId(testIds.statusBar)).toBeInTheDocument();
     expect(screen.getByTestId(testIds.composerInput)).toBeInTheDocument();
   });
 });

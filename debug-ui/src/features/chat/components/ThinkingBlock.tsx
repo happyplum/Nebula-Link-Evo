@@ -8,32 +8,23 @@ export interface ThinkingBlockProps {
 }
 
 export const ThinkingBlock: React.FC<ThinkingBlockProps> = ({ content, isStreaming }) => {
-  const [isExpanded, setIsExpanded] = useState(isStreaming || false);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   if (!content) return null;
 
   return (
-    <div className={styles.container} data-testid={testIds.thinkingBlock}>
-      <button 
+    <div
+      className={`${styles.container} thinking-block ${isExpanded ? 'expanded' : ''}`}
+      data-testid={testIds.thinkingBlock}
+    >
+      <button
         type="button"
-        className={styles.header} 
+        className={`${styles.header} thinking-header`}
         onClick={() => setIsExpanded(!isExpanded)}
       >
-        <svg 
-          className={`${styles.icon} ${isExpanded ? styles.iconExpanded : ''}`} 
-          viewBox="0 0 24 24" 
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <title>{isExpanded ? 'Collapse' : 'Expand'}</title>
-          <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z" />
-        </svg>
-        <span>{isStreaming ? 'Thinking...' : 'Thought Process'}</span>
+        <span>{isStreaming ? '💭 思考中...' : '💭 思考过程'}</span>
       </button>
-      {isExpanded && (
-        <div className={styles.content}>
-          {content}
-        </div>
-      )}
+      {isExpanded && <div className={`${styles.content} thinking-content`}>{content}</div>}
     </div>
   );
 };
