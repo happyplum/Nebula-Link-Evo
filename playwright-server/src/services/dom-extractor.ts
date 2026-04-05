@@ -5,7 +5,13 @@ import type {
   BoundingBox as SharedBoundingBox,
   LocatorBundle as SharedLocatorBundle,
 } from '../../../shared/types/vision-marker.js';
-import { SimplifiedDOMResponse, ElementLocator, SimplifiedElement, SimplifiedDOM, LocatorBundle } from '../types.js';
+import {
+  SimplifiedDOMResponse,
+  ElementLocator,
+  SimplifiedElement,
+  SimplifiedDOM,
+  LocatorBundle,
+} from '../types.js';
 import { generateLocatorBundle } from '../locator-generator.js';
 import { injectMarkers } from '../marker-injector.js';
 import { SnapshotCache, CacheStats } from './snapshot-cache.js';
@@ -45,8 +51,6 @@ export class DOMExtractor {
     return screenshot;
   }
 
-
-
   async getSimplifiedDOMV2(): Promise<SimplifiedDOMResponse> {
     const page = this.requirePage();
 
@@ -81,10 +85,9 @@ export class DOMExtractor {
       for (const elementInfo of elements) {
         try {
           // Get element handle by data-nebula-id attribute
-          const elementHandle = await page.waitForSelector(
-            `[data-nebula-id="${elementInfo.id}"]`,
-            { timeout: 1000 }
-          );
+          const elementHandle = await page.waitForSelector(`[data-nebula-id="${elementInfo.id}"]`, {
+            timeout: 1000,
+          });
 
           if (elementHandle) {
             // Generate multi-strategy locators
@@ -139,22 +142,10 @@ export class DOMExtractor {
 
       return snapshotResponse;
     } catch (error) {
-      // Always return snapshot_id even on error
-      const snapshot_id = crypto.randomUUID();
-      console.error(`getSimplifiedDOMV2 failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-
-      return {
-        snapshot_id,
-        version: '2.0',
-        annotated_screenshot_base64: '',
-        elements_map: {},
-        simplified_dom: {
-          elements: [],
-          viewport: { width: 1920, height: 1080 },
-        },
-      };
+      console.error(
+        `getSimplifiedDOMV2 failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+      throw error;
     }
   }
-
-
 }
