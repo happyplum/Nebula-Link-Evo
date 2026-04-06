@@ -1,3 +1,4 @@
+import { once } from 'node:events';
 import { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import { browserClient } from '../../../browser-client.js';
 import { readFileSync, existsSync } from 'node:fs';
@@ -403,7 +404,9 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
             break;
           }
           if (value) {
-            reply.raw.write(value);
+            if (!reply.raw.write(value)) {
+              await once(reply.raw, 'drain');
+            }
           }
         }
       } catch (error) {
