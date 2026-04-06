@@ -22,22 +22,19 @@ vi.mock('@/features/chat/store/chat.store.js', () => ({
       streamingState: 'idle',
       activeSessionId: null,
       showThinking: false,
-      selectedModel: 'decision',
       addSession: vi.fn(),
       removeSession: vi.fn(),
       setActiveSession: vi.fn(),
       setStreamingState: vi.fn(),
       setShowThinking: vi.fn(),
-      setSelectedModel: vi.fn(),
       updateSession: vi.fn(),
       setSessions: vi.fn(),
       setMessages: vi.fn(),
       setIsLoadingSessions: vi.fn(),
       setIsLoadingMessages: vi.fn(),
-    }),
+    })
   ),
   selectShowThinking: (s: any) => s.showThinking,
-  selectSelectedModel: (s: any) => s.selectedModel,
   selectStreamingState: (s: any) => s.streamingState,
   selectActiveSessionId: (s: any) => s.activeSessionId,
 }));
@@ -53,7 +50,7 @@ describe('ChatPage Layout', () => {
   it('renders with CSS Module class on root container', () => {
     const { container } = render(<ChatPage />);
     const rootElement = container.firstElementChild;
-    
+
     expect(rootElement).toBeInTheDocument();
     // CSS Modules hash class names, so check if the class name contains 'fullPage'
     const className = rootElement?.className || '';
@@ -63,7 +60,7 @@ describe('ChatPage Layout', () => {
   it('renders root container with data-testid', () => {
     const { container } = render(<ChatPage />);
     const rootElement = container.firstElementChild;
-    
+
     expect(rootElement).toBeInTheDocument();
     expect(rootElement).toHaveAttribute('data-testid', testIds.chatPageRoot);
   });

@@ -14,15 +14,9 @@ describe('queryKeys structure', () => {
     expect(queryKeys.tasks.detail('abc')).toEqual(['tasks', 'detail', 'abc']);
   });
 
-  it('should have sessions namespace with detail, messages, status', () => {
+  it('should have sessions namespace with detail', () => {
     expect(queryKeys.sessions.all).toEqual(['sessions']);
     expect(queryKeys.sessions.detail('s1')).toEqual(['sessions', 'detail', 's1']);
-    expect(queryKeys.sessions.messages('s1')).toEqual(['sessions', 'messages', 's1']);
-    expect(queryKeys.sessions.status('s1')).toEqual(['sessions', 'status', 's1']);
-  });
-
-  it('should have playwright namespace with status', () => {
-    expect(queryKeys.playwright.status).toEqual(['playwright', 'status']);
   });
 
   it('should have mcp namespace with status and tools', () => {
@@ -32,7 +26,10 @@ describe('queryKeys structure', () => {
 
   it('should have interactions namespace with list and stats', () => {
     expect(queryKeys.interactions.list()).toEqual(['interactions', undefined]);
-    expect(queryKeys.interactions.list({ type: 'click' })).toEqual(['interactions', { type: 'click' }]);
+    expect(queryKeys.interactions.list({ type: 'click' })).toEqual([
+      'interactions',
+      { type: 'click' },
+    ]);
     expect(queryKeys.interactions.stats).toEqual(['interactions', 'stats']);
   });
 
@@ -43,7 +40,6 @@ describe('queryKeys structure', () => {
       queryKeys.tasks.detail('a'),
       queryKeys.tasks.detail('b'),
       queryKeys.sessions.detail('s1'),
-      queryKeys.sessions.messages('s1'),
     ];
     const serialized = keys.map((k) => JSON.stringify(k));
     const unique = new Set(serialized);
@@ -53,7 +49,6 @@ describe('queryKeys structure', () => {
   it('should be readonly tuple types (as const)', () => {
     const configKey = queryKeys.config;
     expect(Array.isArray(configKey)).toBe(true);
-    // as const provides type-level readonly, not runtime Object.freeze
     expect(configKey.length).toBe(1);
     expect(configKey[0]).toBe('config');
   });

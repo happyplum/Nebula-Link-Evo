@@ -18,11 +18,10 @@ import type { ConfigResponse } from '@/features/config/types/index.js';
 import {
   useChatStore,
   selectShowThinking,
-  selectSelectedModel,
   selectStreamingState,
   selectActiveSessionId,
 } from '@/features/chat/store/chat.store.js';
-import type { ChatMessage, ChatSession, StreamingState } from '@/features/chat/types/index.js';
+import type { ChatMessage, ChatSession } from '@/features/chat/types/index.js';
 import { testIds } from '@/shared/testing/testids.js';
 import styles from './ChatPage.module.css';
 
@@ -45,14 +44,6 @@ interface MessageApiPayload {
   toolCalls?: ChatMessage['toolCalls'];
   isStreaming?: boolean;
 }
-
-const STREAMING_STATE_LABEL: Record<StreamingState, string> = {
-  idle: '就绪',
-  streaming: '生成中',
-  paused: '已暂停',
-  blocked: '需处理',
-  error: '异常',
-};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -143,11 +134,12 @@ function extractMessages(data: unknown): ChatMessage[] {
 }
 
 function getDefaultChatConfig(config: ConfigResponse | undefined) {
+  if (!config?.decision?.provider || !config?.decision?.model) {
+    return null;
+  }
   return {
-    provider: config?.decision?.provider ?? 'glm',
-    model: config?.decision?.model ?? 'glm-4.6v-flash',
-    vision_provider: config?.vision?.provider,
-    vision_model: config?.vision?.model,
+    provider: config.decision.provider,
+    model: config.decision.model,
   };
 }
 
@@ -168,13 +160,11 @@ export default function ChatPage() {
   const streamingState = useChatStore(selectStreamingState);
   const activeSessionId = useChatStore(selectActiveSessionId);
   const showThinking = useChatStore(selectShowThinking);
-  const selectedModel = useChatStore(selectSelectedModel);
   const addSession = useChatStore((s) => s.addSession);
   const removeSession = useChatStore((s) => s.removeSession);
   const setActiveSession = useChatStore((s) => s.setActiveSession);
   const setStreamingState = useChatStore((s) => s.setStreamingState);
   const setShowThinking = useChatStore((s) => s.setShowThinking);
-  const setSelectedModel = useChatStore((s) => s.setSelectedModel);
   const updateSession = useChatStore((s) => s.updateSession);
   const setSessions = useChatStore((s) => s.setSessions);
   const setIsLoadingSessions = useChatStore((s) => s.setIsLoadingSessions);
@@ -209,21 +199,24 @@ export default function ChatPage() {
   }, [activeSessionId, sessionsData, setActiveSession, setSessions]);
 
   const handleCreateSession = async () => {
+    const defaults = getDefaultChatConfig(configData);
+    if (!defaults) {
+      window.alert('请先在配置中设置决策模型');
+      return;
+    }
+
     const nextTitle = window.prompt('请输入会话名称：', '新会话');
     if (nextTitle == null) {
       return;
     }
 
     const title = nextTitle.trim() || '新会话';
-    const defaults = getDefaultChatConfig(configData);
 
     try {
       const created = await apiClient.post<unknown>(API_CHAT_SESSIONS, {
         title,
         provider: defaults.provider,
         model: defaults.model,
-        vision_provider: defaults.vision_provider,
-        vision_model: defaults.vision_model,
       });
 
       const session = normalizeSession(created);
@@ -427,18 +420,6 @@ export default function ChatPage() {
 
       {/* Footer / Composer */}
       <div className={styles.footer}>
-        <div className={styles.footerTop}>
-          <div className={styles.modelSelectWrapper}>
-            <select
-              className={styles.modelSelect}
-              value={selectedModel}
-              onChange={(e) => setSelectedModel(e.target.value)}
-            >
-              <option value="decision">决策模型 (Decision)</option>
-              <option value="vision">视觉模型 (Vision)</option>
-            </select>
-          </div>
-        </div>
         <div className={styles.composerWrapper}>
           <Composer />
         </div>

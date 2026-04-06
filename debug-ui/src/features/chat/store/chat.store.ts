@@ -29,7 +29,6 @@ interface ChatState {
   isLoadingMessages: boolean;
   // Shared UI state (synced across ChatPanel and ChatPage)
   showThinking: boolean;
-  selectedModel: string;
   screenshotData: string | null;
   connectivityResult: { ok: boolean; latencyMs: number; message: string } | null;
   // Pagination
@@ -63,10 +62,11 @@ interface ChatState {
 
   // Shared UI actions
   setShowThinking: (show: boolean) => void;
-  setSelectedModel: (model: string) => void;
   setScreenshotData: (data: string | null) => void;
   clearScreenshotData: () => void;
-  setConnectivityResult: (result: { ok: boolean; latencyMs: number; message: string } | null) => void;
+  setConnectivityResult: (
+    result: { ok: boolean; latencyMs: number; message: string } | null
+  ) => void;
 
   // Pagination actions
   expandVisibleMessages: (sessionId: string) => void;
@@ -86,7 +86,6 @@ const initialState = {
   isLoadingSessions: false,
   isLoadingMessages: false,
   showThinking: getInitialShowThinking(),
-  selectedModel: 'decision',
   screenshotData: null as string | null,
   connectivityResult: null as { ok: boolean; latencyMs: number; message: string } | null,
   visibleMessageCounts: {} as Record<string, number>,
@@ -98,8 +97,7 @@ export const useChatStore = create<ChatState>()((set) => ({
   // Session actions
   setSessions: (sessions) => set({ sessions }),
 
-  addSession: (session) =>
-    set((s) => ({ sessions: [session, ...s.sessions] })),
+  addSession: (session) => set((s) => ({ sessions: [session, ...s.sessions] })),
 
   removeSession: (sessionId) =>
     set((s) => {
@@ -116,7 +114,7 @@ export const useChatStore = create<ChatState>()((set) => ({
   updateSession: (sessionId, update) =>
     set((s) => ({
       sessions: s.sessions.map((session) =>
-        session.id === sessionId ? { ...session, ...update } : session,
+        session.id === sessionId ? { ...session, ...update } : session
       ),
     })),
 
@@ -166,9 +164,7 @@ export const useChatStore = create<ChatState>()((set) => ({
       return {
         messagesBySession: {
           ...s.messagesBySession,
-          [sessionId]: existing.map((msg) =>
-            msg.id === tempId ? serverMessage : msg,
-          ),
+          [sessionId]: existing.map((msg) => (msg.id === tempId ? serverMessage : msg)),
         },
       };
     }),
@@ -180,9 +176,7 @@ export const useChatStore = create<ChatState>()((set) => ({
       return {
         messagesBySession: {
           ...s.messagesBySession,
-          [sessionId]: existing.map((msg) =>
-            msg.id === messageId ? { ...msg, ...update } : msg,
-          ),
+          [sessionId]: existing.map((msg) => (msg.id === messageId ? { ...msg, ...update } : msg)),
         },
       };
     }),
@@ -198,7 +192,7 @@ export const useChatStore = create<ChatState>()((set) => ({
         messagesBySession: {
           ...s.messagesBySession,
           [sessionId]: existing.map((msg, i) =>
-            i === lastIdx ? { ...msg, content: msg.content + token } : msg,
+            i === lastIdx ? { ...msg, content: msg.content + token } : msg
           ),
         },
       };
@@ -207,8 +201,7 @@ export const useChatStore = create<ChatState>()((set) => ({
   // Streaming actions
   setStreamingState: (state) => set({ streamingState: state }),
 
-  appendStreamingContent: (token) =>
-    set((s) => ({ streamingContent: s.streamingContent + token })),
+  appendStreamingContent: (token) => set((s) => ({ streamingContent: s.streamingContent + token })),
 
   appendStreamingThinking: (token) =>
     set((s) => ({ streamingThinking: s.streamingThinking + token })),
@@ -249,7 +242,6 @@ export const useChatStore = create<ChatState>()((set) => ({
     }
     set({ showThinking: show });
   },
-  setSelectedModel: (model) => set({ selectedModel: model }),
   setScreenshotData: (data) => set({ screenshotData: data }),
   clearScreenshotData: () => set({ screenshotData: null }),
   setConnectivityResult: (result) => set({ connectivityResult: result }),
@@ -287,7 +279,6 @@ export const selectStreamingThinking = (s: ChatState) => s.streamingThinking;
 export const selectIsLoadingSessions = (s: ChatState) => s.isLoadingSessions;
 export const selectIsLoadingMessages = (s: ChatState) => s.isLoadingMessages;
 export const selectShowThinking = (s: ChatState) => s.showThinking;
-export const selectSelectedModel = (s: ChatState) => s.selectedModel;
 export const selectScreenshotData = (s: ChatState) => s.screenshotData;
 export const selectConnectivityResult = (s: ChatState) => s.connectivityResult;
 export const selectVisibleMessageCount = (sessionId: string) => (s: ChatState) =>
