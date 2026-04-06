@@ -16,6 +16,11 @@ export class ScreencastManager {
   private lastFrameTime: number = 0;
   private readonly frameInterval: number = 1000 / 30;
   private readonly mjpegBoundary: string = 'frame';
+  private readonly frameHeaderPrefix = Buffer.from(
+    `--${this.mjpegBoundary}\r\nContent-Type: image/jpeg\r\nContent-Length: `
+  );
+  private readonly frameHeaderSuffix = Buffer.from('\r\n\r\n');
+  private readonly frameFooter = Buffer.from('\r\n');
 
   private constructor() {}
 
@@ -141,11 +146,14 @@ export class ScreencastManager {
   }
 
   private formatMjpegFrame(data: Buffer): Buffer {
-    const header =
-      `--${this.mjpegBoundary}\r\n` +
-      `Content-Type: image/jpeg\r\n` +
-      `Content-Length: ${data.length}\r\n\r\n`;
-    return Buffer.concat([Buffer.from(header), data, Buffer.from('\r\n')]);
+    const lenBuf = Buffer.from(String(data.length));
+    return Buffer.concat([
+      this.frameHeaderPrefix,
+      lenBuf,
+      this.frameHeaderSuffix,
+      data,
+      this.frameFooter,
+    ]);
   }
 
   private cleanup(): void {
