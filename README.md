@@ -145,6 +145,7 @@ docs/               # Documentation
 - `刷新 DOM 截图` must render the latest annotated screenshot when backend returns either raw JPEG base64 or gzip-compressed JPEG bytes.
 - If annotated screenshot decode fails or backend returns empty screenshot data, the DOM screenshot card must show a visible inline error instead of only the `暂无截图` placeholder.
 - DOM snapshot v2 element normalization must accept backend `Record<string, ElementLocator>` fields `id` and `locator_bundle` while preserving existing frontend element typing.
+- Live view may upgrade to a LiveKit room-backed video transport when token fetch succeeds; if LiveKit is unavailable or token acquisition fails, monitor rendering must fall back to the existing `LiveViewCanvas` path.
 
 ### AI Provider System
 
