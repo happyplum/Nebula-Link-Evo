@@ -146,7 +146,7 @@ export function LiveViewCanvas({
   const containerRef = useRef<HTMLDivElement>(null);
   const renderCanvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
-  const renderCtxRef = useRef<CanvasRenderingContext2D | null>(null);
+  const renderCtxRef = useRef<ImageBitmapRenderingContext | null>(null);
   const overlayCtxRef = useRef<CanvasRenderingContext2D | null>(null);
   const fitRectRef = useRef<ImageFitRect | null>(null);
   const currentBitmapRef = useRef<ImageBitmap | null>(null);
@@ -224,36 +224,42 @@ export function LiveViewCanvas({
   );
 
   const drawRenderFrame = useCallback(() => {
-    const renderCtx = renderCtxRef.current;
+    const bitmapCtx = renderCtxRef.current;
+    const renderCanvas = renderCanvasRef.current;
     const container = containerRef.current;
     const bitmap = currentBitmapRef.current;
-    if (!renderCtx || !container || !bitmap) {
+    if (!bitmapCtx || !renderCanvas || !container || !bitmap) {
       return;
     }
 
+    const bitmapW = bitmap.width;
+    const bitmapH = bitmap.height;
+
     const containerRect = container.getBoundingClientRect();
-    const fit = getImageFitRect(
-      bitmap.width,
-      bitmap.height,
-      containerRect.width,
-      containerRect.height
-    );
+    const fit = getImageFitRect(bitmapW, bitmapH, containerRect.width, containerRect.height);
     if (!fit) {
       return;
     }
 
     fitRectRef.current = fit;
-    renderCtx.clearRect(0, 0, containerRect.width, containerRect.height);
-    renderCtx.drawImage(bitmap, fit.offsetX, fit.offsetY, fit.drawW, fit.drawH);
+
+    // Position render canvas at contain-fit offset with contain-fit dimensions.
+    // bitmaprenderer fills the entire canvas buffer, so CSS handles the fit.
+    renderCanvas.style.left = `${fit.offsetX}px`;
+    renderCanvas.style.top = `${fit.offsetY}px`;
+    renderCanvas.style.width = `${fit.drawW}px`;
+    renderCanvas.style.height = `${fit.drawH}px`;
+
+    bitmapCtx.transferFromImageBitmap(bitmap);
+    currentBitmapRef.current = null;
   }, []);
 
   const resizeCanvases = useCallback(() => {
     const container = containerRef.current;
     const renderCanvas = renderCanvasRef.current;
     const overlayCanvas = overlayCanvasRef.current;
-    const renderCtx = renderCtxRef.current;
     const overlayCtx = overlayCtxRef.current;
-    if (!container || !renderCanvas || !overlayCanvas || !renderCtx || !overlayCtx) {
+    if (!container || !renderCanvas || !overlayCanvas || !overlayCtx) {
       return;
     }
 
@@ -262,11 +268,12 @@ export function LiveViewCanvas({
     const height = Math.floor(rect.height);
     const dpr = window.devicePixelRatio || 1;
 
-    renderCanvas.width = width * dpr;
-    renderCanvas.height = height * dpr;
+    // Render canvas: bitmaprenderer manages buffer via transferFromImageBitmap.
+    // Reset CSS to container size (drawRenderFrame will apply contain-fit positioning).
+    renderCanvas.style.left = '0';
+    renderCanvas.style.top = '0';
     renderCanvas.style.width = `${width}px`;
     renderCanvas.style.height = `${height}px`;
-    renderCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     overlayCanvas.width = width * dpr;
     overlayCanvas.height = height * dpr;
@@ -483,7 +490,7 @@ export function LiveViewCanvas({
       return;
     }
 
-    renderCtxRef.current = renderCanvas.getContext('2d');
+    renderCtxRef.current = renderCanvas.getContext('bitmaprenderer');
     overlayCtxRef.current = overlayCanvas.getContext('2d');
 
     resizeCanvases();
