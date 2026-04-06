@@ -26,6 +26,9 @@
     "fastify": "catalog:",
     "fastify-plugin": "catalog:",
     "playwright": "^1.41.0",
+    "@livekit/rtc-node": "catalog:",
+    "livekit-server-sdk": "catalog:",
+    "sharp": "catalog:",
     "ws": "catalog:"
   },
   "devDependencies": {

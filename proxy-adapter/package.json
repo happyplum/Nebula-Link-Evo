@@ -41,7 +41,8 @@
     "fastify": "catalog:",
     "fastify-plugin": "catalog:",
     "ws": "catalog:",
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "livekit-server-sdk": "catalog:"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",

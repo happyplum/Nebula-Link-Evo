@@ -54,7 +54,10 @@ yolov8n.pt
 *.bak
 *.backup
 
-# Windows temporary files
+# LiveKit binary (auto-downloaded)
+tools/livekit/livekit-server.exe
+tools/livekit/livekit-server
+tools/livekit/*.zip
 *.nul
 
 # PowerShell scripts

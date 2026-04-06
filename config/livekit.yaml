@@ -1,0 +1,5 @@
+livekit:
+  host: ws://127.0.0.1:7880
+  apiKey: ${LIVEKIT_API_KEY:-devkey}
+  apiSecret: ${LIVEKIT_API_SECRET:-secret}
+  roomName: ${LIVEKIT_ROOM_NAME:-nebula-link-screen}
