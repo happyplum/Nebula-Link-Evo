@@ -1,4 +1,5 @@
 import { chromium, Browser, Page, BrowserContext } from 'playwright';
+import { startPublisher, stopPublisher } from '../livekit-publisher.js';
 
 export interface BrowserState {
   browser: Browser | null;
@@ -134,6 +135,9 @@ export class BrowserLifecycle {
         this.state.page = await this.state.context.newPage();
         this.state.page.on('close', this.handlePageClose);
         this.state.lastViewport = { ...viewport };
+        void startPublisher(this.state.page, viewport).catch((err) => {
+          console.warn('[LiveKit] Publisher failed to start:', err);
+        });
       }
       return;
     }
@@ -169,9 +173,13 @@ export class BrowserLifecycle {
     this.state.lastHeadless = headless;
     this.state.lastViewport = { ...viewport };
     this.state.lastCdpPort = nextCdpPort;
+    void startPublisher(this.state.page, viewport).catch((err) => {
+      console.warn('[LiveKit] Publisher failed to start:', err);
+    });
   }
 
   async close(): Promise<void> {
+    void stopPublisher().catch(() => {});
     if (this.state.browser) {
       this.state.browser.off('disconnected', this.handleDisconnect);
       if (this.state.page) {
