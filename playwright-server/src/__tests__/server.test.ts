@@ -4,13 +4,18 @@ import * as dotenv from 'dotenv';
 vi.mock('dotenv');
 vi.mock('@fastify/cors');
 vi.mock('@fastify/websocket');
-vi.mock('./plugins/02-swagger.plugin.js', () => ({ default: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('./plugins/02-swagger.plugin.js', () => ({
+  default: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock('./plugins/routes/browser.js', () => ({ default: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('./plugins/routes/action.js', () => ({ default: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('./plugins/routes/dom.js', () => ({ default: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('./plugins/routes/health.js', () => ({ default: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('./plugins/routes/stream.js', () => ({ default: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('./plugins/routes/cdp.js', () => ({ default: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('./plugins/routes/livekit-token.js', () => ({
+  default: vi.fn().mockResolvedValue(undefined),
+}));
 
 const mockFastifyInstance = {
   register: vi.fn().mockResolvedValue(undefined),
@@ -52,10 +57,10 @@ describe('Server Initialization', () => {
 
   it('should register plugins and routes', async () => {
     await import('../server.js');
-    await new Promise(resolve => setTimeout(resolve, 10));
-    
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
     expect(mockFastifyInstance.register).toHaveBeenCalled();
-    
+
     const registerCalls = mockFastifyInstance.register.mock.calls;
     const prefixes = registerCalls
       .filter((call) => call[1] && typeof call[1] === 'object' && 'prefix' in call[1])
@@ -66,21 +71,23 @@ describe('Server Initialization', () => {
     expect(prefixes).toContain('/dom');
     expect(prefixes).toContain('/execute');
     expect(prefixes).toContain('/health');
+
+    expect(registerCalls).toHaveLength(11);
   });
 
   it('should start listening on port', async () => {
     await import('../server.js');
-    await new Promise(resolve => setTimeout(resolve, 10));
-    
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
     expect(mockFastifyInstance.listen).toHaveBeenCalledWith({ port: 3001, host: '0.0.0.0' });
   });
 
   it('should handle startup errors', async () => {
     mockFastifyInstance.listen.mockRejectedValueOnce(new Error('Startup failed'));
-    
+
     await import('../server.js');
-    await new Promise(resolve => setTimeout(resolve, 10));
-    
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
     expect(mockFastifyInstance.log.error).toHaveBeenCalled();
     expect(process.exit).toHaveBeenCalledWith(1);
   });

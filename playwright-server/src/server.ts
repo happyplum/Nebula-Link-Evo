@@ -9,6 +9,7 @@ import domRoutesPlugin from './plugins/routes/dom.js';
 import healthRoutesPlugin from './plugins/routes/health.js';
 import streamRoutesPlugin from './plugins/routes/stream.js';
 import cdpRoutesPlugin from './plugins/routes/cdp.js';
+import livekitTokenRoutes from './plugins/routes/livekit-token.js';
 
 dotenv.config();
 
@@ -42,6 +43,7 @@ async function start() {
     await app.register(healthRoutesPlugin, { prefix: '/health' });
     await app.register(streamRoutesPlugin, { prefix: '/browser' });
     await app.register(cdpRoutesPlugin);
+    await app.register(livekitTokenRoutes);
 
     // Start server
     await app.listen({ port: PORT, host: '0.0.0.0' });
