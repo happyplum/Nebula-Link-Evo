@@ -42,7 +42,7 @@ if exist "%PROXY_PID_FILE%" (
 :: Method 2: Fallback - kill by port
 echo.
 echo [2/2] Checking for orphaned processes...
-for %%P in (3001 3000 5173) do (
+for %%P in (7880 3001 3000 5173) do (
     for /f "tokens=5" %%a in ('netstat -ano ^| findstr "LISTENING" ^| findstr ":%%P"') do (
         call :print_success "  Stopping process on port %%P (PID: %%a)"
         taskkill /PID %%a /F >nul 2>&1
@@ -52,7 +52,7 @@ for %%P in (3001 3000 5173) do (
 :: Verify
 echo.
 echo [Verify] Checking ports are free...
-for %%P in (3001 3000 5173) do (
+for %%P in (7880 3001 3000 5173) do (
     netstat -ano | findstr "LISTENING" | findstr ":%%P" >nul
     if errorlevel 1 (
         call :print_success "  Port %%P is free"
