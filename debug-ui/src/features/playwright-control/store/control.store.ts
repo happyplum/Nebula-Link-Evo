@@ -144,6 +144,4 @@ export const selectBrowserUrl = (s: PlaywrightControlState) => s.browserUrl;
 export const selectMarkerToggle = (s: PlaywrightControlState) => s.markerToggle;
 export const selectSnapshotId = (s: PlaywrightControlState) => s.snapshotId;
 export const selectDomElements = (s: PlaywrightControlState) => s.domElements;
-export const selectElementPickerEnabled = (s: PlaywrightControlState) => s.elementPickerEnabled;
-export const selectHighlightedElementId = (s: PlaywrightControlState) => s.highlightedElementId;
 export const selectCapturedCoordinates = (s: PlaywrightControlState) => s.capturedCoordinates;

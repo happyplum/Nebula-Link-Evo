@@ -7,10 +7,6 @@ describe('REST endpoint constants', () => {
     expect(endpoints.API_HEALTH).toBe('/api/health');
   });
 
-  it('should define task execution endpoint', () => {
-    expect(endpoints.API_TASK).toBe('/api/task');
-  });
-
   it('should define debug task endpoints', () => {
     expect(endpoints.DEBUG_TASKS).toBe('/debug/api/tasks');
     expect(endpoints.debugTaskDetail('abc-123')).toBe('/debug/api/tasks/abc-123');
@@ -28,7 +24,6 @@ describe('REST endpoint constants', () => {
     expect(endpoints.DEBUG_PLAYWRIGHT_NAVIGATE).toBe('/debug/api/playwright/navigate');
     expect(endpoints.DEBUG_PLAYWRIGHT_SCREENSHOT).toBe('/debug/api/playwright/screenshot');
     expect(endpoints.DEBUG_PLAYWRIGHT_CLICK).toBe('/debug/api/playwright/click');
-    expect(endpoints.DEBUG_PLAYWRIGHT_TYPE).toBe('/debug/api/playwright/type');
     expect(endpoints.DEBUG_PLAYWRIGHT_SCROLL).toBe('/debug/api/playwright/scroll');
     expect(endpoints.DEBUG_PLAYWRIGHT_ACTION).toBe('/debug/api/playwright/action');
   });
@@ -53,8 +48,6 @@ describe('REST endpoint constants', () => {
     expect(endpoints.apiChatSessionCancel('s1')).toBe('/api/chat/sessions/s1/cancel');
     expect(endpoints.apiChatSessionPause('s1')).toBe('/api/chat/sessions/s1/pause');
     expect(endpoints.apiChatSessionResume('s1')).toBe('/api/chat/sessions/s1/resume');
-    expect(endpoints.apiChatSessionStatus('s1')).toBe('/api/chat/sessions/s1/status');
-    expect(endpoints.apiChatSessionOperations('s1')).toBe('/api/chat/sessions/s1/operations');
     expect(endpoints.API_CHAT_CONNECTIVITY_TEST).toBe('/api/chat/connectivity-test');
   });
 
@@ -67,7 +60,15 @@ describe('REST endpoint constants', () => {
   });
 
   it('should have all factory functions return strings starting with /', () => {
-    const factories = [endpoints.debugTaskDetail, endpoints.apiChatSession, endpoints.apiChatSessionMessages, endpoints.apiChatSessionInterrupt, endpoints.apiChatSessionCancel, endpoints.apiChatSessionPause, endpoints.apiChatSessionResume, endpoints.apiChatSessionStatus, endpoints.apiChatSessionOperations];
+    const factories = [
+      endpoints.debugTaskDetail,
+      endpoints.apiChatSession,
+      endpoints.apiChatSessionMessages,
+      endpoints.apiChatSessionInterrupt,
+      endpoints.apiChatSessionCancel,
+      endpoints.apiChatSessionPause,
+      endpoints.apiChatSessionResume,
+    ];
     factories.forEach((fn) => {
       const result = fn('test-id');
       expect(result).toMatch(/^\//);

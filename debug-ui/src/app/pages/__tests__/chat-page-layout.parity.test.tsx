@@ -29,29 +29,33 @@ vi.mock('@/shared/api/client.js', () => ({
 vi.mock('@/features/chat/store/chat.store.js', () => ({
   useChatStore: vi.fn(),
   selectShowThinking: (s: any) => s.showThinking,
-  selectSelectedModel: (s: any) => s.selectedModel,
   selectStreamingState: (s: any) => s.streamingState,
   selectActiveSessionId: (s: any) => s.activeSessionId,
 }));
 
 // Mock the chat components that are already tested elsewhere
 vi.mock('@/features/chat/components/index.js', () => ({
-  SessionSelector: () => <select data-testid={testIds.sessionSelector}><option>Select session...</option></select>,
+  SessionSelector: () => (
+    <select data-testid={testIds.sessionSelector}>
+      <option>Select session...</option>
+    </select>
+  ),
   MessageList: () => <div data-testid={testIds.messageList}>No messages yet.</div>,
   Composer: () => (
     <div>
       <textarea data-testid={testIds.composerInput} placeholder="Type a message..." />
-      <button type="button" data-testid={testIds.sendButton}>Send</button>
+      <button type="button" data-testid={testIds.sendButton}>
+        Send
+      </button>
     </div>
   ),
 }));
 
 // Helper to mock store state
-  const mockStore = {
+const mockStore = {
   streamingState: 'idle' as 'idle' | 'streaming' | 'paused' | 'error',
   activeSessionId: null as string | null,
   showThinking: false,
-  selectedModel: 'decision',
   addSession: vi.fn(),
   removeSession: vi.fn(),
   setActiveSession: vi.fn(),
@@ -107,13 +111,12 @@ describe('ChatPage Layout Parity', () => {
     expect(composerInput).toBeInTheDocument();
   });
 
-  it('renders model selector in footer', () => {
+  it('renders composer area in footer', () => {
     vi.mocked(useChatStore).mockImplementation((selector) => selector(mockStore as any));
     render(<ChatPage />);
 
-    // Query by text content since role-based query doesn't work well with emojis
-    const modelSelect = screen.getByText(/决策模型/i);
-    expect(modelSelect).toBeInTheDocument();
+    const composer = screen.getByPlaceholderText(/Type a message/i);
+    expect(composer).toBeInTheDocument();
   });
 
   it('renders all control bar buttons with correct labels', () => {

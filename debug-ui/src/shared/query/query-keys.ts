@@ -16,12 +16,6 @@ export const queryKeys = {
   sessions: {
     all: ['sessions'] as const,
     detail: (id: string) => ['sessions', 'detail', id] as const,
-    messages: (id: string) => ['sessions', 'messages', id] as const,
-    status: (id: string) => ['sessions', 'status', id] as const,
-  },
-
-  playwright: {
-    status: ['playwright', 'status'] as const,
   },
 
   mcp: {

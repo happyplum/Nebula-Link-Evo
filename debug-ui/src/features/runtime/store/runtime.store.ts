@@ -30,7 +30,6 @@ interface RuntimeState {
   incrementSnapshotVersion: () => void;
   setLastScreenshotDataUrl: (url: string | null) => void;
   addExecutionMessage: (message: ExecutionMessage) => void;
-  clearExecutionMessages: () => void;
   reset: () => void;
 }
 
@@ -62,7 +61,6 @@ export const useRuntimeStore = create<RuntimeState>()((set) => ({
     set((s) => ({
       executionMessages: [...s.executionMessages, message].slice(-200),
     })),
-  clearExecutionMessages: () => set({ executionMessages: [] }),
   reset: () => set(initialState),
 }));
 
@@ -72,6 +70,4 @@ export const selectReconnectAttempt = (s: RuntimeState) => s.reconnectAttempt;
 export const selectPlaywrightStatus = (s: RuntimeState) => s.playwrightStatus;
 export const selectPlaywrightIsOpen = (s: RuntimeState) => s.playwrightIsOpen;
 export const selectPlaywrightUrl = (s: RuntimeState) => s.playwrightUrl;
-export const selectSnapshotVersion = (s: RuntimeState) => s.snapshotVersion;
-export const selectLastScreenshotDataUrl = (s: RuntimeState) => s.lastScreenshotDataUrl;
 export const selectExecutionMessages = (s: RuntimeState) => s.executionMessages;
