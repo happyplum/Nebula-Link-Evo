@@ -105,19 +105,26 @@ describe('LiveViewCanvas', () => {
       value: vi.fn(),
     });
 
-    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
-      clearRect: vi.fn(),
-      setTransform: vi.fn(),
-      drawImage: vi.fn(),
-      beginPath: vi.fn(),
-      moveTo: vi.fn(),
-      lineTo: vi.fn(),
-      stroke: vi.fn(),
-      save: vi.fn(),
-      restore: vi.fn(),
-      strokeRect: vi.fn(),
-      setLineDash: vi.fn(),
-    } as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation((contextId: string) => {
+      if (contextId === 'bitmaprenderer') {
+        return {
+          transferFromImageBitmap: vi.fn(),
+        } as unknown as CanvasRenderingContext2D;
+      }
+      return {
+        clearRect: vi.fn(),
+        setTransform: vi.fn(),
+        drawImage: vi.fn(),
+        beginPath: vi.fn(),
+        moveTo: vi.fn(),
+        lineTo: vi.fn(),
+        stroke: vi.fn(),
+        save: vi.fn(),
+        restore: vi.fn(),
+        strokeRect: vi.fn(),
+        setLineDash: vi.fn(),
+      } as unknown as CanvasRenderingContext2D;
+    });
 
     vi.spyOn(HTMLCanvasElement.prototype, 'getBoundingClientRect').mockImplementation(
       () =>

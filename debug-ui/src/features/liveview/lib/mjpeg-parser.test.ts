@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { mjpegStreamParser, _testEncoder } from './mjpeg-parser.js';
+import { createMjpegTransform } from './mjpeg-parser.js';
 
 const enc = _testEncoder;
 
@@ -12,10 +13,7 @@ function expectBytes(actual: Uint8Array, expected: Uint8Array): void {
 }
 
 /** Build a synthetic MJPEG frame: headers + \r\n\r\n + JPEG payload */
-function buildFrame(
-  headers: string,
-  jpegPayload: Uint8Array,
-): Uint8Array {
+function buildFrame(headers: string, jpegPayload: Uint8Array): Uint8Array {
   const headerBytes = enc.encode(headers + '\r\n\r\n');
   const frame = new Uint8Array(headerBytes.length + jpegPayload.length);
   frame.set(headerBytes);
@@ -24,10 +22,7 @@ function buildFrame(
 }
 
 /** Build a complete MJPEG stream: boundary + frame + boundary + frame + ... */
-function buildMjpegStream(
-  boundary: string,
-  payloads: Uint8Array[],
-): Uint8Array {
+function buildMjpegStream(boundary: string, payloads: Uint8Array[]): Uint8Array {
   const parts: Uint8Array[] = [];
   for (const payload of payloads) {
     const header = `Content-Type: image/jpeg\r\nContent-Length: ${payload.length}`;
@@ -71,12 +66,31 @@ function toStream(data: Uint8Array, chunkSize?: number): ReadableStream<Uint8Arr
 /** Collect all frames from the async generator */
 async function collectFrames(
   stream: ReadableStream<Uint8Array>,
-  boundary: string,
+  boundary: string
 ): Promise<Uint8Array[]> {
   const frames: Uint8Array[] = [];
   for await (const frame of mjpegStreamParser(stream, boundary)) {
     frames.push(frame);
   }
+  return frames;
+}
+
+/** Collect all frames from a TransformStream */
+async function collectFramesFromTransform(
+  stream: ReadableStream<Uint8Array>,
+  boundary: string
+): Promise<Uint8Array[]> {
+  const transform = createMjpegTransform(boundary);
+  const reader = transform.readable.getReader();
+  const frames: Uint8Array[] = [];
+
+  const writePromise = stream.pipeTo(transform.writable);
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    frames.push(value);
+  }
+  await writePromise;
   return frames;
 }
 
@@ -209,5 +223,57 @@ describe('mjpegStreamParser', () => {
     const frames = await collectFrames(toStream(data), boundary);
     expect(frames).toHaveLength(1);
     expectBytes(frames[0], jpegContent);
+  });
+
+  describe('createMjpegTransform', () => {
+    it('yields a single frame via TransformStream', async () => {
+      const jpeg = enc.encode('TRANSFORM_TEST');
+      const data = buildMjpegStream(boundary, [jpeg]);
+      const frames = await collectFramesFromTransform(toStream(data), boundary);
+      expect(frames).toHaveLength(1);
+      expectBytes(frames[0], jpeg);
+    });
+
+    it('yields multiple frames via TransformStream', async () => {
+      const jpeg1 = enc.encode('TF1');
+      const jpeg2 = enc.encode('TF2');
+      const jpeg3 = enc.encode('TF3');
+      const data = buildMjpegStream(boundary, [jpeg1, jpeg2, jpeg3]);
+      const frames = await collectFramesFromTransform(toStream(data), boundary);
+      expect(frames).toHaveLength(3);
+      expectBytes(frames[0], jpeg1);
+      expectBytes(frames[1], jpeg2);
+      expectBytes(frames[2], jpeg3);
+    });
+
+    it('handles boundary split across chunks via TransformStream', async () => {
+      const jpeg = enc.encode('SPLIT_TRANSFORM');
+      const data = buildMjpegStream(boundary, [jpeg]);
+      const frames = await collectFramesFromTransform(toStream(data, 10), boundary);
+      expect(frames).toHaveLength(1);
+      expectBytes(frames[0], jpeg);
+    });
+
+    it('handles empty body between boundaries', async () => {
+      const boundaryBytes = enc.encode(boundary);
+      const chunk = new Uint8Array(boundaryBytes.length * 2);
+      chunk.set(boundaryBytes);
+      chunk.set(boundaryBytes, boundaryBytes.length);
+      const frames = await collectFramesFromTransform(toStream(chunk), boundary);
+      expect(frames).toHaveLength(0);
+    });
+
+    it('handles large frame (> 1MB)', async () => {
+      const largeJpeg = new Uint8Array(1_100_000);
+      largeJpeg[0] = 0xff;
+      largeJpeg[1] = 0xd8;
+      largeJpeg[2] = 0xff;
+      const data = buildMjpegStream(boundary, [largeJpeg]);
+      const frames = await collectFramesFromTransform(toStream(data, 64 * 1024), boundary);
+      expect(frames).toHaveLength(1);
+      expect(frames[0].length).toBe(1_100_000);
+      expect(frames[0][0]).toBe(0xff);
+      expect(frames[0][1]).toBe(0xd8);
+    });
   });
 });

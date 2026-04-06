@@ -80,3 +80,53 @@ export async function* mjpegStreamParser(
 export const _testEncoder = encoder;
 /** Exposed for testing — the header separator bytes. */
 export const _testHeaderSep = HEADER_SEPARATOR;
+
+/**
+ * Creates a TransformStream that parses MJPEG multipart stream into individual JPEG frames.
+ * Provides automatic backpressure integration with the Fetch API's ReadableStream.
+ */
+export function createMjpegTransform(boundary: string): TransformStream<Uint8Array, Uint8Array> {
+  const boundaryBytes = encoder.encode(boundary);
+
+  let buffer = new Uint8Array(0);
+
+  function extractFrames(controller: TransformStreamDefaultController<Uint8Array>) {
+    let boundaryIndex = findBytes(buffer, boundaryBytes);
+    while (boundaryIndex !== -1) {
+      const frameData = buffer.slice(0, boundaryIndex);
+      buffer = buffer.slice(boundaryIndex + boundaryBytes.length);
+
+      const headerEnd = findBytes(frameData, HEADER_SEPARATOR);
+      if (headerEnd !== -1) {
+        const jpegData = frameData.slice(headerEnd + HEADER_SEPARATOR.length);
+        if (jpegData.length > 0) {
+          controller.enqueue(jpegData);
+        }
+      }
+      boundaryIndex = findBytes(buffer, boundaryBytes);
+    }
+  }
+
+  return new TransformStream({
+    transform(chunk, controller) {
+      const newBuf = new Uint8Array(buffer.length + chunk.length);
+      newBuf.set(buffer);
+      newBuf.set(chunk, buffer.length);
+      buffer = newBuf;
+
+      extractFrames(controller);
+    },
+    flush(controller) {
+      if (buffer.length > 0) {
+        const headerEnd = findBytes(buffer, HEADER_SEPARATOR);
+        if (headerEnd !== -1) {
+          const jpegData = buffer.slice(headerEnd + HEADER_SEPARATOR.length);
+          if (jpegData.length > 0) {
+            controller.enqueue(jpegData);
+          }
+        }
+      }
+      buffer = new Uint8Array(0);
+    },
+  });
+}
