@@ -12,7 +12,7 @@ export interface McpToolsModalProps {
 }
 
 export function McpToolsModal({ serverName, onClose }: McpToolsModalProps) {
-  const { data: mcpTools, isLoading, error } = useMcpTools();
+  const { data: mcpTools, isLoading, error } = useMcpTools({ enabled: !!serverName });
   const mcpCall = useMcpCall();
 
   const [selectedTool, setSelectedTool] = useState<string | null>(null);
