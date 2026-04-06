@@ -58,6 +58,9 @@ yolov8n.pt
 tools/livekit/livekit-server.exe
 tools/livekit/livekit-server
 tools/livekit/*.zip
+tools/livekit/.version
+tools/livekit/LICENSE
+
 *.nul
 
 # PowerShell scripts
@@ -77,5 +80,8 @@ $null
 .worktrees/
 **/*.sqlite-shm
 **/*.sqlite-wal
+Playwright
 
 proxy-adapter/test-conversations-persistence.sqlite-shm
+docs/superpowers/plans
+.opencode
