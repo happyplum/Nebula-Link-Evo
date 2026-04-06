@@ -42,8 +42,6 @@ const CreateSessionBodySchema = Type.Object({
   title: Type.Optional(Type.String()),
   provider: Type.String({ minLength: 1 }),
   model: Type.String({ minLength: 1 }),
-  vision_provider: Type.Optional(Type.String()),
-  vision_model: Type.Optional(Type.String()),
 });
 
 const CreateSessionResponseSchema = Type.Object({
@@ -73,18 +71,8 @@ const AsyncMessageResponseSchema = Type.Object({
 });
 
 const UpdateModelsBodySchema = Type.Object({
-  decision: Type.Optional(
-    Type.Object({
-      provider: Type.String({ minLength: 1 }),
-      model: Type.String({ minLength: 1 }),
-    })
-  ),
-  vision: Type.Optional(
-    Type.Object({
-      provider: Type.String({ minLength: 1 }),
-      model: Type.String({ minLength: 1 }),
-    })
-  ),
+  provider: Type.Optional(Type.String({ minLength: 1 })),
+  model: Type.Optional(Type.String({ minLength: 1 })),
 });
 
 const UpdateModelsResponseSchema = Type.Object({
@@ -129,13 +117,7 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
     async (request, reply) => {
       try {
-        const {
-          title = '新会话',
-          provider,
-          model,
-          vision_provider,
-          vision_model,
-        } = request.body || {};
+        const { title = '新会话', provider, model } = request.body || {};
         const config = TaskService.getInstance().getConfig();
         if (config === null) {
           reply.status(500);
@@ -155,12 +137,6 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
             `Provider '${provider}' is currently unavailable${errorDetail ? `: ${errorDetail}` : ''}`
           );
         }
-        if (vision_provider && registry && !registry.isAvailable(vision_provider)) {
-          const errorDetail = registry.getAvailabilityError(vision_provider);
-          throw new ServiceUnavailableError(
-            `Provider '${vision_provider}' is currently unavailable${errorDetail ? `: ${errorDetail}` : ''}`
-          );
-        }
 
         const sessionId = randomUUID();
 
@@ -169,8 +145,6 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           title,
           provider,
           model,
-          vision_provider,
-          vision_model,
         });
 
         await conversationManager.createSessionState({
@@ -313,11 +287,11 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
     async (request, reply) => {
       const { id: sessionId } = request.params;
-      const { decision, vision } = request.body || {};
+      const { provider, model } = request.body || {};
 
-      if (!decision && !vision) {
+      if (!provider && !model) {
         reply.status(400);
-        return { error: 'At least one of "decision" or "vision" must be provided' };
+        return { error: 'At least "provider" or "model" must be provided' };
       }
 
       try {
@@ -334,40 +308,23 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         }
 
         // Validate providers exist in config
-        if (decision && !registry.listProviders().includes(decision.provider)) {
+        if (provider && !registry.listProviders().includes(provider)) {
           reply.status(400);
-          return { error: `Unknown decision provider: '${decision.provider}'` };
-        }
-        if (vision && !registry.listProviders().includes(vision.provider)) {
-          reply.status(400);
-          return { error: `Unknown vision provider: '${vision.provider}'` };
+          return { error: `Unknown provider: '${provider}'` };
         }
 
         // Check provider availability (configured but unavailable)
-        if (decision && !registry.isAvailable(decision.provider)) {
-          const errorDetail = registry.getAvailabilityError(decision.provider);
+        if (provider && !registry.isAvailable(provider)) {
+          const errorDetail = registry.getAvailabilityError(provider);
           reply.status(503);
           return {
-            error: `Provider '${decision.provider}' is currently unavailable${errorDetail ? `: ${errorDetail}` : ''}`,
-          };
-        }
-        if (vision && !registry.isAvailable(vision.provider)) {
-          const errorDetail = registry.getAvailabilityError(vision.provider);
-          reply.status(503);
-          return {
-            error: `Provider '${vision.provider}' is currently unavailable${errorDetail ? `: ${errorDetail}` : ''}`,
+            error: `Provider '${provider}' is currently unavailable${errorDetail ? `: ${errorDetail}` : ''}`,
           };
         }
 
         const updateParams: import('../../../../conversation/types.js').UpdateSessionParams = {};
-        if (decision) {
-          updateParams.provider = decision.provider;
-          updateParams.model = decision.model;
-        }
-        if (vision) {
-          updateParams.vision_provider = vision.provider;
-          updateParams.vision_model = vision.model;
-        }
+        if (provider) updateParams.provider = provider;
+        if (model) updateParams.model = model;
 
         const updated = conversationManager.updateSession(sessionId, updateParams);
         if (!updated) {
@@ -571,6 +528,7 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           const message = conversationManager.addMessage(sessionId, {
             role: 'user',
             content: content.trim(),
+            metadata: { provider: session.provider, model: session.model },
           });
           messageId = message.id;
 
