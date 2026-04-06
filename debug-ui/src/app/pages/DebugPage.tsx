@@ -1,6 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useLayoutStore, selectActiveActivityIcon, selectActiveRightTab, type ActivityIcon, type RightPanelTab } from '@/features/layout/store/layout.store.js';
+import {
+  useLayoutStore,
+  selectActiveActivityIcon,
+  selectActiveRightTab,
+  type ActivityIcon,
+  type RightPanelTab,
+} from '@/features/layout/store/layout.store.js';
 import { MonitorSidebarShell } from '@/features/runtime/components/MonitorSidebarShell.js';
 import { MonitorMainShell } from '@/features/runtime/components/MonitorMainShell.js';
 import { BrowserBasicShell } from '@/features/playwright-control/components/BrowserBasicShell.js';
@@ -12,7 +18,15 @@ import { HistoryShell, InteractionsShell } from '@/features/history/components/i
 import ChatPage from './ChatPage.js';
 import { Tabs } from '@/shared/ui/Tabs.js';
 import { testIds } from '@/shared/testing/testids.js';
-import { ConfigPanel, HealthStatusCard, McpStatusList, McpToolsModal, ApiKeysStatus, ConnectivityTest, AiTest } from '@/features/config/components/index.js';
+import {
+  ConfigPanel,
+  HealthStatusCard,
+  McpStatusList,
+  McpToolsModal,
+  ApiKeysStatus,
+  ConnectivityTest,
+  AiTest,
+} from '@/features/config/components/index.js';
 import styles from './DebugPage.module.css';
 
 interface ActivityDef {
@@ -26,7 +40,6 @@ const ACTIVITIES: ActivityDef[] = [
   { icon: '📊', name: 'monitor', title: '状态', isRoute: false },
   { icon: '🎮', name: 'control', title: '控制', isRoute: false },
   { icon: '🤖', name: 'ai', title: 'AI', isRoute: false },
-  { icon: '💬', name: 'chat', title: '对话测试', isRoute: true },
   { icon: '📋', name: 'history', title: '历史', isRoute: false },
   { icon: '🖱️', name: 'interactions', title: '交互', isRoute: false },
 ];
@@ -35,7 +48,6 @@ const TESTID_MAP: Record<string, string> = {
   monitor: testIds.activityBtnMonitor,
   control: testIds.activityBtnControl,
   ai: testIds.activityBtnAi,
-  chat: testIds.activityBtnChat,
   history: testIds.activityBtnHistory,
   interactions: testIds.activityBtnInteractions,
 };
@@ -67,9 +79,19 @@ export default function DebugPage() {
       case 'control':
         return (
           <div className={styles.controlSidebar}>
-            <BrowserBasicShell open={browserBasicOpen} onToggle={() => setBrowserBasicOpen((value) => !value)} icon="🌐" />
-            <PageInteractionShell open={pageInteractionOpen} onToggle={() => setPageInteractionOpen((value) => !value)} />
-            <OperationLogsShell open={operationLogsOpen} onToggle={() => setOperationLogsOpen((value) => !value)} />
+            <BrowserBasicShell
+              open={browserBasicOpen}
+              onToggle={() => setBrowserBasicOpen((value) => !value)}
+              icon="🌐"
+            />
+            <PageInteractionShell
+              open={pageInteractionOpen}
+              onToggle={() => setPageInteractionOpen((value) => !value)}
+            />
+            <OperationLogsShell
+              open={operationLogsOpen}
+              onToggle={() => setOperationLogsOpen((value) => !value)}
+            />
           </div>
         );
       case 'ai':
@@ -99,7 +121,9 @@ export default function DebugPage() {
               key={a.name}
               type="button"
               className={`${styles.activityIcon} ${isActive ? styles.active : ''}`}
-              onClick={() => (a.isRoute ? navigate('/chat') : setActiveIcon(a.name as ActivityIcon))}
+              onClick={() =>
+                a.isRoute ? navigate('/chat') : setActiveIcon(a.name as ActivityIcon)
+              }
               title={a.title}
               data-testid={TESTID_MAP[a.name]}
             >
@@ -128,16 +152,19 @@ export default function DebugPage() {
       {/* Right Panel */}
       <aside className={styles.rightPanel} data-testid={testIds.debugRightPanel}>
         <div className={styles.rightPanelContent}>
-          <Tabs 
+          <Tabs
             tabs={[
               { id: 'dom-elements', label: '📍 DOM Elements' },
-              { id: 'config', label: '⚙️ 配置' }
+              { id: 'config', label: '⚙️ 配置' },
             ]}
             activeTab={activeRightTab}
             onTabChange={(id) => setActiveRightTab(id as RightPanelTab)}
           >
             {activeRightTab === 'dom-elements' ? (
-              <div className={styles.domElementsContent} data-testid={testIds.rightPanelTabDomElements}>
+              <div
+                className={styles.domElementsContent}
+                data-testid={testIds.rightPanelTabDomElements}
+              >
                 <DomElementsTable />
                 <SelectedElementCard />
               </div>
@@ -155,10 +182,7 @@ export default function DebugPage() {
         </div>
       </aside>
 
-      <McpToolsModal
-        serverName={selectedMcpServer}
-        onClose={() => setSelectedMcpServer(null)}
-      />
+      <McpToolsModal serverName={selectedMcpServer} onClose={() => setSelectedMcpServer(null)} />
     </div>
   );
 }
