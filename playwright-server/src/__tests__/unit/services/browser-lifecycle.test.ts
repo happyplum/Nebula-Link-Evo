@@ -4,7 +4,7 @@ import { BrowserLifecycle } from '../../../services/browser-lifecycle.js';
 import {
   createBrowserContextMock,
   createMockPage,
-} from '../../../../../shared/test-utils/mocks/BrowserContext.mock.js';
+} from '../../../../../shared/test-utils/mocks/BrowserContext.mock.ts';
 
 // Mock playwright
 vi.mock('playwright', () => {
@@ -363,6 +363,94 @@ describe('BrowserLifecycle', () => {
       vi.mocked(mockBrowser.isConnected).mockReturnValue(false);
 
       expect(lifecycle.isOpen()).toBe(false);
+    });
+
+    it('should return false from isOpen() when page is closed but browser still connected', async () => {
+      await lifecycle.open();
+      expect(lifecycle.isOpen()).toBe(true);
+
+      // Simulate user closing browser window (page closed, process alive due to CDP port)
+      const page = lifecycle.getPage() as any;
+      page.isClosed.mockReturnValue(true);
+
+      expect(lifecycle.isOpen()).toBe(false);
+    });
+
+    it('should re-launch browser on open() after page is closed', async () => {
+      await lifecycle.open();
+      expect(chromium.launch).toHaveBeenCalledTimes(1);
+
+      // Simulate user closing browser window: page closed but process alive
+      const page = lifecycle.getPage() as any;
+      page.isClosed.mockReturnValue(true);
+
+      // open() should detect stale state, close old browser, and re-launch
+      await lifecycle.open();
+      expect(chromium.launch).toHaveBeenCalledTimes(2);
+      expect(lifecycle.isOpen()).toBe(true);
+    });
+
+    it('should invoke onStateChange callback when page closes unexpectedly', async () => {
+      const callback = vi.fn();
+      lifecycle.setOnStateChange(callback);
+
+      await lifecycle.open();
+
+      // Find the page 'close' handler registered by lifecycle
+      const page = lifecycle.getPage() as any;
+      const closeHandler = page.on.mock.calls.find((call: any[]) => call[0] === 'close')?.[1];
+      expect(closeHandler).toBeDefined();
+
+      // Simulate page close event
+      closeHandler();
+
+      expect(callback).toHaveBeenCalledWith('page_closed');
+
+      lifecycle.setOnStateChange(null);
+    });
+
+    it('should invoke onStateChange callback when browser disconnects', async () => {
+      const callback = vi.fn();
+      lifecycle.setOnStateChange(callback);
+
+      await lifecycle.open();
+
+      // Find the browser 'disconnected' handler
+      const disconnectHandler = mockBrowser.on.mock.calls.find(
+        (call: any[]) => call[0] === 'disconnected'
+      )?.[1];
+      expect(disconnectHandler).toBeDefined();
+
+      disconnectHandler();
+
+      expect(callback).toHaveBeenCalledWith('browser_disconnected');
+
+      lifecycle.setOnStateChange(null);
+    });
+
+    it('should remove page close listener on close()', async () => {
+      await lifecycle.open();
+      const page = lifecycle.getPage() as any;
+      expect(page.off).not.toHaveBeenCalledWith('close', expect.any(Function));
+
+      await lifecycle.close();
+
+      expect(page.off).toHaveBeenCalledWith('close', expect.any(Function));
+    });
+
+    it('should not invoke callback after onStateChange is set to null', async () => {
+      const callback = vi.fn();
+      lifecycle.setOnStateChange(callback);
+
+      await lifecycle.open();
+
+      lifecycle.setOnStateChange(null);
+
+      const page = lifecycle.getPage() as any;
+      const closeHandler = page.on.mock.calls.find((call: any[]) => call[0] === 'close')?.[1];
+      closeHandler();
+
+      expect(callback).not.toHaveBeenCalled();
     });
   });
 });

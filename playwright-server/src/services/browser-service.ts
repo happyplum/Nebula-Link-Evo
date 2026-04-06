@@ -1,12 +1,12 @@
 import type { Page } from 'playwright';
 import type { SimplifiedDOMResponse } from '../types.js';
-import { BrowserLifecycle } from './browser-lifecycle.js';
+import { BrowserLifecycle, type StateChangeReason } from './browser-lifecycle.js';
 
 import { PageActions, MarkerActionResult } from './page-actions.js';
 import { DOMExtractor } from './dom-extractor.js';
 import { CacheStats } from './snapshot-cache.js';
 
-export type { MarkerActionResult, CacheStats };
+export type { MarkerActionResult, CacheStats, StateChangeReason };
 
 export class BrowserService {
   private static instance: BrowserService | null = null;
@@ -85,10 +85,7 @@ export class BrowserService {
     return this.pageActions.clickBySelector(selector, options);
   }
 
-  async clickByMarker(
-    snapshotId: string,
-    nebulaId: number
-  ): Promise<MarkerActionResult> {
+  async clickByMarker(snapshotId: string, nebulaId: number): Promise<MarkerActionResult> {
     return this.pageActions.clickByMarker(snapshotId, nebulaId);
   }
 
@@ -169,7 +166,6 @@ export class BrowserService {
     return this.pageActions.dispatchEventByMarker(snapshotId, nebulaId, eventType);
   }
 
-
   async getSimplifiedDOMV2(): Promise<SimplifiedDOMResponse> {
     return this.domExtractor.getSimplifiedDOMV2();
   }
@@ -198,7 +194,10 @@ export class BrowserService {
     return this.pageActions.executeScript(script);
   }
 
-  async getElementAt(x: number, y: number): Promise<{
+  async getElementAt(
+    x: number,
+    y: number
+  ): Promise<{
     selector: string;
     tag: string;
     id?: string;
@@ -219,6 +218,11 @@ export class BrowserService {
 
   static resetInstance(): void {
     BrowserService.instance = null;
+  }
+
+  /** Register callback for unexpected state changes (page closed, browser disconnected) */
+  setOnStateChange(callback: ((reason: StateChangeReason) => void) | null): void {
+    this.lifecycle.setOnStateChange(callback);
   }
 }
 

@@ -21,6 +21,8 @@ export interface NavigateOptions {
   timeout?: number;
 }
 
+export type StateChangeReason = 'page_closed' | 'browser_disconnected';
+
 export class BrowserLifecycle {
   private state: BrowserState = {
     browser: null,
@@ -32,13 +34,24 @@ export class BrowserLifecycle {
     lastCdpPort: null,
   };
 
+  private onStateChange: ((reason: StateChangeReason) => void) | null = null;
+  private handlePageClose = (): void => {
+    this.onStateChange?.('page_closed');
+  };
+
   /** Clean up stale state when browser disconnects unexpectedly */
   private handleDisconnect = (): void => {
     this.state.browser = null;
     this.state.context = null;
     this.state.page = null;
     this.state.cdpPort = 0;
+    this.onStateChange?.('browser_disconnected');
   };
+
+  /** Register callback for state changes (page closed, browser disconnected) */
+  setOnStateChange(callback: ((reason: StateChangeReason) => void) | null): void {
+    this.onStateChange = callback;
+  }
 
   getState(): Readonly<BrowserState> {
     return this.state;
@@ -46,7 +59,10 @@ export class BrowserLifecycle {
 
   isOpen(): boolean {
     return (
-      this.state.browser !== null && this.state.browser.isConnected() && this.state.page !== null
+      this.state.browser !== null &&
+      this.state.browser.isConnected() &&
+      this.state.page !== null &&
+      !this.state.page.isClosed()
     );
   }
 
@@ -70,9 +86,19 @@ export class BrowserLifecycle {
     const { headless = false, viewport = { width: 1920, height: 1080 }, cdpPort } = options;
     const nextCdpPort = cdpPort ?? 0;
 
-    // Detect stale reference from manually closed browser and clean up
-    if (this.state.browser && !this.state.browser.isConnected()) {
-      this.handleDisconnect();
+    // Detect stale browser: disconnected process or closed page (user closed the window)
+    // With --remote-debugging-port, Chromium process stays alive after window close,
+    // so isConnected() returns true and 'disconnected' never fires.
+    const isStale =
+      this.state.browser &&
+      (!this.state.browser.isConnected() ||
+        (this.state.page !== null && this.state.page.isClosed()));
+    if (isStale) {
+      try {
+        await this.close();
+      } catch {
+        this.handleDisconnect();
+      }
     }
 
     if (this.state.browser) {
@@ -106,6 +132,7 @@ export class BrowserLifecycle {
           deviceScaleFactor: 1,
         });
         this.state.page = await this.state.context.newPage();
+        this.state.page.on('close', this.handlePageClose);
         this.state.lastViewport = { ...viewport };
       }
       return;
@@ -138,6 +165,7 @@ export class BrowserLifecycle {
     });
 
     this.state.page = await this.state.context.newPage();
+    this.state.page.on('close', this.handlePageClose);
     this.state.lastHeadless = headless;
     this.state.lastViewport = { ...viewport };
     this.state.lastCdpPort = nextCdpPort;
@@ -146,6 +174,9 @@ export class BrowserLifecycle {
   async close(): Promise<void> {
     if (this.state.browser) {
       this.state.browser.off('disconnected', this.handleDisconnect);
+      if (this.state.page) {
+        this.state.page.off('close', this.handlePageClose);
+      }
       if (this.state.browser.isConnected()) {
         await this.state.browser.close();
       }
