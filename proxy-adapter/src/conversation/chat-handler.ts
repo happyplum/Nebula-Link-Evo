@@ -391,6 +391,10 @@ class ChatHandler {
       messageId,
     });
 
+    // Snapshot model info at execution start — immune to mid-run session updates
+    const activeProvider = session.provider;
+    const activeModel = session.model;
+
     const contextWindow = this.conversationManager.getContextWindow(sessionId);
     const messages = this.toModelMessages(contextWindow.messages);
 
@@ -417,7 +421,7 @@ class ChatHandler {
 
     const systemPrompt = this.getSystemPrompt(session);
     const sessionController = ChatSessionController.getInstance();
-    const decisionModel = await this.resolveDecisionModel(session.provider, session.model);
+    const decisionModel = await this.resolveDecisionModel(activeProvider, activeModel);
 
     const maxSteps = this.maxToolLoops;
     const streamOptions: Parameters<typeof streamText>[0] & { maxSteps: number } = {
@@ -435,7 +439,7 @@ class ChatHandler {
     );
 
     try {
-      console.log(`[ChatHandler] Using SDK model: ${session.provider}/${session.model}`);
+      console.log(`[ChatHandler] Using SDK model: ${activeProvider}/${activeModel}`);
       const result = await streamText(streamOptions);
 
       for await (const streamPart of result.fullStream) {
@@ -505,8 +509,8 @@ class ChatHandler {
               tool_call_id: toolCallId,
               tool_name: toolName,
               tool_args: toolInput,
-              provider: session.provider,
-              model: session.model,
+              provider: activeProvider,
+              model: activeModel,
               runId,
             },
           });
@@ -572,8 +576,8 @@ class ChatHandler {
         metadata: {
           phase: 'chat-decision',
           usage: totalUsage,
-          provider: session.provider,
-          model: session.model,
+          provider: activeProvider,
+          model: activeModel,
           runId,
           tool_calls: emittedToolCalls.length > 0 ? emittedToolCalls : undefined,
         },
