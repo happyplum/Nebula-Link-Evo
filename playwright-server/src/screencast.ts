@@ -3,6 +3,7 @@ import type { Page } from 'playwright';
 type ServerResponse = {
   write: (data: string | Buffer) => boolean;
   end: () => void;
+  once: (event: 'drain', listener: () => void) => ServerResponse;
   writable?: boolean;
 };
 
@@ -10,6 +11,7 @@ export class ScreencastManager {
   private static instance: ScreencastManager;
   private cdpClient: any = null;
   private listeners: Set<ServerResponse> = new Set();
+  private backedUpListeners: Set<ServerResponse> = new Set();
   private isStreaming: boolean = false;
   private lastFrameTime: number = 0;
   private readonly frameInterval: number = 1000 / 30;
@@ -115,12 +117,25 @@ export class ScreencastManager {
 
     for (const listener of this.listeners) {
       try {
-        if (listener.writable !== false) {
-          listener.write(mjpegFrame);
+        if (listener.writable === false) continue;
+        if (this.backedUpListeners.has(listener)) continue;
+
+        const canContinue = listener.write(mjpegFrame);
+        if (!canContinue) {
+          this.backedUpListeners.add(listener);
+          listener.once('drain', () => {
+            this.backedUpListeners.delete(listener);
+          });
         }
       } catch (error) {
         console.error('[Screencast] Failed to write to listener:', (error as Error).message);
+        try {
+          listener.end();
+        } catch {
+          /* ignore */
+        }
         this.listeners.delete(listener);
+        this.backedUpListeners.delete(listener);
       }
     }
   }
@@ -146,6 +161,7 @@ export class ScreencastManager {
       }
     }
     this.listeners.clear();
+    this.backedUpListeners.clear();
   }
 
   getListenerCount(): number {
