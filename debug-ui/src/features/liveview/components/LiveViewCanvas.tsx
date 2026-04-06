@@ -589,8 +589,7 @@ export function LiveViewCanvas({
             break;
           }
 
-          const frameBytes = Uint8Array.from(jpegFrame);
-          const frameBlob = new Blob([frameBytes], { type: 'image/jpeg' });
+          const frameBlob = new Blob([jpegFrame], { type: 'image/jpeg' });
           const downloadUrl =
             typeof URL.createObjectURL === 'function' ? URL.createObjectURL(frameBlob) : null;
           replaceDownloadUrl(downloadUrl, true);

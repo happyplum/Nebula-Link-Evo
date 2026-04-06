@@ -15,7 +15,9 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     const clientId = crypto.randomUUID();
     wsManager.handleConnection(connection, clientId);
     // DEPRECATION WARNING: /debug/ws is deprecated, use /ws/debug instead
-    console.log(`[DEPRECATED] Legacy WebSocket client connected: ${clientId} (Total: ${wsManager.getClientCount()}). Use /ws/debug instead.`);
+    console.log(
+      `[DEPRECATED] Legacy WebSocket client connected: ${clientId} (Total: ${wsManager.getClientCount()}). Use /ws/debug instead.`
+    );
     console.log(`WebSocket client connected: ${clientId} (Total: ${wsManager.getClientCount()})`);
   });
 
@@ -387,7 +389,8 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
 
       reply.hijack();
       reply.raw.writeHead(200, {
-        'Content-Type': upstream.headers.get('content-type') ?? 'multipart/x-mixed-replace; boundary=frame',
+        'Content-Type':
+          upstream.headers.get('content-type') ?? 'multipart/x-mixed-replace; boundary=frame',
         'Cache-Control': 'no-cache',
         Connection: 'keep-alive',
       });
@@ -400,7 +403,7 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
             break;
           }
           if (value) {
-            reply.raw.write(Buffer.from(value));
+            reply.raw.write(value);
           }
         }
       } catch (error) {
@@ -411,7 +414,7 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         reader.releaseLock();
         reply.raw.end();
       }
-    },
+    }
   );
 
   fastify.get(
@@ -966,7 +969,7 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         console.error('[Debug API] Error reading failure sample:', error);
         return { success: false, error: (error as Error).message };
       }
-      }
+    }
   );
 };
 
