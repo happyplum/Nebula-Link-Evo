@@ -30,8 +30,8 @@ function findBytes(buffer: Uint8Array, pattern: Uint8Array, offset = 0): number 
  */
 export async function* mjpegStreamParser(
   stream: ReadableStream<Uint8Array>,
-  boundary: string,
-): AsyncGenerator<Uint8Array, void, unknown> {
+  boundary: string
+): AsyncGenerator<Uint8Array<ArrayBuffer>, void, unknown> {
   const reader = stream.getReader();
   const boundaryBytes = encoder.encode(boundary);
   let buffer = new Uint8Array(0);
