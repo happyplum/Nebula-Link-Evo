@@ -220,13 +220,26 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
       es.addEventListener('message.created', (e: MessageEvent) => {
         const evt = JSON.parse(e.data) as MessageCreatedEvent;
         if (isDuplicate(evt)) return;
-        const msg: ChatMessage = {
+        const store = getChatStore();
+        if (!store) return;
+
+        const serverMsg: ChatMessage = {
           id: evt.messageId,
           role: 'user',
           content: evt.content,
           timestamp: Date.now(),
         };
-        getChatStore()?.addMessage(sid, msg);
+
+        // Reconcile with optimistic message to avoid duplicates.
+        const messages = store.messagesBySession[sid] ?? [];
+        const optimistic = messages.find(
+          (m) => m.id.startsWith('temp-') && m.role === 'user' && m.content === evt.content
+        );
+        if (optimistic) {
+          store.reconcileMessage(sid, optimistic.id, serverMsg);
+        } else {
+          store.addMessage(sid, serverMsg);
+        }
       });
 
       // assistant.started
