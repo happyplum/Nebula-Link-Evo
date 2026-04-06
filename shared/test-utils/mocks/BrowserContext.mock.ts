@@ -1,6 +1,10 @@
 import { vi } from 'vitest';
 import type { Page, BrowserContext as PlaywrightBrowserContext } from 'playwright';
-import type { BrowserState, OpenBrowserOptions, NavigateOptions } from '../../../playwright-server/src/services/browser-lifecycle.js';
+import type {
+  BrowserState,
+  OpenBrowserOptions,
+  NavigateOptions,
+} from '../../../playwright-server/src/services/browser-lifecycle.js';
 
 /**
  * Mock Page implementation
@@ -30,6 +34,9 @@ interface MockPage {
   content: ReturnType<typeof vi.fn>;
   setViewportSize: ReturnType<typeof vi.fn>;
   addInitScript: ReturnType<typeof vi.fn>;
+  isClosed: ReturnType<typeof vi.fn>;
+  on: ReturnType<typeof vi.fn>;
+  off: ReturnType<typeof vi.fn>;
 }
 
 /**
@@ -61,6 +68,9 @@ export function createMockPage(): MockPage {
     content: vi.fn(() => '<html></html>'),
     setViewportSize: vi.fn(),
     addInitScript: vi.fn(),
+    isClosed: vi.fn(() => false),
+    on: vi.fn(),
+    off: vi.fn(),
   };
 
   // Setup mock return values
@@ -184,21 +194,25 @@ export function createBrowserLifecycleMock(config?: {
       mockState.lastViewport = null;
       mockState.lastCdpPort = null;
     }),
-    navigate: vi.fn(async (url: string, waitUntil?: 'load' | 'domcontentloaded' | 'networkidle') => {
-      if (config?.shouldFailOnNavigate) {
-        throw new Error('Failed to navigate');
+    navigate: vi.fn(
+      async (url: string, waitUntil?: 'load' | 'domcontentloaded' | 'networkidle') => {
+        if (config?.shouldFailOnNavigate) {
+          throw new Error('Failed to navigate');
+        }
+        if (!mockState.page) {
+          throw new Error('Browser not opened');
+        }
+        await mockPage.goto(url);
       }
-      if (!mockState.page) {
-        throw new Error('Browser not opened');
-      }
-      await mockPage.goto(url);
-    }),
+    ),
     screenshot: vi.fn(async (fullPage: boolean = false) => {
       if (!mockState.page) {
         throw new Error('Browser not opened');
       }
       const screenshot = await mockPage.screenshot();
-      const viewport = mockState.page.url() ? { width: 1920, height: 1080 } : { width: 0, height: 0 };
+      const viewport = mockState.page.url()
+        ? { width: 1920, height: 1080 }
+        : { width: 0, height: 0 };
       return {
         screenshot: screenshot.toString('base64'),
         viewport,
