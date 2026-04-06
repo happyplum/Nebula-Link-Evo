@@ -70,9 +70,7 @@ describe('DebugPage Navigation Parity Test', () => {
   const renderWithProviders = (ui: React.ReactElement) => {
     return render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
-          {ui}
-        </MemoryRouter>
+        <MemoryRouter>{ui}</MemoryRouter>
       </QueryClientProvider>
     );
   };
@@ -92,48 +90,29 @@ describe('DebugPage Navigation Parity Test', () => {
     useLayoutStore.setState({ activeActivityIcon: 'monitor' });
   });
 
-  it('asserts 6 activity buttons render with correct data-testid values', () => {
+  it('asserts 5 activity buttons render with correct data-testid values', () => {
     renderWithProviders(<DebugPage />);
 
-    // Verify all 6 activity buttons are present with correct testids
     expect(screen.getByTestId(testIds.activityBtnMonitor)).toBeInTheDocument();
     expect(screen.getByTestId(testIds.activityBtnControl)).toBeInTheDocument();
     expect(screen.getByTestId(testIds.activityBtnAi)).toBeInTheDocument();
-    expect(screen.getByTestId(testIds.activityBtnChat)).toBeInTheDocument();
     expect(screen.getByTestId(testIds.activityBtnHistory)).toBeInTheDocument();
     expect(screen.getByTestId(testIds.activityBtnInteractions)).toBeInTheDocument();
   });
 
-  it('asserts buttons are in legacy order: monitor, control, ai, chat, history, interactions', () => {
+  it('asserts buttons are in legacy order: monitor, control, ai, history, interactions', () => {
     renderWithProviders(<DebugPage />);
 
     const activityBar = screen.getByTestId(testIds.activityBar);
     const buttons = activityBar.querySelectorAll('button');
 
-    expect(buttons.length).toBe(6);
+    expect(buttons.length).toBe(5);
 
-    // Verify order by checking data-testid
     expect(buttons[0]).toHaveAttribute('data-testid', testIds.activityBtnMonitor);
     expect(buttons[1]).toHaveAttribute('data-testid', testIds.activityBtnControl);
     expect(buttons[2]).toHaveAttribute('data-testid', testIds.activityBtnAi);
-    expect(buttons[3]).toHaveAttribute('data-testid', testIds.activityBtnChat);
-    expect(buttons[4]).toHaveAttribute('data-testid', testIds.activityBtnHistory);
-    expect(buttons[5]).toHaveAttribute('data-testid', testIds.activityBtnInteractions);
-  });
-
-  it('asserts Chat button has special behavior (navigates to /chat)', () => {
-    // Reset the mock before this test
-    mockNavigate.mockClear();
-
-    renderWithProviders(<DebugPage />);
-
-    const chatButton = screen.getByTestId(testIds.activityBtnChat);
-
-    // Use fireEvent.click for proper React event handling
-    fireEvent.click(chatButton);
-
-    // Chat button should navigate to /chat
-    expect(mockNavigate).toHaveBeenCalledWith('/chat');
+    expect(buttons[3]).toHaveAttribute('data-testid', testIds.activityBtnHistory);
+    expect(buttons[4]).toHaveAttribute('data-testid', testIds.activityBtnInteractions);
   });
 
   it('asserts non-chat buttons call setActiveIcon', () => {
@@ -173,9 +152,8 @@ describe('DebugPage Navigation Parity Test', () => {
     expect(buttons[0]).toHaveTextContent('📊'); // monitor
     expect(buttons[1]).toHaveTextContent('🎮'); // control
     expect(buttons[2]).toHaveTextContent('🤖'); // ai
-    expect(buttons[3]).toHaveTextContent('💬'); // chat
-    expect(buttons[4]).toHaveTextContent('📋'); // history
-    expect(buttons[5]).toHaveTextContent('🖱️'); // interactions
+    expect(buttons[3]).toHaveTextContent('📋'); // history
+    expect(buttons[4]).toHaveTextContent('🖱️'); // interactions
   });
 
   it('asserts activity button titles render correctly', () => {
@@ -188,8 +166,7 @@ describe('DebugPage Navigation Parity Test', () => {
     expect(buttons[0]).toHaveAttribute('title', '状态'); // monitor
     expect(buttons[1]).toHaveAttribute('title', '控制'); // control
     expect(buttons[2]).toHaveAttribute('title', 'AI'); // ai
-    expect(buttons[3]).toHaveAttribute('title', '对话测试'); // chat
-    expect(buttons[4]).toHaveAttribute('title', '历史'); // history
-    expect(buttons[5]).toHaveAttribute('title', '交互'); // interactions
+    expect(buttons[3]).toHaveAttribute('title', '历史'); // history
+    expect(buttons[4]).toHaveAttribute('title', '交互'); // interactions
   });
 });
