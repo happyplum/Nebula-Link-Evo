@@ -349,22 +349,6 @@ export default function ChatPage() {
           >
             ➕
           </button>
-          <button
-            type="button"
-            className={styles.iconBtn}
-            onClick={handleRenameSession}
-            title="重命名会话"
-          >
-            ✏️
-          </button>
-          <button
-            type="button"
-            className={`${styles.iconBtn} ${styles.errorText}`}
-            onClick={handleDeleteSession}
-            title="删除会话"
-          >
-            🗑️
-          </button>
         </div>
       </div>
 
@@ -421,7 +405,7 @@ export default function ChatPage() {
       {/* Footer / Composer */}
       <div className={styles.footer}>
         <div className={styles.composerWrapper}>
-          <Composer />
+          <Composer onRenameSession={handleRenameSession} onDeleteSession={handleDeleteSession} />
         </div>
       </div>
     </div>

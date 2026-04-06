@@ -23,7 +23,12 @@ function toRequestUrl(path: string): string {
   return new URL(path, origin).toString();
 }
 
-export const Composer: React.FC = () => {
+interface ComposerProps {
+  onRenameSession?: () => void;
+  onDeleteSession?: () => void;
+}
+
+export const Composer: React.FC<ComposerProps> = ({ onRenameSession, onDeleteSession }) => {
   const [input, setInput] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -138,6 +143,27 @@ export const Composer: React.FC = () => {
         rows={1}
       />
       <div className={styles.actions}>
+        {onRenameSession && (
+          <button
+            type="button"
+            className={styles.sessionAction}
+            onClick={onRenameSession}
+            title="重命名会话"
+          >
+            ✏️
+          </button>
+        )}
+        {onDeleteSession && (
+          <button
+            type="button"
+            className={`${styles.sessionAction} ${styles.deleteAction}`}
+            onClick={onDeleteSession}
+            title="删除会话"
+          >
+            🗑️
+          </button>
+        )}
+        <div className={styles.actionsSpacer} />
         <button
           type="button"
           className={`${styles.screenshotButton} ${screenshotData ? styles.screenshotActive : ''}`}
