@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { testIds } from '@/shared/testing/testids.js';
-import { LiveViewCanvas } from '@/features/liveview/components/LiveViewCanvas.js';
+import { LiveKitView } from '@/features/liveview/components/index.js';
 import {
   useRuntimeStore,
   selectPlaywrightUrl,
@@ -124,7 +124,7 @@ export function MonitorMainShell() {
           </div>
         </div>
         <div className={styles.liveviewCanvasWrap}>
-          <LiveViewCanvas className={styles.liveviewCanvas} />
+          <LiveKitView className={styles.liveviewCanvas} />
         </div>
       </div>
 
