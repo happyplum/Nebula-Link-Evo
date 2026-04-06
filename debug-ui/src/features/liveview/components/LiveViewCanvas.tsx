@@ -151,6 +151,7 @@ export function LiveViewCanvas({
   const fitRectRef = useRef<ImageFitRect | null>(null);
   const currentBitmapRef = useRef<ImageBitmap | null>(null);
   const downloadUrlRef = useRef<string | null>(null);
+  const lastFrameBlobRef = useRef<Blob | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const streamAbortRef = useRef<AbortController | null>(null);
   const streamVersionRef = useRef(0);
@@ -206,7 +207,7 @@ export function LiveViewCanvas({
   }, [markerToggle]);
 
   const replaceDownloadUrl = useCallback(
-    (nextUrl: string | null, revokeCurrent: boolean) => {
+    (nextBlob: Blob | null, revokeCurrent: boolean) => {
       const previousUrl = downloadUrlRef.current;
       if (
         revokeCurrent &&
@@ -215,10 +216,18 @@ export function LiveViewCanvas({
         typeof URL.revokeObjectURL === 'function'
       ) {
         URL.revokeObjectURL(previousUrl);
+        downloadUrlRef.current = null;
       }
 
-      downloadUrlRef.current = nextUrl;
-      setLastScreenshotDataUrl(nextUrl);
+      lastFrameBlobRef.current = nextBlob;
+      if (nextBlob) {
+        const url =
+          typeof URL.createObjectURL === 'function' ? URL.createObjectURL(nextBlob) : null;
+        downloadUrlRef.current = url;
+        setLastScreenshotDataUrl(url);
+      } else {
+        setLastScreenshotDataUrl(null);
+      }
     },
     [setLastScreenshotDataUrl]
   );
@@ -509,20 +518,32 @@ export function LiveViewCanvas({
   }, [drawOverlayFrame, resizeCanvases]);
 
   useEffect(() => {
-    const loop = () => {
-      drawOverlayFrame();
+    let active = true;
+
+    const startLoop = () => {
+      const loop = () => {
+        if (!active) return;
+        drawOverlayFrame();
+        overlayRafRef.current = window.requestAnimationFrame(loop);
+      };
       overlayRafRef.current = window.requestAnimationFrame(loop);
     };
 
-    overlayRafRef.current = window.requestAnimationFrame(loop);
+    const hasOverlayContent =
+      markers.length > 0 || overlayBBox !== null || hoveredElement !== null || elementPickerEnabled;
+
+    if (hasOverlayContent) {
+      startLoop();
+    }
 
     return () => {
+      active = false;
       if (overlayRafRef.current !== null) {
         window.cancelAnimationFrame(overlayRafRef.current);
         overlayRafRef.current = null;
       }
     };
-  }, [drawOverlayFrame]);
+  }, [drawOverlayFrame, markers.length, overlayBBox, hoveredElement, elementPickerEnabled]);
 
   useEffect(() => {
     let cancelled = false;
@@ -557,10 +578,9 @@ export function LiveViewCanvas({
         if (response.ok) {
           const data = await response.json();
           if (data.screenshot) {
-            replaceDownloadUrl(`data:image/png;base64,${data.screenshot}`, true);
-            const imgBlob = await fetch(`data:image/png;base64,${data.screenshot}`).then((r) =>
-              r.blob()
-            );
+            const base64Data = `data:image/png;base64,${data.screenshot}`;
+            const imgBlob = await fetch(base64Data).then((r) => r.blob());
+            replaceDownloadUrl(imgBlob, true);
             const bitmap = await createImageBitmap(imgBlob);
             if (!cancelled && streamVersion === streamVersionRef.current) {
               if (currentBitmapRef.current) currentBitmapRef.current.close();
@@ -597,9 +617,7 @@ export function LiveViewCanvas({
           }
 
           const frameBlob = new Blob([jpegFrame], { type: 'image/jpeg' });
-          const downloadUrl =
-            typeof URL.createObjectURL === 'function' ? URL.createObjectURL(frameBlob) : null;
-          replaceDownloadUrl(downloadUrl, true);
+          replaceDownloadUrl(frameBlob, true);
           const bitmap = await createImageBitmap(frameBlob);
           if (cancelled || streamVersion !== streamVersionRef.current) {
             bitmap.close();
