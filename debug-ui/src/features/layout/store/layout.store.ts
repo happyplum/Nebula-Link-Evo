@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type ActivityIcon = 'monitor' | 'control' | 'ai' | 'history' | 'interactions';
+export type ActivityIcon = 'monitor' | 'control' | 'ai';
 export type RightPanelTab = 'dom-elements' | 'config';
 
 interface LayoutState {
@@ -23,11 +23,9 @@ export const useLayoutStore = create<LayoutState>()((set) => ({
   activeActivityIcon: 'monitor',
   activeRightTab: 'dom-elements',
 
-  toggleLeftSidebar: () =>
-    set((s) => ({ isLeftSidebarOpen: !s.isLeftSidebarOpen })),
+  toggleLeftSidebar: () => set((s) => ({ isLeftSidebarOpen: !s.isLeftSidebarOpen })),
   setLeftSidebarOpen: (open) => set({ isLeftSidebarOpen: open }),
-  toggleRightPanel: () =>
-    set((s) => ({ isRightPanelOpen: !s.isRightPanelOpen })),
+  toggleRightPanel: () => set((s) => ({ isRightPanelOpen: !s.isRightPanelOpen })),
   setRightPanelOpen: (open) => set({ isRightPanelOpen: open }),
   setActiveActivityIcon: (icon) => set({ activeActivityIcon: icon }),
   setActiveRightTab: (tab) => set({ activeRightTab: tab }),

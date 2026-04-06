@@ -1,9 +1,10 @@
-export { HistoryTable } from './HistoryTable.js';
-export { HistoryShell } from './HistoryShell.js';
-export { LogsView } from './LogsView.js';
-export { DecisionsView } from './DecisionsView.js';
-export { InteractionsShell } from './InteractionsShell.js';
+export { ExecutionShell } from './ExecutionShell.js';
+export { EXECUTION_TABS } from './ExecutionShell.js';
+export { ExecutionStatsCards } from './ExecutionStatsCards.js';
+export { ExecutionContextBar } from './ExecutionContextBar.js';
+export { TaskListPane } from './TaskListPane.js';
+export { TaskDetailPane } from './TaskDetailPane.js';
+export { ActionStreamPane } from './ActionStreamPane.js';
 export { InteractionsTable } from './InteractionsTable.js';
 export { InteractionDetailModal } from './InteractionDetailModal.js';
 export { FailureSampleModal } from './FailureSampleModal.js';
-export { TaskDetailModal } from './TaskDetailModal.js';
