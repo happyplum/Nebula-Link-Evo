@@ -14,7 +14,6 @@ import { PageInteractionShell } from '@/features/playwright-control/components/P
 import { OperationLogsShell } from '@/features/playwright-control/components/OperationLogsShell.js';
 import { SelectedElementCard } from '@/features/playwright-control/components/SelectedElementCard.js';
 import { DomElementsTable } from '@/features/playwright-control/components/DomElementsTable.js';
-import { HistoryShell, InteractionsShell } from '@/features/history/components/index.js';
 import ChatPage from './ChatPage.js';
 import { Tabs } from '@/shared/ui/Tabs.js';
 import { testIds } from '@/shared/testing/testids.js';
@@ -31,7 +30,7 @@ import styles from './DebugPage.module.css';
 
 interface ActivityDef {
   icon: string;
-  name: ActivityIcon | 'chat';
+  name: ActivityIcon | 'chat' | 'execution';
   title: string;
   isRoute: boolean;
 }
@@ -40,24 +39,20 @@ const ACTIVITIES: ActivityDef[] = [
   { icon: '📊', name: 'monitor', title: '状态', isRoute: false },
   { icon: '🎮', name: 'control', title: '控制', isRoute: false },
   { icon: '🤖', name: 'ai', title: 'AI', isRoute: false },
-  { icon: '📋', name: 'history', title: '历史', isRoute: false },
-  { icon: '🖱️', name: 'interactions', title: '交互', isRoute: false },
+  { icon: '📋', name: 'execution', title: '执行记录', isRoute: true },
 ];
 
 const TESTID_MAP: Record<string, string> = {
   monitor: testIds.activityBtnMonitor,
   control: testIds.activityBtnControl,
   ai: testIds.activityBtnAi,
-  history: testIds.activityBtnHistory,
-  interactions: testIds.activityBtnInteractions,
+  execution: testIds.activityBtnExecution,
 };
 
 const SIDEBAR_TITLES: Record<ActivityIcon, string> = {
   monitor: '状态',
   control: '控制',
   ai: 'AI',
-  history: '历史',
-  interactions: '交互',
 };
 
 export default function DebugPage() {
@@ -100,10 +95,6 @@ export default function DebugPage() {
             <ChatPage />
           </div>
         );
-      case 'history':
-        return <HistoryShell />;
-      case 'interactions':
-        return <InteractionsShell />;
       default:
         return null;
     }
@@ -122,7 +113,9 @@ export default function DebugPage() {
               type="button"
               className={`${styles.activityIcon} ${isActive ? styles.active : ''}`}
               onClick={() =>
-                a.isRoute ? navigate('/chat') : setActiveIcon(a.name as ActivityIcon)
+                a.isRoute
+                  ? navigate(a.name === 'chat' ? '/chat' : '/execution')
+                  : setActiveIcon(a.name as ActivityIcon)
               }
               title={a.title}
               data-testid={TESTID_MAP[a.name]}

@@ -44,6 +44,7 @@ function toQueryParams(filters?: InteractionFilters): Record<string, string> | u
   if (!filters) return undefined;
   const params: Record<string, string> = {};
   if (filters.actionType !== undefined) params.action_type = filters.actionType;
+  if (filters.locatorStrategy !== undefined) params.locator_strategy = filters.locatorStrategy;
   if (filters.success !== undefined) params.success = String(filters.success);
   if (filters.startTime !== undefined) params.start_time = String(filters.startTime);
   if (filters.limit !== undefined) params.limit = String(filters.limit);

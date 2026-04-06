@@ -83,8 +83,10 @@ export interface FailureSampleResponse {
 /** Local UI filter params for interactions list */
 export interface InteractionFilters {
   actionType?: string;
+  locatorStrategy?: string;
   success?: boolean;
   startTime?: number;
+  endTime?: number;
   limit?: number;
   offset?: number;
 }
