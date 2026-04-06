@@ -177,10 +177,16 @@ const streamRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         5 * 60 * 1000
       );
 
-      request.raw.on('close', () => {
-        clearInterval(heartbeatInterval);
-        clearTimeout(timeout);
-        unsubscribe();
+      // Keep the handler alive until the client disconnects or timeout fires.
+      // Without this, Fastify may finalize the raw response when the handler
+      // returns, closing the SSE stream before live events can be delivered.
+      return new Promise<void>((resolve) => {
+        request.raw.on('close', () => {
+          clearInterval(heartbeatInterval);
+          clearTimeout(timeout);
+          unsubscribe();
+          resolve();
+        });
       });
     }
   );

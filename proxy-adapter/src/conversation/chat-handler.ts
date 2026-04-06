@@ -74,7 +74,9 @@ class ChatHandler {
     this.sessionEventHub = sessionEventHub || SessionEventHub.getInstance();
     this.providerRegistry = this.createProviderRegistry(config);
     const configuredMaxSteps =
-      this.config._resolved?.settings?.maxSteps ?? this.config.settings?.maxSteps ?? this.maxToolLoops;
+      this.config._resolved?.settings?.maxSteps ??
+      this.config.settings?.maxSteps ??
+      this.maxToolLoops;
     this.maxToolLoops = configuredMaxSteps > 0 ? configuredMaxSteps : this.maxToolLoops;
   }
 
@@ -133,7 +135,10 @@ class ChatHandler {
           seq = await this.sessionEventsDAO.appendEvent(sessionId, type, payload);
         }
         // Always publish to hub for live SSE streaming (even without persistence)
-        this.sessionEventHub.publish(sessionId, seq === undefined ? eventData : { ...eventData, seq });
+        this.sessionEventHub.publish(
+          sessionId,
+          seq === undefined ? eventData : { ...eventData, seq }
+        );
       } catch (error) {
         console.warn(
           `[ChatHandler] Failed to emit session event ${type} for session ${sessionId}:`,
@@ -143,6 +148,34 @@ class ChatHandler {
     });
 
     return this.sessionEventQueue;
+  }
+
+  private emitStreamingEvent(
+    sessionId: string,
+    type: SessionEventType,
+    payload: Record<string, unknown>
+  ): void {
+    const eventData: SessionEvent = {
+      type,
+      ...payload,
+    } as SessionEvent;
+
+    // Fire-and-forget persistence; publish immediately for real-time streaming.
+    const hub = this.sessionEventHub;
+    if (this.sessionEventsDAO) {
+      this.sessionEventQueue = this.sessionEventQueue
+        .then(async () => {
+          try {
+            const seq = await this.sessionEventsDAO!.appendEvent(sessionId, type, payload);
+            hub.publish(sessionId, { ...eventData, seq });
+          } catch {
+            // Persistence failure is non-fatal for streaming events
+          }
+        })
+        .catch(() => {});
+    } else {
+      hub.publish(sessionId, eventData);
+    }
   }
 
   private async flushSessionEvents(): Promise<void> {
@@ -410,7 +443,7 @@ class ChatHandler {
 
         if (part.type === 'text-delta' && typeof part.text === 'string') {
           accumulatedContent += part.text;
-          await this.emitSessionEvent(sessionId, 'assistant.delta', {
+          this.emitStreamingEvent(sessionId, 'assistant.delta', {
             sessionId,
             runId,
             messageId,
@@ -423,7 +456,7 @@ class ChatHandler {
           (part.type === 'reasoning' || part.type === 'reasoning-delta') &&
           typeof part.text === 'string'
         ) {
-          await this.emitSessionEvent(sessionId, 'assistant.thinking', {
+          this.emitStreamingEvent(sessionId, 'assistant.thinking', {
             sessionId,
             runId,
             messageId,
@@ -447,7 +480,7 @@ class ChatHandler {
           };
           emittedToolCalls.push(toolCall);
 
-          await this.emitSessionEvent(sessionId, 'assistant.tool_call', {
+          this.emitStreamingEvent(sessionId, 'assistant.tool_call', {
             sessionId,
             runId,
             messageId,
@@ -478,7 +511,7 @@ class ChatHandler {
             },
           });
 
-          await this.emitSessionEvent(sessionId, 'assistant.tool_result', {
+          this.emitStreamingEvent(sessionId, 'assistant.tool_result', {
             sessionId,
             runId,
             messageId,
@@ -563,7 +596,11 @@ class ChatHandler {
         ...(latestState?.agentState ?? { schema_version: 1 as const }),
         terminalReason,
       };
-      await this.conversationManager.updateSessionStatus(sessionId, completionStatus, nextAgentState);
+      await this.conversationManager.updateSessionStatus(
+        sessionId,
+        completionStatus,
+        nextAgentState
+      );
       this.sendSessionUpdate();
 
       if (pauseRequested) {
@@ -703,7 +740,10 @@ class ChatHandler {
       items?: unknown;
     };
 
-    if (Array.isArray(definition.enum) && definition.enum.every((value) => typeof value === 'string')) {
+    if (
+      Array.isArray(definition.enum) &&
+      definition.enum.every((value) => typeof value === 'string')
+    ) {
       const enumValues = definition.enum as string[];
       return z.string().refine((value) => enumValues.includes(value), {
         message: `Expected one of: ${enumValues.join(', ')}`,
