@@ -28,13 +28,28 @@ vi.mock('@/features/liveview/components/LiveViewCanvas.js', () => ({
   LiveViewCanvas: () => <div data-testid="mock-liveview-canvas">LiveViewCanvas</div>,
 }));
 
-// Mock useQuery hooks for ControlPanel and history components
+// Mock LiveKitView to avoid ResizeObserver in JSDOM
+vi.mock('@/features/liveview/components/LiveKitView.js', () => ({
+  LiveKitView: () => <div data-testid="mock-livekit-view">LiveKitView</div>,
+}));
+
+// Also mock the barrel export that MonitorMainShell uses
+vi.mock('@/features/liveview/components/index.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/liveview/components/index.js')>();
+  return {
+    ...actual,
+    LiveKitView: () => <div data-testid="mock-livekit-view">LiveKitView</div>,
+  };
+});
+
+// Mock useQuery hooks for ControlPanel and execution components
 vi.mock('@tanstack/react-query', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-query')>();
   return {
     ...actual,
     useQuery: vi.fn(() => ({ data: null, isLoading: false, error: null })),
     useMutation: vi.fn(() => ({ mutate: vi.fn(), isLoading: false })),
+    useQueries: vi.fn(() => []),
   };
 });
 
@@ -76,7 +91,6 @@ describe('DebugPage Navigation Parity Test', () => {
   };
 
   beforeAll(() => {
-    // Inject CSS variables into jsdom document
     const cssPath = path.resolve(__dirname, '../../../styles/variables.css');
     const cssContent = fs.readFileSync(cssPath, 'utf-8');
 
@@ -90,42 +104,37 @@ describe('DebugPage Navigation Parity Test', () => {
     useLayoutStore.setState({ activeActivityIcon: 'monitor' });
   });
 
-  it('asserts 5 activity buttons render with correct data-testid values', () => {
+  it('asserts 4 activity buttons render with correct data-testid values', () => {
     renderWithProviders(<DebugPage />);
 
     expect(screen.getByTestId(testIds.activityBtnMonitor)).toBeInTheDocument();
     expect(screen.getByTestId(testIds.activityBtnControl)).toBeInTheDocument();
     expect(screen.getByTestId(testIds.activityBtnAi)).toBeInTheDocument();
-    expect(screen.getByTestId(testIds.activityBtnHistory)).toBeInTheDocument();
-    expect(screen.getByTestId(testIds.activityBtnInteractions)).toBeInTheDocument();
+    expect(screen.getByTestId(testIds.activityBtnExecution)).toBeInTheDocument();
   });
 
-  it('asserts buttons are in legacy order: monitor, control, ai, history, interactions', () => {
+  it('asserts buttons are in order: monitor, control, ai, execution', () => {
     renderWithProviders(<DebugPage />);
 
     const activityBar = screen.getByTestId(testIds.activityBar);
     const buttons = activityBar.querySelectorAll('button');
 
-    expect(buttons.length).toBe(5);
+    expect(buttons.length).toBe(4);
 
     expect(buttons[0]).toHaveAttribute('data-testid', testIds.activityBtnMonitor);
     expect(buttons[1]).toHaveAttribute('data-testid', testIds.activityBtnControl);
     expect(buttons[2]).toHaveAttribute('data-testid', testIds.activityBtnAi);
-    expect(buttons[3]).toHaveAttribute('data-testid', testIds.activityBtnHistory);
-    expect(buttons[4]).toHaveAttribute('data-testid', testIds.activityBtnInteractions);
+    expect(buttons[3]).toHaveAttribute('data-testid', testIds.activityBtnExecution);
   });
 
-  it('asserts non-chat buttons call setActiveIcon', () => {
+  it('asserts non-chat buttons call setActiveIcon, execution button navigates', () => {
     renderWithProviders(<DebugPage />);
 
-    // Get non-chat buttons
     const monitorButton = screen.getByTestId(testIds.activityBtnMonitor);
     const controlButton = screen.getByTestId(testIds.activityBtnControl);
     const aiButton = screen.getByTestId(testIds.activityBtnAi);
-    const historyButton = screen.getByTestId(testIds.activityBtnHistory);
-    const interactionsButton = screen.getByTestId(testIds.activityBtnInteractions);
+    const executionButton = screen.getByTestId(testIds.activityBtnExecution);
 
-    // Click each button and verify store state changes
     fireEvent.click(monitorButton);
     expect(useLayoutStore.getState().activeActivityIcon).toBe('monitor');
 
@@ -135,11 +144,8 @@ describe('DebugPage Navigation Parity Test', () => {
     fireEvent.click(aiButton);
     expect(useLayoutStore.getState().activeActivityIcon).toBe('ai');
 
-    fireEvent.click(historyButton);
-    expect(useLayoutStore.getState().activeActivityIcon).toBe('history');
-
-    fireEvent.click(interactionsButton);
-    expect(useLayoutStore.getState().activeActivityIcon).toBe('interactions');
+    fireEvent.click(executionButton);
+    expect(mockNavigate).toHaveBeenCalledWith('/execution');
   });
 
   it('asserts activity button icons render correctly', () => {
@@ -148,12 +154,10 @@ describe('DebugPage Navigation Parity Test', () => {
     const activityBar = screen.getByTestId(testIds.activityBar);
     const buttons = activityBar.querySelectorAll('button');
 
-    // Verify emoji icons render in order
-    expect(buttons[0]).toHaveTextContent('📊'); // monitor
-    expect(buttons[1]).toHaveTextContent('🎮'); // control
-    expect(buttons[2]).toHaveTextContent('🤖'); // ai
-    expect(buttons[3]).toHaveTextContent('📋'); // history
-    expect(buttons[4]).toHaveTextContent('🖱️'); // interactions
+    expect(buttons[0]).toHaveTextContent('📊');
+    expect(buttons[1]).toHaveTextContent('🎮');
+    expect(buttons[2]).toHaveTextContent('🤖');
+    expect(buttons[3]).toHaveTextContent('📋');
   });
 
   it('asserts activity button titles render correctly', () => {
@@ -162,11 +166,9 @@ describe('DebugPage Navigation Parity Test', () => {
     const activityBar = screen.getByTestId(testIds.activityBar);
     const buttons = activityBar.querySelectorAll('button');
 
-    // Verify title attributes render correctly
-    expect(buttons[0]).toHaveAttribute('title', '状态'); // monitor
-    expect(buttons[1]).toHaveAttribute('title', '控制'); // control
-    expect(buttons[2]).toHaveAttribute('title', 'AI'); // ai
-    expect(buttons[3]).toHaveAttribute('title', '历史'); // history
-    expect(buttons[4]).toHaveAttribute('title', '交互'); // interactions
+    expect(buttons[0]).toHaveAttribute('title', '状态');
+    expect(buttons[1]).toHaveAttribute('title', '控制');
+    expect(buttons[2]).toHaveAttribute('title', 'AI');
+    expect(buttons[3]).toHaveAttribute('title', '执行记录');
   });
 });
