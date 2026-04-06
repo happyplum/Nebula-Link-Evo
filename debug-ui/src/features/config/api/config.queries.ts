@@ -44,10 +44,11 @@ export function useMcpStatus() {
 }
 
 /** MCP tools discovered from connected servers */
-export function useMcpTools() {
+export function useMcpTools(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: queryKeys.mcp.tools,
     queryFn: () => apiClient.get<McpToolsResponse>(DEBUG_MCP_TOOLS),
+    enabled: options?.enabled,
   });
 }
 
