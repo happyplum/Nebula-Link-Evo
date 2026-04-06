@@ -19,13 +19,13 @@ import { initializeWithBackup } from './utils/db-backup.js';
 import healthRoutes from './plugins/routes/health.js';
 import configRoutes from './plugins/routes/config.js';
 import taskRoutes from './plugins/routes/task.js';
+import livekitTokenRoutes from './plugins/routes/api/livekit-token.js';
 import debugRoutes from './plugins/routes/debug/index.js';
 import chatRoutes from './plugins/routes/chat/index.js';
 import apiChatRoutes from './plugins/routes/api/chat/index.js';
 import chatSocketRoutes from './plugins/routes/ws/chat-socket.js';
 import debugSocketRoutes from './plugins/routes/ws/debug-socket.js';
 import { runPreflight } from './services/provider/preflight.js';
-
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -62,7 +62,7 @@ async function start() {
     if (!isTestMode) {
       await initializeWithBackup();
     }
-    
+
     await app.register(cors, {
       origin: true,
       credentials: true,
@@ -93,9 +93,11 @@ async function start() {
       if (staticDirForProduction) {
         console.log(`[INFO] Production mode: Serving Debug UI from: ${staticDirForProduction}`);
       } else {
-        console.warn('[WARN] Production mode: Debug UI dist not found, /debug static files disabled');
+        console.warn(
+          '[WARN] Production mode: Debug UI dist not found, /debug static files disabled'
+        );
       }
-      
+
       // ✅ Static files will be registered after all API routes (see below)
       // Fastify matches routes in registration order, so API routes take precedence
     } else {
@@ -155,8 +157,8 @@ async function start() {
       config,
       wsManager,
       taskService.getMCPSDKClient() || undefined,
-      sessionEventsDAO,   // ✅ Inject sessionEventsDAO for SSE event persistence and recovery
-      sessionEventHub      // ✅ Inject sessionEventHub for SSE event streaming
+      sessionEventsDAO, // ✅ Inject sessionEventsDAO for SSE event persistence and recovery
+      sessionEventHub // ✅ Inject sessionEventHub for SSE event streaming
     );
 
     // Decorate Fastify with conversation management
@@ -166,9 +168,10 @@ async function start() {
     // Set chat handler in WebSocket manager
     wsManager.setChatHandler(chatHandler);
 
-  await app.register(healthRoutes, { prefix: '/api/health' });
-  await app.register(configRoutes, { prefix: '/api/config' });
-  await app.register(taskRoutes, { prefix: '/api/task' });
+    await app.register(healthRoutes, { prefix: '/api/health' });
+    await app.register(configRoutes, { prefix: '/api/config' });
+    await app.register(taskRoutes, { prefix: '/api/task' });
+    await app.register(livekitTokenRoutes, { prefix: '/api' });
 
     // ✅ Register Chat routes - Independent WebSocket channel for chat sessions
     await app.register(chatRoutes, { prefix: '/chat' });
@@ -186,7 +189,7 @@ async function start() {
     // ✅ Register Debug routes - MUST be after decorations and before development mode proxy
     await app.register(debugRoutes, { prefix: '/debug' });
     console.log('[INFO] Debug routes registered: /debug/api/*, /debug/ws');
-    
+
     // ✅ Production mode: register static files after API routes
     if (isProduction && staticDirForProduction) {
       await app.register(fastifyStatic, {
@@ -197,7 +200,7 @@ async function start() {
       });
       console.log('[INFO] Static files registered for /debug');
     }
-    
+
     // ✅ Production mode: static files were already registered, but we need to ensure they don't override API routes
     // Fastify matches routes in registration order, so API routes registered above take precedence
 
@@ -238,10 +241,7 @@ async function start() {
           let body: string | undefined;
           if (request.method !== 'GET' && request.method !== 'HEAD') {
             const contentType = request.headers['content-type'] || '';
-            if (
-              contentType.includes('application/json') ||
-              contentType.includes('text/')
-            ) {
+            if (contentType.includes('application/json') || contentType.includes('text/')) {
               body = JSON.stringify(request.body);
             } else {
               // For form-data and other types, use raw body if available
