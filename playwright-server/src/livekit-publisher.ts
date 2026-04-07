@@ -55,10 +55,6 @@ export async function startPublisher(
     publishOptions.source = TrackSource.SOURCE_SCREENSHARE;
     publishOptions.videoCodec = VideoCodec.H264;
     publishOptions.red = false;
-    publishOptions.videoEncoding = {
-      maxBitrate: 8_000_000n,
-      maxFramerate: 15,
-    } as any;
 
     if (!room.localParticipant) {
       throw new Error('LiveKit room local participant unavailable');
