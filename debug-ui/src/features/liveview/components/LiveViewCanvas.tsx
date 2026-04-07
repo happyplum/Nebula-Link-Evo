@@ -622,6 +622,11 @@ export function LiveViewCanvas({
               break;
             }
 
+            // Skip frame if previous bitmap hasn't been consumed by drawRenderFrame
+            if (currentBitmapRef.current) {
+              continue;
+            }
+
             const frameBlob = new Blob([value.slice()], { type: 'image/jpeg' });
             replaceDownloadUrl(frameBlob, true);
             const bitmap = await createImageBitmap(frameBlob);
@@ -630,9 +635,6 @@ export function LiveViewCanvas({
               break;
             }
 
-            if (currentBitmapRef.current) {
-              currentBitmapRef.current.close();
-            }
             currentBitmapRef.current = bitmap;
             drawRenderFrame();
           }
