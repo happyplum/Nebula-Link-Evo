@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import {
   canvasToPageCoords,
+  createMjpegTransform,
   getImageFitRect,
-  mjpegStreamParser,
   pageToCanvasCoords,
 } from '@/features/liveview/lib/index.js';
 import {
@@ -611,24 +611,33 @@ export function LiveViewCanvas({
         }
 
         const boundary = readBoundary(response.headers.get('content-type'));
-        for await (const jpegFrame of mjpegStreamParser(response.body, boundary)) {
-          if (cancelled || streamVersion !== streamVersionRef.current) {
-            break;
-          }
+        const transform = createMjpegTransform(boundary);
+        const frameStream = response.body.pipeThrough(transform);
+        const reader = frameStream.getReader();
 
-          const frameBlob = new Blob([jpegFrame], { type: 'image/jpeg' });
-          replaceDownloadUrl(frameBlob, true);
-          const bitmap = await createImageBitmap(frameBlob);
-          if (cancelled || streamVersion !== streamVersionRef.current) {
-            bitmap.close();
-            break;
-          }
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done || cancelled || streamVersion !== streamVersionRef.current) {
+              break;
+            }
 
-          if (currentBitmapRef.current) {
-            currentBitmapRef.current.close();
+            const frameBlob = new Blob([value.slice()], { type: 'image/jpeg' });
+            replaceDownloadUrl(frameBlob, true);
+            const bitmap = await createImageBitmap(frameBlob);
+            if (cancelled || streamVersion !== streamVersionRef.current) {
+              bitmap.close();
+              break;
+            }
+
+            if (currentBitmapRef.current) {
+              currentBitmapRef.current.close();
+            }
+            currentBitmapRef.current = bitmap;
+            drawRenderFrame();
           }
-          currentBitmapRef.current = bitmap;
-          drawRenderFrame();
+        } finally {
+          reader.releaseLock();
         }
       } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') {
