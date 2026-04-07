@@ -1,4 +1,4 @@
-export { mjpegStreamParser } from './mjpeg-parser.js';
+export { createMjpegTransform, mjpegStreamParser } from './mjpeg-parser.js';
 export {
   canvasToPageCoords,
   getImageFitRect,
