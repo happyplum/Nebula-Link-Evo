@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getImageFitRect, type ImageFitRect } from '@/features/liveview/lib/index.js';
 import { selectPlaywrightIsOpen, useRuntimeStore } from '@/features/runtime/store/index.js';
+import {
+  selectViewport,
+  useControlStore,
+} from '@/features/playwright-control/store/control.store.js';
 import { LiveViewOverlayLayer } from './LiveViewOverlayLayer.js';
 import { useLiveKit } from '../hooks/useLiveKit.js';
 import styles from './LiveKitView.module.css';
@@ -26,6 +30,7 @@ export default function LiveKitView({
   const [fitRect, setFitRect] = useState<ImageFitRect | null>(null);
   const { isConnected, connect, disconnect, videoElement, setOnTrackSubscribed } = useLiveKit();
   const isPlaywrightOpen = useRuntimeStore(selectPlaywrightIsOpen);
+  const pageViewport = useControlStore(selectViewport);
 
   const startOverlayLoop = useCallback(() => {
     const video = videoRef.current;
@@ -56,13 +61,16 @@ export default function LiveKitView({
         return;
       }
 
+      // Use page viewport dimensions for coordinate mapping, fallback to video resolution
+      const imgW = pageViewport?.width ?? videoWidth;
+      const imgH = pageViewport?.height ?? videoHeight;
       const scale = Math.min(clientWidth / videoWidth, clientHeight / videoHeight);
       const drawWidth = videoWidth * scale;
       const drawHeight = videoHeight * scale;
       const offsetX = (clientWidth - drawWidth) / 2;
       const offsetY = (clientHeight - drawHeight) / 2;
 
-      setFitRect(getImageFitRect(videoWidth, videoHeight, clientWidth, clientHeight));
+      setFitRect(getImageFitRect(imgW, imgH, clientWidth, clientHeight));
       ctx.clearRect(0, 0, clientWidth, clientHeight);
       ctx.drawImage(currentVideo, offsetX, offsetY, drawWidth, drawHeight);
 
@@ -82,7 +90,7 @@ export default function LiveKitView({
     };
 
     rafLoop();
-  }, []);
+  }, [pageViewport]);
 
   useEffect(() => {
     if (!isPlaywrightOpen) {

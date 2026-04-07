@@ -9,13 +9,16 @@ vi.mock('../../../services/browser-service.js', () => {
       getInstance: vi.fn().mockReturnValue({
         open: vi.fn().mockResolvedValue(undefined),
         navigate: vi.fn().mockResolvedValue(undefined),
-        screenshot: vi.fn().mockResolvedValue({ screenshot: 'base64', viewport: { width: 800, height: 600 } }),
+        screenshot: vi
+          .fn()
+          .mockResolvedValue({ screenshot: 'base64', viewport: { width: 800, height: 600 } }),
         close: vi.fn().mockResolvedValue(undefined),
         isOpen: vi.fn().mockReturnValue(true),
         getCurrentUrl: vi.fn().mockReturnValue('https://example.com'),
         getTitle: vi.fn().mockResolvedValue('Example Domain'),
-      })
-    }
+        getViewport: vi.fn().mockReturnValue({ width: 1920, height: 1080 }),
+      }),
+    },
   };
 });
 
@@ -28,6 +31,11 @@ describe('Browser Routes', () => {
     await app.register(browserRoutes);
     mockBrowserService = BrowserService.getInstance();
     vi.clearAllMocks();
+    // Re-apply mock implementations after clearAllMocks
+    mockBrowserService.isOpen.mockReturnValue(true);
+    mockBrowserService.getCurrentUrl.mockReturnValue('https://example.com');
+    mockBrowserService.getTitle.mockResolvedValue('Example Domain');
+    mockBrowserService.getViewport.mockReturnValue({ width: 1920, height: 1080 });
   });
 
   describe('POST /open', () => {
@@ -35,15 +43,19 @@ describe('Browser Routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/open',
-        payload: { headless: true, viewport: { width: 1024, height: 768 } }
+        payload: { headless: true, viewport: { width: 1024, height: 768 } },
       });
 
       expect(response.statusCode).toBe(200);
       expect(JSON.parse(response.payload)).toEqual({
         success: true,
-        message: 'Browser opened successfully'
+        message: 'Browser opened successfully',
       });
-      expect(mockBrowserService.open).toHaveBeenCalledWith(true, { width: 1024, height: 768 }, undefined);
+      expect(mockBrowserService.open).toHaveBeenCalledWith(
+        true,
+        { width: 1024, height: 768 },
+        undefined
+      );
     });
 
     it('should return 500 on error', async () => {
@@ -52,13 +64,13 @@ describe('Browser Routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/open',
-        payload: {}
+        payload: {},
       });
 
       expect(response.statusCode).toBe(500);
       expect(JSON.parse(response.payload)).toEqual({
         success: false,
-        error: 'Failed'
+        error: 'Failed',
       });
     });
   });
@@ -68,16 +80,19 @@ describe('Browser Routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/navigate',
-        payload: { url: 'https://example.com' }
+        payload: { url: 'https://example.com' },
       });
 
       expect(response.statusCode).toBe(200);
       expect(JSON.parse(response.payload)).toEqual({
         isOpen: true,
         currentUrl: 'https://example.com',
-        title: 'Example Domain'
+        title: 'Example Domain',
       });
-      expect(mockBrowserService.navigate).toHaveBeenCalledWith('https://example.com', 'networkidle');
+      expect(mockBrowserService.navigate).toHaveBeenCalledWith(
+        'https://example.com',
+        'networkidle'
+      );
     });
 
     it('should return 500 on error', async () => {
@@ -86,13 +101,13 @@ describe('Browser Routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/navigate',
-        payload: { url: 'https://example.com' }
+        payload: { url: 'https://example.com' },
       });
 
       expect(response.statusCode).toBe(500);
       expect(JSON.parse(response.payload)).toEqual({
         success: false,
-        error: 'Failed'
+        error: 'Failed',
       });
     });
   });
@@ -102,14 +117,14 @@ describe('Browser Routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/screenshot',
-        payload: { fullPage: true }
+        payload: { fullPage: true },
       });
 
       expect(response.statusCode).toBe(200);
       expect(JSON.parse(response.payload)).toEqual({
         success: true,
         screenshot: 'base64',
-        viewport: { width: 800, height: 600 }
+        viewport: { width: 800, height: 600 },
       });
       expect(mockBrowserService.screenshot).toHaveBeenCalledWith(true);
     });
@@ -120,13 +135,13 @@ describe('Browser Routes', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/screenshot',
-        payload: {}
+        payload: {},
       });
 
       expect(response.statusCode).toBe(500);
       expect(JSON.parse(response.payload)).toEqual({
         success: false,
-        error: 'Failed'
+        error: 'Failed',
       });
     });
   });
@@ -135,13 +150,13 @@ describe('Browser Routes', () => {
     it('should call close and return success', async () => {
       const response = await app.inject({
         method: 'POST',
-        url: '/close'
+        url: '/close',
       });
 
       expect(response.statusCode).toBe(200);
       expect(JSON.parse(response.payload)).toEqual({
         success: true,
-        message: 'Browser closed successfully'
+        message: 'Browser closed successfully',
       });
       expect(mockBrowserService.close).toHaveBeenCalled();
     });
@@ -151,13 +166,13 @@ describe('Browser Routes', () => {
 
       const response = await app.inject({
         method: 'POST',
-        url: '/close'
+        url: '/close',
       });
 
       expect(response.statusCode).toBe(500);
       expect(JSON.parse(response.payload)).toEqual({
         success: false,
-        error: 'Failed'
+        error: 'Failed',
       });
     });
   });
@@ -166,14 +181,15 @@ describe('Browser Routes', () => {
     it('should return browser status', async () => {
       const response = await app.inject({
         method: 'GET',
-        url: '/status'
+        url: '/status',
       });
 
       expect(response.statusCode).toBe(200);
       expect(JSON.parse(response.payload)).toEqual({
         isOpen: true,
         currentUrl: 'https://example.com',
-        title: 'Example Domain'
+        title: 'Example Domain',
+        viewport: { width: 1920, height: 1080 },
       });
     });
   });

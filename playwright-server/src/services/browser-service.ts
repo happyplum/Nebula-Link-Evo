@@ -39,6 +39,10 @@ export class BrowserService {
     return this.lifecycle.getCurrentUrl();
   }
 
+  getViewport(): { width: number; height: number } | null {
+    return this.lifecycle.getViewport();
+  }
+
   async open(
     headless: boolean = false,
     viewport = { width: 1920, height: 1080 },

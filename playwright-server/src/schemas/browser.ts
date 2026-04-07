@@ -17,6 +17,7 @@ export const BrowserStatusResponseSchema = Type.Object({
   isOpen: Type.Boolean(),
   currentUrl: Type.Optional(Type.String()),
   title: Type.Optional(Type.String()),
+  viewport: Type.Optional(ViewportSchema),
 });
 
 export const ScreenshotResponseSchema = Type.Object({

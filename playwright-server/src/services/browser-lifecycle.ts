@@ -79,6 +79,10 @@ export class BrowserLifecycle {
     return this.state.page?.url();
   }
 
+  getViewport(): { width: number; height: number } | null {
+    return this.state.lastViewport;
+  }
+
   async getTitle(): Promise<string | undefined> {
     return this.state.page?.title();
   }
