@@ -1,29 +1,29 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useLiveKit } from '../hooks/useLiveKit.js';
+import { getImageFitRect, type ImageFitRect } from '@/features/liveview/lib/index.js';
 import { selectPlaywrightIsOpen, useRuntimeStore } from '@/features/runtime/store/index.js';
-import { LiveViewCanvas } from './LiveViewCanvas.js';
+import { LiveViewOverlayLayer } from './LiveViewOverlayLayer.js';
+import { useLiveKit } from '../hooks/useLiveKit.js';
 import styles from './LiveKitView.module.css';
-
-// LiveKit support is assumed available; fallback triggers on fetch/connect failure
-const IS_LIVEKIT_SUPPORTED = true;
 
 interface LiveKitViewProps {
   className?: string;
   onElementSelect?: (selector: string) => void;
   onCoordinateCapture?: (coords: { x: number; y: number }) => void;
+  onRenderError?: (error: Error) => void;
 }
 
 export default function LiveKitView({
   className,
   onElementSelect,
   onCoordinateCapture,
+  onRenderError,
 }: LiveKitViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const overlayRafRef = useRef<number>(0);
-  const [showFallback, setShowFallback] = useState(!IS_LIVEKIT_SUPPORTED);
   const [tokenData, setTokenData] = useState<{ token: string; url: string } | null>(null);
+  const [fitRect, setFitRect] = useState<ImageFitRect | null>(null);
   const { isConnected, connect, disconnect, videoElement, setOnTrackSubscribed } = useLiveKit();
   const isPlaywrightOpen = useRuntimeStore(selectPlaywrightIsOpen);
 
@@ -49,6 +49,7 @@ export default function LiveKitView({
       const { videoWidth, videoHeight } = currentVideo;
       const { clientWidth, clientHeight } = currentCanvas;
       if (videoWidth === 0 || videoHeight === 0) {
+        setFitRect(null);
         if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
           currentVideo.requestVideoFrameCallback(renderFrame);
         }
@@ -61,6 +62,7 @@ export default function LiveKitView({
       const offsetX = (clientWidth - drawWidth) / 2;
       const offsetY = (clientHeight - drawHeight) / 2;
 
+      setFitRect(getImageFitRect(videoWidth, videoHeight, clientWidth, clientHeight));
       ctx.clearRect(0, 0, clientWidth, clientHeight);
       ctx.drawImage(currentVideo, offsetX, offsetY, drawWidth, drawHeight);
 
@@ -83,7 +85,7 @@ export default function LiveKitView({
   }, []);
 
   useEffect(() => {
-    if (!isPlaywrightOpen || showFallback) {
+    if (!isPlaywrightOpen) {
       return;
     }
 
@@ -101,31 +103,36 @@ export default function LiveKitView({
           return;
         }
 
-        setShowFallback(true);
+        onRenderError?.(new Error('LiveKit token response missing token or url'));
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (!cancelled) {
-          setShowFallback(true);
+          onRenderError?.(
+            error instanceof Error ? error : new Error('Failed to fetch LiveKit token')
+          );
         }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [isPlaywrightOpen, showFallback]);
+  }, [isPlaywrightOpen, onRenderError]);
 
   useEffect(() => {
-    if (!tokenData || isConnected || showFallback) {
+    if (!tokenData || isConnected) {
       return;
     }
 
-    connect(tokenData).catch(() => setShowFallback(true));
-  }, [connect, isConnected, showFallback, tokenData]);
+    connect(tokenData).catch((error: unknown) => {
+      onRenderError?.(error instanceof Error ? error : new Error('Failed to connect to LiveKit'));
+    });
+  }, [connect, isConnected, onRenderError, tokenData]);
 
   useEffect(() => {
     if (!isPlaywrightOpen && isConnected) {
       disconnect();
       setTokenData(null);
+      setFitRect(null);
     }
   }, [disconnect, isConnected, isPlaywrightOpen]);
 
@@ -153,6 +160,7 @@ export default function LiveKitView({
       if (videoElement && videoElement.parentNode) {
         videoElement.parentNode.removeChild(videoElement);
       }
+      setFitRect(null);
     };
   }, [startOverlayLoop, videoElement]);
 
@@ -186,16 +194,6 @@ export default function LiveKitView({
     return () => observer.disconnect();
   }, [handleResize]);
 
-  if (showFallback) {
-    return (
-      <LiveViewCanvas
-        className={className}
-        onElementSelect={onElementSelect}
-        onCoordinateCapture={onCoordinateCapture}
-      />
-    );
-  }
-
   const containerClassName = className ? `${styles.container} ${className}` : styles.container;
 
   return (
@@ -206,6 +204,11 @@ export default function LiveKitView({
       data-connected={isConnected}
     >
       <canvas ref={canvasRef} className={styles.canvas} />
+      <LiveViewOverlayLayer
+        fitRect={fitRect}
+        onElementSelect={onElementSelect}
+        onCoordinateCapture={onCoordinateCapture}
+      />
     </div>
   );
 }

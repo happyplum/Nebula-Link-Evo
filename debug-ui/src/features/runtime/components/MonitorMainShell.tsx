@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { testIds } from '@/shared/testing/testids.js';
-import { LiveKitView } from '@/features/liveview/components/index.js';
+import {
+  LiveKitView,
+  LiveViewCanvas,
+  TransportToggle,
+} from '@/features/liveview/components/index.js';
 import {
   useRuntimeStore,
   selectPlaywrightUrl,
   selectExecutionMessages,
+  selectLiveviewTransport,
   type ConnectionStatus,
   type ServiceStatus,
 } from '@/features/runtime/store/runtime.store.js';
@@ -39,14 +44,19 @@ export function MonitorMainShell() {
   const lastScreenshotDataUrl = useRuntimeStore((s) => s.lastScreenshotDataUrl);
   const incrementSnapshotVersion = useRuntimeStore((s) => s.incrementSnapshotVersion);
   const executionMessages = useRuntimeStore(selectExecutionMessages);
+  const preferredTransport = useRuntimeStore(selectLiveviewTransport);
+  const setLiveviewTransport = useRuntimeStore((s) => s.setLiveviewTransport);
 
   const { sendMessage } = useDebugSocket();
   const isConnected = connectionStatus === 'connected';
 
   const [commandInput, setCommandInput] = useState('');
   const commandInputRef = useRef<HTMLInputElement>(null);
-
   const logContainerRef = useRef<HTMLDivElement>(null);
+
+  const [webrtcFailed, setWebrtcFailed] = useState(false);
+  const effectiveTransport =
+    preferredTransport === 'webrtc' && webrtcFailed ? 'mjpeg' : preferredTransport;
 
   useEffect(() => {
     if (executionMessages.length > 0) {
@@ -98,6 +108,14 @@ export function MonitorMainShell() {
     [handleExecute]
   );
 
+  const handleTransportChange = useCallback(
+    (mode: 'webrtc' | 'mjpeg') => {
+      setLiveviewTransport(mode);
+      if (mode === 'webrtc') setWebrtcFailed(false);
+    },
+    [setLiveviewTransport]
+  );
+
   const badgeClass = isConnected ? `${styles.statusBadge} ${styles.connected}` : styles.statusBadge;
   const indicatorClass =
     playwrightStatus === 'ready' ? `${styles.taskIndicator} ${styles.ready}` : styles.taskIndicator;
@@ -120,11 +138,26 @@ export function MonitorMainShell() {
         <div className={styles.liveviewHeaderBar}>
           <h3 className={styles.liveviewTitle}>实时画面</h3>
           <div className={styles.liveviewHeaderMeta}>
+            {webrtcFailed && preferredTransport === 'webrtc' && (
+              <span className={styles.degradedIndicator}>已降级</span>
+            )}
+            <TransportToggle
+              transport={preferredTransport}
+              onTransportChange={handleTransportChange}
+              webrtcAvailable={!webrtcFailed}
+            />
             <span className={styles.liveviewUrl}>{playwrightUrl || '-'}</span>
           </div>
         </div>
         <div className={styles.liveviewCanvasWrap}>
-          <LiveKitView className={styles.liveviewCanvas} />
+          {effectiveTransport === 'webrtc' ? (
+            <LiveKitView
+              className={styles.liveviewCanvas}
+              onRenderError={() => setWebrtcFailed(true)}
+            />
+          ) : (
+            <LiveViewCanvas className={styles.liveviewCanvas} />
+          )}
         </div>
       </div>
 

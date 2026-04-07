@@ -119,6 +119,15 @@
   min-height: 320px;
 }
 
+.degradedIndicator {
+  font-size: 11px;
+  color: var(--accent-warning);
+  background: rgba(234, 179, 8, 0.1);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+
 /* Task strip — legacy: control-bar row with status */
 .taskStrip {
   display: flex;

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 
 export type ConnectionStatus = 'connected' | 'disconnected' | 'connecting' | 'reconnecting';
 export type ServiceStatus = 'unknown' | 'ready' | 'unhealthy';
+export type LiveviewTransport = 'webrtc' | 'mjpeg';
 
 export interface ExecutionMessage {
   type: 'info' | 'success' | 'warning' | 'error';
@@ -18,6 +19,7 @@ interface RuntimeState {
   snapshotVersion: number;
   lastScreenshotDataUrl: string | null;
   executionMessages: ExecutionMessage[];
+  liveviewTransport: LiveviewTransport;
 
   setConnectionStatus: (status: ConnectionStatus) => void;
   setReconnectAttempt: (attempt: number) => void;
@@ -30,8 +32,18 @@ interface RuntimeState {
   incrementSnapshotVersion: () => void;
   setLastScreenshotDataUrl: (url: string | null) => void;
   addExecutionMessage: (message: ExecutionMessage) => void;
+  setLiveviewTransport: (mode: LiveviewTransport) => void;
   reset: () => void;
 }
+
+const persistedTransport = (() => {
+  try {
+    const v = localStorage.getItem('liveviewTransport');
+    return v === 'mjpeg' || v === 'webrtc' ? v : 'webrtc';
+  } catch {
+    return 'webrtc' as const;
+  }
+})();
 
 const initialState = {
   connectionStatus: 'disconnected' as ConnectionStatus,
@@ -42,11 +54,11 @@ const initialState = {
   snapshotVersion: 0,
   lastScreenshotDataUrl: null as string | null,
   executionMessages: [] as ExecutionMessage[],
+  liveviewTransport: persistedTransport as LiveviewTransport,
 };
 
 export const useRuntimeStore = create<RuntimeState>()((set) => ({
   ...initialState,
-
   setConnectionStatus: (status) => set({ connectionStatus: status }),
   setReconnectAttempt: (attempt) => set({ reconnectAttempt: attempt }),
   incrementReconnectAttempt: () => set((s) => ({ reconnectAttempt: s.reconnectAttempt + 1 })),
@@ -58,9 +70,15 @@ export const useRuntimeStore = create<RuntimeState>()((set) => ({
   incrementSnapshotVersion: () => set((s) => ({ snapshotVersion: s.snapshotVersion + 1 })),
   setLastScreenshotDataUrl: (url) => set({ lastScreenshotDataUrl: url }),
   addExecutionMessage: (message) =>
-    set((s) => ({
-      executionMessages: [...s.executionMessages, message].slice(-200),
-    })),
+    set((s) => ({ executionMessages: [...s.executionMessages, message].slice(-200) })),
+  setLiveviewTransport: (mode) => {
+    try {
+      localStorage.setItem('liveviewTransport', mode);
+    } catch {
+      /* storage unavailable */
+    }
+    set({ liveviewTransport: mode });
+  },
   reset: () => set(initialState),
 }));
 
@@ -71,3 +89,4 @@ export const selectPlaywrightStatus = (s: RuntimeState) => s.playwrightStatus;
 export const selectPlaywrightIsOpen = (s: RuntimeState) => s.playwrightIsOpen;
 export const selectPlaywrightUrl = (s: RuntimeState) => s.playwrightUrl;
 export const selectExecutionMessages = (s: RuntimeState) => s.executionMessages;
+export const selectLiveviewTransport = (s: RuntimeState) => s.liveviewTransport;
