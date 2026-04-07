@@ -1,0 +1,2 @@
+# Batch files MUST use CRLF — CMD requires \r\n line endings
+*.bat text eol=crlf
