@@ -71,8 +71,7 @@ export async function startPublisher(
 
     cdpSession = await page.context().newCDPSession(page);
     await cdpSession.send('Page.startScreencast', {
-      format: 'jpeg',
-      quality: 95,
+      format: 'png',
       maxWidth: width,
       maxHeight: height,
     });

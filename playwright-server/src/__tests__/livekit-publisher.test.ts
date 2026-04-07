@@ -109,8 +109,7 @@ describe('livekit-publisher', () => {
     expect(publishTrack).toHaveBeenCalledTimes(1);
     expect(newCDPSession).toHaveBeenCalledWith(page);
     expect(send).toHaveBeenCalledWith('Page.startScreencast', {
-      format: 'jpeg',
-      quality: 80,
+      format: 'png',
       maxWidth: 1280,
       maxHeight: 720,
     });
