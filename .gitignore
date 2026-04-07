@@ -81,6 +81,8 @@ $null
 **/*.sqlite-shm
 **/*.sqlite-wal
 Playwright
+playwright-report/
+test-results/
 
 proxy-adapter/test-conversations-persistence.sqlite-shm
 docs/superpowers/plans
