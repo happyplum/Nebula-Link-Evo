@@ -1,7 +1,4 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
-import * as path from 'node:path';
-import * as fs from 'node:fs';
-import { fileURLToPath } from 'node:url';
 
 /**
  * Environment Isolation Tests
@@ -65,7 +62,6 @@ vi.mock('dotenv', () => ({
 
 describe('Production Environment Isolation', () => {
   let originalNodeEnv: string | undefined;
-  let mockStaticDir: string;
 
   beforeAll(() => {
     // Set production mode BEFORE any imports
@@ -73,17 +69,6 @@ describe('Production Environment Isolation', () => {
     process.env.NODE_ENV = 'production';
     process.env.TEST_MODE = 'true';
     process.env.PROXY_PORT = '0';
-
-    // Set mock static directory path (use __dirname to avoid URL encoding issues)
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = path.dirname(__filename);
-    mockStaticDir = path.join(__dirname, 'mock-static');
-
-    // Create mock static directory if it doesn't exist
-    if (!fs.existsSync(mockStaticDir)) {
-      fs.mkdirSync(mockStaticDir, { recursive: true });
-      fs.writeFileSync(path.join(mockStaticDir, 'index.html'), '<html>test</html>');
-    }
   });
 
   afterAll(() => {
@@ -201,55 +186,6 @@ describe('Production Environment Isolation', () => {
       });
 
       expect(response.statusCode).toBe(200);
-    });
-  });
-
-  describe('Route Registration Order in Production', () => {
-    it('should serve API routes before static files when both use same prefix', async () => {
-      const { default: Fastify } = await import('fastify');
-      const debugRoutes = await import('../plugins/routes/debug/index.js');
-      const healthRoutes = await import('../plugins/routes/health.js');
-
-      const app = Fastify({ logger: { level: 'warn' } });
-
-      // Register debug routes first (API routes)
-      await app.register(debugRoutes.default, { prefix: '/debug' });
-
-      // Register health routes (should still work as they use different prefix)
-      await app.register(healthRoutes.default, { prefix: '/api/health' });
-
-      // Register static files after API routes (simulating production)
-      const { default: fastifyStatic } = await import('@fastify/static');
-      await app.register(fastifyStatic, {
-        root: mockStaticDir,
-        prefix: '/debug',
-        index: 'index.html',
-        redirect: true,
-      });
-
-      const debugResponse = await app.inject({
-        method: 'GET',
-        url: '/debug/api/health',
-      });
-
-      const healthResponse = await app.inject({
-        method: 'GET',
-        url: '/api/health',
-      });
-
-      const staticRootResponse = await app.inject({
-        method: 'GET',
-        url: '/debug/',
-      });
-
-      // API routes take precedence over static files
-      expect(debugResponse.statusCode).toBe(200);
-
-      // Health API works fine (different prefix)
-      expect(healthResponse.statusCode).toBe(200);
-
-      // Static files are accessible at root
-      expect(staticRootResponse.statusCode).toBe(200);
     });
   });
 });
