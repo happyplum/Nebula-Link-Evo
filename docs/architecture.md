@@ -30,8 +30,8 @@
 │  └────────────────────────┬──────────────────────────────────────┘  │
 │  ┌───────────────────────▼──────────────────────────────────────┐  │
 │  │                   Development / Production                     │  │
-│  │ Dev: Proxy /debug* → Vite dev server (:5173)                 │  │
-│  │ Prod: Serve debug-ui/dist as static files                    │  │
+│  │ Dev: Standalone Vite dev server (:5173)                        │  │
+│  │ Prod: Standalone build (no proxy-adapter static serving)       │  │
 │  └────────────────────────┬─────────────────────────────────────┘  │
 └───────────────────────────┼────────────────────────────────────────┘
                             │
@@ -43,12 +43,12 @@
 
 ### 端口映射
 
-| 服务 | 端口 | 职责 |
-|------|------|------|
-| playwright-server | 3001 | 浏览器控制、截图、DOM 提取 |
-| proxy-adapter | 3000 | AI 编排、任务执行、会话管理 |
-| debug-ui (dev) | 5173 | 前端开发服务器 |
-| debug-ui (prod) | 3000/debug | 由 proxy-adapter 托管静态文件 |
+| 服务              | 端口     | 职责                                |
+| ----------------- | -------- | ----------------------------------- |
+| playwright-server | 3001     | 浏览器控制、截图、DOM 提取          |
+| proxy-adapter     | 3000     | AI 编排、任务执行、会话管理         |
+| debug-ui (dev)    | 5173     | 前端开发服务器                      |
+| debug-ui (prod)   | 独立部署 | 独立构建，不通过 proxy-adapter 托管 |
 
 ## 开发模式 vs 生产模式
 
@@ -59,37 +59,28 @@ Browser (http://localhost:5173)
     │ /api, /ws, /debug/api
     ▼
 proxy-adapter (:3000)
-    │
-    ▼
-Vite dev server (:5173) ← proxy-adapter 代理 /debug* (排除 /debug/api/* 和 /debug/ws)
 ```
 
-**proxy-adapter 行为:**
-- 检测 `isDistRuntime = __dirname.includes('dist')` + `NODE_ENV`
-- 如果非生产模式，注册 `/debug*` fetch 代理
-- 跳过 `/debug/api/*` 和 `/debug/ws`（由 debugRoutes 处理）
-- 过滤 hop-by-hop headers (transfer-encoding, connection, keep-alive 等)
-- 支持二进制响应（arrayBuffer）
+debug-ui 通过 Vite dev server (`:5173`) 独立运行，直接将 `/api`、`/ws`、`/debug/api` 请求代理到 proxy-adapter。proxy-adapter 不再反向代理 `/debug*` 到 Vite。
 
 ### 生产模式
 
 ```
-Browser (http://localhost:3000/debug)
-    │
+Browser → debug-ui (独立部署 / CDN)
+    │ /api, /ws, /debug/api
     ▼
 proxy-adapter (:3000)
     │
     ├─ API routes (health → config → task → chat → ws/chat → ws/debug → api/chat → debug)
     ├─ /debug/api/* → debugRoutes
     ├─ /ws/debug → debugSocketRoutes
-    ├─ /ws/chat → chatSocketRoutes
-    └─ /debug/* (未匹配) → debug-ui/dist (static files)
+    └─ /ws/chat → chatSocketRoutes
 ```
 
 **proxy-adapter 行为:**
-- 注册顺序：API routes 先于 static files（Fastify 路由匹配顺序决定优先级）
-- 静态文件目录查找顺序：`DEBUG_UI_DIST_DIR` env → `../debug-ui/dist` → 其他相对路径
-- 使用 `@fastify/static` 服务 `debug-ui/dist`
+
+- 纯后端 API 服务，不托管前端静态文件
+- `debug-ui/` 为独立前端包，通过 Vite dev server 或独立部署访问
 
 ## 请求代理链
 
@@ -109,12 +100,11 @@ Browser
 
 ```
 Browser
-    │ http://localhost:3000/debug (proxy-adapter 托管)
+    │ http://localhost:5173/debug (debug-ui 独立部署/Vite dev server)
     │
-    ├─ /api/* → proxy-adapter routes
-    ├─ /ws/* → proxy-adapter WebSocket
-    ├─ /debug/api/* → debugRoutes
-    └─ /debug/* (其他) → debug-ui/dist static files
+     ├─ /api/* → proxy-adapter (:3000)
+     ├─ /ws/* → proxy-adapter (:3000)
+     └─ /debug/api/* → proxy-adapter (:3000)
 ```
 
 ### 服务间通信
@@ -132,20 +122,22 @@ playwright-server (:3001)
 ```
 
 **设计原则:**
+
 - proxy-adapter 通过 HTTP 调用 playwright-server（无 WebSocket）
 - 所有浏览器操作统一通过 playwright-server 的 HTTP API
 - playwright-server 不包含业务逻辑，仅控制浏览器
 
 ## WebSocket 通道
 
-| 端点 | 类型 | 用途 |
-|------|------|------|
+| 端点        | 类型 | 用途                                   |
+| ----------- | ---- | -------------------------------------- |
 | `/ws/debug` | 正式 | Debug WebSocket（实时任务/浏览器更新） |
-| `/ws/chat` | 正式 | Chat WebSocket（会话订阅） |
-| `/debug/ws` | 遗留 | Debug WebSocket（兼容旧版本） |
-| `/chat/ws` | 遗留 | Chat WebSocket（兼容旧版本） |
+| `/ws/chat`  | 正式 | Chat WebSocket（会话订阅）             |
+| `/debug/ws` | 遗留 | Debug WebSocket（兼容旧版本）          |
+| `/chat/ws`  | 遗留 | Chat WebSocket（兼容旧版本）           |
 
 **注册顺序:**
+
 ```
 1. await app.register(chatRoutes, { prefix: '/chat' })        // 遗留: /chat/ws
 2. await app.register(chatSocketRoutes, { prefix: '/ws' })     // /ws/chat
@@ -159,11 +151,13 @@ playwright-server (:3001)
 ### SQLite (conversations.sqlite)
 
 **存储内容:**
+
 - 会话 (sessions)
 - 消息 (messages)
 - 事件流 (events)
 
 **使用场景:**
+
 - 会话历史查询
 - SSE 事件持久化（支持断点续传）
 - 失败会话恢复
@@ -171,11 +165,13 @@ playwright-server (:3001)
 ### Filesystem
 
 **存储内容:**
+
 - 日志文件
 - 失败截图
 - 交互日志
 
 **使用场景:**
+
 - 调试信息持久化
 - 失败分析样本
 

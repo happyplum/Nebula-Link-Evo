@@ -7,7 +7,7 @@ Nebula-Link Evo 是一个基于 AI 的浏览器自动化平台，通过视觉感
 ## Architecture
 
 ```
-Browser ←→ Debug UI (:5173 dev / :3000/debug prod)
+Browser ←→ Debug UI (:5173 dev / standalone build)
                   ↕ HTTP/WebSocket
              Proxy Adapter (:3000) → AI Providers (GLM, OpenAI, Anthropic, Kimi, NVIDIA)
                   ↕ HTTP
