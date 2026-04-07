@@ -6,6 +6,7 @@ import {
   TrackPublishOptions,
   TrackSource,
   VideoBufferType,
+  VideoCodec,
   VideoFrame,
   VideoSource,
 } from '@livekit/rtc-node';
@@ -52,6 +53,8 @@ export async function startPublisher(
     const track = LocalVideoTrack.createVideoTrack('browser-screen', videoSource);
     const publishOptions = new TrackPublishOptions();
     publishOptions.source = TrackSource.SOURCE_SCREENSHARE;
+    publishOptions.videoCodec = VideoCodec.VP9;
+    publishOptions.red = false;
 
     if (!room.localParticipant) {
       throw new Error('LiveKit room local participant unavailable');
