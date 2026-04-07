@@ -136,6 +136,7 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
         isOpen: BrowserService.getInstance().isOpen(),
         currentUrl: BrowserService.getInstance().getCurrentUrl(),
         title: await BrowserService.getInstance().getTitle(),
+        viewport: BrowserService.getInstance().getViewport(),
       };
     }
   );

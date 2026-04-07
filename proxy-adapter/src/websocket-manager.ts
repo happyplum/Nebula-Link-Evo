@@ -11,6 +11,7 @@ interface ServiceStatus {
     url?: string;
     title?: string;
     status: 'healthy' | 'unhealthy';
+    viewport?: { width: number; height: number };
   };
   mcp?: {
     enabled: boolean;
@@ -150,6 +151,7 @@ export class DebugWebSocketManager {
         url: status.url,
         title: status.title,
         status: status.isOpen ? 'healthy' : 'unhealthy',
+        viewport: status.viewport,
       };
     } catch {
       return { isOpen: false, status: 'unhealthy' };
@@ -165,10 +167,7 @@ export class DebugWebSocketManager {
         if (this.chatHandler) {
           const ws = this.clients.get(clientId);
           if (ws) {
-            this.chatHandler.handleMessage(
-              message as unknown as ChatMessageData,
-              ws
-            );
+            this.chatHandler.handleMessage(message as unknown as ChatMessageData, ws);
           }
         }
         break;

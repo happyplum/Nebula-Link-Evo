@@ -130,7 +130,11 @@ export class BrowserClient {
     });
   }
 
-  async dispatchEventByMarker(snapshotId: string, nebulaId: number, eventType: string): Promise<void> {
+  async dispatchEventByMarker(
+    snapshotId: string,
+    nebulaId: number,
+    eventType: string
+  ): Promise<void> {
     await axios.post(`${PLAYWRIGHT_URL}/action/execute-by-marker`, {
       snapshot_id: snapshotId,
       nebula_id: nebulaId,
@@ -195,13 +199,19 @@ export class BrowserClient {
     }
   }
 
-  async getStatus(): Promise<{ isOpen: boolean; url?: string; title?: string }> {
+  async getStatus(): Promise<{
+    isOpen: boolean;
+    url?: string;
+    title?: string;
+    viewport?: { width: number; height: number };
+  }> {
     try {
       const response = await axios.get(`${PLAYWRIGHT_URL}/browser/status`);
       return {
         isOpen: response.data.isOpen || false,
         url: response.data.currentUrl || response.data.url,
         title: response.data.title,
+        viewport: response.data.viewport,
       };
     } catch {
       return { isOpen: false };
@@ -237,14 +247,16 @@ export class BrowserClient {
       if (dom.elements_map && typeof dom.elements_map === 'object') {
         // v2.0 format: Record<string, ElementLocator>
         console.log('[BrowserClient] Using v2.0 format (Record)');
-        domElements = Object.values(dom.elements_map).map((info: ElementLocator): PageStateElement => ({
-          tag: info.tag,
-          text: info.text,
-          bbox: info.bbox,
-          // v2.0 doesn't have isVisible/isInteractable, default to true
-          isVisible: true,
-          isInteractable: true,
-        }));
+        domElements = Object.values(dom.elements_map).map(
+          (info: ElementLocator): PageStateElement => ({
+            tag: info.tag,
+            text: info.text,
+            bbox: info.bbox,
+            // v2.0 doesn't have isVisible/isInteractable, default to true
+            isVisible: true,
+            isInteractable: true,
+          })
+        );
       } else {
         console.warn('[BrowserClient] Invalid elements_map format:', typeof dom.elements_map);
       }

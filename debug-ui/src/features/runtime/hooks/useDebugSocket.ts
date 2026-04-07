@@ -9,6 +9,7 @@ interface ServiceStatusPayload {
     isOpen: boolean;
     url?: string;
     status?: 'healthy' | 'unhealthy';
+    viewport?: { width: number; height: number };
   };
   mcp?: unknown;
 }
@@ -79,6 +80,10 @@ function syncPlaywrightState(payload: ServiceStatusPayload['playwright']) {
 
   if (payload.status !== undefined) {
     runtime.setPlaywrightStatus(payload.status === 'healthy' ? 'ready' : 'unhealthy');
+  }
+
+  if (payload.viewport) {
+    control.setViewport(payload.viewport);
   }
 }
 
