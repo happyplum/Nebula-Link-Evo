@@ -5,7 +5,7 @@ import { TIMEOUTS } from '../constants';
  * Debug UI test utility functions (React selectors)
  */
 
-export const DEBUG_UI_URL = process.env.DEBUG_UI_URL || 'http://localhost:3000/debug';
+export const DEBUG_UI_URL = process.env.DEBUG_UI_URL || 'http://localhost:5173/debug';
 export const API_URL = process.env.API_URL || 'http://localhost:3000/api';
 export const WS_URL = process.env.WS_URL || 'ws://localhost:3000/ws/debug';
 
@@ -83,7 +83,11 @@ export async function waitForElement(page: Page, selector: string, timeout = 500
 /**
  * Wait for element to be hidden or removed
  */
-export async function waitForElementToBeHidden(page: Page, selector: string, timeout = 5000): Promise<void> {
+export async function waitForElementToBeHidden(
+  page: Page,
+  selector: string,
+  timeout = 5000
+): Promise<void> {
   await page.waitForSelector(selector, { state: 'hidden', timeout });
 }
 
@@ -108,14 +112,24 @@ export async function clickAndWait(
 /**
  * Fill an input field with typing delay
  */
-export async function fillInput(page: Page, selector: string, value: string, delay = 50): Promise<void> {
+export async function fillInput(
+  page: Page,
+  selector: string,
+  value: string,
+  delay = 50
+): Promise<void> {
   await page.fill(selector, value);
 }
 
 /**
  * Type into an input field character by character
  */
-export async function typeInput(page: Page, selector: string, value: string, delay = 50): Promise<void> {
+export async function typeInput(
+  page: Page,
+  selector: string,
+  value: string,
+  delay = 50
+): Promise<void> {
   await page.type(selector, value, { delay });
 }
 
@@ -243,15 +257,20 @@ export async function reloadPage(page: Page): Promise<void> {
  * Submit a task via the Control Panel
  * TODO: React refactor — new ControlPanel uses action-button-navigate
  */
-export async function submitTask(page: Page, task: { url: string; instruction: string }): Promise<void> {
+export async function submitTask(
+  page: Page,
+  task: { url: string; instruction: string }
+): Promise<void> {
   const navigateBtn = page.locator('[data-testid="action-button-navigate"]');
-  const input = page.locator('[data-testid="action-button-navigate"]')
-    .locator('..').locator('input[type="text"]');
+  const input = page
+    .locator('[data-testid="action-button-navigate"]')
+    .locator('..')
+    .locator('input[type="text"]');
 
-  if (await input.count() > 0) {
+  if ((await input.count()) > 0) {
     await input.fill(task.url);
   }
-  if (await navigateBtn.count() > 0) {
+  if ((await navigateBtn.count()) > 0) {
     await navigateBtn.click();
   }
 }

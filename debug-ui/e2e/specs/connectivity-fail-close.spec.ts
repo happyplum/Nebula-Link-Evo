@@ -12,7 +12,7 @@ import { test, expect } from '@playwright/test';
 test.describe.skip('Connectivity Fail-Close', () => {
   test.beforeEach(async ({ page }) => {
     // Navigate to Debug UI and ensure page is loaded
-    await page.goto('http://localhost:3000/debug');
+    await page.goto('http://localhost:5173/debug');
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(1000);
 
@@ -37,7 +37,7 @@ test.describe.skip('Connectivity Fail-Close', () => {
 
   test('should display connectivity test button', async ({ page }) => {
     // Navigate to root debug page (not chat)
-    await page.goto('http://localhost:3000/debug');
+    await page.goto('http://localhost:5173/debug');
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(1000);
 
@@ -56,7 +56,7 @@ test.describe.skip('Connectivity Fail-Close', () => {
         (window as any).fetchConfig();
       }
     });
-    
+
     // Wait for config to be loaded
     await page.waitForTimeout(2000);
 
@@ -117,8 +117,8 @@ test.describe.skip('Connectivity Fail-Close', () => {
         body: JSON.stringify({
           ok: false,
           message: 'Connection failed',
-          latencyMs: 100
-        })
+          latencyMs: 100,
+        }),
       });
     });
 
@@ -172,8 +172,8 @@ test.describe.skip('Connectivity Fail-Close', () => {
         body: JSON.stringify({
           ok: false,
           message: 'Connection failed',
-          latencyMs: 100
-        })
+          latencyMs: 100,
+        }),
       });
     });
 
@@ -207,8 +207,8 @@ test.describe.skip('Connectivity Fail-Close', () => {
         body: JSON.stringify({
           ok: true,
           message: 'Connection successful',
-          latencyMs: 50
-        })
+          latencyMs: 50,
+        }),
       });
     });
 
@@ -251,8 +251,8 @@ test.describe.skip('Connectivity Fail-Close', () => {
         body: JSON.stringify({
           ok: false,
           message: 'Connection failed',
-          latencyMs: 100
-        })
+          latencyMs: 100,
+        }),
       });
     });
 
@@ -294,8 +294,8 @@ test.describe.skip('Connectivity Fail-Close', () => {
         body: JSON.stringify({
           ok: true,
           message: 'Connection successful',
-          latencyMs: 45
-        })
+          latencyMs: 45,
+        }),
       });
     });
 
@@ -327,8 +327,8 @@ test.describe.skip('Connectivity Fail-Close', () => {
         body: JSON.stringify({
           ok: false,
           message: 'Timeout',
-          latencyMs: 3000
-        })
+          latencyMs: 3000,
+        }),
       });
     });
 

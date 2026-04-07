@@ -48,7 +48,7 @@ export const test = base.extend<{
   // Provide test configuration options
   testOptions: async ({}, use) => {
     const options: TestOptions = {
-      debugURL: process.env.DEBUG_UI_URL || 'http://localhost:3000/debug',
+      debugURL: process.env.DEBUG_UI_URL || 'http://localhost:5173/debug',
       apiURL: process.env.PROXY_API_URL || 'http://localhost:3000/api',
     };
     await use(options);
