@@ -56,6 +56,13 @@ export async function startPublisher(
     publishOptions.videoCodec = VideoCodec.H264;
     publishOptions.red = false;
 
+    // Use fromJson to properly instantiate nested protobuf VideoEncoding message
+    // (plain objects lack toBinary and break protobuf serialization)
+    const encodingHolder = TrackPublishOptions.fromJson({
+      videoEncoding: { maxBitrate: '20000000', maxFramerate: 15 },
+    });
+    publishOptions.videoEncoding = encodingHolder.videoEncoding;
+
     if (!room.localParticipant) {
       throw new Error('LiveKit room local participant unavailable');
     }
