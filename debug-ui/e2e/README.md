@@ -11,6 +11,7 @@ This directory contains end-to-end tests for the Debug UI interface using Playwr
 ## Testing Approach
 
 Tests in this directory verify the Debug UI functionality including:
+
 - Task execution visualization
 - Real-time log streaming
 - Browser interaction controls
@@ -19,14 +20,17 @@ Tests in this directory verify the Debug UI functionality including:
 ## Running Tests
 
 ```bash
-# Run all Debug UI E2E tests
-pnpm test:debug-ui
+# From repo root: run all Debug UI E2E tests
+pnpm --filter debug-ui test:e2e
+
+# From debug-ui/: run all Debug UI E2E tests
+pnpm test:e2e
 
 # Run specific test file
-pnpm test:debug-ui <test-file>
+pnpm --filter debug-ui exec playwright test e2e/specs/page-load.spec.ts
 
 # Run with headed browser
-pnpm test:debug-ui --headed
+pnpm --filter debug-ui exec playwright test --headed
 ```
 
 ## Notes

@@ -13,7 +13,7 @@ import { test, expect } from '@playwright/test';
 test.describe.skip('Message Recovery on Page Refresh', () => {
   test.beforeEach(async ({ page }) => {
     // Navigate to Debug UI and ensure page is loaded
-    await page.goto('http://localhost:3000/debug/#/chat');
+    await page.goto('http://localhost:5173/debug/#/chat');
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(500);
   });
@@ -190,8 +190,8 @@ test.describe.skip('Message Recovery on Page Refresh', () => {
 
     // Capture message order before refresh
     const messagesBefore = await chatMessages.allTextContents();
-    const orderBefore = testMessages.map(msg =>
-      messagesBefore.findIndex(content => content.includes(msg))
+    const orderBefore = testMessages.map((msg) =>
+      messagesBefore.findIndex((content) => content.includes(msg))
     );
 
     // Refresh page
@@ -200,8 +200,8 @@ test.describe.skip('Message Recovery on Page Refresh', () => {
 
     // Capture message order after refresh
     const messagesAfter = await chatMessages.allTextContents();
-    const orderAfter = testMessages.map(msg =>
-      messagesAfter.findIndex(content => content.includes(msg))
+    const orderAfter = testMessages.map((msg) =>
+      messagesAfter.findIndex((content) => content.includes(msg))
     );
 
     // Verify order is preserved
