@@ -5,7 +5,7 @@ import { defineConfig, devices } from '@playwright/test';
  * Uses existing running servers
  */
 export default defineConfig({
-  testDir: './src/__tests__/e2e/debug-ui/specs',
+  testDir: './e2e/specs',
   timeout: 30 * 1000,
   expect: { timeout: 5000 },
   fullyParallel: true,
@@ -14,7 +14,7 @@ export default defineConfig({
   workers: undefined,
   reporter: [['list']],
   use: {
-    baseURL: 'http://localhost:5173/debug/',
+    baseURL: 'http://localhost:5173/debug',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
