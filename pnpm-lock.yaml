@@ -12,12 +12,6 @@ catalogs:
     '@fastify/cors':
       specifier: ^11.1.0
       version: 11.2.0
-    '@fastify/middie':
-      specifier: ^9.1.0
-      version: 9.1.0
-    '@fastify/static':
-      specifier: ^9.0.0
-      version: 9.0.0
     '@fastify/swagger':
       specifier: ^9.7.0
       version: 9.7.0
@@ -147,6 +141,9 @@ importers:
         specifier: ^5.0.12
         version: 5.0.12(@types/react@19.2.14)(react@19.2.4)
     devDependencies:
+      '@playwright/test':
+        specifier: ^1.58.2
+        version: 1.58.2
       '@testing-library/jest-dom':
         specifier: ^6.9.1
         version: 6.9.1
@@ -262,12 +259,6 @@ importers:
       '@fastify/cors':
         specifier: 'catalog:'
         version: 11.2.0
-      '@fastify/middie':
-        specifier: 'catalog:'
-        version: 9.1.0
-      '@fastify/static':
-        specifier: 'catalog:'
-        version: 9.0.0
       '@fastify/swagger':
         specifier: 'catalog:'
         version: 9.7.0
@@ -323,9 +314,6 @@ importers:
         specifier: 'catalog:'
         version: 4.3.6
     devDependencies:
-      '@playwright/test':
-        specifier: ^1.58.2
-        version: 1.58.2
       '@types/js-yaml':
         specifier: ^4.0.9
         version: 4.0.9
@@ -917,9 +905,6 @@ packages:
 
   '@fastify/merge-json-schemas@0.2.1':
     resolution: {integrity: sha512-OA3KGBCy6KtIvLf8DINC5880o5iBlDX4SxzLQS8HorJAbqluzLRn80UXU0bxZn7UOFhFgpRJDasfwn9nG4FG4A==}
-
-  '@fastify/middie@9.1.0':
-    resolution: {integrity: sha512-cObruXSFB5CCqn2m9sF5ktf6pNQX+QQth2N39FGXXV+8M4O+dWzkvqjqzwpIWvwvIffP9+O7KaLN+5xVgFFdWw==}
 
   '@fastify/proxy-addr@5.1.0':
     resolution: {integrity: sha512-INS+6gh91cLUjB+PVHfu1UqcB76Sqtpyp7bnL+FYojhjygvOPA9ctiD/JDKsyD9Xgu4hUhCSJBPig/w7duNajw==}
@@ -3718,14 +3703,6 @@ snapshots:
   '@fastify/merge-json-schemas@0.2.1':
     dependencies:
       dequal: 2.0.3
-
-  '@fastify/middie@9.1.0':
-    dependencies:
-      '@fastify/error': 4.2.0
-      fastify-plugin: 5.1.0
-      find-my-way: 9.5.0
-      path-to-regexp: 8.3.0
-      reusify: 1.1.0
 
   '@fastify/proxy-addr@5.1.0':
     dependencies:

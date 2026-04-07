@@ -12,9 +12,6 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui",
-    "test:e2e:debug": "playwright test --debug",
     "test:debug": "node tests/debug-page-test.cjs",
     "test:agent": "node tests/agent-mcp-test.cjs"
   },
@@ -25,8 +22,6 @@
     "execa": "^9.0.0",
     "@fastify/autoload": "catalog:",
     "@fastify/cors": "catalog:",
-    "@fastify/middie": "catalog:",
-    "@fastify/static": "catalog:",
     "@fastify/swagger": "catalog:",
     "@fastify/swagger-ui": "catalog:",
     "@fastify/type-provider-typebox": "catalog:",
@@ -45,7 +40,6 @@
     "livekit-server-sdk": "catalog:"
   },
   "devDependencies": {
-    "@playwright/test": "^1.58.2",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "catalog:",
     "@types/ws": "catalog:",
