@@ -5,51 +5,24 @@ import { defineConfig, devices } from '@playwright/test';
  * Test configuration without webServer auto-start
  */
 export default defineConfig({
-  testDir: './src/__tests__/e2e/debug-ui/specs',
+  testDir: './e2e/specs',
 
-  // Timeout settings
   timeout: 60 * 1000,
   expect: {
     timeout: 10000,
   },
-
-  // Run tests in parallel
   fullyParallel: false,
-
-  // Fail if build on CI if you accidentally left test.only in the source code
   forbidOnly: !!process.env.CI,
-
-  // Retry on CI only
   retries: process.env.CI ? 2 : 0,
-
-  // Opt out of parallel tests on CI
   workers: process.env.CI ? 1 : undefined,
-
-  // Reporter configuration
-  reporter: [
-    ['line'],
-    ['html', { outputFolder: 'playwright-report/html' }],
-  ],
-
-  // Shared settings for all projects
+  reporter: [['line'], ['html', { outputFolder: 'playwright-report/html' }]],
   use: {
-    // Base URL for the Debug UI
-    baseURL: 'http://localhost:3000/debug',
-
-    // Collect trace on failure
+    baseURL: 'http://localhost:5173/debug',
     trace: 'on-first-retry',
-
-    // Screenshot on failure
     screenshot: 'only-on-failure',
-
-    // Video on failure
     video: 'retain-on-failure',
-
-    // Actionability checks
     actionTimeout: 10000,
   },
-
-  // Configure projects for major browsers
   projects: [
     {
       name: 'chromium',
@@ -62,9 +35,9 @@ export default defineConfig({
 
   // webServer is disabled - services must be started manually
   // webServer: {
-  //   command: 'pnpm dev',
-  //   url: 'http://localhost:3000',
+  //   command: 'pnpm -C .. dev',
+  //   url: 'http://localhost:5173/debug/',
   //   reuseExistingServer: !process.env.CI,
-  //   timeout: 60 * 1000,
+  //   timeout: 180 * 1000,
   // },
 });
