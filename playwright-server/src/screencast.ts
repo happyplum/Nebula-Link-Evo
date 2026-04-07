@@ -118,6 +118,11 @@ export class ScreencastManager {
       return;
     }
 
+    // Skip frame decode and distribution when all listeners are backed up
+    if (this.listeners.size > 0 && this.listeners.size === this.backedUpListeners.size) {
+      return;
+    }
+
     const frameData = Buffer.from(event.data, 'base64');
     const mjpegFrame = this.formatMjpegFrame(frameData);
 
