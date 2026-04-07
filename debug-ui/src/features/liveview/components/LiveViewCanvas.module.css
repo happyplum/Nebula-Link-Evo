@@ -9,16 +9,16 @@
   background: var(--bg-secondary);
 }
 
-.renderCanvas {
+.renderCanvas,
+.overlayCanvas {
   position: absolute;
-  left: 0;
-  top: 0;
-  z-index: 1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
 
-.overlayCanvas {
-  z-index: 2;
-  pointer-events: auto;
+.renderCanvas {
+  z-index: 1;
 }
 
 .overlayCanvasInteractive {
