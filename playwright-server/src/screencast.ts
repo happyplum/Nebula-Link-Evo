@@ -94,6 +94,7 @@ export class ScreencastManager {
 
   removeListener(res: ServerResponse): void {
     this.listeners.delete(res);
+    this.backedUpListeners.delete(res);
     console.log(`[Screencast] Listener removed. Total: ${this.listeners.size}`);
   }
 
