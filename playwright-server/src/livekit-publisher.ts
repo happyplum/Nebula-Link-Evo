@@ -29,6 +29,12 @@ let room: Room | null = null;
 let videoSource: VideoSource | null = null;
 let cdpSession: CDPSession | null = null;
 let isPublishing = false;
+let frameTimestampUs = 0n;
+let publishWidth = 0;
+let publishHeight = 0;
+
+// ~66ms per frame at 15fps
+const FRAME_INTERVAL_US = 66_666n;
 
 export async function startPublisher(
   page: Page,
@@ -39,9 +45,12 @@ export async function startPublisher(
   }
 
   isPublishing = true;
+  frameTimestampUs = 0n;
 
   try {
     const { width, height } = options;
+    publishWidth = width;
+    publishHeight = height;
 
     room = new Room();
     await room.connect(LIVEKIT_URL, await generateToken(), {
@@ -108,10 +117,12 @@ async function handleScreencastFrame(event: ScreencastFrameEvent): Promise<void>
   }
 
   try {
-    const jpegBuffer = Buffer.from(event.data, 'base64');
-    const { data, info } = await sharp(jpegBuffer).ensureAlpha().raw().toBuffer({
-      resolveWithObject: true,
-    });
+    const frameBuffer = Buffer.from(event.data, 'base64');
+    const { data, info } = await sharp(frameBuffer)
+      .ensureAlpha()
+      .resize(publishWidth, publishHeight, { fit: 'fill' })
+      .raw()
+      .toBuffer({ resolveWithObject: true });
 
     const frame = new VideoFrame(
       new Uint8Array(data.buffer, data.byteOffset, data.byteLength),
@@ -120,7 +131,8 @@ async function handleScreencastFrame(event: ScreencastFrameEvent): Promise<void>
       VideoBufferType.RGBA
     );
 
-    videoSource.captureFrame(frame, BigInt(0), undefined);
+    frameTimestampUs += FRAME_INTERVAL_US;
+    videoSource.captureFrame(frame, frameTimestampUs, undefined);
   } catch (error) {
     console.error('[LiveKitPublisher] Frame error:', error);
   }

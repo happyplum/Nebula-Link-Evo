@@ -61,17 +61,19 @@ export default function LiveKitView({
         return;
       }
 
-      // Use page viewport dimensions for coordinate mapping, fallback to video resolution
-      const imgW = pageViewport?.width ?? videoWidth;
-      const imgH = pageViewport?.height ?? videoHeight;
-      const scale = Math.min(clientWidth / videoWidth, clientHeight / videoHeight);
+      const dpr = window.devicePixelRatio || 1;
+      const canvasW = clientWidth * dpr;
+      const canvasH = clientHeight * dpr;
+      const scale = Math.min(canvasW / videoWidth, canvasH / videoHeight);
       const drawWidth = videoWidth * scale;
       const drawHeight = videoHeight * scale;
-      const offsetX = (clientWidth - drawWidth) / 2;
-      const offsetY = (clientHeight - drawHeight) / 2;
+      const offsetX = (canvasW - drawWidth) / 2;
+      const offsetY = (canvasH - drawHeight) / 2;
 
+      const imgW = pageViewport?.width ?? videoWidth;
+      const imgH = pageViewport?.height ?? videoHeight;
       setFitRect(getImageFitRect(imgW, imgH, clientWidth, clientHeight));
-      ctx.clearRect(0, 0, clientWidth, clientHeight);
+      ctx.clearRect(0, 0, canvasW, canvasH);
       ctx.drawImage(currentVideo, offsetX, offsetY, drawWidth, drawHeight);
 
       if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
