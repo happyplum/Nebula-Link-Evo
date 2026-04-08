@@ -35,8 +35,8 @@ export function useLiveKit(): UseLiveKitReturn {
       disconnect();
 
       const room = new Room({
-        adaptiveStream: true,
-        dynacast: true,
+        adaptiveStream: false,
+        dynacast: false,
       });
 
       room.on(RoomEvent.Connected, () => {
