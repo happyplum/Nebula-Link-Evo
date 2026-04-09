@@ -2,7 +2,7 @@
 
 ## Overview
 
-React 19 frontend for `/debug`. Dev server on `:5173`, production assets served by `proxy-adapter` at `/debug/`.
+React 19 frontend for `/debug`. Dev server on `:5173`; production is a standalone build accessed directly.
 
 ## Commands
 
@@ -21,6 +21,7 @@ pnpm type-check   # tsc --noEmit
 | App shell   | `src/app/`            | App.tsx, routes, layout                                                                          |
 | Features    | `src/features/`       | Feature-based architecture: layout, runtime, chat, playwright-control, config, history, liveview |
 | Shared UI   | `src/shared/`         | Reusable components, hooks, utilities, testids                                                   |
+| E2E         | `e2e/`                | Playwright specs, custom fixtures, websocket monitoring                                          |
 | Styles      | `src/**/*.module.css` | CSS Modules for component styling                                                                |
 | Tests       | `src/**/*.test.tsx`   | Vitest unit tests                                                                                |
 
@@ -75,4 +76,9 @@ pnpm type-check   # tsc --noEmit
 
 ## Child AGENTS
 
-- `src/features/*/AGENTS.md` — feature-level guidance
+- `src/features/AGENTS.md` — feature-level guidance
+- `src/features/chat/AGENTS.md` — SSE + optimistic chat streaming
+- `src/features/runtime/AGENTS.md` — shared debug WebSocket lifecycle
+- `src/features/liveview/AGENTS.md` — MJPEG canvas and overlay rules
+- `src/features/playwright-control/AGENTS.md` — browser control/store rules
+- `e2e/AGENTS.md` — Playwright fixture and parity/e2e rules
