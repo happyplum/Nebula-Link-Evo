@@ -38,5 +38,6 @@ Backend source for task execution, AI clients, conversations, debug APIs, and we
 - `services/AGENTS.md`
 - `clients/AGENTS.md`
 - `conversation/AGENTS.md`
+- `config/AGENTS.md`
 - `plugins/AGENTS.md`
 - `__tests__/AGENTS.md`

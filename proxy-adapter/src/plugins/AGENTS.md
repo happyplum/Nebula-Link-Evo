@@ -1,9 +1,11 @@
 # Plugins
 
 ## Overview
+
 Fastify plugins and route tree for API, chat, debug, and websocket endpoints.
 
 ## Structure
+
 ```
 plugins/
 ├── 01-cors.plugin.ts           # CORS setup
@@ -31,12 +33,18 @@ plugins/
 ```
 
 ## Working Rules
+
 - Keep handlers thin — delegate to services/chat handlers.
 - Preserve route registration order for `/debug`, `/api/chat`, `/ws/*`.
 - Keep compatibility shims explicit and documented.
 - Use TypeBox/Fastify schema where existing routes already do.
 
 ## Anti-Patterns
+
 - No large business workflows directly inside plugins.
 - No duplicate websocket endpoints without deprecation plan.
 - No stale references to old embedded Debug UI layout.
+
+## Child AGENTS
+
+- `routes/api/chat/AGENTS.md`
