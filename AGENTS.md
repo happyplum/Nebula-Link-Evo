@@ -1,7 +1,7 @@
 # Nebula-Link Evo - Agent Knowledge Base
 
-**Generated:** 2026-03-28
-**Commit:** 862f182
+**Generated:** 2026-04-09
+**Commit:** 636024d
 **Branch:** main
 
 ## Overview
@@ -17,21 +17,25 @@ Monorepo: browser automation system with AI orchestration. Four pnpm workspace p
 ├── playwright-server/     # Browser automation HTTP/WS service
 ├── shared/                # Workspace package: @nebula-link-evo/shared
 ├── config/                # Cross-service config (not a package)
+├── skills/                # YAML workflow definitions (extract-data, google-search)
+├── tools/                 # Utility scripts (livekit/)
 └── docs/                  # Documentation
 ```
 
 ## Where To Look
 
-| Task             | Location                                     | Notes                                      |
-| ---------------- | -------------------------------------------- | ------------------------------------------ |
-| Frontend source  | `debug-ui/src/`                              | React app: app/, features/, shared/        |
-| Backend entry    | `proxy-adapter/src/server.ts`                | Env load, routes, WebSocket                |
-| Task execution   | `proxy-adapter/src/services/`                | TaskService, Orchestrator, StepRunner      |
-| AI providers     | `proxy-adapter/src/clients/`                 | Decision + vision factories, Vercel AI SDK |
-| Chat/session API | `proxy-adapter/src/plugins/routes/api/chat/` | Sessions, stream, control                  |
-| Browser control  | `playwright-server/src/services/`            | BrowserService singleton                   |
-| Shared types     | `shared/types/`                              | Action, SSE, task, vision marker           |
-| Shared utils     | `shared/utils/`                              | UUID, selector, metrics                    |
+| Task               | Location                                               | Notes                                                      |
+| ------------------ | ------------------------------------------------------ | ---------------------------------------------------------- |
+| Frontend source    | `debug-ui/src/`                                        | React app: app/, features/, shared/                        |
+| Frontend streaming | `debug-ui/src/features/chat/`, `runtime/`, `liveview/` | SSE, shared WebSocket, MJPEG/live overlay                  |
+| Backend entry      | `proxy-adapter/src/server.ts`                          | Env load, provider preflight, routes, WebSocket            |
+| Task execution     | `proxy-adapter/src/services/`                          | TaskService, orchestrator, step runner, persistence        |
+| Provider loading   | `proxy-adapter/src/services/provider/`                 | `@ai-sdk/*` normalization, registry, dynamic install guard |
+| Chat/session API   | `proxy-adapter/src/plugins/routes/api/chat/`           | Sessions, SSE bootstrap, control, runtime state            |
+| Browser control    | `playwright-server/src/services/`                      | BrowserService, lifecycle, marker actions, DOM cache       |
+| Browser tests      | `playwright-server/src/__tests__/`                     | Real `app.inject()` integration plus service/unit coverage |
+| Shared types       | `shared/types/`                                        | Action, SSE, task, vision marker                           |
+| Shared utils       | `shared/utils/`                                        | UUID, selector, metrics                                    |
 
 ## Commands
 
@@ -54,6 +58,15 @@ stop.bat              # Windows: kill listeners on 3000, 3001, 5173
 - `proxy-adapter` owns HTTP APIs, WebSocket, AI orchestration. Talks to playwright-server over HTTP.
 - `playwright-server` owns Playwright/browser control. No business logic from proxy-adapter.
 - `shared` is the cross-package contract. Import as `@nebula-link-evo/shared`.
+
+## Runtime Orchestration
+
+- Build order is strict: `shared` → `debug-ui` → `playwright-server` → `proxy-adapter`.
+- `pnpm dev` builds `shared` first, then runs the three services in parallel.
+- `start.bat` production flow is sequential: build `shared`, start LiveKit, verify ports, then build/start `playwright-server` and `proxy-adapter`.
+- `stop.bat` uses forceful `taskkill /F`; shutdown hooks do not get graceful time.
+- `proxy-adapter` startup is ordered: DB backup init (outside tests), `TaskService.initialize()`, provider preflight, conversation manager, then chat/session route surfaces.
+- Chat resume is checkpoint-based; SSE clients reconnect for a fresh `session.snapshot` instead of `Last-Event-ID` replay.
 
 ## Conventions
 
