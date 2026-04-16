@@ -339,6 +339,79 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     }
   );
 
+  fastify.get(
+    '/api/playwright/tabs',
+    {
+      schema: {
+        description: 'Get browser open tabs',
+        tags: ['Debug'],
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              tabs: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    url: { type: 'string' },
+                    title: { type: 'string' },
+                    isActive: { type: 'boolean' }
+                  }
+                }
+              }
+            },
+          },
+        },
+      },
+    },
+    async () => {
+      try {
+        const tabs = await browserClient.getTabs();
+        return { success: true, tabs };
+      } catch (error) {
+        return { success: false, tabs: [], error: (error as Error).message };
+      }
+    }
+  );
+
+  fastify.post(
+    '/api/playwright/tabs/switch',
+    {
+      schema: {
+        description: 'Switch to a specific browser tab',
+        tags: ['Debug'],
+        body: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' }
+          },
+          required: ['id']
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              message: { type: 'string' },
+            },
+          },
+        },
+      },
+    },
+    async (request, _reply) => {
+      const { id } = request.body as { id: string };
+      try {
+        await browserClient.switchTab(id);
+        return { success: true, message: `已切换到标签页` };
+      } catch (error) {
+        return { success: false, error: (error as Error).message };
+      }
+    }
+  );
+
   fastify.post(
     '/api/playwright/navigate',
     {
