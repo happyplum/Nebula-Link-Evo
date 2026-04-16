@@ -5,6 +5,8 @@ import {
   BrowserNavigateRequestSchema,
   BrowserStatusResponseSchema,
   ScreenshotResponseSchema,
+  BrowserTabsResponseSchema,
+  BrowserSwitchTabRequestSchema,
 } from '../../schemas/browser.js';
 import { SuccessResponseSchema, ErrorResponseSchema } from '../../schemas/common.js';
 
@@ -138,6 +140,56 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
         title: await BrowserService.getInstance().getTitle(),
         viewport: BrowserService.getInstance().getViewport(),
       };
+    }
+  );
+
+  fastify.get(
+    '/tabs',
+    {
+      schema: {
+        description: 'Get list of all open tabs',
+        tags: ['Browser'],
+        summary: 'Get browser tabs',
+        response: {
+          200: BrowserTabsResponseSchema,
+          500: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const tabs = await BrowserService.getInstance().getTabs();
+        return { tabs };
+      } catch (error) {
+        reply.status(500);
+        return { success: false, error: (error as Error).message };
+      }
+    }
+  );
+
+  fastify.post(
+    '/tabs/switch',
+    {
+      schema: {
+        description: 'Switch to a specific tab',
+        tags: ['Browser'],
+        summary: 'Switch browser tab',
+        body: BrowserSwitchTabRequestSchema,
+        response: {
+          200: SuccessResponseSchema,
+          500: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const body = request.body as any;
+        await BrowserService.getInstance().switchTab(body.id);
+        return { success: true, message: 'Switched tab successfully' };
+      } catch (error) {
+        reply.status(500);
+        return { success: false, error: (error as Error).message };
+      }
     }
   );
 };

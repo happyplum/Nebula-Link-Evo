@@ -1,4 +1,5 @@
 import { chromium, Browser, Page, BrowserContext } from 'playwright';
+import * as crypto from 'node:crypto';
 import { startPublisher, stopPublisher } from '../livekit-publisher.js';
 
 export interface BrowserState {
@@ -34,6 +35,7 @@ export class BrowserLifecycle {
     lastViewport: null,
     lastCdpPort: null,
   };
+  private pageIds = new WeakMap<Page, string>();
 
   private onStateChange: ((reason: StateChangeReason) => void) | null = null;
   private handlePageClose = (): void => {
@@ -87,6 +89,59 @@ export class BrowserLifecycle {
     return this.state.page?.title();
   }
 
+  async getTabs(): Promise<Array<{ id: string; url: string; title: string; isActive: boolean }>> {
+    if (!this.state.context) return [];
+    
+    const pages = this.state.context.pages();
+    const tabs = [];
+    
+    for (const p of pages) {
+      if (!this.pageIds.has(p)) {
+        this.pageIds.set(p, crypto.randomUUID());
+      }
+      tabs.push({
+        id: this.pageIds.get(p)!,
+        url: p.url(),
+        title: await p.title(),
+        isActive: p === this.state.page,
+      });
+    }
+    return tabs;
+  }
+
+  async switchTab(id: string): Promise<Page> {
+    if (!this.state.context) throw new Error('Browser not opened');
+    
+    const pages = this.state.context.pages();
+    const targetPage = pages.find((p) => this.pageIds.get(p) === id);
+    
+    if (!targetPage) {
+      throw new Error(`Tab with id ${id} not found`);
+    }
+
+    if (this.state.page === targetPage) {
+      return targetPage;
+    }
+
+    await targetPage.bringToFront();
+    
+    // Refresh livekit publisher for the new page
+    if (this.state.page) {
+      await stopPublisher().catch(() => {});
+    }
+    
+    this.state.page = targetPage;
+    this.state.page.on('close', this.handlePageClose);
+
+    if (this.state.lastViewport) {
+      void startPublisher(this.state.page, this.state.lastViewport).catch((err) => {
+        console.warn('[LiveKit] Publisher failed to restart for new tab:', err);
+      });
+    }
+
+    return targetPage;
+  }
+
   async open(options: OpenBrowserOptions = {}): Promise<void> {
     const { headless = false, viewport = { width: 1920, height: 1080 }, cdpPort } = options;
     const nextCdpPort = cdpPort ?? 0;
@@ -137,6 +192,7 @@ export class BrowserLifecycle {
           deviceScaleFactor: 1,
         });
         this.state.page = await this.state.context.newPage();
+        this.pageIds.set(this.state.page, crypto.randomUUID());
         this.state.page.on('close', this.handlePageClose);
         this.state.lastViewport = { ...viewport };
         void startPublisher(this.state.page, viewport).catch((err) => {
@@ -173,6 +229,7 @@ export class BrowserLifecycle {
     });
 
     this.state.page = await this.state.context.newPage();
+    this.pageIds.set(this.state.page, crypto.randomUUID());
     this.state.page.on('close', this.handlePageClose);
     this.state.lastHeadless = headless;
     this.state.lastViewport = { ...viewport };
