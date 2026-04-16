@@ -218,6 +218,19 @@ export class BrowserClient {
     }
   }
 
+  async getTabs(): Promise<Array<{ id: string; url: string; title: string; isActive: boolean }>> {
+    try {
+      const response = await axios.get(`${PLAYWRIGHT_URL}/browser/tabs`);
+      return response.data.tabs || [];
+    } catch {
+      return [];
+    }
+  }
+
+  async switchTab(id: string): Promise<void> {
+    await axios.post(`${PLAYWRIGHT_URL}/browser/tabs/switch`, { id });
+  }
+
   async getElementAt(x: number, y: number): Promise<ElementInfo | null> {
     const response = await axios.get(`${PLAYWRIGHT_URL}/dom/element-at`, {
       params: { x, y },
