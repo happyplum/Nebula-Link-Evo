@@ -16,6 +16,8 @@ import {
   DEBUG_PLAYWRIGHT_SCREENSHOT,
   DEBUG_PLAYWRIGHT_SCROLL,
   DEBUG_PLAYWRIGHT_STATUS,
+  DEBUG_PLAYWRIGHT_TABS,
+  DEBUG_PLAYWRIGHT_SWITCH_TAB,
 } from '@/shared/api/endpoints.js';
 
 export interface ActionResponse {
@@ -28,6 +30,12 @@ export interface StatusResponse {
   success: boolean;
   isOpen?: boolean;
   url?: string;
+  error?: string;
+}
+
+export interface TabsResponse {
+  success: boolean;
+  tabs?: Array<{ id: string; url: string; title: string; isActive: boolean }>;
   error?: string;
 }
 
@@ -212,6 +220,16 @@ export async function openBrowser(): Promise<ActionResponse> {
 /** Close the browser instance */
 export async function closeBrowser(): Promise<ActionResponse> {
   return apiClient.post<ActionResponse>(DEBUG_PLAYWRIGHT_CLOSE);
+}
+
+/** Fetch list of open browser tabs */
+export async function fetchBrowserTabs(): Promise<TabsResponse> {
+  return apiClient.get<TabsResponse>(DEBUG_PLAYWRIGHT_TABS);
+}
+
+/** Switch the active browser tab */
+export async function switchBrowserTab(id: string): Promise<ActionResponse> {
+  return apiClient.post<ActionResponse>(DEBUG_PLAYWRIGHT_SWITCH_TAB, { id });
 }
 
 /** Navigate the browser to a URL */

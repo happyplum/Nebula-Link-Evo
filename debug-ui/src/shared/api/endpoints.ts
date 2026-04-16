@@ -28,6 +28,8 @@ export const DEBUG_PLAYWRIGHT_ELEMENT_AT = '/debug/api/playwright/element-at' as
 export const DEBUG_PLAYWRIGHT_CLICK_BY_MARKER = '/debug/api/playwright/click-by-marker' as const;
 export const DEBUG_PLAYWRIGHT_EXECUTE_BY_MARKER =
   '/debug/api/playwright/execute-by-marker' as const;
+export const DEBUG_PLAYWRIGHT_TABS = '/debug/api/playwright/tabs' as const;
+export const DEBUG_PLAYWRIGHT_SWITCH_TAB = '/debug/api/playwright/tabs/switch' as const;
 
 // Debug API — DOM & Interactions
 export const DEBUG_DOM = '/debug/api/dom' as const;
