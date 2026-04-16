@@ -7,6 +7,9 @@ import { useDebugSocket } from '@/features/runtime/hooks/useDebugSocket.js';
 import {
   takeScreenshot,
   fetchDomSnapshot,
+  fetchBrowserTabs,
+  switchBrowserTab,
+  type TabsResponse,
 } from '@/features/playwright-control/api/control.adapters.js';
 import { useControlStore } from '@/features/playwright-control/store/control.store.js';
 import { normalizeDomElements } from '@/features/playwright-control/lib/index.js';
@@ -73,6 +76,8 @@ export function MonitorSidebarShell() {
   const [domSnapshotId, setDomSnapshotId] = useState<string>('—');
   const [domApiVersion, setDomApiVersion] = useState<string>('—');
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [browserTabs, setBrowserTabs] = useState<NonNullable<TabsResponse['tabs']>>([]);
+  const [fetchingTabs, setFetchingTabs] = useState(false);
 
   const { sendMessage, reconnect } = useDebugSocket();
 
@@ -174,6 +179,50 @@ export function MonitorSidebarShell() {
       setExecutingAction(false);
     }
   }, [setExecutingAction, setActionError, setDomElements, setSnapshotId, incrementSnapshotVersion]);
+
+  const handleFetchTabs = useCallback(async () => {
+    setFetchingTabs(true);
+    setActionError(null);
+    try {
+      const res = await fetchBrowserTabs();
+      if (res.success && res.tabs) {
+        setBrowserTabs(res.tabs);
+      } else {
+        setActionError(res.error ?? '获取标签页失败');
+      }
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : '获取标签页失败');
+    } finally {
+      setFetchingTabs(false);
+    }
+  }, [setActionError]);
+
+  const handleSwitchTab = useCallback(async (id: string) => {
+    setExecutingAction(true);
+    setActionError(null);
+    try {
+      const res = await switchBrowserTab(id);
+      if (res.success) {
+        appendConsoleMessage('success', '标签页切换成功');
+        await handleFetchTabs();
+        handleWsRefresh();
+      } else {
+        appendConsoleMessage('error', res.error ?? '切换标签页失败');
+        setActionError(res.error ?? '切换标签页失败');
+      }
+    } catch (err) {
+      appendConsoleMessage('error', err instanceof Error ? err.message : '切换标签页失败');
+      setActionError(err instanceof Error ? err.message : '切换标签页失败');
+    } finally {
+      setExecutingAction(false);
+    }
+  }, [handleFetchTabs, handleWsRefresh, setActionError, setExecutingAction]);
+
+  useEffect(() => {
+    if (playwrightStatus === 'ready') {
+      void handleFetchTabs();
+    }
+  }, [playwrightStatus, handleFetchTabs]);
 
   return (
     <div className={styles.shell} data-testid={testIds.monitorSidebar}>
@@ -296,6 +345,40 @@ export function MonitorSidebarShell() {
           title="DOM 截图 (Annotated)"
         />
       )}
+
+      {/* Card 4: Tabs List */}
+      <div className={styles.card} data-testid="monitor-sidebar-tabs-card">
+        <div className={styles.cardHeaderRow}>
+          <h3 className={styles.cardTitle}>浏览器标签页</h3>
+          <button
+            type="button"
+            className={styles.iconBtn}
+            onClick={handleFetchTabs}
+            disabled={fetchingTabs}
+            title="刷新标签列表"
+          >
+            🔄
+          </button>
+        </div>
+        <div className={styles.tabsList}>
+          {browserTabs.length === 0 ? (
+            <div className={styles.tabsEmpty}>暂无标签页</div>
+          ) : (
+            browserTabs.map((tab) => (
+              <button
+                type="button"
+                key={tab.id}
+                className={`${styles.tabItem} ${tab.isActive ? styles.tabItemActive : ''}`}
+                onClick={() => !tab.isActive && handleSwitchTab(tab.id)}
+                disabled={tab.isActive || fetchingTabs}
+              >
+                <div className={styles.tabTitle}>{tab.title || 'Untitled'}</div>
+                <div className={styles.tabUrl}>{tab.url}</div>
+              </button>
+            ))
+          )}
+        </div>
+      </div>
     </div>
   );
 }
