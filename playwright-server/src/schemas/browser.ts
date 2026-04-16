@@ -26,7 +26,26 @@ export const ScreenshotResponseSchema = Type.Object({
   viewport: ViewportSchema,
 });
 
+export const BrowserTabSchema = Type.Object({
+  id: Type.String(),
+  url: Type.String(),
+  title: Type.String(),
+  isActive: Type.Boolean(),
+});
+
+export const BrowserTabsResponseSchema = Type.Object({
+  tabs: Type.Array(BrowserTabSchema),
+});
+
+export const BrowserSwitchTabRequestSchema = Type.Object({
+  id: Type.String(),
+});
+
+
 export type BrowserOpenRequest = Static<typeof BrowserOpenRequestSchema>;
 export type BrowserNavigateRequest = Static<typeof BrowserNavigateRequestSchema>;
 export type BrowserStatusResponse = Static<typeof BrowserStatusResponseSchema>;
 export type ScreenshotResponse = Static<typeof ScreenshotResponseSchema>;
+export type BrowserTab = Static<typeof BrowserTabSchema>;
+export type BrowserTabsResponse = Static<typeof BrowserTabsResponseSchema>;
+export type BrowserSwitchTabRequest = Static<typeof BrowserSwitchTabRequestSchema>;

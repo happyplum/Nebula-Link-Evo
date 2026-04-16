@@ -43,6 +43,16 @@ export class BrowserService {
     return this.lifecycle.getViewport();
   }
 
+  async getTabs(): Promise<Array<{ id: string; url: string; title: string; isActive: boolean }>> {
+    return this.lifecycle.getTabs();
+  }
+
+  async switchTab(id: string): Promise<void> {
+    const page = await this.lifecycle.switchTab(id);
+    this.pageActions.setPage(page);
+    this.domExtractor.setPage(page);
+  }
+
   async open(
     headless: boolean = false,
     viewport = { width: 1920, height: 1080 },
