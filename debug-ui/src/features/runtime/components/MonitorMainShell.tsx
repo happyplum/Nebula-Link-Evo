@@ -55,6 +55,7 @@ export function MonitorMainShell() {
   const logContainerRef = useRef<HTMLDivElement>(null);
 
   const [webrtcFailed, setWebrtcFailed] = useState(false);
+  const handleRenderError = useCallback(() => setWebrtcFailed(true), []);
   const effectiveTransport =
     preferredTransport === 'webrtc' && webrtcFailed ? 'mjpeg' : preferredTransport;
 
@@ -151,10 +152,7 @@ export function MonitorMainShell() {
         </div>
         <div className={styles.liveviewCanvasWrap}>
           {effectiveTransport === 'webrtc' ? (
-            <LiveKitView
-              className={styles.liveviewCanvas}
-              onRenderError={() => setWebrtcFailed(true)}
-            />
+            <LiveKitView className={styles.liveviewCanvas} onRenderError={handleRenderError} />
           ) : (
             <LiveViewCanvas className={styles.liveviewCanvas} />
           )}

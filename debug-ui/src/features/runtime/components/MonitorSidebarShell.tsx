@@ -66,6 +66,7 @@ export function MonitorSidebarShell() {
   const playwrightStatus = useRuntimeStore((s) => s.playwrightStatus);
   const snapshotVersion = useRuntimeStore((s) => s.snapshotVersion);
   const incrementSnapshotVersion = useRuntimeStore((s) => s.incrementSnapshotVersion);
+  const incrementLiveviewRefreshKey = useRuntimeStore((s) => s.incrementLiveviewRefreshKey);
   const setLastScreenshotDataUrl = useRuntimeStore((s) => s.setLastScreenshotDataUrl);
   const setExecutingAction = useControlStore((s) => s.setExecutingAction);
   const setActionError = useControlStore((s) => s.setActionError);
@@ -197,26 +198,36 @@ export function MonitorSidebarShell() {
     }
   }, [setActionError]);
 
-  const handleSwitchTab = useCallback(async (id: string) => {
-    setExecutingAction(true);
-    setActionError(null);
-    try {
-      const res = await switchBrowserTab(id);
-      if (res.success) {
-        appendConsoleMessage('success', '标签页切换成功');
-        await handleFetchTabs();
-        handleWsRefresh();
-      } else {
-        appendConsoleMessage('error', res.error ?? '切换标签页失败');
-        setActionError(res.error ?? '切换标签页失败');
+  const handleSwitchTab = useCallback(
+    async (id: string) => {
+      setExecutingAction(true);
+      setActionError(null);
+      try {
+        const res = await switchBrowserTab(id);
+        if (res.success) {
+          appendConsoleMessage('success', '标签页切换成功');
+          incrementLiveviewRefreshKey();
+          await handleFetchTabs();
+          handleWsRefresh();
+        } else {
+          appendConsoleMessage('error', res.error ?? '切换标签页失败');
+          setActionError(res.error ?? '切换标签页失败');
+        }
+      } catch (err) {
+        appendConsoleMessage('error', err instanceof Error ? err.message : '切换标签页失败');
+        setActionError(err instanceof Error ? err.message : '切换标签页失败');
+      } finally {
+        setExecutingAction(false);
       }
-    } catch (err) {
-      appendConsoleMessage('error', err instanceof Error ? err.message : '切换标签页失败');
-      setActionError(err instanceof Error ? err.message : '切换标签页失败');
-    } finally {
-      setExecutingAction(false);
-    }
-  }, [handleFetchTabs, handleWsRefresh, setActionError, setExecutingAction]);
+    },
+    [
+      handleFetchTabs,
+      handleWsRefresh,
+      incrementLiveviewRefreshKey,
+      setActionError,
+      setExecutingAction,
+    ]
+  );
 
   useEffect(() => {
     if (playwrightStatus === 'ready') {
