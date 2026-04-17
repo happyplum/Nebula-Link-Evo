@@ -3,6 +3,7 @@ import { createMjpegTransform, getImageFitRect } from '@/features/liveview/lib/i
 import type { ImageFitRect } from '@/features/liveview/lib/index.js';
 import {
   selectConnectionStatus,
+  selectLiveviewRefreshKey,
   selectPlaywrightIsOpen,
   useRuntimeStore,
 } from '@/features/runtime/store/index.js';
@@ -45,8 +46,13 @@ export function LiveViewCanvas({
   const [fitRect, setFitRect] = useState<ImageFitRect | null>(null);
 
   const isPlaywrightConnected = useRuntimeStore(selectPlaywrightIsOpen);
+  const liveviewRefreshKey = useRuntimeStore(selectLiveviewRefreshKey);
   const connectionStatus = useRuntimeStore(selectConnectionStatus);
   const setLastScreenshotDataUrl = useRuntimeStore((s) => s.setLastScreenshotDataUrl);
+
+  // Track connection state for cleanup: distinguish tab-switch refresh from real disconnect
+  const isPlaywrightConnectedRef = useRef(isPlaywrightConnected);
+  isPlaywrightConnectedRef.current = isPlaywrightConnected;
 
   const replaceDownloadUrl = useCallback(
     (nextBlob: Blob | null, revokeCurrent: boolean) => {
@@ -150,23 +156,33 @@ export function LiveViewCanvas({
 
   useEffect(() => {
     let cancelled = false;
+    // liveviewRefreshKey triggers stream reconnection on tab switch
+    void liveviewRefreshKey;
     const streamVersion = ++streamVersionRef.current;
+
+    const clearVisualState = () => {
+      fitRectRef.current = null;
+      setFitRect(null);
+      replaceDownloadUrl(null, true);
+    };
 
     const closeBitmap = () => {
       if (currentBitmapRef.current) {
         currentBitmapRef.current.close();
         currentBitmapRef.current = null;
       }
-      fitRectRef.current = null;
-      setFitRect(null);
-      replaceDownloadUrl(null, true);
+      clearVisualState();
     };
 
-    const stopStream = () => {
+    const abortStream = () => {
       if (streamAbortRef.current) {
         streamAbortRef.current.abort();
         streamAbortRef.current = null;
       }
+    };
+
+    const stopStream = () => {
+      abortStream();
       closeBitmap();
     };
 
@@ -258,9 +274,20 @@ export function LiveViewCanvas({
 
     return () => {
       cancelled = true;
-      stopStream();
+      abortStream();
+      // Close unrendered bitmap to prevent leak, but don't clear the canvas.
+      // The last transferFromImageBitmap result stays visible on the canvas.
+      if (currentBitmapRef.current) {
+        currentBitmapRef.current.close();
+        currentBitmapRef.current = null;
+      }
+      // Only clear visual state on real disconnect (browser closed),
+      // not on tab-switch refresh — keep the last frame visible during transition.
+      if (!isPlaywrightConnectedRef.current) {
+        clearVisualState();
+      }
     };
-  }, [drawRenderFrame, isPlaywrightConnected, replaceDownloadUrl]);
+  }, [drawRenderFrame, isPlaywrightConnected, liveviewRefreshKey, replaceDownloadUrl]);
 
   useEffect(() => {
     return () => {

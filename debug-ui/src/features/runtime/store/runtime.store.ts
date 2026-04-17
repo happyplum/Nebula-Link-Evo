@@ -17,6 +17,7 @@ interface RuntimeState {
   playwrightIsOpen: boolean;
   playwrightUrl: string | null;
   snapshotVersion: number;
+  liveviewRefreshKey: number;
   lastScreenshotDataUrl: string | null;
   executionMessages: ExecutionMessage[];
   liveviewTransport: LiveviewTransport;
@@ -30,6 +31,7 @@ interface RuntimeState {
   setPlaywrightUrl: (url: string | null) => void;
   setSnapshotVersion: (version: number) => void;
   incrementSnapshotVersion: () => void;
+  incrementLiveviewRefreshKey: () => void;
   setLastScreenshotDataUrl: (url: string | null) => void;
   addExecutionMessage: (message: ExecutionMessage) => void;
   setLiveviewTransport: (mode: LiveviewTransport) => void;
@@ -52,6 +54,7 @@ const initialState = {
   playwrightIsOpen: false,
   playwrightUrl: null as string | null,
   snapshotVersion: 0,
+  liveviewRefreshKey: 0,
   lastScreenshotDataUrl: null as string | null,
   executionMessages: [] as ExecutionMessage[],
   liveviewTransport: persistedTransport as LiveviewTransport,
@@ -68,6 +71,7 @@ export const useRuntimeStore = create<RuntimeState>()((set) => ({
   setPlaywrightUrl: (url) => set({ playwrightUrl: url }),
   setSnapshotVersion: (version) => set({ snapshotVersion: version }),
   incrementSnapshotVersion: () => set((s) => ({ snapshotVersion: s.snapshotVersion + 1 })),
+  incrementLiveviewRefreshKey: () => set((s) => ({ liveviewRefreshKey: s.liveviewRefreshKey + 1 })),
   setLastScreenshotDataUrl: (url) => set({ lastScreenshotDataUrl: url }),
   addExecutionMessage: (message) =>
     set((s) => ({ executionMessages: [...s.executionMessages, message].slice(-200) })),
@@ -90,3 +94,4 @@ export const selectPlaywrightIsOpen = (s: RuntimeState) => s.playwrightIsOpen;
 export const selectPlaywrightUrl = (s: RuntimeState) => s.playwrightUrl;
 export const selectExecutionMessages = (s: RuntimeState) => s.executionMessages;
 export const selectLiveviewTransport = (s: RuntimeState) => s.liveviewTransport;
+export const selectLiveviewRefreshKey = (s: RuntimeState) => s.liveviewRefreshKey;

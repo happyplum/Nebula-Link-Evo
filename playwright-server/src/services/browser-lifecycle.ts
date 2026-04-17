@@ -1,6 +1,7 @@
 import { chromium, Browser, Page, BrowserContext } from 'playwright';
 import * as crypto from 'node:crypto';
 import { startPublisher, stopPublisher } from '../livekit-publisher.js';
+import { screencastManager } from '../screencast.js';
 
 export interface BrowserState {
   browser: Browser | null;
@@ -91,10 +92,10 @@ export class BrowserLifecycle {
 
   async getTabs(): Promise<Array<{ id: string; url: string; title: string; isActive: boolean }>> {
     if (!this.state.context) return [];
-    
+
     const pages = this.state.context.pages();
     const tabs = [];
-    
+
     for (const p of pages) {
       if (!this.pageIds.has(p)) {
         this.pageIds.set(p, crypto.randomUUID());
@@ -111,10 +112,10 @@ export class BrowserLifecycle {
 
   async switchTab(id: string): Promise<Page> {
     if (!this.state.context) throw new Error('Browser not opened');
-    
+
     const pages = this.state.context.pages();
     const targetPage = pages.find((p) => this.pageIds.get(p) === id);
-    
+
     if (!targetPage) {
       throw new Error(`Tab with id ${id} not found`);
     }
@@ -124,18 +125,29 @@ export class BrowserLifecycle {
     }
 
     await targetPage.bringToFront();
-    
+
     // Refresh livekit publisher for the new page
     if (this.state.page) {
       await stopPublisher().catch(() => {});
     }
-    
+
+    // Restart screencast for the new page so MJPEG stream reflects the active tab
+    if (screencastManager.isActive()) {
+      await screencastManager.stop().catch(() => {});
+    }
+
     this.state.page = targetPage;
     this.state.page.on('close', this.handlePageClose);
 
     if (this.state.lastViewport) {
       void startPublisher(this.state.page, this.state.lastViewport).catch((err) => {
         console.warn('[LiveKit] Publisher failed to restart for new tab:', err);
+      });
+    }
+
+    if (screencastManager.isActive() || this.state.lastViewport) {
+      await screencastManager.start(this.state.page).catch((err) => {
+        console.warn('[Screencast] Failed to restart for new tab:', err);
       });
     }
 
