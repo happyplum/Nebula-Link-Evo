@@ -15,6 +15,26 @@ vi.mock('playwright', () => {
   };
 });
 
+// Mock livekit-publisher
+const mockStartPublisher = vi.fn().mockResolvedValue(undefined);
+const mockStopPublisher = vi.fn().mockResolvedValue(undefined);
+vi.mock('../../../livekit-publisher.js', () => ({
+  startPublisher: (...args: unknown[]) => mockStartPublisher(...args),
+  stopPublisher: () => mockStopPublisher(),
+}));
+
+// Mock screencast
+const mockScreencastIsActive = vi.fn().mockReturnValue(false);
+const mockScreencastStart = vi.fn().mockResolvedValue(undefined);
+const mockScreencastStop = vi.fn().mockResolvedValue(undefined);
+vi.mock('../../../screencast.js', () => ({
+  screencastManager: {
+    isActive: () => mockScreencastIsActive(),
+    start: (...args: unknown[]) => mockScreencastStart(...args),
+    stop: () => mockScreencastStop(),
+  },
+}));
+
 describe('BrowserLifecycle', () => {
   let lifecycle: BrowserLifecycle;
   let mockBrowser: any;
@@ -451,6 +471,173 @@ describe('BrowserLifecycle', () => {
       closeHandler();
 
       expect(callback).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('open() awaits startPublisher', () => {
+    beforeEach(() => {
+      mockStartPublisher.mockClear();
+      mockStopPublisher.mockClear();
+    });
+
+    it('should await startPublisher on initial open', async () => {
+      mockStartPublisher.mockResolvedValueOnce(undefined);
+
+      await lifecycle.open();
+
+      expect(mockStartPublisher).toHaveBeenCalledTimes(1);
+      expect(mockStartPublisher).toHaveBeenCalledWith(lifecycle.getPage(), {
+        width: 1920,
+        height: 1080,
+      });
+      // startPublisher resolved before open() returns — no fire-and-forget
+      expect(mockStartPublisher).toHaveResolved();
+    });
+
+    it('should await startPublisher when recreating context/page', async () => {
+      await lifecycle.open();
+
+      // Clear context/page to simulate missing state
+      (lifecycle as any).state.context = null;
+      (lifecycle as any).state.page = null;
+
+      mockStartPublisher.mockClear();
+      mockStartPublisher.mockResolvedValueOnce(undefined);
+
+      await lifecycle.open();
+
+      expect(mockStartPublisher).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('close() awaits stopPublisher', () => {
+    beforeEach(() => {
+      mockStartPublisher.mockClear();
+      mockStopPublisher.mockClear();
+    });
+
+    it('should await stopPublisher on close', async () => {
+      await lifecycle.open();
+
+      mockStopPublisher.mockResolvedValueOnce(undefined);
+
+      await lifecycle.close();
+
+      expect(mockStopPublisher).toHaveBeenCalledTimes(1);
+      // stopPublisher resolved before close() returns
+      expect(mockStopPublisher).toHaveResolved();
+    });
+
+    it('should await stopPublisher even when no browser is open', async () => {
+      mockStopPublisher.mockResolvedValueOnce(undefined);
+
+      await lifecycle.close();
+
+      expect(mockStopPublisher).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('switchTab() awaits publisher lifecycle', () => {
+    let page1: any;
+    let page2: any;
+
+    beforeEach(async () => {
+      mockStartPublisher.mockClear();
+      mockStopPublisher.mockClear();
+      mockScreencastStart.mockClear();
+      mockScreencastStop.mockClear();
+      mockScreencastIsActive.mockReturnValue(false);
+
+      // Open browser and simulate a multi-tab context
+      await lifecycle.open();
+      page1 = lifecycle.getPage();
+
+      // Clear startPublisher call from open() so switchTab assertions are clean
+      mockStartPublisher.mockClear();
+
+      // Create a second mock page with bringToFront
+      page2 = createMockPage();
+      page2.bringToFront = vi.fn().mockResolvedValue(undefined);
+
+      // Set up pageIds for both pages
+      const pages = [page1, page2];
+      mockContext.pages.mockReturnValue(pages);
+      (lifecycle as any).pageIds.set(page1, 'tab-1');
+      (lifecycle as any).pageIds.set(page2, 'tab-2');
+    });
+
+    it('should await stopPublisher before startPublisher on tab switch', async () => {
+      const callOrder: string[] = [];
+      mockStopPublisher.mockImplementation(async () => {
+        callOrder.push('stop');
+      });
+      mockStartPublisher.mockImplementation(async () => {
+        callOrder.push('start');
+      });
+
+      await lifecycle.switchTab('tab-2');
+
+      // stopPublisher must complete before startPublisher begins
+      expect(callOrder).toEqual(['stop', 'start']);
+    });
+
+    it('should capture screencast state before teardown and restart if was active', async () => {
+      mockScreencastIsActive.mockReturnValue(true);
+      mockStopPublisher.mockResolvedValue(undefined);
+      mockStartPublisher.mockResolvedValue(undefined);
+      mockScreencastStop.mockResolvedValue(undefined);
+      mockScreencastStart.mockResolvedValue(undefined);
+
+      await lifecycle.switchTab('tab-2');
+
+      // Screencast was active before teardown
+      expect(mockScreencastStop).toHaveBeenCalledTimes(1);
+      expect(mockScreencastStart).toHaveBeenCalledWith(page2);
+    });
+
+    it('should NOT restart screencast if it was not active before teardown', async () => {
+      mockScreencastIsActive.mockReturnValue(false);
+      mockStopPublisher.mockResolvedValue(undefined);
+      mockStartPublisher.mockResolvedValue(undefined);
+
+      await lifecycle.switchTab('tab-2');
+
+      expect(mockScreencastStop).not.toHaveBeenCalled();
+      expect(mockScreencastStart).not.toHaveBeenCalled();
+    });
+
+    it('should await full shutdown before swapping page', async () => {
+      let publisherStopped = false;
+      mockStopPublisher.mockImplementation(async () => {
+        publisherStopped = true;
+      });
+      mockStartPublisher.mockResolvedValue(undefined);
+
+      const result = await lifecycle.switchTab('tab-2');
+
+      // Publisher was fully stopped before the new page was set
+      expect(publisherStopped).toBe(true);
+      expect(lifecycle.getPage()).toBe(page2);
+      expect(result).toBe(page2);
+    });
+
+    it('should return early when switching to the same tab', async () => {
+      const result = await lifecycle.switchTab('tab-1');
+
+      expect(result).toBe(page1);
+      expect(mockStopPublisher).not.toHaveBeenCalled();
+      expect(mockStartPublisher).not.toHaveBeenCalled();
+    });
+
+    it('should throw if tab id not found', async () => {
+      await expect(lifecycle.switchTab('nonexistent')).rejects.toThrow(
+        'Tab with id nonexistent not found'
+      );
+    });
+
+    it('should throw if browser not opened', async () => {
+      const empty = new BrowserLifecycle();
+      await expect(empty.switchTab('any')).rejects.toThrow('Browser not opened');
     });
   });
 });
