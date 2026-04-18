@@ -161,3 +161,11 @@ docs/               # Documentation
 - API boundary separates unknown providers (400) from unavailable providers (503 with error detail).
 
 **Error taxonomy**: CONFIG_INVALID (config-time validation) → INSTALL_FAILED (import resolution) → INIT_FAILED (factory invocation).
+
+### Tech Debt
+
+- [tech-debt] proxy-adapter has ~47 pre-existing test failures in untouched files (streaming.ts, task-service.ts, sessions-models.test.ts, and multiple lint errors); these failures existed before pipeline-observability work and our commits introduced zero new test failures (F3 review confirmed).
+
+### Known Behaviors
+
+- Screencast debug counter only activates on new stream connections via `?debug=true`; relay/parser/canvas counters respond to mid-stream toggle immediately (requires page refresh to see screencast counter changes).

@@ -146,6 +146,7 @@ export function createFrameCounter(windowDurationMs: number = 1000): FrameCounte
     /**
      * Gets current summary of all metrics
      * @returns FrameCounterSummary with current metric values
+     * @note fps and bytesPerSecond are counts within the rolling window, only semantically accurate as "per second" when the window duration is 1000ms (default)
      */
     getSummary(): FrameCounterSummary {
       const now = Date.now();
