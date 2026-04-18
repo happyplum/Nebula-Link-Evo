@@ -208,6 +208,13 @@ export class ScreencastManager {
     this.cdpClient = null;
     this.lastFrameTime = 0;
 
+    // Tear down debug instrumentation to prevent orphaned interval
+    if (this.debugInterval) {
+      clearInterval(this.debugInterval);
+      this.debugInterval = null;
+    }
+    this.debugCounter = null;
+
     for (const listener of this.listeners) {
       try {
         listener.end();
