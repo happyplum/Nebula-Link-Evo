@@ -126,26 +126,30 @@ export class BrowserLifecycle {
 
     await targetPage.bringToFront();
 
-    // Refresh livekit publisher for the new page
-    if (this.state.page) {
-      await stopPublisher().catch(() => {});
-    }
+    // Capture which transports were active BEFORE teardown
+    const wasScreencastActive = screencastManager.isActive();
+    const previousViewport = this.state.lastViewport;
 
-    // Restart screencast for the new page so MJPEG stream reflects the active tab
-    if (screencastManager.isActive()) {
+    // Teardown: stop LiveKit publisher for old page
+    await stopPublisher().catch(() => {});
+
+    // Stop MJPEG screencast if it was running
+    if (wasScreencastActive) {
       await screencastManager.stop().catch(() => {});
     }
 
     this.state.page = targetPage;
     this.state.page.on('close', this.handlePageClose);
 
-    if (this.state.lastViewport) {
-      void startPublisher(this.state.page, this.state.lastViewport).catch((err) => {
+    // Restart LiveKit publisher for the new page (awaited, deterministic order)
+    if (previousViewport) {
+      await startPublisher(this.state.page, previousViewport).catch((err) => {
         console.warn('[LiveKit] Publisher failed to restart for new tab:', err);
       });
     }
 
-    if (screencastManager.isActive() || this.state.lastViewport) {
+    // Restart MJPEG screencast only if it was previously active
+    if (wasScreencastActive) {
       await screencastManager.start(this.state.page).catch((err) => {
         console.warn('[Screencast] Failed to restart for new tab:', err);
       });
@@ -207,7 +211,7 @@ export class BrowserLifecycle {
         this.pageIds.set(this.state.page, crypto.randomUUID());
         this.state.page.on('close', this.handlePageClose);
         this.state.lastViewport = { ...viewport };
-        void startPublisher(this.state.page, viewport).catch((err) => {
+        await startPublisher(this.state.page, viewport).catch((err) => {
           console.warn('[LiveKit] Publisher failed to start:', err);
         });
       }
@@ -246,13 +250,13 @@ export class BrowserLifecycle {
     this.state.lastHeadless = headless;
     this.state.lastViewport = { ...viewport };
     this.state.lastCdpPort = nextCdpPort;
-    void startPublisher(this.state.page, viewport).catch((err) => {
+    await startPublisher(this.state.page, viewport).catch((err) => {
       console.warn('[LiveKit] Publisher failed to start:', err);
     });
   }
 
   async close(): Promise<void> {
-    void stopPublisher().catch(() => {});
+    await stopPublisher().catch(() => {});
     if (this.state.browser) {
       this.state.browser.off('disconnected', this.handleDisconnect);
       if (this.state.page) {

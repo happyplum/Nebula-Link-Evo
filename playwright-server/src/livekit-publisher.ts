@@ -11,6 +11,7 @@ import {
   VideoSource,
 } from '@livekit/rtc-node';
 import type { CDPSession, Page } from 'playwright';
+import { createFrameCounter } from '@nebula-link-evo/shared';
 
 const LIVEKIT_URL = process.env.LIVEKIT_URL || 'ws://127.0.0.1:7880';
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY || 'devkey';
@@ -32,6 +33,13 @@ let isPublishing = false;
 let frameTimestampUs = 0n;
 let publishWidth = 0;
 let publishHeight = 0;
+
+/** Stored frame listener for proper removal during cleanup */
+let storedFrameListener: ((event: ScreencastFrameEvent) => void) | null = null;
+
+/** Dev-only debug instrumentation */
+let debugCounter: ReturnType<typeof createFrameCounter> | null = null;
+let debugInterval: ReturnType<typeof setInterval> | null = null;
 
 // ~66ms per frame at 15fps
 const FRAME_INTERVAL_US = 66_666n;
@@ -79,15 +87,32 @@ export async function startPublisher(
     await room.localParticipant.publishTrack(track, publishOptions);
 
     cdpSession = await page.context().newCDPSession(page);
+
+    storedFrameListener = (event: ScreencastFrameEvent) => {
+      void handleScreencastFrame(event);
+    };
+    cdpSession.on('Page.screencastFrame', storedFrameListener);
+
     await cdpSession.send('Page.startScreencast', {
       format: 'png',
       maxWidth: width,
       maxHeight: height,
     });
 
-    cdpSession.on('Page.screencastFrame', (event) => {
-      void handleScreencastFrame(event);
-    });
+    // Dev-only debug frame counter
+    if (process.env.NODE_ENV !== 'production') {
+      debugCounter = createFrameCounter();
+      debugInterval = setInterval(() => {
+        if (!debugCounter) return;
+        const s = debugCounter.getSummary();
+        const reasons = Object.entries(s.dropReasons)
+          .map(([k, v]) => `${k}=${v}`)
+          .join(', ');
+        console.log(
+          `[NLE-Debug] livekit fps=${s.fps} drops=${s.totalDrops}( ${reasons || 'none'} )`
+        );
+      }, 1000);
+    }
 
     console.log(`[LiveKitPublisher] Publishing ${width}x${height} to room "${LIVEKIT_ROOM}"`);
   } catch (error) {
@@ -113,6 +138,7 @@ async function handleScreencastFrame(event: ScreencastFrameEvent): Promise<void>
   }
 
   if (!videoSource || videoSource.closed) {
+    if (debugCounter) debugCounter.recordDrop('source_closed');
     return;
   }
 
@@ -133,24 +159,71 @@ async function handleScreencastFrame(event: ScreencastFrameEvent): Promise<void>
 
     frameTimestampUs += FRAME_INTERVAL_US;
     videoSource.captureFrame(frame, frameTimestampUs, undefined);
+
+    if (debugCounter) debugCounter.recordFrame();
   } catch (error) {
+    if (debugCounter) debugCounter.recordDrop('frame_error');
     console.error('[LiveKitPublisher] Frame error:', error);
   }
 }
 
 async function cleanupPublisher(): Promise<void> {
+  // Idempotent: skip if already cleaned up
+  if (!isPublishing && !room && !videoSource && !cdpSession) {
+    return;
+  }
+
+  // 1. Stop CDP screencast and tear down session (matching screencast.ts pattern)
+  if (cdpSession) {
+    try {
+      await cdpSession.send('Page.stopScreencast').catch(() => {});
+    } catch {
+      // Session may already be detached
+    }
+
+    if (storedFrameListener) {
+      cdpSession.off('Page.screencastFrame', storedFrameListener);
+      storedFrameListener = null;
+    }
+
+    try {
+      await cdpSession.detach().catch(() => {});
+    } catch {
+      // May already be detached
+    }
+    cdpSession = null;
+  }
+
+  // 2. Close video source
   if (videoSource) {
     videoSource.close();
     videoSource = null;
   }
 
+  // 3. Disconnect room
   if (room) {
     await room.disconnect();
     room = null;
   }
 
-  cdpSession = null;
+  // 4. Tear down debug instrumentation
+  if (debugInterval) {
+    clearInterval(debugInterval);
+    debugInterval = null;
+  }
+  if (debugCounter) {
+    const s = debugCounter.getSummary();
+    const reasons = Object.entries(s.dropReasons)
+      .map(([k, v]) => `${k}=${v}`)
+      .join(', ');
+    console.log(
+      `[NLE-Debug] livekit final: fps=${s.fps} drops=${s.totalDrops}( ${reasons || 'none'} )`
+    );
+    debugCounter = null;
+  }
+
   isPublishing = false;
+  frameTimestampUs = 0n;
   await dispose();
 }
 

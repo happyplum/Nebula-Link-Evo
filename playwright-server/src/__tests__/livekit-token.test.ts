@@ -42,4 +42,29 @@ describe('GET /livekit-token', () => {
       serverActive: true,
     });
   });
+
+  // Token expiry was investigated and ruled out as a root cause of the blank-WebRTC issue
+  it('creates a fresh AccessToken per request boundary', async () => {
+    const Fastify = (await import('fastify')).default;
+    const app = Fastify();
+    const routePlugin = (await import('../plugins/routes/livekit-token.js')).default;
+
+    await app.register(routePlugin);
+    await app.ready();
+
+    // First request
+    await app.inject({
+      method: 'GET',
+      url: '/livekit-token',
+    });
+
+    // Second request - should create a new AccessToken, not reuse cached
+    await app.inject({
+      method: 'GET',
+      url: '/livekit-token',
+    });
+
+    // Verify that AccessToken was called twice (once per request, no caching)
+    expect(accessTokenMock).toHaveBeenCalledTimes(2);
+  });
 });
