@@ -208,6 +208,7 @@ export class DebugWebSocketManager {
         const enabled = Boolean((message as Record<string, unknown>).enabled);
         this.debugEnabled = enabled;
         if (enabled && process.env.NODE_ENV !== 'production') {
+          if (this.debugCounter) return; // idempotent guard — prevent orphaned interval
           this.debugCounter = createFrameCounter(1000);
           this.debugSummaryInterval = setInterval(() => {
             if (this.debugCounter) {
