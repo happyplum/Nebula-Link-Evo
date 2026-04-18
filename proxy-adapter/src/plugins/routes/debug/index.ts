@@ -358,10 +358,10 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
                     id: { type: 'string' },
                     url: { type: 'string' },
                     title: { type: 'string' },
-                    isActive: { type: 'boolean' }
-                  }
-                }
-              }
+                    isActive: { type: 'boolean' },
+                  },
+                },
+              },
             },
           },
         },
@@ -386,9 +386,9 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         body: {
           type: 'object',
           properties: {
-            id: { type: 'string' }
+            id: { type: 'string' },
           },
-          required: ['id']
+          required: ['id'],
         },
         response: {
           200: {
@@ -452,7 +452,10 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       const abortController = new AbortController();
       request.raw.on('close', () => abortController.abort());
 
-      const upstream = await fetch(`${PLAYWRIGHT_URL}/browser/stream`, {
+      const debugEnabled = wsManager.isDebugEnabled();
+      const counter = wsManager.getDebugCounter();
+      const upstreamUrl = `${PLAYWRIGHT_URL}/browser/stream${debugEnabled ? '?debug=true' : ''}`;
+      const upstream = await fetch(upstreamUrl, {
         signal: abortController.signal,
       });
 
@@ -477,7 +480,14 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
             break;
           }
           if (value) {
+            if (counter) {
+              counter.recordFrame();
+              counter.recordBytes(value.length);
+            }
             if (!reply.raw.write(value)) {
+              if (counter) {
+                counter.recordDrop('relay_backpressure');
+              }
               await once(reply.raw, 'drain');
             }
           }

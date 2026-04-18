@@ -21,6 +21,7 @@ interface RuntimeState {
   lastScreenshotDataUrl: string | null;
   executionMessages: ExecutionMessage[];
   liveviewTransport: LiveviewTransport;
+  debugEnabled: boolean;
 
   setConnectionStatus: (status: ConnectionStatus) => void;
   setReconnectAttempt: (attempt: number) => void;
@@ -35,6 +36,7 @@ interface RuntimeState {
   setLastScreenshotDataUrl: (url: string | null) => void;
   addExecutionMessage: (message: ExecutionMessage) => void;
   setLiveviewTransport: (mode: LiveviewTransport) => void;
+  toggleDebug: () => void;
   reset: () => void;
 }
 
@@ -47,6 +49,16 @@ const persistedTransport = (() => {
   }
 })();
 
+const persistedDebugEnabled = import.meta.env.DEV
+  ? (() => {
+      try {
+        return localStorage.getItem('nle-debug-enabled') === 'true';
+      } catch {
+        return false;
+      }
+    })()
+  : false;
+
 const initialState = {
   connectionStatus: 'disconnected' as ConnectionStatus,
   reconnectAttempt: 0,
@@ -58,6 +70,7 @@ const initialState = {
   lastScreenshotDataUrl: null as string | null,
   executionMessages: [] as ExecutionMessage[],
   liveviewTransport: persistedTransport as LiveviewTransport,
+  debugEnabled: persistedDebugEnabled,
 };
 
 export const useRuntimeStore = create<RuntimeState>()((set) => ({
@@ -83,6 +96,19 @@ export const useRuntimeStore = create<RuntimeState>()((set) => ({
     }
     set({ liveviewTransport: mode });
   },
+  toggleDebug: () => {
+    const current = useRuntimeStore.getState().debugEnabled;
+    const enabled = !current;
+    set({ debugEnabled: enabled });
+
+    if (import.meta.env.DEV) {
+      try {
+        localStorage.setItem('nle-debug-enabled', String(enabled));
+      } catch {
+        /* storage unavailable */
+      }
+    }
+  },
   reset: () => set(initialState),
 }));
 
@@ -95,3 +121,4 @@ export const selectPlaywrightUrl = (s: RuntimeState) => s.playwrightUrl;
 export const selectExecutionMessages = (s: RuntimeState) => s.executionMessages;
 export const selectLiveviewTransport = (s: RuntimeState) => s.liveviewTransport;
 export const selectLiveviewRefreshKey = (s: RuntimeState) => s.liveviewRefreshKey;
+export const selectDebugEnabled = (s: RuntimeState) => s.debugEnabled;

@@ -5,13 +5,18 @@ import { browserClient } from '../browser-client.js';
 
 vi.mock('../browser-client.js', () => ({
   browserClient: {
-    getStatus: vi.fn().mockResolvedValue({ isOpen: true, url: 'https://example.com', title: 'Test' }),
+    getStatus: vi
+      .fn()
+      .mockResolvedValue({ isOpen: true, url: 'https://example.com', title: 'Test' }),
   },
 }));
 
 vi.mock('ws', () => ({
   default: Object.assign(vi.fn(), { OPEN: 1 }),
 }));
+
+// Preserve original NODE_ENV
+const originalNodeEnv = process.env.NODE_ENV;
 
 describe('DebugWebSocketManager', () => {
   let manager: DebugWebSocketManager;
@@ -23,6 +28,7 @@ describe('DebugWebSocketManager', () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+    process.env.NODE_ENV = originalNodeEnv;
   });
 
   describe('getInstance', () => {
@@ -42,9 +48,7 @@ describe('DebugWebSocketManager', () => {
       };
       const clientId = 'client-123';
       manager.handleConnection(mockWs as any, clientId);
-      expect(mockWs.send).toHaveBeenCalledWith(
-        expect.stringContaining('"type":"connected"')
-      );
+      expect(mockWs.send).toHaveBeenCalledWith(expect.stringContaining('"type":"connected"'));
     });
 
     it('should handle client disconnect', () => {
@@ -349,9 +353,7 @@ describe('DebugWebSocketManager', () => {
       const message = { type: 'subscribe_session', sessionId };
       manager['handleClientMessage'](clientId, message);
 
-      expect(mockWs.send).toHaveBeenCalledWith(
-        expect.stringContaining('"type":"session_buffer"')
-      );
+      expect(mockWs.send).toHaveBeenCalledWith(expect.stringContaining('"type":"session_buffer"'));
     });
 
     it('should unsubscribe client from session', () => {
@@ -441,6 +443,103 @@ describe('DebugWebSocketManager', () => {
 
       const buffer = manager.getStreamBuffer(sessionId);
       expect(buffer).toBeUndefined();
+    });
+  });
+
+  describe('debug_toggle', () => {
+    function connectClient(clientId: string) {
+      const mockWs = { send: vi.fn(), on: vi.fn(), readyState: 1 };
+      manager.handleConnection(mockWs as any, clientId);
+      return mockWs;
+    }
+
+    it('should enable debug and create counter when toggled on (non-production)', () => {
+      process.env.NODE_ENV = 'development';
+      const ws = connectClient('dbg-1');
+      ws.send.mockClear();
+
+      manager['handleClientMessage']('dbg-1', { type: 'debug_toggle', enabled: true });
+
+      expect(manager.isDebugEnabled()).toBe(true);
+      expect(manager.getDebugCounter()).not.toBeNull();
+      expect(ws.send).toHaveBeenCalledWith(expect.stringContaining('"type":"debug_status"'));
+      expect(ws.send).toHaveBeenCalledWith(expect.stringContaining('"enabled":true'));
+
+      // Cleanup interval
+      manager['handleClientMessage']('dbg-1', { type: 'debug_toggle', enabled: false });
+    });
+
+    it('should destroy counter and clear interval when toggled off', () => {
+      process.env.NODE_ENV = 'development';
+      const ws = connectClient('dbg-2');
+      manager['handleClientMessage']('dbg-2', { type: 'debug_toggle', enabled: true });
+      expect(manager.getDebugCounter()).not.toBeNull();
+
+      ws.send.mockClear();
+      manager['handleClientMessage']('dbg-2', { type: 'debug_toggle', enabled: false });
+
+      expect(manager.isDebugEnabled()).toBe(false);
+      expect(manager.getDebugCounter()).toBeNull();
+      expect(manager['debugSummaryInterval']).toBeNull();
+      expect(ws.send).toHaveBeenCalledWith(expect.stringContaining('"enabled":false'));
+    });
+
+    it('should NOT create counter in production', () => {
+      process.env.NODE_ENV = 'production';
+      const ws = connectClient('dbg-3');
+      ws.send.mockClear();
+
+      manager['handleClientMessage']('dbg-3', { type: 'debug_toggle', enabled: true });
+
+      // Flag is set but no counter allocated
+      expect(manager.isDebugEnabled()).toBe(true);
+      expect(manager.getDebugCounter()).toBeNull();
+
+      // Reset
+      manager['handleClientMessage']('dbg-3', { type: 'debug_toggle', enabled: false });
+    });
+
+    it('should default to debug disabled', () => {
+      expect(manager.isDebugEnabled()).toBe(false);
+      expect(manager.getDebugCounter()).toBeNull();
+    });
+
+    it('counter should record frames, drops, and bytes', () => {
+      process.env.NODE_ENV = 'development';
+      connectClient('dbg-4');
+      manager['handleClientMessage']('dbg-4', { type: 'debug_toggle', enabled: true });
+
+      const counter = manager.getDebugCounter()!;
+      counter.recordFrame();
+      counter.recordFrame();
+      counter.recordBytes(1024);
+      counter.recordDrop('relay_backpressure');
+
+      const summary = counter.getSummary();
+      expect(summary.totalFrames).toBe(2);
+      expect(summary.totalDrops).toBe(1);
+      expect(summary.dropReasons['relay_backpressure']).toBe(1);
+
+      // Cleanup
+      manager['handleClientMessage']('dbg-4', { type: 'debug_toggle', enabled: false });
+    });
+
+    it('should log final summary when toggled off with active counter', () => {
+      process.env.NODE_ENV = 'development';
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      connectClient('dbg-5');
+
+      manager['handleClientMessage']('dbg-5', { type: 'debug_toggle', enabled: true });
+      const counter = manager.getDebugCounter()!;
+      counter.recordFrame();
+      counter.recordBytes(512);
+
+      logSpy.mockClear();
+      manager['handleClientMessage']('dbg-5', { type: 'debug_toggle', enabled: false });
+
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('[NLE-Debug] relay fps=1'));
+
+      logSpy.mockRestore();
     });
   });
 });

@@ -4,6 +4,7 @@ import type { ChatHandler, ChatMessageData } from './conversation/chat-handler.j
 import { StreamBuffer } from './services/websocket/stream-buffer.js';
 export { cleanupPersistence } from './services/websocket/persistence-singletons.js';
 import type { WebSocketMessage, StreamChunk } from './services/websocket/types.js';
+import { createFrameCounter, type FrameCounter } from '@nebula-link-evo/shared';
 
 interface ServiceStatus {
   playwright: {
@@ -33,6 +34,9 @@ export class DebugWebSocketManager {
   private sessionSubscriptions: Map<string, Set<string>> = new Map();
   private clientSessions: Map<string, string> = new Map();
   private streamBuffers: Map<string, StreamBuffer> = new Map();
+  private debugEnabled = false;
+  private debugCounter: FrameCounter | null = null;
+  private debugSummaryInterval: NodeJS.Timeout | null = null;
   private constructor() {}
 
   static getInstance(): DebugWebSocketManager {
@@ -200,6 +204,38 @@ export class DebugWebSocketManager {
           timestamp: new Date().toISOString(),
         });
         break;
+      case 'debug_toggle': {
+        const enabled = Boolean((message as Record<string, unknown>).enabled);
+        this.debugEnabled = enabled;
+        if (enabled && process.env.NODE_ENV !== 'production') {
+          this.debugCounter = createFrameCounter(1000);
+          this.debugSummaryInterval = setInterval(() => {
+            if (this.debugCounter) {
+              const s = this.debugCounter.getSummary();
+              console.log(
+                `[NLE-Debug] relay fps=${s.fps} drops=${s.totalDrops}( relay_backpressure=${s.dropReasons['relay_backpressure'] ?? 0} ) bytesPerSec=${s.bytesPerSecond}`
+              );
+            }
+          }, 1000);
+        } else {
+          if (this.debugCounter) {
+            const s = this.debugCounter.getSummary();
+            console.log(
+              `[NLE-Debug] relay fps=${s.fps} drops=${s.totalDrops}( relay_backpressure=${s.dropReasons['relay_backpressure'] ?? 0} ) bytesPerSec=${s.bytesPerSecond}`
+            );
+            this.debugCounter = null;
+          }
+          if (this.debugSummaryInterval) {
+            clearInterval(this.debugSummaryInterval);
+            this.debugSummaryInterval = null;
+          }
+        }
+        this.respondToClient(clientId, {
+          type: 'debug_status',
+          enabled: this.debugEnabled,
+        });
+        break;
+      }
       default:
         this.respondToClient(clientId, {
           type: 'ack',
@@ -237,6 +273,14 @@ export class DebugWebSocketManager {
         this.clients.delete(clientId);
       }
     }
+  }
+
+  isDebugEnabled(): boolean {
+    return this.debugEnabled;
+  }
+
+  getDebugCounter(): FrameCounter | null {
+    return this.debugCounter;
   }
 
   setTaskCommandHandler(handler: (message: WebSocketMessage) => void): void {

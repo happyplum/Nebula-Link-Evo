@@ -244,6 +244,14 @@ function connectSharedSocket() {
     useRuntimeStore
       .getState()
       .addExecutionMessage({ type: 'success', text: 'WebSocket 连接成功', timestamp: Date.now() });
+
+    // Re-emit current debugEnabled state on reconnect to sync server
+    if (import.meta.env.DEV) {
+      const debugEnabled = useRuntimeStore.getState().debugEnabled;
+      if (debugEnabled) {
+        ws.send(JSON.stringify({ type: 'debug_toggle', enabled: true }));
+      }
+    }
   };
 
   ws.onmessage = handleSocketMessage;
@@ -321,6 +329,7 @@ export function useDebugSocket(): UseDebugSocketReturn {
       'ping',
       'config',
       'command',
+      'debug_toggle',
     ];
     if (!whitelist.includes(type)) {
       console.warn(`WebSocket command '${type}' is not in whitelist.`);
