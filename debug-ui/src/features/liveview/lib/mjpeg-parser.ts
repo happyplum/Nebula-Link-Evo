@@ -1,6 +1,37 @@
+import type { FrameCounter } from '@nebula-link-evo/shared';
+import { createFrameCounter } from '@nebula-link-evo/shared';
+
 const encoder = new TextEncoder();
 
 const HEADER_SEPARATOR = encoder.encode('\r\n\r\n');
+
+// --- Debug frame counter (DEV only, tree-shaken in production) ---
+let debugCounter: FrameCounter | null = null;
+let debugSummaryInterval: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Enable or disable the parser-side debug counter.
+ * Gated by `import.meta.env.DEV` — no-op in production builds.
+ */
+export function setParserDebugEnabled(enabled: boolean): void {
+  if (!import.meta.env.DEV) return;
+
+  if (enabled && !debugCounter) {
+    debugCounter = createFrameCounter();
+    debugSummaryInterval = setInterval(() => {
+      if (debugCounter) {
+        console.log('[NLE-Debug] parser', debugCounter.getSummary());
+      }
+    }, 1000);
+  } else if (!enabled && debugCounter) {
+    console.log('[NLE-Debug] parser', debugCounter.getSummary());
+    if (debugSummaryInterval) {
+      clearInterval(debugSummaryInterval);
+      debugSummaryInterval = null;
+    }
+    debugCounter = null;
+  }
+}
 
 /**
  * Finds the first occurrence of `pattern` in `buffer` starting at `offset`.
@@ -85,7 +116,10 @@ export const _testHeaderSep = HEADER_SEPARATOR;
  * Creates a TransformStream that parses MJPEG multipart stream into individual JPEG frames.
  * Provides automatic backpressure integration with the Fetch API's ReadableStream.
  */
-export function createMjpegTransform(boundary: string): TransformStream<Uint8Array, Uint8Array> {
+export function createMjpegTransform(
+  boundary: string,
+  onFrame?: (jpegData: Uint8Array) => void
+): TransformStream<Uint8Array, Uint8Array> {
   const boundaryBytes = encoder.encode(boundary);
 
   let buffer = new Uint8Array(0);
@@ -101,7 +135,11 @@ export function createMjpegTransform(boundary: string): TransformStream<Uint8Arr
         const jpegData = frameData.slice(headerEnd + HEADER_SEPARATOR.length);
         if (jpegData.length > 0) {
           controller.enqueue(jpegData);
+          onFrame?.(jpegData);
+          debugCounter?.recordFrame();
         }
+      } else if (frameData.length > 0) {
+        debugCounter?.recordDrop('incomplete_jpeg');
       }
       boundaryIndex = findBytes(buffer, boundaryBytes);
     }
@@ -123,6 +161,8 @@ export function createMjpegTransform(boundary: string): TransformStream<Uint8Arr
           const jpegData = buffer.slice(headerEnd + HEADER_SEPARATOR.length);
           if (jpegData.length > 0) {
             controller.enqueue(jpegData);
+            onFrame?.(jpegData);
+            debugCounter?.recordFrame();
           }
         }
       }
