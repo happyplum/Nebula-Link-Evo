@@ -1,6 +1,8 @@
 @echo off
 setlocal EnableDelayedExpansion
 
+set NODE_ENV=development
+
 cd /d "%~dp0"
 
 echo ==========================================

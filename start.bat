@@ -1,6 +1,8 @@
 @echo off
 setlocal EnableDelayedExpansion
 
+if "%NODE_ENV%"=="" set NODE_ENV=production
+
 cd /d "%~dp0"
 
 echo ==========================================
