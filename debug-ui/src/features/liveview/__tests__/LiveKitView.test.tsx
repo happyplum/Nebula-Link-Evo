@@ -1,6 +1,8 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+let mockTrackStatus: 'disconnected' | 'waiting' | 'ready' | 'timeout' = 'disconnected';
+
 const connectMock = vi.fn().mockResolvedValue(undefined);
 const disconnectMock = vi.fn();
 const setOnTrackSubscribedMock = vi.fn();
@@ -13,6 +15,7 @@ vi.mock('../hooks/useLiveKit.js', () => ({
   useLiveKit: () => ({
     isConnected: false,
     roomName: null,
+    trackStatus: mockTrackStatus,
     connect: connectMock,
     disconnect: disconnectMock,
     videoElement: null,
@@ -39,6 +42,7 @@ describe('LiveKitView', () => {
     vi.clearAllMocks();
     vi.resetModules();
     runtimeState.playwrightIsOpen = false;
+    mockTrackStatus = 'disconnected';
 
     globalThis.fetch = vi.fn().mockResolvedValue({
       json: vi.fn().mockResolvedValue({ token: 'livekit-token', url: 'wss://livekit.test' }),
@@ -90,5 +94,47 @@ describe('LiveKitView', () => {
     });
 
     expect(screen.getByTestId('livekit-view')).toHaveAttribute('data-connected', 'false');
+  });
+
+  it('calls onRenderError when trackStatus becomes timeout', async () => {
+    runtimeState.playwrightIsOpen = true;
+    vi.doMock('livekit-client', () => ({}));
+
+    const { default: LiveKitView } = await import('../components/LiveKitView.js');
+
+    const renderError = vi.fn();
+    const { rerender } = render(<LiveKitView onRenderError={renderError} />);
+
+    await waitFor(() => {
+      expect(connectMock).toHaveBeenCalled();
+    });
+
+    mockTrackStatus = 'timeout';
+    rerender(<LiveKitView onRenderError={renderError} />);
+
+    await waitFor(() => {
+      expect(renderError).toHaveBeenCalledWith(expect.any(Error));
+    });
+
+    expect(renderError.mock.calls[0][0].message).toBe('LiveKit connected without video track');
+  });
+
+  it('does not call onRenderError when trackStatus becomes ready', async () => {
+    runtimeState.playwrightIsOpen = true;
+    vi.doMock('livekit-client', () => ({}));
+
+    const { default: LiveKitView } = await import('../components/LiveKitView.js');
+
+    const renderError = vi.fn();
+    const { rerender } = render(<LiveKitView onRenderError={renderError} />);
+
+    await waitFor(() => {
+      expect(connectMock).toHaveBeenCalled();
+    });
+
+    mockTrackStatus = 'ready';
+    rerender(<LiveKitView onRenderError={renderError} />);
+
+    expect(renderError).not.toHaveBeenCalled();
   });
 });

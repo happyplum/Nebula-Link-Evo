@@ -11,6 +11,7 @@ import {
   selectPlaywrightUrl,
   selectExecutionMessages,
   selectLiveviewTransport,
+  selectPlaywrightIsOpen,
   type ConnectionStatus,
   type ServiceStatus,
 } from '@/features/runtime/store/runtime.store.js';
@@ -46,6 +47,7 @@ export function MonitorMainShell() {
   const incrementSnapshotVersion = useRuntimeStore((s) => s.incrementSnapshotVersion);
   const executionMessages = useRuntimeStore(selectExecutionMessages);
   const preferredTransport = useRuntimeStore(selectLiveviewTransport);
+  const playwrightIsOpen = useRuntimeStore(selectPlaywrightIsOpen);
   const setLiveviewTransport = useRuntimeStore((s) => s.setLiveviewTransport);
 
   const { sendMessage } = useDebugSocket();
@@ -117,6 +119,12 @@ export function MonitorMainShell() {
     },
     [setLiveviewTransport]
   );
+
+  useEffect(() => {
+    if (!playwrightIsOpen) {
+      setWebrtcFailed(false);
+    }
+  }, [playwrightIsOpen]);
 
   const badgeClass = isConnected ? `${styles.statusBadge} ${styles.connected}` : styles.statusBadge;
   const indicatorClass =
