@@ -1,4 +1,5 @@
 import type { Page } from 'playwright';
+import { createFrameCounter } from '@nebula-link-evo/shared';
 
 type ServerResponse = {
   write: (data: string | Buffer) => boolean;
@@ -21,6 +22,8 @@ export class ScreencastManager {
   );
   private readonly frameHeaderSuffix = Buffer.from('\r\n\r\n');
   private readonly frameFooter = Buffer.from('\r\n');
+  private debugCounter: ReturnType<typeof createFrameCounter> | null = null;
+  private debugInterval: ReturnType<typeof setInterval> | null = null;
 
   private constructor() {}
 
@@ -98,9 +101,41 @@ export class ScreencastManager {
     console.log(`[Screencast] Listener removed. Total: ${this.listeners.size}`);
   }
 
+  setDebugEnabled(enabled: boolean): void {
+    if (enabled && process.env.NODE_ENV !== 'production') {
+      if (this.debugCounter) return;
+      this.debugCounter = createFrameCounter();
+      this.debugInterval = setInterval(() => {
+        const s = this.debugCounter!.getSummary();
+        const reasons = Object.entries(s.dropReasons)
+          .map(([k, v]) => `${k}=${v}`)
+          .join(', ');
+        console.log(
+          `[NLE-Debug] screencast fps=${s.fps} drops=${s.totalDrops}( ${reasons || 'none'} )`
+        );
+      }, 1000);
+    } else {
+      if (this.debugCounter) {
+        const s = this.debugCounter.getSummary();
+        const reasons = Object.entries(s.dropReasons)
+          .map(([k, v]) => `${k}=${v}`)
+          .join(', ');
+        console.log(
+          `[NLE-Debug] screencast final: fps=${s.fps} drops=${s.totalDrops}( ${reasons || 'none'} )`
+        );
+        this.debugCounter = null;
+      }
+      if (this.debugInterval) {
+        clearInterval(this.debugInterval);
+        this.debugInterval = null;
+      }
+    }
+  }
+
   private async handleScreencastFrame(event: { data: string; sessionId: string }): Promise<void> {
     const now = Date.now();
     if (now - this.lastFrameTime < this.frameInterval) {
+      if (this.debugCounter) this.debugCounter.recordDrop('throttle');
       try {
         await this.cdpClient?.send('Page.screencastFrameAck', { sessionId: event.sessionId });
       } catch {
@@ -120,6 +155,7 @@ export class ScreencastManager {
 
     // Skip frame decode and distribution when all listeners are backed up
     if (this.listeners.size > 0 && this.listeners.size === this.backedUpListeners.size) {
+      if (this.debugCounter) this.debugCounter.recordDrop('all_backpressure');
       return;
     }
 
@@ -129,7 +165,10 @@ export class ScreencastManager {
     for (const listener of this.listeners) {
       try {
         if (listener.writable === false) continue;
-        if (this.backedUpListeners.has(listener)) continue;
+        if (this.backedUpListeners.has(listener)) {
+          if (this.debugCounter) this.debugCounter.recordDrop('listener_backpressure');
+          continue;
+        }
 
         const canContinue = listener.write(mjpegFrame);
         if (!canContinue) {
@@ -149,6 +188,8 @@ export class ScreencastManager {
         this.backedUpListeners.delete(listener);
       }
     }
+
+    if (this.debugCounter) this.debugCounter.recordFrame();
   }
 
   private formatMjpegFrame(data: Buffer): Buffer {

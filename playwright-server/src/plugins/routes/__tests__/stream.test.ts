@@ -8,9 +8,9 @@ vi.mock('../../../services/browser-service.js', () => {
   return {
     BrowserService: {
       getInstance: vi.fn().mockReturnValue({
-        getPage: vi.fn().mockReturnValue({})
-      })
-    }
+        getPage: vi.fn().mockReturnValue({}),
+      }),
+    },
   };
 });
 
@@ -19,11 +19,12 @@ vi.mock('../../../screencast.js', () => {
     screencastManager: {
       isActive: vi.fn().mockReturnValue(false),
       start: vi.fn().mockResolvedValue(undefined),
+      setDebugEnabled: vi.fn(),
       addListener: vi.fn().mockImplementation((res) => {
         res.end();
       }),
-      removeListener: vi.fn()
-    }
+      removeListener: vi.fn(),
+    },
   };
 });
 
@@ -44,13 +45,13 @@ describe('Stream Routes', () => {
 
       const response = await app.inject({
         method: 'GET',
-        url: '/stream'
+        url: '/stream',
       });
 
       expect(response.statusCode).toBe(500);
       expect(JSON.parse(response.payload)).toEqual({
         success: false,
-        error: 'Browser not opened'
+        error: 'Browser not opened',
       });
     });
 
@@ -60,7 +61,7 @@ describe('Stream Routes', () => {
 
       const response = await app.inject({
         method: 'GET',
-        url: '/stream'
+        url: '/stream',
       });
 
       expect(response.statusCode).toBe(200);
@@ -74,7 +75,7 @@ describe('Stream Routes', () => {
 
       const response = await app.inject({
         method: 'GET',
-        url: '/stream'
+        url: '/stream',
       });
 
       expect(response.statusCode).toBe(200);
@@ -89,13 +90,13 @@ describe('Stream Routes', () => {
 
       const response = await app.inject({
         method: 'GET',
-        url: '/stream'
+        url: '/stream',
       });
 
       expect(response.statusCode).toBe(500);
       expect(JSON.parse(response.payload)).toEqual({
         success: false,
-        error: 'Failed to start'
+        error: 'Failed to start',
       });
     });
   });

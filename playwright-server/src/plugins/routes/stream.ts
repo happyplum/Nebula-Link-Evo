@@ -31,6 +31,8 @@ const routes: FastifyPluginAsync = async (fastify) => {
 
     reply.raw.writeHead(200, headers);
 
+    const debug = (request.query as Record<string, string | undefined>).debug === 'true';
+    screencastManager.setDebugEnabled(debug);
     screencastManager.addListener(reply.raw);
 
     request.raw.on('close', () => {
