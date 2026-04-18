@@ -198,6 +198,9 @@ importers:
       '@livekit/rtc-node':
         specifier: 'catalog:'
         version: 0.13.24
+      '@nebula-link-evo/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@sinclair/typebox':
         specifier: 'catalog:'
         version: 0.32.35

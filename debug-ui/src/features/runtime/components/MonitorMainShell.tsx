@@ -4,6 +4,7 @@ import {
   LiveKitView,
   LiveViewCanvas,
   TransportToggle,
+  DebugToggle,
 } from '@/features/liveview/components/index.js';
 import {
   useRuntimeStore,
@@ -147,6 +148,7 @@ export function MonitorMainShell() {
               onTransportChange={handleTransportChange}
               webrtcAvailable={!webrtcFailed}
             />
+            <DebugToggle />
             <span className={styles.liveviewUrl}>{playwrightUrl || '-'}</span>
           </div>
         </div>
