@@ -2,9 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Room, RoomEvent } from 'livekit-client';
 import type { RemoteParticipant, RemoteTrack } from 'livekit-client';
 
+type TrackStatus = 'disconnected' | 'waiting' | 'ready' | 'timeout';
+
 interface UseLiveKitReturn {
   isConnected: boolean;
   roomName: string | null;
+  trackStatus: TrackStatus;
   connect: (options: { token: string; url: string }) => Promise<void>;
   disconnect: () => void;
   videoElement: HTMLVideoElement | null;
@@ -13,22 +16,36 @@ interface UseLiveKitReturn {
   ) => void;
 }
 
-export function useLiveKit(): UseLiveKitReturn {
+export function useLiveKit(options?: { timeoutMs?: number }): UseLiveKitReturn {
+  const timeoutMs = options?.timeoutMs ?? 4000;
   const roomRef = useRef<Room | null>(null);
+  const trackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timeoutTriggeredRef = useRef(false);
   const onTrackRef = useRef<((track: RemoteTrack, participant: RemoteParticipant) => void) | null>(
     null
   );
   const [isConnected, setIsConnected] = useState(false);
   const [roomName, setRoomName] = useState<string | null>(null);
   const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
+  const [trackStatus, setTrackStatus] = useState<TrackStatus>('disconnected');
+
+  const clearTrackTimeout = useCallback(() => {
+    if (trackTimeoutRef.current !== null) {
+      clearTimeout(trackTimeoutRef.current);
+      trackTimeoutRef.current = null;
+    }
+  }, []);
 
   const disconnect = useCallback(() => {
+    timeoutTriggeredRef.current = false;
+    clearTrackTimeout();
     roomRef.current?.disconnect();
     roomRef.current = null;
     setVideoElement(null);
     setIsConnected(false);
     setRoomName(null);
-  }, []);
+    setTrackStatus('disconnected');
+  }, [clearTrackTimeout]);
 
   const connect = useCallback(
     async ({ token, url }: { token: string; url: string }) => {
@@ -42,6 +59,19 @@ export function useLiveKit(): UseLiveKitReturn {
       room.on(RoomEvent.Connected, () => {
         setIsConnected(true);
         setRoomName(room.name ?? null);
+        setTrackStatus('waiting');
+
+        clearTrackTimeout();
+        trackTimeoutRef.current = setTimeout(() => {
+          timeoutTriggeredRef.current = true;
+          clearTrackTimeout();
+          room.disconnect();
+          roomRef.current = null;
+          setIsConnected(false);
+          setRoomName(null);
+          setVideoElement(null);
+          setTrackStatus('timeout');
+        }, timeoutMs);
       });
 
       room.on(
@@ -51,27 +81,42 @@ export function useLiveKit(): UseLiveKitReturn {
             return;
           }
 
+          timeoutTriggeredRef.current = false;
+          clearTrackTimeout();
           const element = track.attach() as HTMLVideoElement;
           setVideoElement(element);
+          setTrackStatus('ready');
           onTrackRef.current?.(track, participant);
         }
       );
 
       room.on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack) => {
+        timeoutTriggeredRef.current = false;
+        clearTrackTimeout();
         track.detach();
         setVideoElement(null);
+        setTrackStatus('disconnected');
       });
 
       room.on(RoomEvent.Disconnected, () => {
+        const wasTimeout = timeoutTriggeredRef.current;
+        clearTrackTimeout();
         setIsConnected(false);
         setRoomName(null);
         setVideoElement(null);
+        roomRef.current = null;
+
+        if (!wasTimeout) {
+          setTrackStatus('disconnected');
+        }
+
+        timeoutTriggeredRef.current = false;
       });
 
       roomRef.current = room;
       await room.connect(url, token, { autoSubscribe: true, maxRetries: 3 });
     },
-    [disconnect]
+    [clearTrackTimeout, disconnect, timeoutMs]
   );
 
   const setOnTrackSubscribed = useCallback(
@@ -81,11 +126,18 @@ export function useLiveKit(): UseLiveKitReturn {
     []
   );
 
-  useEffect(() => () => disconnect(), [disconnect]);
+  useEffect(
+    () => () => {
+      clearTrackTimeout();
+      disconnect();
+    },
+    [clearTrackTimeout, disconnect]
+  );
 
   return {
     isConnected,
     roomName,
+    trackStatus,
     connect,
     disconnect,
     videoElement,

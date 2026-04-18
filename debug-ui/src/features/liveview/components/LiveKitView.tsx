@@ -28,7 +28,7 @@ export default function LiveKitView({
   const overlayRafRef = useRef<number>(0);
   const [tokenData, setTokenData] = useState<{ token: string; url: string } | null>(null);
   const [fitRect, setFitRect] = useState<ImageFitRect | null>(null);
-  const { isConnected, connect, disconnect, videoElement, setOnTrackSubscribed } = useLiveKit();
+  const { isConnected, trackStatus, connect, disconnect, videoElement, setOnTrackSubscribed } = useLiveKit();
   const isPlaywrightOpen = useRuntimeStore(selectPlaywrightIsOpen);
   const pageViewport = useControlStore(selectViewport);
 
@@ -145,6 +145,18 @@ export default function LiveKitView({
       setFitRect(null);
     }
   }, [disconnect, isConnected, isPlaywrightOpen]);
+
+  const timeoutReportedRef = useRef(false);
+
+  useEffect(() => {
+    if (trackStatus === 'timeout' && !timeoutReportedRef.current) {
+      timeoutReportedRef.current = true;
+      onRenderError?.(new Error('LiveKit connected without video track'));
+    }
+    if (trackStatus === 'disconnected' || trackStatus === 'waiting') {
+      timeoutReportedRef.current = false;
+    }
+  }, [trackStatus, onRenderError]);
 
   useEffect(() => {
     setOnTrackSubscribed(() => {
