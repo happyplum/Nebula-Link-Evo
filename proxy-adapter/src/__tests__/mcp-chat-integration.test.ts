@@ -25,6 +25,13 @@ describe('MCP Chat Integration', () => {
   let session: Session;
 
   const mockConfig: ResolvedConfig = {
+    providers: {
+      test: {
+        enabled: true,
+        apiKey: 'test-key',
+        npmPackage: '@ai-sdk/openai',
+      },
+    },
     mcp: {
       enabled: true,
       servers: {
@@ -36,7 +43,41 @@ describe('MCP Chat Integration', () => {
         },
       },
     },
-  } as unknown as ResolvedConfig;
+    defaults: {
+      mode: 'separation',
+      decision: { provider: 'test', model: 'test-model' },
+      vision: { provider: 'test', model: 'test-model' },
+    },
+    settings: {
+      timeout: 30000,
+      maxRetries: 3,
+      temperature: 0.7,
+      maxTokens: 4096,
+      maxSteps: 10,
+    },
+    _resolved: {
+      providers: {
+        test: {
+          enabled: true,
+          apiKey: 'test-key',
+          npmPackage: '@ai-sdk/openai',
+          models: {
+            'test-model': {
+              type: 'decision',
+              capabilities: ['decision'],
+            },
+          },
+        },
+      },
+      settings: {
+        timeout: 30000,
+        maxRetries: 3,
+        temperature: 0.7,
+        maxTokens: 4096,
+        maxSteps: 10,
+      },
+    },
+  };
 
   const mockTools: MCPTool[] = [
     {

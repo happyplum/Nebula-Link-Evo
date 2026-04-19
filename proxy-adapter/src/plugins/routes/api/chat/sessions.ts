@@ -71,8 +71,18 @@ const AsyncMessageResponseSchema = Type.Object({
 });
 
 const UpdateModelsBodySchema = Type.Object({
-  provider: Type.Optional(Type.String({ minLength: 1 })),
-  model: Type.Optional(Type.String({ minLength: 1 })),
+  decision: Type.Optional(
+    Type.Object({
+      provider: Type.Optional(Type.String({ minLength: 1 })),
+      model: Type.Optional(Type.String({ minLength: 1 })),
+    })
+  ),
+  vision: Type.Optional(
+    Type.Object({
+      provider: Type.Optional(Type.String({ minLength: 1 })),
+      model: Type.Optional(Type.String({ minLength: 1 })),
+    })
+  ),
 });
 
 const UpdateModelsResponseSchema = Type.Object({
@@ -287,11 +297,11 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
     async (request, reply) => {
       const { id: sessionId } = request.params;
-      const { provider, model } = request.body || {};
+      const { decision, vision } = request.body || {};
 
-      if (!provider && !model) {
+      if (!decision && !vision) {
         reply.status(400);
-        return { error: 'At least "provider" or "model" must be provided' };
+        return { error: 'At least one of decision or vision must be provided' };
       }
 
       try {
@@ -307,24 +317,43 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           return { error: 'Provider registry unavailable' };
         }
 
-        // Validate providers exist in config
-        if (provider && !registry.listProviders().includes(provider)) {
+        // Validate decision provider
+        const decisionProvider = decision?.provider;
+        if (decisionProvider && !registry.listProviders().includes(decisionProvider)) {
           reply.status(400);
-          return { error: `Unknown provider: '${provider}'` };
+          return { error: `Unknown decision provider: '${decisionProvider}'` };
         }
 
-        // Check provider availability (configured but unavailable)
-        if (provider && !registry.isAvailable(provider)) {
-          const errorDetail = registry.getAvailabilityError(provider);
+        // Validate vision provider
+        const visionProvider = vision?.provider;
+        if (visionProvider && !registry.listProviders().includes(visionProvider)) {
+          reply.status(400);
+          return { error: `Unknown vision provider: '${visionProvider}'` };
+        }
+
+        // Check decision provider availability
+        if (decisionProvider && !registry.isAvailable(decisionProvider)) {
+          const errorDetail = registry.getAvailabilityError(decisionProvider);
           reply.status(503);
           return {
-            error: `Provider '${provider}' is currently unavailable${errorDetail ? `: ${errorDetail}` : ''}`,
+            error: `Decision provider '${decisionProvider}' is currently unavailable${errorDetail ? `: ${errorDetail}` : ''}`,
+          };
+        }
+
+        // Check vision provider availability
+        if (visionProvider && !registry.isAvailable(visionProvider)) {
+          const errorDetail = registry.getAvailabilityError(visionProvider);
+          reply.status(503);
+          return {
+            error: `Vision provider '${visionProvider}' is currently unavailable${errorDetail ? `: ${errorDetail}` : ''}`,
           };
         }
 
         const updateParams: import('../../../../conversation/types.js').UpdateSessionParams = {};
-        if (provider) updateParams.provider = provider;
-        if (model) updateParams.model = model;
+        if (decision?.provider) updateParams.provider = decision.provider;
+        if (decision?.model) updateParams.model = decision.model;
+        if (vision?.provider !== undefined) updateParams.vision_provider = vision.provider;
+        if (vision?.model !== undefined) updateParams.vision_model = vision.model;
 
         const updated = conversationManager.updateSession(sessionId, updateParams);
         if (!updated) {

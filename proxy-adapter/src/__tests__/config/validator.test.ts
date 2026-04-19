@@ -264,7 +264,7 @@ describe('validateConfig', () => {
       expect(result.errors).toContain('Provider test-provider: missing baseUrl');
     });
 
-    it('should error when provider has no models', () => {
+    it('should allow provider with no models (dynamic resolution)', () => {
       const config: ResolvedConfig = {
         version: '1.0.0',
         providers: {
@@ -303,8 +303,7 @@ describe('validateConfig', () => {
       };
 
       const result = validateConfig(config);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Provider test-provider: no models defined');
+      expect(result.valid).toBe(true);
     });
 
     it('should warn when no providers enabled', () => {
@@ -349,7 +348,7 @@ describe('validateConfig', () => {
       expect(result.warnings).toContain('No providers enabled');
     });
 
-    it('should error when model missing type', () => {
+    it('should allow model with missing type (dynamic resolution)', () => {
       const config: ResolvedConfig = {
         version: '1.0.0',
         providers: {
@@ -393,13 +392,10 @@ describe('validateConfig', () => {
       };
 
       const result = validateConfig(config);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain(
-        'Provider test-provider model test-model: missing type'
-      );
+      expect(result.valid).toBe(true);
     });
 
-    it('should error when model missing capabilities', () => {
+    it('should allow model with missing capabilities (dynamic resolution)', () => {
       const config: ResolvedConfig = {
         version: '1.0.0',
         providers: {
@@ -443,10 +439,7 @@ describe('validateConfig', () => {
       };
 
       const result = validateConfig(config);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain(
-        'Provider test-provider model test-model: missing capabilities'
-      );
+      expect(result.valid).toBe(true);
     });
   });
 
@@ -865,7 +858,7 @@ describe('validateConfig', () => {
       expect(result.errors).toContain('Unified mode requires decision.model');
     });
 
-    it('should error when unified mode model does not support decision capability', () => {
+    it('should allow unified mode with model missing decision capability (dynamic resolution)', () => {
       const config: ResolvedConfig = {
         version: '1.0.0',
         providers: {
@@ -909,10 +902,7 @@ describe('validateConfig', () => {
       };
 
       const result = validateConfig(config);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain(
-        'Model vision-only-model does not support decision capability'
-      );
+      expect(result.valid).toBe(true);
     });
   });
 

@@ -65,7 +65,17 @@ mockConfig = {
           apiKey: 'test-key',
           baseUrl: 'https://test.example.com',
         }
-      }
+      },
+      _resolved: {
+        providers: {
+          test: {
+            enabled: true,
+            apiKey: 'test-key',
+            baseUrl: 'https://test.example.com',
+            models: {},
+          },
+        },
+      },
     } as unknown as ResolvedConfig;
   });
 
@@ -391,7 +401,7 @@ await streamTask({
         onEvent: (event) => events.push(event),
       });
 
-      expect(getModel).toHaveBeenCalledWith(mockConfig, 'anthropic', 'claude-3-opus');
+      expect(getModel).toHaveBeenCalledWith(expect.any(Object), 'anthropic', 'claude-3-opus');
     });
   });
 

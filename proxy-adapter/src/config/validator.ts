@@ -121,6 +121,11 @@ export function validateProviderModel(
 
   if (!model || model.trim().length === 0) {
     errors.push(`Model ${model} not found in provider ${provider}`);
+  } else if (providerConfig.models && Object.keys(providerConfig.models).length > 0) {
+    const modelConfig = providerConfig.models[model];
+    if (!modelConfig) {
+      errors.push(`Model ${model} not found in provider ${provider}`);
+    }
   }
 
   return { valid: errors.length === 0, errors };
@@ -137,5 +142,22 @@ export function canProviderDo(
     return false;
   }
 
-  return model.trim().length > 0 && (capability === 'vision' || capability === 'decision');
+  if (!model || model.trim().length === 0) {
+    return false;
+  }
+
+  // Check model existence if provider has explicit model definitions
+  if (providerConfig.models && Object.keys(providerConfig.models).length > 0) {
+    const modelConfig = providerConfig.models[model];
+    if (!modelConfig) {
+      return false;
+    }
+
+    // Check capability support if model declares capabilities
+    if (modelConfig.capabilities && modelConfig.capabilities.length > 0) {
+      return modelConfig.capabilities.includes(capability);
+    }
+  }
+
+  return capability === 'vision' || capability === 'decision';
 }

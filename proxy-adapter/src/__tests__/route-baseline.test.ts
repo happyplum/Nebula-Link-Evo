@@ -301,6 +301,8 @@ describe('Route Baseline: API Chat Routes', () => {
           message_count: 5,
           provider: 'kimi',
           model: 'moonshot-v1',
+          vision_provider: null,
+          vision_model: null,
         },
         {
           id: 'session-2',
@@ -311,6 +313,8 @@ describe('Route Baseline: API Chat Routes', () => {
           message_count: 10,
           provider: 'anthropic',
           model: 'claude-3-sonnet',
+          vision_provider: null,
+          vision_model: null,
         },
       ];
 
@@ -384,6 +388,8 @@ describe('Route Baseline: API Chat Routes', () => {
         message_count: 15,
         provider: 'kimi',
         model: 'moonshot-v1',
+        vision_provider: null,
+        vision_model: null,
       };
 
       app.conversationManager.getSession = vi.fn().mockReturnValue(mockSession);
@@ -433,6 +439,8 @@ describe('Route Baseline: API Chat Routes', () => {
         message_count: 2,
         provider: 'kimi',
         model: 'moonshot-v1',
+        vision_provider: null,
+        vision_model: null,
       };
 
       const mockMessages = [
@@ -509,6 +517,8 @@ describe('Route Baseline: API Chat Routes', () => {
         message_count: 0,
         provider: 'kimi',
         model: 'moonshot-v1',
+        vision_provider: null,
+        vision_model: null,
       };
 
       app.conversationManager.getSession = vi.fn().mockReturnValue(mockSession);

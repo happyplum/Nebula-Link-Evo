@@ -6,7 +6,9 @@ import { StepRunner, type StepContext } from '../../../services/step-runner.js';
 import type { ActionExecutor, ActionResult } from '../../../services/action-executor.js';
 import type { ProviderRegistry } from '../../../services/provider/registry.js';
 
-const streamTextMock = vi.fn();
+const { streamTextMock } = vi.hoisted(() => ({
+  streamTextMock: vi.fn(),
+}));
 
 vi.mock('ai', async () => {
   const actual = await vi.importActual<typeof import('ai')>('ai');
