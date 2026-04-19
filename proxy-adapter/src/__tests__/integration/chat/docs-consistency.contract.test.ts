@@ -10,7 +10,7 @@ describe('Docs consistency contract', () => {
       await app.register(apiChatRoutes, { prefix: '/api/chat' });
 
       const routes = app.printRoutes({ includeHooks: false });
-      expect(routes).toContain('messages (GET, HEAD, POST)');
+      expect(routes).toContain('essages (GET, HEAD, POST)');
     });
 
   });

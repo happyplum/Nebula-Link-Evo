@@ -15,6 +15,21 @@ vi.mock('../../config/index.js', () => ({
           },
         },
       },
+      defaults: {
+        mode: 'separation',
+        decision: { provider: 'kimi', model: 'test-decision-model' },
+        vision: { provider: 'kimi', model: 'test-vision-model' },
+      },
+      _resolved: {
+        providers: {
+          kimi: {
+            enabled: true,
+            apiKey: 'test-key',
+            baseUrl: 'https://api.test.com/v1',
+            models: {},
+          },
+        },
+      },
     },
     configPath: '/test/config.json',
     result: { success: true, warnings: [], errors: [] },

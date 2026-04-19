@@ -20,6 +20,7 @@ vi.mock('../services/index.js', () => ({
     getMCPStatus: vi.fn().mockReturnValue({
       enabled: true,
     }),
+    getRegistry: vi.fn().mockReturnValue(null),
     shutdown: vi.fn().mockResolvedValue(undefined),
   },
 }));
@@ -77,6 +78,20 @@ vi.mock('../plugins/routes/health.js', () => ({ default: vi.fn().mockResolvedVal
 vi.mock('../plugins/routes/config.js', () => ({ default: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('../plugins/routes/task.js', () => ({ default: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('../plugins/routes/debug/index.js', () => ({ default: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('../plugins/routes/api/livekit-token.js', () => ({ default: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('../plugins/routes/api/chat/index.js', () => ({ default: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('../plugins/routes/chat/index.js', () => ({ default: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('../plugins/routes/ws/chat-socket.js', () => ({ default: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('../plugins/routes/ws/debug-socket.js', () => ({ default: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('../services/provider/preflight.js', () => ({
+  runPreflight: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock('../utils/db-backup.js', () => ({
+  initializeWithBackup: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock('../clients/compression.js', () => ({
+  createCompressionClient: vi.fn().mockReturnValue(null),
+}));
 
 // Create mock instances BEFORE importing server
 const mockFastifyInstance = {
@@ -220,7 +235,7 @@ describe('server initialization', () => {
     expect(ChatHandler).toHaveBeenCalled();
   });
 
-  it('should wire a compressor-capable client into conversation manager', async () => {
+  it('should skip compressor client when createCompressionClient returns null', async () => {
     vi.clearAllMocks();
     vi.mocked(fs.existsSync).mockReturnValue(false);
 
@@ -232,10 +247,7 @@ describe('server initialization', () => {
       setAiClient: ReturnType<typeof vi.fn>;
     };
 
-    expect(conversationManagerInstance.setAiClient).toHaveBeenCalledWith(
-      expect.objectContaining({
-        generateSummary: expect.any(Function),
-      })
-    );
+    // createCompressionClient(null) returns null, so setAiClient is never called
+    expect(conversationManagerInstance?.setAiClient).not.toHaveBeenCalled();
   });
 });

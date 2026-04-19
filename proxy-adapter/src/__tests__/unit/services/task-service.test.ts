@@ -49,7 +49,11 @@ vi.mock('../../../config/index.js', () => ({
   loadConfig: vi.fn().mockReturnValue({
     config: {
       providers: {},
-      defaults: { mode: 'separation' },
+      defaults: {
+        mode: 'separation',
+        decision: { provider: 'test-provider', model: 'test-model' },
+        vision: { provider: 'test-provider', model: 'test-model' },
+      },
       _resolved: { providers: {} },
     },
     configPath: '/path/to/config.json',

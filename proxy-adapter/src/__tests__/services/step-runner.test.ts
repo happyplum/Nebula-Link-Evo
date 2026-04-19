@@ -1,24 +1,45 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Action } from '../../types.js';
-import type { UIElement, DOMSnapshotResponse } from '../../config/schema.js';
+import type { LanguageModelV3 } from '@ai-sdk/provider';
+import type { DOMSnapshotResponse } from '../../config/schema.js';
 import type { MCPTool } from '../../clients/types.js';
+import type { ActionExecutor } from '../../services/action-executor.js';
+import { StepRunner } from '../../services/step-runner.js';
 
 const {
+  mockStreamText,
+  mockTool,
+  mockCreateVisionTool,
+  mockResolveSessionModels,
   mockScreenshot,
   mockGetSimplifiedDOM,
-  mockIsUnifiedMode,
-  mockDecideAction,
-  mockDetectWithFallback,
   mockExecute,
   mockGetMCPTools,
 } = vi.hoisted(() => ({
+  mockStreamText: vi.fn(),
+  mockTool: vi.fn((definition: unknown) => definition),
+  mockCreateVisionTool: vi.fn(),
+  mockResolveSessionModels: vi.fn(),
   mockScreenshot: vi.fn(),
   mockGetSimplifiedDOM: vi.fn(),
-  mockIsUnifiedMode: vi.fn(),
-  mockDecideAction: vi.fn(),
-  mockDetectWithFallback: vi.fn(),
   mockExecute: vi.fn(),
   mockGetMCPTools: vi.fn(),
+}));
+
+vi.mock('ai', async () => {
+  const actual = await vi.importActual('ai');
+  return {
+    ...actual,
+    streamText: mockStreamText,
+    tool: mockTool,
+  };
+});
+
+vi.mock('../../services/provider/resolver.js', () => ({
+  resolveSessionModels: mockResolveSessionModels,
+}));
+
+vi.mock('../../services/provider/vision-tool.js', () => ({
+  createVisionTool: mockCreateVisionTool,
 }));
 
 vi.mock('../../browser-client.js', () => ({
@@ -28,17 +49,38 @@ vi.mock('../../browser-client.js', () => ({
   },
 }));
 
-import { StepRunner } from '../../services/step-runner.js';
+function createMockLanguageModel(name: string): LanguageModelV3 {
+  return {
+    specificationVersion: 'v2',
+    provider: 'test-provider',
+    modelId: name,
+    supportedUrls: {},
+    doGenerate: vi.fn(),
+    doStream: vi.fn(),
+  } as unknown as LanguageModelV3;
+}
+
+function createStreamResult(text: string) {
+  return {
+    fullStream: (async function* () {
+      yield { type: 'text-delta', text };
+      yield { type: 'finish' };
+    })(),
+  };
+}
 
 describe('StepRunner', () => {
   const actionExecutor = {
     execute: mockExecute,
   };
 
-  const clientFactory = {
-    isUnifiedMode: mockIsUnifiedMode,
-    decideAction: mockDecideAction,
-    detectWithFallback: mockDetectWithFallback,
+  const registry = {
+    resolve: vi.fn(),
+  };
+
+  const defaults = {
+    decision: 'test-provider/test-model',
+    vision: 'test-provider/test-vision-model',
   };
 
   const getMCPTools = mockGetMCPTools;
@@ -49,6 +91,12 @@ describe('StepRunner', () => {
     instruction: 'test instruction',
     maxSteps: 5,
     previousActions: [],
+    session: {
+      provider: 'anthropic',
+      model: 'claude-3-7-sonnet',
+      vision_provider: 'openai',
+      vision_model: 'gpt-4.1-mini',
+    },
   };
 
   const mockDom: DOMSnapshotResponse = {
@@ -72,199 +120,182 @@ describe('StepRunner', () => {
 
     mockGetSimplifiedDOM.mockResolvedValue(mockDom);
 
-    mockExecute.mockResolvedValue({
-      action: { type: 'wait', params: { delay: 100 } },
+    mockResolveSessionModels.mockResolvedValue({
+      decision: createMockLanguageModel('decision-model'),
+      vision: createMockLanguageModel('vision-model'),
+    });
+
+    mockCreateVisionTool.mockReturnValue({
+      description: 'mock vision tool',
+      inputSchema: {},
+      execute: vi.fn(),
+    });
+
+    mockExecute.mockImplementation(async (action) => ({
+      action,
       success: true,
       message: 'ok',
-    });
+    }));
 
     mockGetMCPTools.mockReturnValue([]);
   });
 
   describe('runStep in unified mode', () => {
-    beforeEach(() => {
-      mockIsUnifiedMode.mockReturnValue(true);
-    });
-
     it('should execute step successfully and return action', async () => {
-      const runner = new StepRunner({
-        actionExecutor: actionExecutor as never,
-        clientFactory: clientFactory as never,
-        getMCPTools,
-      });
+      mockStreamText.mockResolvedValue(
+        createStreamResult('{"type":"click","params":{"x":100,"y":200}}'),
+      );
 
-      const expectedAction: Action = { type: 'click', params: { x: 100, y: 200 } };
-      mockDecideAction.mockResolvedValue({
-        success: true,
-        data: expectedAction,
+      const runner = new StepRunner({
+        actionExecutor: actionExecutor as never as ActionExecutor,
+        registry: registry as never,
+        defaults,
+        getMCPTools,
       });
 
       const result = await runner.runStep(defaultContext, 0);
 
-      expect(mockScreenshot).toHaveBeenCalledTimes(1);
-      expect(mockGetSimplifiedDOM).toHaveBeenCalledTimes(1);
-      expect(mockIsUnifiedMode).toHaveBeenCalledTimes(1);
-      expect(mockDecideAction).toHaveBeenCalledWith(
-        {
-          screenshot: 'base64-image-data',
-          dom: mockDom,
-          elements: [],
-          instruction: defaultContext.instruction,
-          previousActions: defaultContext.previousActions,
-        },
-        []
-      );
-      expect(mockExecute).toHaveBeenCalledWith(expectedAction);
-
-      expect(result.action).toEqual(expectedAction);
-      expect(result.screenshot).toBe('base64-image-data');
-      expect(result.dom).toEqual(mockDom);
-      expect(result.isFinished).toBe(false);
+      expect(mockResolveSessionModels).toHaveBeenCalledWith(defaultContext.session, registry, defaults);
+      expect(mockStreamText).toHaveBeenCalledTimes(1);
+      expect(mockExecute).toHaveBeenCalledWith({ type: 'click', params: { x: 100, y: 200 }, reasoning: undefined });
+      expect(result).toEqual({
+        action: { type: 'click', params: { x: 100, y: 200 }, reasoning: undefined },
+        result: { action: { type: 'click', params: { x: 100, y: 200 }, reasoning: undefined }, success: true, message: 'ok' },
+        screenshot: 'base64-image-data',
+        dom: mockDom,
+        isFinished: false,
+      });
     });
 
     it('should fallback to wait action if decideAction fails', async () => {
-      const runner = new StepRunner({
-        actionExecutor: actionExecutor as never,
-        clientFactory: clientFactory as never,
-        getMCPTools,
-      });
+      mockStreamText.mockResolvedValue(createStreamResult('not-json'));
 
-      mockDecideAction.mockResolvedValue({
-        success: false,
-        error: 'AI failed',
+      const runner = new StepRunner({
+        actionExecutor: actionExecutor as never as ActionExecutor,
+        registry: registry as never,
+        defaults,
+        getMCPTools,
       });
 
       const result = await runner.runStep(defaultContext, 0);
 
-      expect(mockDecideAction).toHaveBeenCalledTimes(1);
       expect(mockExecute).toHaveBeenCalledWith({ type: 'wait', params: { delay: 2000 } });
       expect(result.action).toEqual({ type: 'wait', params: { delay: 2000 } });
       expect(result.isFinished).toBe(false);
     });
 
     it('should pass MCP tools to decideAction if available', async () => {
-      const runner = new StepRunner({
-        actionExecutor: actionExecutor as never,
-        clientFactory: clientFactory as never,
-        getMCPTools,
-      });
-
-      const mcpTools: MCPTool[] = [{ name: 'test-tool', description: 'test', inputSchema: {} }];
+      const mcpTools: MCPTool[] = [
+        {
+          name: 'test-tool',
+          description: 'test tool',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              query: { type: 'string' },
+            },
+          },
+        },
+      ];
       mockGetMCPTools.mockReturnValue(mcpTools);
+      mockStreamText.mockResolvedValue(createStreamResult('{"type":"finish","params":{}}'));
 
-      mockDecideAction.mockResolvedValue({
-        success: true,
-        data: { type: 'finish', params: {} },
+      const runner = new StepRunner({
+        actionExecutor: actionExecutor as never as ActionExecutor,
+        registry: registry as never,
+        defaults,
+        getMCPTools,
       });
 
       const result = await runner.runStep(defaultContext, 0);
 
-      expect(mockDecideAction).toHaveBeenCalledWith(
-        expect.any(Object),
-        mcpTools
-      );
+      const streamArgs = mockStreamText.mock.calls[0]?.[0] as {
+        tools: Record<string, unknown>;
+      };
+
+      expect(streamArgs.tools).toHaveProperty('test-tool');
+      expect(streamArgs.tools).toHaveProperty('analyze_page');
+      expect(mockTool).toHaveBeenCalled();
       expect(result.isFinished).toBe(true);
     });
   });
 
   describe('runStep in non-unified mode', () => {
-    beforeEach(() => {
-      mockIsUnifiedMode.mockReturnValue(false);
-    });
-
     it('should detect elements and then decide action', async () => {
+      mockStreamText.mockResolvedValue(createStreamResult('{"type":"type","params":{"text":"hello"}}'));
+
       const runner = new StepRunner({
-        actionExecutor: actionExecutor as never,
-        clientFactory: clientFactory as never,
+        actionExecutor: actionExecutor as never as ActionExecutor,
+        registry: registry as never,
+        defaults,
         getMCPTools,
-      });
-
-      const mockElements: UIElement[] = [
-        { id: 1, type: 'button', bbox: [0, 0, 10, 10], center: [5, 5], confidence: 0.9 },
-      ];
-
-      mockDetectWithFallback.mockResolvedValue({
-        success: true,
-        data: mockElements,
-      });
-
-      const expectedAction: Action = { type: 'type', params: { text: 'hello' } };
-      mockDecideAction.mockResolvedValue({
-        success: true,
-        data: expectedAction,
       });
 
       const result = await runner.runStep(defaultContext, 0);
 
-      expect(mockDetectWithFallback).toHaveBeenCalledWith(
-        'base64-image-data',
-        { width: 1920, height: 1080 },
-        '检测页面中可交互的UI元素'
-      );
+      expect(mockScreenshot).toHaveBeenCalledTimes(1);
+      expect(mockGetSimplifiedDOM).toHaveBeenCalledTimes(1);
+      expect(mockCreateVisionTool).toHaveBeenCalledTimes(1);
 
-      expect(mockDecideAction).toHaveBeenCalledWith(
-        {
-          screenshot: 'base64-image-data',
-          dom: mockDom,
-          elements: mockElements,
-          instruction: defaultContext.instruction,
-          previousActions: defaultContext.previousActions,
-        },
-        []
-      );
+      const visionToolArgs = mockCreateVisionTool.mock.calls[0];
+      const screenshotFn = visionToolArgs?.[1] as (() => Promise<{ screenshot: Buffer; viewport: { width: number; height: number } }>) | undefined;
+      expect(screenshotFn).toBeTypeOf('function');
 
-      expect(mockExecute).toHaveBeenCalledWith(expectedAction);
-      expect(result.action).toEqual(expectedAction);
+      const streamArgs = mockStreamText.mock.calls[0]?.[0] as {
+        messages: Array<{ role: string; content: string }>;
+        tools: Record<string, unknown>;
+      };
+      expect(streamArgs.tools).toHaveProperty('analyze_page');
+
+      const userMessage = streamArgs.messages[1];
+      expect(userMessage?.role).toBe('user');
+      expect(JSON.parse(userMessage?.content ?? '')).toEqual({
+        taskId: defaultContext.taskId,
+        url: defaultContext.url,
+        instruction: defaultContext.instruction,
+        step: 1,
+        maxSteps: defaultContext.maxSteps,
+        previousActions: defaultContext.previousActions,
+        dom: mockDom,
+      });
+
+      expect(result.action).toEqual({ type: 'type', params: { text: 'hello' }, reasoning: undefined });
     });
 
     it('should proceed with empty elements if detect fails', async () => {
+      mockStreamText.mockResolvedValue(createStreamResult('{"type":"scroll","params":{"direction":"down"}}'));
+
       const runner = new StepRunner({
-        actionExecutor: actionExecutor as never,
-        clientFactory: clientFactory as never,
+        actionExecutor: actionExecutor as never as ActionExecutor,
+        registry: registry as never,
+        defaults,
         getMCPTools,
-      });
-
-      mockDetectWithFallback.mockResolvedValue({
-        success: false,
-        error: 'Vision failed',
-      });
-
-      const expectedAction: Action = { type: 'scroll', params: { direction: 'down' } };
-      mockDecideAction.mockResolvedValue({
-        success: true,
-        data: expectedAction,
       });
 
       const result = await runner.runStep(defaultContext, 0);
 
-      expect(mockDetectWithFallback).toHaveBeenCalledTimes(1);
-      expect(mockDecideAction).toHaveBeenCalledWith(
-        expect.objectContaining({ elements: [] }),
-        []
-      );
-      expect(result.action).toEqual(expectedAction);
+      const streamArgs = mockStreamText.mock.calls[0]?.[0] as {
+        messages: Array<{ role: string; content: string }>;
+      };
+      const userPayload = JSON.parse(streamArgs.messages[1]?.content ?? 'null') as { dom: DOMSnapshotResponse };
+
+      expect(userPayload.dom.simplified_dom.elements).toEqual([]);
+      expect(result.action).toEqual({ type: 'scroll', params: { direction: 'down' }, reasoning: undefined });
+      expect(result.dom).toEqual(mockDom);
     });
 
     it('should fallback to wait action if decideAction fails in non-unified mode', async () => {
+      mockStreamText.mockResolvedValue(createStreamResult('{"type":"click"}'));
+
       const runner = new StepRunner({
-        actionExecutor: actionExecutor as never,
-        clientFactory: clientFactory as never,
+        actionExecutor: actionExecutor as never as ActionExecutor,
+        registry: registry as never,
+        defaults,
         getMCPTools,
-      });
-
-      mockDetectWithFallback.mockResolvedValue({
-        success: true,
-        data: [],
-      });
-
-      mockDecideAction.mockResolvedValue({
-        success: false,
-        error: 'AI failed',
       });
 
       const result = await runner.runStep(defaultContext, 0);
 
-      expect(mockDecideAction).toHaveBeenCalledTimes(1);
       expect(mockExecute).toHaveBeenCalledWith({ type: 'wait', params: { delay: 2000 } });
       expect(result.action).toEqual({ type: 'wait', params: { delay: 2000 } });
       expect(result.isFinished).toBe(false);
@@ -274,17 +305,18 @@ describe('StepRunner', () => {
   describe('sleep', () => {
     it('should resolve after specified time', async () => {
       const runner = new StepRunner({
-        actionExecutor: actionExecutor as never,
-        clientFactory: clientFactory as never,
+        actionExecutor: actionExecutor as never as ActionExecutor,
+        registry: registry as never,
+        defaults,
         getMCPTools,
       });
 
       vi.useFakeTimers();
       const sleepPromise = runner.sleep(1000);
-      
+
       vi.advanceTimersByTime(1000);
       await expect(sleepPromise).resolves.toBeUndefined();
-      
+
       vi.useRealTimers();
     });
   });

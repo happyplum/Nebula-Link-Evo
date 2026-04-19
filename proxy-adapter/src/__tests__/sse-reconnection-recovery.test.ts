@@ -2,18 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Fastify from 'fastify';
 import { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import http from 'node:http';
+import { MockLanguageModelV3 } from 'ai/test';
+import { simulateReadableStream } from 'ai';
 import { ConversationManager } from '../conversation/manager.js';
 import { ChatHandler } from '../conversation/chat-handler.js';
 import { DatabaseManager } from '../conversation/db.js';
 import { DebugWebSocketManager } from '../websocket-manager.js';
 import { SessionEventHub } from '../services/session-event-hub.js';
 import { SessionLock } from '../services/session-lock.js';
-import type { DecisionClient } from '../clients/types.js';
-type StreamCallbacks = {
-  onToken: (text: string) => void;
-  onThinking: (text: string) => void;
-  onDone: () => Promise<void>;
-};
+import type { LanguageModelV3 } from '@ai-sdk/provider';
 import type { ResolvedConfig } from '../config/schema.js';
 import apiChatRoutes from '../plugins/routes/api/chat/index.js';
 import errorHandler from '../plugins/03-error-handler.plugin.js';
@@ -70,6 +67,28 @@ const mockConfig: ResolvedConfig = {
     decision: { provider: 'kimi', model: 'moonshot-v1-vision-preview' },
   },
 } as unknown as ResolvedConfig;
+
+function createMockStreamingModel(chunks: Array<Record<string, unknown>>): LanguageModelV3 {
+  return new MockLanguageModelV3({
+    doStream: async () => ({
+      stream: simulateReadableStream({ chunks }),
+    }),
+  }) as unknown as LanguageModelV3;
+}
+
+const defaultStreamChunks = [
+  { type: 'text-start', id: 'text-0' },
+  { type: 'text-delta', id: 'text-0', delta: 'Test response' },
+  { type: 'text-end', id: 'text-0' },
+  {
+    type: 'finish',
+    finishReason: { unified: 'stop' },
+    usage: {
+      inputTokens: { total: 10, noCache: 10, cacheRead: 0, cacheWrite: 0 },
+      outputTokens: { total: 4, text: 4, reasoning: 0 },
+    },
+  },
+];
 
 async function collectSSEEvents(
   url: string,
@@ -229,7 +248,7 @@ describe('SSE Reconnection Event Recovery', () => {
   let baseUrl: string;
   let manager: ConversationManager;
   let chatHandler: ChatHandler;
-  let mockDecisionClient: DecisionClient;
+  let mockModel: LanguageModelV3;
   let sessionEventHub: SessionEventHub;
   let sessionEventsDAO: ReturnType<DatabaseManager['getSessionEventsDAO']>;
 
@@ -241,16 +260,7 @@ describe('SSE Reconnection Event Recovery', () => {
     manager = new ConversationManager(':memory:');
     sessionEventHub = SessionEventHub.getInstance();
 
-    mockDecisionClient = {
-      provider: 'kimi',
-      model: 'moonshot-v1-vision-preview',
-      decide: vi.fn(),
-      decideStream: vi.fn().mockImplementation(async (_context, callbacks: StreamCallbacks) => {
-        callbacks.onThinking('thinking...');
-        callbacks.onToken('Test response');
-        await callbacks.onDone();
-      }),
-    } as unknown as DecisionClient;
+    mockModel = createMockStreamingModel(defaultStreamChunks);
 
     const db = DatabaseManager.getInstance();
     sessionEventsDAO = db.getSessionEventsDAO();
@@ -265,8 +275,8 @@ describe('SSE Reconnection Event Recovery', () => {
       sessionEventHub
     );
 
-    vi.spyOn(chatHandler as unknown as { resolveDecisionModel: () => DecisionClient }, 'resolveDecisionModel')
-      .mockReturnValue(mockDecisionClient);
+    vi.spyOn(chatHandler as unknown as { resolveDecisionModel: () => Promise<LanguageModelV3> }, 'resolveDecisionModel')
+      .mockResolvedValue(mockModel);
 
     app = Fastify({ logger: false }).withTypeProvider<TypeBoxTypeProvider>();
     app.register(swaggerPlugin);
@@ -330,38 +340,26 @@ describe('SSE Reconnection Event Recovery', () => {
     expect(eventTypes).toContain('assistant.started');
     expect(eventTypes).toContain('assistant.completed');
 
-    // Find the seq of assistant.completed event
-    const completedEvents = firstStream.events.filter((event) => event.event === 'assistant.completed');
-    expect(completedEvents.length).toBeGreaterThan(0);
-
-    const lastEventId = completedEvents[0]?.id;
-    expect(lastEventId).toBeDefined();
-
-    // Verify persistence: check that we can replay from earlier seq
+    // Verify persistence: events are stored in the database
     const eventsFromDb = await sessionEventsDAO.getEventsAfter(session.id, 0, 100);
     const assistantStartedEvents = eventsFromDb.filter((e) => e.type === 'assistant.started');
     expect(assistantStartedEvents.length).toBeGreaterThan(0);
 
-    const startedSeq = assistantStartedEvents[0]?.seq;
-    expect(startedSeq).toBeDefined();
-
-    // Now reconnect from before assistant.started to verify we can recover events
-    const earlyReplayStream = await collectSSEEvents(
-      `${baseUrl}/api/chat/sessions/${session.id}/stream?lastEventId=${startedSeq! - 1}`,
+    // Reconnecting always gets a fresh snapshot — no lastEventId replay
+    const reconnectStream = await collectSSEEvents(
+      `${baseUrl}/api/chat/sessions/${session.id}/stream`,
       {
-        maxEvents: 4,
+        maxEvents: 1,
         timeoutMs: 2000,
       }
     );
 
-    expect(earlyReplayStream.statusCode).toBe(200);
-    const earlyReplayTypes = earlyReplayStream.events.map((event) => event.event);
-    expect(earlyReplayTypes).toContain('assistant.started');
-    expect(earlyReplayTypes).toContain('assistant.completed');
-    expect(earlyReplayTypes).not.toContain('session.snapshot');
+    expect(reconnectStream.statusCode).toBe(200);
+    const reconnectTypes = reconnectStream.events.map((event) => event.event);
+    expect(reconnectTypes).toContain('session.snapshot');
   });
 
-  it('Test 2: Fresh connection receives snapshot', async () => {
+  it('Test 2: Fresh connection receives snapshot with messages', async () => {
     const session = manager.createSession({
       title: 'Snapshot Test',
       provider: 'kimi',
@@ -393,7 +391,7 @@ describe('SSE Reconnection Event Recovery', () => {
     expect(Array.isArray(snapshotPayload.messages)).toBe(true);
     expect((snapshotPayload.messages as unknown[]).length).toBe(2);
 
-    // Now test with a running session that has persisted events
+    // Test with a running session — snapshot carries state
     const runningSession = manager.createSession({
       title: 'Running Session Test',
       provider: 'kimi',
@@ -405,33 +403,20 @@ describe('SSE Reconnection Event Recovery', () => {
       status: 'running',
     });
 
-    // Persist some events
-    await sessionEventsDAO.appendEvent(runningSession.id, 'assistant.started', {
-      messageId: 'msg-assistant-1',
-    });
-    await sessionEventsDAO.appendEvent(runningSession.id, 'assistant.delta', {
-      messageId: 'msg-assistant-1',
-      text: 'Working...',
-    });
-    await sessionEventsDAO.flush();
-
-    // Fresh connection should get snapshot + persisted events
-    const freshStreamWithRunning = await collectSSEEvents(
+    const runningStream = await collectSSEEvents(
       `${baseUrl}/api/chat/sessions/${runningSession.id}/stream`,
       {
-        maxEvents: 4,
-        timeoutMs: 4000,
+        maxEvents: 1,
+        timeoutMs: 3000,
       }
     );
 
-    expect(freshStreamWithRunning.statusCode).toBe(200);
-    const eventTypes = freshStreamWithRunning.events.map((event) => event.event);
-    expect(eventTypes[0]).toBe('session.snapshot');
-    expect(eventTypes).toContain('assistant.started');
-    expect(eventTypes).toContain('assistant.delta');
+    expect(runningStream.statusCode).toBe(200);
+    const runningSnapshot = parseEventData(runningStream.events[0]!);
+    expect(runningSnapshot.state).toBe('running');
   });
 
-  it('Test 3: Reconnection after page refresh scenario', async () => {
+  it('Test 3: Page refresh scenario preserves messages in snapshot', async () => {
     const session = manager.createSession({
       title: 'Page Refresh Test',
       provider: 'kimi',
@@ -442,58 +427,25 @@ describe('SSE Reconnection Event Recovery', () => {
     const userResponse = await postMessage(baseUrl, session.id, 'Navigate to example.com');
     expect(userResponse.status).toBe(202);
 
-    // Wait for message.created event and AI response events
+    // Wait for AI response to complete
     await waitForEventPersistence(session.id, 4);
 
-    // Simulate user sees message.created event (seq 1) then page refreshes
-    const firstStream = await collectSSEEvents(
+    // Simulate page refresh: reconnect gets fresh snapshot with all messages
+    const refreshStream = await collectSSEEvents(
       `${baseUrl}/api/chat/sessions/${session.id}/stream`,
       {
-        maxEvents: 2,
+        maxEvents: 1,
         timeoutMs: 4000,
-      }
-    );
-
-    expect(firstStream.statusCode).toBe(200);
-    expect(firstStream.events[0]?.event).toBe('session.snapshot');
-    expect(firstStream.events[1]?.event).toBe('message.created');
-
-    const lastSeenEventId = firstStream.events[1]?.id;
-    expect(lastSeenEventId).toBeDefined();
-
-    // Page refresh: reconnect with lastEventId
-    // Should recover all AI response events that happened during refresh
-    const refreshStream = await collectSSEEvents(
-      `${baseUrl}/api/chat/sessions/${session.id}/stream?lastEventId=${lastSeenEventId}`,
-      {
-        maxEvents: 4,
-        timeoutMs: 2500,
       }
     );
 
     expect(refreshStream.statusCode).toBe(200);
 
     const refreshTypes = refreshStream.events.map((event) => event.event);
+    expect(refreshTypes).toContain('session.snapshot');
 
-    // Should recover AI events
-    expect(refreshTypes).toContain('assistant.started');
-    expect(refreshTypes).toContain('assistant.delta');
-    expect(refreshTypes).toContain('assistant.completed');
-
-    // Should NOT receive session.snapshot on reconnect
-    expect(refreshTypes).not.toContain('session.snapshot');
-
-    // Verify messages array in snapshot includes user message
-    // Get fresh snapshot by connecting without lastEventId
-    const freshSnapshotStream = await collectSSEEvents(
-      `${baseUrl}/api/chat/sessions/${session.id}/stream`,
-      {
-        maxEvents: 1,
-        timeoutMs: 2000,
-      }
-    );
-
-    const snapshotPayload = parseEventData(freshSnapshotStream.events[0]!);
+    // Verify messages array in snapshot includes user message and AI response
+    const snapshotPayload = parseEventData(refreshStream.events[0]!);
     const messages = snapshotPayload.messages as unknown[];
     expect(messages.length).toBeGreaterThanOrEqual(1);
 
@@ -515,9 +467,9 @@ describe('SSE Reconnection Event Recovery', () => {
     expect(aiEvents.some((e) => e.type === 'assistant.completed')).toBe(true);
   });
 
-  it('Test 4: Reconnect replays >100 persisted events without loss or duplicate seq', { timeout: 15000 }, async () => {
+  it('Test 4: Persisted events store >100 events without loss or duplicate seq', { timeout: 15000 }, async () => {
     const session = manager.createSession({
-      title: 'Large Replay Test',
+      title: 'Large Persistence Test',
       provider: 'kimi',
       model: 'moonshot-v1-vision-preview',
     });
@@ -527,8 +479,8 @@ describe('SSE Reconnection Event Recovery', () => {
       messageId: 'msg-assistant-large',
     }));
 
-    const replayDeltaCount = 150;
-    for (let i = 0; i < replayDeltaCount; i++) {
+    const deltaCount = 150;
+    for (let i = 0; i < deltaCount; i++) {
       pendingWrites.push(sessionEventsDAO.appendEvent(session.id, 'assistant.delta', {
         messageId: 'msg-assistant-large',
         text: `chunk-${i}`,
@@ -541,33 +493,29 @@ describe('SSE Reconnection Event Recovery', () => {
     await Promise.all(pendingWrites);
     await sessionEventsDAO.flush();
 
-    const replayStream = await collectSSEEvents(
-      `${baseUrl}/api/chat/sessions/${session.id}/stream?lastEventId=1`,
-      {
-        maxEvents: replayDeltaCount + 1,
-        timeoutMs: 5000,
-      }
-    );
+    // Verify all events persisted correctly via DAO
+    const allEvents = await sessionEventsDAO.getEventsAfter(session.id, 0, 500);
 
-    expect(replayStream.statusCode).toBe(200);
-    expect(replayStream.events.some((event) => event.event === 'session.snapshot')).toBe(false);
-    expect(replayStream.events.length).toBe(replayDeltaCount + 1);
+    expect(allEvents.length).toBe(deltaCount + 2);
 
-    const replaySeqs = replayStream.events
-      .map((event) => Number.parseInt(event.id ?? '', 10))
-      .filter((seq) => Number.isFinite(seq));
+    const seqs = allEvents.map((e) => e.seq);
+    expect(new Set(seqs).size).toBe(seqs.length);
 
-    expect(replaySeqs.length).toBe(replayDeltaCount + 1);
-    expect(new Set(replaySeqs).size).toBe(replaySeqs.length);
-    expect(replaySeqs[0]).toBe(2);
-    expect(replaySeqs.at(-1)).toBe(replayDeltaCount + 2);
+    const startedEvents = allEvents.filter((e) => e.type === 'assistant.started');
+    const deltaEvents = allEvents.filter((e) => e.type === 'assistant.delta');
+    const completedEvents = allEvents.filter((e) => e.type === 'assistant.completed');
 
-    for (let index = 0; index < replaySeqs.length; index++) {
-      expect(replaySeqs[index]).toBe(index + 2);
+    expect(startedEvents.length).toBe(1);
+    expect(deltaEvents.length).toBe(deltaCount);
+    expect(completedEvents.length).toBe(1);
+
+    // Verify sequential seq numbering
+    for (let i = 0; i < seqs.length; i++) {
+      expect(seqs[i]).toBe(i + 1);
     }
   });
 
-  it('Test 5: ChatHandler without显式DAO注入仍可回放重连事件', { timeout: 10000 }, async () => {
+  it('Test 5: ChatHandler without explicit DAO injection still streams events', { timeout: 10000 }, async () => {
     const buggyChatHandler = new ChatHandler(
       manager,
       mockConfig,
@@ -578,9 +526,9 @@ describe('SSE Reconnection Event Recovery', () => {
     );
 
     vi.spyOn(
-      buggyChatHandler as unknown as { resolveDecisionModel: () => DecisionClient },
+      buggyChatHandler as unknown as { resolveDecisionModel: () => Promise<LanguageModelV3> },
       'resolveDecisionModel'
-    ).mockReturnValue(mockDecisionClient);
+    ).mockImplementation(async () => mockModel);
 
     // Register a new route with buggy handler
     const buggyApp = Fastify({ logger: false }).withTypeProvider<TypeBoxTypeProvider>();
@@ -610,8 +558,8 @@ describe('SSE Reconnection Event Recovery', () => {
       const ssePromise = collectSSEEvents(
         `${buggyBaseUrl}/api/chat/sessions/${session.id}/stream`,
         {
-          maxEvents: 2,
-          timeoutMs: 8000,
+          maxEvents: 6,
+          timeoutMs: 5000,
         }
       );
 
@@ -625,30 +573,16 @@ describe('SSE Reconnection Event Recovery', () => {
       });
       expect(response.status).toBe(202);
 
-      // First connection should work and get snapshot
+      // Connection should work and get snapshot + live events
       const firstStream = await ssePromise;
 
       expect(firstStream.statusCode).toBe(200);
       expect(firstStream.events[0]?.event).toBe('session.snapshot');
 
-      // Wait a bit for message to complete
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const eventTypes = firstStream.events.map((event) => event.event);
+      expect(eventTypes).toContain('assistant.started');
 
-      // Reconnect with lastEventId=0
-      const replayStream = await collectSSEEvents(
-        `${buggyBaseUrl}/api/chat/sessions/${session.id}/stream?lastEventId=0`,
-        {
-          maxEvents: 4,
-          timeoutMs: 3000,
-        }
-      );
-
-      expect(replayStream.statusCode).toBe(200);
-
-      const replayTypes = replayStream.events.map((event) => event.event);
-      const hasAssistantEvents = replayTypes.some(type => type.startsWith('assistant.'));
-      expect(hasAssistantEvents).toBe(true);
-
+      // Events are still persisted via the fallback DAO from DatabaseManager
       const allEvents = await sessionEventsDAO.getEventsAfter(session.id, 0, 100);
       expect(allEvents.some((event) => event.type === 'assistant.completed')).toBe(true);
     } finally {

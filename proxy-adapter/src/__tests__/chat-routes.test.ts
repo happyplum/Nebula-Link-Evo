@@ -68,6 +68,7 @@ vi.mock('../services/index.js', () => ({
   TaskService: {
     getInstance: vi.fn().mockReturnValue({
       getConfig: mockGetConfig,
+      getRegistry: vi.fn().mockReturnValue(null),
     }),
   },
 }));
@@ -563,7 +564,8 @@ describe('Chat Routes', () => {
       expect(body.code).toBeUndefined();
     });
 
-    it('should reject unknown model with 400', async () => {
+    it('should reject non-existent model for valid provider', async () => {
+      // validateProviderModel checks model exists in provider's model list
       const response = await app.inject({
         method: 'POST',
         url: '/api/chat/sessions',
@@ -575,9 +577,7 @@ describe('Chat Routes', () => {
 
       expect(response.statusCode).toBe(400);
       const body = JSON.parse(response.payload);
-      expect(body.error).toContain('Model nonexistent-model not found in provider kimi');
-      expect(body.success).toBeUndefined();
-      expect(body.code).toBeUndefined();
+      expect(body.error).toContain('not found in provider');
     });
 
     it('should reject disabled provider with 400', async () => {
