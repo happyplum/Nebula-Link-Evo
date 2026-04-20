@@ -22,7 +22,7 @@ export function loadConfig(configPath?: string): LoadResult {
   }
 
   let foundPath: string | null = null;
-  let rawConfig: ResolvedConfig | null = null;
+  let resolvedConfig: ResolvedConfig | null = null;
 
   for (const p of searchPaths) {
     const absolutePath = path.resolve(p);
@@ -32,7 +32,7 @@ export function loadConfig(configPath?: string): LoadResult {
         const parsedConfig = JSON.parse(content) as Config;
         const { config, result } = resolveConfig(parsedConfig);
         if (result.success) {
-          rawConfig = config;
+          resolvedConfig = config;
           foundPath = absolutePath;
           break;
         }
@@ -42,7 +42,7 @@ export function loadConfig(configPath?: string): LoadResult {
     }
   }
 
-  if (!rawConfig) {
+  if (!resolvedConfig) {
     return {
       config: null,
       result: {
@@ -55,7 +55,7 @@ export function loadConfig(configPath?: string): LoadResult {
   }
 
   return {
-    config: rawConfig,
+    config: resolvedConfig,
     result: { success: true, errors: [], warnings: [] },
     configPath: foundPath!,
   };

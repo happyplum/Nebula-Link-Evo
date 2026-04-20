@@ -56,16 +56,14 @@ describe('config/loader', () => {
           decision: { provider: 'glm', model: 'glm-4.7-flash' },
           vision: { provider: 'glm', model: 'glm-4.6v-flash' },
         },
-        _resolved: {
-          providers: {},
-          settings: {
-            timeout: 30000,
-            maxRetries: 3,
-            temperature: 0.2,
-            maxTokens: 1000,
-            maxSteps: 3,
-          },
+        settings: {
+          timeout: 30000,
+          maxRetries: 3,
+          temperature: 0.2,
+          maxTokens: 1000,
+          maxSteps: 3,
         },
+        providers: {},
       },
       result: { success: true, errors: [], warnings: [] },
     });

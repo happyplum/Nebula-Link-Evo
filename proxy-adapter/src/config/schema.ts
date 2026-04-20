@@ -42,12 +42,7 @@ export interface FlatProvider {
   models?: Record<string, ModelConfig>;
 }
 
-export interface Provider extends FlatProvider {
-  name: string;
-  baseUrl: string;
-  mcp: string[];
-  models: Record<string, ModelConfig>;
-}
+
 
 export interface ModelConfig {
   type: 'vision' | 'decision' | 'multimodal';
@@ -109,13 +104,10 @@ export interface SettingsConfig {
   maxSteps: number;
 }
 
-export interface ResolvedConfig extends Omit<Config, 'defaults' | 'settings'> {
+export interface ResolvedConfig extends Omit<Config, 'defaults' | 'settings' | 'providers'> {
   defaults: ResolvedDefaultsConfig;
   settings: SettingsConfig;
-  _resolved: {
-    providers: Record<string, ResolvedProvider>;
-    settings: SettingsConfig;
-  };
+  providers: Record<string, ResolvedProvider>;
 }
 
 export interface ResolvedProvider extends FlatProvider {

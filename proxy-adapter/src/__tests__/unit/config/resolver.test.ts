@@ -44,7 +44,7 @@ describe('config/resolver with flat provider config', () => {
     };
   });
 
-  it('resolves enabled providers and api keys', () => {
+  it('resolves enabled providers and includes disabled providers', () => {
     const options: ResolverOptions = {
       env: {
         GLM_API_KEY: 'glm-secret',
@@ -54,9 +54,11 @@ describe('config/resolver with flat provider config', () => {
     const { config: resolved, result } = resolveConfig(baseConfig, options);
 
     expect(result.success).toBe(true);
-    expect(resolved._resolved.providers.glm.apiKey).toBe('glm-secret');
-    expect(resolved._resolved.providers.glm.npmPackage).toBe('@ai-sdk/openai-compatible');
-    expect(resolved._resolved.providers.openai).toBeUndefined();
+    expect(resolved.providers.glm.apiKey).toBe('glm-secret');
+    expect(resolved.providers.glm.npmPackage).toBe('@ai-sdk/openai-compatible');
+    expect(resolved.providers.openai).toBeDefined();
+    expect(resolved.providers.openai.enabled).toBe(false);
+    expect(resolved.providers.openai.apiKey).toBe('{OPENAI_API_KEY}');
   });
 
   it('parses defaults provider/model strings into selector objects', () => {
@@ -103,7 +105,9 @@ describe('config/resolver with flat provider config', () => {
     const entry = getProviderModel(resolved, 'glm', 'glm-4.7-flash');
     expect(entry).not.toBeNull();
     expect(entry?.provider.apiKey).toBe('glm-secret');
-    expect(getProviderModel(resolved, 'openai', 'gpt-4o')).toBeNull();
+    const openaiEntry = getProviderModel(resolved, 'openai', 'gpt-4o');
+    expect(openaiEntry).not.toBeNull();
+    expect(openaiEntry?.provider.enabled).toBe(false);
   });
 
   it('mirrors raw provider models into resolved provider when provided', () => {
@@ -127,8 +131,8 @@ describe('config/resolver with flat provider config', () => {
     });
 
     expect(result.success).toBe(true);
-    expect(resolved._resolved.providers.glm.models).toBeDefined();
-    expect(resolved._resolved.providers.glm.models['glm-4.7-flash']).toEqual({
+    expect(resolved.providers.glm.models).toBeDefined();
+    expect(resolved.providers.glm.models['glm-4.7-flash']).toEqual({
       type: 'multimodal',
       capabilities: ['vision', 'decision'],
     });
@@ -140,6 +144,6 @@ describe('config/resolver with flat provider config', () => {
     });
 
     expect(result.success).toBe(true);
-    expect(resolved._resolved.providers.glm.models).toEqual({});
+    expect(resolved.providers.glm.models).toEqual({});
   });
 });

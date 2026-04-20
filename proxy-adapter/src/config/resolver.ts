@@ -39,6 +39,11 @@ export function resolveConfig(
 
   for (const [key, provider] of Object.entries(config.providers)) {
     if (!provider.enabled) {
+      resolvedProviders[key] = {
+        ...provider,
+        apiKey: provider.apiKey || '',
+        models: provider.models ?? {},
+      };
       continue;
     }
 
@@ -75,10 +80,7 @@ export function resolveConfig(
       vision: parseProviderModelString(config.defaults.vision, 'vision', result),
     },
     settings: resolvedSettings,
-    _resolved: {
-      providers: resolvedProviders,
-      settings: resolvedSettings,
-    },
+    providers: resolvedProviders,
   };
 
   if (result.errors.length > 0) {
@@ -158,7 +160,7 @@ export function getProviderModel(
   providerName: string,
   modelName: string
 ): { provider: ResolvedProvider; model: ModelConfig } | null {
-  const provider = config._resolved.providers[providerName];
+  const provider = config.providers[providerName];
   if (!provider) {
     return null;
   }
