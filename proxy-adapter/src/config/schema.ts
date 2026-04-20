@@ -39,6 +39,7 @@ export interface FlatProvider {
   baseUrl?: string;
   npmPackage?: string;
   mcp?: string[];
+  models?: Record<string, ModelConfig>;
 }
 
 export interface Provider extends FlatProvider {

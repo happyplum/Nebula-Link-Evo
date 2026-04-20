@@ -20,6 +20,24 @@ describe('config/schema types', () => {
     expect(provider.apiKey).toContain('GLM_API_KEY');
   });
 
+  it('accepts flat provider config with optional models', () => {
+    const provider: FlatProvider = {
+      enabled: true,
+      apiKey: '{GLM_API_KEY}',
+      baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+      models: {
+        'glm-4.7-flash': {
+          type: 'decision',
+          capabilities: ['decision'],
+        },
+      },
+    };
+
+    expect(provider.enabled).toBe(true);
+    expect(provider.models).toBeDefined();
+    expect(provider.models?.['glm-4.7-flash'].type).toBe('decision');
+  });
+
   it('accepts string defaults in raw config', () => {
     const defaults: DefaultsConfig = {
       mode: 'separation',

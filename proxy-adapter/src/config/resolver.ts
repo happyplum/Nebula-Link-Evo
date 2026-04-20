@@ -51,7 +51,7 @@ export function resolveConfig(
     const resolvedProvider: ResolvedProvider = {
       ...provider,
       apiKey: apiKeyResult.value!,
-      models: {},
+      models: provider.models ?? {},
     };
 
     resolvedProvider.npmPackage = normalizeNpmPackage(resolvedProvider.npmPackage);
