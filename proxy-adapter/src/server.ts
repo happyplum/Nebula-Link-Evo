@@ -75,7 +75,7 @@ async function start() {
     const registry = taskService.getRegistry();
     const preflightConfig = taskService.getConfig();
     if (registry && preflightConfig) {
-      const providerKeys = Object.keys(preflightConfig._resolved?.providers ?? {});
+      const providerKeys = Object.keys(preflightConfig.providers ?? {});
       await runPreflight(registry, providerKeys);
     }
 

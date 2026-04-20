@@ -56,7 +56,7 @@ export class TaskService {
     }
 
     const configProviders: Record<string, ProviderConfig> = {};
-    for (const [key, provider] of Object.entries(this.config._resolved.providers)) {
+    for (const [key, provider] of Object.entries(this.config.providers)) {
       if (provider.enabled) {
         configProviders[key] = {
           apiKey: provider.apiKey,
@@ -352,10 +352,10 @@ export class TaskService {
   private async getModelIntro(provider: string, model: string): Promise<string> {
     try {
       const config = this.config;
-      if (!config?._resolved?.providers?.[provider]) {
+      if (!config?.providers?.[provider]) {
         return `我是 ${model} 决策模型，由 ${this.getProviderDisplayName(provider)} 提供。`;
       }
-      const providerConfig = config._resolved.providers[provider];
+      const providerConfig = config.providers[provider];
       const apiKey = providerConfig?.apiKey;
       const baseUrl = providerConfig?.baseUrl || 'https://api.moonshot.cn/v1';
       if (!apiKey || apiKey.startsWith('{')) {

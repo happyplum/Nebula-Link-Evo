@@ -42,7 +42,7 @@ export async function streamTask(options: StreamTaskOptions): Promise<void> {
   try {
     // Get the AI model
     const providers: Record<string, ProviderConfig> = {};
-    for (const [key, providerConfig] of Object.entries(config._resolved.providers)) {
+    for (const [key, providerConfig] of Object.entries(config.providers)) {
       if (!providerConfig.enabled) {
         continue;
       }

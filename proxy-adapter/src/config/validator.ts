@@ -11,7 +11,7 @@ function getResolvedModels(
   config: ResolvedConfig,
   provider: string
 ): Record<string, ModelConfig> | undefined {
-  return config._resolved?.providers[provider]?.models;
+  return config.providers[provider]?.models;
 }
 
 export function validateConfig(config: ResolvedConfig): ValidationResult {
@@ -96,12 +96,11 @@ export function validateConfig(config: ResolvedConfig): ValidationResult {
     }
   }
 
-  // --- Resolved-layer checks ---
-  if (config._resolved) {
-    for (const [name, provider] of Object.entries(config._resolved.providers)) {
-      if (!provider.apiKey) {
-        errors.push(`Provider ${name}: apiKey not resolved`);
-      }
+  // --- Runtime resolved-key checks ---
+  for (const [name, provider] of Object.entries(config.providers)) {
+    if (!provider.enabled) continue;
+    if (!provider.apiKey) {
+      errors.push(`Provider ${name}: apiKey not resolved`);
     }
   }
 
