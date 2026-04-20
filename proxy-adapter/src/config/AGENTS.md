@@ -24,9 +24,10 @@ Runtime config loading, placeholder resolution, validation, and capability check
 
 ## Contributor Traps
 
-- A config can be structurally present but still invalid because `_resolved.providers.*.apiKey` is empty.
+- A config can be structurally present but still invalid because `providers.*.apiKey` is empty (no _resolved wrapper anymore).
 - Disabled default providers currently warn rather than fail; changing that affects startup behavior and tests.
 - Capability helpers stay lightweight; provider/model pairing still determines runtime truth.
+- DO NOT reintroduce raw-vs-resolved provider duplication; `ResolvedConfig.providers` is the single canonical runtime provider map.
 
 ## Anti-Patterns
 

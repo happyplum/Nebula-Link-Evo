@@ -24,12 +24,19 @@ describe('MCP Chat Integration', () => {
   let chatHandler: ChatHandler;
   let session: Session;
 
-  const mockConfig: ResolvedConfig = {
+const mockConfig: ResolvedConfig = {
+    version: '1.0',
     providers: {
       test: {
         enabled: true,
         apiKey: 'test-key',
         npmPackage: '@ai-sdk/openai',
+        models: {
+          'test-model': {
+            type: 'decision',
+            capabilities: ['decision'],
+          },
+        },
       },
     },
     mcp: {
@@ -50,32 +57,10 @@ describe('MCP Chat Integration', () => {
     },
     settings: {
       timeout: 30000,
-      maxRetries: 3,
+      maxRetries:3,
       temperature: 0.7,
       maxTokens: 4096,
       maxSteps: 10,
-    },
-    _resolved: {
-      providers: {
-        test: {
-          enabled: true,
-          apiKey: 'test-key',
-          npmPackage: '@ai-sdk/openai',
-          models: {
-            'test-model': {
-              type: 'decision',
-              capabilities: ['decision'],
-            },
-          },
-        },
-      },
-      settings: {
-        timeout: 30000,
-        maxRetries: 3,
-        temperature: 0.7,
-        maxTokens: 4096,
-        maxSteps: 10,
-      },
     },
   };
 

@@ -48,13 +48,14 @@ vi.mock('../../../clients/mcp/sdk-client.js', () => {
 vi.mock('../../../config/index.js', () => ({
   loadConfig: vi.fn().mockReturnValue({
     config: {
+      version: '1.0',
       providers: {},
+      mcp: { enabled: false, servers: {} },
       defaults: {
         mode: 'separation',
         decision: { provider: 'test-provider', model: 'test-model' },
         vision: { provider: 'test-provider', model: 'test-model' },
       },
-      _resolved: { providers: {} },
     },
     configPath: '/path/to/config.json',
     result: { errors: [] },

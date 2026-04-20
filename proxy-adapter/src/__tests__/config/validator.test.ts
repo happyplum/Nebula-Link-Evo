@@ -4,7 +4,7 @@ import {
   validateProviderModel,
   canProviderDo,
 } from '../../config/validator.js';
-import type { ResolvedConfig } from '../../config/schema.js';
+import type { ResolvedConfig, ModelConfig } from '../../config/schema.js';
 
 describe('validateConfig', () => {
   describe('valid configuration', () => {
@@ -39,44 +39,7 @@ describe('validateConfig', () => {
           maxTokens: 2000,
           maxSteps: 10,
         },
-        _resolved: {
-          providers: {
-            'vision-provider': {
-              name: 'vision-provider',
-              enabled: true,
-              apiKey: 'resolved-key',
-              baseUrl: 'https://api.vision.com',
-              mcp: [],
-              models: {
-                'vision-model': {
-                  type: 'vision',
-                  capabilities: ['vision'],
-                },
-              },
-            },
-            'decision-provider': {
-              name: 'decision-provider',
-              enabled: true,
-              apiKey: 'resolved-key',
-              baseUrl: 'https://api.decision.com',
-              mcp: [],
-              models: {
-                'decision-model': {
-                  type: 'decision',
-                  capabilities: ['decision'],
-                },
-              },
-            },
-          },
-          settings: {
-            timeout: 30000,
-            maxRetries: 3,
-            temperature: 0.7,
-            maxTokens: 2000,
-            maxSteps: 10,
-          },
-        },
-      };
+};
 
       const result = validateConfig(config);
       expect(result.valid).toBe(true);
@@ -110,31 +73,7 @@ describe('validateConfig', () => {
           maxTokens: 2000,
           maxSteps: 10,
         },
-        _resolved: {
-          providers: {
-            'unified-provider': {
-              name: 'unified-provider',
-              enabled: true,
-              apiKey: 'resolved-key',
-              baseUrl: 'https://api.unified.com',
-              mcp: [],
-              models: {
-                'unified-model': {
-                  type: 'multimodal',
-                  capabilities: ['vision', 'decision'],
-                },
-              },
-            },
-          },
-          settings: {
-            timeout: 30000,
-            maxRetries: 3,
-            temperature: 0.7,
-            maxTokens: 2000,
-            maxSteps: 10,
-          },
-        },
-      };
+};
 
       const result = validateConfig(config);
       expect(result.valid).toBe(true);
@@ -167,17 +106,7 @@ describe('validateConfig', () => {
           maxTokens: 2000,
           maxSteps: 10,
         },
-        _resolved: {
-          providers: {},
-          settings: {
-            timeout: 30000,
-            maxRetries: 3,
-            temperature: 0.7,
-            maxTokens: 2000,
-            maxSteps: 10,
-          },
-        },
-      };
+};
 
       const result = validateConfig(config);
       expect(result.valid).toBe(false);
@@ -207,17 +136,7 @@ describe('validateConfig', () => {
           maxTokens: 2000,
           maxSteps: 10,
         },
-        _resolved: {
-          providers: {},
-          settings: {
-            timeout: 30000,
-            maxRetries: 3,
-            temperature: 0.7,
-            maxTokens: 2000,
-            maxSteps: 10,
-          },
-        },
-      };
+};
 
       const result = validateConfig(config);
       expect(result.valid).toBe(false);
@@ -247,17 +166,7 @@ describe('validateConfig', () => {
           maxTokens: 2000,
           maxSteps: 10,
         },
-        _resolved: {
-          providers: {},
-          settings: {
-            timeout: 30000,
-            maxRetries: 3,
-            temperature: 0.7,
-            maxTokens: 2000,
-            maxSteps: 10,
-          },
-        },
-      };
+};
 
       const result = validateConfig(config);
       expect(result.valid).toBe(true);
@@ -286,17 +195,7 @@ describe('validateConfig', () => {
           maxTokens: 2000,
           maxSteps: 10,
         },
-        _resolved: {
-          providers: {},
-          settings: {
-            timeout: 30000,
-            maxRetries: 3,
-            temperature: 0.7,
-            maxTokens: 2000,
-            maxSteps: 10,
-          },
-        },
-      };
+};
 
       const result = validateConfig(config);
       expect(result.warnings).toContain('No providers enabled');
@@ -325,17 +224,7 @@ describe('validateConfig', () => {
           maxTokens: 2000,
           maxSteps: 10,
         },
-        _resolved: {
-          providers: {},
-          settings: {
-            timeout: 30000,
-            maxRetries: 3,
-            temperature: 0.7,
-            maxTokens: 2000,
-            maxSteps: 10,
-          },
-        },
-      };
+};
 
       const result = validateConfig(config);
       expect(result.valid).toBe(true);
@@ -364,17 +253,7 @@ describe('validateConfig', () => {
           maxTokens: 2000,
           maxSteps: 10,
         },
-        _resolved: {
-          providers: {},
-          settings: {
-            timeout: 30000,
-            maxRetries: 3,
-            temperature: 0.7,
-            maxTokens: 2000,
-            maxSteps: 10,
-          },
-        },
-      };
+};
 
       const result = validateConfig(config);
       expect(result.valid).toBe(true);
@@ -405,17 +284,7 @@ describe('validateConfig', () => {
           maxTokens: 2000,
           maxSteps: 10,
         },
-        _resolved: {
-          providers: {},
-          settings: {
-            timeout: 30000,
-            maxRetries: 3,
-            temperature: 0.7,
-            maxTokens: 2000,
-            maxSteps: 10,
-          },
-        },
-      };
+};
 
       const result = validateConfig(config);
       expect(result.valid).toBe(false);
@@ -445,17 +314,7 @@ describe('validateConfig', () => {
           maxTokens: 2000,
           maxSteps: 10,
         },
-        _resolved: {
-          providers: {},
-          settings: {
-            timeout: 30000,
-            maxRetries: 3,
-            temperature: 0.7,
-            maxTokens: 2000,
-            maxSteps: 10,
-          },
-        },
-      };
+};
 
       const result = validateConfig(config);
       expect(result.valid).toBe(false);
@@ -485,17 +344,7 @@ describe('validateConfig', () => {
           maxTokens: 2000,
           maxSteps: 10,
         },
-        _resolved: {
-          providers: {},
-          settings: {
-            timeout: 30000,
-            maxRetries: 3,
-            temperature: 0.7,
-            maxTokens: 2000,
-            maxSteps: 10,
-          },
-        },
-      };
+};
 
       const result = validateConfig(config);
       expect(result.valid).toBe(false);
@@ -525,17 +374,7 @@ describe('validateConfig', () => {
           maxTokens: 2000,
           maxSteps: 10,
         },
-        _resolved: {
-          providers: {},
-          settings: {
-            timeout: 30000,
-            maxRetries: 3,
-            temperature: 0.7,
-            maxTokens: 2000,
-            maxSteps: 10,
-          },
-        },
-      };
+};
 
       const result = validateConfig(config);
       expect(result.valid).toBe(false);
@@ -570,17 +409,7 @@ describe('validateConfig', () => {
           maxTokens: 2000,
           maxSteps: 10,
         },
-        _resolved: {
-          providers: {},
-          settings: {
-            timeout: 30000,
-            maxRetries: 3,
-            temperature: 0.7,
-            maxTokens: 2000,
-            maxSteps: 10,
-          },
-        },
-      };
+};
 
       const result = validateConfig(config);
       expect(result.warnings).toContain(
@@ -616,17 +445,7 @@ describe('validateConfig', () => {
           maxTokens: 2000,
           maxSteps: 10,
         },
-        _resolved: {
-          providers: {},
-          settings: {
-            timeout: 30000,
-            maxRetries: 3,
-            temperature: 0.7,
-            maxTokens: 2000,
-            maxSteps: 10,
-          },
-        },
-      };
+};
 
       const result = validateConfig(config);
       expect(result.warnings).toContain(
@@ -659,17 +478,7 @@ describe('validateConfig', () => {
           maxTokens: 2000,
           maxSteps: 10,
         },
-        _resolved: {
-          providers: {},
-          settings: {
-            timeout: 30000,
-            maxRetries: 3,
-            temperature: 0.7,
-            maxTokens: 2000,
-            maxSteps: 10,
-          },
-        },
-      };
+};
 
       const result = validateConfig(config);
       expect(result.valid).toBe(false);
@@ -699,17 +508,7 @@ describe('validateConfig', () => {
           maxTokens: 2000,
           maxSteps: 10,
         },
-        _resolved: {
-          providers: {},
-          settings: {
-            timeout: 30000,
-            maxRetries: 3,
-            temperature: 0.7,
-            maxTokens: 2000,
-            maxSteps: 10,
-          },
-        },
-      };
+};
 
       const result = validateConfig(config);
       expect(result.valid).toBe(false);
@@ -739,17 +538,7 @@ describe('validateConfig', () => {
           maxTokens: 2000,
           maxSteps: 10,
         },
-        _resolved: {
-          providers: {},
-          settings: {
-            timeout: 30000,
-            maxRetries: 3,
-            temperature: 0.7,
-            maxTokens: 2000,
-            maxSteps: 10,
-          },
-        },
-      };
+};
 
       const result = validateConfig(config);
       expect(result.valid).toBe(true);
@@ -774,17 +563,7 @@ describe('validateConfig', () => {
           maxTokens: 2000,
           maxSteps: 10,
         },
-        _resolved: {
-          providers: {},
-          settings: {
-            timeout: 30000,
-            maxRetries: 3,
-            temperature: 0.7,
-            maxTokens: 2000,
-            maxSteps: 10,
-          },
-        },
-      };
+};
 
       const result = validateConfig(config);
       expect(result.valid).toBe(false);
@@ -806,17 +585,7 @@ describe('validateConfig', () => {
           maxTokens: 2000,
           maxSteps: 10,
         },
-        _resolved: {
-          providers: {},
-          settings: {
-            timeout: 30000,
-            maxRetries: 3,
-            temperature: 0.7,
-            maxTokens: 2000,
-            maxSteps: 10,
-          },
-        },
-      };
+};
 
       const result = validateConfig(config);
       expect(result.valid).toBe(false);
@@ -858,17 +627,7 @@ describe('validateConfig', () => {
           maxTokens: 2000,
           maxSteps: 10,
         },
-        _resolved: {
-          providers: {},
-          settings: {
-            timeout: 30000,
-            maxRetries: 3,
-            temperature: 0.7,
-            maxTokens: 2000,
-            maxSteps: 10,
-          },
-        },
-      };
+};
 
       const result = validateConfig(config);
       expect(result.valid).toBe(false);
@@ -908,17 +667,7 @@ describe('validateConfig', () => {
           maxTokens: 2000,
           maxSteps: 10,
         },
-        _resolved: {
-          providers: {},
-          settings: {
-            timeout: 30000,
-            maxRetries: 3,
-            temperature: 0.7,
-            maxTokens: 2000,
-            maxSteps: 10,
-          },
-        },
-      };
+};
 
       const result = validateConfig(config);
       expect(result.warnings).toContain('MCP server test-server: no args specified');
@@ -957,17 +706,7 @@ describe('validateConfig', () => {
           maxTokens: 2000,
           maxSteps: 10,
         },
-        _resolved: {
-          providers: {},
-          settings: {
-            timeout: 30000,
-            maxRetries: 3,
-            temperature: 0.7,
-            maxTokens: 2000,
-            maxSteps: 10,
-          },
-        },
-      };
+};
 
       const result = validateConfig(config);
       expect(result.errors).not.toContain(
@@ -983,7 +722,7 @@ describe('validateConfig', () => {
         providers: {
           'test-provider': {
             enabled: true,
-            apiKey: 'test-key',
+            apiKey: '',
             baseUrl: 'https://api.test.com',
           },
         },
@@ -1000,31 +739,7 @@ describe('validateConfig', () => {
           maxTokens: 2000,
           maxSteps: 10,
         },
-        _resolved: {
-          providers: {
-            'test-provider': {
-              name: 'test-provider',
-              enabled: true,
-              apiKey: '',
-              baseUrl: 'https://api.test.com',
-              mcp: [],
-              models: {
-                'test-model': {
-                  type: 'vision',
-                  capabilities: ['vision'],
-                },
-              },
-            },
-          },
-          settings: {
-            timeout: 30000,
-            maxRetries: 3,
-            temperature: 0.7,
-            maxTokens: 2000,
-            maxSteps: 10,
-          },
-        },
-      };
+};
 
       const result = validateConfig(config);
       expect(result.valid).toBe(false);
@@ -1058,17 +773,7 @@ describe('validateProviderModel', () => {
           maxTokens: 2000,
           maxSteps: 10,
         },
-        _resolved: {
-          providers: {},
-          settings: {
-            timeout: 30000,
-            maxRetries: 3,
-            temperature: 0.7,
-            maxTokens: 2000,
-            maxSteps: 10,
-          },
-        },
-      };
+};
 
       const result = validateProviderModel(
         config,
@@ -1098,17 +803,7 @@ describe('validateProviderModel', () => {
           maxTokens: 2000,
           maxSteps: 10,
         },
-        _resolved: {
-          providers: {},
-          settings: {
-            timeout: 30000,
-            maxRetries: 3,
-            temperature: 0.7,
-            maxTokens: 2000,
-            maxSteps: 10,
-          },
-        },
-      };
+};
 
       const result = validateProviderModel(
         config,
@@ -1144,17 +839,7 @@ describe('validateProviderModel', () => {
           maxTokens: 2000,
           maxSteps: 10,
         },
-        _resolved: {
-          providers: {},
-          settings: {
-            timeout: 30000,
-            maxRetries: 3,
-            temperature: 0.7,
-            maxTokens: 2000,
-            maxSteps: 10,
-          },
-        },
-      };
+};
 
       const result = validateProviderModel(
         config,
@@ -1173,6 +858,12 @@ describe('validateProviderModel', () => {
             enabled: true,
             apiKey: 'test-key',
             baseUrl: 'https://api.test.com',
+            models: {
+              'existing-model': {
+                type: 'multimodal',
+                capabilities: ['vision', 'decision'],
+              },
+            },
           },
         },
         mcp: { enabled: false, servers: {} },
@@ -1188,31 +879,7 @@ describe('validateProviderModel', () => {
           maxTokens: 2000,
           maxSteps: 10,
         },
-        _resolved: {
-          providers: {
-            'test-provider': {
-              name: 'test-provider',
-              enabled: true,
-              apiKey: 'test-key',
-              baseUrl: 'https://api.test.com',
-              mcp: [],
-              models: {
-                'test-model': {
-                  type: 'vision',
-                  capabilities: ['vision'],
-                },
-              },
-            },
-          },
-          settings: {
-            timeout: 30000,
-            maxRetries: 3,
-            temperature: 0.7,
-            maxTokens: 2000,
-            maxSteps: 10,
-          },
-        },
-      };
+};
 
       const result = validateProviderModel(
         config,
@@ -1252,17 +919,7 @@ describe('canProviderDo', () => {
           maxTokens: 2000,
           maxSteps: 10,
         },
-        _resolved: {
-          providers: {},
-          settings: {
-            timeout: 30000,
-            maxRetries: 3,
-            temperature: 0.7,
-            maxTokens: 2000,
-            maxSteps: 10,
-          },
-        },
-      };
+};
 
       const result = canProviderDo(
         'test-provider',
@@ -1296,17 +953,7 @@ describe('canProviderDo', () => {
           maxTokens: 2000,
           maxSteps: 10,
         },
-        _resolved: {
-          providers: {},
-          settings: {
-            timeout: 30000,
-            maxRetries: 3,
-            temperature: 0.7,
-            maxTokens: 2000,
-            maxSteps: 10,
-          },
-        },
-      };
+};
 
       const result = canProviderDo(
         'test-provider',
@@ -1340,17 +987,7 @@ describe('canProviderDo', () => {
           maxTokens: 2000,
           maxSteps: 10,
         },
-        _resolved: {
-          providers: {},
-          settings: {
-            timeout: 30000,
-            maxRetries: 3,
-            temperature: 0.7,
-            maxTokens: 2000,
-            maxSteps: 10,
-          },
-        },
-      };
+};
 
       const visionResult = canProviderDo(
         'test-provider',
@@ -1387,17 +1024,7 @@ describe('canProviderDo', () => {
           maxTokens: 2000,
           maxSteps: 10,
         },
-        _resolved: {
-          providers: {},
-          settings: {
-            timeout: 30000,
-            maxRetries: 3,
-            temperature: 0.7,
-            maxTokens: 2000,
-            maxSteps: 10,
-          },
-        },
-      };
+};
 
       const result = canProviderDo(
         'non-existent-provider',
@@ -1431,17 +1058,7 @@ describe('canProviderDo', () => {
           maxTokens: 2000,
           maxSteps: 10,
         },
-        _resolved: {
-          providers: {},
-          settings: {
-            timeout: 30000,
-            maxRetries: 3,
-            temperature: 0.7,
-            maxTokens: 2000,
-            maxSteps: 10,
-          },
-        },
-      };
+};
 
       const result = canProviderDo(
         'test-provider',
@@ -1460,6 +1077,12 @@ describe('canProviderDo', () => {
             enabled: true,
             apiKey: 'test-key',
             baseUrl: 'https://api.test.com',
+            models: {
+              'existing-model': {
+                type: 'multimodal',
+                capabilities: ['vision', 'decision'],
+              },
+            },
           },
         },
         mcp: { enabled: false, servers: {} },
@@ -1475,31 +1098,7 @@ describe('canProviderDo', () => {
           maxTokens: 2000,
           maxSteps: 10,
         },
-        _resolved: {
-          providers: {
-            'test-provider': {
-              name: 'test-provider',
-              enabled: true,
-              apiKey: 'test-key',
-              baseUrl: 'https://api.test.com',
-              mcp: [],
-              models: {
-                'test-model': {
-                  type: 'vision',
-                  capabilities: ['vision'],
-                },
-              },
-            },
-          },
-          settings: {
-            timeout: 30000,
-            maxRetries: 3,
-            temperature: 0.7,
-            maxTokens: 2000,
-            maxSteps: 10,
-          },
-        },
-      };
+};
 
       const result = canProviderDo(
         'test-provider',
@@ -1518,6 +1117,12 @@ describe('canProviderDo', () => {
             enabled: true,
             apiKey: 'test-key',
             baseUrl: 'https://api.test.com',
+            models: {
+              'vision-model': {
+                type: 'multimodal',
+                capabilities: ['vision'],
+              },
+            },
           },
         },
         mcp: { enabled: false, servers: {} },
@@ -1533,31 +1138,7 @@ describe('canProviderDo', () => {
           maxTokens: 2000,
           maxSteps: 10,
         },
-        _resolved: {
-          providers: {
-            'test-provider': {
-              name: 'test-provider',
-              enabled: true,
-              apiKey: 'test-key',
-              baseUrl: 'https://api.test.com',
-              mcp: [],
-              models: {
-                'vision-model': {
-                  type: 'vision',
-                  capabilities: ['vision'],
-                },
-              },
-            },
-          },
-          settings: {
-            timeout: 30000,
-            maxRetries: 3,
-            temperature: 0.7,
-            maxTokens: 2000,
-            maxSteps: 10,
-          },
-        },
-      };
+};
 
       const result = canProviderDo(
         'test-provider',

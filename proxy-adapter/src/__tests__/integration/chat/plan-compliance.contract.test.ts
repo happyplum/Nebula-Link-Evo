@@ -29,11 +29,10 @@ const { mockConfig, mockGetConfig } = vi.hoisted(() => {
     version: '1.0',
     providers: {
       kimi: {
-        name: 'kimi',
         enabled: true,
         apiKey: 'test-key',
         baseUrl: 'https://api.moonshot.cn/v1',
-        mcp: [],
+        npmPackage: '@ai-sdk/openai-compatible',
         models: {
           'moonshot-v1-vision-preview': {
             type: 'vision',
@@ -56,32 +55,6 @@ const { mockConfig, mockGetConfig } = vi.hoisted(() => {
       temperature: 0.4,
       maxTokens: 2000,
       maxSteps: 3,
-    },
-    _resolved: {
-      providers: {
-        kimi: {
-          name: 'kimi',
-          enabled: true,
-          apiKey: 'test-key',
-          baseUrl: 'https://api.moonshot.cn/v1',
-          mcp: [],
-          models: {
-            'moonshot-v1-vision-preview': {
-              type: 'vision',
-              capabilities: ['vision', 'decision'],
-              temperature: 0.4,
-              maxTokens: 2000,
-            },
-          },
-        },
-      },
-      settings: {
-        timeout: 30000,
-        maxRetries: 3,
-        temperature: 0.4,
-        maxTokens: 2000,
-        maxSteps: 3,
-      },
     },
   };
 

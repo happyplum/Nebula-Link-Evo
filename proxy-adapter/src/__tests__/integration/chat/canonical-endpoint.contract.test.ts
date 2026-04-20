@@ -10,31 +10,14 @@ import type { DecisionClient } from '../../../clients/types.js';
 import type { ResolvedConfig } from '../../../config/schema.js';
 
 const { mockConfig, mockGetConfig } = vi.hoisted(() => {
-  const config = {
-    _resolved: {
-      providers: {
-        kimi: {
-          apiKey: 'test-key',
-          baseUrl: 'https://api.moonshot.cn/v1',
-          models: {
-            'moonshot-v1-vision-preview': {
-              type: 'vision',
-              capabilities: ['vision', 'decision'],
-              temperature: 0.4,
-              maxTokens: 2000,
-            },
-          },
-        },
-      },
-    },
+  const config: ResolvedConfig = {
     version: '1.0',
     providers: {
       kimi: {
-        name: 'kimi',
         enabled: true,
         apiKey: 'test-key',
         baseUrl: 'https://api.moonshot.cn/v1',
-        mcp: [],
+        npmPackage: '@ai-sdk/openai-compatible',
         models: {
           'moonshot-v1-vision-preview': {
             type: 'vision',
@@ -58,7 +41,7 @@ const { mockConfig, mockGetConfig } = vi.hoisted(() => {
       maxTokens: 2000,
       maxSteps: 10,
     },
-  } as unknown as ResolvedConfig;
+  };
 
   const getConfig = vi.fn().mockReturnValue(config);
   return { mockConfig: config, mockGetConfig: getConfig };
