@@ -1,7 +1,7 @@
 import axios, { AxiosRequestConfig } from 'axios';
 import crypto from 'crypto';
 import { loadConfig } from '../config/index.js';
-import type { FlatProvider } from '../config/schema.js';
+import type { ResolvedProvider } from '../config/schema.js';
 
 export interface ConnectivityTestRequest {
   provider?: string;
@@ -44,7 +44,7 @@ export async function testConnectivity(
     // Note: apiKey and baseUrl must be in request or have config defaults
     let provider: string;
     let modelId: string;
-    let providerConfig: FlatProvider | undefined;
+    let providerConfig: ResolvedProvider | undefined;
     let baseUrl: string | undefined;
     let apiKey: string | undefined;
 
@@ -52,7 +52,7 @@ export async function testConnectivity(
       provider = request.provider;
     } else if (config) {
       provider = config.defaults.decision.provider;
-      providerConfig = config.providers[provider];
+      providerConfig = config._resolved?.providers[provider];
     } else {
       return {
         ok: false,
