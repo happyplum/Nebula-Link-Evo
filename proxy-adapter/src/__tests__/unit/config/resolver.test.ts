@@ -105,4 +105,41 @@ describe('config/resolver with flat provider config', () => {
     expect(entry?.provider.apiKey).toBe('glm-secret');
     expect(getProviderModel(resolved, 'openai', 'gpt-4o')).toBeNull();
   });
+
+  it('mirrors raw provider models into resolved provider when provided', () => {
+    const configWithModels: Config = {
+      ...baseConfig,
+      providers: {
+        glm: {
+          ...baseConfig.providers.glm,
+          models: {
+            'glm-4.7-flash': {
+              type: 'multimodal',
+              capabilities: ['vision', 'decision'],
+            },
+          },
+        },
+      },
+    };
+
+    const { config: resolved, result } = resolveConfig(configWithModels, {
+      env: { GLM_API_KEY: 'glm-secret' },
+    });
+
+    expect(result.success).toBe(true);
+    expect(resolved._resolved.providers.glm.models).toBeDefined();
+    expect(resolved._resolved.providers.glm.models['glm-4.7-flash']).toEqual({
+      type: 'multimodal',
+      capabilities: ['vision', 'decision'],
+    });
+  });
+
+  it('uses empty models object when raw provider omits models', () => {
+    const { config: resolved, result } = resolveConfig(baseConfig, {
+      env: { GLM_API_KEY: 'glm-secret' },
+    });
+
+    expect(result.success).toBe(true);
+    expect(resolved._resolved.providers.glm.models).toEqual({});
+  });
 });
