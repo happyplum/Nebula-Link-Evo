@@ -1395,7 +1395,21 @@ describe('validateProviderModel', () => {
           maxSteps: 10,
         },
         _resolved: {
-          providers: {},
+          providers: {
+            'test-provider': {
+              name: 'test-provider',
+              enabled: true,
+              apiKey: 'test-key',
+              baseUrl: 'https://api.test.com',
+              mcp: [],
+              models: {
+                'test-model': {
+                  type: 'vision',
+                  capabilities: ['vision'],
+                },
+              },
+            },
+          },
           settings: {
             timeout: 30000,
             maxRetries: 3,
@@ -1708,7 +1722,21 @@ describe('canProviderDo', () => {
           maxSteps: 10,
         },
         _resolved: {
-          providers: {},
+          providers: {
+            'test-provider': {
+              name: 'test-provider',
+              enabled: true,
+              apiKey: 'test-key',
+              baseUrl: 'https://api.test.com',
+              mcp: [],
+              models: {
+                'test-model': {
+                  type: 'vision',
+                  capabilities: ['vision'],
+                },
+              },
+            },
+          },
           settings: {
             timeout: 30000,
             maxRetries: 3,
@@ -1760,7 +1788,21 @@ describe('canProviderDo', () => {
           maxSteps: 10,
         },
         _resolved: {
-          providers: {},
+          providers: {
+            'test-provider': {
+              name: 'test-provider',
+              enabled: true,
+              apiKey: 'test-key',
+              baseUrl: 'https://api.test.com',
+              mcp: [],
+              models: {
+                'vision-model': {
+                  type: 'vision',
+                  capabilities: ['vision'],
+                },
+              },
+            },
+          },
           settings: {
             timeout: 30000,
             maxRetries: 3,

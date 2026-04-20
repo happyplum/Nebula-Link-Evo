@@ -1,4 +1,4 @@
-import type { ResolvedConfig } from './schema.js';
+import type { ResolvedConfig, ModelConfig } from './schema.js';
 
 export interface ValidationResult {
   valid: boolean;
@@ -6,10 +6,19 @@ export interface ValidationResult {
   warnings: string[];
 }
 
+// Internal helper for centralized resolved-model access
+function getResolvedModels(
+  config: ResolvedConfig,
+  provider: string
+): Record<string, ModelConfig> | undefined {
+  return config._resolved?.providers[provider]?.models;
+}
+
 export function validateConfig(config: ResolvedConfig): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
 
+  // --- Declaration-layer checks ---
   const enabledProviders = Object.entries(config.providers).filter(([_, p]) => p.enabled);
 
   if (enabledProviders.length === 0) {
@@ -87,6 +96,7 @@ export function validateConfig(config: ResolvedConfig): ValidationResult {
     }
   }
 
+  // --- Resolved-layer checks ---
   if (config._resolved) {
     for (const [name, provider] of Object.entries(config._resolved.providers)) {
       if (!provider.apiKey) {
@@ -109,6 +119,7 @@ export function validateProviderModel(
 ): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
 
+  // --- Declaration-layer checks ---
   const providerConfig = config.providers[provider];
   if (!providerConfig) {
     errors.push(`Provider ${provider} not found`);
@@ -119,11 +130,12 @@ export function validateProviderModel(
     errors.push(`Provider ${provider} is disabled`);
   }
 
+  // --- Resolved-layer checks ---
   if (!model || model.trim().length === 0) {
     errors.push(`Model ${model} not found in provider ${provider}`);
-  } else if (providerConfig.models && Object.keys(providerConfig.models).length > 0) {
-    const modelConfig = providerConfig.models[model];
-    if (!modelConfig) {
+  } else {
+    const resolvedModels = getResolvedModels(config, provider);
+    if (resolvedModels && Object.keys(resolvedModels).length > 0 && !resolvedModels[model]) {
       errors.push(`Model ${model} not found in provider ${provider}`);
     }
   }
@@ -137,6 +149,7 @@ export function canProviderDo(
   capability: 'vision' | 'decision',
   config: ResolvedConfig
 ): boolean {
+  // --- Declaration-layer checks ---
   const providerConfig = config.providers[provider];
   if (!providerConfig || !providerConfig.enabled) {
     return false;
@@ -146,9 +159,10 @@ export function canProviderDo(
     return false;
   }
 
-  // Check model existence if provider has explicit model definitions
-  if (providerConfig.models && Object.keys(providerConfig.models).length > 0) {
-    const modelConfig = providerConfig.models[model];
+  // --- Resolved-layer checks ---
+  const resolvedModels = getResolvedModels(config, provider);
+  if (resolvedModels && Object.keys(resolvedModels).length > 0) {
+    const modelConfig = resolvedModels[model];
     if (!modelConfig) {
       return false;
     }
