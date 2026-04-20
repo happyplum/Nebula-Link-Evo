@@ -55,8 +55,10 @@ describe('config/schema types', () => {
       providers: {
         glm: {
           enabled: true,
-          apiKey: '{GLM_API_KEY}',
+          apiKey: 'resolved-key',
           baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+          npmPackage: '@ai-sdk/openai-compatible',
+          models: {},
         },
       },
       mcp: { enabled: false, servers: {} },
@@ -72,28 +74,10 @@ describe('config/schema types', () => {
         maxTokens: 1000,
         maxSteps: 3,
       },
-      _resolved: {
-        providers: {
-          glm: {
-            enabled: true,
-            apiKey: 'resolved-key',
-            baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
-            npmPackage: '@ai-sdk/openai-compatible',
-            models: {},
-          },
-        },
-        settings: {
-          timeout: 30000,
-          maxRetries: 3,
-          temperature: 0.2,
-          maxTokens: 1000,
-          maxSteps: 3,
-        },
-      },
     };
 
     expect(resolved.defaults.decision.provider).toBe('glm');
-    expect(resolved._resolved.providers.glm.npmPackage).toBe('@ai-sdk/openai-compatible');
+    expect(resolved.providers.glm.npmPackage).toBe('@ai-sdk/openai-compatible');
   });
 
   it('preserves legacy helper types', () => {
