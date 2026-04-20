@@ -13,30 +13,14 @@ describe('validateConfig', () => {
         version: '1.0.0',
         providers: {
           'vision-provider': {
-            name: 'vision-provider',
             enabled: true,
             apiKey: 'test-key',
             baseUrl: 'https://api.vision.com',
-            mcp: [],
-            models: {
-              'vision-model': {
-                type: 'vision',
-                capabilities: ['vision'],
-              },
-            },
           },
           'decision-provider': {
-            name: 'decision-provider',
             enabled: true,
             apiKey: 'test-key',
             baseUrl: 'https://api.decision.com',
-            mcp: [],
-            models: {
-              'decision-model': {
-                type: 'decision',
-                capabilities: ['decision'],
-              },
-            },
           },
         },
         mcp: {
@@ -105,17 +89,9 @@ describe('validateConfig', () => {
         version: '1.0.0',
         providers: {
           'unified-provider': {
-            name: 'unified-provider',
             enabled: true,
             apiKey: 'test-key',
             baseUrl: 'https://api.unified.com',
-            mcp: [],
-            models: {
-              'unified-model': {
-                type: 'multimodal',
-                capabilities: ['vision', 'decision'],
-              },
-            },
           },
         },
         mcp: {
@@ -173,17 +149,9 @@ describe('validateConfig', () => {
         version: '1.0.0',
         providers: {
           'test-provider': {
-            name: 'test-provider',
             enabled: true,
             apiKey: '',
             baseUrl: 'https://api.test.com',
-            mcp: [],
-            models: {
-              'test-model': {
-                type: 'vision',
-                capabilities: ['vision'],
-              },
-            },
           },
         },
         mcp: { enabled: false, servers: {} },
@@ -221,17 +189,9 @@ describe('validateConfig', () => {
         version: '1.0.0',
         providers: {
           'test-provider': {
-            name: 'test-provider',
             enabled: true,
             apiKey: 'test-key',
             baseUrl: '',
-            mcp: [],
-            models: {
-              'test-model': {
-                type: 'vision',
-                capabilities: ['vision'],
-              },
-            },
           },
         },
         mcp: { enabled: false, servers: {} },
@@ -269,12 +229,9 @@ describe('validateConfig', () => {
         version: '1.0.0',
         providers: {
           'test-provider': {
-            name: 'test-provider',
             enabled: true,
             apiKey: 'test-key',
             baseUrl: 'https://api.test.com',
-            mcp: [],
-            models: {},
           },
         },
         mcp: { enabled: false, servers: {} },
@@ -311,12 +268,9 @@ describe('validateConfig', () => {
         version: '1.0.0',
         providers: {
           'test-provider': {
-            name: 'test-provider',
             enabled: false,
             apiKey: 'test-key',
             baseUrl: 'https://api.test.com',
-            mcp: [],
-            models: {},
           },
         },
         mcp: { enabled: false, servers: {} },
@@ -353,17 +307,9 @@ describe('validateConfig', () => {
         version: '1.0.0',
         providers: {
           'test-provider': {
-            name: 'test-provider',
             enabled: true,
             apiKey: 'test-key',
             baseUrl: 'https://api.test.com',
-            mcp: [],
-            models: {
-              'test-model': {
-                type: '' as any,
-                capabilities: ['vision'],
-              },
-            },
           },
         },
         mcp: { enabled: false, servers: {} },
@@ -400,17 +346,9 @@ describe('validateConfig', () => {
         version: '1.0.0',
         providers: {
           'test-provider': {
-            name: 'test-provider',
             enabled: true,
             apiKey: 'test-key',
             baseUrl: 'https://api.test.com',
-            mcp: [],
-            models: {
-              'test-model': {
-                type: 'vision',
-                capabilities: [],
-              },
-            },
           },
         },
         mcp: { enabled: false, servers: {} },
@@ -449,17 +387,9 @@ describe('validateConfig', () => {
         version: '1.0.0',
         providers: {
           'vision-provider': {
-            name: 'vision-provider',
             enabled: true,
             apiKey: 'test-key',
             baseUrl: 'https://api.vision.com',
-            mcp: [],
-            models: {
-              'vision-model': {
-                type: 'vision',
-                capabilities: ['vision'],
-              },
-            },
           },
         },
         mcp: { enabled: false, servers: {} },
@@ -497,17 +427,9 @@ describe('validateConfig', () => {
         version: '1.0.0',
         providers: {
           'vision-provider': {
-            name: 'vision-provider',
             enabled: true,
             apiKey: 'test-key',
             baseUrl: 'https://api.vision.com',
-            mcp: [],
-            models: {
-              'vision-model': {
-                type: 'vision',
-                capabilities: ['vision'],
-              },
-            },
           },
         },
         mcp: { enabled: false, servers: {} },
@@ -545,17 +467,9 @@ describe('validateConfig', () => {
         version: '1.0.0',
         providers: {
           'decision-provider': {
-            name: 'decision-provider',
             enabled: true,
             apiKey: 'test-key',
             baseUrl: 'https://api.decision.com',
-            mcp: [],
-            models: {
-              'decision-model': {
-                type: 'decision',
-                capabilities: ['decision'],
-              },
-            },
           },
         },
         mcp: { enabled: false, servers: {} },
@@ -593,17 +507,9 @@ describe('validateConfig', () => {
         version: '1.0.0',
         providers: {
           'decision-provider': {
-            name: 'decision-provider',
             enabled: true,
             apiKey: 'test-key',
             baseUrl: 'https://api.decision.com',
-            mcp: [],
-            models: {
-              'decision-model': {
-                type: 'decision',
-                capabilities: ['decision'],
-              },
-            },
           },
         },
         mcp: { enabled: false, servers: {} },
@@ -641,30 +547,14 @@ describe('validateConfig', () => {
         version: '1.0.0',
         providers: {
           'vision-provider': {
-            name: 'vision-provider',
             enabled: false,
             apiKey: 'test-key',
             baseUrl: 'https://api.vision.com',
-            mcp: [],
-            models: {
-              'vision-model': {
-                type: 'vision',
-                capabilities: ['vision'],
-              },
-            },
           },
           'decision-provider': {
-            name: 'decision-provider',
             enabled: true,
             apiKey: 'test-key',
             baseUrl: 'https://api.decision.com',
-            mcp: [],
-            models: {
-              'decision-model': {
-                type: 'decision',
-                capabilities: ['decision'],
-              },
-            },
           },
         },
         mcp: { enabled: false, servers: {} },
@@ -703,30 +593,14 @@ describe('validateConfig', () => {
         version: '1.0.0',
         providers: {
           'vision-provider': {
-            name: 'vision-provider',
             enabled: true,
             apiKey: 'test-key',
             baseUrl: 'https://api.vision.com',
-            mcp: [],
-            models: {
-              'vision-model': {
-                type: 'vision',
-                capabilities: ['vision'],
-              },
-            },
           },
           'decision-provider': {
-            name: 'decision-provider',
             enabled: false,
             apiKey: 'test-key',
             baseUrl: 'https://api.decision.com',
-            mcp: [],
-            models: {
-              'decision-model': {
-                type: 'decision',
-                capabilities: ['decision'],
-              },
-            },
           },
         },
         mcp: { enabled: false, servers: {} },
@@ -767,17 +641,9 @@ describe('validateConfig', () => {
         version: '1.0.0',
         providers: {
           'unified-provider': {
-            name: 'unified-provider',
             enabled: true,
             apiKey: 'test-key',
             baseUrl: 'https://api.unified.com',
-            mcp: [],
-            models: {
-              'unified-model': {
-                type: 'multimodal',
-                capabilities: ['vision', 'decision'],
-              },
-            },
           },
         },
         mcp: { enabled: false, servers: {} },
@@ -815,17 +681,9 @@ describe('validateConfig', () => {
         version: '1.0.0',
         providers: {
           'unified-provider': {
-            name: 'unified-provider',
             enabled: true,
             apiKey: 'test-key',
             baseUrl: 'https://api.unified.com',
-            mcp: [],
-            models: {
-              'unified-model': {
-                type: 'multimodal',
-                capabilities: ['vision', 'decision'],
-              },
-            },
           },
         },
         mcp: { enabled: false, servers: {} },
@@ -863,17 +721,9 @@ describe('validateConfig', () => {
         version: '1.0.0',
         providers: {
           'unified-provider': {
-            name: 'unified-provider',
             enabled: true,
             apiKey: 'test-key',
             baseUrl: 'https://api.unified.com',
-            mcp: [],
-            models: {
-              'vision-only-model': {
-                type: 'vision',
-                capabilities: ['vision'],
-              },
-            },
           },
         },
         mcp: { enabled: false, servers: {} },
@@ -980,17 +830,9 @@ describe('validateConfig', () => {
         version: '1.0.0',
         providers: {
           'test-provider': {
-            name: 'test-provider',
             enabled: true,
             apiKey: 'test-key',
             baseUrl: 'https://api.test.com',
-            mcp: [],
-            models: {
-              'test-model': {
-                type: 'vision',
-                capabilities: ['vision'],
-              },
-            },
           },
         },
         mcp: {
@@ -1038,17 +880,9 @@ describe('validateConfig', () => {
         version: '1.0.0',
         providers: {
           'test-provider': {
-            name: 'test-provider',
             enabled: true,
             apiKey: 'test-key',
             baseUrl: 'https://api.test.com',
-            mcp: [],
-            models: {
-              'test-model': {
-                type: 'vision',
-                capabilities: ['vision'],
-              },
-            },
           },
         },
         mcp: {
@@ -1095,17 +929,9 @@ describe('validateConfig', () => {
         version: '1.0.0',
         providers: {
           'test-provider': {
-            name: 'test-provider',
             enabled: true,
             apiKey: 'test-key',
             baseUrl: 'https://api.test.com',
-            mcp: [],
-            models: {
-              'test-model': {
-                type: 'vision',
-                capabilities: ['vision'],
-              },
-            },
           },
         },
         mcp: {
@@ -1156,17 +982,9 @@ describe('validateConfig', () => {
         version: '1.0.0',
         providers: {
           'test-provider': {
-            name: 'test-provider',
             enabled: true,
             apiKey: 'test-key',
             baseUrl: 'https://api.test.com',
-            mcp: [],
-            models: {
-              'test-model': {
-                type: 'vision',
-                capabilities: ['vision'],
-              },
-            },
           },
         },
         mcp: { enabled: false, servers: {} },
@@ -1222,17 +1040,9 @@ describe('validateProviderModel', () => {
         version: '1.0.0',
         providers: {
           'test-provider': {
-            name: 'test-provider',
             enabled: true,
             apiKey: 'test-key',
             baseUrl: 'https://api.test.com',
-            mcp: [],
-            models: {
-              'test-model': {
-                type: 'vision',
-                capabilities: ['vision'],
-              },
-            },
           },
         },
         mcp: { enabled: false, servers: {} },
@@ -1316,17 +1126,9 @@ describe('validateProviderModel', () => {
         version: '1.0.0',
         providers: {
           'test-provider': {
-            name: 'test-provider',
             enabled: false,
             apiKey: 'test-key',
             baseUrl: 'https://api.test.com',
-            mcp: [],
-            models: {
-              'test-model': {
-                type: 'vision',
-                capabilities: ['vision'],
-              },
-            },
           },
         },
         mcp: { enabled: false, servers: {} },
@@ -1368,17 +1170,9 @@ describe('validateProviderModel', () => {
         version: '1.0.0',
         providers: {
           'test-provider': {
-            name: 'test-provider',
             enabled: true,
             apiKey: 'test-key',
             baseUrl: 'https://api.test.com',
-            mcp: [],
-            models: {
-              'test-model': {
-                type: 'vision',
-                capabilities: ['vision'],
-              },
-            },
           },
         },
         mcp: { enabled: false, servers: {} },
@@ -1440,17 +1234,9 @@ describe('canProviderDo', () => {
         version: '1.0.0',
         providers: {
           'test-provider': {
-            name: 'test-provider',
             enabled: true,
             apiKey: 'test-key',
             baseUrl: 'https://api.test.com',
-            mcp: [],
-            models: {
-              'vision-model': {
-                type: 'vision',
-                capabilities: ['vision'],
-              },
-            },
           },
         },
         mcp: { enabled: false, servers: {} },
@@ -1492,17 +1278,9 @@ describe('canProviderDo', () => {
         version: '1.0.0',
         providers: {
           'test-provider': {
-            name: 'test-provider',
             enabled: true,
             apiKey: 'test-key',
             baseUrl: 'https://api.test.com',
-            mcp: [],
-            models: {
-              'decision-model': {
-                type: 'decision',
-                capabilities: ['decision'],
-              },
-            },
           },
         },
         mcp: { enabled: false, servers: {} },
@@ -1544,17 +1322,9 @@ describe('canProviderDo', () => {
         version: '1.0.0',
         providers: {
           'test-provider': {
-            name: 'test-provider',
             enabled: true,
             apiKey: 'test-key',
             baseUrl: 'https://api.test.com',
-            mcp: [],
-            models: {
-              'multimodal-model': {
-                type: 'multimodal',
-                capabilities: ['vision', 'decision'],
-              },
-            },
           },
         },
         mcp: { enabled: false, servers: {} },
@@ -1643,17 +1413,9 @@ describe('canProviderDo', () => {
         version: '1.0.0',
         providers: {
           'test-provider': {
-            name: 'test-provider',
             enabled: false,
             apiKey: 'test-key',
             baseUrl: 'https://api.test.com',
-            mcp: [],
-            models: {
-              'test-model': {
-                type: 'vision',
-                capabilities: ['vision'],
-              },
-            },
           },
         },
         mcp: { enabled: false, servers: {} },
@@ -1695,17 +1457,9 @@ describe('canProviderDo', () => {
         version: '1.0.0',
         providers: {
           'test-provider': {
-            name: 'test-provider',
             enabled: true,
             apiKey: 'test-key',
             baseUrl: 'https://api.test.com',
-            mcp: [],
-            models: {
-              'test-model': {
-                type: 'vision',
-                capabilities: ['vision'],
-              },
-            },
           },
         },
         mcp: { enabled: false, servers: {} },
@@ -1761,17 +1515,9 @@ describe('canProviderDo', () => {
         version: '1.0.0',
         providers: {
           'test-provider': {
-            name: 'test-provider',
             enabled: true,
             apiKey: 'test-key',
             baseUrl: 'https://api.test.com',
-            mcp: [],
-            models: {
-              'vision-model': {
-                type: 'vision',
-                capabilities: ['vision'],
-              },
-            },
           },
         },
         mcp: { enabled: false, servers: {} },
