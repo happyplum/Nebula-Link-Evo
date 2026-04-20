@@ -11,30 +11,29 @@ import swaggerPlugin from '../../../plugins/02-swagger.plugin.js';
 import { MAX_SCREENSHOT_SIZE_BYTES } from '@nebula-link-evo/shared';
 
 const mockConfig: ResolvedConfig = {
-  _resolved: {
-    providers: {
-      kimi: {
-        apiKey: 'test-key',
-        baseUrl: 'https://api.moonshot.cn/v1',
-        models: {
-          'moonshot-v1-vision-preview': {
-            type: 'vision',
-            capabilities: ['vision', 'decision'],
-            temperature: 0.4,
-            maxTokens: 2000,
-          },
+  version: '1.0',
+  providers: {
+    kimi: {
+      enabled: true,
+      apiKey: 'test-key',
+      baseUrl: 'https://api.moonshot.cn/v1',
+      npmPackage: '@ai-sdk/openai-compatible',
+      models: {
+        'moonshot-v1-vision-preview': {
+          type: 'vision',
+          capabilities: ['vision', 'decision'],
+          temperature: 0.4,
+          maxTokens: 2000,
         },
       },
     },
   },
-  version: '1.0',
-  providers: {},
   mcp: { enabled: false, servers: {} },
   defaults: {
     vision: { provider: 'kimi', model: 'moonshot-v1-vision-preview' },
     decision: { provider: 'kimi', model: 'moonshot-v1-vision-preview' },
   },
-} as unknown as ResolvedConfig;
+};
 
 describe('screenshot validation contract', () => {
   let app: ReturnType<typeof Fastify>;

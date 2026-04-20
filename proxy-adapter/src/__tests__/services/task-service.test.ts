@@ -5,30 +5,21 @@ import { TaskService } from '../../services/task-service.js';
 vi.mock('../../config/index.js', () => ({
   loadConfig: vi.fn(() => ({
     config: {
+      version: '1.0',
       providers: {
         kimi: {
+          enabled: true,
           apiKey: 'test-key',
           baseUrl: 'https://api.test.com/v1',
-          models: {
-            vision: 'test-vision-model',
-            decision: 'test-decision-model',
-          },
+          npmPackage: '@ai-sdk/openai-compatible',
+          models: {},
         },
       },
+      mcp: { enabled: false, servers: {} },
       defaults: {
         mode: 'separation',
         decision: { provider: 'kimi', model: 'test-decision-model' },
         vision: { provider: 'kimi', model: 'test-vision-model' },
-      },
-      _resolved: {
-        providers: {
-          kimi: {
-            enabled: true,
-            apiKey: 'test-key',
-            baseUrl: 'https://api.test.com/v1',
-            models: {},
-          },
-        },
       },
     },
     configPath: '/test/config.json',

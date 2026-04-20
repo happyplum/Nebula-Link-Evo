@@ -9,9 +9,6 @@ import type { Action, TaskRequest } from '../types.js';
 vi.mock('../config/index.js', () => ({
   loadConfig: vi.fn(() => ({
     config: {
-      _resolved: {
-        providers: {},
-      },
       version: '1.0',
       providers: {},
       mcp: { enabled: false, servers: {} },

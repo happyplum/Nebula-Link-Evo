@@ -60,23 +60,17 @@ let mockConfig: ResolvedConfig;
 
     events = [];
 mockConfig = {
+      version: '1.0',
       providers: {
         test: {
+          enabled: true,
           apiKey: 'test-key',
           baseUrl: 'https://test.example.com',
-        }
-      },
-      _resolved: {
-        providers: {
-          test: {
-            enabled: true,
-            apiKey: 'test-key',
-            baseUrl: 'https://test.example.com',
-            models: {},
-          },
+          npmPackage: '@ai-sdk/openai-compatible',
+          models: {},
         },
       },
-    } as unknown as ResolvedConfig;
+    } as ResolvedConfig;
   });
 
   describe('streaming events', () => {
