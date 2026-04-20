@@ -10,24 +10,22 @@ import swaggerPlugin from '../../../../02-swagger.plugin.js';
 
 const { mockConfig, mockGetConfig, mockRegistry } = vi.hoisted(() => {
   const config = {
-    _resolved: {
-      providers: {
-        kimi: {
-          apiKey: 'test-key',
-          baseUrl: 'https://api.moonshot.cn/v1',
-          models: {},
-          enabled: true,
-        },
-        openai: {
-          apiKey: 'test-key',
-          baseUrl: 'https://api.openai.com/v1',
-          models: {},
-          enabled: true,
-        },
+
+    version: '1.0',
+    providers: {
+      kimi: {
+        apiKey: 'test-key',
+        baseUrl: 'https://api.moonshot.cn/v1',
+        models: {},
+        enabled: true,
+      },
+      openai: {
+        apiKey: 'test-key',
+        baseUrl: 'https://api.openai.com/v1',
+        models: {},
+        enabled: true,
       },
     },
-    version: '1.0',
-    providers: {},
     mcp: { enabled: false, servers: {} },
     defaults: {
       mode: 'separation',

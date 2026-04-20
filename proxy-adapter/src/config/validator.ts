@@ -18,7 +18,7 @@ export function validateConfig(config: ResolvedConfig): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
 
-  // --- Declaration-layer checks ---
+  // --- Provider checks ---
   const enabledProviders = Object.entries(config.providers).filter(([_, p]) => p.enabled);
 
   if (enabledProviders.length === 0) {
@@ -93,14 +93,6 @@ export function validateConfig(config: ResolvedConfig): ValidationResult {
       if (!server.args || server.args.length === 0) {
         warnings.push(`MCP server ${name}: no args specified`);
       }
-    }
-  }
-
-  // --- Runtime resolved-key checks ---
-  for (const [name, provider] of Object.entries(config.providers)) {
-    if (!provider.enabled) continue;
-    if (!provider.apiKey) {
-      errors.push(`Provider ${name}: apiKey not resolved`);
     }
   }
 
