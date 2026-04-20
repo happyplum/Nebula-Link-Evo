@@ -74,7 +74,6 @@ class ChatHandler {
     this.sessionEventHub = sessionEventHub || SessionEventHub.getInstance();
     this.providerRegistry = this.createProviderRegistry(config);
     const configuredMaxSteps =
-      this.config._resolved?.settings?.maxSteps ??
       this.config.settings?.maxSteps ??
       this.maxToolLoops;
     this.maxToolLoops = configuredMaxSteps > 0 ? configuredMaxSteps : this.maxToolLoops;
@@ -82,7 +81,7 @@ class ChatHandler {
 
   private createProviderRegistry(config: ResolvedConfig): ProviderRegistry {
     const providers: Record<string, ProviderConfig> = {};
-    for (const [key, provider] of Object.entries(config._resolved.providers)) {
+    for (const [key, provider] of Object.entries(config.providers)) {
       if (!provider.enabled) {
         continue;
       }

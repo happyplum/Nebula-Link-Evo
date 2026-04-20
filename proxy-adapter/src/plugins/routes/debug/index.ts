@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { TaskService } from '../../../services/index.js';
 import { DatabaseManager } from '../../../conversation/db.js';
 import { getServiceEndpointsCached } from '../../../config/services.js';
+import type { ResolvedProvider } from '../../../config/schema.js';
 
 const PLAYWRIGHT_URL = getServiceEndpointsCached().playwright.url;
 const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
@@ -218,18 +219,18 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
     async () => {
       const config = taskService.getConfig();
-      if (!config?._resolved?.providers) {
+      if (!config?.providers) {
         return { keys: [] };
       }
 
       const results = [];
 
-      for (const [providerName, providerConfig] of Object.entries(config._resolved.providers)) {
-        const providerConf = providerConfig as any;
-        if (!providerConf.enabled) continue;
+      for (const [providerName, providerConfig] of Object.entries(config.providers)) {
+        const provider = providerConfig as ResolvedProvider;
+        if (!provider.enabled) continue;
 
-        const apiKey = providerConf.apiKey;
-        const providerDisplayName = providerConf.name;
+        const apiKey = provider.apiKey;
+        const providerDisplayName = provider.name;
 
         if (!apiKey || apiKey === '' || apiKey.startsWith('{')) {
           results.push({

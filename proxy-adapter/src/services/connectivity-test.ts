@@ -52,7 +52,7 @@ export async function testConnectivity(
       provider = request.provider;
     } else if (config) {
       provider = config.defaults.decision.provider;
-      providerConfig = config._resolved?.providers[provider];
+      providerConfig = config.providers[provider];
     } else {
       return {
         ok: false,
