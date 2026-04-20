@@ -25,7 +25,7 @@ const configRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         mode: config.defaults?.mode ?? 'unknown',
         vision: config.defaults?.vision ?? 'unknown',
         decision: config.defaults?.decision ?? 'unknown',
-        providers: Object.keys(config.providers || {}),
+        providers: Object.keys(config.providers || {}).filter(k => config.providers[k].enabled),
       };
     }
   );

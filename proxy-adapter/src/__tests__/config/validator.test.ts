@@ -743,7 +743,7 @@ describe('validateConfig', () => {
 
       const result = validateConfig(config);
       expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Provider test-provider: apiKey not resolved');
+      expect(result.errors).toContain('Provider test-provider: missing apiKey');
     });
   });
 });

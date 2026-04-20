@@ -14,7 +14,7 @@ vi.mock('../../config/index.js', () => ({
       defaults: { mode: 'separation', vision: { provider: 'glm', model: 'glm-4v' }, decision: { provider: 'glm', model: 'glm-4' } },
       settings: { timeout: 30, maxRetries: 3, temperature: 0.7, maxTokens: 4096, maxSteps: 5 },
       mcp: { enabled: false, servers: {} },
-      _resolved: { providers: {}, settings: { timeout: 30, maxRetries: 3, temperature: 0.7, maxTokens: 4096, maxSteps: 5 } },
+
     },
     configPath: '/test/config.json',
     result: { success: true, warnings: [], errors: [] },

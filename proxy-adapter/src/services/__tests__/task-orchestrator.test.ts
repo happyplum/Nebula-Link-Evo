@@ -94,7 +94,7 @@ describe('TaskOrchestrator', () => {
     providers: {},
     mcp: { enabled: false, servers: {} },
     version: '1',
-    _resolved: { providers: {}, settings: { maxSteps: 5, timeout: 30, maxRetries: 3, temperature: 0.7, maxTokens: 4096 } },
+
   } as unknown as ResolvedConfig;
 
   beforeEach(() => {
