@@ -36,26 +36,8 @@ export type {
   ResolvedTarget,
 } from './action.js';
 
-export {
-  isClickAction,
-  isTypeAction,
-  isFocusAction,
-  isBlurAction,
-  isHoverAction,
-  isValueAction,
-  isDispatchAction,
-  isScrollAction,
-  isNavigateAction,
-  isWaitAction,
-  isMCPAction,
-  isFinishAction,
-  isValidActionType,
-  isAction,
-  getActionType,
-  createAction,
-  filterActions,
-  validateAction,
-} from './action-guards.js';
+// Action guards (available from './action-guards.js' if needed)
+// None currently consumed externally - exported on demand.
 
 // Vision Marker types (DOM, elements, locators)
 export type {
@@ -79,16 +61,8 @@ export type {
   ExecutedAction,
 } from './task-context.js';
 
-export {
-  createTaskContext,
-  updateTaskContext,
-  updateTaskMetadata,
-  isTaskComplete,
-  isTaskSuccessful,
-  isTaskFailed,
-  isMaxStepsReached,
-  getTaskDuration,
-} from './task-context.js';
+// TaskContext helpers (available from './task-context.js' if needed)
+// None currently consumed externally - exported on demand.
 
 // TaskHistory types (history tracking)
 export type {
@@ -97,17 +71,8 @@ export type {
   TaskHistoryStatus,
 } from './task-history.js';
 
-export {
-  createTaskHistory,
-  createStep,
-  addStepToHistory,
-  markHistoryCompleted,
-  markHistoryFailed,
-  getHistoryDuration,
-  getSuccessfulSteps,
-  getFailedSteps,
-  getSuccessRate,
-} from './task-history.js';
+// TaskHistory helpers (available from './task-history.js' if needed)
+// None currently consumed externally - exported on demand.
 
 // SSE event types
 export type {
