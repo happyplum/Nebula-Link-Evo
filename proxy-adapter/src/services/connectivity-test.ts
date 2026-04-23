@@ -210,84 +210,119 @@ function generateGLMToken(apiKey: string): string {
   return `${base64Header}.${base64Payload}.${signature}`;
 }
 
+/**
+ * Type guard for error objects with a code property
+ */
+function isErrorWithCode(error: unknown): error is { code: string; message?: string } {
+  return (
+    error !== null &&
+    typeof error === 'object' &&
+    'code' in error &&
+    typeof (error as { code?: unknown }).code === 'string'
+  );
+}
+
+/**
+ * Type guard for error objects with a response property
+ */
+function isErrorWithResponse(error: unknown): error is { response: { status: number }; message?: string } {
+  return (
+    error !== null &&
+    typeof error === 'object' &&
+    'response' in error &&
+    typeof (error as { response?: unknown }).response === 'object' &&
+    (error as { response: { status?: unknown } }).response !== null &&
+    'status' in (error as { response: { status?: unknown } }).response &&
+    typeof (error as { response: { status?: unknown } }).response.status === 'number'
+  );
+}
+
+/**
+ * Type guard for error objects with a message property
+ */
+function isErrorWithMessage(error: unknown): error is { message: string } {
+  return (
+    error !== null &&
+    typeof error === 'object' &&
+    'message' in error &&
+    typeof (error as { message?: unknown }).message === 'string'
+  );
+}
+
 function normalizeError(error: unknown): { code: NormalizedErrorCode; message: string } {
-  // Manual check for axios-like error structure
-  if (error !== null && typeof error === 'object') {
-    const err = error as any;
-
-    // Check error codes first (highest priority for network and timeout errors)
-    if (typeof err.code === 'string') {
-      if (err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT' || (err.message && err.message.toLowerCase().includes('timeout'))) {
-        return {
-          code: 'TIMEOUT',
-          message: err.message || 'Request timeout',
-        };
-      }
-
-      if (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND' || err.code === 'ENETUNREACH') {
-        return {
-          code: 'NETWORK_ERROR',
-          message: err.message || 'Network unreachable',
-        };
-      }
-    }
-
-    // Check status codes second (for auth and model errors from server)
-    if (err.response && typeof err.response.status === 'number') {
-      const status = err.response.status;
-
-      if (status === 401 || status === 403) {
-        return {
-          code: 'AUTH_ERROR',
-          message: 'Authentication failed: Invalid or missing API key',
-        };
-      }
-
-      if (status === 404) {
-        return {
-          code: 'MODEL_NOT_FOUND',
-          message: 'Model not found or does not exist',
-        };
-      }
-
-      // If we have a status code but don't match specific ones, return NETWORK_ERROR
+  // Check error codes first (highest priority for network and timeout errors)
+  if (isErrorWithCode(error)) {
+    if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT' || (error.message && error.message.toLowerCase().includes('timeout'))) {
       return {
-        code: 'NETWORK_ERROR',
-        message: err.message || 'HTTP error',
+        code: 'TIMEOUT',
+        message: error.message || 'Request timeout',
       };
     }
 
-    // Check error messages for keywords (lowest priority, only if no code/status matched)
-    if (error instanceof Error) {
-      const message = error.message.toLowerCase();
+    if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND' || error.code === 'ENETUNREACH') {
+      return {
+        code: 'NETWORK_ERROR',
+        message: error.message || 'Network unreachable',
+      };
+    }
+  }
 
-      if (message.includes('unauthorized') || message.includes('auth') || message.includes('api key') || message.includes('forbidden')) {
-        return {
-          code: 'AUTH_ERROR',
-          message: error.message,
-        };
-      }
+  // Check status codes second (for auth and model errors from server)
+  if (isErrorWithResponse(error)) {
+    const status = error.response.status;
 
-      if (message.includes('timeout')) {
-        return {
-          code: 'TIMEOUT',
-          message: error.message,
-        };
-      }
+    if (status === 401 || status === 403) {
+      return {
+        code: 'AUTH_ERROR',
+        message: 'Authentication failed: Invalid or missing API key',
+      };
+    }
 
-      if (message.includes('model not found')) {
-        return {
-          code: 'MODEL_NOT_FOUND',
-          message: error.message,
-        };
-      }
+    if (status === 404) {
+      return {
+        code: 'MODEL_NOT_FOUND',
+        message: 'Model not found or does not exist',
+      };
+    }
 
-      if (message.includes('network') || message.includes('connect') || message.includes('econn') || message.includes('enet')) {
-        return {
-          code: 'NETWORK_ERROR',
-          message: error.message,
-        };
-      }
+    // If we have a status code but don't match specific ones, return NETWORK_ERROR
+    const message = isErrorWithMessage(error) ? error.message : 'HTTP error';
+    return {
+      code: 'NETWORK_ERROR',
+      message,
+    };
+  }
+
+  // Check error messages for keywords (lowest priority, only if no code/status matched)
+  if (error instanceof Error) {
+    const message = error.message.toLowerCase();
+
+    if (message.includes('unauthorized') || message.includes('auth') || message.includes('api key') || message.includes('forbidden')) {
+      return {
+        code: 'AUTH_ERROR',
+        message: error.message,
+      };
+    }
+
+    if (message.includes('timeout')) {
+      return {
+        code: 'TIMEOUT',
+        message: error.message,
+      };
+    }
+
+    if (message.includes('model not found')) {
+      return {
+        code: 'MODEL_NOT_FOUND',
+        message: error.message,
+      };
+    }
+
+    if (message.includes('network') || message.includes('connect') || message.includes('econn') || message.includes('enet')) {
+      return {
+        code: 'NETWORK_ERROR',
+        message: error.message,
+      };
     }
   }
 
