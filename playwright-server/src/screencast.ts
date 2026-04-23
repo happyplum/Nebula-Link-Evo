@@ -1,4 +1,4 @@
-import type { Page } from 'playwright';
+import type { Page, CDPSession } from 'playwright';
 import { createFrameCounter } from '@nebula-link-evo/shared';
 
 type ServerResponse = {
@@ -8,9 +8,14 @@ type ServerResponse = {
   writable?: boolean;
 };
 
+type ScreencastFrameEvent = {
+  data: string;
+  sessionId: number;
+};
+
 export class ScreencastManager {
   private static instance: ScreencastManager;
-  private cdpClient: any = null;
+  private cdpClient: CDPSession | null = null;
   private listeners: Set<ServerResponse> = new Set();
   private backedUpListeners: Set<ServerResponse> = new Set();
   private isStreaming: boolean = false;
@@ -24,6 +29,7 @@ export class ScreencastManager {
   private readonly frameFooter = Buffer.from('\r\n');
   private debugCounter: ReturnType<typeof createFrameCounter> | null = null;
   private debugInterval: ReturnType<typeof setInterval> | null = null;
+  private screencastFrameHandler: ((event: ScreencastFrameEvent) => void) | null = null;
 
   private constructor() {}
 
@@ -43,12 +49,10 @@ export class ScreencastManager {
       const context = page.context();
       this.cdpClient = await context.newCDPSession(page);
 
-      this.cdpClient.on('Page.screencastFrame', this.handleScreencastFrame.bind(this));
-
-      this.cdpClient.on('detached', () => {
-        console.log('[Screencast] CDP client detached');
-        this.cleanup();
-      });
+      this.screencastFrameHandler = (event: ScreencastFrameEvent) => {
+        void this.handleScreencastFrame(event);
+      };
+      this.cdpClient.on('Page.screencastFrame', this.screencastFrameHandler);
 
       page.on('close', () => {
         console.log('[Screencast] Page closed');
@@ -79,7 +83,11 @@ export class ScreencastManager {
     try {
       if (this.cdpClient) {
         await this.cdpClient.send('Page.stopScreencast').catch(() => {});
-        this.cdpClient.removeAllListeners();
+        if (this.screencastFrameHandler) {
+          this.cdpClient.off('Page.screencastFrame', this.screencastFrameHandler);
+          this.screencastFrameHandler = null;
+        }
+        await this.cdpClient.detach().catch(() => {});
         this.cdpClient = null;
       }
     } catch (error) {
@@ -132,7 +140,7 @@ export class ScreencastManager {
     }
   }
 
-  private async handleScreencastFrame(event: { data: string; sessionId: string }): Promise<void> {
+  private async handleScreencastFrame(event: ScreencastFrameEvent): Promise<void> {
     const now = Date.now();
     if (now - this.lastFrameTime < this.frameInterval) {
       if (this.debugCounter) this.debugCounter.recordDrop('throttle');
