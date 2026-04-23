@@ -16,7 +16,7 @@ const healthRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
     async () => {
       const taskService = TaskService.getInstance();
-      const wsManager = (fastify as any).wsManager;
+      const wsManager = fastify.wsManager;
       const config = taskService.getConfig();
       const mcpStatus = taskService.getMCPStatus();
       const endpoints = getServiceEndpointsCached();

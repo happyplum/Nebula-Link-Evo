@@ -18,7 +18,7 @@ const taskRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
     async (request, reply) => {
       const taskService = TaskService.getInstance();
-      const wsManager = (fastify as any).wsManager;
+      const wsManager = fastify.wsManager;
 
       try {
         wsManager.broadcast({

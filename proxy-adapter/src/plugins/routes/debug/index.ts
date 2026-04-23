@@ -8,10 +8,19 @@ import { DatabaseManager } from '../../../conversation/db.js';
 import { getServiceEndpointsCached } from '../../../config/services.js';
 import type { ResolvedProvider } from '../../../config/schema.js';
 
+interface InteractionQuery {
+  limit?: number;
+  offset?: number;
+  action_type?: string;
+  success?: boolean;
+  locator_strategy?: string;
+  start_time?: number;
+}
+
 const PLAYWRIGHT_URL = getServiceEndpointsCached().playwright.url;
 const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
   const taskService = TaskService.getInstance();
-  const wsManager = (fastify as any).wsManager;
+  const wsManager = fastify.wsManager;
 
   fastify.get('/ws', { websocket: true }, (connection, _req) => {
     const clientId = crypto.randomUUID();
@@ -968,7 +977,7 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       },
     },
     async (request, _reply) => {
-      const query = request.query as any;
+      const query = request.query as InteractionQuery;
       const options = {
         limit: query.limit ? Number(query.limit) : 100,
         offset: query.offset ? Number(query.offset) : 0,

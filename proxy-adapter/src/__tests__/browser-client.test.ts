@@ -19,7 +19,7 @@ describe('BrowserClient', () => {
       expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/browser/open'), {
         headless: false,
         cdpPort: 9222
-      });
+      }, { timeout: 30000 });
     });
   });
 
@@ -27,7 +27,7 @@ describe('BrowserClient', () => {
     it('should call close endpoint', async () => {
       vi.mocked(axios.post).mockResolvedValueOnce({ data: { success: true } });
       await client.closeBrowser();
-      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/browser/close'), {});
+      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/browser/close'), {}, { timeout: 30000 });
     });
   });
 
@@ -35,7 +35,7 @@ describe('BrowserClient', () => {
     it('should call navigate endpoint', async () => {
       vi.mocked(axios.post).mockResolvedValueOnce({ data: { success: true } });
       await client.navigate('https://example.com');
-      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/browser/navigate'), { url: 'https://example.com' });
+      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/browser/navigate'), { url: 'https://example.com' }, { timeout: 30000 });
     });
   });
 
@@ -46,7 +46,7 @@ describe('BrowserClient', () => {
       expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/browser/screenshot'), {
         fullPage: false,
         type: 'png'
-      });
+      }, { timeout: 30000 });
       expect(result).toEqual({ screenshot: 'base64' });
     });
   });
@@ -99,124 +99,124 @@ describe('BrowserClient', () => {
     it('should call click', async () => {
       vi.mocked(axios.post).mockResolvedValueOnce({ data: { success: true } });
       await client.click(100, 200);
-      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/click'), { x: 100, y: 200 });
+      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/click'), { x: 100, y: 200 }, { timeout: 30000 });
     });
 
     it('should call clickBySelector', async () => {
       vi.mocked(axios.post).mockResolvedValueOnce({ data: { success: true } });
       await client.clickBySelector('#test');
-      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/click-by-selector'), { selector: '#test' });
+      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/click-by-selector'), { selector: '#test' }, { timeout: 30000 });
     });
 
     it('should call clickByMarker', async () => {
       vi.mocked(axios.post).mockResolvedValueOnce({ data: { success: true } });
       await client.clickByMarker('snap-1', 123);
-      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/click-by-marker'), { snapshot_id: 'snap-1', nebula_id: 123 });
+      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/click-by-marker'), { snapshot_id: 'snap-1', nebula_id: 123 }, { timeout: 30000 });
     });
 
     it('should call typeByMarker', async () => {
       vi.mocked(axios.post).mockResolvedValueOnce({ data: { success: true } });
       await client.typeByMarker('snap-1', 123, 'hello');
-      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/execute-by-marker'), { snapshot_id: 'snap-1', nebula_id: 123, action: 'type', param: 'hello' });
+      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/execute-by-marker'), { snapshot_id: 'snap-1', nebula_id: 123, action: 'type', param: 'hello' }, { timeout: 30000 });
     });
 
     it('should call focusByMarker', async () => {
       vi.mocked(axios.post).mockResolvedValueOnce({ data: { success: true } });
       await client.focusByMarker('snap-1', 123);
-      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/execute-by-marker'), { snapshot_id: 'snap-1', nebula_id: 123, action: 'focus' });
+      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/execute-by-marker'), { snapshot_id: 'snap-1', nebula_id: 123, action: 'focus' }, { timeout: 30000 });
     });
 
     it('should call blurByMarker', async () => {
       vi.mocked(axios.post).mockResolvedValueOnce({ data: { success: true } });
       await client.blurByMarker('snap-1', 123);
-      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/execute-by-marker'), { snapshot_id: 'snap-1', nebula_id: 123, action: 'blur' });
+      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/execute-by-marker'), { snapshot_id: 'snap-1', nebula_id: 123, action: 'blur' }, { timeout: 30000 });
     });
 
     it('should call hoverByMarker', async () => {
       vi.mocked(axios.post).mockResolvedValueOnce({ data: { success: true } });
       await client.hoverByMarker('snap-1', 123);
-      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/execute-by-marker'), { snapshot_id: 'snap-1', nebula_id: 123, action: 'hover' });
+      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/execute-by-marker'), { snapshot_id: 'snap-1', nebula_id: 123, action: 'hover' }, { timeout: 30000 });
     });
 
     it('should call setValueByMarker', async () => {
       vi.mocked(axios.post).mockResolvedValueOnce({ data: { success: true } });
       await client.setValueByMarker('snap-1', 123, 'val');
-      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/execute-by-marker'), { snapshot_id: 'snap-1', nebula_id: 123, action: 'value', param: 'val' });
+      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/execute-by-marker'), { snapshot_id: 'snap-1', nebula_id: 123, action: 'value', param: 'val' }, { timeout: 30000 });
     });
 
     it('should call dispatchEventByMarker', async () => {
       vi.mocked(axios.post).mockResolvedValueOnce({ data: { success: true } });
       await client.dispatchEventByMarker('snap-1', 123, 'change');
-      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/execute-by-marker'), { snapshot_id: 'snap-1', nebula_id: 123, action: 'dispatch', param: 'change' });
+      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/execute-by-marker'), { snapshot_id: 'snap-1', nebula_id: 123, action: 'dispatch', param: 'change' }, { timeout: 30000 });
     });
 
     it('should call type', async () => {
       vi.mocked(axios.post).mockResolvedValueOnce({ data: { success: true } });
       await client.type('#test', 'hello');
-      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/type'), { selector: '#test', text: 'hello' });
+      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/type'), { selector: '#test', text: 'hello' }, { timeout: 30000 });
     });
 
     it('should call scroll', async () => {
       vi.mocked(axios.post).mockResolvedValueOnce({ data: { success: true } });
       await client.scroll(0, 500);
-      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/scroll'), { x: 0, y: 500 });
+      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/scroll'), { x: 0, y: 500 }, { timeout: 30000 });
     });
 
     it('should call focus', async () => {
       vi.mocked(axios.post).mockResolvedValueOnce({ data: { success: true } });
       await client.focus('#test');
-      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/focus'), { selector: '#test' });
+      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/focus'), { selector: '#test' }, { timeout: 30000 });
     });
 
     it('should call blur', async () => {
       vi.mocked(axios.post).mockResolvedValueOnce({ data: { success: true } });
       await client.blur('#test');
-      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/blur'), { selector: '#test' });
+      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/blur'), { selector: '#test' }, { timeout: 30000 });
     });
 
     it('should call hover', async () => {
       vi.mocked(axios.post).mockResolvedValueOnce({ data: { success: true } });
       await client.hover('#test');
-      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/hover'), { selector: '#test' });
+      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/hover'), { selector: '#test' }, { timeout: 30000 });
     });
 
     it('should call setValue', async () => {
       vi.mocked(axios.post).mockResolvedValueOnce({ data: { success: true } });
       await client.setValue('#test', 'val');
-      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/value'), { selector: '#test', value: 'val' });
+      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/value'), { selector: '#test', value: 'val' }, { timeout: 30000 });
     });
 
     it('should call dispatchEvent', async () => {
       vi.mocked(axios.post).mockResolvedValueOnce({ data: { success: true } });
       await client.dispatchEvent('#test', 'change');
-      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/dispatch'), { selector: '#test', eventType: 'change' });
+      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/dispatch'), { selector: '#test', eventType: 'change' }, { timeout: 30000 });
     });
   });
 
   describe('elementAction', () => {
     it('should route to correct action', async () => {
       vi.mocked(axios.post).mockResolvedValue({ data: { success: true } });
-      
+
       await client.elementAction('#test', 'click');
-      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/click-by-selector'), { selector: '#test' });
-      
+      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/click-by-selector'), { selector: '#test' }, { timeout: 30000 });
+
       await client.elementAction('#test', 'type', 'hello');
-      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/type'), { selector: '#test', text: 'hello' });
-      
+      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/type'), { selector: '#test', text: 'hello' }, { timeout: 30000 });
+
       await client.elementAction('#test', 'value', 'val');
-      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/value'), { selector: '#test', value: 'val' });
-      
+      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/value'), { selector: '#test', value: 'val' }, { timeout: 30000 });
+
       await client.elementAction('#test', 'focus');
-      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/focus'), { selector: '#test' });
-      
+      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/focus'), { selector: '#test' }, { timeout: 30000 });
+
       await client.elementAction('#test', 'blur');
-      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/blur'), { selector: '#test' });
-      
+      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/blur'), { selector: '#test' }, { timeout: 30000 });
+
       await client.elementAction('#test', 'hover');
-      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/hover'), { selector: '#test' });
-      
+      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/hover'), { selector: '#test' }, { timeout: 30000 });
+
       await client.elementAction('#test', 'dispatch', 'change');
-      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/dispatch'), { selector: '#test', eventType: 'change' });
+      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/dispatch'), { selector: '#test', eventType: 'change' }, { timeout: 30000 });
     });
 
     it('should throw on unknown action', async () => {
