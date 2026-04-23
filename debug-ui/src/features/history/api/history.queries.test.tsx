@@ -92,7 +92,7 @@ describe('useTaskHistory', () => {
 
     renderHook(() => useTaskHistory(25), { wrapper: createWrapper() });
     await waitFor(() => expect(fetch).toHaveBeenCalled());
-    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('limit=25'));
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('limit=25'), { signal: expect.any(AbortSignal) });
   });
 });
 
@@ -113,7 +113,7 @@ describe('useTaskDetail', () => {
     const { result } = renderHook(() => useTaskDetail('t1'), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data!.taskId).toBe('t1');
-    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/debug/api/tasks/t1'));
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/debug/api/tasks/t1'), { signal: expect.any(AbortSignal) });
   });
 });
 

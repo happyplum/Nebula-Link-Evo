@@ -115,7 +115,7 @@ describe('config.queries', () => {
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
       // Verify the endpoint was called
-      expect(fetch).toHaveBeenCalledWith('/api/config');
+      expect(fetch).toHaveBeenCalledWith('/api/config', { signal: expect.any(AbortSignal) });
     });
   });
 
@@ -139,7 +139,7 @@ describe('config.queries', () => {
       mockFetchResponse(healthData);
 
       renderHook(() => useHealth(), { wrapper: createWrapper() });
-      await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/health'));
+      await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/health', { signal: expect.any(AbortSignal) }));
     });
   });
 
@@ -162,7 +162,7 @@ describe('config.queries', () => {
       mockFetchResponse(mcpStatusData);
 
       renderHook(() => useMcpStatus(), { wrapper: createWrapper() });
-      await waitFor(() => expect(fetch).toHaveBeenCalledWith('/debug/api/mcp/status'));
+      await waitFor(() => expect(fetch).toHaveBeenCalledWith('/debug/api/mcp/status', { signal: expect.any(AbortSignal) }));
     });
   });
 
@@ -193,7 +193,7 @@ describe('config.queries', () => {
       mockFetchResponse(mcpToolsData);
 
       renderHook(() => useMcpTools(), { wrapper: createWrapper() });
-      await waitFor(() => expect(fetch).toHaveBeenCalledWith('/debug/api/mcp/tools'));
+      await waitFor(() => expect(fetch).toHaveBeenCalledWith('/debug/api/mcp/tools', { signal: expect.any(AbortSignal) }));
     });
   });
 
@@ -215,7 +215,7 @@ describe('config.queries', () => {
       mockFetchResponse(verifyKeysData);
 
       renderHook(() => useVerifyKeys(), { wrapper: createWrapper() });
-      await waitFor(() => expect(fetch).toHaveBeenCalledWith('/debug/api/verify-keys'));
+      await waitFor(() => expect(fetch).toHaveBeenCalledWith('/debug/api/verify-keys', { signal: expect.any(AbortSignal) }));
     });
   });
 
