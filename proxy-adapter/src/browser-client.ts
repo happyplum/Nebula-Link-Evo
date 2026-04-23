@@ -14,6 +14,8 @@ interface PageStateElement {
 const endpoints = getServiceEndpointsCached();
 const PLAYWRIGHT_URL = endpoints.playwright.url;
 
+const BROWSER_TIMEOUT_MS = 30000;
+
 export class BrowserClient {
   private cdpPort: number = 9222;
 
@@ -21,28 +23,28 @@ export class BrowserClient {
     await axios.post(`${PLAYWRIGHT_URL}/browser/open`, {
       headless: false,
       cdpPort: this.cdpPort,
-    });
+    }, { timeout: BROWSER_TIMEOUT_MS });
   }
 
   async closeBrowser(): Promise<void> {
-    await axios.post(`${PLAYWRIGHT_URL}/browser/close`, {});
+    await axios.post(`${PLAYWRIGHT_URL}/browser/close`, {}, { timeout: BROWSER_TIMEOUT_MS });
   }
 
   async navigate(url: string): Promise<void> {
-    await axios.post(`${PLAYWRIGHT_URL}/browser/navigate`, { url });
+    await axios.post(`${PLAYWRIGHT_URL}/browser/navigate`, { url }, { timeout: BROWSER_TIMEOUT_MS });
   }
 
   async screenshot(): Promise<ScreenshotData> {
     const response = await axios.post(`${PLAYWRIGHT_URL}/browser/screenshot`, {
       fullPage: false,
       type: 'png',
-    });
+    }, { timeout: BROWSER_TIMEOUT_MS });
     return response.data;
   }
 
   async getSimplifiedDOM(): Promise<DOMSnapshotResponse> {
     try {
-      const response = await axios.get(`${PLAYWRIGHT_URL}/dom/simplified`);
+      const response = await axios.get(`${PLAYWRIGHT_URL}/dom/simplified`, { timeout: BROWSER_TIMEOUT_MS });
       const data = response.data;
       if (data.snapshot_id) {
         return data;
@@ -74,18 +76,18 @@ export class BrowserClient {
   }
 
   async click(x: number, y: number): Promise<void> {
-    await axios.post(`${PLAYWRIGHT_URL}/action/click`, { x, y });
+    await axios.post(`${PLAYWRIGHT_URL}/action/click`, { x, y }, { timeout: BROWSER_TIMEOUT_MS });
   }
 
   async clickBySelector(selector: string): Promise<void> {
-    await axios.post(`${PLAYWRIGHT_URL}/action/click-by-selector`, { selector });
+    await axios.post(`${PLAYWRIGHT_URL}/action/click-by-selector`, { selector }, { timeout: BROWSER_TIMEOUT_MS });
   }
 
   async clickByMarker(snapshotId: string, nebulaId: number): Promise<void> {
     await axios.post(`${PLAYWRIGHT_URL}/action/click-by-marker`, {
       snapshot_id: snapshotId,
       nebula_id: nebulaId,
-    });
+    }, { timeout: BROWSER_TIMEOUT_MS });
   }
 
   async typeByMarker(snapshotId: string, nebulaId: number, text: string): Promise<void> {
@@ -94,7 +96,7 @@ export class BrowserClient {
       nebula_id: nebulaId,
       action: 'type',
       param: text,
-    });
+    }, { timeout: BROWSER_TIMEOUT_MS });
   }
 
   async focusByMarker(snapshotId: string, nebulaId: number): Promise<void> {
@@ -102,7 +104,7 @@ export class BrowserClient {
       snapshot_id: snapshotId,
       nebula_id: nebulaId,
       action: 'focus',
-    });
+    }, { timeout: BROWSER_TIMEOUT_MS });
   }
 
   async blurByMarker(snapshotId: string, nebulaId: number): Promise<void> {
@@ -110,7 +112,7 @@ export class BrowserClient {
       snapshot_id: snapshotId,
       nebula_id: nebulaId,
       action: 'blur',
-    });
+    }, { timeout: BROWSER_TIMEOUT_MS });
   }
 
   async hoverByMarker(snapshotId: string, nebulaId: number): Promise<void> {
@@ -118,7 +120,7 @@ export class BrowserClient {
       snapshot_id: snapshotId,
       nebula_id: nebulaId,
       action: 'hover',
-    });
+    }, { timeout: BROWSER_TIMEOUT_MS });
   }
 
   async setValueByMarker(snapshotId: string, nebulaId: number, value: string): Promise<void> {
@@ -127,7 +129,7 @@ export class BrowserClient {
       nebula_id: nebulaId,
       action: 'value',
       param: value,
-    });
+    }, { timeout: BROWSER_TIMEOUT_MS });
   }
 
   async dispatchEventByMarker(
@@ -140,35 +142,35 @@ export class BrowserClient {
       nebula_id: nebulaId,
       action: 'dispatch',
       param: eventType,
-    });
+    }, { timeout: BROWSER_TIMEOUT_MS });
   }
 
   async type(selector: string, text: string): Promise<void> {
-    await axios.post(`${PLAYWRIGHT_URL}/action/type`, { selector, text });
+    await axios.post(`${PLAYWRIGHT_URL}/action/type`, { selector, text }, { timeout: BROWSER_TIMEOUT_MS });
   }
 
   async scroll(x: number, y: number): Promise<void> {
-    await axios.post(`${PLAYWRIGHT_URL}/action/scroll`, { x, y });
+    await axios.post(`${PLAYWRIGHT_URL}/action/scroll`, { x, y }, { timeout: BROWSER_TIMEOUT_MS });
   }
 
   async focus(selector: string): Promise<void> {
-    await axios.post(`${PLAYWRIGHT_URL}/action/focus`, { selector });
+    await axios.post(`${PLAYWRIGHT_URL}/action/focus`, { selector }, { timeout: BROWSER_TIMEOUT_MS });
   }
 
   async blur(selector: string): Promise<void> {
-    await axios.post(`${PLAYWRIGHT_URL}/action/blur`, { selector });
+    await axios.post(`${PLAYWRIGHT_URL}/action/blur`, { selector }, { timeout: BROWSER_TIMEOUT_MS });
   }
 
   async hover(selector: string): Promise<void> {
-    await axios.post(`${PLAYWRIGHT_URL}/action/hover`, { selector });
+    await axios.post(`${PLAYWRIGHT_URL}/action/hover`, { selector }, { timeout: BROWSER_TIMEOUT_MS });
   }
 
   async setValue(selector: string, value: string): Promise<void> {
-    await axios.post(`${PLAYWRIGHT_URL}/action/value`, { selector, value });
+    await axios.post(`${PLAYWRIGHT_URL}/action/value`, { selector, value }, { timeout: BROWSER_TIMEOUT_MS });
   }
 
   async dispatchEvent(selector: string, eventType: string): Promise<void> {
-    await axios.post(`${PLAYWRIGHT_URL}/action/dispatch`, { selector, eventType });
+    await axios.post(`${PLAYWRIGHT_URL}/action/dispatch`, { selector, eventType }, { timeout: BROWSER_TIMEOUT_MS });
   }
 
   async elementAction(selector: string, action: string, param?: string): Promise<void> {
@@ -206,7 +208,7 @@ export class BrowserClient {
     viewport?: { width: number; height: number };
   }> {
     try {
-      const response = await axios.get(`${PLAYWRIGHT_URL}/browser/status`);
+      const response = await axios.get(`${PLAYWRIGHT_URL}/browser/status`, { timeout: BROWSER_TIMEOUT_MS });
       return {
         isOpen: response.data.isOpen || false,
         url: response.data.currentUrl || response.data.url,
@@ -220,7 +222,7 @@ export class BrowserClient {
 
   async getTabs(): Promise<Array<{ id: string; url: string; title: string; isActive: boolean }>> {
     try {
-      const response = await axios.get(`${PLAYWRIGHT_URL}/browser/tabs`);
+      const response = await axios.get(`${PLAYWRIGHT_URL}/browser/tabs`, { timeout: BROWSER_TIMEOUT_MS });
       return response.data.tabs || [];
     } catch {
       return [];
@@ -228,12 +230,13 @@ export class BrowserClient {
   }
 
   async switchTab(id: string): Promise<void> {
-    await axios.post(`${PLAYWRIGHT_URL}/browser/tabs/switch`, { id });
+    await axios.post(`${PLAYWRIGHT_URL}/browser/tabs/switch`, { id }, { timeout: 15000 });
   }
 
   async getElementAt(x: number, y: number): Promise<ElementInfo | null> {
     const response = await axios.get(`${PLAYWRIGHT_URL}/dom/element-at`, {
       params: { x, y },
+      timeout: BROWSER_TIMEOUT_MS,
     });
     if (response.data.success && response.data.element) {
       return response.data.element;
