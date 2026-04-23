@@ -47,8 +47,8 @@ async function start() {
 
     // Start server
     await app.listen({ port: PORT, host: '0.0.0.0' });
-    console.log(`Playwright Server running on http://localhost:${PORT}`);
-    console.log(`CDP WebSocket endpoint: ws://localhost:${PORT}/cdp`);
+    app.log.info({ port: PORT }, 'Playwright Server running');
+    app.log.info({ port: PORT }, 'CDP WebSocket endpoint available');
   } catch (err) {
     app.log.error(err);
     process.exit(1);
@@ -57,13 +57,13 @@ async function start() {
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
-  console.log('Shutting down gracefully...');
+  app.log.info('Shutting down gracefully...');
   await app.close();
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
-  console.log('Shutting down gracefully...');
+  app.log.info('Shutting down gracefully...');
   await app.close();
   process.exit(0);
 });
