@@ -8,6 +8,11 @@ import {
   BrowserTabsResponseSchema,
   BrowserSwitchTabRequestSchema,
 } from '../../schemas/browser.js';
+import type {
+  BrowserOpenRequest,
+  BrowserNavigateRequest,
+  BrowserSwitchTabRequest,
+} from '../../schemas/browser.js';
 import { SuccessResponseSchema, ErrorResponseSchema } from '../../schemas/common.js';
 
 const routes: FastifyPluginAsyncTypebox = async (fastify) => {
@@ -28,8 +33,7 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
     async (request, reply) => {
       try {
-        const body = request.body as any;
-        const { headless = false, viewport, cdpPort } = body || {};
+        const { headless = false, viewport, cdpPort } = (request.body ?? {}) as BrowserOpenRequest;
         await BrowserService.getInstance().open(headless, viewport, cdpPort);
         return { success: true, message: 'Browser opened successfully' };
       } catch (error) {
@@ -55,9 +59,8 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
     async (request, reply) => {
       try {
-        const body = request.body as any;
-        const { url, waitUntil = 'networkidle' } = body;
-        await BrowserService.getInstance().navigate(url, waitUntil);
+        const { url, waitUntil = 'networkidle' } = request.body as BrowserNavigateRequest;
+        await BrowserService.getInstance().navigate(url, waitUntil as 'load' | 'domcontentloaded' | 'networkidle');
         return {
           success: true,
           isOpen: BrowserService.getInstance().isOpen(),
@@ -86,8 +89,7 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
     async (request, reply) => {
       try {
-        const body = request.body as any;
-        const { fullPage = false } = body || {};
+        const { fullPage = false }: { fullPage?: boolean } = request.body ?? {};
         const result = await BrowserService.getInstance().screenshot(fullPage);
         return { success: true, ...result };
       } catch (error) {
@@ -183,8 +185,7 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
     async (request, reply) => {
       try {
-        const body = request.body as any;
-        await BrowserService.getInstance().switchTab(body.id);
+        await BrowserService.getInstance().switchTab((request.body as BrowserSwitchTabRequest).id);
         return { success: true, message: 'Switched tab successfully' };
       } catch (error) {
         reply.status(500);
