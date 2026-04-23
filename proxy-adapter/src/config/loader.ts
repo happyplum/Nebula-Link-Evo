@@ -2,6 +2,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { Config, ResolvedConfig } from './schema.js';
 import { resolveConfig, ResolveResult } from './resolver.js';
+import { createWorkerLogger } from '../services/logger.js';
+
+const logger = createWorkerLogger('config-loader');
 
 export interface LoadResult {
   config: ResolvedConfig | null;
@@ -37,7 +40,7 @@ export function loadConfig(configPath?: string): LoadResult {
           break;
         }
       } catch (error) {
-        console.warn(`Failed to parse config at ${absolutePath}:`, error);
+        logger.warn({ err: error, path: absolutePath }, 'Failed to parse config');
       }
     }
   }

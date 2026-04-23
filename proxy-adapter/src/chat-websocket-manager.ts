@@ -1,6 +1,8 @@
 import WebSocket from 'ws';
 import { StreamBuffer } from './services/websocket/stream-buffer.js';
 import { cleanupPersistence as cleanupWebSocketPersistence } from './services/websocket/persistence-singletons.js';
+import { createWorkerLogger } from './services/logger.js';
+import type { Logger } from 'pino';
 import type { WebSocketMessage, StreamChunk } from './services/websocket/types.js';
 interface ChatHandler {
   handleMessage(data: unknown, ws: WebSocket): void;
@@ -16,7 +18,10 @@ export class ChatWebSocketManager {
   private sessionSubscriptions: Map<string, Set<string>> = new Map();
   private clientSessions: Map<string, string> = new Map();
   private streamBuffers: Map<string, StreamBuffer> = new Map();
-  private constructor() {}
+  private logger: Logger;
+  private constructor(logger?: Logger) {
+    this.logger = logger ?? createWorkerLogger('chat-websocket');
+  }
   static getInstance(): ChatWebSocketManager {
     if (!ChatWebSocketManager.instance) {
       ChatWebSocketManager.instance = new ChatWebSocketManager();
@@ -25,7 +30,7 @@ export class ChatWebSocketManager {
   }
   handleConnection(ws: WebSocket, clientId: string): void {
     this.clients.set(clientId, ws);
-    console.log(`[ChatWebSocket] Client ${clientId} connected (${this.clients.size} total)`);
+    this.logger.info({ clientId, total: this.clients.size }, 'Client connected');
 
     ws.send(
       JSON.stringify({
@@ -52,9 +57,7 @@ export class ChatWebSocketManager {
 
     ws.on('close', (code, reason) => {
       const reasonStr = reason?.toString() || 'unknown';
-      console.log(
-        `[ChatWebSocket] Client ${clientId} disconnected: code=${code}, reason=${reasonStr} (${this.clients.size} remaining)`
-      );
+      this.logger.info({ clientId, code, reason: reasonStr, remaining: this.clients.size }, 'Client disconnected');
       this.unsubscribeFromSession(clientId);
       this.clients.delete(clientId);
       if (this.clients.size === 0 && this.statusInterval) {
@@ -64,7 +67,7 @@ export class ChatWebSocketManager {
     });
 
     ws.on('error', (error: Error) => {
-      console.error(`[ChatWebSocket] Error for client ${clientId}:`, error.message);
+      this.logger.error({ err: error, clientId }, 'WebSocket error for client');
       this.clients.delete(clientId);
     });
 

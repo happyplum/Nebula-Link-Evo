@@ -26,10 +26,7 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     const clientId = crypto.randomUUID();
     wsManager.handleConnection(connection, clientId);
     // DEPRECATION WARNING: /debug/ws is deprecated, use /ws/debug instead
-    console.log(
-      `[DEPRECATED] Legacy WebSocket client connected: ${clientId} (Total: ${wsManager.getClientCount()}). Use /ws/debug instead.`
-    );
-    console.log(`WebSocket client connected: ${clientId} (Total: ${wsManager.getClientCount()})`);
+    fastify.log.warn({ clientId, total: wsManager.getClientCount() }, 'Legacy WebSocket client connected on deprecated /debug/ws. Use /ws/debug instead');
   });
 
   fastify.get(
@@ -568,25 +565,22 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     async (request, _reply) => {
       try {
         const { version } = request.query;
-        console.log('[Debug API] Fetching DOM from browserClient...');
+        request.log.info('[Debug API] Fetching DOM from browserClient...');
         const dom = await browserClient.getSimplifiedDOM();
-        console.log(
-          '[Debug API] DOM data received:',
-          JSON.stringify({
-            hasSnapshotId: !!dom.snapshot_id,
-            hasAnnotatedScreenshot: !!dom.annotated_screenshot_base64,
-            elementsMapLength: dom.elements_map?.length,
-            hasSimplifiedDom: !!dom.simplified_dom,
-            version: dom.version,
-          })
-        );
+        request.log.info({
+          hasSnapshotId: !!dom.snapshot_id,
+          hasAnnotatedScreenshot: !!dom.annotated_screenshot_base64,
+          elementsMapLength: dom.elements_map?.length,
+          hasSimplifiedDom: !!dom.simplified_dom,
+          version: dom.version,
+        }, '[Debug API] DOM data received');
 
         return {
           success: true,
           dom,
         };
       } catch (error) {
-        console.error('[Debug API] Error fetching DOM:', error);
+        request.log.error({ err: error }, '[Debug API] Error fetching DOM');
         return { success: false, error: (error as Error).message };
       }
     }
@@ -1062,7 +1056,7 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           },
         };
       } catch (error) {
-        console.error('[Debug API] Error reading failure sample:', error);
+        request.log.error({ err: error }, '[Debug API] Error reading failure sample');
         return { success: false, error: (error as Error).message };
       }
     }

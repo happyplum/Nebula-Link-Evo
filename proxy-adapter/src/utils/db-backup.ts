@@ -1,13 +1,19 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import { createWorkerLogger } from '../services/logger.js';
+import type { Logger } from 'pino';
+
+const logger = createWorkerLogger('db-backup');
 
 export class DatabaseBackup {
   private dbPath: string;
   private backupDir: string;
+  private logger: Logger;
 
-  constructor(dbPath: string = './conversations.sqlite') {
+  constructor(dbPath: string = './conversations.sqlite', instanceLogger?: Logger) {
     this.dbPath = dbPath;
     this.backupDir = path.join(path.dirname(dbPath), 'backups');
+    this.logger = instanceLogger ?? logger;
   }
 
   async createBackup(suffix: string = 'pre-refactor'): Promise<string> {
@@ -18,7 +24,7 @@ export class DatabaseBackup {
     await fs.mkdir(this.backupDir, { recursive: true });
     await fs.copyFile(this.dbPath, backupPath);
 
-    console.log(`✅ Database backup created: ${backupPath}`);
+    this.logger.info({ backupPath }, 'Database backup created');
     return backupPath;
   }
 
@@ -37,7 +43,7 @@ export class DatabaseBackup {
 
   async restoreBackup(backupPath: string): Promise<void> {
     await fs.copyFile(backupPath, this.dbPath);
-    console.log(`✅ Database restored from: ${backupPath}`);
+    this.logger.info({ backupPath }, 'Database restored');
   }
 
   async cleanupOldBackups(keepCount: number = 5): Promise<void> {
@@ -46,7 +52,7 @@ export class DatabaseBackup {
 
     for (const backup of toDelete) {
       await fs.unlink(backup);
-      console.log(`🗑️  Cleaned old backup: ${backup}`);
+      this.logger.info({ backup }, 'Cleaned old backup');
     }
   }
 }
@@ -60,6 +66,6 @@ export async function initializeWithBackup(dbPath: string = './conversations.sql
     await backup.cleanupOldBackups(5);
   } catch {
     // 数据库不存在，跳过备份
-    console.log('ℹ️  Database does not exist, skipping backup');
+    logger.info('Database does not exist, skipping backup');
   }
 }

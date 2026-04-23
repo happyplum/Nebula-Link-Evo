@@ -1,4 +1,7 @@
 import type { FastifyInstance } from 'fastify';
+import { createWorkerLogger } from '../../../services/logger.js';
+
+const logger = createWorkerLogger('ws-debug');
 
 export default async function debugSocketRoutes(fastify: FastifyInstance) {
   const wsManager = fastify.wsManager;
@@ -6,6 +9,6 @@ export default async function debugSocketRoutes(fastify: FastifyInstance) {
   fastify.get('/debug', { websocket: true }, (connection, _req) => {
     const clientId = crypto.randomUUID();
     wsManager.handleConnection(connection, clientId);
-    console.log(`[WS-DEBUG] Client connected: ${clientId} (Total: ${wsManager.getClientCount()})`);
+    logger.info({ clientId, total: wsManager.getClientCount() }, 'Client connected');
   });
 }
