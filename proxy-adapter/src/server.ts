@@ -94,7 +94,7 @@ async function start() {
     if (compressionClient) {
       conversationManager.setAiClient(compressionClient);
     } else {
-      console.warn('[WARN] Runtime compression disabled: no compatible decision client available');
+      app.log.warn('Runtime compression disabled: no compatible decision client available');
     }
 
     // Initialize chat session controller (recover crashed sessions)
@@ -132,25 +132,26 @@ async function start() {
 
     // Register Chat routes - Independent WebSocket channel for chat sessions
     await app.register(chatRoutes, { prefix: '/chat' });
-    console.log('[INFO] Chat routes registered: /chat/ws');
+    app.log.info({ prefix: '/chat' }, 'Chat routes registered');
 
     // Register WebSocket routes - /ws/* prefix architecture
     await app.register(chatSocketRoutes, { prefix: '/ws' });
     await app.register(debugSocketRoutes, { prefix: '/ws' });
-    console.log('[INFO] WebSocket routes registered: /ws/chat, /ws/debug');
+    app.log.info({ prefix: '/ws' }, 'WebSocket routes registered');
 
     // Register API chat routes - Async message handling and SSE streaming
     await app.register(apiChatRoutes, { prefix: '/api/chat' });
-    console.log('[INFO] API chat routes registered: /api/chat/*');
+    app.log.info({ prefix: '/api/chat' }, 'API chat routes registered');
 
     // Register Debug routes
     await app.register(debugRoutes, { prefix: '/debug' });
-    console.log('[INFO] Debug routes registered: /debug/api/*, /debug/ws');
+    app.log.info({ prefix: '/debug' }, 'Debug routes registered');
 
     const mcpStatus = taskService.getMCPStatus();
-    console.log(`[INFO] Configuration loaded from: ${taskService.getConfigPath()}`);
-    console.log(
-      `[INFO] MCP Systems: [Browser: ${mcpStatus.enabled ? 'OK' : 'Disabled'}, File: ${mcpStatus.enabled ? 'OK' : 'Disabled'}]`
+    app.log.info({ configPath: taskService.getConfigPath() }, 'Configuration loaded');
+    app.log.info(
+      { browser: mcpStatus.enabled ? 'OK' : 'Disabled', file: mcpStatus.enabled ? 'OK' : 'Disabled' },
+      'MCP Systems status'
     );
 
     app.get(
@@ -191,15 +192,15 @@ async function start() {
     );
 
     await app.listen({ port: PORT, host: '0.0.0.0' });
-    console.log(`Proxy Adapter running on http://localhost:${PORT}`);
-    console.log('Available endpoints:');
-    console.log(`  POST http://localhost:${PORT}/api/task`);
-    console.log(`  GET  http://localhost:${PORT}/api/health`);
-    console.log(`  GET  http://localhost:${PORT}/api/config`);
-    console.log(`  WS   ws://localhost:${PORT}/ws/debug     - Debug WebSocket (new)`);
-    console.log(`  WS   ws://localhost:${PORT}/ws/chat      - Chat WebSocket (new)`);
-    console.log(`  WS   ws://localhost:${PORT}/debug/ws    - Debug WebSocket (legacy)`);
-    console.log(`  WS   ws://localhost:${PORT}/chat/ws      - Chat WebSocket (legacy)`);
+    app.log.info({ url: `http://localhost:${PORT}` }, 'Proxy Adapter running');
+    app.log.info('Available endpoints:');
+    app.log.info({ endpoint: 'POST /api/task' });
+    app.log.info({ endpoint: 'GET  /api/health' });
+    app.log.info({ endpoint: 'GET  /api/config' });
+    app.log.info({ endpoint: 'WS   /ws/debug     - Debug WebSocket (new)' });
+    app.log.info({ endpoint: 'WS   /ws/chat      - Chat WebSocket (new)' });
+    app.log.info({ endpoint: 'WS   /debug/ws    - Debug WebSocket (legacy)' });
+    app.log.info({ endpoint: 'WS   /chat/ws      - Chat WebSocket (legacy)' });
   } catch (err) {
     app.log.error(err);
     process.exit(1);
@@ -207,7 +208,7 @@ async function start() {
 }
 
 process.on('SIGINT', async () => {
-  console.log('Shutting down gracefully...');
+  app.log.info('Shutting down gracefully...');
   if (conversationManager) {
     await conversationManager.close();
   }
@@ -217,7 +218,7 @@ process.on('SIGINT', async () => {
 });
 
 process.on('SIGTERM', async () => {
-  console.log('Shutting down gracefully...');
+  app.log.info('Shutting down gracefully...');
   if (conversationManager) {
     await conversationManager.close();
   }
