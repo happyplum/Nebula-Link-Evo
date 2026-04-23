@@ -1,5 +1,6 @@
 import { DatabaseManager } from './db.js';
 import type { Message } from './types.js';
+import { createWorkerLogger } from '../services/logger.js';
 
 interface CompressorConfig {
   compressThreshold?: number;
@@ -19,6 +20,7 @@ class SessionCompressor {
   private db: DatabaseManager;
   private compressThreshold: number;
   private keepRecentCount: number;
+  private logger = createWorkerLogger('compressor');
 
   constructor(db: DatabaseManager, config: CompressorConfig = {}) {
     this.db = db;
@@ -73,7 +75,7 @@ class SessionCompressor {
     try {
       this.db.updateSession(sessionId, { summary });
     } catch (err) {
-      console.error('Failed to update session summary:', err);
+      this.logger.error({ err, sessionId }, 'Failed to update session summary');
     }
   }
 

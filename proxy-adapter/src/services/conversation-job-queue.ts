@@ -5,6 +5,9 @@ import { DatabaseManager } from '../conversation/db.js';
 import type { AgentState } from '../conversation/types.js';
 import { StreamPersistWorker } from './stream-persist-worker.js';
 import { ProviderError } from './provider/errors.js';
+import { createWorkerLogger } from './logger.js';
+
+const logger = createWorkerLogger('ConversationJobQueue');
 
 type BlockReason = NonNullable<AgentState['blockReason']>;
 type WaitingFor = NonNullable<AgentState['waitingFor']>;
@@ -227,7 +230,7 @@ export class ConversationJobQueue {
     this.sessionLastActive.set(job.sessionId, Date.now());
 
     // Start execution in background on next tick
-    Promise.resolve().then(() => this.executeJob(job)).catch(console.error);
+    Promise.resolve().then(() => this.executeJob(job)).catch((err) => logger.error({ err }, 'Job execution failed'));
 
     return id;
   }

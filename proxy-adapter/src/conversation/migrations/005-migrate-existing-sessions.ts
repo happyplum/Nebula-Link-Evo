@@ -1,4 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
+import { createWorkerLogger } from '../../services/logger.js';
+
+const logger = createWorkerLogger('migration-005');
 
 export function up(db: DatabaseSync): void {
   const now = new Date().toISOString();
@@ -7,7 +10,7 @@ export function up(db: DatabaseSync): void {
   const sessions = sessionsStmt.all() as { id: string }[];
 
   const existingStmt = db.prepare('SELECT session_id FROM sessions_state');
-  const existing = new Set(existingStmt.all().map((row: any) => row.session_id));
+  const existing = new Set(existingStmt.all().map((row: { session_id: string }) => row.session_id));
 
   const insertStmt = db.prepare(
     `INSERT OR IGNORE INTO sessions_state (
@@ -25,7 +28,7 @@ export function up(db: DatabaseSync): void {
   }
 
   if (migrated > 0) {
-    console.log(`Migrated ${migrated} existing sessions to sessions_state`);
+    logger.info({ migrated }, 'Migrated existing sessions to sessions_state');
   }
 }
 

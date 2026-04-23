@@ -15,6 +15,7 @@ import { z } from 'zod';
 import { getModel } from '../clients/vercel-ai/provider.js';
 import { ProviderRegistry } from '../services/provider/registry.js';
 import type { ProviderConfig } from '../services/provider/types.js';
+import { createWorkerLogger } from '../services/logger.js';
 import WebSocket from 'ws';
 
 interface ChatSendParams {
@@ -57,6 +58,7 @@ class ChatHandler {
   private maxToolLoops = 10;
   private toolLoopCount = 0;
   private sessionEventQueue: Promise<void> = Promise.resolve();
+  private logger = createWorkerLogger('chat-handler');
 
   constructor(
     conversationManager: ConversationManager,
@@ -139,10 +141,7 @@ class ChatHandler {
           seq === undefined ? eventData : { ...eventData, seq }
         );
       } catch (error) {
-        console.warn(
-          `[ChatHandler] Failed to emit session event ${type} for session ${sessionId}:`,
-          error
-        );
+        this.logger.warn({ sessionId, type, error }, 'Failed to emit session event');
       }
     });
 
@@ -274,7 +273,7 @@ class ChatHandler {
       throw new Error(`Session ${sessionId} not found`);
     }
 
-    console.log(`[ChatHandler] handleChatSend, screenshot length: ${screenshot?.length || 0}`);
+    this.logger.debug({ sessionId, screenshotLength: screenshot?.length ?? 0 }, 'handleChatSend');
 
     if (!skipAddMessage) {
       this.conversationManager.addMessage(sessionId, {
@@ -369,7 +368,7 @@ class ChatHandler {
     signal?: AbortSignal
   ): Promise<void> {
     if (signal?.aborted) {
-      console.log(`[ChatHandler] Execution aborted for session ${sessionId}`);
+      this.logger.debug({ sessionId }, 'Execution aborted');
       return;
     }
 
@@ -433,12 +432,10 @@ class ChatHandler {
       stopWhen: stepCountIs(maxSteps),
     };
 
-    console.log(
-      `[ChatHandler] executeAIResponse, screenshot param length: ${screenshot?.length || 0}`
-    );
+    this.logger.debug({ screenshotLength: screenshot?.length ?? 0 }, 'executeAIResponse');
 
     try {
-      console.log(`[ChatHandler] Using SDK model: ${activeProvider}/${activeModel}`);
+      this.logger.info({ provider: activeProvider, model: activeModel }, 'Using SDK model');
       const result = await streamText(streamOptions);
 
       for await (const streamPart of result.fullStream) {
@@ -555,7 +552,7 @@ class ChatHandler {
         }
 
         if (part.type === 'abort') {
-          console.log(`[ChatHandler] Stream aborted for session ${sessionId}`);
+          this.logger.debug({ sessionId }, 'Stream aborted');
           return;
         }
       }
@@ -565,7 +562,7 @@ class ChatHandler {
       }
 
       if (signal?.aborted) {
-        console.log(`[ChatHandler] Execution aborted for session ${sessionId}`);
+        this.logger.debug({ sessionId }, 'Execution aborted');
         return;
       }
 
@@ -611,20 +608,13 @@ class ChatHandler {
       }
     } catch (error) {
       if (signal?.aborted || this.isAbortLikeError(error)) {
-        console.log(`[ChatHandler] Execution aborted for session ${sessionId}`);
+        this.logger.debug({ sessionId }, 'Execution aborted');
         return;
       }
 
       const errorMessage = error instanceof Error ? error.message : String(error);
       const errorStack = error instanceof Error ? error.stack : undefined;
-      console.error('[ChatHandler] Failed to stream AI response', {
-        sessionId,
-        provider: session.provider,
-        model: session.model,
-        iteration,
-        error: errorMessage,
-        stack: errorStack,
-      });
+      this.logger.error({ sessionId, provider: session.provider, model: session.model, iteration, error: errorMessage, stack: errorStack }, 'Failed to stream AI response');
       await this.flushSessionEvents();
       await this.emitSessionEvent(sessionId, 'run.error', {
         sessionId,

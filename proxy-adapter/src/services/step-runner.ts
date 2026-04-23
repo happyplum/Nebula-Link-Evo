@@ -17,6 +17,9 @@ import type { ActionExecutor, ActionResult } from './action-executor.js';
 import type { ProviderRegistry } from './provider/registry.js';
 import { resolveSessionModels } from './provider/resolver.js';
 import { createVisionTool } from './provider/vision-tool.js';
+import { createWorkerLogger } from './logger.js';
+
+const logger = createWorkerLogger('StepRunner');
 
 export interface ConfigDefaults {
   decision: string;
@@ -71,7 +74,7 @@ export class StepRunner {
   }
 
   async runStep(context: StepContext, currentStep: number): Promise<StepResult> {
-    console.log(`\n=== Step ${currentStep + 1}/${context.maxSteps} ===`);
+    logger.info({ step: currentStep + 1, maxSteps: context.maxSteps }, 'Step');
 
     const [screenshotData, dom] = await Promise.all([
       browserClient.screenshot(),
@@ -122,18 +125,19 @@ export class StepRunner {
       }
     }
 
-    console.log(
-      JSON.stringify({
+    logger.info(
+      {
         phase: 'decision',
         provider: decision.provider,
         model: decision.modelId,
         runId: context.taskId,
-      })
+      },
+      'Decision phase'
     );
 
     const action = this.parseActionFromOutput(textOutput);
 
-    console.log(`Action: ${action.type}`, action.params);
+    logger.info({ actionType: action.type, params: action.params }, 'Action');
 
     const executionResult = await this.actionExecutor.execute(action);
 

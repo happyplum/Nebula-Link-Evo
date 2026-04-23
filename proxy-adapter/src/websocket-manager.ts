@@ -5,6 +5,8 @@ import { StreamBuffer } from './services/websocket/stream-buffer.js';
 export { cleanupPersistence } from './services/websocket/persistence-singletons.js';
 import type { WebSocketMessage, StreamChunk } from './services/websocket/types.js';
 import { createFrameCounter, type FrameCounter } from '@nebula-link-evo/shared';
+import type { Logger } from 'pino';
+import { createWorkerLogger } from './services/logger.js';
 
 interface ServiceStatus {
   playwright: {
@@ -37,7 +39,11 @@ export class DebugWebSocketManager {
   private debugEnabled = false;
   private debugCounter: FrameCounter | null = null;
   private debugSummaryInterval: NodeJS.Timeout | null = null;
-  private constructor() {}
+  private logger: Logger;
+
+  private constructor(logger?: Logger) {
+    this.logger = logger ?? createWorkerLogger('WebSocketManager');
+  }
 
   static getInstance(): DebugWebSocketManager {
     if (!DebugWebSocketManager.instance) {
@@ -48,7 +54,7 @@ export class DebugWebSocketManager {
 
   handleConnection(ws: WebSocket, clientId: string): void {
     this.clients.set(clientId, ws);
-    console.log(`[WebSocket] Client ${clientId} connected (${this.clients.size} total)`);
+    this.logger.info({ clientId, totalClients: this.clients.size }, 'Client connected');
 
     ws.send(
       JSON.stringify({
@@ -75,9 +81,7 @@ export class DebugWebSocketManager {
 
     ws.on('close', (code, reason) => {
       const reasonStr = reason?.toString() || 'unknown';
-      console.log(
-        `[WebSocket] Client ${clientId} disconnected: code=${code}, reason=${reasonStr} (${this.clients.size} remaining)`
-      );
+      this.logger.info({ clientId, code, reason: reasonStr, remainingClients: this.clients.size - 1 }, 'Client disconnected');
       this.unsubscribeFromSession(clientId);
       this.clients.delete(clientId);
       if (this.clients.size === 0 && this.statusInterval) {
@@ -87,7 +91,7 @@ export class DebugWebSocketManager {
     });
 
     ws.on('error', (error: Error) => {
-      console.error(`[WebSocket] Error for client ${clientId}:`, error.message);
+      this.logger.error({ err: error, clientId }, 'Client error');
       this.clients.delete(clientId);
     });
 
@@ -135,10 +139,7 @@ export class DebugWebSocketManager {
       try {
         mcpStatus = this.mcpStatusProvider() || mcpStatus;
       } catch (error) {
-        console.warn(
-          '[DebugWebSocketManager] Failed to get MCP status from provider, using fallback',
-          error
-        );
+        this.logger.warn({ err: error }, 'Failed to get MCP status from provider');
       }
     }
     return {
@@ -213,18 +214,14 @@ export class DebugWebSocketManager {
           this.debugSummaryInterval = setInterval(() => {
             if (this.debugCounter) {
               const s = this.debugCounter.getSummary();
-              console.log(
-                `[NLE-Debug] relay fps=${s.fps} drops=${s.totalDrops}( relay_backpressure=${s.dropReasons['relay_backpressure'] ?? 0} ) bytesPerSec=${s.bytesPerSecond}`
-              );
+              this.logger.info({ fps: s.fps, totalDrops: s.totalDrops, relayBackpressure: s.dropReasons['relay_backpressure'] ?? 0, bytesPerSec: s.bytesPerSecond }, 'NLE-Debug relay stats');
             }
           }, 1000);
         } else {
           if (this.debugCounter) {
-            const s = this.debugCounter.getSummary();
-            console.log(
-              `[NLE-Debug] relay fps=${s.fps} drops=${s.totalDrops}( relay_backpressure=${s.dropReasons['relay_backpressure'] ?? 0} ) bytesPerSec=${s.bytesPerSecond}`
-            );
-            this.debugCounter = null;
+              const s = this.debugCounter.getSummary();
+              this.logger.info({ fps: s.fps, totalDrops: s.totalDrops, relayBackpressure: s.dropReasons['relay_backpressure'] ?? 0, bytesPerSec: s.bytesPerSecond }, 'NLE-Debug relay stats (disabled)');
+              this.debugCounter = null;
           }
           if (this.debugSummaryInterval) {
             clearInterval(this.debugSummaryInterval);
