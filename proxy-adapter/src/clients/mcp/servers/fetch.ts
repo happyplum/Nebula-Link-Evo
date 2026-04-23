@@ -4,7 +4,7 @@ interface FetchOptions extends RequestInit {
 
 interface FetchResult {
   success: boolean;
-  data?: any;
+  data?: unknown;
   error?: string;
   status: number;
 }
@@ -52,7 +52,7 @@ export async function fetch_get(url: string, options?: FetchOptions): Promise<Fe
 
 export async function fetch_post(
   url: string,
-  body?: any,
+  body?: unknown,
   options?: FetchOptions
 ): Promise<FetchResult> {
   try {
