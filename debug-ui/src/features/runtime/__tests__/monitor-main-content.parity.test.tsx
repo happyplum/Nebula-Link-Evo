@@ -10,6 +10,10 @@ vi.mock('@/features/liveview/components/LiveViewCanvas.js', () => ({
   LiveViewCanvas: () => <div data-testid="mock-monitor-liveview">LiveViewCanvas</div>,
 }));
 
+vi.mock('@/features/liveview/components/LiveKitView.js', () => ({
+  default: () => <div data-testid="mock-monitor-liveview">LiveKitView</div>,
+}));
+
 /**
  * P3-17-V Monitor Main Content Parity Tests
  *

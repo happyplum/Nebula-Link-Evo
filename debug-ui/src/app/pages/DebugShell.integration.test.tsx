@@ -47,7 +47,8 @@ describe('DebugShell Integration', () => {
     expect(screen.getByTitle('状态')).toBeInTheDocument();
     expect(screen.getByTitle('控制')).toBeInTheDocument();
     expect(screen.getByTitle('AI')).toBeInTheDocument();
-    expect(screen.getByTitle('对话测试')).toBeInTheDocument();
+    // TODO(renamed-activity): '对话测试' was renamed to '执行记录' (route-based, not sidebar)
+    expect(screen.getByTitle('执行记录')).toBeInTheDocument();
     
     // Check sidebar header
     expect(screen.getByText('🌌 Nebula Debug')).toBeInTheDocument();
@@ -60,7 +61,10 @@ describe('DebugShell Integration', () => {
     expect(screen.getByRole('tab', { name: '⚙️ 配置' })).toBeInTheDocument();
   });
 
-  it('switches sidebar content when activity icons are clicked', () => {
+  // TODO(removed-activity): '历史' sidebar activity was removed — replaced by '执行记录' route navigation.
+  // The sidebar-based history panel no longer exists; this test verified sidebar switching
+  // for an activity that is now route-based (navigates to /execution).
+  it.skip('switches sidebar content when activity icons are clicked', () => {
     renderWithProviders(<DebugPage />);
     
     // Default is Monitor panel

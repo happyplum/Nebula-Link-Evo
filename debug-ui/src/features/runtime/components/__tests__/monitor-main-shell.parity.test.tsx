@@ -1,13 +1,18 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { MonitorMainShell } from '../MonitorMainShell.js';
+import { useRuntimeStore } from '@/features/runtime/store/runtime.store.js';
 import { testIds } from '@/shared/testing/testids.js';
 
 vi.mock('@/features/liveview/components/LiveViewCanvas.js', () => ({
   LiveViewCanvas: () => <div data-testid="mock-monitor-liveview">LiveViewCanvas</div>,
 }));
 
-vi.mock('@/features/runtime/hooks/index.js', () => ({
+vi.mock('@/features/liveview/components/LiveKitView.js', () => ({
+  default: () => <div data-testid="mock-monitor-liveview">LiveKitView</div>,
+}));
+
+vi.mock('@/features/runtime/hooks/useDebugSocket.js', () => ({
   useDebugSocket: () => ({
     sendMessage: vi.fn(),
     onMessage: vi.fn(() => vi.fn()),
@@ -15,6 +20,9 @@ vi.mock('@/features/runtime/hooks/index.js', () => ({
 }));
 
 describe('MonitorMainShell Parity Test', () => {
+  beforeEach(() => {
+    useRuntimeStore.getState().reset();
+  });
   it('asserts MonitorMainShell renders with 6 structural regions', () => {
     render(<MonitorMainShell />);
 
@@ -61,7 +69,7 @@ describe('MonitorMainShell Parity Test', () => {
     const header = screen.getByTestId(testIds.monitorMainHeader);
     expect(within(header).getByText('📸 实时监控')).toBeInTheDocument();
     expect(within(header).getByTestId(testIds.monitorMainStatusBadge)).toHaveTextContent(
-      '连接中...'
+      '未连接'
     );
 
     // Verify task strip text
