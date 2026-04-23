@@ -1,5 +1,6 @@
 import { DatabaseManager } from './db.js';
 import { SessionCompressor } from './compressor.js';
+import { createWorkerLogger } from '../services/logger.js';
 import type {
   Session,
   Message,
@@ -42,6 +43,7 @@ class ConversationManager {
   private initialized = false;
   private compressor: SessionCompressor;
   private aiClient: CompressorAIClient | null = null;
+  private logger = createWorkerLogger('conversation-manager');
 
   constructor(dbPath: string = ':memory:') {
     this.db = DatabaseManager.getInstance();
@@ -348,7 +350,7 @@ class ConversationManager {
       try {
         await this.compressor.compress(sessionId, this.aiClient);
       } catch (error) {
-        console.error('Compression failed:', error);
+        this.logger.error({ err: error, sessionId }, 'Compression failed');
       }
     }
   }

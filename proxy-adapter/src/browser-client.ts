@@ -2,6 +2,9 @@ import axios from 'axios';
 import { ScreenshotData } from './types.js';
 import type { DOMSnapshotResponse, ElementInfo, ElementLocator } from '@nebula-link-evo/shared';
 import { getServiceEndpointsCached } from './config/services.js';
+import { createWorkerLogger } from './services/logger.js';
+
+const logger = createWorkerLogger('BrowserClient');
 
 interface PageStateElement {
   tag: string;
@@ -49,28 +52,25 @@ export class BrowserClient {
       if (data.snapshot_id) {
         return data;
       }
-      console.warn('[BrowserClient] DOM response missing snapshot_id');
+      logger.warn('DOM response missing snapshot_id');
       return data;
     } catch (error) {
       if (axios.isAxiosError(error)) {
         // Handle network errors or HTTP errors
         if (error.response) {
           // Server responded with error status
-          console.error('[BrowserClient] Playwright Server returned error:', {
-            status: error.response.status,
-            data: error.response.data,
-          });
+          logger.error({ status: error.response.status, data: error.response.data }, 'Playwright Server returned error');
           throw new Error(
             `Playwright Server error: ${error.response.status} - ${JSON.stringify(error.response.data)}`
           );
         } else if (error.request) {
           // Request made but no response received
-          console.error('[BrowserClient] No response from Playwright Server:', error.message);
+          logger.error({ message: error.message }, 'No response from Playwright Server');
           throw new Error(`Playwright Server unreachable: ${error.message}`);
         }
       }
       // Other errors
-      console.error('[BrowserClient] Unexpected error fetching DOM:', error);
+      logger.error({ err: error }, 'Unexpected error fetching DOM');
       throw error;
     }
   }
@@ -258,11 +258,11 @@ export class BrowserClient {
       ]);
 
       // Extract elements from v2.0 (Record) format
-      console.log('[BrowserClient] Extracting elements from elements_map...');
+      logger.info('Extracting elements from elements_map');
       let domElements: PageStateElement[] = [];
       if (dom.elements_map && typeof dom.elements_map === 'object') {
         // v2.0 format: Record<string, ElementLocator>
-        console.log('[BrowserClient] Using v2.0 format (Record)');
+        logger.info('Using v2.0 format (Record)');
         domElements = Object.values(dom.elements_map).map(
           (info: ElementLocator): PageStateElement => ({
             tag: info.tag,
@@ -274,7 +274,7 @@ export class BrowserClient {
           })
         );
       } else {
-        console.warn('[BrowserClient] Invalid elements_map format:', typeof dom.elements_map);
+        logger.warn({ format: typeof dom.elements_map }, 'Invalid elements_map format');
       }
       return {
         url: dom.snapshot_id, // Use snapshot_id as URL identifier
@@ -284,7 +284,7 @@ export class BrowserClient {
         screenshot: dom.annotated_screenshot_base64 || screenshotData?.screenshot || undefined,
       };
     } catch (error) {
-      console.error('[BrowserClient] Failed to get page state:', error);
+      logger.error({ err: error }, 'Failed to get page state');
       return null;
     }
   }

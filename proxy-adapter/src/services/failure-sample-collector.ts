@@ -2,6 +2,8 @@ import { writeFileSync, mkdirSync, existsSync, readdirSync, rmSync } from 'node:
 import { join } from 'node:path';
 import { browserClient } from '../browser-client.js';
 import type { Action } from '../config/schema.js';
+import type { Logger } from 'pino';
+import { createWorkerLogger } from './logger.js';
 
 interface FailureContext {
   timestamp: number;
@@ -18,8 +20,11 @@ const MAX_SAMPLES = 50;
 
 export class FailureSampleCollector {
   private static instance: FailureSampleCollector;
+  private logger: Logger;
 
-  private constructor() {}
+  private constructor(logger?: Logger) {
+    this.logger = logger ?? createWorkerLogger('FailureSampleCollector');
+  }
 
   static getInstance(): FailureSampleCollector {
     if (!FailureSampleCollector.instance) {
@@ -70,7 +75,7 @@ export class FailureSampleCollector {
 
       return sampleDir;
     } catch (sampleError) {
-      console.error('[FailureSampleCollector] Failed to save failure sample:', sampleError);
+      this.logger.error({ err: sampleError }, 'Failed to save failure sample');
       return null;
     }
   }
@@ -93,7 +98,7 @@ export class FailureSampleCollector {
         }
       }
     } catch (cleanupError) {
-      console.error('[FailureSampleCollector] Failed to cleanup old samples:', cleanupError);
+      this.logger.error({ err: cleanupError }, 'Failed to cleanup old samples');
     }
   }
 
@@ -111,7 +116,7 @@ export class FailureSampleCollector {
         }))
         .sort((a, b) => b.timestamp - a.timestamp);
     } catch (error) {
-      console.error('[FailureSampleCollector] Failed to list samples:', error);
+      this.logger.error({ err: error }, 'Failed to list samples');
       return [];
     }
   }

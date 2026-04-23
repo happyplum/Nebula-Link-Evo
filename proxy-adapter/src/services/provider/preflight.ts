@@ -1,4 +1,7 @@
 import type { ProviderRegistry } from './registry.js';
+import { createWorkerLogger } from '../logger.js';
+
+const logger = createWorkerLogger('Preflight');
 
 /**
  * Runs startup provider preflight check by probing each enabled provider
@@ -39,6 +42,6 @@ export async function runPreflight(
   // Partial — warn per provider with error detail
   for (const key of unavailableProviders) {
     const error = registry.getAvailabilityError(key) ?? 'unknown error';
-    console.warn(`Provider "${key}" is not available: ${error}`);
+    logger.warn({ provider: key, error }, 'Provider not available');
   }
 }

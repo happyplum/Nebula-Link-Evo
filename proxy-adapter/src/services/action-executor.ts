@@ -11,6 +11,9 @@ import { interactionLogger } from './interaction-logger.js';
 import { failureSampleCollector } from './failure-sample-collector.js';
 import type { CreateInteractionParams } from '../conversation/types.js';
 import type { MCPSDKClient } from '../clients/mcp/sdk-client.js';
+import { createWorkerLogger } from './logger.js';
+
+const logger = createWorkerLogger('ActionExecutor');
 
 export type { ActionResult };
 
@@ -304,7 +307,7 @@ export class ActionExecutor {
         failureSamplePath
       );
       void interactionLogger.log(logPayload).catch((error) => {
-        console.error('[ActionExecutor] Failed to enqueue interaction log:', error);
+        logger.error({ err: error }, 'Failed to enqueue interaction log');
       });
     }
 

@@ -2,6 +2,8 @@ import { DatabaseManager } from '../conversation/db.js';
 import type { CreateInteractionParams } from '../conversation/types.js';
 import { writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import type { Logger } from 'pino';
+import { createWorkerLogger } from './logger.js';
 
 interface QueuedInteraction {
   params: CreateInteractionParams;
@@ -23,8 +25,10 @@ export class InteractionLogger {
   private readonly BATCH_SIZE = 100;
   private readonly FLUSH_INTERVAL_MS = 5000;
   private readonly FAILURE_LOG_DIR = '.sisyphus/failures/logger';
+  private logger: Logger;
 
-  private constructor() {
+  private constructor(logger?: Logger) {
+    this.logger = logger ?? createWorkerLogger('InteractionLogger');
     this.dbManager = DatabaseManager.getInstance();
     this.startPeriodicFlush();
     this.registerExitHandlers();
@@ -43,7 +47,7 @@ export class InteractionLogger {
     }
     this.flushInterval = setInterval(() => {
       this.flush().catch((err) => {
-        console.error('[InteractionLogger] Periodic flush failed:', err);
+        this.logger.error({ err }, 'Periodic flush failed');
       });
     }, this.FLUSH_INTERVAL_MS);
   }
@@ -93,7 +97,7 @@ export class InteractionLogger {
     queueMicrotask(() => {
       this.flushScheduled = false;
       this.flush().catch((err) => {
-        console.error('[InteractionLogger] Scheduled flush failed:', err);
+        this.logger.error({ err }, 'Scheduled flush failed');
       });
     });
   }
@@ -123,7 +127,7 @@ export class InteractionLogger {
         }
       }
     } catch (error) {
-      console.error('[InteractionLogger] Flush failed:', error);
+      this.logger.error({ err: error }, 'Flush failed');
       await this.fallbackLogAll();
     } finally {
       this.isFlushing = false;
@@ -151,11 +155,9 @@ export class InteractionLogger {
       );
 
       writeFileSync(filePath, content, 'utf-8');
-      console.error(
-        `[InteractionLogger] ${failures.length} interactions logged to ${filePath}`
-      );
+      this.logger.error({ count: failures.length, path: filePath }, 'Interactions logged to failure file');
     } catch (fileError) {
-      console.error('[InteractionLogger] Failed to write failure log:', fileError);
+      this.logger.error({ err: fileError }, 'Failed to write failure log');
     }
   }
 
@@ -177,12 +179,10 @@ export class InteractionLogger {
       );
 
       writeFileSync(filePath, content, 'utf-8');
-      console.error(
-        `[InteractionLogger] Fallback: ${this.queue.length} interactions logged to ${filePath}`
-      );
+      this.logger.error({ count: this.queue.length, path: filePath }, 'Fallback: interactions logged');
       this.queue = [];
     } catch (error) {
-      console.error('[InteractionLogger] Fallback log failed:', error);
+      this.logger.error({ err: error }, 'Fallback log failed');
     }
   }
 

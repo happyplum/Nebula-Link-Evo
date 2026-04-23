@@ -2,6 +2,30 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { Skill } from './schema.js';
 
+/**
+ * Raw, unvalidated skill structure from JSON/YAML parsing.
+ * Used before validation and type narrowing to Skill.
+ */
+interface UnvalidatedSkill {
+  id?: string;
+  name?: string;
+  description?: string;
+  version?: string;
+  steps?: unknown;
+  category?: string;
+  enabled?: boolean;
+}
+
+/**
+ * Raw, unvalidated step structure within a skill.
+ */
+interface UnvalidatedStep {
+  action?: string;
+  type?: string;
+  params?: unknown;
+  description?: string;
+}
+
 export class SkillManager {
   private skillsDir: string;
   private skills: Map<string, Skill> = new Map();
@@ -28,7 +52,7 @@ export class SkillManager {
   }
 
   private async parseSkillFile(content: string, filePath: string): Promise<Skill> {
-    let skill: any;
+    let skill: unknown;
 
     if (filePath.endsWith('.json')) {
       try {
@@ -52,20 +76,36 @@ export class SkillManager {
     return skill as Skill;
   }
 
-  validateSkill(skill: any): boolean {
+  validateSkill(skill: unknown): boolean {
+    // Type guard: ensure skill is an object
+    if (typeof skill !== 'object' || skill === null) {
+      throw new Error('Skill must be an object');
+    }
+
+    const unvalidated = skill as UnvalidatedSkill;
+
+    // Check required fields
     for (const field of this.requiredFields) {
-      if (!skill[field]) {
+      if (!(field in unvalidated) || unvalidated[field as keyof UnvalidatedSkill] === undefined) {
         throw new Error(`Missing required field: ${field}`);
       }
     }
 
-    if (!Array.isArray(skill.steps)) {
+    // Validate steps is an array
+    if (!Array.isArray(unvalidated.steps)) {
       throw new Error('steps must be an array');
     }
 
-    for (const step of skill.steps) {
-      const stepType = step.action || step.type;
-      if (!stepType || !step.params) {
+    // Validate each step
+    for (const step of unvalidated.steps) {
+      if (typeof step !== 'object' || step === null) {
+        throw new Error('Each step must be an object');
+      }
+
+      const unvalidatedStep = step as UnvalidatedStep;
+      const stepType = unvalidatedStep.action || unvalidatedStep.type;
+
+      if (!stepType || !unvalidatedStep.params) {
         throw new Error('Each step must have action or type, and params');
       }
     }

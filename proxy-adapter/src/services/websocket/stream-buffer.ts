@@ -1,5 +1,8 @@
 import type { StreamChunk } from './types.js';
 import { getPersistWorker, getPersistenceManager } from './persistence-singletons.js';
+import { createWorkerLogger } from '../logger.js';
+
+const logger = createWorkerLogger('StreamBuffer');
 
 export class StreamBuffer {
   private chunks: StreamChunk[] = [];
@@ -16,7 +19,7 @@ export class StreamBuffer {
       const persistenceChunk = { index, type: chunk.type, text: chunk.content, version: 1, timestamp: chunk.timestamp || new Date().toISOString() };
       await getPersistWorker().persist(this.sessionId, [persistenceChunk]);
     } catch (error) {
-      console.error('[StreamBuffer] Failed to persist chunk:', error);
+      logger.error({ err: error }, 'Failed to persist chunk');
     }
   }
   getBuffer(): StreamChunk[] { return [...this.chunks]; }

@@ -16,9 +16,12 @@ import { DatabaseSync } from 'node:sqlite';
 import type {
   StreamChunk as PersistStreamChunk,
 } from './stream-persist-worker.types.js';
+import { createWorkerLogger } from './logger.js';
 
 // Re-export for convenience
 export type { PersistStreamChunk };
+
+const logger = createWorkerLogger('StreamBufferPersistence');
 
 export interface StreamBufferPersistenceOptions {
   dbPath?: string;
@@ -148,9 +151,7 @@ export class StreamBufferPersistenceManager {
 
     const result = deleteStmt.run(cutoffDate);
 
-    console.log(
-      `[StreamBufferPersistence] Cleaned up ${result.changes} chunks older than ${olderThanHours}h`
-    );
+    logger.info({ changes: result.changes, olderThanHours }, 'Cleaned up old chunks');
 
     return result.changes;
   }
@@ -173,9 +174,7 @@ export class StreamBufferPersistenceManager {
 
     const result = deleteStmt.run(sessionId);
 
-    console.log(
-      `[StreamBufferPersistence] Cleaned up ${result.changes} chunks for session ${sessionId}`
-    );
+    logger.info({ changes: result.changes, sessionId }, 'Cleaned up session chunks');
 
     return result.changes;
   }

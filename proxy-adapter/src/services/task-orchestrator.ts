@@ -14,6 +14,9 @@ import { HistoryManager, TaskHistory, Step } from '../debug/history.js';
 import type { ActionExecutor, ActionResult } from './action-executor.js';
 import type { StepRunner, StepSessionModelConfig } from './step-runner.js';
 import type { Skill } from '../skills/schema.js';
+import { createWorkerLogger } from './logger.js';
+
+const logger = createWorkerLogger('TaskOrchestrator');
 
 
 export interface TaskOrchestratorDeps {
@@ -129,10 +132,10 @@ export class TaskOrchestrator {
     const maxSteps = skill.steps.length;
 
     for (; currentStep < maxSteps; currentStep++) {
-      console.log(`\n=== Step ${currentStep + 1}/${maxSteps} ===`);
+      logger.info({ step: currentStep + 1, maxSteps }, 'Step');
       const step = skill.steps[currentStep];
 
-      console.log(`Action: ${step.type}`, step.params);
+      logger.info({ actionType: step.type, params: step.params }, 'Action');
 
       const substitutedParams = this.substituteParams(step.params, params);
       const result = await this.actionExecutor.execute({

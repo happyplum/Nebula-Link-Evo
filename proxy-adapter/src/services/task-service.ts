@@ -21,6 +21,8 @@ import { streamTask } from '../clients/vercel-ai/streaming.js';
 import { ProviderRegistry } from './provider/registry.js';
 import type { ProviderConfig } from './provider/types.js';
 import type { ModelMessage } from 'ai';
+import type { Logger } from 'pino';
+import { createWorkerLogger } from './logger.js';
 
 export class TaskService {
   private config: ResolvedConfig | null = null;
@@ -31,8 +33,10 @@ export class TaskService {
   private actionExecutor: ActionExecutor;
   private stepRunner: StepRunner | null = null;
   private taskOrchestrator: TaskOrchestrator | null = null;
+  private logger: Logger;
 
-  constructor() {
+  constructor(logger?: Logger) {
+    this.logger = logger ?? createWorkerLogger('TaskService');
     this.wsManager = DebugWebSocketManager.getInstance();
     this.wsManager.setMCPStatusProvider(() => this.getMCPStatus());
     this.actionExecutor = new ActionExecutor({ mcpClient: null });
@@ -49,7 +53,7 @@ export class TaskService {
 
     const validation = validateConfig(this.config);
     if (!validation.valid) {
-      console.warn('Config validation warnings:', validation.warnings);
+      this.logger.warn({ warnings: validation.warnings }, 'Config validation warnings');
       if (validation.errors.length > 0) {
         throw new Error('Config validation failed: ' + validation.errors.join(', '));
       }
@@ -72,7 +76,7 @@ export class TaskService {
       await this.mcpClient.initialize();
       this.actionExecutor.setMCPClient(this.mcpClient);
     } catch (error) {
-      console.warn('MCP initialization failed, continuing without MCP:', error);
+      this.logger.warn({ err: error }, 'MCP initialization failed, continuing without MCP');
     }
 
     this.stepRunner = new StepRunner({
@@ -229,7 +233,7 @@ export class TaskService {
     totalResponseTime: number;
   }> {
     const startTime = Date.now();
-    console.log('[AI Test] Starting connectivity test...');
+    this.logger.info('Starting AI connectivity test');
 
     const defaults = this.config?.defaults;
     if (!defaults || !this.registry) {
@@ -253,14 +257,14 @@ export class TaskService {
     const visionModel = defaults.vision.model;
     try {
       if (!this.registry.isAvailable(visionProvider)) {
-        console.log('[AI Test] Vision: not configured');
+        this.logger.info('Vision: not configured');
         visionResult = {
           status: 'not_configured',
           responseTime: Date.now() - visionStart,
           error: 'No vision provider available',
         };
       } else {
-        console.log(`[AI Test] Testing Vision: ${visionProvider}/${visionModel}`);
+        this.logger.info({ provider: visionProvider, model: visionModel }, 'Testing Vision');
         await this.registry.resolve(visionProvider, visionModel);
         const intro = await this.getModelIntro(visionProvider, visionModel);
         visionResult = {
@@ -271,13 +275,13 @@ export class TaskService {
           error: null,
           intro,
         };
-        console.log(`[AI Test] Vision: OK (${visionResult.responseTime}ms)`);
-        console.log(`[AI Test] Vision AI Response: ${intro}`);
+        this.logger.info({ responseTime: visionResult.responseTime }, 'Vision: OK');
+        this.logger.info({ intro }, 'Vision AI Response');
       }
     } catch (err) {
       const errMsg = (err as Error).message;
       const truncatedError = errMsg.length > 200 ? errMsg.substring(0, 200) + '...' : errMsg;
-      console.log(`[AI Test] Vision: FAILED - ${truncatedError}`);
+        this.logger.warn({ error: truncatedError }, 'Vision: FAILED');
       visionResult = {
         status: 'disconnected',
         responseTime: Date.now() - visionStart,
@@ -298,14 +302,14 @@ export class TaskService {
     const decisionModel = defaults.decision.model;
     try {
       if (!this.registry.isAvailable(decisionProvider)) {
-        console.log('[AI Test] Decision: not configured');
+        this.logger.info('Decision: not configured');
         decisionResult = {
           status: 'not_configured',
           responseTime: Date.now() - decisionStart,
           error: 'No decision provider available',
         };
       } else {
-        console.log(`[AI Test] Testing Decision: ${decisionProvider}/${decisionModel}`);
+        this.logger.info({ provider: decisionProvider, model: decisionModel }, 'Testing Decision');
         const intro = await this.getModelIntro(decisionProvider, decisionModel);
         decisionResult = {
           status: 'connected',
@@ -315,13 +319,13 @@ export class TaskService {
           error: null,
           intro,
         };
-        console.log(`[AI Test] Decision: OK (${decisionResult.responseTime}ms)`);
-        console.log(`[AI Test] AI Response: ${intro}`);
+        this.logger.info({ responseTime: decisionResult.responseTime }, 'Decision: OK');
+        this.logger.info({ intro }, 'AI Response');
       }
     } catch (err) {
       const errMsg = (err as Error).message;
       const truncatedError = errMsg.length > 200 ? errMsg.substring(0, 200) + '...' : errMsg;
-      console.log(`[AI Test] Decision: FAILED - ${truncatedError}`);
+        this.logger.warn({ error: truncatedError }, 'Decision: FAILED');
       decisionResult = {
         status: 'disconnected',
         responseTime: Date.now() - decisionStart,
@@ -329,7 +333,7 @@ export class TaskService {
       };
     }
 
-    console.log(`[AI Test] Completed in ${Date.now() - startTime}ms`);
+    this.logger.info({ elapsedMs: Date.now() - startTime }, 'AI connectivity test completed');
     return {
       vision: visionResult,
       decision: decisionResult,
@@ -398,7 +402,7 @@ export class TaskService {
   }): void {
     switch (message.type) {
       case 'pause':
-        console.log('Pause command received');
+        this.logger.info('Pause command received');
         this.wsManager.broadcast({
           type: 'task_paused',
           taskId: message.taskId,
@@ -406,7 +410,7 @@ export class TaskService {
         });
         break;
       case 'resume':
-        console.log('Resume command received');
+        this.logger.info('Resume command received');
         this.wsManager.broadcast({
           type: 'task_resumed',
           taskId: message.taskId,
@@ -414,7 +418,7 @@ export class TaskService {
         });
         break;
       case 'modify':
-        console.log('Modify command received:', message);
+        this.logger.info({ message }, 'Modify command received');
         this.wsManager.broadcast({
           type: 'task_modified',
           taskId: message.taskId,
@@ -423,7 +427,7 @@ export class TaskService {
         });
         break;
       case 'manual_action':
-        console.log('Manual action command received:', message);
+        this.logger.info({ message }, 'Manual action command received');
         this.wsManager.broadcast({
           type: 'manual_action_executed',
           taskId: message.taskId,

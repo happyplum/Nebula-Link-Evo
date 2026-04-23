@@ -1,6 +1,9 @@
 import { tool, generateText } from 'ai';
 import { z } from 'zod';
 import type { LanguageModelV3 } from '@ai-sdk/provider';
+import { createWorkerLogger } from '../logger.js';
+
+const logger = createWorkerLogger('VisionTool');
 
 export interface VisionToolOptions {
   timeoutMs: number;
@@ -51,12 +54,13 @@ export function createVisionTool(
         abortSignal: AbortSignal.timeout(options.timeoutMs),
       });
 
-      console.log(
-        JSON.stringify({
+      logger.info(
+        {
           phase: 'vision',
           provider: visionModel.provider,
           model: visionModel.modelId,
-        })
+        },
+        'Vision phase'
       );
 
       return { description: result.text };

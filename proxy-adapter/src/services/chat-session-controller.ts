@@ -1,5 +1,7 @@
 import { DatabaseManager } from '../conversation/db.js';
 import type { TracedOperation, ControlCommandType, SessionStatus } from '../conversation/types.js';
+import type { Logger } from 'pino';
+import { createWorkerLogger } from './logger.js';
 
 export interface OperationTrace {
   traceId: string;
@@ -37,8 +39,11 @@ export class ChatSessionController {
   private abortControllers = new Map<string, AbortController>();
   private sessionStatuses = new Map<string, SessionStatus>();
   private sessionMetadata = new Map<string, SessionMetadata>();
+  private logger: Logger;
 
-  private constructor() {}
+  private constructor(logger?: Logger) {
+    this.logger = logger ?? createWorkerLogger('ChatSessionController');
+  }
 
   static getInstance(): ChatSessionController {
     if (!ChatSessionController.instance) {
@@ -261,7 +266,7 @@ export class ChatSessionController {
     */
   private log(sessionId: string, message: string, traceId?: string): void {
     const displayTraceId = traceId || sessionId.substring(0, 8);
-    console.log(`[TraceID: ${displayTraceId}] ${message}`);
+    this.logger.info({ sessionId, traceId: displayTraceId }, message);
   }
 
   /**
@@ -277,7 +282,7 @@ export class ChatSessionController {
       try {
         db.updateOperation(traceId, { status: 'success', endTime: Date.now() });
       } catch (err) {
-        console.error(`Failed to update operation trace ${traceId}:`, err);
+        this.logger.error({ err, traceId }, 'Failed to update operation trace');
       }
     });
 
@@ -303,7 +308,7 @@ export class ChatSessionController {
     const recoveredSessionIds: string[] = [];
     for (const session of recoveredSessions) {
       recoveredSessionIds.push(session.id);
-      console.log(`[Session Recovery] Session ${session.id} marked as blocked (process restart)`);
+      this.logger.info({ sessionId: session.id }, 'Session marked as blocked (process restart)');
 
       // Update in-memory state
       this.sessionStatuses.set(session.id, 'blocked');
@@ -319,13 +324,13 @@ export class ChatSessionController {
      * Call this on application startup
      */
   initialize(): void {
-    console.log('[SessionController] Initializing...');
+    this.logger.info('Initializing');
     const recoveredIds = this.recoverRunningSessions();
 
     if (recoveredIds.length > 0) {
-      console.log(`[SessionController] Recovered ${recoveredIds.length} session(s) from crash:`, recoveredIds);
+      this.logger.info({ count: recoveredIds.length, ids: recoveredIds }, 'Recovered sessions from crash');
     } else {
-      console.log('[SessionController] No crashed sessions to recover');
+      this.logger.info('No crashed sessions to recover');
     }
   }
 }

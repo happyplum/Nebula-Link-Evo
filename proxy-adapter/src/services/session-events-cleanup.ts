@@ -1,5 +1,8 @@
 import { DatabaseSync } from 'node:sqlite';
 import type { SessionEventsDAO } from '../conversation/session-events-dao.js';
+import { createWorkerLogger } from './logger.js';
+
+const logger = createWorkerLogger('SessionEventsCleanup');
 
 /**
  * SessionEventsCleanup manages TTL-based cleanup of expired session events.
@@ -59,7 +62,7 @@ export class SessionEventsCleanup {
 
       return deletedCount;
     } catch (error) {
-      console.error('SessionEventsCleanup: Failed to cleanup expired events', error);
+      logger.error({ err: error }, 'Failed to cleanup expired events');
       throw error;
     }
   }
@@ -72,7 +75,7 @@ export class SessionEventsCleanup {
     const nextRun = this.calculateNextRunTime(now);
     const delayMs = nextRun.getTime() - now.getTime();
 
-    console.log(`SessionEventsCleanup: Next cleanup scheduled for ${nextRun.toISOString()} (in ${Math.round(delayMs / 1000 / 60)} minutes)`);
+    logger.info({ nextRun: nextRun.toISOString(), delayMinutes: Math.round(delayMs / 1000 / 60) }, 'Next cleanup scheduled');
 
     this.cleanupTimer = setTimeout(async () => {
       await this.cleanupExpired();
@@ -113,9 +116,9 @@ export class SessionEventsCleanup {
   private runWalCheckpoint(): void {
     try {
       this.db.exec('PRAGMA wal_checkpoint(PASSIVE)');
-      console.log('SessionEventsCleanup: WAL checkpoint completed');
+      logger.info('WAL checkpoint completed');
     } catch (error) {
-      console.error('SessionEventsCleanup: WAL checkpoint failed', error);
+      logger.error({ err: error }, 'WAL checkpoint failed');
     }
   }
 
@@ -126,9 +129,9 @@ export class SessionEventsCleanup {
    */
   private logCleanup(deletedCount: number): void {
     if (deletedCount > 0) {
-      console.log(`SessionEventsCleanup: Deleted ${deletedCount} expired session events`);
+      logger.info({ deletedCount }, 'Deleted expired session events');
     } else {
-      console.log('SessionEventsCleanup: No expired events found');
+      logger.info('No expired events found');
     }
   }
 }
