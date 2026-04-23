@@ -1,5 +1,6 @@
 import { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import { BrowserService } from '../../services/browser-service.js';
+import type { MarkerActionResult } from '../../services/page-actions.js';
 import {
   ClickRequestSchema,
   ClickBySelectorRequestSchema,
@@ -7,6 +8,14 @@ import {
   TypeRequestSchema,
   ScrollRequestSchema,
   ExecuteByMarkerRequestSchema,
+} from '../../schemas/action.js';
+import type {
+  ClickRequest,
+  ClickBySelectorRequest,
+  ClickByMarkerRequest,
+  TypeRequest,
+  ScrollRequest,
+  ExecuteByMarkerRequest,
 } from '../../schemas/action.js';
 import { SuccessResponseSchema, ErrorResponseSchema } from '../../schemas/common.js';
 
@@ -27,8 +36,7 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
     async (request, reply) => {
       try {
-        const body = request.body as any;
-        const { x, y } = body;
+        const { x, y } = request.body as ClickRequest;
 
         let lastError: Error | null = null;
         for (let attempt = 1; attempt <= 3; attempt++) {
@@ -71,14 +79,23 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
     async (request, reply) => {
       try {
-        const body = request.body as any;
-        const { selector, options } = body;
+        const { selector, options } = request.body as ClickBySelectorRequest;
 
         try {
-          await BrowserService.getInstance().clickBySelector(selector, options);
+          await BrowserService.getInstance().clickBySelector(selector, options as {
+            button?: 'left' | 'right' | 'middle';
+            clickCount?: number;
+            delay?: number;
+            force?: boolean;
+          });
         } catch {
           console.log(`[Action] Normal click failed, retrying with force option...`);
-          await BrowserService.getInstance().clickBySelector(selector, { ...options, force: true });
+          await BrowserService.getInstance().clickBySelector(selector, { ...options, force: true } as {
+            button?: 'left' | 'right' | 'middle';
+            clickCount?: number;
+            delay?: number;
+            force?: boolean;
+          });
         }
 
         return { success: true, message: `Clicked element: ${selector}` };
@@ -120,8 +137,7 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
     async (request, reply) => {
       try {
-        const body = request.body as any;
-        const { snapshot_id, nebula_id } = body;
+        const { snapshot_id, nebula_id } = request.body as ClickByMarkerRequest;
 
         const result = await BrowserService.getInstance().clickByMarker(snapshot_id, nebula_id);
 
@@ -168,9 +184,8 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
     async (request, reply) => {
       try {
-        const body = request.body as any;
-        const { selector, text, options } = body;
-        let currentOptions = options;
+        const { selector, text, options } = request.body as TypeRequest;
+        let currentOptions: { delay?: number; clear?: boolean; force?: boolean } | undefined = options;
 
         let lastError: Error | null = null;
         for (let attempt = 1; attempt <= 3; attempt++) {
@@ -218,8 +233,7 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
     async (request, reply) => {
       try {
-        const body = request.body as any;
-        const { x = 0, y = 0 } = body;
+        const { x = 0, y = 0 } = request.body as ScrollRequest;
         await BrowserService.getInstance().scroll(x, y);
         return { success: true, message: `Scrolled by (${x}, ${y})` };
       } catch (error) {
@@ -245,8 +259,7 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
     async (request, reply) => {
       try {
-        const body = request.body as any;
-        const { selector } = body;
+        const { selector } = request.body as { selector: string };
         await BrowserService.getInstance().focus(selector);
         return { success: true, message: `Focused element: ${selector}` };
       } catch (error) {
@@ -272,8 +285,7 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
     async (request, reply) => {
       try {
-        const body = request.body as any;
-        const { selector } = body;
+        const { selector } = request.body as { selector: string };
         await BrowserService.getInstance().blur(selector);
         return { success: true, message: `Blurred element: ${selector}` };
       } catch (error) {
@@ -299,8 +311,7 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
     async (request, reply) => {
       try {
-        const body = request.body as any;
-        const { selector } = body;
+        const { selector } = request.body as { selector: string };
         await BrowserService.getInstance().hover(selector);
         return { success: true, message: `Hovered element: ${selector}` };
       } catch (error) {
@@ -326,8 +337,7 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
     async (request, reply) => {
       try {
-        const body = request.body as any;
-        const { selector, value } = body;
+        const { selector, value } = request.body as { selector: string; value: string };
         await BrowserService.getInstance().setValue(selector, value);
         return { success: true, message: `Set value of ${selector}` };
       } catch (error) {
@@ -353,8 +363,7 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
     async (request, reply) => {
       try {
-        const body = request.body as any;
-        const { selector, eventType } = body;
+        const { selector, eventType } = request.body as { selector: string; eventType: string };
         await BrowserService.getInstance().dispatchEvent(selector, eventType);
         return { success: true, message: `Dispatched ${eventType} on ${selector}` };
       } catch (error) {
@@ -395,10 +404,9 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
     async (request, reply) => {
       try {
-        const body = request.body as any;
-        const { snapshot_id, nebula_id, action, param } = body;
+        const { snapshot_id, nebula_id, action, param } = request.body as ExecuteByMarkerRequest;
 
-        let result: any;
+        let result: MarkerActionResult;
         switch (action) {
           case 'click':
             result = await BrowserService.getInstance().clickByMarker(snapshot_id, nebula_id);
@@ -407,8 +415,8 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
             result = await BrowserService.getInstance().typeByMarker(
               snapshot_id,
               nebula_id,
-              typeof param === 'string' ? param : param?.text,
-              typeof param === 'object' ? param?.options : undefined
+              typeof param === 'string' ? param : (param as Record<string, string>)?.text,
+              typeof param === 'object' ? (param as Record<string, unknown>)?.options as { delay?: number; clear?: boolean; force?: boolean } : undefined
             );
             break;
           case 'focus':
@@ -424,14 +432,14 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
             result = await BrowserService.getInstance().setValueByMarker(
               snapshot_id,
               nebula_id,
-              typeof param === 'string' ? param : param?.value
+              typeof param === 'string' ? param : (param as Record<string, string>)?.value
             );
             break;
           case 'dispatch':
             result = await BrowserService.getInstance().dispatchEventByMarker(
               snapshot_id,
               nebula_id,
-              typeof param === 'string' ? param : param?.eventType
+              typeof param === 'string' ? param : (param as Record<string, string>)?.eventType
             );
             break;
           default:

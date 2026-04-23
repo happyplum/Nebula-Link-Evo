@@ -6,7 +6,7 @@ import { Type } from '@sinclair/typebox';
 
 interface ExecuteScriptRequest {
   script: string;
-  args?: any[];
+  args?: unknown[];
 }
 
 const ExecuteScriptRequestSchema = Type.Object({
@@ -105,8 +105,7 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
     async (request, reply) => {
       try {
-        const body = request.body as any;
-        const { script, args = [] } = body;
+        const { script, args = [] } = request.body as ExecuteScriptRequest;
 
         const dangerousPatterns = [
           /eval\s*\(/,
