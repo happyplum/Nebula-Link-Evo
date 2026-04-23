@@ -18,7 +18,7 @@ describe('ApiClient', () => {
 
       const result = await client.get<{ status: string }>('/api/health');
       expect(result).toEqual(data);
-      expect(fetch).toHaveBeenCalledWith('/api/health');
+      expect(fetch).toHaveBeenCalledWith('/api/health', { signal: expect.any(AbortSignal) });
     });
 
     it('should append query params when provided', async () => {
@@ -27,7 +27,7 @@ describe('ApiClient', () => {
       );
 
       await client.get('/debug/api/tasks', { limit: '10' });
-      expect(fetch).toHaveBeenCalledWith('/debug/api/tasks?limit=10');
+      expect(fetch).toHaveBeenCalledWith('/debug/api/tasks?limit=10', { signal: expect.any(AbortSignal) });
     });
 
     it('should throw ApiError on non-ok response', async () => {
@@ -61,6 +61,7 @@ describe('ApiClient', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
+        signal: expect.any(AbortSignal),
       });
     });
 
@@ -70,7 +71,7 @@ describe('ApiClient', () => {
       );
 
       await client.post('/debug/api/playwright/open');
-      expect(fetch).toHaveBeenCalledWith('/debug/api/playwright/open', { method: 'POST' });
+      expect(fetch).toHaveBeenCalledWith('/debug/api/playwright/open', { method: 'POST', signal: expect.any(AbortSignal) });
     });
 
     it('should throw ApiError on server error', async () => {
@@ -90,7 +91,7 @@ describe('ApiClient', () => {
 
       const result = await client.delete('/api/resource/1');
       expect(result).toBeUndefined();
-      expect(fetch).toHaveBeenCalledWith('/api/resource/1', { method: 'DELETE' });
+      expect(fetch).toHaveBeenCalledWith('/api/resource/1', { method: 'DELETE', signal: expect.any(AbortSignal) });
     });
   });
 
