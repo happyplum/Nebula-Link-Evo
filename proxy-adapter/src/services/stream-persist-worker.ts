@@ -19,12 +19,15 @@ import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 
 import { ServiceUnavailableError } from '../errors/http-errors.js';
+import { createWorkerLogger } from './logger.js';
 
 import type {
   PersistRequest,
   PersistResponse,
   StreamChunk,
 } from './stream-persist-worker.types.js';
+
+const logger = createWorkerLogger('stream-persist');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -76,7 +79,7 @@ class StreamPersistWorker extends EventEmitter {
     });
 
     this.worker.on('error', (error) => {
-      console.error('Worker error:', error);
+      logger.error({ error }, 'Worker error');
       this.isHealthy = false;
       this.rejectAllPending(error);
       this.restartWorker();
@@ -84,7 +87,7 @@ class StreamPersistWorker extends EventEmitter {
 
     this.worker.on('exit', (code) => {
       if (code !== 0) {
-        console.error(`Worker exited with code ${code}`);
+        logger.error({ code }, 'Worker exited');
         this.isHealthy = false;
         this.rejectAllPending(new Error('Worker crashed'));
         this.restartWorker();
@@ -176,7 +179,7 @@ class StreamPersistWorker extends EventEmitter {
    * Restart worker after crash
    */
   private restartWorker(): void {
-    console.log('Restarting worker...');
+    logger.info('Restarting worker');
     if (this.worker) {
       this.worker.terminate();
     }
@@ -190,8 +193,9 @@ class StreamPersistWorker extends EventEmitter {
   private startHealthCheck(): void {
     this.healthCheckInterval = setInterval(() => {
       if (this.messageQueue.length > this.maxQueueSize * 0.8) {
-        console.warn(
-          `Queue at ${this.messageQueue.length}/${this.maxQueueSize} capacity`
+        logger.warn(
+          { size: this.messageQueue.length, max: this.maxQueueSize },
+          'Queue capacity warning'
         );
       }
     }, 5000);
