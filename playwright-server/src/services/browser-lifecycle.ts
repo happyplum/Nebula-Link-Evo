@@ -2,6 +2,7 @@ import { chromium, Browser, Page, BrowserContext } from 'playwright';
 import * as crypto from 'node:crypto';
 import { startPublisher, stopPublisher } from '../livekit-publisher.js';
 import { screencastManager } from '../screencast.js';
+import { createWorkerLogger, type Logger } from './logger.js';
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -57,6 +58,7 @@ export class BrowserLifecycle {
   };
   private pageIds = new WeakMap<Page, string>();
   private switchVersion = 0;
+  private logger: Logger;
 
   private onStateChange: ((reason: StateChangeReason) => void) | null = null;
   private handlePageClose = (): void => {
@@ -71,6 +73,10 @@ export class BrowserLifecycle {
     this.state.cdpPort = 0;
     this.onStateChange?.('browser_disconnected');
   };
+
+  constructor(logger?: Logger) {
+    this.logger = logger ?? createWorkerLogger('BrowserLifecycle');
+  }
 
   /** Register callback for state changes (page closed, browser disconnected) */
   setOnStateChange(callback: ((reason: StateChangeReason) => void) | null): void {
@@ -166,7 +172,7 @@ export class BrowserLifecycle {
       previousViewport,
       currentVersion
     ).catch((error) => {
-      console.warn('[BrowserLifecycle] Background transport restart failed:', error);
+      this.logger.warn({ err: error }, 'Background transport restart failed');
     });
 
     return targetPage;
@@ -179,44 +185,44 @@ export class BrowserLifecycle {
     version: number
   ): Promise<void> {
     if (version !== this.switchVersion) {
-      console.warn('[BrowserLifecycle] Skipping stale tab switch before stopPublisher');
+      this.logger.warn('Skipping stale tab switch before stopPublisher');
       return;
     }
 
     await withTimeout(stopPublisher(), 10000, 'stopPublisher').catch((error) => {
-      console.warn('[LiveKit] Publisher failed to stop during tab switch:', error);
+      this.logger.warn({ err: error }, 'Publisher failed to stop during tab switch');
     });
 
     if (wasScreencastActive) {
       if (version !== this.switchVersion) {
-        console.warn('[BrowserLifecycle] Skipping stale tab switch before screencast stop');
+        this.logger.warn('Skipping stale tab switch before screencast stop');
         return;
       }
 
       await withTimeout(screencastManager.stop(), 5000, 'screencastManager.stop').catch((error) => {
-        console.warn('[Screencast] Failed to stop during tab switch:', error);
+        this.logger.warn({ err: error }, 'Screencast failed to stop during tab switch');
       });
     }
 
     if (viewport) {
       if (version !== this.switchVersion) {
-        console.warn('[BrowserLifecycle] Skipping stale tab switch before startPublisher');
+        this.logger.warn('Skipping stale tab switch before startPublisher');
         return;
       }
 
       await withTimeout(startPublisher(targetPage, viewport), 10000, 'startPublisher').catch((error) => {
-        console.warn('[LiveKit] Publisher failed to restart for new tab:', error);
+        this.logger.warn({ err: error }, 'Publisher failed to restart for new tab');
       });
     }
 
     if (wasScreencastActive) {
       if (version !== this.switchVersion) {
-        console.warn('[BrowserLifecycle] Skipping stale tab switch before screencast start');
+        this.logger.warn('Skipping stale tab switch before screencast start');
         return;
       }
 
       await withTimeout(screencastManager.start(targetPage), 5000, 'screencastManager.start').catch((error) => {
-        console.warn('[Screencast] Failed to restart for new tab:', error);
+        this.logger.warn({ err: error }, 'Screencast failed to restart for new tab');
       });
     }
   }
@@ -255,13 +261,9 @@ export class BrowserLifecycle {
         cdpPortChanged ||
         (viewportChanged && this.state.context !== null && this.state.page !== null)
       ) {
-        console.warn(
-          'Browser already open; new open() parameters will not fully take effect. Call close() before open() to apply headless/cdpPort and active viewport changes.',
-          {
-            headless,
-            viewport,
-            cdpPort: nextCdpPort,
-          }
+        this.logger.warn(
+          { headless, viewport, cdpPort: nextCdpPort },
+          'Browser already open; new open() parameters will not fully take effect. Call close() before open() to apply changes.'
         );
       }
 
@@ -275,7 +277,7 @@ export class BrowserLifecycle {
         this.state.page.on('close', this.handlePageClose);
         this.state.lastViewport = { ...viewport };
         await startPublisher(this.state.page, viewport).catch((err) => {
-          console.warn('[LiveKit] Publisher failed to start:', err);
+          this.logger.warn({ err }, 'Publisher failed to start');
         });
       }
       return;
@@ -314,7 +316,7 @@ export class BrowserLifecycle {
     this.state.lastViewport = { ...viewport };
     this.state.lastCdpPort = nextCdpPort;
     await startPublisher(this.state.page, viewport).catch((err) => {
-      console.warn('[LiveKit] Publisher failed to start:', err);
+      this.logger.warn({ err }, 'Publisher failed to start');
     });
   }
 

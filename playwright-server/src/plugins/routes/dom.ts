@@ -77,12 +77,12 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
           return { success: false, error: 'No page available', code: 'NO_PAGE_AVAILABLE' };
         }
 
-        console.log('[/dom/simplified] Using v2.0 format');
+        request.log.info('DOM simplified v2.0 format requested');
         const dom = await BrowserService.getInstance().getSimplifiedDOMV2();
-        console.log(`[/dom/simplified] snapshot_id: ${dom.snapshot_id}`);
+        request.log.info({ snapshot_id: dom.snapshot_id }, 'DOM snapshot generated');
         return dom;
       } catch (error) {
-        console.error(`[/dom/simplified] Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        request.log.error({ err: error }, 'DOM simplified request failed');
         reply.status(500);
         return { success: false, error: error instanceof Error ? error.message : 'Unknown error', code: 'INTERNAL_ERROR' };
       }

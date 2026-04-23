@@ -89,7 +89,7 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
             force?: boolean;
           });
         } catch {
-          console.log(`[Action] Normal click failed, retrying with force option...`);
+          request.log.info({ selector }, 'Normal click failed, retrying with force');
           await BrowserService.getInstance().clickBySelector(selector, { ...options, force: true } as {
             button?: 'left' | 'right' | 'middle';
             clickCount?: number;
@@ -200,7 +200,7 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
             lastError = error as Error;
 
             if (attempt < 3) {
-              console.log(`[Action] Type attempt ${attempt} failed, retrying...`);
+              request.log.info({ attempt }, 'Type attempt failed, retrying');
               await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
               if (!currentOptions?.force) {
                 currentOptions = { ...currentOptions, force: true };
