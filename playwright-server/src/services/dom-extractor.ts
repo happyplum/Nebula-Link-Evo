@@ -15,10 +15,16 @@ import {
 import { generateLocatorBundle } from '../locator-generator.js';
 import { injectMarkers } from '../marker-injector.js';
 import { SnapshotCache, CacheStats } from './snapshot-cache.js';
+import { createWorkerLogger, type Logger } from './logger.js';
 
 export class DOMExtractor {
   private page: Page | null = null;
   private snapshotCache: SnapshotCache = new SnapshotCache();
+  private logger: Logger;
+
+  constructor(logger?: Logger) {
+    this.logger = logger ?? createWorkerLogger('DOMExtractor');
+  }
 
   setPage(page: Page | null): void {
     this.page = page;
@@ -117,8 +123,9 @@ export class DOMExtractor {
             await elementHandle.dispose();
           }
         } catch (error) {
-          console.warn(
-            `Failed to process element ${elementInfo.id}: ${error instanceof Error ? error.message : 'Unknown error'}`
+          this.logger.warn(
+            { err: error, elementId: elementInfo.id },
+            'Failed to process element'
           );
         }
       }
@@ -142,9 +149,7 @@ export class DOMExtractor {
 
       return snapshotResponse;
     } catch (error) {
-      console.error(
-        `getSimplifiedDOMV2 failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
+      this.logger.error({ err: error }, 'getSimplifiedDOMV2 failed');
       throw error;
     }
   }

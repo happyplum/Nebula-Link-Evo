@@ -4,8 +4,8 @@ import { BrowserService } from '../../services/browser-service.js';
 import { WebSocket as FastifyWebSocket } from '@fastify/websocket';
 
 const routes: FastifyPluginAsyncTypebox = async (fastify) => {
-  fastify.get('/cdp', { websocket: true }, async (connection: FastifyWebSocket, _req) => {
-    console.log('[CDP] New WebSocket connection request');
+  fastify.get('/cdp', { websocket: true }, async (connection: FastifyWebSocket, req) => {
+    req.log.info('CDP WebSocket connection request');
     let browserWs: WebSocket | null = null;
     let isClosed = false;
     let messageBuffer: Buffer[] = [];
@@ -18,14 +18,14 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
         clearInterval(checkInterval);
         const cdpEndpoint = await BrowserService.getInstance().getCdpEndpoint();
         if (cdpEndpoint) {
-          console.log(`[CDP] Connecting to browser CDP: ${cdpEndpoint}`);
+          req.log.info({ cdpEndpoint }, 'Connecting to browser CDP');
           try {
             browserWs = new WebSocket(cdpEndpoint);
             browserWs.on('open', () => {
-              console.log('[CDP] Connected to browser CDP');
+              req.log.info('Connected to browser CDP');
               // Flush buffered messages
               if (messageBuffer.length > 0) {
-                console.log(`[CDP] Flushing ${messageBuffer.length} buffered messages`);
+                req.log.info({ count: messageBuffer.length }, 'Flushing buffered messages');
                 for (const msg of messageBuffer) {
                   browserWs?.send(msg);
                 }
@@ -33,7 +33,6 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
               }
             });
             browserWs.on('message', (data: WebSocket.RawData) => {
-              // ... existing code ...
               const preview = (() => {
                 if (data instanceof ArrayBuffer) {
                   return Buffer.from(data).subarray(0, 100).toString('utf8');
@@ -43,36 +42,32 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
                 }
                 return data.subarray(0, 100).toString('utf8');
               })();
-              console.log('[CDP] Received message from browser:', preview || '<binary>');
+              req.log.debug({ preview: preview || '<binary>' }, 'CDP message from browser');
               if (!isClosed && connection.readyState === 1) {
-                // console.log('[CDP] Forwarding to client');
                 connection.send(data);
               } else {
-                console.log('[CDP] Cannot forward to client: closed or not ready');
+                req.log.warn('Cannot forward to client: closed or not ready');
               }
             });
-            // ... existing code ...
           } catch {
-            // ... existing code ...
+            // Connection error handled by WebSocket events
           }
         } else {
-          // ... existing code ...
+          // No CDP endpoint available
         }
       }
-    }, 100); // Check more frequently
+    }, 100);
 
     connection.on('message', (data: Buffer) => {
-      // console.log('[CDP] Received message from client:', data.slice(0, 100));
       if (browserWs && browserWs.readyState === 1) {
-        // console.log('[CDP] Forwarding to browser');
         browserWs.send(data);
       } else {
-        console.log('[CDP] Buffering message: browserWs not ready');
+        req.log.debug('Buffering message: browserWs not ready');
         messageBuffer.push(data);
       }
     });
     connection.on('close', () => {
-      console.log('[CDP] Client WebSocket closed');
+      req.log.info('Client WebSocket closed');
       isClosed = true;
       clearInterval(checkInterval);
       if (browserWs) {
@@ -81,7 +76,7 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
       }
     });
     connection.on('error', (error: Error) => {
-      console.error('[CDP] Client WebSocket error:', error.message);
+      req.log.error({ err: error }, 'Client WebSocket error');
       isClosed = true;
       clearInterval(checkInterval);
       if (browserWs) {

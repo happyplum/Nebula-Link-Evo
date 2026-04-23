@@ -1,5 +1,6 @@
 import type { Page, CDPSession } from 'playwright';
 import { createFrameCounter } from '@nebula-link-evo/shared';
+import { createWorkerLogger, type Logger } from './services/logger.js';
 
 type ServerResponse = {
   write: (data: string | Buffer) => boolean;
@@ -30,8 +31,11 @@ export class ScreencastManager {
   private debugCounter: ReturnType<typeof createFrameCounter> | null = null;
   private debugInterval: ReturnType<typeof setInterval> | null = null;
   private screencastFrameHandler: ((event: ScreencastFrameEvent) => void) | null = null;
+  private logger: Logger;
 
-  private constructor() {}
+  private constructor(logger?: Logger) {
+    this.logger = logger ?? createWorkerLogger('ScreencastManager');
+  }
 
   static getInstance(): ScreencastManager {
     if (!ScreencastManager.instance) {
@@ -55,7 +59,7 @@ export class ScreencastManager {
       this.cdpClient.on('Page.screencastFrame', this.screencastFrameHandler);
 
       page.on('close', () => {
-        console.log('[Screencast] Page closed');
+        this.logger.info('Page closed');
         this.cleanup();
       });
 
@@ -67,9 +71,9 @@ export class ScreencastManager {
       });
 
       this.isStreaming = true;
-      console.log('[Screencast] Started streaming');
+      this.logger.info('Started streaming');
     } catch (error) {
-      console.error('[Screencast] Failed to start:', (error as Error).message);
+      this.logger.error({ err: error }, 'Failed to start');
       this.cleanup();
       throw error;
     }
@@ -91,22 +95,22 @@ export class ScreencastManager {
         this.cdpClient = null;
       }
     } catch (error) {
-      console.error('[Screencast] Error stopping:', (error as Error).message);
+      this.logger.error({ err: error }, 'Error stopping');
     }
 
     this.cleanup();
-    console.log('[Screencast] Stopped streaming');
+    this.logger.info('Stopped streaming');
   }
 
   addListener(res: ServerResponse): void {
     this.listeners.add(res);
-    console.log(`[Screencast] Listener added. Total: ${this.listeners.size}`);
+    this.logger.debug({ total: this.listeners.size }, 'Listener added');
   }
 
   removeListener(res: ServerResponse): void {
     this.listeners.delete(res);
     this.backedUpListeners.delete(res);
-    console.log(`[Screencast] Listener removed. Total: ${this.listeners.size}`);
+    this.logger.debug({ total: this.listeners.size }, 'Listener removed');
   }
 
   setDebugEnabled(enabled: boolean): void {
@@ -118,8 +122,9 @@ export class ScreencastManager {
         const reasons = Object.entries(s.dropReasons)
           .map(([k, v]) => `${k}=${v}`)
           .join(', ');
-        console.log(
-          `[NLE-Debug] screencast fps=${s.fps} drops=${s.totalDrops}( ${reasons || 'none'} )`
+        this.logger.info(
+          { fps: s.fps, drops: s.totalDrops, reasons },
+          'screencast debug stats'
         );
       }, 1000);
     } else {
@@ -128,8 +133,9 @@ export class ScreencastManager {
         const reasons = Object.entries(s.dropReasons)
           .map(([k, v]) => `${k}=${v}`)
           .join(', ');
-        console.log(
-          `[NLE-Debug] screencast final: fps=${s.fps} drops=${s.totalDrops}( ${reasons || 'none'} )`
+        this.logger.info(
+          { fps: s.fps, drops: s.totalDrops, reasons },
+          'screencast final debug stats'
         );
         this.debugCounter = null;
       }
@@ -157,7 +163,7 @@ export class ScreencastManager {
     try {
       await this.cdpClient?.send('Page.screencastFrameAck', { sessionId: event.sessionId });
     } catch (error) {
-      console.error('[Screencast] Frame ack failed:', (error as Error).message);
+      this.logger.error({ err: error }, 'Frame ack failed');
       return;
     }
 
@@ -186,7 +192,7 @@ export class ScreencastManager {
           });
         }
       } catch (error) {
-        console.error('[Screencast] Failed to write to listener:', (error as Error).message);
+        this.logger.error({ err: error }, 'Failed to write to listener');
         try {
           listener.end();
         } catch {

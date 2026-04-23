@@ -12,6 +12,9 @@ import {
 } from '@livekit/rtc-node';
 import type { CDPSession, Page } from 'playwright';
 import { createFrameCounter } from '@nebula-link-evo/shared';
+import { createWorkerLogger } from './services/logger.js';
+
+const logger = createWorkerLogger('LiveKitPublisher');
 
 const LIVEKIT_URL = process.env.LIVEKIT_URL || 'ws://127.0.0.1:7880';
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY || 'devkey';
@@ -108,13 +111,14 @@ export async function startPublisher(
         const reasons = Object.entries(s.dropReasons)
           .map(([k, v]) => `${k}=${v}`)
           .join(', ');
-        console.log(
-          `[NLE-Debug] livekit fps=${s.fps} drops=${s.totalDrops}( ${reasons || 'none'} )`
+        logger.info(
+          { fps: s.fps, drops: s.totalDrops, reasons },
+          'livekit debug stats'
         );
       }, 1000);
     }
 
-    console.log(`[LiveKitPublisher] Publishing ${width}x${height} to room "${LIVEKIT_ROOM}"`);
+    logger.info({ width, height, room: LIVEKIT_ROOM }, 'Publishing started');
   } catch (error) {
     await cleanupPublisher();
     throw error;
@@ -123,7 +127,7 @@ export async function startPublisher(
 
 export async function stopPublisher(): Promise<void> {
   await cleanupPublisher();
-  console.log('[LiveKitPublisher] Stopped');
+  logger.info('Publisher stopped');
 }
 
 export function isPublisherActive(): boolean {
@@ -163,7 +167,7 @@ async function handleScreencastFrame(event: ScreencastFrameEvent): Promise<void>
     if (debugCounter) debugCounter.recordFrame();
   } catch (error) {
     if (debugCounter) debugCounter.recordDrop('frame_error');
-    console.error('[LiveKitPublisher] Frame error:', error);
+    logger.error({ err: error }, 'Frame error');
   }
 }
 
@@ -216,8 +220,9 @@ async function cleanupPublisher(): Promise<void> {
     const reasons = Object.entries(s.dropReasons)
       .map(([k, v]) => `${k}=${v}`)
       .join(', ');
-    console.log(
-      `[NLE-Debug] livekit final: fps=${s.fps} drops=${s.totalDrops}( ${reasons || 'none'} )`
+    logger.info(
+      { fps: s.fps, drops: s.totalDrops, reasons },
+      'livekit final debug stats'
     );
     debugCounter = null;
   }

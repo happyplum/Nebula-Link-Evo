@@ -5,6 +5,7 @@ import { BrowserLifecycle, type StateChangeReason } from './browser-lifecycle.js
 import { PageActions, MarkerActionResult } from './page-actions.js';
 import { DOMExtractor } from './dom-extractor.js';
 import { CacheStats } from './snapshot-cache.js';
+import { createWorkerLogger, type Logger } from './logger.js';
 
 export type { MarkerActionResult, CacheStats, StateChangeReason };
 
@@ -13,11 +14,13 @@ export class BrowserService {
   private lifecycle: BrowserLifecycle;
   private pageActions: PageActions;
   private domExtractor: DOMExtractor;
+  private logger: Logger;
 
-  private constructor() {
-    this.lifecycle = new BrowserLifecycle();
+  private constructor(logger?: Logger) {
+    this.logger = logger ?? createWorkerLogger('BrowserService');
+    this.lifecycle = new BrowserLifecycle(this.logger);
     this.pageActions = new PageActions();
-    this.domExtractor = new DOMExtractor();
+    this.domExtractor = new DOMExtractor(this.logger);
   }
 
   static getInstance(): BrowserService {

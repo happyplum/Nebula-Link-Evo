@@ -1,5 +1,8 @@
 import { Page, ElementHandle } from 'playwright';
 import type { LocatorBundle } from '../../shared/types/vision-marker.js';
+import { createWorkerLogger } from './services/logger.js';
+
+const logger = createWorkerLogger('LocatorGenerator');
 
 /**
  * Generate multiple locator strategies for an element in priority order.
@@ -67,7 +70,7 @@ export async function generateLocatorBundle(
     }
   } catch (error) {
     // Silently handle errors - return empty bundle on failure
-    console.warn(`Failed to generate locator bundle: ${error}`);
+    logger.warn({ err: error }, 'Failed to generate locator bundle');
   }
 
   return bundle;
@@ -111,7 +114,7 @@ export async function generateStableSelector(
       return `xpath=${bundle.xpath}`;
     }
   } catch (error) {
-    console.warn(`Failed to generate stable selector: ${error}`);
+    logger.warn({ err: error }, 'Failed to generate stable selector');
   }
 
   // Fallback: use a basic tag selector
