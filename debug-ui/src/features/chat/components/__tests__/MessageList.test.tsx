@@ -84,6 +84,6 @@ describe('MessageList', () => {
 
     expect(screen.queryByText('No messages yet. Start a conversation!')).not.toBeInTheDocument();
     expect(screen.getByTestId(testIds.thinkingBlock)).toBeInTheDocument();
-    expect(screen.getByText('Analyzing next step...')).toBeInTheDocument();
+    expect(screen.getByText('💭 思考中...')).toBeInTheDocument();
   });
 });
