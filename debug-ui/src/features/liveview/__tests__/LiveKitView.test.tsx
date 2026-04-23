@@ -61,7 +61,10 @@ describe('LiveKitView', () => {
     globalThis.ResizeObserver = originalResizeObserver;
   });
 
-  it('renders LiveViewCanvas fallback when LiveKit support check fails', async () => {
+  // TODO(removed-fallback): LiveKitView no longer falls back to LiveViewCanvas when
+  // livekit-client import fails. The component always renders its own canvas container
+  // with data-testid="livekit-view". The livekit-client support check was removed.
+  it.skip('renders LiveViewCanvas fallback when LiveKit support check fails', async () => {
     vi.doMock('livekit-client', () => {
       throw new Error('unsupported');
     });
