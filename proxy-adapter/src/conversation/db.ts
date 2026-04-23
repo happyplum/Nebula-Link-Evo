@@ -23,6 +23,8 @@ import type {
   TracedOperation,
   CreateOperationParams,
   UpdateOperationParams,
+  ControlCommandType,
+  OperationStatus,
 } from './types.js';
 
 class DatabaseManager {
@@ -34,6 +36,13 @@ class DatabaseManager {
   private sessionEventsCleanup: SessionEventsCleanup | null = null;
 
   private constructor() {}
+
+  /**
+   * Type guard for SQLite errors with code property
+   */
+  private static isSQLiteError(error: unknown): error is Error & { code: string } {
+    return error instanceof Error && 'code' in error && typeof (error as { code?: unknown }).code === 'string';
+  }
 
   static getInstance(): DatabaseManager {
     if (!DatabaseManager.instance) {
@@ -123,8 +132,8 @@ class DatabaseManager {
     for (let i = 0; i < maxRetries; i++) {
       try {
         return operation();
-      } catch (err: any) {
-        if (err?.code === 'SQLITE_BUSY' && i < maxRetries - 1) {
+      } catch (err: unknown) {
+        if (DatabaseManager.isSQLiteError(err) && err.code === 'SQLITE_BUSY' && i < maxRetries - 1) {
           const delay = 100 * (i + 1); // Exponential backoff: 100ms, 200ms, 300ms
           this.sleep(delay);
           continue;
@@ -737,10 +746,10 @@ class DatabaseManager {
     return {
       traceId: row.id,
       sessionId: row.session_id,
-      operation: row.operation as any,
+      operation: row.operation as ControlCommandType,
       startTime: row.start_time,
       endTime: row.end_time ?? undefined,
-      status: row.status as any,
+      status: row.status as OperationStatus,
       error: row.error ?? undefined,
     };
   }
@@ -792,10 +801,10 @@ class DatabaseManager {
     return rows.map((row) => ({
       traceId: row.id,
       sessionId: row.session_id,
-      operation: row.operation as any,
+      operation: row.operation as ControlCommandType,
       startTime: row.start_time,
       endTime: row.end_time ?? undefined,
-      status: row.status as any,
+      status: row.status as OperationStatus,
       error: row.error ?? undefined,
     }));
   }
