@@ -3,6 +3,25 @@ import * as crypto from 'node:crypto';
 import { startPublisher, stopPublisher } from '../livekit-publisher.js';
 import { screencastManager } from '../screencast.js';
 
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${ms}ms`));
+    }, ms);
+
+    promise.then(
+      (value) => {
+        clearTimeout(timeout);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timeout);
+        reject(error);
+      }
+    );
+  });
+}
+
 export interface BrowserState {
   browser: Browser | null;
   context: BrowserContext | null;
@@ -37,6 +56,7 @@ export class BrowserLifecycle {
     lastCdpPort: null,
   };
   private pageIds = new WeakMap<Page, string>();
+  private switchVersion = 0;
 
   private onStateChange: ((reason: StateChangeReason) => void) | null = null;
   private handlePageClose = (): void => {
@@ -124,38 +144,81 @@ export class BrowserLifecycle {
       return targetPage;
     }
 
+    const currentVersion = ++this.switchVersion;
     await targetPage.bringToFront();
 
     // Capture which transports were active BEFORE teardown
     const wasScreencastActive = screencastManager.isActive();
     const previousViewport = this.state.lastViewport;
+    const oldPage = this.state.page;
 
-    // Teardown: stop LiveKit publisher for old page
-    await stopPublisher().catch(() => {});
-
-    // Stop MJPEG screencast if it was running
-    if (wasScreencastActive) {
-      await screencastManager.stop().catch(() => {});
+    if (oldPage && !oldPage.isClosed()) {
+      oldPage.off('close', this.handlePageClose);
     }
 
     this.state.page = targetPage;
+    targetPage.off('close', this.handlePageClose);
     this.state.page.on('close', this.handlePageClose);
 
-    // Restart LiveKit publisher for the new page (awaited, deterministic order)
-    if (previousViewport) {
-      await startPublisher(this.state.page, previousViewport).catch((err) => {
-        console.warn('[LiveKit] Publisher failed to restart for new tab:', err);
-      });
-    }
-
-    // Restart MJPEG screencast only if it was previously active
-    if (wasScreencastActive) {
-      await screencastManager.start(this.state.page).catch((err) => {
-        console.warn('[Screencast] Failed to restart for new tab:', err);
-      });
-    }
+    this.restartTransportsForPage(
+      targetPage,
+      wasScreencastActive,
+      previousViewport,
+      currentVersion
+    ).catch((error) => {
+      console.warn('[BrowserLifecycle] Background transport restart failed:', error);
+    });
 
     return targetPage;
+  }
+
+  private async restartTransportsForPage(
+    targetPage: Page,
+    wasScreencastActive: boolean,
+    viewport: { width: number; height: number } | null,
+    version: number
+  ): Promise<void> {
+    if (version !== this.switchVersion) {
+      console.warn('[BrowserLifecycle] Skipping stale tab switch before stopPublisher');
+      return;
+    }
+
+    await withTimeout(stopPublisher(), 10000, 'stopPublisher').catch((error) => {
+      console.warn('[LiveKit] Publisher failed to stop during tab switch:', error);
+    });
+
+    if (wasScreencastActive) {
+      if (version !== this.switchVersion) {
+        console.warn('[BrowserLifecycle] Skipping stale tab switch before screencast stop');
+        return;
+      }
+
+      await withTimeout(screencastManager.stop(), 5000, 'screencastManager.stop').catch((error) => {
+        console.warn('[Screencast] Failed to stop during tab switch:', error);
+      });
+    }
+
+    if (viewport) {
+      if (version !== this.switchVersion) {
+        console.warn('[BrowserLifecycle] Skipping stale tab switch before startPublisher');
+        return;
+      }
+
+      await withTimeout(startPublisher(targetPage, viewport), 10000, 'startPublisher').catch((error) => {
+        console.warn('[LiveKit] Publisher failed to restart for new tab:', error);
+      });
+    }
+
+    if (wasScreencastActive) {
+      if (version !== this.switchVersion) {
+        console.warn('[BrowserLifecycle] Skipping stale tab switch before screencast start');
+        return;
+      }
+
+      await withTimeout(screencastManager.start(targetPage), 5000, 'screencastManager.start').catch((error) => {
+        console.warn('[Screencast] Failed to restart for new tab:', error);
+      });
+    }
   }
 
   async open(options: OpenBrowserOptions = {}): Promise<void> {

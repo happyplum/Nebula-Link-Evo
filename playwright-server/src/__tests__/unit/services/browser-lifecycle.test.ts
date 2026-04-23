@@ -566,7 +566,7 @@ describe('BrowserLifecycle', () => {
       (lifecycle as any).pageIds.set(page2, 'tab-2');
     });
 
-    it('should await stopPublisher before startPublisher on tab switch', async () => {
+    it('should stopPublisher before startPublisher on tab switch', async () => {
       const callOrder: string[] = [];
       mockStopPublisher.mockImplementation(async () => {
         callOrder.push('stop');
@@ -577,8 +577,10 @@ describe('BrowserLifecycle', () => {
 
       await lifecycle.switchTab('tab-2');
 
-      // stopPublisher must complete before startPublisher begins
-      expect(callOrder).toEqual(['stop', 'start']);
+      // Transport restart runs in background — wait for it to complete
+      await vi.waitFor(() => {
+        expect(callOrder).toEqual(['stop', 'start']);
+      });
     });
 
     it('should capture screencast state before teardown and restart if was active', async () => {
@@ -590,9 +592,11 @@ describe('BrowserLifecycle', () => {
 
       await lifecycle.switchTab('tab-2');
 
-      // Screencast was active before teardown
-      expect(mockScreencastStop).toHaveBeenCalledTimes(1);
-      expect(mockScreencastStart).toHaveBeenCalledWith(page2);
+      // Transport restart runs in background — wait for it to complete
+      await vi.waitFor(() => {
+        expect(mockScreencastStop).toHaveBeenCalledTimes(1);
+        expect(mockScreencastStart).toHaveBeenCalledWith(page2);
+      });
     });
 
     it('should NOT restart screencast if it was not active before teardown', async () => {
@@ -606,7 +610,7 @@ describe('BrowserLifecycle', () => {
       expect(mockScreencastStart).not.toHaveBeenCalled();
     });
 
-    it('should await full shutdown before swapping page', async () => {
+    it('should swap page immediately and restart transports in background', async () => {
       let publisherStopped = false;
       mockStopPublisher.mockImplementation(async () => {
         publisherStopped = true;
@@ -615,10 +619,14 @@ describe('BrowserLifecycle', () => {
 
       const result = await lifecycle.switchTab('tab-2');
 
-      // Publisher was fully stopped before the new page was set
-      expect(publisherStopped).toBe(true);
+      // Page is swapped immediately (before background transport restart)
       expect(lifecycle.getPage()).toBe(page2);
       expect(result).toBe(page2);
+
+      // Background transport restart completes after response
+      await vi.waitFor(() => {
+        expect(publisherStopped).toBe(true);
+      });
     });
 
     it('should return early when switching to the same tab', async () => {
