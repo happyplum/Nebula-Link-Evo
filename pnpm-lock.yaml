@@ -310,6 +310,9 @@ importers:
       livekit-server-sdk:
         specifier: 'catalog:'
         version: 2.15.0
+      pino:
+        specifier: ^10.3.1
+        version: 10.3.1
       ws:
         specifier: 'catalog:'
         version: 8.19.0
