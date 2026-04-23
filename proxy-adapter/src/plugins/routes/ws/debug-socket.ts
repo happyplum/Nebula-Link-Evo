@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 
 export default async function debugSocketRoutes(fastify: FastifyInstance) {
-  const wsManager = (fastify as any).wsManager;
+  const wsManager = fastify.wsManager;
 
   fastify.get('/debug', { websocket: true }, (connection, _req) => {
     const clientId = crypto.randomUUID();

@@ -19,7 +19,7 @@ const MessageSchema = Type.Object({
 });
 
 const messagesRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
-  const conversationManager = (fastify as any).conversationManager as ConversationManager;
+  const conversationManager = fastify.conversationManager;
 
   if (!conversationManager) {
     throw new Error('conversationManager not decorated on fastify instance');

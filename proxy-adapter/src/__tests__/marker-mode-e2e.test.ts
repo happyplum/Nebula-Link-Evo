@@ -55,7 +55,8 @@ describe('Frontend E2E - Marker Mode Operations', () => {
         {
           snapshot_id: mockSnapshotId,
           nebula_id: mockNebulaId,
-        }
+        },
+        { timeout: 30000 }
       );
     });
 
@@ -92,7 +93,8 @@ describe('Frontend E2E - Marker Mode Operations', () => {
           nebula_id: mockNebulaId,
           action: 'type',
           param: testText,
-        }
+        },
+        { timeout: 30000 }
       );
     });
 
@@ -124,7 +126,8 @@ describe('Frontend E2E - Marker Mode Operations', () => {
           snapshot_id: mockSnapshotId,
           nebula_id: mockNebulaId,
           action: 'focus',
-        }
+        },
+        { timeout: 30000 }
       );
     });
 
@@ -155,7 +158,8 @@ describe('Frontend E2E - Marker Mode Operations', () => {
           snapshot_id: mockSnapshotId,
           nebula_id: mockNebulaId,
           action: 'blur',
-        }
+        },
+        { timeout: 30000 }
       );
     });
 
@@ -186,7 +190,8 @@ describe('Frontend E2E - Marker Mode Operations', () => {
           snapshot_id: mockSnapshotId,
           nebula_id: mockNebulaId,
           action: 'hover',
-        }
+        },
+        { timeout: 30000 }
       );
     });
 
@@ -220,7 +225,8 @@ describe('Frontend E2E - Marker Mode Operations', () => {
           nebula_id: mockNebulaId,
           action: 'value',
           param: testValue,
-        }
+        },
+        { timeout: 30000 }
       );
     });
 
@@ -255,7 +261,8 @@ describe('Frontend E2E - Marker Mode Operations', () => {
           nebula_id: mockNebulaId,
           action: 'dispatch',
           param: testEventType,
-        }
+        },
+        { timeout: 30000 }
       );
     });
 
