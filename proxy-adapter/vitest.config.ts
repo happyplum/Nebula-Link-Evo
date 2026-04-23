@@ -4,7 +4,6 @@ import path from 'node:path';
 export default defineConfig({
   resolve: {
     alias: {
-      '@shared': path.resolve(__dirname, '../shared'),
       '@mocks': path.resolve(__dirname, '../shared/test-utils/mocks'),
     },
   },

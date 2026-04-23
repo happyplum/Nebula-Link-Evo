@@ -106,7 +106,6 @@ curl http://localhost:3000/api/health
 
 ```
 debug-ui/           # Frontend (React 19 + TypeScript + Vite)
-debug-ui-legacy/    # Legacy frontend (preserved temporarily for reference, do not modify)
 proxy-adapter/      # Backend (Fastify, AI orchestration)
 playwright-server/  # Browser service (Playwright)
 shared/             # Shared types & utils (@nebula-link-evo/shared)

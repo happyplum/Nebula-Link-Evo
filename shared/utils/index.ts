@@ -6,6 +6,5 @@
 
 export { Metrics, metrics } from './metrics.js';
 export type { MetricStats } from './metrics.js';
-export { generateUUID } from './uuid.js';
 export { createFrameCounter } from './frame-counter.js';
 export type { FrameCounter, FrameCounterSummary } from './frame-counter.js';
