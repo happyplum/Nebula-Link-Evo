@@ -10,6 +10,8 @@ import {
   getDefaultEnvironment,
 } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { ResolvedConfig, MCPServerConfig } from '../../config/schema.js';
+import { createWorkerLogger } from '../../services/logger.js';
+import type { Logger } from 'pino';
 
 export interface MCPTool {
   name: string;
@@ -46,19 +48,21 @@ export class MCPSDKClient {
   private config: ResolvedConfig;
   private servers: Map<string, MCPServerInfo> = new Map();
   private enabled: boolean = false;
+  private logger: Logger;
 
-  constructor(config: ResolvedConfig) {
+  constructor(config: ResolvedConfig, logger?: Logger) {
     this.config = config;
     this.enabled = config.mcp?.enabled ?? false;
+    this.logger = logger ?? createWorkerLogger('mcp-sdk-client');
   }
 
   async initialize(): Promise<void> {
     if (!this.enabled) {
-      console.log('MCP is disabled');
+      this.logger.info('MCP is disabled');
       return;
     }
 
-    console.log('Initializing MCP servers with SDK...');
+    this.logger.info('Initializing MCP servers with SDK...');
 
     if (this.config.mcp?.servers) {
       for (const [name, serverConfigEntry] of Object.entries(this.config.mcp.servers)) {
@@ -72,7 +76,7 @@ export class MCPSDKClient {
 
   private async startServer(name: string, config: MCPServerConfig): Promise<boolean> {
     try {
-      console.log(`Starting MCP server: ${name}`);
+      this.logger.info({ name }, 'Starting MCP server');
 
       const client = new Client({
         name: 'Nebula-Link Evo',
@@ -87,7 +91,7 @@ export class MCPSDKClient {
       });
 
       await client.connect(transport);
-      console.log(`MCP server ${name} connected`);
+      this.logger.info({ name }, 'MCP server connected');
 
       const tools = await this.fetchToolsList(client);
 
@@ -103,7 +107,7 @@ export class MCPSDKClient {
       this.servers.set(name, serverInfo);
       return true;
     } catch (error) {
-      console.error(`Failed to start MCP server ${name}:`, error);
+      this.logger.error({ err: error, name }, 'Failed to start MCP server');
       return false;
     }
   }
@@ -120,7 +124,7 @@ export class MCPSDKClient {
       }
       return [];
     } catch (error) {
-      console.warn('Failed to fetch tools list:', (error as Error).message);
+      this.logger.warn({ err: error }, 'Failed to fetch tools list');
       return [];
     }
   }
@@ -147,7 +151,7 @@ export class MCPSDKClient {
       throw new Error(`MCP server ${serverName} is not running`);
     }
 
-    console.log(`Calling ${serverName}.${toolName}(${JSON.stringify(args)})`);
+    this.logger.info({ serverName, toolName, args }, 'Calling MCP tool');
 
     try {
       const result = await server.client.callTool({
@@ -155,10 +159,7 @@ export class MCPSDKClient {
         arguments: args,
       });
 
-      console.log(
-        `MCP tool ${toolName} result:`,
-        JSON.stringify(result, null, 2).substring(0, 500)
-      );
+      this.logger.info({ toolName, result: JSON.stringify(result).substring(0, 500) }, 'MCP tool result');
 
       if (result && result.content && Array.isArray(result.content)) {
         const textContent = result.content
@@ -172,7 +173,7 @@ export class MCPSDKClient {
 
       return result;
     } catch (error) {
-      console.error(`MCP tool ${toolName} error:`, error);
+      this.logger.error({ err: error, toolName }, 'MCP tool error');
       throw new Error(`Tool call failed: ${(error as Error).message}`);
     }
   }
@@ -195,7 +196,7 @@ export class MCPSDKClient {
       const result = await server.client.listResources();
       return result?.resources || [];
     } catch (error) {
-      console.warn(`Failed to list resources for ${serverName}:`, (error as Error).message);
+      this.logger.warn({ err: error, serverName }, 'Failed to list resources');
       return [];
     }
   }
@@ -224,7 +225,7 @@ export class MCPSDKClient {
       const result = await server.client.listPrompts();
       return result?.prompts || [];
     } catch (error) {
-      console.warn(`Failed to list prompts for ${serverName}:`, (error as Error).message);
+      this.logger.warn({ err: error, serverName }, 'Failed to list prompts');
       return [];
     }
   }
@@ -278,16 +279,16 @@ export class MCPSDKClient {
   }
 
   async shutdown(): Promise<void> {
-    console.log('Shutting down MCP SDK clients...');
+    this.logger.info('Shutting down MCP SDK clients...');
 
     for (const [name, server] of this.servers) {
       if (server.running) {
-        console.log(`Stopping MCP server: ${name}`);
+        this.logger.info({ name }, 'Stopping MCP server');
         try {
           await server.transport.close();
           server.running = false;
         } catch (error) {
-          console.error(`Error stopping ${name}:`, error);
+          this.logger.error({ err: error, name }, 'Error stopping MCP server');
         }
       }
     }

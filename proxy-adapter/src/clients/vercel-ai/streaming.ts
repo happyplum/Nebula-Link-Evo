@@ -12,6 +12,9 @@ import type { ProviderConfig } from '../../services/provider/types.js';
 import { getModel } from './provider.js';
 import { createCoreTools } from './core-tools.js';
 import { createLoadSkillTool } from './skills-tool.js';
+import { createWorkerLogger } from '../../services/logger.js';
+
+const logger = createWorkerLogger('vercel-streaming');
 
 /**
  * Options for streaming a task
@@ -121,7 +124,7 @@ export async function streamTask(options: StreamTaskOptions): Promise<void> {
 
           default: {
             // Handle unknown part types gracefully
-            console.warn('Unknown stream part type:', (part as { type: string }).type);
+            logger.warn({ type: (part as { type: string }).type }, 'Unknown stream part type');
           }
         }
       } catch (streamError) {
@@ -136,7 +139,7 @@ export async function streamTask(options: StreamTaskOptions): Promise<void> {
   } catch (error) {
     // Handle setup/initialization errors
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error('Stream task error:', errorMessage);
+    logger.error({ err: error }, 'Stream task error');
     onEvent({
       type: 'chat_stream_error',
       error: `Failed to start stream: ${errorMessage}`,
