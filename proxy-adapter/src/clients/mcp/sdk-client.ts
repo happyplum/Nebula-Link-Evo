@@ -1,4 +1,10 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import type {
+  Resource,
+  ReadResourceResult,
+  Prompt,
+  GetPromptResult,
+} from '@modelcontextprotocol/sdk/types.js';
 import {
   StdioClientTransport,
   getDefaultEnvironment,
@@ -9,6 +15,22 @@ export interface MCPTool {
   name: string;
   description: string;
   inputSchema: object;
+}
+
+/** Text content block returned by MCP tool calls. */
+interface MCPTextContent {
+  type: 'text';
+  text: string;
+}
+
+/** SDK-level return type of client.callTool(). */
+type SDKCallToolResult = Awaited<ReturnType<Client['callTool']>>;
+
+/** Structured result when a tool call returns text content. */
+interface MCPToolCallTextResult {
+  raw: SDKCallToolResult;
+  text: string;
+  parsed: unknown;
 }
 
 interface MCPServerInfo {
@@ -118,8 +140,8 @@ export class MCPSDKClient {
   async callTool(
     serverName: string,
     toolName: string,
-    args: Record<string, any> = {}
-  ): Promise<any> {
+    args: Record<string, unknown> = {}
+  ): Promise<SDKCallToolResult | MCPToolCallTextResult> {
     const server = this.servers.get(serverName);
     if (!server || !server.running) {
       throw new Error(`MCP server ${serverName} is not running`);
@@ -140,8 +162,8 @@ export class MCPSDKClient {
 
       if (result && result.content && Array.isArray(result.content)) {
         const textContent = result.content
-          .filter((c: any) => c.type === 'text')
-          .map((c: any) => c.text)
+          .filter((c): c is MCPTextContent => c.type === 'text')
+          .map((c) => c.text)
           .join('\n');
         if (textContent) {
           return { raw: result, text: textContent, parsed: this.tryParseJson(textContent) };
@@ -155,7 +177,7 @@ export class MCPSDKClient {
     }
   }
 
-  private tryParseJson(text: string): any {
+  private tryParseJson(text: string): unknown {
     try {
       return JSON.parse(text);
     } catch {
@@ -163,7 +185,7 @@ export class MCPSDKClient {
     }
   }
 
-  async listResources(serverName: string): Promise<any[]> {
+  async listResources(serverName: string): Promise<Resource[]> {
     const server = this.servers.get(serverName);
     if (!server || !server.running) {
       throw new Error(`MCP server ${serverName} is not running`);
@@ -178,7 +200,7 @@ export class MCPSDKClient {
     }
   }
 
-  async readResource(serverName: string, uri: string): Promise<any> {
+  async readResource(serverName: string, uri: string): Promise<ReadResourceResult> {
     const server = this.servers.get(serverName);
     if (!server || !server.running) {
       throw new Error(`MCP server ${serverName} is not running`);
@@ -192,7 +214,7 @@ export class MCPSDKClient {
     }
   }
 
-  async listPrompts(serverName: string): Promise<any[]> {
+  async listPrompts(serverName: string): Promise<Prompt[]> {
     const server = this.servers.get(serverName);
     if (!server || !server.running) {
       throw new Error(`MCP server ${serverName} is not running`);
@@ -207,7 +229,7 @@ export class MCPSDKClient {
     }
   }
 
-  async getPrompt(serverName: string, name: string, args?: Record<string, any>): Promise<any> {
+  async getPrompt(serverName: string, name: string, args?: Record<string, string>): Promise<GetPromptResult> {
     const server = this.servers.get(serverName);
     if (!server || !server.running) {
       throw new Error(`MCP server ${serverName} is not running`);

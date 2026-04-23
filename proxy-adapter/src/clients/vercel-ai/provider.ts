@@ -1,4 +1,4 @@
-import type { LanguageModelV3 } from '@ai-sdk/provider';
+import type { LanguageModelV3, LanguageModelV3StreamResult } from '@ai-sdk/provider';
 import { MockLanguageModelV3 } from 'ai/test';
 import { simulateReadableStream } from 'ai';
 import type { ProviderRegistry } from '../../services/provider/registry.js';
@@ -38,7 +38,7 @@ export async function getModel(
               },
             ],
           }),
-        } as any;
+        } as unknown as LanguageModelV3StreamResult;
       },
     }) as unknown as LanguageModelV3;
   }
