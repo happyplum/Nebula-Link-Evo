@@ -81,4 +81,5 @@ pnpm type-check   # tsc --noEmit
 - `src/features/runtime/AGENTS.md` — shared debug WebSocket lifecycle
 - `src/features/liveview/AGENTS.md` — MJPEG canvas and overlay rules
 - `src/features/playwright-control/AGENTS.md` — browser control/store rules
+- `src/shared/AGENTS.md` — shared REST/query/testid/date conventions
 - `e2e/AGENTS.md` — Playwright fixture and parity/e2e rules
