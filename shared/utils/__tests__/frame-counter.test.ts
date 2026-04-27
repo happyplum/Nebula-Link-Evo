@@ -11,7 +11,7 @@ describe('createFrameCounter', () => {
 
       const summary = counter.getSummary();
       expect(summary.totalFrames).toBe(2);
-      expect(summary.fps).toBeGreaterThanOrEqual(0);
+      expect(summary.fps).toBe(2); // 2 frames in the current 1s window
     });
 
     it('records a frame with custom timestamp', () => {
