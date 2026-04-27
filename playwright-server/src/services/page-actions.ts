@@ -418,8 +418,6 @@ export class PageActions {
     snapshotId: string,
     nebulaId: number,
     eventType: string
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    // _eventInit is kept for backward compatibility but not used
   ): Promise<MarkerActionResult> {
     const page = this.requirePage();
     const startTime = Date.now();

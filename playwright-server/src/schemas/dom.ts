@@ -1,4 +1,4 @@
-import { Type, Static } from '@sinclair/typebox';
+import { Type } from '@sinclair/typebox';
 import { BoundingBoxSchema } from './common.js';
 
 /**
@@ -80,8 +80,3 @@ export const SimplifiedDOMResponseSchema = Type.Object({
   /** Simplified DOM tree */
   simplified_dom: SimplifiedDOMSchema,
 });
-
-
-export type ElementLocatorType = Static<typeof ElementLocatorSchema>;
-export type SimplifiedElementType = Static<typeof SimplifiedElementSchema>;
-export type SimplifiedDOMType = Static<typeof SimplifiedDOMSchema>;
