@@ -1,4 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+const mockLogger = vi.hoisted(() => ({
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+}));
+
+vi.mock('../../services/logger.js', () => ({
+  createWorkerLogger: vi.fn(() => mockLogger),
+}));
+
 import { streamTask } from '../../clients/vercel-ai/streaming.js';
 import type { ActionExecutor, ActionResult } from '../../services/action-executor.js';
 import type { TaskOrchestrator } from '../../services/task-orchestrator.js';
@@ -287,7 +298,6 @@ await expect(
   describe('stream processing errors', () => {
     it('should handle unknown part types gracefully', async () => {
       const { streamText } = vi.mocked(await import('ai'));
-      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
       const asyncIterator = {
         async *[Symbol.asyncIterator]() {
@@ -309,8 +319,10 @@ await streamTask({
         onEvent: (event) => events.push(event),
       });
 
-      expect(consoleSpy).toHaveBeenCalledWith('Unknown stream part type:', 'unknown-type');
-      consoleSpy.mockRestore();
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        { type: 'unknown-type' },
+        'Unknown stream part type'
+      );
     });
   });
 

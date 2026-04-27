@@ -102,6 +102,8 @@ const mockFastifyInstance = {
   listen: vi.fn().mockResolvedValue(undefined),
   close: vi.fn().mockResolvedValue(undefined),
   log: {
+    info: vi.fn(),
+    warn: vi.fn(),
     error: vi.fn(),
   },
 };
