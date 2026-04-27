@@ -37,21 +37,6 @@ export const ClickByMarkerRequestSchema = Type.Object({
   nebula_id: Type.Number(),
 });
 
-export const ClickByMarkerResponseSchema = Type.Object({
-  success: Type.Boolean(),
-  strategy_used: Type.String(),
-  attempts: Type.Number(),
-  latency_ms: Type.Number(),
-});
-
-export const ClickByMarkerErrorResponseSchema = Type.Object({
-  success: Type.Boolean(),
-  error: Type.Object({
-    code: Type.String(),
-    message: Type.String(),
-  }),
-});
-
 // Action enum for marker-based operations
 export const ActionEnum = Type.Union([
   Type.Literal('click'),

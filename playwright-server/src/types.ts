@@ -12,12 +12,6 @@ export interface NavigateRequest {
   timeout?: number;
 }
 
-export interface ScreenshotRequest {
-  fullPage?: boolean;
-  type?: 'png' | 'jpeg';
-  quality?: number;
-}
-
 export interface ScreenshotResponse {
   screenshot: string;
   viewport: {
@@ -54,34 +48,6 @@ export interface TypeRequest {
 export interface ScrollRequest {
   x?: number;
   y?: number;
-}
-
-export interface DOMElement {
-  tag: string;
-  id?: string;
-  class?: string;
-  type?: string;
-  name?: string;
-  placeholder?: string;
-  text?: string;
-  href?: string;
-  src?: string;
-  alt?: string;
-  bbox?: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  };
-  isVisible: boolean;
-  isInteractable: boolean;
-}
-
-
-export interface BrowserStatus {
-  isOpen: boolean;
-  currentUrl?: string;
-  title?: string;
 }
 
 export interface ElementInfo {
