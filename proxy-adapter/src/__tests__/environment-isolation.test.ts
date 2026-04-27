@@ -63,6 +63,9 @@ vi.mock('dotenv', () => ({
 describe('Production Environment Isolation', () => {
   let originalNodeEnv: string | undefined;
 
+  // Per-test timeout: route registration with mocking can be slow in CI
+  vi.setConfig({ testTimeout: 15_000 });
+
   beforeAll(() => {
     // Set production mode BEFORE any imports
     originalNodeEnv = process.env.NODE_ENV;

@@ -54,6 +54,31 @@ export class StreamBufferPersistenceManager {
     // Enable WAL mode for better concurrency
     this.db.exec('PRAGMA journal_mode = WAL');
 
+    // Ensure table exists for standalone reads (worker creates it too, but manager
+    // may be queried before any worker write — e.g., getLastChunkIndex on empty DB)
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS stream_buffer_chunks (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        chunk_index INTEGER NOT NULL,
+        chunk_type TEXT NOT NULL,
+        chunk_text TEXT NOT NULL,
+        version INTEGER NOT NULL,
+        timestamp TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )
+    `);
+
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_stream_buffer_session_id
+      ON stream_buffer_chunks(session_id)
+    `);
+
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_stream_buffer_created_at
+      ON stream_buffer_chunks(created_at DESC)
+    `);
+
     this.isInitialized = true;
   }
 
