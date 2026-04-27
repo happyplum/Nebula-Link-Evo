@@ -132,7 +132,7 @@ export class SessionLock {
    * Clear all locks (for testing purposes)
    */
   clear(): void {
-    for (const [sessionId, entry] of this.locks) {
+    for (const entry of this.locks.values()) {
       clearTimeout(entry.timeoutId);
       clearInterval(entry.renewalIntervalId);
     }

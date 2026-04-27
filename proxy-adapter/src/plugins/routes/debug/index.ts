@@ -548,23 +548,16 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     }
   );
 
-  fastify.get<{ Querystring: { version?: string } }>(
+  fastify.get(
     '/api/dom',
     {
       schema: {
         description: 'Get simplified DOM tree with vision markers',
         tags: ['Debug'],
-        querystring: {
-          type: 'object',
-          properties: {
-            version: { type: 'string', description: 'API version (e.g., "1.0", "2.0")' },
-          },
-        },
       },
     },
     async (request, _reply) => {
       try {
-        const { version } = request.query;
         request.log.info('[Debug API] Fetching DOM from browserClient...');
         const dom = await browserClient.getSimplifiedDOM();
         request.log.info({
