@@ -145,6 +145,7 @@ docs/               # Documentation
 - If annotated screenshot decode fails or backend returns empty screenshot data, the DOM screenshot card must show a visible inline error instead of only the `暂无截图` placeholder.
 - DOM snapshot v2 element normalization must accept backend `Record<string, ElementLocator>` fields `id` and `locator_bundle` while preserving existing frontend element typing.
 - Live view may upgrade to a LiveKit room-backed video transport when token fetch succeeds; if LiveKit is unavailable or token acquisition fails, monitor rendering must fall back to the existing `LiveViewCanvas` path.
+- LiveKit live view must preserve the last rendered frame and overlay fit state across transient transport disconnects; container resizes during that state must redraw the cached frame instead of flashing to black.
 
 ### AI Provider System
 

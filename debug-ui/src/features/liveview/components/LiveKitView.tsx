@@ -29,6 +29,11 @@ export default function LiveKitView({
   const { isConnected, trackStatus, connect, disconnect, videoElement, setOnTrackSubscribed } = useLiveKit();
   const isPlaywrightOpen = useRuntimeStore(selectPlaywrightIsOpen);
   const setLastScreenshotDataUrl = useRuntimeStore((s) => s.setLastScreenshotDataUrl);
+  const lastFrameDataRef = useRef<ImageData | null>(null);
+  const isPlaywrightOpenRef = useRef(isPlaywrightOpen);
+
+  // Track connection state: distinguish real disconnect from transport disruption
+  isPlaywrightOpenRef.current = isPlaywrightOpen;
 
   const captureScreenshot = useCallback(
     (canvas: HTMLCanvasElement) => {
@@ -78,7 +83,7 @@ export default function LiveKitView({
       const { videoWidth, videoHeight } = currentVideo;
       const { clientWidth, clientHeight } = currentCanvas;
       if (videoWidth === 0 || videoHeight === 0) {
-        setFitRect(null);
+        // Don't clear fitRect — preserve overlay during transient video pauses
         if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
           currentVideo.requestVideoFrameCallback(renderFrame);
         }
@@ -99,6 +104,14 @@ export default function LiveKitView({
       setFitRect(getImageFitRect(videoWidth, videoHeight, clientWidth, clientHeight));
       ctx.clearRect(0, 0, canvasW, canvasH);
       ctx.drawImage(currentVideo, offsetX, offsetY, drawWidth, drawHeight);
+
+      // Cache frame for redraw on resize after disconnect
+      try {
+        lastFrameDataRef.current = ctx.getImageData(0, 0, canvasW, canvasH);
+      } catch {
+        // SecurityError if canvas is tainted (cross-origin video)
+        lastFrameDataRef.current = null;
+      }
 
       // Capture screenshot for download (throttled to once per second)
       captureScreenshot(currentCanvas);
@@ -169,7 +182,6 @@ export default function LiveKitView({
     if (!isPlaywrightOpen && isConnected) {
       disconnect();
       setTokenData(null);
-      setFitRect(null);
     }
   }, [disconnect, isConnected, isPlaywrightOpen]);
 
@@ -209,7 +221,12 @@ export default function LiveKitView({
       if (videoElement && videoElement.parentNode) {
         videoElement.parentNode.removeChild(videoElement);
       }
-      setFitRect(null);
+      // Only clear overlay on real disconnect (browser closed),
+      // not on transport disruption — matches MJPEG isPlaywrightConnectedRef pattern.
+      if (!isPlaywrightOpenRef.current) {
+        setFitRect(null);
+      }
+      lastFrameDataRef.current = null;
     };
   }, [startOverlayLoop, videoElement]);
 
@@ -232,6 +249,15 @@ export default function LiveKitView({
     const dpr = window.devicePixelRatio || 1;
     canvas.width = Math.floor(rect.width * dpr);
     canvas.height = Math.floor(rect.height * dpr);
+
+    // Redraw cached frame after resize to prevent black canvas
+    const cached = lastFrameDataRef.current;
+    if (cached) {
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.putImageData(cached, 0, 0);
+      }
+    }
   }, []);
 
   useEffect(() => {
