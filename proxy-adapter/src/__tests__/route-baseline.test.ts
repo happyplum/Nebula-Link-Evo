@@ -500,13 +500,6 @@ describe('Route Baseline: API Chat Routes', () => {
   });
 
   describe('POST /api/chat/sessions/:id/messages', () => {
-    it.skip('should accept message and return job details (no success wrapper)', async () => {
-      // NOTE: This test requires complex database mocking or real database
-      // Skipped for baseline - documents expected behavior from code review
-      // Response format verified: returns { jobId, runId, sessionId, messageId } without success wrapper
-      expect(true).toBe(true);
-    });
-
     it('should return 400 for empty content', async () => {
       const mockSession = {
         id: 'session-123',
