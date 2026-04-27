@@ -321,7 +321,7 @@ describe('VF1 plan compliance contract', () => {
     await manager.close();
   });
 
-  it('4) SSE observability and deterministic afterSeq replay remain available', async () => {
+  it('4) SSE observability and deterministic event replay via DAO remain available', async () => {
     const manager = new ConversationManager(':memory:');
     manager.initialize();
     const wsManager = DebugWebSocketManager.getInstance();

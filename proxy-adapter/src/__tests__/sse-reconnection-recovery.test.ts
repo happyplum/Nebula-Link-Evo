@@ -21,11 +21,12 @@ import type { SessionEvent } from '../../../shared/types/sse-events.js';
  * Test suite for SSE reconnection event recovery.
  *
  * These tests verify that `/api/chat/:id/stream` endpoint correctly recovers
- * missed events after reconnection using `lastEventId` query param or `Last-Event-ID` header.
+ * missed events after reconnection by rebuilding from session.snapshot
+ * and then streaming live events.
  *
  * Key scenarios:
- * - Reconnecting after disconnect should replay only events with seq > lastEventId
- * - Fresh connection without lastEventId receives snapshot + running events
+ * - Reconnecting after disconnect receives a fresh session.snapshot bootstrap
+ * - Fresh connection receives snapshot + running events
  * - Page refresh scenario preserves AI response events
  * - ChatHandler without explicit DAO/Hub injection still supports reconnection recovery
  */
