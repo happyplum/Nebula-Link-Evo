@@ -1,4 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+const mockLogger = vi.hoisted(() => ({
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+}));
+
+vi.mock('../../services/logger.js', () => ({
+  createWorkerLogger: vi.fn(() => mockLogger),
+}));
+
 import { DatabaseManager } from '../../conversation/db.js';
 import { ConversationManager } from '../../conversation/manager.js';
 import { SessionCompressor } from '../../conversation/compressor.js';
@@ -10,6 +21,7 @@ describe('SessionCompressor', () => {
   let mockAiClient: { generateSummary: ReturnType<typeof vi.fn> };
 
   beforeEach(() => {
+    vi.clearAllMocks();
     db = DatabaseManager.getInstance();
     manager = new ConversationManager(':memory:');
     compressor = new SessionCompressor(db);
@@ -245,7 +257,6 @@ describe('SessionCompressor', () => {
         manager.addMessage(session.id, { role: 'user', content: `Message ${i}` });
       }
 
-      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       vi.spyOn(db, 'updateSession').mockImplementation(() => {
         throw new Error('DB write failed');
       });
@@ -254,12 +265,13 @@ describe('SessionCompressor', () => {
         compressor.compress(session.id, mockAiClient as any)
       ).resolves.toBeUndefined();
 
-      expect(errorSpy).toHaveBeenCalledWith(
-        'Failed to update session summary:',
-        expect.any(Error)
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        expect.objectContaining({
+          err: expect.any(Error),
+          sessionId: session.id,
+        }),
+        'Failed to update session summary'
       );
-
-      errorSpy.mockRestore();
     });
   });
 

@@ -1,4 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
+const mockLogger = vi.hoisted(() => ({
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+}));
+
+vi.mock('../services/logger.js', () => ({
+  createWorkerLogger: vi.fn(() => mockLogger),
+}));
+
 import { DebugWebSocketManager } from '../websocket-manager.js';
 import WebSocket from 'ws';
 import { browserClient } from '../browser-client.js';
@@ -526,7 +537,6 @@ describe('DebugWebSocketManager', () => {
 
     it('should log final summary when toggled off with active counter', () => {
       process.env.NODE_ENV = 'development';
-      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
       connectClient('dbg-5');
 
       manager['handleClientMessage']('dbg-5', { type: 'debug_toggle', enabled: true });
@@ -534,12 +544,18 @@ describe('DebugWebSocketManager', () => {
       counter.recordFrame();
       counter.recordBytes(512);
 
-      logSpy.mockClear();
+      mockLogger.info.mockClear();
       manager['handleClientMessage']('dbg-5', { type: 'debug_toggle', enabled: false });
 
-      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('[NLE-Debug] relay fps=1'));
-
-      logSpy.mockRestore();
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fps: 1,
+          totalDrops: 0,
+          relayBackpressure: 0,
+          bytesPerSec: 512,
+        }),
+        'NLE-Debug relay stats (disabled)'
+      );
     });
   });
 });

@@ -1,4 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+const mockLogger = vi.hoisted(() => ({
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+}));
+
+vi.mock('../../logger.js', () => ({
+  createWorkerLogger: vi.fn(() => mockLogger),
+}));
+
 import type { LanguageModelV3 } from '@ai-sdk/provider';
 import { createVisionTool, type ScreenshotResult } from '../vision-tool.js';
 import { createMockLanguageModel } from './helpers/mock-factory.js';
@@ -35,7 +46,6 @@ describe('createVisionTool', () => {
   });
 
   it('logs metadata with phase, provider, and model after generateText completes', async () => {
-    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     mockGenerateText.mockResolvedValue({ text: 'A login form with email and password fields' } as never);
 
     const screenshotFn = vi.fn<() => Promise<ScreenshotResult>>().mockResolvedValue(mockScreenshot);
@@ -43,15 +53,14 @@ describe('createVisionTool', () => {
 
     await visionTool.execute!({ prompt: 'describe the page' }, {} as never);
 
-    expect(consoleLogSpy).toHaveBeenCalledWith(
-      JSON.stringify({
+    expect(mockLogger.info).toHaveBeenCalledWith(
+      {
         phase: 'vision',
         provider: 'test-provider',
         model: 'test-model',
-      })
+      },
+      'Vision phase'
     );
-
-    consoleLogSpy.mockRestore();
   });
 
   it('returns description from generateText on happy path', async () => {

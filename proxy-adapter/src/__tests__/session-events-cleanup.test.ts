@@ -1,17 +1,37 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
-import { SessionEventsDAO } from '../conversation/session-events-dao.js';
-import { SessionEventsCleanup } from '../services/session-events-cleanup.js';
-import { DatabaseManager } from '../conversation/db.js';
+
+const mockLogger = vi.hoisted(() => ({
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+}));
+
+vi.mock('pino', () => ({
+  default: vi.fn(() => mockLogger),
+}));
+
+vi.mock('../services/logger.js', () => ({
+  createWorkerLogger: vi.fn(() => mockLogger),
+}));
 
 describe('SessionEventsCleanup', () => {
-  let cleanup: SessionEventsCleanup;
-  let dao: SessionEventsDAO;
-  let dbManager: DatabaseManager;
+  let cleanup: import('../services/session-events-cleanup.js').SessionEventsCleanup;
+  let dao: import('../conversation/session-events-dao.js').SessionEventsDAO;
+  let dbManager: import('../conversation/db.js').DatabaseManager;
   let db: DatabaseSync;
   const sessionId = 'test-session-id';
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    vi.resetModules();
+
+    const [{ SessionEventsDAO }, { SessionEventsCleanup }, { DatabaseManager }] = await Promise.all([
+      import('../conversation/session-events-dao.js'),
+      import('../services/session-events-cleanup.js'),
+      import('../conversation/db.js'),
+    ]);
+
     dbManager = DatabaseManager.getInstance();
     dbManager.initialize(':memory:');
     db = (dbManager as unknown as { db: DatabaseSync }).db;
@@ -121,12 +141,15 @@ describe('SessionEventsCleanup', () => {
 
     it('should log next cleanup time', () => {
       vi.useFakeTimers();
-      const consoleSpy = vi.spyOn(console, 'log');
 
       cleanup.start();
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('SessionEventsCleanup: Next cleanup scheduled for')
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        expect.objectContaining({
+          nextRun: expect.any(String),
+          delayMinutes: expect.any(Number),
+        }),
+        'Next cleanup scheduled'
       );
 
       vi.useRealTimers();
@@ -160,9 +183,12 @@ describe('SessionEventsCleanup', () => {
 
       cleanup.start();
 
-      const logSpy = vi.spyOn(console, 'log');
-      expect(logSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Next cleanup scheduled for')
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        expect.objectContaining({
+          nextRun: '2024-01-01T03:00:00.000Z',
+          delayMinutes: 30,
+        }),
+        'Next cleanup scheduled'
       );
 
       vi.useRealTimers();
@@ -176,9 +202,12 @@ describe('SessionEventsCleanup', () => {
 
       cleanup.start();
 
-      const logSpy = vi.spyOn(console, 'log');
-      expect(logSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Next cleanup scheduled for')
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        expect.objectContaining({
+          nextRun: '2024-01-02T03:00:00.000Z',
+          delayMinutes: 1380,
+        }),
+        'Next cleanup scheduled'
       );
 
       vi.useRealTimers();
@@ -188,13 +217,13 @@ describe('SessionEventsCleanup', () => {
   describe('error handling', () => {
     it('should log error if cleanup fails', async () => {
       vi.useFakeTimers();
-      const consoleSpy = vi.spyOn(console, 'error');
-      const errorSpy = vi.spyOn(dao, 'cleanupExpired').mockRejectedValueOnce(new Error('DB error'));
+      const error = new Error('DB error');
+      vi.spyOn(dao, 'cleanupExpired').mockRejectedValueOnce(error);
 
       await expect(cleanup.cleanupExpired()).rejects.toThrow('DB error');
-      expect(consoleSpy).toHaveBeenCalledWith(
-        'SessionEventsCleanup: Failed to cleanup expired events',
-        expect.any(Error)
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        { err: error },
+        'Failed to cleanup expired events'
       );
 
       vi.useRealTimers();
@@ -202,9 +231,9 @@ describe('SessionEventsCleanup', () => {
 
     it('should handle WAL checkpoint errors gracefully', async () => {
       vi.useFakeTimers();
-      const consoleSpy = vi.spyOn(console, 'error');
-      const execSpy = vi.spyOn(db, 'exec').mockImplementationOnce(() => {
-        throw new Error('WAL checkpoint error');
+      const checkpointError = new Error('WAL checkpoint error');
+      vi.spyOn(db, 'exec').mockImplementationOnce(() => {
+        throw checkpointError;
       });
 
       // Create an expired event
@@ -218,9 +247,9 @@ describe('SessionEventsCleanup', () => {
       const deleted = await cleanup.cleanupExpired();
 
       expect(deleted).toBe(1);
-      expect(consoleSpy).toHaveBeenCalledWith(
-        'SessionEventsCleanup: WAL checkpoint failed',
-        expect.any(Error)
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        { err: checkpointError },
+        'WAL checkpoint failed'
       );
 
       vi.useRealTimers();

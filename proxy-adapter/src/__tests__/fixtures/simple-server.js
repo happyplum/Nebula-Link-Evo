@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { createServer } from 'net';
 
 const port = parseInt(process.argv[2] || '3000', 10);
@@ -9,7 +10,7 @@ server.on('error', (err) => {
 });
 
 server.on('connection', (socket) => {
-  socket.on('data', (data) => {
+  socket.on('data', (_data) => {
     // Simple HTTP response
     const response = 'HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nOK';
     socket.write(response);

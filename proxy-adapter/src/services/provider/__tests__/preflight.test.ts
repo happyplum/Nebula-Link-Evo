@@ -1,4 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+const mockLogger = vi.hoisted(() => ({
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+}));
+
+vi.mock('../../logger.js', () => ({
+  createWorkerLogger: vi.fn(() => mockLogger),
+}));
+
 import type { ProviderRegistry } from '../registry.js';
 import { runPreflight } from '../preflight.js';
 
@@ -6,6 +17,7 @@ describe('runPreflight', () => {
   let mockRegistry: ProviderRegistry;
 
   beforeEach(() => {
+    vi.clearAllMocks();
     mockRegistry = {
       probeProvider: vi.fn(),
       isAvailable: vi.fn(),
@@ -18,8 +30,6 @@ describe('runPreflight', () => {
       vi.mocked(mockRegistry.probeProvider).mockResolvedValue(undefined);
       vi.mocked(mockRegistry.isAvailable).mockReturnValue(true);
 
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
       await expect(
         runPreflight(mockRegistry, ['openai', 'anthropic']),
       ).resolves.toBeUndefined();
@@ -27,9 +37,7 @@ describe('runPreflight', () => {
       expect(mockRegistry.probeProvider).toHaveBeenCalledTimes(2);
       expect(mockRegistry.probeProvider).toHaveBeenCalledWith('openai');
       expect(mockRegistry.probeProvider).toHaveBeenCalledWith('anthropic');
-      expect(consoleWarnSpy).not.toHaveBeenCalled();
-
-      consoleWarnSpy.mockRestore();
+      expect(mockLogger.warn).not.toHaveBeenCalled();
     });
   });
 
@@ -45,8 +53,6 @@ describe('runPreflight', () => {
         return undefined;
       });
 
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
       await expect(
         runPreflight(mockRegistry, ['openai', 'anthropic', 'kimi']),
       ).resolves.toBeUndefined();
@@ -56,15 +62,15 @@ describe('runPreflight', () => {
       expect(mockRegistry.probeProvider).toHaveBeenCalledWith('anthropic');
       expect(mockRegistry.probeProvider).toHaveBeenCalledWith('kimi');
 
-      expect(consoleWarnSpy).toHaveBeenCalledTimes(2);
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        'Provider "anthropic" is not available: PROVIDER_INSTALL_FAILED: module not found',
+      expect(mockLogger.warn).toHaveBeenCalledTimes(2);
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        { provider: 'anthropic', error: 'PROVIDER_INSTALL_FAILED: module not found' },
+        'Provider not available'
       );
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        'Provider "kimi" is not available: PROVIDER_INIT_FAILED: bad factory',
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        { provider: 'kimi', error: 'PROVIDER_INIT_FAILED: bad factory' },
+        'Provider not available'
       );
-
-      consoleWarnSpy.mockRestore();
     });
 
     it('should not throw when only one provider is available', async () => {
@@ -74,18 +80,15 @@ describe('runPreflight', () => {
         (key) => key === 'anthropic' ? 'failed' : undefined,
       );
 
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
       await expect(
         runPreflight(mockRegistry, ['openai', 'anthropic']),
       ).resolves.toBeUndefined();
 
-      expect(consoleWarnSpy).toHaveBeenCalledTimes(1);
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        'Provider "anthropic" is not available: failed',
+      expect(mockLogger.warn).toHaveBeenCalledTimes(1);
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        { provider: 'anthropic', error: 'failed' },
+        'Provider not available'
       );
-
-      consoleWarnSpy.mockRestore();
     });
   });
 
@@ -94,30 +97,22 @@ describe('runPreflight', () => {
       vi.mocked(mockRegistry.probeProvider).mockResolvedValue(undefined);
       vi.mocked(mockRegistry.isAvailable).mockReturnValue(false);
 
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
       await expect(
         runPreflight(mockRegistry, ['openai', 'anthropic']),
       ).rejects.toThrow('No providers available');
 
       expect(mockRegistry.probeProvider).toHaveBeenCalledTimes(2);
       // No individual warnings — fatal throw instead
-      expect(consoleWarnSpy).not.toHaveBeenCalled();
-
-      consoleWarnSpy.mockRestore();
+      expect(mockLogger.warn).not.toHaveBeenCalled();
     });
 
     it('should throw error when providerKeys array is empty', async () => {
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
       await expect(
         runPreflight(mockRegistry, []),
       ).rejects.toThrow('No providers available');
 
       expect(mockRegistry.probeProvider).not.toHaveBeenCalled();
-      expect(consoleWarnSpy).not.toHaveBeenCalled();
-
-      consoleWarnSpy.mockRestore();
+      expect(mockLogger.warn).not.toHaveBeenCalled();
     });
   });
 });

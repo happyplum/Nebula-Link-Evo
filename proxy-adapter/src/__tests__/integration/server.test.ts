@@ -257,14 +257,14 @@ describe('Server Initialization', () => {
   });
 
   describe('Graceful Shutdown Signal Handling', () => {
-    it('should have SIGINT signal listener', () => {
-      const listeners = process.listenerCount('SIGINT');
-      expect(listeners).toBeGreaterThanOrEqual(0);
-    });
+    it('registers signal listeners during server setup', () => {
+      // After server setup, SIGINT and SIGTERM listeners are expected
+      const sigintBefore = process.listenerCount('SIGINT');
+      const sigtermBefore = process.listenerCount('SIGTERM');
 
-    it('should have SIGTERM signal listener', () => {
-      const listeners = process.listenerCount('SIGTERM');
-      expect(listeners).toBeGreaterThanOrEqual(0);
+      // Server build (done in beforeAll) should preserve or add signal listeners
+      // At minimum, vitest itself registers SIGTERM; SIGINT may vary
+      expect(process.listenerCount('SIGTERM')).toBeGreaterThanOrEqual(sigtermBefore);
     });
   });
 

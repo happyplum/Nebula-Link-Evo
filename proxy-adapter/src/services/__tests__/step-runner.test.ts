@@ -1,4 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const mockLogger = vi.hoisted(() => ({
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+}));
+
+vi.mock('../logger.js', () => ({
+  createWorkerLogger: vi.fn(() => mockLogger),
+}));
+
 import type { LanguageModelV3 } from '@ai-sdk/provider';
 import type { DOMSnapshotResponse } from '../../config/schema.js';
 import type { ActionExecutor, ActionResult } from '../action-executor.js';
@@ -134,7 +145,6 @@ describe('StepRunner (single streamText flow)', () => {
   });
 
   it('logs metadata with phase, provider, model, and runId after streamText completes', async () => {
-    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     mockStreamText.mockResolvedValue(
       createStreamResult([
         {
@@ -154,16 +164,15 @@ describe('StepRunner (single streamText flow)', () => {
 
     await runner.runStep(baseContext, 0);
 
-    expect(consoleLogSpy).toHaveBeenCalledWith(
-      JSON.stringify({
+    expect(mockLogger.info).toHaveBeenCalledWith(
+      {
         phase: 'decision',
         provider: 'mock-provider',
         model: 'decision-model',
         runId: 'task-1',
-      })
+      },
+      'Decision phase'
     );
-
-    consoleLogSpy.mockRestore();
   });
 
   it('runs one streamText call, resolves session models, and executes parsed action', async () => {
