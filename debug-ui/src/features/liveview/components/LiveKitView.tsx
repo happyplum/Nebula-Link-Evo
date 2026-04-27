@@ -22,10 +22,36 @@ export default function LiveKitView({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const overlayRafRef = useRef<number>(0);
+  const lastScreenshotUrlRef = useRef<string | null>(null);
+  const lastCaptureTimeRef = useRef(0);
   const [tokenData, setTokenData] = useState<{ token: string; url: string } | null>(null);
   const [fitRect, setFitRect] = useState<ImageFitRect | null>(null);
   const { isConnected, trackStatus, connect, disconnect, videoElement, setOnTrackSubscribed } = useLiveKit();
   const isPlaywrightOpen = useRuntimeStore(selectPlaywrightIsOpen);
+  const setLastScreenshotDataUrl = useRuntimeStore((s) => s.setLastScreenshotDataUrl);
+
+  const captureScreenshot = useCallback(
+    (canvas: HTMLCanvasElement) => {
+      const now = Date.now();
+      if (now - lastCaptureTimeRef.current < 1000) return;
+      lastCaptureTimeRef.current = now;
+
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        if (
+          lastScreenshotUrlRef.current &&
+          lastScreenshotUrlRef.current.startsWith('blob:') &&
+          typeof URL.revokeObjectURL === 'function'
+        ) {
+          URL.revokeObjectURL(lastScreenshotUrlRef.current);
+        }
+        const url = URL.createObjectURL(blob);
+        lastScreenshotUrlRef.current = url;
+        setLastScreenshotDataUrl(url);
+      }, 'image/jpeg', 0.9);
+    },
+    [setLastScreenshotDataUrl]
+  );
 
   const startOverlayLoop = useCallback(() => {
     // NOTE: This callback has empty deps [] — closures inside renderFrame
@@ -73,6 +99,9 @@ export default function LiveKitView({
       setFitRect(getImageFitRect(videoWidth, videoHeight, clientWidth, clientHeight));
       ctx.clearRect(0, 0, canvasW, canvasH);
       ctx.drawImage(currentVideo, offsetX, offsetY, drawWidth, drawHeight);
+
+      // Capture screenshot for download (throttled to once per second)
+      captureScreenshot(currentCanvas);
 
       if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
         currentVideo.requestVideoFrameCallback(renderFrame);
@@ -213,6 +242,20 @@ export default function LiveKitView({
     handleResize();
     return () => observer.disconnect();
   }, [handleResize]);
+
+  // Cleanup screenshot blob URL on unmount
+  useEffect(() => {
+    return () => {
+      if (
+        lastScreenshotUrlRef.current &&
+        lastScreenshotUrlRef.current.startsWith('blob:') &&
+        typeof URL.revokeObjectURL === 'function'
+      ) {
+        URL.revokeObjectURL(lastScreenshotUrlRef.current);
+      }
+      setLastScreenshotDataUrl(null);
+    };
+  }, [setLastScreenshotDataUrl]);
 
   const containerClassName = className ? `${styles.container} ${className}` : styles.container;
 
