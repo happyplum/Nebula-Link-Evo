@@ -21,29 +21,9 @@ import {
   selectStreamingState,
   selectActiveSessionId,
 } from '@/features/chat/store/chat.store.js';
-import type { ChatMessage, ChatSession } from '@/features/chat/types/index.js';
+import type { ChatSession } from '@/features/chat/types/index.js';
 import { testIds } from '@/shared/testing/testids.js';
 import styles from './ChatPage.module.css';
-
-interface SessionApiPayload {
-  id: string;
-  title?: string;
-  created_at?: number | string;
-  createdAt?: number | string;
-  status?: ChatSession['status'];
-}
-
-interface MessageApiPayload {
-  id: string;
-  role: ChatMessage['role'];
-  content?: string;
-  screenshot?: string;
-  thinking?: string;
-  timestamp?: number | string;
-  created_at?: number | string;
-  toolCalls?: ChatMessage['toolCalls'];
-  isStreaming?: boolean;
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -86,33 +66,6 @@ function normalizeSession(payload: unknown): ChatSession | null {
   };
 }
 
-function normalizeMessage(payload: unknown): ChatMessage | null {
-  if (!isRecord(payload) || typeof payload.id !== 'string') {
-    return null;
-  }
-
-  if (payload.role !== 'user' && payload.role !== 'assistant') {
-    return null;
-  }
-
-  return {
-    id: payload.id,
-    role: payload.role,
-    content: typeof payload.content === 'string' ? payload.content : '',
-    screenshot: typeof payload.screenshot === 'string' ? payload.screenshot : undefined,
-    thinking: typeof payload.thinking === 'string' ? payload.thinking : undefined,
-    timestamp: toOptionalNumber(payload.timestamp),
-    created_at:
-      typeof payload.created_at === 'number' || typeof payload.created_at === 'string'
-        ? payload.created_at
-        : undefined,
-    toolCalls: Array.isArray(payload.toolCalls)
-      ? (payload.toolCalls as ChatMessage['toolCalls'])
-      : undefined,
-    isStreaming: typeof payload.isStreaming === 'boolean' ? payload.isStreaming : undefined,
-  };
-}
-
 function extractSessions(data: unknown): ChatSession[] {
   const raw = Array.isArray(data)
     ? data
@@ -121,16 +74,6 @@ function extractSessions(data: unknown): ChatSession[] {
       : [];
 
   return raw.map(normalizeSession).filter((session): session is ChatSession => session !== null);
-}
-
-function extractMessages(data: unknown): ChatMessage[] {
-  const raw = Array.isArray(data)
-    ? data
-    : isRecord(data) && Array.isArray(data.messages)
-      ? data.messages
-      : [];
-
-  return raw.map(normalizeMessage).filter((message): message is ChatMessage => message !== null);
 }
 
 function getDefaultChatConfig(config: ConfigResponse | undefined) {

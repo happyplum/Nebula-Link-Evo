@@ -20,17 +20,6 @@ import type { ChatMessage, ToolCall as LocalToolCall } from '@/features/chat/typ
 const INITIAL_BACKOFF_MS = 1000;
 const MAX_BACKOFF_MS = 30000;
 const BACKOFF_MULTIPLIER = 2;
-const SSE_EVENT_TYPES = [
-  'session.snapshot',
-  'message.created',
-  'assistant.started',
-  'assistant.delta',
-  'assistant.thinking',
-  'assistant.tool_call',
-  'assistant.tool_result',
-  'assistant.completed',
-  'run.error',
-] as const;
 
 function backoffDelay(attempt: number): number {
   return Math.min(INITIAL_BACKOFF_MS * BACKOFF_MULTIPLIER ** attempt, MAX_BACKOFF_MS);

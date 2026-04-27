@@ -1,4 +1,3 @@
-/* eslint-disable jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events */
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import styles from './ImagePreviewModal.module.css';
@@ -8,10 +7,9 @@ export interface ImagePreviewModalProps {
   onClose: () => void;
   src: string;
   alt?: string;
-  title?: string;
 }
 
-export function ImagePreviewModal({ open, onClose, src, alt, title }: ImagePreviewModalProps) {
+export function ImagePreviewModal({ open, onClose, src, alt }: ImagePreviewModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

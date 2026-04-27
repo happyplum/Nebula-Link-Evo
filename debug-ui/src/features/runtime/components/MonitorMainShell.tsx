@@ -122,9 +122,11 @@ export function MonitorMainShell() {
 
   useEffect(() => {
     if (!playwrightIsOpen) {
+      // Reset webrtc failure flag when browser closes since a new connection
+      // attempt will happen on next open
       setWebrtcFailed(false);
     }
-  }, [playwrightIsOpen]);
+  }, [playwrightIsOpen, setWebrtcFailed]);
 
   const badgeClass = isConnected ? `${styles.statusBadge} ${styles.connected}` : styles.statusBadge;
   const indicatorClass =
