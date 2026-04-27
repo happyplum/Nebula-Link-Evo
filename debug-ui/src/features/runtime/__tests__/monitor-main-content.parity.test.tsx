@@ -113,7 +113,7 @@ describe('P3-17-V MonitorMainShell - Content Parity', () => {
     });
 
     it('keeps legacy "无任务" copy even when snapshotVersion changes', () => {
-      useRuntimeStore.getState().setSnapshotVersion(7);
+      useRuntimeStore.getState().incrementSnapshotVersion();
       render(<MonitorMainShell />);
 
       expect(screen.getByTestId(testIds.monitorMainTaskId)).toHaveTextContent('无任务');

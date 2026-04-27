@@ -23,7 +23,6 @@ const { storeState } = vi.hoisted(() => ({
     setPlaywrightStatus: vi.fn(),
     setPlaywrightIsOpen: vi.fn(),
     setPlaywrightUrl: vi.fn(),
-    setSnapshotVersion: vi.fn(),
     incrementSnapshotVersion: vi.fn(),
     incrementLiveviewRefreshKey: vi.fn(),
     setLastScreenshotDataUrl: vi.fn(),
@@ -59,10 +58,10 @@ vi.mock('@/features/liveview/components/index.js', async (importOriginal) => {
     ),
       TransportToggle: ({
       onTransportChange,
-      webrtcAvailable,
+      _webrtcAvailable: _available,
     }: {
       onTransportChange: (mode: 'webrtc' | 'mjpeg') => void;
-      webrtcAvailable: boolean;
+      _webrtcAvailable: boolean;
     }) => (
       <div>
         <button
@@ -91,7 +90,6 @@ vi.mock('@/features/runtime/store/runtime.store.js', () => {
       storeState.playwrightIsOpen = isOpen;
     }),
     setPlaywrightUrl: vi.fn(),
-    setSnapshotVersion: vi.fn(),
     incrementSnapshotVersion: vi.fn(),
     incrementLiveviewRefreshKey: vi.fn(),
     setLastScreenshotDataUrl: vi.fn(),

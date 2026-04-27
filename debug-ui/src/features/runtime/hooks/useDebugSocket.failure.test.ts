@@ -28,7 +28,7 @@ class MockWebSocket {
   readyState = 1;
 
   constructor(public url: string) {
-    mockWsInstance = this;
+    mockWsInstance = this; // eslint-disable-line @typescript-eslint/no-this-alias
   }
 }
 
@@ -135,7 +135,7 @@ describe('useDebugSocket failure scenarios', () => {
 
   describe('service_status edge cases', () => {
     it('handles service_status without playwright', () => {
-      const { result } = renderHook(() => useDebugSocket());
+      renderHook(() => useDebugSocket());
       act(() => {
         mockWsInstance.onopen?.(new Event('open'));
       });
@@ -155,7 +155,7 @@ describe('useDebugSocket failure scenarios', () => {
     });
 
     it('handles service_status with partial playwright data', () => {
-      const { result } = renderHook(() => useDebugSocket());
+      renderHook(() => useDebugSocket());
       act(() => {
         mockWsInstance.onopen?.(new Event('open'));
       });
@@ -178,7 +178,7 @@ describe('useDebugSocket failure scenarios', () => {
     });
 
     it('handles service_status without services field', () => {
-      const { result } = renderHook(() => useDebugSocket());
+      renderHook(() => useDebugSocket());
       act(() => {
         mockWsInstance.onopen?.(new Event('open'));
       });
@@ -195,7 +195,7 @@ describe('useDebugSocket failure scenarios', () => {
 
   describe('WebSocket errors', () => {
     it('handles onerror without crashing', () => {
-      const { result } = renderHook(() => useDebugSocket());
+      renderHook(() => useDebugSocket());
       act(() => {
         mockWsInstance.onopen?.(new Event('open'));
       });

@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { AppRoutes } from './router.js';
 import { testIds } from '@/shared/testing/testids.js';

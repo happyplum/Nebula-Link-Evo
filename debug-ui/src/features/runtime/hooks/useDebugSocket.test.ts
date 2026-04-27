@@ -30,7 +30,7 @@ class MockWebSocket {
   readyState = OPEN;
 
   constructor(public url: string) {
-    mockWsInstance = this;
+    mockWsInstance = this; // eslint-disable-line @typescript-eslint/no-this-alias
   }
 }
 

@@ -44,16 +44,6 @@ MockEventSourceConstructor.CONNECTING = 0;
 MockEventSourceConstructor.OPEN = 1;
 MockEventSourceConstructor.CLOSED = 2;
 
-// Override addEventListener on mock instances
-const origCreate = createMockEventSource;
-function createInstrumentedES(url: string): MockEventSourceInstance {
-  const es = origCreate(url);
-  // Intercept addEventListener — the hook calls es.addEventListener(type, fn)
-  const proto = Object.getPrototypeOf(es) ?? {};
-  // Use a Proxy approach: we monkey-patch after creation
-  return es;
-}
-
 // --- Setup ---
 beforeEach(() => {
   vi.useFakeTimers();
