@@ -2,7 +2,7 @@
  * Browser Action Types
  *
  * Precise discriminated union types for all browser automation actions.
- * Used by TaskExecutor to enforce type-safe action execution.
+ * Used by task execution services (TaskService, ActionExecutor) to enforce type-safe action execution.
  */
 
 // ========== BASE INTERFACES ==========
@@ -313,27 +313,4 @@ export type Action =
   | MCPAction
   | FinishAction;
 
-// ========== ACTION TYPE LITERALS ==========
 
-/**
- * All valid action type literals.
- */
-export type ActionType = Action['type'];
-
-/**
- * Union type of all action parameter types.
- * Used for type-safe action parameter handling.
- */
-export type ActionParams =
-  | ClickActionParams
-  | TypeActionParams
-  | FocusActionParams
-  | BlurActionParams
-  | HoverActionParams
-  | ValueActionParams
-  | DispatchActionParams
-  | ScrollActionParams
-  | NavigateActionParams
-  | WaitActionParams
-  | MCPActionParams
-  | FinishActionParams;
