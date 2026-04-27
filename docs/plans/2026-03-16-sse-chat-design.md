@@ -1,7 +1,7 @@
 # SSE Debug Chat Architecture Design
 
 **Date:** 2026-03-16
-**Status:** Approved
+**Status:** Superseded — reconnect contract changed to session.snapshot bootstrap (no Last-Event-ID/afterSeq)
 **Author:** Oracle + Momus Review + User Validation
 
 ## Overview
@@ -80,7 +80,7 @@ CREATE INDEX idx_session_events_seq ON session_events(session_id, seq);
 ```
 
 **Key Design Points:**
-- `seq` is monotonic per session, used as SSE `id` for `Last-Event-ID` replay
+- `seq` is monotonic per session (used for ordered event replay via session.snapshot — NOT Last-Event-ID header)
 - `ON DELETE CASCADE` ensures events are cleaned up when session is deleted
 - Index on `(session_id, seq)` for efficient replay queries
 
@@ -155,19 +155,18 @@ Send a message and start AI execution.
 
 ### GET `/debug/api/chat/sessions/:id/stream`
 
-SSE endpoint for real-time streaming with replay support.
-
-**Headers:**
-- `Last-Event-ID`: Optional, last received event ID for reconnection
+SSE endpoint for real-time streaming with snapshot bootstrap.
 
 **Response:** SSE stream
 
-**Flow:**
-1. If `Last-Event-ID` present: replay events with `seq > Last-Event-ID`
-2. Else: send `session.snapshot` with current state
-3. Register subscriber to SessionEventHub
-4. Stream new events as they arrive
-5. On disconnect: auto-remove from Hub
+**Flow (current implementation):**
+1. Always send `session.snapshot` with current state on connect
+2. Register subscriber to SessionEventHub
+3. Stream new events as they arrive
+4. On disconnect: auto-remove from Hub
+
+> **Note:** The original design proposed `Last-Event-ID` header replay, but the current
+> implementation uses session.snapshot bootstrap instead. See `stream.ts` for actual code.
 
 ---
 

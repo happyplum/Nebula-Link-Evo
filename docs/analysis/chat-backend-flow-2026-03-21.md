@@ -360,16 +360,13 @@ Web 不再靠“发消息接口的同步返回”判断执行结果，而是走�
 
 这样新打开页面也能恢复 thinking / delta / tool timeline，而不是只看到静态消息列表。
 
-### 9.3 重连（携带 `lastEventId`）
+### 9.3 重连（基于 session.snapshot 恢复）
 
-如果 query 或 header 里带：
+重连时后端发送完整的 `session.snapshot`，前端从 snapshot 重建状态后切换到 live 事件订阅。
+不再依赖 `Last-Event-ID` 头部或 `lastEventId` 参数做增量回放。
 
-- `lastEventId`
-- 或 `Last-Event-ID`
-
-后端会只补发 `seq > lastEventId` 的事件。
-
-这意味着前端重连策略应该尽量持久化“最后成功处理的 seq”，而不是只记“是否连过”。
+> 注意：该分析文档写于 2026-03-21，描述的是当时的实现方案。
+> 当前 SSE 重连契约已变更为 session.snapshot bootstrap，参见 AGENTS.md。
 
 ### 9.4 为什么现在不会再丢 bootstrap 期间的 live 事件
 
@@ -494,7 +491,7 @@ Web 不再靠“发消息接口的同步返回”判断执行结果，而是走�
   - `GET /api/chat/sessions/:id`
   - 或 `GET /api/chat/sessions/:id/status`
 - 再建 SSE
-- 如果前端保存了最后处理到的 `seq`，重连时传 `lastEventId`
+- 再建 SSE（重连时自动从 session.snapshot 恢复）
 
 ### 12.4 阻塞与恢复 UI
 
@@ -526,7 +523,7 @@ Web 不再靠“发消息接口的同步返回”判断执行结果，而是走�
 2. 统一实时显示入口到 `GET /api/chat/sessions/:id/stream`
 3. 列表 / 详情 / 运行态全部改读 merged runtime state
 4. 接入 `blocked` / `resume` 真实恢复语义
-5. 接入 `lastEventId` 重连
+5. 接入 SSE 重连（session.snapshot 恢复）
 6. 最后再优化基于 thinking / tool timeline 的中间态 UI
 
 ---

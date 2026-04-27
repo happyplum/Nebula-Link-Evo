@@ -65,7 +65,7 @@
 
 1. Resume endpoint actually resumes execution instead of only changing status.
 2. Fresh SSE reconnect can reconstruct thinking + tool timeline.
-3. Replay after `Last-Event-ID` covers >100 persisted events or fails explicitly with a documented contract.
+3. SSE reconnect rebuilds from session.snapshot (superseded: no longer uses Last-Event-ID).
 4. Compression is enabled in runtime bootstrap and affects later turns.
 5. Session detail/status endpoint exposes blocked/paused recovery state.
 

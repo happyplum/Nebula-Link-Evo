@@ -1,5 +1,7 @@
 # Nebula-Link Evo - 深度技术分析报告
 
+> **⚠️ Historical Document (2026-03-01)** — This analysis reflects the codebase state at the date above. Architecture has since evolved: `TaskExecutor` was replaced by `TaskService`, shared dead modules were removed, and the debug-ui was migrated to React 19. For current architecture, refer to `AGENTS.md` files and `README.md`.
+
 **分析日期**: 2026-03-01  
 **分析师**: AI Agent (Sisyphus + Explore)  
 **分析方法**: 代码审查 + 架构分析 + SWOT 评估
