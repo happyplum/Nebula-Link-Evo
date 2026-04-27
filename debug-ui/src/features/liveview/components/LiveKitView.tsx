@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getImageFitRect, type ImageFitRect } from '@/features/liveview/lib/index.js';
 import { selectPlaywrightIsOpen, useRuntimeStore } from '@/features/runtime/store/index.js';
-import {
-  selectViewport,
-  useControlStore,
-} from '@/features/playwright-control/store/control.store.js';
 import { LiveViewOverlayLayer } from './LiveViewOverlayLayer.js';
 import { useLiveKit } from '../hooks/useLiveKit.js';
 import styles from './LiveKitView.module.css';
@@ -30,9 +26,11 @@ export default function LiveKitView({
   const [fitRect, setFitRect] = useState<ImageFitRect | null>(null);
   const { isConnected, trackStatus, connect, disconnect, videoElement, setOnTrackSubscribed } = useLiveKit();
   const isPlaywrightOpen = useRuntimeStore(selectPlaywrightIsOpen);
-  const pageViewport = useControlStore(selectViewport);
 
   const startOverlayLoop = useCallback(() => {
+    // NOTE: This callback has empty deps [] — closures inside renderFrame
+    // rely on stable useCallback references (e.g., captureScreenshot added in later tasks).
+    // Zustand store actions are stable references, so this is safe.
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas) {
@@ -70,9 +68,9 @@ export default function LiveKitView({
       const offsetX = (canvasW - drawWidth) / 2;
       const offsetY = (canvasH - drawHeight) / 2;
 
-      const imgW = pageViewport?.width ?? videoWidth;
-      const imgH = pageViewport?.height ?? videoHeight;
-      setFitRect(getImageFitRect(imgW, imgH, clientWidth, clientHeight));
+      // Video track dimensions are the source of truth for coordinate mapping.
+      // adaptiveStream is disabled in useLiveKit, so video resolution matches browser viewport.
+      setFitRect(getImageFitRect(videoWidth, videoHeight, clientWidth, clientHeight));
       ctx.clearRect(0, 0, canvasW, canvasH);
       ctx.drawImage(currentVideo, offsetX, offsetY, drawWidth, drawHeight);
 
@@ -92,7 +90,7 @@ export default function LiveKitView({
     };
 
     rafLoop();
-  }, [pageViewport]);
+  }, []);
 
   useEffect(() => {
     if (!isPlaywrightOpen) {
@@ -202,7 +200,7 @@ export default function LiveKitView({
     }
 
     const rect = container.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 2;
+    const dpr = window.devicePixelRatio || 1;
     canvas.width = Math.floor(rect.width * dpr);
     canvas.height = Math.floor(rect.height * dpr);
   }, []);
