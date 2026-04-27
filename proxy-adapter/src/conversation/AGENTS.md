@@ -18,7 +18,7 @@ SQLite-backed session and message persistence with context compression.
 ## Key Patterns
 - **SQLite** via `node:sqlite`. Schema: `sessions` (metadata) + `messages` (role-based content).
 - **Single-writer persistence**: durable storage before SSE publish.
-- **Replay/resume** via `afterSeq` cursor parameter.
+- **Replay/resume** via `session.snapshot` bootstrap on SSE reconnect. No `Last-Event-ID` or `afterSeq` query param — always full snapshot rebuild.
 
 ## Anti-Patterns
 - No SQL injection — parameterized queries only.

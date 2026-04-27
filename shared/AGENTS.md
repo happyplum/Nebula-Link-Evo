@@ -6,11 +6,11 @@ Workspace package published as `@nebula-link-evo/shared`. Shared runtime-safe ty
 ## Where To Look
 | Area | Path | Notes |
 |------|------|-------|
-| Package exports | `package.json` | Root + `./types`, `./utils`, `./test-utils` subpaths |
+| Package exports | `package.json` | Root + `./types`, `./utils` subpaths |
 | Build scope | `tsconfig.json` | Builds `types/`, `utils/`, `index.ts`; excludes `test-utils/` |
 | Public entry | `index.ts` | Re-exports shared types, SSE helpers, utils |
-| Runtime types | `types/` | Action, task context/history, SSE, vision marker |
-| Runtime utils | `utils/` | UUID, selector generation, metrics |
+| Runtime types | `types/` | Action, SSE events, vision marker |
+| Runtime utils | `utils/` | UUID, selector generation |
 | Test helpers | `test-utils/` | Source-level mocks and service lifecycle (not in build output) |
 
 ## Export Rules

@@ -7,7 +7,7 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    ignores: ['**/node_modules/**', '**/dist/**', '**/static/**', 'debug-ui-legacy/**'],
+    ignores: ['**/node_modules/**', '**/dist/**', '**/static/**'],
   },
   {
     files: ['**/*.ts', '**/*.tsx'],
