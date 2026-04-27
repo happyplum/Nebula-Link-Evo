@@ -72,7 +72,7 @@ pnpm type-check   # tsc --noEmit
 - No CSS-in-JS or Tailwind (CSS Modules only).
 - No code splitting or lazy loading (Vite handles build optimization).
 - No SSR or server components (SPA with HashRouter).
-- No mixing debug-ui-legacy patterns (plain DOM, window.\* globals).
+- No plain DOM or window.* global patterns (use React idioms).
 
 ## Child AGENTS
 
