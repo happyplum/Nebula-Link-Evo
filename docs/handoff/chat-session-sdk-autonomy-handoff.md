@@ -72,15 +72,16 @@ ChatHandler (streamText parts)
   → SSE route → text/event-stream to client
 ```
 
-### SSE Gap Recovery
+### SSE Reconnection
 
 ```
-Client connects with Last-Event-ID or ?lastEventId=
-  → parseLastEventSeq()
-  → DAO.getMinSeq() check
-  → If gap: send session.snapshot + replay from minSeq-1 (limit 10000)
-  → Then subscribe to live SessionEventHub events
+Client connects to /api/chat/sessions/:id/stream
+  → Backend sends session.snapshot (full state bootstrap)
+  → Then subscribes to live SessionEventHub events
   → 15s heartbeat, 5min idle timeout
+
+Note: No Last-Event-ID or afterSeq cursor-based replay.
+      Reconnect always rebuilds from session.snapshot.
 ```
 
 ---
@@ -178,7 +179,6 @@ class ChatManager {
   sessionState: Map<string, {
     messages: ChatMessage[]
     isRunning: boolean
-    lastEventId: string | null
     highestEventSeq: number
     hydrated: boolean
   }>
@@ -309,7 +309,7 @@ enum ChatStreamEventType {
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| Transport | SSE (not WebSocket) for chat | Unidirectional, standard `Last-Event-ID` recovery, simpler backpressure |
+| Transport | SSE (not WebSocket) for chat | Unidirectional, session.snapshot bootstrap on reconnect, simpler backpressure |
 | Persistence model | Write-first | Events persisted to SQLite BEFORE broadcasting to SSE subscribers |
 | Event cache | None in EventHub | SQLite is source of truth; replay from DB on reconnect |
 | Concurrency | Single task per session | SessionLock mutex (30s TTL), prevents race conditions |

@@ -129,7 +129,7 @@ ChatHandler.executeAIResponse()  [recursive, max 10 tool loops]
 Client connects ──▶ SessionEventHub.subscribe()
                        │
                        ├─ First connect: send session.snapshot
-                       ├─ Reconnect via Last-Event-ID header
+                        ├─ Reconnect: rebuild from session.snapshot (no Last-Event-ID replay)
                        ├─ Heartbeat: 15s interval
                        └─ Timeout: 5min idle disconnect
 ```

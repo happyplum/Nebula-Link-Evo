@@ -66,7 +66,7 @@ POST   /api/chat/sessions/:id/messages        Send message (async)
 GET    /api/chat/sessions/:id/stream          Event stream
 ```
 
-**Params:** `?lastEventId=<seq>` or header `Last-Event-ID: <seq>`
+**Note:** `Last-Event-ID` header and `afterSeq` query param are not supported. Reconnect always rebuilds from a fresh `session.snapshot` event — there is no cursor-based replay.
 
 **Response:** `text/event-stream`, 15s heartbeat, 5min idle timeout
 

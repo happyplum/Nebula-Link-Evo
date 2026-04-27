@@ -1,5 +1,7 @@
 # Nebula-Link Evo 执行流程分析
 
+> **⚠️ Historical Document (2026-03-01)** — This analysis reflects the codebase state at the date above. The execution entry point `TaskExecutor` has been replaced by `TaskService`, and several modules referenced here have been removed or restructured. For current architecture, refer to `AGENTS.md` files and `README.md`.
+
 **分析时间**: 2026-03-01  
 **架构**: 双服务 Monorepo (Proxy Adapter + Playwright Server)
 
