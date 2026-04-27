@@ -1,7 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within, fireEvent } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
 import dayjs from 'dayjs';
 import duration from 'dayjs/plugin/duration';
 import { InteractionsTable } from '../components/InteractionsTable.js';
@@ -17,14 +15,6 @@ dayjs.extend(duration);
 vi.mock('../api/history.queries.js', () => ({
   useFailureSample: () => ({ data: null, isLoading: false, error: null }),
 }));
-
-// Build a wrapper function that QueryClient for InteractionDetailModal tests
-function createWrapper() {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return function Wrapper({ children }: { children: ReactNode }) {
-    return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
-  };
-}
 
 /** Build a complete Interaction with sensible defaults. */
 function buildInteraction(overrides: Partial<Interaction> = {}): Interaction {

@@ -156,7 +156,7 @@ describe('P3-16-V MonitorSidebarShell - Content Parity', () => {
 
   describe('DOM Screenshot Card', () => {
     it('shows "ID: —" when snapshot info is empty', () => {
-      useRuntimeStore.getState().setSnapshotVersion(0);
+      useRuntimeStore.getState().reset();
       renderWithProviders(<MonitorSidebarShell />);
 
       const snapshotLabel = screen.getByTestId(testIds.monitorSidebarSnapshotLabel);
@@ -164,7 +164,7 @@ describe('P3-16-V MonitorSidebarShell - Content Parity', () => {
     });
 
     it('still shows empty snapshot id when only local version counter changes to 1', () => {
-      useRuntimeStore.getState().setSnapshotVersion(1);
+      useRuntimeStore.getState().incrementSnapshotVersion();
       renderWithProviders(<MonitorSidebarShell />);
 
       const snapshotLabel = screen.getByTestId(testIds.monitorSidebarSnapshotLabel);
@@ -172,7 +172,9 @@ describe('P3-16-V MonitorSidebarShell - Content Parity', () => {
     });
 
     it('still shows empty snapshot id when only local version counter changes to 42', () => {
-      useRuntimeStore.getState().setSnapshotVersion(42);
+      for (let i = 0; i < 42; i++) {
+        useRuntimeStore.getState().incrementSnapshotVersion();
+      }
       renderWithProviders(<MonitorSidebarShell />);
 
       const snapshotLabel = screen.getByTestId(testIds.monitorSidebarSnapshotLabel);
@@ -180,8 +182,10 @@ describe('P3-16-V MonitorSidebarShell - Content Parity', () => {
     });
 
     it('shows empty snapshot id when version counter is reset to default', () => {
-      useRuntimeStore.getState().setSnapshotVersion(10);
-      useRuntimeStore.getState().setSnapshotVersion(0);
+      for (let i = 0; i < 10; i++) {
+        useRuntimeStore.getState().incrementSnapshotVersion();
+      }
+      useRuntimeStore.getState().reset();
       renderWithProviders(<MonitorSidebarShell />);
 
       const snapshotLabel = screen.getByTestId(testIds.monitorSidebarSnapshotLabel);
@@ -194,7 +198,9 @@ describe('P3-16-V MonitorSidebarShell - Content Parity', () => {
       // First test: set connected
       useRuntimeStore.getState().setConnectionStatus('connected');
       useRuntimeStore.getState().setPlaywrightStatus('ready');
-      useRuntimeStore.getState().setSnapshotVersion(5);
+      for (let i = 0; i < 5; i++) {
+        useRuntimeStore.getState().incrementSnapshotVersion();
+      }
 
       renderWithProviders(<MonitorSidebarShell />);
 
