@@ -1,8 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { LiveViewCanvas } from './LiveViewCanvas.js';
 import { useControlStore } from '@/features/playwright-control/store/control.store.js';
-import * as controlAdapters from '@/features/playwright-control/api/control.adapters.js';
 
 const onMessageMock = vi.fn();
 const runtimeState = {
@@ -181,114 +180,6 @@ describe('LiveViewCanvas', () => {
     const { container } = render(<LiveViewCanvas />);
     expect(screen.getByTestId('liveview-canvas')).toBeInTheDocument();
     expect(container.querySelectorAll('canvas')).toHaveLength(2);
-  });
-
-  // TODO: data-picker-active was removed from LiveViewCanvas container — picker logic moved to LiveViewOverlayLayer
-  it.skip('toggles picker mode via button', () => {
-    render(<LiveViewCanvas />);
-
-    const container = screen.getByTestId('liveview-canvas');
-    const toggle = screen.getByTestId('liveview-picker-toggle');
-    expect(container).toHaveAttribute('data-picker-active', 'false');
-    expect(toggle).toHaveAttribute('aria-pressed', 'false');
-
-    fireEvent.click(toggle);
-    expect(container).toHaveAttribute('data-picker-active', 'true');
-    expect(toggle).toHaveAttribute('aria-pressed', 'true');
-  });
-
-  // TODO: data-marker-count was removed from LiveViewCanvas container — marker state moved to LiveViewOverlayLayer
-  it.skip('captures coordinates and updates marker state when picker is active', async () => {
-    const onCoordinateCapture = vi.fn();
-    const { container } = render(<LiveViewCanvas onCoordinateCapture={onCoordinateCapture} />);
-
-    await waitFor(() => {
-      expect(globalThis.createImageBitmap).toHaveBeenCalledTimes(1);
-    });
-
-    fireEvent.click(screen.getByTestId('liveview-picker-toggle'));
-
-    const overlayCanvas = container.querySelectorAll('canvas')[1] as HTMLCanvasElement;
-    fireEvent.click(overlayCanvas, { clientX: 120, clientY: 80 });
-
-    await waitFor(() => {
-      expect(onCoordinateCapture).toHaveBeenCalledWith({ x: 120, y: 80 });
-      expect(screen.getByTestId('liveview-canvas')).toHaveAttribute('data-marker-count', '1');
-    });
-  });
-
-  // TODO: Stream/polling flow no longer triggers createImageBitmap with current mocks — requires fetch mock per-URL routing
-  it.skip('captures coordinates when picker is inactive so control sidebar can use coordinate click', async () => {
-    const onCoordinateCapture = vi.fn();
-    const { container } = render(<LiveViewCanvas onCoordinateCapture={onCoordinateCapture} />);
-
-    await waitFor(() => {
-      expect(globalThis.createImageBitmap).toHaveBeenCalledTimes(1);
-    });
-
-    const overlayCanvas = container.querySelectorAll('canvas')[1] as HTMLCanvasElement;
-    fireEvent.click(overlayCanvas, { clientX: 64, clientY: 48 });
-
-    await waitFor(() => {
-      expect(onCoordinateCapture).toHaveBeenCalledWith({ x: 64, y: 48 });
-      expect(useControlStore.getState().capturedCoordinates).toEqual({ x: 64, y: 48 });
-    });
-  });
-
-  // TODO: data-has-overlay was removed from LiveViewCanvas container — overlay rendering moved to LiveViewOverlayLayer
-  it.skip('updates overlay state from debug socket messages', async () => {
-    const onElementSelect = vi.fn();
-    render(<LiveViewCanvas onElementSelect={onElementSelect} />);
-
-    const handler = (globalThis as { __liveviewMessageHandler?: (payload: unknown) => void })
-      .__liveviewMessageHandler;
-    expect(handler).toBeTypeOf('function');
-
-    await act(async () => {
-      handler?.({
-        type: 'liveview.hover',
-        bbox: { x: 10, y: 12, width: 100, height: 50, selector: '#target' },
-      });
-    });
-
-    await waitFor(() => {
-      expect(screen.getByTestId('liveview-canvas')).toHaveAttribute('data-has-overlay', 'true');
-      expect(onElementSelect).toHaveBeenCalledWith('#target');
-    });
-  });
-
-  // TODO: data-has-overlay was removed from LiveViewCanvas container — hover preview moved to LiveViewOverlayLayer
-  it.skip('shows hover preview in picker mode on mouse move', async () => {
-    vi.spyOn(controlAdapters, 'getElementAt').mockResolvedValue({
-      success: true,
-      element: {
-        selector: '#hover-target',
-        tag: 'button',
-        text: 'Hover me',
-        bbox: { x: 40, y: 30, width: 120, height: 40 },
-        isVisible: true,
-        isInteractable: true,
-      },
-    });
-
-    const { container } = render(<LiveViewCanvas />);
-
-    await waitFor(() => {
-      expect(globalThis.createImageBitmap).toHaveBeenCalledTimes(1);
-    });
-
-    fireEvent.click(screen.getByTestId('liveview-picker-toggle'));
-    const overlayCanvas = container.querySelectorAll('canvas')[1] as HTMLCanvasElement;
-    fireEvent.mouseMove(overlayCanvas, { clientX: 80, clientY: 60 });
-
-    await act(async () => {
-      await new Promise((resolve) => window.setTimeout(resolve, 180));
-    });
-
-    await waitFor(() => {
-      expect(controlAdapters.getElementAt).toHaveBeenCalledWith(80, 60);
-      expect(screen.getByTestId('liveview-canvas')).toHaveAttribute('data-has-overlay', 'true');
-    });
   });
 
   afterEach(() => {
