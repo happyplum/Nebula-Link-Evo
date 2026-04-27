@@ -4,7 +4,7 @@ import type { Action } from '../config/schema.js';
 import { TaskService } from '../services/index.js';
 import { interactionLogger } from '../services/interaction-logger.js';
 
-describe('TaskExecutor interaction logging', () => {
+describe('TaskService interaction logging', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });

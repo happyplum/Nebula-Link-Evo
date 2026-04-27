@@ -4,7 +4,7 @@ import { browserClient } from '../browser-client.js';
 import type { Action } from '../config/schema.js';
 import { failureSampleCollector } from '../services/failure-sample-collector.js';
 
-describe('TaskExecutor - Marker Operations', () => {
+describe('TaskService - Marker Operations', () => {
   const mockSnapshotId = 'snapshot-123';
   const mockNebulaId = 42;
 
