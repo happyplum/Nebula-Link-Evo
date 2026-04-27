@@ -1,4 +1,3 @@
-/* eslint-disable jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events */
 import { useEffect, useRef, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import styles from './Modal.module.css';

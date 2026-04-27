@@ -101,8 +101,10 @@ export const useChatStore = create<ChatState>()((set) => ({
 
   removeSession: (sessionId) =>
     set((s) => {
-      const { [sessionId]: _msgRemoved, ...msgRest } = s.messagesBySession;
-      const { [sessionId]: _visRemoved, ...visRest } = s.visibleMessageCounts;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { [sessionId]: _removedMsg, ...msgRest } = s.messagesBySession;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { [sessionId]: _removedVis, ...visRest } = s.visibleMessageCounts;
       return {
         sessions: s.sessions.filter((session) => session.id !== sessionId),
         messagesBySession: msgRest,
@@ -257,6 +259,7 @@ export const useChatStore = create<ChatState>()((set) => ({
 
   resetVisibleMessages: (sessionId) =>
     set((s) => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { [sessionId]: _removed, ...rest } = s.visibleMessageCounts;
       return { visibleMessageCounts: rest };
     }),
@@ -281,5 +284,4 @@ export const selectIsLoadingMessages = (s: ChatState) => s.isLoadingMessages;
 export const selectShowThinking = (s: ChatState) => s.showThinking;
 export const selectScreenshotData = (s: ChatState) => s.screenshotData;
 export const selectConnectivityResult = (s: ChatState) => s.connectivityResult;
-export const selectVisibleMessageCount = (sessionId: string) => (s: ChatState) =>
-  s.visibleMessageCounts[sessionId] ?? DEFAULT_PAGE_SIZE;
+

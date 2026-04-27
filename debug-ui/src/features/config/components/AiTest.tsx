@@ -44,7 +44,8 @@ export function AiTest() {
     try {
       const data = await mutation.mutateAsync();
       setResult(data);
-    } catch (err) {
+    } catch {
+      // Ignore errors - just clear the result on failure
       setResult(null);
     }
   };

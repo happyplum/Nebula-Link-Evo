@@ -30,7 +30,6 @@ interface RuntimeState {
   setPlaywrightStatus: (status: ServiceStatus) => void;
   setPlaywrightIsOpen: (isOpen: boolean) => void;
   setPlaywrightUrl: (url: string | null) => void;
-  setSnapshotVersion: (version: number) => void;
   incrementSnapshotVersion: () => void;
   incrementLiveviewRefreshKey: () => void;
   setLastScreenshotDataUrl: (url: string | null) => void;
@@ -82,7 +81,6 @@ export const useRuntimeStore = create<RuntimeState>()((set) => ({
   setPlaywrightStatus: (status) => set({ playwrightStatus: status }),
   setPlaywrightIsOpen: (isOpen) => set({ playwrightIsOpen: isOpen }),
   setPlaywrightUrl: (url) => set({ playwrightUrl: url }),
-  setSnapshotVersion: (version) => set({ snapshotVersion: version }),
   incrementSnapshotVersion: () => set((s) => ({ snapshotVersion: s.snapshotVersion + 1 })),
   incrementLiveviewRefreshKey: () => set((s) => ({ liveviewRefreshKey: s.liveviewRefreshKey + 1 })),
   setLastScreenshotDataUrl: (url) => set({ lastScreenshotDataUrl: url }),
