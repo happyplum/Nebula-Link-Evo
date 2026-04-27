@@ -82,15 +82,17 @@ describe('Server Initialization', () => {
     });
 
     it('should register WebSocket plugin', async () => {
-      // After registering websocket, we can verify it works with a websocket route
       app.register(async (fastify: any) => {
         fastify.get('/ws', { websocket: true }, (_connection: any, _req: any) => {
           // WebSocket handler
         });
       });
 
-      // The plugin should be registered successfully
-      expect(app).toBeDefined();
+      // Verify the websocket route was registered
+      await app.ready();
+      const pluginOutput = app.printPlugins();
+      expect(typeof pluginOutput).toBe('string');
+      expect(pluginOutput).toMatch(/websocket/i);
     });
   });
 

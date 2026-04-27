@@ -5,6 +5,7 @@ describe('ScreencastManager', () => {
   let manager: ScreencastManager;
   let mockPage: any;
   let mockCdpClient: any;
+  let loggerInfoSpy: ReturnType<typeof vi.spyOn>;
   let originalNodeEnv: string | undefined;
 
   beforeEach(() => {
@@ -14,8 +15,9 @@ describe('ScreencastManager', () => {
 
     mockCdpClient = {
       on: vi.fn(),
+      off: vi.fn(),
       send: vi.fn().mockResolvedValue(undefined),
-      removeAllListeners: vi.fn(),
+      detach: vi.fn().mockResolvedValue(undefined),
     };
 
     mockPage = {
@@ -27,6 +29,7 @@ describe('ScreencastManager', () => {
 
     originalNodeEnv = process.env.NODE_ENV;
     vi.clearAllMocks();
+    loggerInfoSpy = vi.spyOn((manager as any).logger, 'info').mockImplementation(() => undefined);
   });
 
   afterEach(() => {
@@ -49,7 +52,6 @@ describe('ScreencastManager', () => {
       expect(mockPage.context).toHaveBeenCalled();
       expect(mockPage.context().newCDPSession).toHaveBeenCalledWith(mockPage);
       expect(mockCdpClient.on).toHaveBeenCalledWith('Page.screencastFrame', expect.any(Function));
-      expect(mockCdpClient.on).toHaveBeenCalledWith('detached', expect.any(Function));
       expect(mockPage.on).toHaveBeenCalledWith('close', expect.any(Function));
       expect(mockCdpClient.send).toHaveBeenCalledWith('Page.startScreencast', expect.any(Object));
       expect(manager.isActive()).toBe(true);
@@ -80,7 +82,8 @@ describe('ScreencastManager', () => {
       await manager.stop();
 
       expect(mockCdpClient.send).toHaveBeenCalledWith('Page.stopScreencast');
-      expect(mockCdpClient.removeAllListeners).toHaveBeenCalled();
+      expect(mockCdpClient.off).toHaveBeenCalledWith('Page.screencastFrame', expect.any(Function));
+      expect(mockCdpClient.detach).toHaveBeenCalled();
       expect(manager.isActive()).toBe(false);
     });
 
@@ -115,7 +118,7 @@ describe('ScreencastManager', () => {
     it('should process frame and send to listeners', async () => {
       await manager.start(mockPage);
 
-      const listener = { write: vi.fn(), end: vi.fn(), writable: true };
+      const listener = { write: vi.fn().mockReturnValue(true), end: vi.fn(), once: vi.fn(), writable: true };
       manager.addListener(listener);
 
       // Get the frame handler
@@ -135,7 +138,7 @@ describe('ScreencastManager', () => {
     it('should drop frames if too frequent', async () => {
       await manager.start(mockPage);
 
-      const listener = { write: vi.fn(), end: vi.fn(), writable: true };
+      const listener = { write: vi.fn().mockReturnValue(true), end: vi.fn(), once: vi.fn(), writable: true };
       manager.addListener(listener);
 
       const frameHandler = mockCdpClient.on.mock.calls.find(
@@ -180,14 +183,12 @@ describe('ScreencastManager', () => {
     it('should end all listeners on cleanup', async () => {
       await manager.start(mockPage);
 
-      const listener = { write: vi.fn(), end: vi.fn() };
+      const listener = { write: vi.fn(), end: vi.fn(), once: vi.fn(), writable: true };
       manager.addListener(listener);
 
-      // Trigger cleanup via detached event
-      const detachedHandler = mockCdpClient.on.mock.calls.find(
-        (call: any) => call[0] === 'detached'
-      )[1];
-      detachedHandler();
+      // Trigger cleanup via page close event
+      const closeHandler = mockPage.on.mock.calls.find((call: any) => call[0] === 'close')[1];
+      closeHandler();
 
       expect(listener.end).toHaveBeenCalled();
       expect(manager.getListenerCount()).toBe(0);
@@ -243,13 +244,12 @@ describe('ScreencastManager', () => {
       process.env.NODE_ENV = 'test';
       manager.setDebugEnabled(true);
 
-      const consoleSpy = vi.spyOn(console, 'log');
       manager.setDebugEnabled(false);
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[NLE-Debug] screencast final:')
+      expect(loggerInfoSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ fps: expect.any(Number), drops: expect.any(Number) }),
+        'screencast final debug stats'
       );
-      consoleSpy.mockRestore();
     });
 
     it('should be idempotent when enabling twice', () => {
@@ -276,7 +276,6 @@ describe('ScreencastManager', () => {
       manager.addListener(listener);
       manager.setDebugEnabled(true);
 
-      const consoleSpy = vi.spyOn(console, 'log');
       const frameHandler = mockCdpClient.on.mock.calls.find(
         (call: any) => call[0] === 'Page.screencastFrame'
       )[1];
@@ -289,12 +288,13 @@ describe('ScreencastManager', () => {
       // Disable debug to trigger final summary which includes drops
       manager.setDebugEnabled(false);
 
-      const finalLog = consoleSpy.mock.calls.find((c: string[]) =>
-        c[0].includes('screencast final')
+      const finalLog = loggerInfoSpy.mock.calls.find(
+        (call: any[]) => call[1] === 'screencast final debug stats'
       );
       expect(finalLog).toBeDefined();
-      expect(finalLog![0]).toContain('throttle=1');
-      consoleSpy.mockRestore();
+      expect(finalLog![0]).toEqual(
+        expect.objectContaining({ drops: 1, reasons: expect.stringContaining('throttle=1') })
+      );
     });
 
     it('should record all_backpressure drops when all listeners backed up', async () => {
@@ -314,7 +314,6 @@ describe('ScreencastManager', () => {
       manager.addListener(listener);
       manager.setDebugEnabled(true);
 
-      const consoleSpy = vi.spyOn(console, 'log');
       const frameHandler = mockCdpClient.on.mock.calls.find(
         (call: any) => call[0] === 'Page.screencastFrame'
       )[1];
@@ -352,12 +351,13 @@ describe('ScreencastManager', () => {
 
       manager.setDebugEnabled(false);
 
-      const finalLog = consoleSpy.mock.calls.find((c: string[]) =>
-        c[0].includes('screencast final')
+      const finalLog = loggerInfoSpy.mock.calls.find(
+        (call: any[]) => call[1] === 'screencast final debug stats'
       );
       expect(finalLog).toBeDefined();
-      expect(finalLog![0]).toContain('all_backpressure');
-      consoleSpy.mockRestore();
+      expect(finalLog![0]).toEqual(
+        expect.objectContaining({ reasons: expect.stringContaining('all_backpressure=1') })
+      );
     });
 
     it('should record successful frames', async () => {
@@ -373,7 +373,6 @@ describe('ScreencastManager', () => {
       manager.addListener(listener);
       manager.setDebugEnabled(true);
 
-      const consoleSpy = vi.spyOn(console, 'log');
       const frameHandler = mockCdpClient.on.mock.calls.find(
         (call: any) => call[0] === 'Page.screencastFrame'
       )[1];
@@ -382,13 +381,13 @@ describe('ScreencastManager', () => {
 
       manager.setDebugEnabled(false);
 
-      const finalLog = consoleSpy.mock.calls.find((c: string[]) =>
-        c[0].includes('screencast final')
+      const finalLog = loggerInfoSpy.mock.calls.find(
+        (call: any[]) => call[1] === 'screencast final debug stats'
       );
       expect(finalLog).toBeDefined();
-      // Should have fps > 0 since a frame was recorded
-      expect(finalLog![0]).toContain('fps=');
-      consoleSpy.mockRestore();
+      expect(finalLog![0]).toEqual(
+        expect.objectContaining({ fps: expect.any(Number), drops: 0, reasons: '' })
+      );
     });
   });
 });
