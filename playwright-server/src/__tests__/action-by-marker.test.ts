@@ -1,28 +1,32 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
-import { chromium, Browser } from 'playwright';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import Fastify from 'fastify';
 import actionRoutesPlugin from '../plugins/routes/action.js';
 import { browserService } from '../services/browser-service.js';
 
+vi.mock('../livekit-publisher.js', () => ({
+  startPublisher: vi.fn().mockResolvedValue(undefined),
+  stopPublisher: vi.fn().mockResolvedValue(undefined),
+}));
+
 describe('/action/execute-by-marker endpoint', () => {
-  let browser: Browser;
   let app: ReturnType<typeof Fastify>;
 
   beforeAll(async () => {
-    browser = await chromium.launch();
-
     await browserService.open(true, { width: 1920, height: 1080 });
     await browserService.navigate('about:blank');
   });
 
   afterAll(async () => {
     await browserService.close();
-    await browser.close();
   });
 
   beforeEach(() => {
     app = Fastify();
     app.register(actionRoutesPlugin, { prefix: '/action' });
+  });
+
+  afterEach(async () => {
+    await app.close();
   });
 
   describe('click action', () => {

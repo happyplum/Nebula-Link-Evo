@@ -101,7 +101,7 @@ describe('BrowserLifecycle', () => {
     });
 
     it('should handle browser already open', async () => {
-      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warnSpy = vi.spyOn((lifecycle as any).logger, 'warn').mockImplementation(() => undefined);
 
       await lifecycle.open({ headless: false });
       expect(chromium.launch).toHaveBeenCalledTimes(1);
@@ -112,12 +112,16 @@ describe('BrowserLifecycle', () => {
       // Should not launch again
       expect(chromium.launch).toHaveBeenCalledTimes(1);
       // Should warn about options not taking effect
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Browser already open'),
-        expect.any(Object)
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          headless: true,
+          viewport: { width: 1920, height: 1080 },
+          cdpPort: 0,
+        }),
+        expect.stringContaining('Browser already open')
       );
 
-      consoleSpy.mockRestore();
+      warnSpy.mockRestore();
     });
 
     it('should recreate context and page if missing but browser exists', async () => {

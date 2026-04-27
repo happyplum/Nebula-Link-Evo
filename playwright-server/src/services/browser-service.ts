@@ -244,3 +244,4 @@ export class BrowserService {
 }
 
 export const browserService = BrowserService.getInstance();
+

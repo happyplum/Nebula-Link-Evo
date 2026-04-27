@@ -233,8 +233,7 @@ describe('ClickResolutionService', () => {
 
       // First locator should be role-based
       if (target.locators.length > 0 && target.locators[0].includes('role')) {
-        await service.executeWithFallback(target);
-        expect(true).toBe(true); // Successfully clicked
+        await expect(service.executeWithFallback(target)).resolves.toBeUndefined();
       }
     });
 
