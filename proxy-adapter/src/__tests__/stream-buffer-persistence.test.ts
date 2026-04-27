@@ -11,12 +11,17 @@ import { randomUUID } from 'node:crypto';
 import { StreamBufferPersistenceManager } from '../services/stream-buffer-persistence.js';
 import { StreamPersistWorker } from '../services/stream-persist-worker.js';
 
-const TEST_DB_PATH = './test-conversations-persistence.sqlite';
+const BASE_DB_PATH = './test-conversations-persistence';
+
+let TEST_DB_PATH: string;
 
 describe('StreamBufferPersistenceManager', () => {
   let manager: StreamBufferPersistenceManager;
 
   beforeEach(async () => {
+    // Use unique DB path per test to avoid SQLite lock contention
+    TEST_DB_PATH = `${BASE_DB_PATH}-${randomUUID()}.sqlite`;
+
     // Clean up test database if exists (ignore permission errors)
     try {
       if (existsSync(TEST_DB_PATH)) {
@@ -46,10 +51,18 @@ describe('StreamBufferPersistenceManager', () => {
       await manager.close();
     }
 
-    // Clean up test database (ignore permission errors)
+    // Clean up test database and WAL files (ignore permission errors)
     try {
       if (existsSync(TEST_DB_PATH)) {
         rmSync(TEST_DB_PATH);
+      }
+      const walPath = `${TEST_DB_PATH}-wal`;
+      if (existsSync(walPath)) {
+        rmSync(walPath);
+      }
+      const shmPath = `${TEST_DB_PATH}-shm`;
+      if (existsSync(shmPath)) {
+        rmSync(shmPath);
       }
     } catch (error) {
       // Ignore permission errors on Windows
@@ -86,7 +99,7 @@ describe('StreamBufferPersistenceManager', () => {
       await worker.persist(sessionId, chunks);
 
       // Wait for persistence
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       // Load chunks from disk
       const loadedChunks = manager.loadFromDisk(sessionId);
@@ -129,7 +142,7 @@ describe('StreamBufferPersistenceManager', () => {
       await worker.persist(sessionId, chunks);
 
       // Wait for persistence
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       // Load chunks from index 1
       const loadedChunks = manager.loadFromDisk(sessionId, 1);
@@ -191,7 +204,7 @@ describe('StreamBufferPersistenceManager', () => {
       await worker.persist(sessionId, chunks);
 
       // Wait for persistence
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       const lastIndex = manager.getLastChunkIndex(sessionId);
 
@@ -241,7 +254,7 @@ describe('StreamBufferPersistenceManager', () => {
       await worker.persist(sessionId, chunks);
 
       // Wait for persistence
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       const count = manager.getChunkCount(sessionId);
 
@@ -347,7 +360,7 @@ describe('StreamBufferPersistenceManager', () => {
       await worker.persist(sessionId, chunks);
 
       // Wait for persistence
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       // Verify chunks exist
       const loadedChunks = manager.loadFromDisk(sessionId);
