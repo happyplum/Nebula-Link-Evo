@@ -29,7 +29,7 @@ export default function LiveKitView({
   const lastCaptureTimeRef = useRef(0);
   const [tokenData, setTokenData] = useState<{ token: string; url: string } | null>(null);
   const [fitRect, setFitRect] = useState<ImageFitRect | null>(null);
-  const { isConnected, trackStatus, connect, disconnect, videoElement, setOnTrackSubscribed } = useLiveKit();
+  const { isConnected, trackStatus, connect, disconnect, videoElement } = useLiveKit();
   const isPlaywrightOpen = useRuntimeStore(selectPlaywrightIsOpen);
   const setLastScreenshotDataUrl = useRuntimeStore((s) => s.setLastScreenshotDataUrl);
   const debugEnabled = useRuntimeStore(selectDebugEnabled);
@@ -237,16 +237,6 @@ export default function LiveKitView({
   }, [trackStatus, onRenderError]);
 
   useEffect(() => {
-    setOnTrackSubscribed(() => {
-      startOverlayLoop();
-    });
-
-    return () => {
-      setOnTrackSubscribed(null);
-    };
-  }, [setOnTrackSubscribed, startOverlayLoop]);
-
-  useEffect(() => {
     videoRef.current = videoElement;
 
     if (videoElement) {
@@ -264,8 +254,8 @@ export default function LiveKitView({
       // not on transport disruption — matches MJPEG isPlaywrightConnectedRef pattern.
       if (!isPlaywrightOpenRef.current) {
         setFitRect(null);
+        lastFrameDataRef.current = null;
       }
-      lastFrameDataRef.current = null;
     };
   }, [startOverlayLoop, videoElement]);
 
