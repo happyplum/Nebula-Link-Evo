@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getImageFitRect, type ImageFitRect } from '@/features/liveview/lib/index.js';
 import { selectPlaywrightIsOpen, useRuntimeStore } from '@/features/runtime/store/index.js';
+import { createFrameCounter } from '@nebula-link-evo/shared';
+import type { FrameCounter } from '@nebula-link-evo/shared';
+import { selectDebugEnabled } from '@/features/runtime/store/runtime.store.js';
 import { LiveViewOverlayLayer } from './LiveViewOverlayLayer.js';
 import { useLiveKit } from '../hooks/useLiveKit.js';
 import styles from './LiveKitView.module.css';
@@ -29,11 +32,46 @@ export default function LiveKitView({
   const { isConnected, trackStatus, connect, disconnect, videoElement, setOnTrackSubscribed } = useLiveKit();
   const isPlaywrightOpen = useRuntimeStore(selectPlaywrightIsOpen);
   const setLastScreenshotDataUrl = useRuntimeStore((s) => s.setLastScreenshotDataUrl);
+  const debugEnabled = useRuntimeStore(selectDebugEnabled);
   const lastFrameDataRef = useRef<ImageData | null>(null);
   const isPlaywrightOpenRef = useRef(isPlaywrightOpen);
+  const debugCounterRef = useRef<FrameCounter | null>(null);
+  const debugIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Track connection state: distinguish real disconnect from transport disruption
   isPlaywrightOpenRef.current = isPlaywrightOpen;
+
+  // Debug counter lifecycle — watches runtime store debugEnabled toggle
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+
+    if (debugEnabled) {
+      const counter = createFrameCounter();
+      debugCounterRef.current = counter;
+      debugIntervalRef.current = setInterval(() => {
+        if (debugCounterRef.current) {
+          console.log('[NLE-Debug] livekit', debugCounterRef.current.getSummary());
+        }
+      }, 1000);
+    } else {
+      if (debugCounterRef.current) {
+        console.log('[NLE-Debug] livekit', debugCounterRef.current.getSummary());
+      }
+      if (debugIntervalRef.current) {
+        clearInterval(debugIntervalRef.current);
+        debugIntervalRef.current = null;
+      }
+      debugCounterRef.current = null;
+    }
+
+    return () => {
+      if (debugIntervalRef.current) {
+        clearInterval(debugIntervalRef.current);
+        debugIntervalRef.current = null;
+      }
+      debugCounterRef.current = null;
+    };
+  }, [debugEnabled]);
 
   const captureScreenshot = useCallback(
     (canvas: HTMLCanvasElement) => {
@@ -115,6 +153,7 @@ export default function LiveKitView({
 
       // Capture screenshot for download (throttled to once per second)
       captureScreenshot(currentCanvas);
+      debugCounterRef.current?.recordFrame();
 
       if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
         currentVideo.requestVideoFrameCallback(renderFrame);
