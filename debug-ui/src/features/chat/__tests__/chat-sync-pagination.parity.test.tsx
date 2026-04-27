@@ -14,7 +14,6 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
 import { useChatStore } from '@/features/chat/store/chat.store.js';
 
 describe('chat-sync-pagination.parity', () => {
@@ -27,13 +26,6 @@ describe('chat-sync-pagination.parity', () => {
     it('structural element 1: showThinking field exists with default true', () => {
       const state = useChatStore.getState();
       expect(state.showThinking).toBe(true);
-    });
-
-    // TODO(removed-field): selectedModel field and setSelectedModel action were removed
-    // from the chat store during refactoring. Model selection is now handled differently.
-    it.skip('structural element 2: selectedModel field exists with default "decision"', () => {
-      const state = useChatStore.getState();
-      expect(state.selectedModel).toBe('decision');
     });
 
     it('structural element 3: screenshotData field exists with default null', () => {
@@ -66,23 +58,6 @@ describe('chat-sync-pagination.parity', () => {
       // Set to true
       setShowThinking(true);
       expect(useChatStore.getState().showThinking).toBe(true);
-    });
-
-    // TODO(removed-field): selectedModel / setSelectedModel were removed from the chat store.
-    // Model selection is now handled at the config/provider level, not in the chat store.
-    it.skip('selectedModel is shared - setting in store updates both surfaces', () => {
-      const { setSelectedModel } = useChatStore.getState();
-
-      // Initially 'decision'
-      expect(useChatStore.getState().selectedModel).toBe('decision');
-
-      // Set to 'vision'
-      setSelectedModel('vision');
-      expect(useChatStore.getState().selectedModel).toBe('vision');
-
-      // Set back to 'decision'
-      setSelectedModel('decision');
-      expect(useChatStore.getState().selectedModel).toBe('decision');
     });
 
     it('screenshotData is shared - setting in store updates both surfaces', () => {
@@ -145,7 +120,7 @@ describe('chat-sync-pagination.parity', () => {
     });
 
     it('multiple sessions have independent pagination counts', () => {
-      const { addSession, setActiveSession, expandVisibleMessages } = useChatStore.getState();
+      const { addSession, expandVisibleMessages } = useChatStore.getState();
 
       // Create two sessions
       const session1 = 'sess-1';
@@ -208,7 +183,7 @@ describe('chat-sync-pagination.parity', () => {
     });
 
     it('removeSession keeps other sessions pagination intact', () => {
-      const { addSession, setActiveSession, expandVisibleMessages, removeSession } = useChatStore.getState();
+      const { addSession, expandVisibleMessages, removeSession } = useChatStore.getState();
 
       // Create three sessions
       const session1 = 'sess-1';
@@ -235,40 +210,6 @@ describe('chat-sync-pagination.parity', () => {
       expect(useChatStore.getState().visibleMessageCounts[session1]).toBe(100);
       expect(useChatStore.getState().visibleMessageCounts[session2]).toBeUndefined();
       expect(useChatStore.getState().visibleMessageCounts[session3]).toBe(150);
-    });
-  });
-
-  describe('Cross-surface state consistency', () => {
-    // TODO(removed-field): setSelectedModel was removed from the chat store.
-    // Model selection is now handled at the config/provider level.
-    it.skip('all shared state persists across multiple surface operations', () => {
-      const {
-        setShowThinking,
-        setSelectedModel,
-        setScreenshotData,
-        addSession,
-        setActiveSession,
-        expandVisibleMessages,
-      } = useChatStore.getState();
-
-      // Set shared UI state
-      setShowThinking(false);
-      setSelectedModel('vision');
-      setScreenshotData('data:image/png;base64,test');
-
-      // Set up session with pagination
-      const sessionId = 'sess-comprehensive';
-      addSession({ id: sessionId, title: 'Test', createdAt: Date.now() });
-      setActiveSession(sessionId);
-      expandVisibleMessages(sessionId);
-
-      // Verify all state persists
-      const state = useChatStore.getState();
-      expect(state.showThinking).toBe(false);
-      expect(state.selectedModel).toBe('vision');
-      expect(state.screenshotData).toBe('data:image/png;base64,test');
-      expect(state.activeSessionId).toBe(sessionId);
-      expect(state.visibleMessageCounts[sessionId]).toBe(100);
     });
   });
 });

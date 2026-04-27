@@ -61,25 +61,6 @@ describe('LiveKitView', () => {
     globalThis.ResizeObserver = originalResizeObserver;
   });
 
-  // TODO(removed-fallback): LiveKitView no longer falls back to LiveViewCanvas when
-  // livekit-client import fails. The component always renders its own canvas container
-  // with data-testid="livekit-view". The livekit-client support check was removed.
-  it.skip('renders LiveViewCanvas fallback when LiveKit support check fails', async () => {
-    vi.doMock('livekit-client', () => {
-      throw new Error('unsupported');
-    });
-
-    const { default: LiveKitView } = await import('../components/LiveKitView.js');
-
-    render(<LiveKitView className="fallback-shell" />);
-
-    expect(screen.getByTestId('liveview-fallback')).toHaveAttribute(
-      'data-classname',
-      'fallback-shell'
-    );
-    expect(screen.queryByTestId('livekit-view')).toBeNull();
-  });
-
   it('renders the livekit canvas container and connects after token fetch', async () => {
     runtimeState.playwrightIsOpen = true;
     vi.doMock('livekit-client', () => ({}));

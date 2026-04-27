@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import DebugPage from './DebugPage.js';
@@ -59,23 +59,5 @@ describe('DebugShell Integration', () => {
     // Check right panel tabs
     expect(screen.getByRole('tab', { name: '📍 DOM Elements' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '⚙️ 配置' })).toBeInTheDocument();
-  });
-
-  // TODO(removed-activity): '历史' sidebar activity was removed — replaced by '执行记录' route navigation.
-  // The sidebar-based history panel no longer exists; this test verified sidebar switching
-  // for an activity that is now route-based (navigates to /execution).
-  it.skip('switches sidebar content when activity icons are clicked', () => {
-    renderWithProviders(<DebugPage />);
-    
-    // Default is Monitor panel
-    expect(screen.getByText('状态')).toBeInTheDocument();
-    
-    // Click Control
-    fireEvent.click(screen.getByTitle('控制'));
-    expect(screen.getByRole('button', { name: /浏览器基础/i })).toBeInTheDocument();
-    
-    // Click History
-    fireEvent.click(screen.getByTitle('历史'));
-    expect(screen.getByTestId(testIds.historyShell)).toBeInTheDocument();
   });
 });

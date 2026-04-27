@@ -110,19 +110,6 @@ describe('LiveViewCanvas - picker & DOM highlight integration parity', () => {
     mockOnMessageSubscribe.mockClear();
   });
 
-  // TODO: data-picker-active, data-marker-count, data-has-overlay, data-has-dom-highlight removed from container — moved to LiveViewOverlayLayer
-  it.skip('renders with correct testid and initial data attributes', () => {
-    render(<LiveViewCanvas />);
-
-    const container = screen.getByTestId('liveview-canvas');
-    expect(container).toBeInTheDocument();
-    expect(container).toHaveAttribute('data-picker-active', 'false');
-    expect(container).toHaveAttribute('data-marker-count', '0');
-    expect(container).toHaveAttribute('data-has-overlay', 'false');
-    expect(container).toHaveAttribute('data-has-dom-highlight', 'false');
-    expect(container).toHaveAttribute('data-connection-status', 'disconnected');
-  });
-
   it('renders picker toggle button with correct testid and initial state', () => {
     render(<LiveViewCanvas />);
 
@@ -141,34 +128,6 @@ describe('LiveViewCanvas - picker & DOM highlight integration parity', () => {
     fireEvent.click(toggleBtn);
 
     expect(mockUseControlStore.state.setElementPickerEnabled).toHaveBeenCalledWith(true);
-  });
-
-  // TODO: data-picker-active removed from LiveViewCanvas container — picker state is internal to LiveViewOverlayLayer
-  it.skip('reflects elementPickerEnabled in data-picker-active attribute', () => {
-    mockUseControlStore.state.elementPickerEnabled = true;
-
-    render(<LiveViewCanvas />);
-
-    const container = screen.getByTestId('liveview-canvas');
-    expect(container).toHaveAttribute('data-picker-active', 'true');
-
-    const toggleBtn = screen.getByTestId('liveview-picker-toggle');
-    expect(toggleBtn).toHaveTextContent('Picker: on');
-    expect(toggleBtn).toHaveAttribute('aria-pressed', 'true');
-  });
-
-  // TODO: data-has-dom-highlight removed from LiveViewCanvas container — DOM highlight moved to LiveViewOverlayLayer
-  it.skip('reflects selectedElement.bbox in data-has-dom-highlight attribute', () => {
-    mockUseControlStore.state.selectedElement = {
-      selector: '#test',
-      tag: 'div',
-      bbox: { x: 10, y: 20, width: 100, height: 50 },
-    };
-
-    render(<LiveViewCanvas />);
-
-    const container = screen.getByTestId('liveview-canvas');
-    expect(container).toHaveAttribute('data-has-dom-highlight', 'true');
   });
 
   it('renders overlay canvas with correct class based on picker state', () => {
@@ -286,62 +245,5 @@ describe('LiveViewCanvas - picker & DOM highlight integration parity', () => {
     // Note: This is testing the integration contract - that the component subscribes to
     // WebSocket messages and has a handler that can process marker messages
     // The actual marker rendering on canvas is implementation detail
-  });
-
-  // TODO: data-picker-active and data-has-dom-highlight removed from LiveViewCanvas container — moved to LiveViewOverlayLayer
-  it.skip('integrates with all 5 structural elements: picker, DOM highlight, overlay, callbacks, and attributes', () => {
-    const onElementSelect = vi.fn();
-    const onCoordinateCapture = vi.fn();
-
-    // Enable picker
-    mockUseControlStore.state.elementPickerEnabled = true;
-
-    // Set selected element with bbox
-    mockUseControlStore.state.selectedElement = {
-      selector: '#element',
-      tag: 'div',
-      bbox: { x: 50, y: 50, width: 200, height: 100 },
-    };
-
-    render(
-      <LiveViewCanvas
-        onElementSelect={onElementSelect}
-        onCoordinateCapture={onCoordinateCapture}
-      />,
-    );
-
-    const container = screen.getByTestId('liveview-canvas');
-
-    // 1. Picker active
-    expect(container).toHaveAttribute('data-picker-active', 'true');
-    const toggleBtn = screen.getByTestId('liveview-picker-toggle');
-    expect(toggleBtn).toHaveTextContent('Picker: on');
-
-    // 2. DOM highlight active
-    expect(container).toHaveAttribute('data-has-dom-highlight', 'true');
-
-    // 3. Overlay canvas exists with interactive class
-    const overlayCanvas = container.querySelector('canvas:nth-child(2)');
-    expect(overlayCanvas?.className).toContain('overlayCanvasInteractive');
-
-    // 4. Connection status
-    expect(container).toHaveAttribute('data-connection-status', 'disconnected');
-
-    // 5. Callbacks integrated
-    // @ts-expect-error - TypeScript doesn't know mock was called, but it always is
-    const subscribeHandler = mockOnMessageSubscribe.mock.calls[0][0] as (data: unknown) => void;
-    expect(subscribeHandler).toBeDefined();
-
-    // Test onElementSelect callback
-    subscribeHandler({
-      type: 'hover',
-      bbox: { x: 10, y: 10, width: 50, height: 20, selector: '#btn' },
-    });
-    expect(onElementSelect).toHaveBeenCalledWith('#btn');
-
-    // Test onCoordinateCapture callback integration
-    // The actual coordinate capture requires canvas context setup which happens during resize
-    // For parity testing, we verify the integration contract - that the callback is accepted
-    expect(onCoordinateCapture).toBeDefined();
   });
 });

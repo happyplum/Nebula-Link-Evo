@@ -44,8 +44,11 @@ test.describe('Debug UI - Page Load', () => {
     await expect(debugPage.locator('[data-testid="playwright-status"]')).toBeVisible();
   });
 
-  test.skip('WebSocket connection establishes — requires live playwright-server', async ({ debugPage, wsMonitor }) => {
-    // TODO: Configure test runner to automatically start playwright-server
+  // WebSocket connection test requires live playwright-server.
+  // Run with: PLAYWRIGHT_SERVER=true pnpm test:e2e
+  test('WebSocket connection establishes — requires live playwright-server', async ({ debugPage, wsMonitor }) => {
+    test.skip(!!process.env.CI, 'Requires live playwright-server');
+
     await debugPage.waitForTimeout(TIMEOUTS.LONG);
 
     await expect(() => {
@@ -77,20 +80,28 @@ test.describe('Debug UI - WebSocket Failure Scenarios', () => {
       }
     });
 
-    try {
-      await page.goto('http://localhost:9999/debug', {
-        timeout: 5000,
-        waitUntil: 'domcontentloaded'
-      }).catch(() => {});
+    // Page should load even if WS fails — shell renders without live connection
+    await page.goto('http://localhost:9999/debug', {
+      timeout: 5000,
+      waitUntil: 'domcontentloaded'
+    }).catch(() => {});
 
-      await page.waitForTimeout(TIMEOUTS.XLONG);
+    await page.waitForTimeout(TIMEOUTS.XLONG);
 
-      expect(consoleErrors.length).toBeGreaterThanOrEqual(0);
-    } catch (error) {
-      expect(error).toBeDefined();
-    } finally {
-      await context.close();
+    // Verify the debug shell still renders (graceful degradation)
+    const shell = page.locator('[data-testid="debug-shell"]');
+    await expect(shell).toBeVisible({ timeout: 5000 });
+
+    // Any console errors should be WS-related, not JS crashes
+    const wsErrors = consoleErrors.filter(e =>
+      e.includes('WebSocket') || e.includes('ws') || e.includes('socket')
+    );
+    // If there are errors, they must all be WS-related (not app crashes)
+    for (const err of consoleErrors) {
+      expect(wsErrors).toContain(err);
     }
+
+    await context.close();
   });
 
   test('UI shows offline status when WebSocket cannot connect', async ({ debugPage }) => {
@@ -106,7 +117,8 @@ test.describe('Debug UI - WebSocket Failure Scenarios', () => {
     await expect(connectionStatus).toBeVisible();
 
     const statusText = await connectionStatus.textContent();
-    expect(statusText).toBeTruthy();
+    // Should show a non-empty connection status when WS fails
+    expect(statusText?.trim().length).toBeGreaterThan(0);
   });
 
   test('WebSocket reconnects after temporary disconnection', async ({ debugPage }) => {
@@ -150,8 +162,10 @@ test.describe('Debug UI - Activity Bar Navigation', () => {
     await expect(debugPage.locator('[data-testid="history-table"]')).toBeVisible();
   });
 
-  // TODO: React refactor removed legacy data-history-tab, data-right-tab, and
-  // sidebar-* ID-based panel switching. History and Interactions are now
-  // combined in the sidebar. Right panel uses Tabs component with
-  // data-testid="tabs-{id}" for tab switching tests.
+  test('activity bar switch count matches active features', async ({ debugPage }) => {
+    await debugPage.waitForTimeout(TIMEOUTS.LONG);
+
+    const buttons = debugPage.locator('[data-testid^="activity-btn-"]');
+    await expect(buttons).toHaveCount(4);
+  });
 });
