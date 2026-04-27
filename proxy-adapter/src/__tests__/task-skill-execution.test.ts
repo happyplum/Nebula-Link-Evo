@@ -22,7 +22,7 @@ vi.mock('../config/index.js', () => ({
   })),
   validateConfig: vi.fn(() => ({ valid: true, warnings: [], errors: [] })),
 }));
-describe('TaskExecutor - Skill Execution', () => {
+describe('TaskService - Skill Execution', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     vi.resetAllMocks();

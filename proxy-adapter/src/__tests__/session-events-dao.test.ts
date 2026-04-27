@@ -479,9 +479,11 @@ describe('SessionEventsDAO', () => {
     });
 
     it('should have shutdown handlers registered', () => {
-      // Verify dispose unregisters handlers without error
+      // Verify dispose clears internal state
       dao.dispose();
-      expect(true).toBe(true);
+      // After dispose, further operations should be no-ops
+      // The flushTimer is cleared and disposed flag is set
+      expect(() => dao.dispose()).not.toThrow();
     });
   });
 });

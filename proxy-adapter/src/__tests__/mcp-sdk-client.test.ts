@@ -36,7 +36,9 @@ describe('MCPSDKClient', () => {
 
     it('should initialize and connect to MCP servers', async () => {
       await client.initialize();
-      expect(true).toBe(true); // Placeholder - will be replaced with actual checks
+      // After init, getServerList reflects startup state
+      const servers = client.getServerList();
+      expect(Array.isArray(servers)).toBe(true);
     });
 
     it('should not initialize when MCP is disabled', async () => {
