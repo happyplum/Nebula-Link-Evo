@@ -18,8 +18,6 @@ export interface Action {
   reasoning?: string;
 }
 
-export type ActionType = Action['type'];
-
 // ========== RESOLVED TARGET ==========
 
 /**

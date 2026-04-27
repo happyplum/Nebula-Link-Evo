@@ -1,7 +1,5 @@
-import { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
+import type { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import { Type } from '@sinclair/typebox';
-import type { ConversationManager } from '../../../conversation/manager.js';
-import type { Message, MessageRole } from '../../../conversation/types.js';
 
 const MessageSchema = Type.Object({
   id: Type.String(),

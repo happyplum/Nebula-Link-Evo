@@ -12,7 +12,3 @@ export interface Skill {
   enabled?: boolean;
 }
 
-export interface SkillValidationError {
-  field: string;
-  message: string;
-}

@@ -32,5 +32,5 @@ export function up(db: DatabaseSync): void {
   }
 }
 
-export function down(db: DatabaseSync): void {
+export function down(_db: DatabaseSync): void {
 }

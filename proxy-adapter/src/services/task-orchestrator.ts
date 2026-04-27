@@ -6,7 +6,6 @@
  */
 
 import type { TaskRequest, TaskResponse, ResolvedConfig } from '../config/schema.js';
-import type { Action } from '../types.js';
 import { browserClient } from '../browser-client.js';
 import { SkillManager } from '../skills/manager.js';
 import { DebugWebSocketManager } from '../websocket-manager.js';

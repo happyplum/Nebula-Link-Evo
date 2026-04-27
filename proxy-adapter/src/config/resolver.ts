@@ -202,7 +202,7 @@ function parseProviderModelString(
   const model = slashIndex > 0 ? value.slice(slashIndex + 1).trim() : '';
 
   if (!provider || !model) {
-    result.errors.push(`defaults.${key} must use \"provider/model\" format`);
+    result.errors.push(`defaults.${key} must use "provider/model" format`);
     return { provider: '', model: '' };
   }
 

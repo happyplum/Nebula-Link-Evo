@@ -12,7 +12,7 @@ export function createCoreTools(executor: ActionExecutor) {
       x: z.number().optional(),
       y: z.number().optional(),
     }).refine((v) => v.selector || (v.x !== undefined && v.y !== undefined)),
-    execute: async ({ selector, x, y }, options: ToolExecutionOptions): Promise<ActionResult> => {
+    execute: async ({ selector, x, y }, _options: ToolExecutionOptions): Promise<ActionResult> => {
       return await executor.execute({ 
         type: 'click', 
         params: { selector, x, y } 
@@ -27,7 +27,7 @@ export function createCoreTools(executor: ActionExecutor) {
       text: z.string(),
       clear: z.boolean().optional().default(true),
     }),
-    execute: async ({ selector, text, clear }, options: ToolExecutionOptions): Promise<ActionResult> => {
+    execute: async ({ selector, text, clear }, _options: ToolExecutionOptions): Promise<ActionResult> => {
       return await executor.execute({
         type: 'type',
         params: { selector, text, clear },
@@ -40,7 +40,7 @@ export function createCoreTools(executor: ActionExecutor) {
     inputSchema: z.object({
       url: z.string().url(),
     }),
-    execute: async ({ url }, options: ToolExecutionOptions): Promise<ActionResult> => {
+    execute: async ({ url }, _options: ToolExecutionOptions): Promise<ActionResult> => {
       return await executor.execute({
         type: 'navigate',
         params: { url },
@@ -54,7 +54,7 @@ export function createCoreTools(executor: ActionExecutor) {
       x: z.number().default(0),
       y: z.number().default(0),
     }),
-    execute: async ({ x, y }, options: ToolExecutionOptions): Promise<ActionResult> => {
+    execute: async ({ x, y }, _options: ToolExecutionOptions): Promise<ActionResult> => {
       return await executor.execute({
         type: 'scroll',
         params: { x, y },
@@ -67,7 +67,7 @@ export function createCoreTools(executor: ActionExecutor) {
     inputSchema: z.object({
       duration: z.number().default(1000).describe('Duration in milliseconds'),
     }),
-    execute: async ({ duration }, options: ToolExecutionOptions): Promise<ActionResult> => {
+    execute: async ({ duration }, _options: ToolExecutionOptions): Promise<ActionResult> => {
       return await executor.execute({
         type: 'wait',
         params: { duration },
@@ -80,7 +80,7 @@ export function createCoreTools(executor: ActionExecutor) {
     inputSchema: z.object({
       fullPage: z.boolean().optional().default(false),
     }),
-    execute: async ({ fullPage }, options: ToolExecutionOptions): Promise<ActionResult> => {
+    execute: async ({ fullPage }, _options: ToolExecutionOptions): Promise<ActionResult> => {
       return await executor.execute({
         type: 'screenshot',
         params: { fullPage },

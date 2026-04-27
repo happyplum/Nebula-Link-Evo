@@ -33,7 +33,7 @@ export function createLoadSkillTool(
       skillId: z.string().describe('The ID of the skill to load (e.g., "google-search", "extract-data")'),
       params: z.record(z.string(), z.string()).describe('Parameters to substitute into the skill steps'),
     }),
-    execute: async ({ skillId, params }, options: ToolExecutionOptions): Promise<ActionResult> => {
+    execute: async ({ skillId, params }, _options: ToolExecutionOptions): Promise<ActionResult> => {
       try {
         // Ensure skills are loaded (cached after first call)
         await ensureLoaded();

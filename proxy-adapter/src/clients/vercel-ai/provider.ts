@@ -2,8 +2,7 @@ import type { LanguageModelV3, LanguageModelV3StreamResult } from '@ai-sdk/provi
 import { MockLanguageModelV3 } from 'ai/test';
 import { simulateReadableStream } from 'ai';
 import type { ProviderRegistry } from '../../services/provider/registry.js';
-import { resolveSessionModels, type ResolvedModels } from '../../services/provider/resolver.js';
-import { ProviderError, PROVIDER_ERRORS } from '../../services/provider/errors.js';
+import { resolveSessionModels } from '../../services/provider/resolver.js';
 
 /**
  * Get a language model instance for the specified provider and model.

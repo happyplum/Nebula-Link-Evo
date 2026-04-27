@@ -102,14 +102,12 @@ export async function testConnectivity(
       };
     }
 
-    let response: unknown;
-
     switch (provider) {
       case 'glm':
-        response = await testGLMConnectivity(baseUrl, apiKey, modelId);
+        await testGLMConnectivity(baseUrl, apiKey, modelId);
         break;
       case 'kimi':
-        response = await testKimiConnectivity(baseUrl, apiKey, modelId);
+        await testKimiConnectivity(baseUrl, apiKey, modelId);
         break;
       default:
         return {
