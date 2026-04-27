@@ -7,7 +7,6 @@
 // Action types (precise discriminated union)
 export type {
   Action,
-  ActionType,
   ClickAction,
   TypeAction,
   FocusAction,
@@ -32,12 +31,8 @@ export type {
   WaitActionParams,
   MCPActionParams,
   FinishActionParams,
-  ActionParams,
   ResolvedTarget,
 } from './action.js';
-
-// Action guards (available from './action-guards.js' if needed)
-// None currently consumed externally - exported on demand.
 
 // Vision Marker types (DOM, elements, locators)
 export type {
@@ -51,28 +46,6 @@ export type {
 } from './vision-marker.js';
 
 export { VISION_MARKER_API_VERSION } from './vision-marker.js';
-
-// TaskContext types (immutable state container)
-export type {
-  TaskContext,
-  TaskMetadata,
-  TaskStatus,
-  TaskContextOptions,
-  ExecutedAction,
-} from './task-context.js';
-
-// TaskContext helpers (available from './task-context.js' if needed)
-// None currently consumed externally - exported on demand.
-
-// TaskHistory types (history tracking)
-export type {
-  TaskHistory,
-  Step,
-  TaskHistoryStatus,
-} from './task-history.js';
-
-// TaskHistory helpers (available from './task-history.js' if needed)
-// None currently consumed externally - exported on demand.
 
 // SSE event types
 export type {
