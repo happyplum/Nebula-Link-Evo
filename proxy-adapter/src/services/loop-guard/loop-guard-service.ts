@@ -9,6 +9,7 @@ import { normalizeActionSignature } from './fingerprint.js';
 export class LoopGuardService {
   private history: LoopGuardAction[] = [];
   private readonly config: LoopGuardConfig;
+  private totalActionCount = 0;
 
   constructor(config?: Partial<LoopGuardConfig>) {
     this.config = { ...DEFAULT_LOOP_GUARD_CONFIG, ...config };
@@ -16,6 +17,7 @@ export class LoopGuardService {
 
   /** Record a completed action. Call AFTER tool execution completes. */
   recordAction(action: LoopGuardAction): void {
+    this.totalActionCount++;
     this.history.push(action);
     if (this.history.length > this.config.windowSize) {
       this.history.shift();
@@ -29,7 +31,7 @@ export class LoopGuardService {
     }
 
     // Priority 1: hard cap
-    if (this.history.length >= this.config.hardCap) {
+    if (this.totalActionCount >= this.config.hardCap) {
       return {
         level: 'critical',
         detector: 'hard_cap',
@@ -56,6 +58,7 @@ export class LoopGuardService {
   /** Reset history for a new execution run. */
   reset(): void {
     this.history = [];
+    this.totalActionCount = 0;
   }
 
   private clean(): LoopGuardVerdict {

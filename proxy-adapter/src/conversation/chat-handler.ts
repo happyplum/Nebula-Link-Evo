@@ -61,7 +61,7 @@ class ChatHandler {
   private providerRegistry: ProviderRegistry;
   private maxToolLoops = 10;
   private toolLoopCount = 0;
-  private loopGuard: LoopGuardService;
+  private loopGuardMap: Map<string, LoopGuardService> = new Map();
   private intervention: InterventionEngine;
   private sessionEventQueue: Promise<void> = Promise.resolve();
   private logger = createWorkerLogger('chat-handler');
@@ -85,9 +85,16 @@ class ChatHandler {
       this.config.settings?.maxSteps ??
       this.maxToolLoops;
     this.maxToolLoops = configuredMaxSteps > 0 ? configuredMaxSteps : this.maxToolLoops;
-    const loopGuardConfig = this.config.settings?.loopGuard;
-    this.loopGuard = new LoopGuardService(loopGuardConfig);
     this.intervention = new InterventionEngine();
+  }
+
+  private getOrCreateLoopGuard(sessionId: string): LoopGuardService {
+    let guard = this.loopGuardMap.get(sessionId);
+    if (!guard) {
+      guard = new LoopGuardService(this.config.settings?.loopGuard);
+      this.loopGuardMap.set(sessionId, guard);
+    }
+    return guard;
   }
 
   private createProviderRegistry(config: ResolvedConfig): ProviderRegistry {
@@ -385,7 +392,7 @@ class ChatHandler {
 
     this.toolLoopCount = iteration;
     if (restartCount === 0) {
-      this.loopGuard.reset();
+      this.getOrCreateLoopGuard(sessionId).reset();
     }
     const runId = this.createRunId();
     const messageId = this.createMessageId();
@@ -538,7 +545,7 @@ class ChatHandler {
             result: this.stringifyToolResult(output),
           });
 
-          this.loopGuard.recordAction({
+          this.getOrCreateLoopGuard(sessionId).recordAction({
             toolName,
             argsHash: hashArgs(toolInput),
             resultHash: hashResult(output),
@@ -563,7 +570,7 @@ class ChatHandler {
           }
 
           // Loop guard detection — check after each completed step
-          const verdict = this.loopGuard.check();
+          const verdict = this.getOrCreateLoopGuard(sessionId).check();
           if (verdict.level === 'critical') {
             terminalReasonOverride = 'loop_detected';
             break;

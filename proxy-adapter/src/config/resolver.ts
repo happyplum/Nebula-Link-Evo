@@ -219,6 +219,12 @@ function parseProviderModelString(
   return { provider, model };
 }
 
+function safeParseInt(value: unknown, fallback: number): number {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : fallback;
+  if (typeof value === 'string') { const n = parseInt(value, 10); return Number.isFinite(n) ? n : fallback; }
+  return fallback;
+}
+
 function resolveLoopGuard(raw: RawLoopGuardConfig): LoopGuardConfig {
   return {
     identicalAction: {
@@ -233,7 +239,7 @@ function resolveLoopGuard(raw: RawLoopGuardConfig): LoopGuardConfig {
       warnAt: raw.pingPong?.warnAt ?? DEFAULT_LOOP_GUARD_CONFIG.pingPong.warnAt,
       blockAt: raw.pingPong?.blockAt ?? DEFAULT_LOOP_GUARD_CONFIG.pingPong.blockAt,
     },
-    hardCap: typeof raw.hardCap === 'string' ? parseInt(raw.hardCap, 10) : (raw.hardCap ?? DEFAULT_LOOP_GUARD_CONFIG.hardCap),
-    windowSize: typeof raw.windowSize === 'string' ? parseInt(raw.windowSize, 10) : (raw.windowSize ?? DEFAULT_LOOP_GUARD_CONFIG.windowSize),
+    hardCap: safeParseInt(raw.hardCap, DEFAULT_LOOP_GUARD_CONFIG.hardCap),
+    windowSize: safeParseInt(raw.windowSize, DEFAULT_LOOP_GUARD_CONFIG.windowSize),
   };
 }
