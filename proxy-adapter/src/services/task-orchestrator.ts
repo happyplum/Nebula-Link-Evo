@@ -14,6 +14,7 @@ import type { ActionExecutor, ActionResult } from './action-executor.js';
 import type { StepRunner, StepSessionModelConfig } from './step-runner.js';
 import type { Skill } from '../skills/schema.js';
 import { createWorkerLogger } from './logger.js';
+import { LoopGuardService } from './loop-guard/loop-guard-service.js';
 
 const logger = createWorkerLogger('TaskOrchestrator');
 
@@ -245,6 +246,10 @@ const endTime = new Date().toISOString();
     const maxSteps = (context.maxSteps as number) || config?.settings?.maxSteps || 1;
     const session = context.session as StepSessionModelConfig | undefined;
 
+    const loopGuardConfig = config?.settings?.loopGuard;
+    const loopGuard = new LoopGuardService(loopGuardConfig);
+    loopGuard.reset();
+
     try {
       await browserClient.openBrowser();
       await browserClient.navigate(url);
@@ -259,6 +264,7 @@ const endTime = new Date().toISOString();
             maxSteps,
             previousActions,
             session,
+            loopGuard,
           },
           step
         );
@@ -268,6 +274,37 @@ const endTime = new Date().toISOString();
           success: stepResult.result.success,
           message: stepResult.result.message,
         });
+
+        // Check loop guard after step execution
+        const loopVerdict = loopGuard.check();
+        if (loopVerdict.level === 'blocked' || loopVerdict.level === 'critical') {
+          // Graceful termination with partial results
+          await browserClient.closeBrowser();
+          const endTime = new Date().toISOString();
+          const partialResult = `Loop detected: ${loopVerdict.message}. Partial results saved (${previousActions.length} actions completed).`;
+
+          this.historyManager.update(taskId, {
+            endTime,
+            status: 'completed',
+            result: partialResult,
+          });
+
+          this.wsManager.broadcast({
+            type: 'task_completed',
+            taskId,
+            url,
+            instruction,
+            result: partialResult,
+            timestamp: endTime,
+          });
+
+          return {
+            success: true,
+            url,
+            actions: previousActions,
+            result: partialResult,
+          };
+        }
 
         const stepData: Step = {
           step,

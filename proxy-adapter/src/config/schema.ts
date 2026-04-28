@@ -94,6 +94,7 @@ export interface RawSettingsConfig {
   temperature: number | string;
   maxTokens: number | string;
   maxSteps: number | string;
+  loopGuard?: import('../services/loop-guard/types.js').RawLoopGuardConfig;
 }
 
 export interface SettingsConfig {
@@ -102,6 +103,7 @@ export interface SettingsConfig {
   temperature: number;
   maxTokens: number;
   maxSteps: number;
+  loopGuard?: import('../services/loop-guard/types.js').LoopGuardConfig;
 }
 
 export interface ResolvedConfig extends Omit<Config, 'defaults' | 'settings' | 'providers'> {

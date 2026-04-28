@@ -16,6 +16,10 @@ import { getModel } from '../clients/vercel-ai/provider.js';
 import { ProviderRegistry } from '../services/provider/registry.js';
 import type { ProviderConfig } from '../services/provider/types.js';
 import { createWorkerLogger } from '../services/logger.js';
+import { LoopGuardService } from '../services/loop-guard/loop-guard-service.js';
+import { InterventionEngine } from '../services/loop-guard/intervention.js';
+import { hashArgs, hashResult } from '../services/loop-guard/fingerprint.js';
+import type { LoopGuardVerdict } from '../services/loop-guard/types.js';
 import WebSocket from 'ws';
 
 interface ChatSendParams {
@@ -45,7 +49,7 @@ interface MCPObjectSchema {
   required?: string[];
 }
 
-type TerminalReason = 'stop' | 'max_steps_reached' | 'tool_error' | 'abort' | 'pause';
+type TerminalReason = 'stop' | 'max_steps_reached' | 'tool_error' | 'abort' | 'pause' | 'loop_detected' | 'loop_warned';
 
 class ChatHandler {
   private conversationManager: ConversationManager;
@@ -57,6 +61,8 @@ class ChatHandler {
   private providerRegistry: ProviderRegistry;
   private maxToolLoops = 10;
   private toolLoopCount = 0;
+  private loopGuard: LoopGuardService;
+  private intervention: InterventionEngine;
   private sessionEventQueue: Promise<void> = Promise.resolve();
   private logger = createWorkerLogger('chat-handler');
 
@@ -79,6 +85,9 @@ class ChatHandler {
       this.config.settings?.maxSteps ??
       this.maxToolLoops;
     this.maxToolLoops = configuredMaxSteps > 0 ? configuredMaxSteps : this.maxToolLoops;
+    const loopGuardConfig = this.config.settings?.loopGuard;
+    this.loopGuard = new LoopGuardService(loopGuardConfig);
+    this.intervention = new InterventionEngine();
   }
 
   private createProviderRegistry(config: ResolvedConfig): ProviderRegistry {
@@ -365,7 +374,9 @@ class ChatHandler {
     session: ChatSessionData,
     iteration: number = 0,
     screenshot?: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    restartCount: number = 0,
+    nudgeOverride?: string,
   ): Promise<void> {
     if (signal?.aborted) {
       this.logger.debug({ sessionId }, 'Execution aborted');
@@ -373,6 +384,9 @@ class ChatHandler {
     }
 
     this.toolLoopCount = iteration;
+    if (restartCount === 0) {
+      this.loopGuard.reset();
+    }
     const runId = this.createRunId();
     const messageId = this.createMessageId();
     let accumulatedContent = '';
@@ -382,6 +396,9 @@ class ChatHandler {
     let pauseRequested = false;
     let stepHadToolResult = false;
     let finishReason: string | undefined;
+    let terminalReasonOverride: TerminalReason | undefined;
+    let loopVerdict: LoopGuardVerdict | null = null;
+    let pendingNudge: string | undefined;
 
     await this.emitSessionEvent(sessionId, 'assistant.started', {
       sessionId,
@@ -417,7 +434,9 @@ class ChatHandler {
       }
     }
 
-    const systemPrompt = this.getSystemPrompt(session);
+    const systemPrompt = nudgeOverride
+      ? `${this.getSystemPrompt(session)}\n\n${nudgeOverride}`
+      : this.getSystemPrompt(session);
     const sessionController = ChatSessionController.getInstance();
     const decisionModel = await this.resolveDecisionModel(activeProvider, activeModel);
 
@@ -518,6 +537,13 @@ class ChatHandler {
             toolCallId,
             result: this.stringifyToolResult(output),
           });
+
+          this.loopGuard.recordAction({
+            toolName,
+            argsHash: hashArgs(toolInput),
+            resultHash: hashResult(output),
+            timestamp: Date.now(),
+          });
           continue;
         }
 
@@ -533,6 +559,18 @@ class ChatHandler {
           if (stepHadToolResult && sessionController.shouldPause(sessionId, 'afterExecution')) {
             sessionController.markAsPaused(sessionId);
             pauseRequested = true;
+            break;
+          }
+
+          // Loop guard detection — check after each completed step
+          const verdict = this.loopGuard.check();
+          if (verdict.level === 'critical') {
+            terminalReasonOverride = 'loop_detected';
+            break;
+          }
+          if (verdict.level === 'warning' || verdict.level === 'blocked') {
+            loopVerdict = verdict;
+            pendingNudge = this.intervention.getNudge(verdict);
             break;
           }
 
@@ -566,6 +604,22 @@ class ChatHandler {
         return;
       }
 
+      // Handle loop detection restart/terminate
+      const MAX_RESTARTS = 1;
+      if (terminalReasonOverride === 'loop_detected') {
+        // Critical: force terminate, fall through to completion with override
+      } else if (loopVerdict && pendingNudge) {
+        if (restartCount < MAX_RESTARTS) {
+          return this.executeAIResponse(
+            _clientId, sessionId, session,
+            iteration, screenshot, signal,
+            restartCount + 1, pendingNudge,
+          );
+        }
+        // Restart limit exceeded — force terminate
+        terminalReasonOverride = 'loop_detected';
+      }
+
       this.conversationManager.addMessage(sessionId, {
         role: 'assistant',
         content: accumulatedContent,
@@ -581,7 +635,7 @@ class ChatHandler {
 
       const terminalReason: TerminalReason = pauseRequested
         ? 'pause'
-        : this.mapFinishReasonToTerminalReason(finishReason);
+        : terminalReasonOverride ?? this.mapFinishReasonToTerminalReason(finishReason);
 
       await this.flushSessionEvents();
       await this.emitSessionEvent(sessionId, 'assistant.completed', {

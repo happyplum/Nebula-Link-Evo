@@ -23,6 +23,7 @@ Backend service layer: task orchestration, action execution, chat/session coordi
 | `connectivity-gate-service.ts` | Connectivity gating                                                |
 | `provider/`                    | Provider normalization, registry, preflight, adapter-specific boot |
 | `websocket/`                   | Client management, broadcast, buffering, persistence               |
+| `loop-guard/`                  | Progressive cycle detection — 3 detectors (identical action, no-progress, ping-pong), warn→block→terminate intervention, SHA-256 fingerprinting |
 
 ## Patterns
 
