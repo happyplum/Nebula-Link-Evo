@@ -18,6 +18,9 @@ import type { ProviderRegistry } from './provider/registry.js';
 import { resolveSessionModels } from './provider/resolver.js';
 import { createVisionTool } from './provider/vision-tool.js';
 import { createWorkerLogger } from './logger.js';
+import type { LoopGuardService } from './loop-guard/loop-guard-service.js';
+import { InterventionEngine } from './loop-guard/intervention.js';
+import { hashArgs, hashResult } from './loop-guard/fingerprint.js';
 
 const logger = createWorkerLogger('StepRunner');
 
@@ -40,6 +43,7 @@ export interface StepContext {
   maxSteps: number;
   previousActions: ActionResult[];
   session?: StepSessionModelConfig;
+  loopGuard?: LoopGuardService;
 }
 
 export interface StepResult {
@@ -64,6 +68,7 @@ export class StepRunner {
   private defaults: ConfigDefaults;
   private getMCPTools: () => MCPTool[];
   private visionTool?: { maxCallsPerStep?: number; timeoutMs?: number; screenshotQuality?: number };
+  private intervention: InterventionEngine;
 
   constructor(deps: StepRunnerDeps) {
     this.actionExecutor = deps.actionExecutor;
@@ -71,6 +76,7 @@ export class StepRunner {
     this.defaults = deps.defaults;
     this.getMCPTools = deps.getMCPTools;
     this.visionTool = deps.visionTool;
+    this.intervention = new InterventionEngine();
   }
 
   async runStep(context: StepContext, currentStep: number): Promise<StepResult> {
@@ -108,9 +114,35 @@ export class StepRunner {
       },
     );
 
+    // Check loop guard before AI decision
+    if (context.loopGuard) {
+      const verdict = context.loopGuard.check();
+      if (this.intervention.shouldBlockExecution(verdict)) {
+        const errorMsg = this.intervention.formatBlockError(verdict);
+        const waitAction: Action = { type: 'wait', params: { delay: 2000 } };
+        logger.warn({ verdict: verdict.detector, count: verdict.repeatedCount }, 'Loop guard blocked');
+        return {
+          action: waitAction,
+          result: { success: false, message: errorMsg, action: waitAction },
+          screenshot: screenshotData.screenshot,
+          dom,
+          isFinished: false,
+        };
+      }
+    }
+
+    // Collect nudge if warning
+    let warningNudge: string | undefined;
+    if (context.loopGuard) {
+      const verdict = context.loopGuard.check();
+      if (verdict.level === 'warning') {
+        warningNudge = this.intervention.getNudge(verdict);
+      }
+    }
+
     const streamResult = await streamText({
       model: decision,
-      messages: this.buildMessages(context, currentStep, dom),
+      messages: this.buildMessages(context, currentStep, dom, warningNudge),
       tools: {
         ...mcpTools,
         analyze_page: visionTool,
@@ -141,6 +173,16 @@ export class StepRunner {
 
     const executionResult = await this.actionExecutor.execute(action);
 
+    // Record action for loop guard
+    if (context.loopGuard) {
+      context.loopGuard.recordAction({
+        toolName: action.type,
+        argsHash: hashArgs(action.params as Record<string, unknown>),
+        resultHash: hashResult(executionResult),
+        timestamp: Date.now(),
+      });
+    }
+
     const isFinished = action.type === 'finish';
 
     return {
@@ -160,8 +202,9 @@ export class StepRunner {
     context: StepContext,
     currentStep: number,
     dom: DOMSnapshotResponse,
+    nudge?: string,
   ): Parameters<typeof streamText>[0]['messages'] {
-    const system = [
+    let systemContent = [
       'You are a browser automation action planner.',
       'Use tool "analyze_page" when visual understanding is needed.',
       'You may call available MCP tools when necessary.',
@@ -169,6 +212,10 @@ export class StepRunner {
       'JSON format: {"type":"click|type|scroll|wait|navigate|screenshot|loadSkill|finish|mcp_call|focus|blur|hover|value|dispatch","params":{...},"reasoning":"optional"}',
       'Do not include markdown fences or extra prose.',
     ].join(' ');
+
+    if (nudge) {
+      systemContent += `\n\n${nudge}`;
+    }
 
     const user = {
       taskId: context.taskId,
@@ -183,7 +230,7 @@ export class StepRunner {
     return [
       {
         role: 'system',
-        content: system,
+        content: systemContent,
       },
       {
         role: 'user',

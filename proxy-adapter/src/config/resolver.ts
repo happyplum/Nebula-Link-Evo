@@ -6,6 +6,13 @@ import {
   ModelSelector,
 } from './schema.js';
 import { normalizeNpmPackage } from '../services/provider/errors.js';
+import {
+  DEFAULT_LOOP_GUARD_CONFIG,
+} from '../services/loop-guard/types.js';
+import type {
+  RawLoopGuardConfig,
+  LoopGuardConfig,
+} from '../services/loop-guard/types.js';
 
 export interface ResolverOptions {
   env?: Record<string, string>;
@@ -70,6 +77,9 @@ export function resolveConfig(
     temperature: resolveSetting(config.settings.temperature, env, defaults, 0.2),
     maxTokens: resolveSetting(config.settings.maxTokens, env, defaults, 1000),
     maxSteps: resolveSetting(config.settings.maxSteps, env, defaults, 1),
+    loopGuard: config.settings.loopGuard
+      ? resolveLoopGuard(config.settings.loopGuard)
+      : undefined,
   };
 
   const resolvedConfig: ResolvedConfig = {
@@ -207,4 +217,23 @@ function parseProviderModelString(
   }
 
   return { provider, model };
+}
+
+function resolveLoopGuard(raw: RawLoopGuardConfig): LoopGuardConfig {
+  return {
+    identicalAction: {
+      warnAt: raw.identicalAction?.warnAt ?? DEFAULT_LOOP_GUARD_CONFIG.identicalAction.warnAt,
+      blockAt: raw.identicalAction?.blockAt ?? DEFAULT_LOOP_GUARD_CONFIG.identicalAction.blockAt,
+    },
+    noProgress: {
+      warnAt: raw.noProgress?.warnAt ?? DEFAULT_LOOP_GUARD_CONFIG.noProgress.warnAt,
+      blockAt: raw.noProgress?.blockAt ?? DEFAULT_LOOP_GUARD_CONFIG.noProgress.blockAt,
+    },
+    pingPong: {
+      warnAt: raw.pingPong?.warnAt ?? DEFAULT_LOOP_GUARD_CONFIG.pingPong.warnAt,
+      blockAt: raw.pingPong?.blockAt ?? DEFAULT_LOOP_GUARD_CONFIG.pingPong.blockAt,
+    },
+    hardCap: typeof raw.hardCap === 'string' ? parseInt(raw.hardCap, 10) : (raw.hardCap ?? DEFAULT_LOOP_GUARD_CONFIG.hardCap),
+    windowSize: typeof raw.windowSize === 'string' ? parseInt(raw.windowSize, 10) : (raw.windowSize ?? DEFAULT_LOOP_GUARD_CONFIG.windowSize),
+  };
 }
