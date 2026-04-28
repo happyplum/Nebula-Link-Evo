@@ -72,8 +72,8 @@ describe('InterventionEngine', () => {
       expect(engine.shouldBlockExecution(makeVerdict({ level: 'blocked' }))).toBe(true);
     });
 
-    it('returns false for critical — handled at integration layer', () => {
-      expect(engine.shouldBlockExecution(makeVerdict({ level: 'critical' }))).toBe(false);
+    it('returns true for critical — hard cap triggers immediate block', () => {
+      expect(engine.shouldBlockExecution(makeVerdict({ level: 'critical' }))).toBe(true);
     });
   });
 

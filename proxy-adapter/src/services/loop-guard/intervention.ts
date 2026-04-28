@@ -41,7 +41,7 @@ class InterventionEngine {
   }
 
   shouldBlockExecution(verdict: LoopGuardVerdict): boolean {
-    return verdict.level === 'blocked';
+    return verdict.level === 'blocked' || verdict.level === 'critical';
   }
 
   shouldInjectNudge(verdict: LoopGuardVerdict): boolean {
