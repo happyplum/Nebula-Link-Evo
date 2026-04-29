@@ -9,6 +9,7 @@ const setOnTrackSubscribedMock = vi.fn();
 
 const runtimeState = {
   playwrightIsOpen: false,
+  setLastScreenshotDataUrl: vi.fn(),
 };
 
 vi.mock('../hooks/useLiveKit.js', () => ({
