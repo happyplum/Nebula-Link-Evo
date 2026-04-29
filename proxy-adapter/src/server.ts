@@ -13,6 +13,7 @@ import { createCompressionClient } from './clients/compression.js';
 import { ChatSessionController } from './services/chat-session-controller.js';
 import { SessionEventHub } from './services/session-event-hub.js';
 import { initializeWithBackup } from './utils/db-backup.js';
+import { normalizeLogLevel } from './services/logger.js';
 import healthRoutes from './plugins/routes/health.js';
 import configRoutes from './plugins/routes/config.js';
 import taskRoutes from './plugins/routes/task.js';
@@ -37,8 +38,9 @@ if (fs.existsSync(envLocal)) {
 
 const app = Fastify({
   logger: {
-    level: 'warn',
+    level: normalizeLogLevel(),
   },
+  disableRequestLogging: true,
 });
 
 const wsManager = DebugWebSocketManager.getInstance();

@@ -2,6 +2,7 @@
 setlocal EnableDelayedExpansion
 
 set NODE_ENV=development
+set LOG_LEVEL=info
 
 cd /d "%~dp0"
 
