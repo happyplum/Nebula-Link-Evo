@@ -232,7 +232,6 @@ export function LiveViewCanvas({
               if (currentBitmapRef.current) currentBitmapRef.current.close();
               currentBitmapRef.current = bitmap;
               drawRenderFrame();
-              debugCounterRef.current?.recordFrame();
             } else {
               bitmap.close();
             }

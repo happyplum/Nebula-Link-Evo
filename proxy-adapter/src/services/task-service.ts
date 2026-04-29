@@ -276,7 +276,8 @@ export class TaskService {
           intro,
         };
         this.logger.info({ responseTime: visionResult.responseTime }, 'Vision: OK');
-        this.logger.info({ intro }, 'Vision AI Response');
+        this.logger.info({ introLength: intro?.length ?? 0 }, 'Vision AI Response');
+        this.logger.debug({ intro }, 'Vision AI Response (full)');
       }
     } catch (err) {
       const errMsg = (err as Error).message;
@@ -320,7 +321,8 @@ export class TaskService {
           intro,
         };
         this.logger.info({ responseTime: decisionResult.responseTime }, 'Decision: OK');
-        this.logger.info({ intro }, 'AI Response');
+        this.logger.info({ introLength: intro?.length ?? 0 }, 'AI Response');
+        this.logger.debug({ intro }, 'AI Response (full)');
       }
     } catch (err) {
       const errMsg = (err as Error).message;
