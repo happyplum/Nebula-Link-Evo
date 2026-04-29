@@ -1,8 +1,8 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { AccessToken } from 'livekit-server-sdk';
 
-const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY || 'devkey';
-const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET || 'secret';
+const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY;
+const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET;
 const LIVEKIT_ROOM = process.env.LIVEKIT_ROOM_NAME || 'nebula-link-screen';
 const LIVEKIT_URL = process.env.LIVEKIT_URL || 'ws://127.0.0.1:7880';
 
@@ -29,6 +29,11 @@ const routes: FastifyPluginAsync = async (fastify) => {
       },
     },
     async () => {
+      if (!LIVEKIT_API_KEY || !LIVEKIT_API_SECRET) {
+        throw new Error(
+          'LIVEKIT_API_KEY and LIVEKIT_API_SECRET environment variables are required'
+        );
+      }
       const accessToken = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
         identity: `debug-ui-${Date.now()}`,
       });

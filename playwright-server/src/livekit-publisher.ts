@@ -17,8 +17,8 @@ import { createWorkerLogger } from './services/logger.js';
 const logger = createWorkerLogger('LiveKitPublisher');
 
 const LIVEKIT_URL = process.env.LIVEKIT_URL || 'ws://127.0.0.1:7880';
-const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY || 'devkey';
-const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET || 'secret';
+const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY;
+const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET;
 const LIVEKIT_ROOM = process.env.LIVEKIT_ROOM_NAME || 'nebula-link-screen';
 
 type ScreencastFrameEvent = {
@@ -233,6 +233,11 @@ async function cleanupPublisher(): Promise<void> {
 }
 
 async function generateToken(): Promise<string> {
+  if (!LIVEKIT_API_KEY || !LIVEKIT_API_SECRET) {
+    throw new Error(
+      'LIVEKIT_API_KEY and LIVEKIT_API_SECRET environment variables are required'
+    );
+  }
   const { AccessToken } = await import('livekit-server-sdk');
   const accessToken = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
     identity: 'playwright-server',

@@ -21,7 +21,9 @@ const roomEvents = {
 };
 
 vi.mock('livekit-client', () => ({
-  Room: vi.fn(() => mockRoom),
+  Room: vi.fn(function (this: unknown) {
+    Object.assign(this, mockRoom);
+  }),
   RoomEvent: roomEvents,
 }));
 

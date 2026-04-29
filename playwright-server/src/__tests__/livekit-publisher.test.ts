@@ -120,6 +120,8 @@ function createMockCdpSession() {
 
 describe('livekit-publisher', () => {
   beforeEach(() => {
+    process.env.LIVEKIT_API_KEY = 'test-key';
+    process.env.LIVEKIT_API_SECRET = 'test-secret';
     vi.resetModules();
     vi.clearAllMocks();
     // Default: non-production env so debug counter is active

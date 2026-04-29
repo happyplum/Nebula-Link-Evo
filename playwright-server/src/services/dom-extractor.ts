@@ -3,14 +3,12 @@ import * as crypto from 'node:crypto';
 import { gzipSync } from 'node:zlib';
 import type {
   BoundingBox as SharedBoundingBox,
-  LocatorBundle as SharedLocatorBundle,
 } from '@nebula-link-evo/shared/types/vision-marker';
 import {
   SimplifiedDOMResponse,
   ElementLocator,
   SimplifiedElement,
   SimplifiedDOM,
-  LocatorBundle,
 } from '../types.js';
 import { generateLocatorBundle } from '../locator-generator.js';
 import { injectMarkers } from '../marker-injector.js';
@@ -41,10 +39,6 @@ export class DOMExtractor {
 
   clearCache(): void {
     this.snapshotCache.clear();
-  }
-
-  private convertLocatorBundle(sharedBundle: SharedLocatorBundle): LocatorBundle {
-    return sharedBundle;
   }
 
   private async takeAnnotatedScreenshot(): Promise<Buffer> {
@@ -101,7 +95,7 @@ export class DOMExtractor {
 
             const elementLocator: ElementLocator = {
               id: elementInfo.id,
-              locator_bundle: this.convertLocatorBundle(locator_bundle),
+              locator_bundle: locator_bundle,
               bbox: elementInfo.bbox as SharedBoundingBox,
               tag: elementInfo.tag,
               text: elementInfo.text,
