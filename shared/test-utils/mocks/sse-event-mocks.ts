@@ -8,7 +8,7 @@ import type {
   AssistantToolCallEvent,
   AssistantToolResultEvent,
   RunErrorEvent,
-} from '../../../shared/types/sse-events.js';
+} from '../../types/sse-events.js';
 
 /**
  * Create a mock session.snapshot event

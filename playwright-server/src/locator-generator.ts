@@ -1,5 +1,5 @@
 import { Page, ElementHandle } from 'playwright';
-import type { LocatorBundle } from '../../shared/types/vision-marker.js';
+import type { LocatorBundle } from '@nebula-link-evo/shared/types/vision-marker';
 import { createWorkerLogger } from './services/logger.js';
 
 const logger = createWorkerLogger('LocatorGenerator');

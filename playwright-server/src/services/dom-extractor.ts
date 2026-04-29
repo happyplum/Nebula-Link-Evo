@@ -4,7 +4,7 @@ import { gzipSync } from 'node:zlib';
 import type {
   BoundingBox as SharedBoundingBox,
   LocatorBundle as SharedLocatorBundle,
-} from '../../../shared/types/vision-marker.js';
+} from '@nebula-link-evo/shared/types/vision-marker';
 import {
   SimplifiedDOMResponse,
   ElementLocator,
