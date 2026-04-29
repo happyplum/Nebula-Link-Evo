@@ -36,13 +36,8 @@ vi.mock('@/features/runtime/store/index.js', () => ({
     connectionStatus: 'disconnected',
     playwrightIsOpen: false,
     liveviewRefreshKey: 0,
-    debugEnabled: false,
     setLastScreenshotDataUrl: vi.fn(),
   }),
-}));
-
-vi.mock('@/features/runtime/store/runtime.store.js', () => ({
-  selectDebugEnabled: (s: any) => s.debugEnabled,
 }));
 
 // Mock useDebugSocket hook
@@ -70,7 +65,6 @@ vi.mock('@/features/playwright-control/store/control.store.js', () => {
 // Mock coordinate transform functions as no-ops
 vi.mock('@/features/liveview/lib/index.js', () => ({
   createMjpegTransform: () => new TransformStream(),
-  setParserDebugEnabled: vi.fn(),
   canvasToPageCoords: (cssX: number, cssY: number) => ({ x: cssX, y: cssY }),
   getImageFitRect: (): ImageFitRect => ({
     offsetX: 0,

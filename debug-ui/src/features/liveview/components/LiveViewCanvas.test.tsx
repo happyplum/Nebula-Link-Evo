@@ -8,7 +8,6 @@ const runtimeState = {
   connectionStatus: 'connected',
   playwrightIsOpen: true,
   liveviewRefreshKey: 0,
-  debugEnabled: false,
   setLastScreenshotDataUrl: vi.fn(),
 };
 
@@ -28,13 +27,8 @@ vi.mock('@/features/runtime/store/index.js', () => ({
   selectLiveviewRefreshKey: (state: typeof runtimeState) => state.liveviewRefreshKey,
 }));
 
-vi.mock('@/features/runtime/store/runtime.store.js', () => ({
-  selectDebugEnabled: (state: typeof runtimeState) => state.debugEnabled,
-}));
-
 vi.mock('@/features/liveview/lib/index.js', () => ({
   createMjpegTransform: () => new TransformStream(),
-  setParserDebugEnabled: vi.fn(),
   getImageFitRect: (imgW: number, imgH: number, containerW: number, containerH: number) => ({
     offsetX: 0,
     offsetY: 0,
@@ -77,7 +71,6 @@ describe('LiveViewCanvas', () => {
     runtimeState.connectionStatus = 'connected';
     runtimeState.playwrightIsOpen = true;
     runtimeState.liveviewRefreshKey = 0;
-    runtimeState.debugEnabled = false;
     runtimeState.setLastScreenshotDataUrl = vi.fn();
     useControlStore.getState().reset();
 

@@ -15,7 +15,6 @@ const { storeState } = vi.hoisted(() => ({
     lastScreenshotDataUrl: null as string | null,
     executionMessages: [] as Array<{ type: string; text: string; timestamp: number }>,
     liveviewTransport: 'webrtc' as 'webrtc' | 'mjpeg',
-    debugEnabled: false,
     setConnectionStatus: vi.fn(),
     setReconnectAttempt: vi.fn(),
     incrementReconnectAttempt: vi.fn(),
@@ -30,7 +29,6 @@ const { storeState } = vi.hoisted(() => ({
     setLiveviewTransport: vi.fn((mode: 'webrtc' | 'mjpeg') => {
       storeState.liveviewTransport = mode;
     }),
-    toggleDebug: vi.fn(),
     reset: vi.fn(),
   },
 }));
@@ -97,7 +95,6 @@ vi.mock('@/features/runtime/store/runtime.store.js', () => {
     setLiveviewTransport: vi.fn((mode) => {
       storeState.liveviewTransport = mode;
     }),
-    toggleDebug: vi.fn(),
     reset: vi.fn(),
   };
 
@@ -114,7 +111,6 @@ vi.mock('@/features/runtime/store/runtime.store.js', () => {
     selectExecutionMessages: (s: typeof storeState) => s.executionMessages,
     selectLiveviewTransport: (s: typeof storeState) => s.liveviewTransport,
     selectLiveviewRefreshKey: (s: typeof storeState) => s.liveviewRefreshKey,
-    selectDebugEnabled: (s: typeof storeState) => s.debugEnabled,
   };
 });
 
@@ -130,7 +126,6 @@ describe('MonitorMainShell Transport Degradation', () => {
     storeState.lastScreenshotDataUrl = null;
     storeState.executionMessages = [];
     storeState.liveviewTransport = 'webrtc';
-    storeState.debugEnabled = false;
   });
 
   it('renders LiveKitView when preferred transport is webrtc and no error', () => {

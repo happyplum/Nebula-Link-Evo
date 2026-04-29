@@ -4,7 +4,6 @@ import type { ChatHandler, ChatMessageData } from './conversation/chat-handler.j
 import { StreamBuffer } from './services/websocket/stream-buffer.js';
 export { cleanupPersistence } from './services/websocket/persistence-singletons.js';
 import type { WebSocketMessage, StreamChunk } from './services/websocket/types.js';
-import { createFrameCounter, type FrameCounter } from '@nebula-link-evo/shared';
 import type { Logger } from 'pino';
 import { createWorkerLogger } from './services/logger.js';
 
@@ -36,9 +35,6 @@ export class DebugWebSocketManager {
   private sessionSubscriptions: Map<string, Set<string>> = new Map();
   private clientSessions: Map<string, string> = new Map();
   private streamBuffers: Map<string, StreamBuffer> = new Map();
-  private debugEnabled = false;
-  private debugCounter: FrameCounter | null = null;
-  private debugSummaryInterval: NodeJS.Timeout | null = null;
   private logger: Logger;
 
   private constructor(logger?: Logger) {
@@ -205,35 +201,6 @@ export class DebugWebSocketManager {
           timestamp: new Date().toISOString(),
         });
         break;
-      case 'debug_toggle': {
-        const enabled = Boolean((message as Record<string, unknown>).enabled);
-        this.debugEnabled = enabled;
-        if (enabled && process.env.NODE_ENV !== 'production') {
-          if (this.debugCounter) return; // idempotent guard — prevent orphaned interval
-          this.debugCounter = createFrameCounter(1000);
-          this.debugSummaryInterval = setInterval(() => {
-            if (this.debugCounter) {
-              const s = this.debugCounter.getSummary();
-              this.logger.info({ fps: s.fps, totalDrops: s.totalDrops, relayBackpressure: s.dropReasons['relay_backpressure'] ?? 0, bytesPerSec: s.bytesPerSecond }, 'NLE-Debug relay stats');
-            }
-          }, 1000);
-        } else {
-          if (this.debugCounter) {
-              const s = this.debugCounter.getSummary();
-              this.logger.info({ fps: s.fps, totalDrops: s.totalDrops, relayBackpressure: s.dropReasons['relay_backpressure'] ?? 0, bytesPerSec: s.bytesPerSecond }, 'NLE-Debug relay stats (disabled)');
-              this.debugCounter = null;
-          }
-          if (this.debugSummaryInterval) {
-            clearInterval(this.debugSummaryInterval);
-            this.debugSummaryInterval = null;
-          }
-        }
-        this.respondToClient(clientId, {
-          type: 'debug_status',
-          enabled: this.debugEnabled,
-        });
-        break;
-      }
       default:
         this.respondToClient(clientId, {
           type: 'ack',
@@ -271,14 +238,6 @@ export class DebugWebSocketManager {
         this.clients.delete(clientId);
       }
     }
-  }
-
-  isDebugEnabled(): boolean {
-    return this.debugEnabled;
-  }
-
-  getDebugCounter(): FrameCounter | null {
-    return this.debugCounter;
   }
 
   setTaskCommandHandler(handler: (message: WebSocketMessage) => void): void {
