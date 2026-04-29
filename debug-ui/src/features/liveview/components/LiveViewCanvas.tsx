@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createFrameCounter } from '@nebula-link-evo/shared';
+import type { FrameCounter } from '@nebula-link-evo/shared';
 import {
   createMjpegTransform,
   getImageFitRect,
-  setParserDebugEnabled,
 } from '@/features/liveview/lib/index.js';
 import type { ImageFitRect } from '@/features/liveview/lib/index.js';
 import {
@@ -11,15 +12,15 @@ import {
   selectPlaywrightIsOpen,
   useRuntimeStore,
 } from '@/features/runtime/store/index.js';
-import { selectDebugEnabled } from '@/features/runtime/store/runtime.store.js';
-import { createFrameCounter } from '@nebula-link-evo/shared';
-import type { FrameCounter } from '@nebula-link-evo/shared';
 import { testIds } from '@/shared/testing/testids.js';
 import { LiveViewOverlayLayer } from './LiveViewOverlayLayer.js';
 import styles from './LiveViewCanvas.module.css';
 
 const STREAM_URL = '/debug/api/playwright/screenshot/stream';
 const DEFAULT_BOUNDARY = '--frameboundary';
+
+// --- Debug frame counter (compile-time, tree-shaken when VITE_VIDEO_DEBUG !== '1') ---
+const VIDEO_DEBUG = import.meta.env.VITE_VIDEO_DEBUG === '1';
 
 interface LiveViewCanvasProps {
   onElementSelect?: (selector: string) => void;
@@ -50,55 +51,17 @@ export function LiveViewCanvas({
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const streamAbortRef = useRef<AbortController | null>(null);
   const streamVersionRef = useRef(0);
-  const [fitRect, setFitRect] = useState<ImageFitRect | null>(null);
-
   const debugCounterRef = useRef<FrameCounter | null>(null);
-  const debugIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [fitRect, setFitRect] = useState<ImageFitRect | null>(null);
 
   const isPlaywrightConnected = useRuntimeStore(selectPlaywrightIsOpen);
   const liveviewRefreshKey = useRuntimeStore(selectLiveviewRefreshKey);
   const connectionStatus = useRuntimeStore(selectConnectionStatus);
   const setLastScreenshotDataUrl = useRuntimeStore((s) => s.setLastScreenshotDataUrl);
-  const debugEnabled = useRuntimeStore(selectDebugEnabled);
 
   // Track connection state for cleanup: distinguish tab-switch refresh from real disconnect
   const isPlaywrightConnectedRef = useRef(isPlaywrightConnected);
   isPlaywrightConnectedRef.current = isPlaywrightConnected;
-
-  // Debug counter lifecycle — watches runtime store debugEnabled toggle
-  useEffect(() => {
-    if (!import.meta.env.DEV) return;
-
-    if (debugEnabled) {
-      const counter = createFrameCounter();
-      debugCounterRef.current = counter;
-      debugIntervalRef.current = setInterval(() => {
-        if (debugCounterRef.current) {
-          console.log('[NLE-Debug] canvas', debugCounterRef.current.getSummary());
-        }
-      }, 1000);
-      setParserDebugEnabled(true);
-    } else {
-      if (debugCounterRef.current) {
-        console.log('[NLE-Debug] canvas', debugCounterRef.current.getSummary());
-      }
-      if (debugIntervalRef.current) {
-        clearInterval(debugIntervalRef.current);
-        debugIntervalRef.current = null;
-      }
-      debugCounterRef.current = null;
-      setParserDebugEnabled(false);
-    }
-
-    return () => {
-      if (debugIntervalRef.current) {
-        clearInterval(debugIntervalRef.current);
-        debugIntervalRef.current = null;
-      }
-      debugCounterRef.current = null;
-      setParserDebugEnabled(false);
-    };
-  }, [debugEnabled]);
 
   const replaceDownloadUrl = useCallback(
     (nextBlob: Blob | null, revokeCurrent: boolean) => {
@@ -157,6 +120,7 @@ export function LiveViewCanvas({
 
     bitmapCtx.transferFromImageBitmap(bitmap);
     currentBitmapRef.current = null;
+    debugCounterRef.current?.recordFrame();
   }, []);
 
   const resizeCanvases = useCallback(() => {
@@ -199,6 +163,21 @@ export function LiveViewCanvas({
       resizeObserverRef.current = null;
     };
   }, [resizeCanvases]);
+
+  // Initialize debug frame counter when VIDEO_DEBUG is true
+  useEffect(() => {
+    if (VIDEO_DEBUG) {
+      const counter = createFrameCounter(1000);
+      debugCounterRef.current = counter;
+      const interval = setInterval(() => {
+        console.log('[NLE-Debug] canvas', counter.getSummary());
+      }, 1000);
+      return () => {
+        clearInterval(interval);
+        debugCounterRef.current = null;
+      };
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -253,6 +232,7 @@ export function LiveViewCanvas({
               if (currentBitmapRef.current) currentBitmapRef.current.close();
               currentBitmapRef.current = bitmap;
               drawRenderFrame();
+              debugCounterRef.current?.recordFrame();
             } else {
               bitmap.close();
             }
@@ -291,14 +271,12 @@ export function LiveViewCanvas({
             }
 
             if (currentBitmapRef.current) {
-              debugCounterRef.current?.recordDrop('buffer_full');
               continue;
             }
 
             const frameBlob = new Blob([value.slice()], { type: 'image/jpeg' });
             replaceDownloadUrl(frameBlob, true);
             const bitmap = await createImageBitmap(frameBlob);
-            debugCounterRef.current?.recordFrame();
             if (cancelled || streamVersion !== streamVersionRef.current) {
               bitmap.close();
               break;

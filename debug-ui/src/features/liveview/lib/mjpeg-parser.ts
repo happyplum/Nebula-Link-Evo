@@ -5,32 +5,14 @@ const encoder = new TextEncoder();
 
 const HEADER_SEPARATOR = encoder.encode('\r\n\r\n');
 
-// --- Debug frame counter (DEV only, tree-shaken in production) ---
-let debugCounter: FrameCounter | null = null;
-let debugSummaryInterval: ReturnType<typeof setInterval> | null = null;
+// --- Debug frame counter (compile-time, tree-shaken when VITE_VIDEO_DEBUG !== '1') ---
+const VIDEO_DEBUG = import.meta.env.VITE_VIDEO_DEBUG === '1';
+const debugCounter = VIDEO_DEBUG ? createFrameCounter(1000) : null;
 
-/**
- * Enable or disable the parser-side debug counter.
- * Gated by `import.meta.env.DEV` — no-op in production builds.
- */
-export function setParserDebugEnabled(enabled: boolean): void {
-  if (!import.meta.env.DEV) return;
-
-  if (enabled && !debugCounter) {
-    debugCounter = createFrameCounter();
-    debugSummaryInterval = setInterval(() => {
-      if (debugCounter) {
-        console.log('[NLE-Debug] parser', debugCounter.getSummary());
-      }
-    }, 1000);
-  } else if (!enabled && debugCounter) {
+if (VIDEO_DEBUG && debugCounter) {
+  setInterval(() => {
     console.log('[NLE-Debug] parser', debugCounter.getSummary());
-    if (debugSummaryInterval) {
-      clearInterval(debugSummaryInterval);
-      debugSummaryInterval = null;
-    }
-    debugCounter = null;
-  }
+  }, 1000);
 }
 
 /**

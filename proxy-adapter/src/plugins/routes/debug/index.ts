@@ -7,6 +7,7 @@ import { TaskService } from '../../../services/index.js';
 import { DatabaseManager } from '../../../conversation/db.js';
 import { getServiceEndpointsCached } from '../../../config/services.js';
 import type { ResolvedProvider } from '../../../config/schema.js';
+import { createFrameCounter } from '@nebula-link-evo/shared';
 
 interface InteractionQuery {
   limit?: number;
@@ -459,9 +460,9 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       const abortController = new AbortController();
       request.raw.on('close', () => abortController.abort());
 
-      const debugEnabled = wsManager.isDebugEnabled();
-      const counter = wsManager.getDebugCounter();
-      const upstreamUrl = `${PLAYWRIGHT_URL}/browser/stream${debugEnabled ? '?debug=true' : ''}`;
+      const VIDEO_DEBUG = process.env.LOG_LEVEL === 'debug';
+      const counter = VIDEO_DEBUG ? createFrameCounter(1000) : null;
+      const upstreamUrl = `${PLAYWRIGHT_URL}/browser/stream${VIDEO_DEBUG ? '?debug=true' : ''}`;
       const upstream = await fetch(upstreamUrl, {
         signal: abortController.signal,
       });
