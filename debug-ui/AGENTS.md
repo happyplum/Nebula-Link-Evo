@@ -78,6 +78,8 @@ pnpm type-check   # tsc --noEmit
 
 - `src/features/AGENTS.md` — feature-level guidance
 - `src/features/chat/AGENTS.md` — SSE + optimistic chat streaming
+- `src/features/config/AGENTS.md` — health, MCP tools, API keys, AI test
+- `src/features/history/AGENTS.md` — task execution history, interaction inspection
 - `src/features/runtime/AGENTS.md` — shared debug WebSocket lifecycle
 - `src/features/liveview/AGENTS.md` — MJPEG canvas and overlay rules
 - `src/features/playwright-control/AGENTS.md` — browser control/store rules

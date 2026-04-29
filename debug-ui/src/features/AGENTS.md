@@ -47,6 +47,8 @@ features/
 ## Child AGENTS
 
 - `chat/AGENTS.md`
-- `runtime/AGENTS.md`
+- `config/AGENTS.md`
+- `history/AGENTS.md`
 - `liveview/AGENTS.md`
 - `playwright-control/AGENTS.md`
+- `runtime/AGENTS.md`
