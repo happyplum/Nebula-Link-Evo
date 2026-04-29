@@ -13,7 +13,8 @@
     "rootDirs": ["./src", "../shared", "../playwright-server/src"],
     "baseUrl": ".",
     "paths": {
-      "@shared/*": ["../shared/*"]
+      "@nebula-link-evo/shared": ["../shared/index.ts"],
+      "@nebula-link-evo/shared/*": ["../shared/*"]
     }
   },
   "include": ["src/**/*", "src/__tests__/**/*", "src/**/*.test.ts", "playwright.config.ts"]

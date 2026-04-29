@@ -3,7 +3,6 @@ import { fileURLToPath, URL } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
-  // @ts-expect-error -- @vitejs/plugin-react types target vite@5; vitest@4 bundles vite@7
   plugins: [react()],
   test: {
     globals: true,

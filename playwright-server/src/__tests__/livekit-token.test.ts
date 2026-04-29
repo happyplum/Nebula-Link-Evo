@@ -15,6 +15,8 @@ vi.mock('livekit-server-sdk', () => ({
 
 describe('GET /livekit-token', () => {
   beforeEach(() => {
+    process.env.LIVEKIT_API_KEY = 'test-key';
+    process.env.LIVEKIT_API_SECRET = 'test-secret';
     vi.resetModules();
     vi.clearAllMocks();
   });

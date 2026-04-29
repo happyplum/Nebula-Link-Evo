@@ -7,6 +7,8 @@ export interface ImagePreviewModalProps {
   onClose: () => void;
   src: string;
   alt?: string;
+  /** Accepted but intentionally not rendered in lightbox mode. */
+  title?: string;
 }
 
 export function ImagePreviewModal({ open, onClose, src, alt }: ImagePreviewModalProps) {
