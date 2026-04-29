@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
-import type { SessionEvent, SessionEventType, SessionState } from '../../../shared/types/sse-events.js';
+import type { SessionEvent, SessionEventType, SessionState } from '@nebula-link-evo/shared/types/sse-events';
 import type { Message } from './types.js';
 
 interface BufferedEvent {

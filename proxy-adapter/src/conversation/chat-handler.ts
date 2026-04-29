@@ -4,7 +4,7 @@ import { MCPSDKClient } from '../clients/mcp/sdk-client.js';
 import type { ResolvedConfig } from '../config/schema.js';
 import { ChatSessionController } from '../services/chat-session-controller.js';
 import type { AgentState, Session, Message, SessionStatus } from './types.js';
-import type { SessionEvent, SessionEventType } from '../../../shared/types/sse-events.js';
+import type { SessionEvent, SessionEventType } from '@nebula-link-evo/shared/types/sse-events';
 import { SessionEventsDAO } from './session-events-dao.js';
 import { DatabaseManager } from './db.js';
 import { SessionEventHub } from '../services/session-event-hub.js';
