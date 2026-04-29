@@ -328,7 +328,8 @@ export class ChatSessionController {
     const recoveredIds = this.recoverRunningSessions();
 
     if (recoveredIds.length > 0) {
-      this.logger.info({ count: recoveredIds.length, ids: recoveredIds }, 'Recovered sessions from crash');
+      this.logger.info({ count: recoveredIds.length }, 'Recovered sessions from crash');
+      this.logger.debug({ ids: recoveredIds }, 'Recovered sessions from crash (full IDs)');
     } else {
       this.logger.info('No crashed sessions to recover');
     }

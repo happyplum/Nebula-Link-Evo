@@ -148,8 +148,9 @@ describe('server initialization', () => {
     vi.mocked(fs.existsSync).mockReturnValue(false);
     await import('../server.js');
     expect(mockFastifyConstructor).toHaveBeenCalledWith({
+      disableRequestLogging: true,
       logger: {
-        level: 'warn',
+        level: 'info',
       },
     });
   });

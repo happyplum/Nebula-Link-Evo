@@ -151,7 +151,8 @@ export class MCPSDKClient {
       throw new Error(`MCP server ${serverName} is not running`);
     }
 
-    this.logger.info({ serverName, toolName, args }, 'Calling MCP tool');
+    this.logger.info({ serverName, toolName }, 'Calling MCP tool');
+    this.logger.debug({ serverName, toolName, args }, 'Calling MCP tool (full args)');
 
     try {
       const result = await server.client.callTool({
