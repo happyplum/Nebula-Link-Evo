@@ -13,7 +13,7 @@
  * uses this simpler representation for flexibility.
  */
 export interface Action {
-  type: 'click' | 'type' | 'scroll' | 'wait' | 'navigate' | 'screenshot' | 'loadSkill' | 'finish' | 'mcp_call' | 'focus' | 'blur' | 'hover' | 'value' | 'dispatch';
+  type: 'click' | 'type' | 'scroll' | 'wait' | 'navigate' | 'screenshot' | 'finish' | 'mcp_call' | 'focus' | 'blur' | 'hover' | 'value' | 'dispatch';
   params: Record<string, unknown>;
   reasoning?: string;
 }
@@ -42,32 +42,6 @@ export interface ActionResult {
   success: boolean;
   message: string;
   screenshot?: string;
-}
-
-export interface TaskRequest {
-  url: string;
-  instruction: string;
-  skillId?: string;
-  context?: {
-    previousActions?: ActionResult[];
-    maxSteps?: number;
-    screenshotOnError?: boolean;
-    params?: Record<string, string>;
-    session?: {
-      provider: string | null;
-      model: string | null;
-      vision_provider: string | null;
-      vision_model: string | null;
-    };
-  };
-}
-
-export interface TaskResponse {
-  success: boolean;
-  url: string;
-  actions: ActionResult[];
-  result?: string;
-  error?: string;
 }
 
 // ========== DOM TYPES ==========
