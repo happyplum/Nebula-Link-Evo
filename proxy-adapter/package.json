@@ -24,7 +24,6 @@
     "@fastify/swagger": "catalog:",
     "@fastify/swagger-ui": "catalog:",
     "@fastify/type-provider-typebox": "catalog:",
-    "@fastify/websocket": "catalog:",
     "@microsoft/fetch-event-source": "^2.0.1",
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@nebula-link-evo/shared": "workspace:*",
@@ -38,13 +37,11 @@
     "fastify-plugin": "catalog:",
     "livekit-server-sdk": "catalog:",
     "pino": "^10.3.1",
-    "ws": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/node": "catalog:",
-    "@types/ws": "catalog:",
     "@vitest/coverage-v8": "catalog:",
     "cross-env": "^10.1.0",
     "esbuild": "catalog:",
