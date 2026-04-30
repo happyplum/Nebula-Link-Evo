@@ -2,7 +2,7 @@
 
 ## Overview
 
-Fastify backend on port `3000`. AI orchestration, chat/session APIs, debug APIs, WebSocket.
+Fastify backend on port `3000`. AI orchestration, chat/session APIs, debug APIs.
 
 ## Commands
 
@@ -20,11 +20,9 @@ pnpm test:debug   # Debug page smoke check
 | Area             | Path                                | Notes                                                 |
 | ---------------- | ----------------------------------- | ----------------------------------------------------- |
 | Server entry     | `src/server.ts`                     | Env load, plugins, route registration                 |
-| Task facade      | `src/services/task-service.ts`      | Task execution entry                                  |
-| Orchestration    | `src/services/task-orchestrator.ts` | Skill vs AI paths, history, ws events                 |
+| Task facade      | `src/services/task-service.ts`      | Config, MCP, provider registry, singleton facade      |
 | Action execution | `src/services/action-executor.ts`   | Browser action dispatch                               |
-| Debug routes     | `src/plugins/routes/debug/`         | `/debug/api/*`, task history                          |
-| Chat routes      | `src/plugins/routes/api/chat/`      | Session, stream, control                              |
+| Chat routes      | `src/plugins/routes/api/chat/`      | Session, stream, control (sole execution path)        |
 | Conversations    | `src/conversation/`                 | SQLite persistence, compression                       |
 | AI clients       | `src/clients/`                      | Provider factories (decision, vision, Vercel AI, MCP) |
 | Config           | `src/config/`                       | Schema, loader, resolver, validator                   |
