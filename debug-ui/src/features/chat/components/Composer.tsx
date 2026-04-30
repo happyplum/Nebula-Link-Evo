@@ -5,7 +5,7 @@ import {
   selectActiveSessionId,
   selectScreenshotData,
 } from '../store/chat.store.js';
-import { useRuntimeStore, selectConnectionStatus } from '@/features/runtime/store/index.js';
+import { useRuntimeStore } from '@/features/runtime/store/index.js';
 import { apiChatSessionMessages, DEBUG_PLAYWRIGHT_SCREENSHOT } from '@/shared/api/endpoints.js';
 import { testIds } from '@/shared/testing/testids.js';
 import styles from './Composer.module.css';
@@ -40,11 +40,9 @@ export const Composer: React.FC<ComposerProps> = ({ onRenameSession, onDeleteSes
   const clearScreenshotData = useChatStore((s) => s.clearScreenshotData);
   const setStreamingState = useChatStore((s) => s.setStreamingState);
 
-  const connectionStatus = useRuntimeStore(selectConnectionStatus);
-
   const isStreaming = streamingState === 'streaming';
   const isComposerDisabled = isStreaming || !activeSessionId;
-  const isScreenshotDisabled = isStreaming || !activeSessionId || connectionStatus !== 'connected';
+  const isScreenshotDisabled = isStreaming || !activeSessionId;
 
   const handleSend = async () => {
     const content = input.trim();

@@ -7,10 +7,6 @@
 export const API_CONFIG = '/api/config' as const;
 export const API_HEALTH = '/api/health' as const;
 
-// Debug API — Tasks
-export const DEBUG_TASKS = '/debug/api/tasks' as const;
-export const debugTaskDetail = (id: string) => `/debug/api/tasks/${id}` as const;
-
 // Debug API — AI & Keys
 export const DEBUG_TEST_AI = '/debug/api/test-ai' as const;
 export const DEBUG_VERIFY_KEYS = '/debug/api/verify-keys' as const;

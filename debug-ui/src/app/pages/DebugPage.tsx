@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   useLayoutStore,
   selectActiveActivityIcon,
@@ -30,23 +29,20 @@ import styles from './DebugPage.module.css';
 
 interface ActivityDef {
   icon: string;
-  name: ActivityIcon | 'chat' | 'execution';
+  name: ActivityIcon | 'chat';
   title: string;
-  isRoute: boolean;
 }
 
 const ACTIVITIES: ActivityDef[] = [
-  { icon: '📊', name: 'monitor', title: '状态', isRoute: false },
-  { icon: '🎮', name: 'control', title: '控制', isRoute: false },
-  { icon: '🤖', name: 'ai', title: 'AI', isRoute: false },
-  { icon: '📋', name: 'execution', title: '执行记录', isRoute: true },
+  { icon: '📊', name: 'monitor', title: '状态' },
+  { icon: '🎮', name: 'control', title: '控制' },
+  { icon: '🤖', name: 'ai', title: 'AI' },
 ];
 
 const TESTID_MAP: Record<string, string> = {
   monitor: testIds.activityBtnMonitor,
   control: testIds.activityBtnControl,
   ai: testIds.activityBtnAi,
-  execution: testIds.activityBtnExecution,
 };
 
 const SIDEBAR_TITLES: Record<ActivityIcon, string> = {
@@ -58,7 +54,6 @@ const SIDEBAR_TITLES: Record<ActivityIcon, string> = {
 };
 
 export default function DebugPage() {
-  const navigate = useNavigate();
   const activeIcon = useLayoutStore(selectActiveActivityIcon);
   const setActiveIcon = useLayoutStore((s) => s.setActiveActivityIcon);
   const activeRightTab = useLayoutStore(selectActiveRightTab);
@@ -107,18 +102,13 @@ export default function DebugPage() {
       {/* Activity Bar */}
       <nav className={styles.activityBar} data-testid={testIds.activityBar}>
         {ACTIVITIES.map((a) => {
-          const isSidebar = !a.isRoute;
-          const isActive = isSidebar && activeIcon === a.name;
+          const isActive = activeIcon === a.name;
           return (
             <button
               key={a.name}
               type="button"
               className={`${styles.activityIcon} ${isActive ? styles.active : ''}`}
-              onClick={() =>
-                a.isRoute
-                  ? navigate(a.name === 'chat' ? '/chat' : '/execution')
-                  : setActiveIcon(a.name as ActivityIcon)
-              }
+              onClick={() => setActiveIcon(a.name as ActivityIcon)}
               title={a.title}
               data-testid={TESTID_MAP[a.name]}
             >
