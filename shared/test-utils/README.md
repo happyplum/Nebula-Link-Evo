@@ -64,19 +64,16 @@ When `TEST_MODE='true'` is set:
 ```typescript
 import { createKimiClientMock } from '@mocks/KimiClient.mock.js';
 import { createBrowserContextMock } from '@mocks/BrowserContext.mock.js';
-import { createWebSocketMock } from '@mocks/WebSocket.mock.js';
 
 // Create fresh mocks for each test
 const kimiMock = createKimiClientMock();
 const browserMock = createBrowserContextMock();
-const wsMock = createWebSocketMock();
 ```
 
 ### Available Mocks
 
 - `KimiClient.mock.ts` - Mock for Kimi AI API client
 - `BrowserContext.mock.ts` - Mock for Playwright BrowserContext
-- `WebSocket.mock.ts` - Mock for WebSocket connections
 
 ### Conventions
 

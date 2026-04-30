@@ -22,12 +22,3 @@ export {
   createBrowserLifecycleMock,
   createMockElementHandle,
 } from './mocks/BrowserContext.mock.js';
-
-// WebSocket mocks
-export {
-  createWebSocketMock,
-  createFastifyWebSocketMock,
-  simulateWebSocketMessage,
-  simulateWebSocketError,
-  simulateWebSocketClose,
-} from './mocks/WebSocket.mock.js';
