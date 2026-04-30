@@ -24,13 +24,6 @@ vi.mock('../services/index.js', () => ({
     shutdown: vi.fn().mockResolvedValue(undefined),
   },
 }));
-vi.mock('../websocket-manager.js', () => ({
-  DebugWebSocketManager: {
-    getInstance: vi.fn().mockReturnValue({
-      setChatHandler: vi.fn(),
-    }),
-  },
-}));
 vi.mock('../browser-client.js', () => ({
   browserClient: {},
 }));

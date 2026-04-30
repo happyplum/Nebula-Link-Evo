@@ -7,7 +7,6 @@ import { simulateReadableStream } from 'ai';
 import { ConversationManager } from '../conversation/manager.js';
 import { ChatHandler } from '../conversation/chat-handler.js';
 import { DatabaseManager } from '../conversation/db.js';
-import { DebugWebSocketManager } from '../websocket-manager.js';
 import { SessionEventHub } from '../services/session-event-hub.js';
 import { SessionLock } from '../services/session-lock.js';
 import type { LanguageModelV3 } from '@ai-sdk/provider';
@@ -264,16 +263,8 @@ describe('SSE Reconnection Event Recovery', () => {
 
     const db = DatabaseManager.getInstance();
     sessionEventsDAO = db.getSessionEventsDAO();
-    const wsManager = DebugWebSocketManager.getInstance();
-
-    chatHandler = new ChatHandler(
-      manager,
-      mockConfig,
-      wsManager,
-      undefined,
-      sessionEventsDAO,
-      sessionEventHub
-    );
+    
+    chatHandler = new ChatHandler(manager, mockConfig, undefined, sessionEventsDAO, sessionEventHub);
 
     vi.spyOn(chatHandler as unknown as { resolveDecisionModel: () => Promise<LanguageModelV3> }, 'resolveDecisionModel')
       .mockResolvedValue(mockModel);
@@ -516,14 +507,7 @@ describe('SSE Reconnection Event Recovery', () => {
   });
 
   it('Test 5: ChatHandler without explicit DAO injection still streams events', { timeout: 10000 }, async () => {
-    const buggyChatHandler = new ChatHandler(
-      manager,
-      mockConfig,
-      DebugWebSocketManager.getInstance(),
-      undefined,
-      undefined,
-      sessionEventHub
-    );
+    const buggyChatHandler = new ChatHandler(manager, mockConfig, undefined, undefined, sessionEventHub);
 
     vi.spyOn(
       buggyChatHandler as unknown as { resolveDecisionModel: () => Promise<LanguageModelV3> },

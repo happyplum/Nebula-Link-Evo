@@ -3,7 +3,6 @@ import type { ResolvedConfig } from '../../../config/schema.js';
 import type { SessionEventType } from '@nebula-link-evo/shared/types/sse-events';
 import { ChatHandler } from '../../../conversation/chat-handler.js';
 import { ConversationManager } from '../../../conversation/manager.js';
-import { DebugWebSocketManager } from '../../../websocket-manager.js';
 import { MCPSDKClient } from '../../../clients/mcp/sdk-client.js';
 import { ChatSessionController } from '../../../services/chat-session-controller.js';
 import { SessionEventsDAO } from '../../../conversation/session-events-dao.js';
@@ -73,7 +72,6 @@ function createResolvedConfig(): ResolvedConfig {
 
 describe('chat sdk loop error contract', () => {
   let manager: ConversationManager;
-  let wsManager: DebugWebSocketManager;
   let mcpClient: MCPSDKClient;
   let chatHandler: ChatHandler;
   let sessionId: string;
@@ -84,9 +82,6 @@ describe('chat sdk loop error contract', () => {
     vi.clearAllMocks();
     manager = new ConversationManager(':memory:');
     manager.initialize();
-    wsManager = DebugWebSocketManager.getInstance();
-    wsManager.setTaskCommandHandler(() => {});
-
     mcpClient = new MCPSDKClient(createResolvedConfig());
     vi.spyOn(mcpClient, 'isEnabled').mockReturnValue(true);
     vi.spyOn(mcpClient, 'getAvailableTools').mockReturnValue([]);
@@ -110,7 +105,6 @@ describe('chat sdk loop error contract', () => {
     chatHandler = new ChatHandler(
       manager,
       createResolvedConfig(),
-      wsManager,
       mcpClient,
       sessionEventsDAO,
       sessionEventHub

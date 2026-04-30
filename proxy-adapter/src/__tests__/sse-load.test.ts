@@ -24,7 +24,6 @@ import http from 'node:http';
 import { ConversationManager } from '../conversation/manager.js';
 import { ChatHandler } from '../conversation/chat-handler.js';
 import { DatabaseManager } from '../conversation/db.js';
-import { DebugWebSocketManager } from '../websocket-manager.js';
 import { SessionEventHub } from '../services/session-event-hub.js';
 import { SessionLock } from '../services/session-lock.js';
 import type { DecisionClient } from '../clients/types.js';
@@ -297,16 +296,9 @@ describe.skipIf(isCI)('SSE Load Tests', () => {
 
     const db = DatabaseManager.getInstance();
     const sessionEventsDAO = db.getSessionEventsDAO();
-    const wsManager = DebugWebSocketManager.getInstance();
+    
 
-    chatHandler = new ChatHandler(
-      manager,
-      mockConfig,
-      wsManager,
-      undefined,
-      sessionEventsDAO,
-      sessionEventHub
-    );
+    chatHandler = new ChatHandler(manager, mockConfig, undefined, sessionEventsDAO, sessionEventHub);
 
     vi.spyOn(chatHandler as unknown as { resolveDecisionModel: () => DecisionClient }, 'resolveDecisionModel')
       .mockReturnValue(mockDecisionClient);

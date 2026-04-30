@@ -14,7 +14,6 @@ import { ConversationJobQueue } from '../../../services/conversation-job-queue.j
 import { StreamPersistWorker } from '../../../services/stream-persist-worker.js';
 import { SessionEventHub } from '../../../services/session-event-hub.js';
 import { SessionEventsDAO } from '../../../conversation/session-events-dao.js';
-import { DebugWebSocketManager } from '../../../websocket-manager.js';
 
 type StreamPart = { type: string; [key: string]: unknown };
 
@@ -149,8 +148,7 @@ describe('VF1 plan compliance contract', () => {
     const app = Fastify();
     const manager = new ConversationManager(':memory:');
     manager.initialize();
-    const wsManager = DebugWebSocketManager.getInstance();
-    const handler = new ChatHandler(manager, mockConfig, wsManager);
+    const handler = new ChatHandler(manager, mockConfig);
     const handleChatSendSpy = vi.spyOn(handler, 'handleChatSend').mockResolvedValue(undefined);
 
     await app.register(swaggerPlugin);
@@ -260,8 +258,6 @@ describe('VF1 plan compliance contract', () => {
   it('3) maxToolLoops is enforced with explicit terminal semantics', async () => {
     const manager = new ConversationManager(':memory:');
     manager.initialize();
-    const wsManager = DebugWebSocketManager.getInstance();
-
     const events: SessionEvent[] = [];
     const appendEvent = vi.fn<
       (sessionId: string, type: SessionEventType, payload: Record<string, unknown>) => Promise<number>
@@ -281,7 +277,6 @@ describe('VF1 plan compliance contract', () => {
     const handler = new ChatHandler(
       manager,
       mockConfig,
-      wsManager,
       undefined,
       { appendEvent } as unknown as SessionEventsDAO,
       { publish } as unknown as SessionEventHub
@@ -324,8 +319,6 @@ describe('VF1 plan compliance contract', () => {
   it('4) SSE observability and deterministic event replay via DAO remain available', async () => {
     const manager = new ConversationManager(':memory:');
     manager.initialize();
-    const wsManager = DebugWebSocketManager.getInstance();
-
     const emittedTypes: SessionEventType[] = [];
     const appendEvent = vi.fn<
       (sessionId: string, type: SessionEventType, payload: Record<string, unknown>) => Promise<number>
@@ -338,7 +331,6 @@ describe('VF1 plan compliance contract', () => {
     const handler = new ChatHandler(
       manager,
       mockConfig,
-      wsManager,
       undefined,
       { appendEvent } as unknown as SessionEventsDAO,
       { publish: vi.fn() } as unknown as SessionEventHub

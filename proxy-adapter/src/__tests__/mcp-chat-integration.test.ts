@@ -3,7 +3,6 @@ import { ChatHandler } from '../conversation/chat-handler.js';
 import { ConversationManager } from '../conversation/manager.js';
 import type { DecisionClient } from '../clients/types.js';
 import type { DecisionContext } from '../clients/types.js';
-import { DebugWebSocketManager } from '../websocket-manager.js';
 import { MCPSDKClient, MCPTool } from '../clients/mcp/sdk-client.js';
 import type { ResolvedConfig } from '../config/schema.js';
 import type { Session } from '../conversation/types.js';
@@ -19,7 +18,6 @@ interface TestStreamCallbacks {
 describe('MCP Chat Integration', () => {
   let conversationManager: ConversationManager;
   let decisionClient: Partial<DecisionClient>;
-  let wsManager: DebugWebSocketManager;
   let mcpClient: MCPSDKClient;
   let chatHandler: ChatHandler;
   let session: Session;
@@ -102,17 +100,12 @@ const mockConfig: ResolvedConfig = {
       getCapabilities: () => [],
     };
 
-    wsManager = {
-      respondToClient: vi.fn(),
-      broadcast: vi.fn(),
-    } as unknown as DebugWebSocketManager;
-
     mcpClient = new MCPSDKClient(mockConfig);
     vi.spyOn(mcpClient, 'initialize').mockResolvedValue(undefined);
     vi.spyOn(mcpClient, 'getAvailableTools').mockReturnValue(mockTools);
     vi.spyOn(mcpClient, 'callTool').mockResolvedValue(mockToolResult);
 
-    chatHandler = new ChatHandler(conversationManager, mockConfig, wsManager, mcpClient);
+    chatHandler = new ChatHandler(conversationManager, mockConfig, mcpClient);
     (chatHandler as any).resolveDecisionModel = () => decisionClient as DecisionClient;
 
     session = conversationManager.createSession({
@@ -325,57 +318,6 @@ const mockConfig: ResolvedConfig = {
       ).rejects.toThrow('Maximum tool use loop exceeded');
 
       expect(loopCount).toBeGreaterThan(maxLoops);
-    });
-  });
-
-  describe('WebSocket tool_call streaming', () => {
-    it('should send chat_stream_tool_call message via WebSocket', async () => {
-      const mockRespondToClient = vi.fn();
-      wsManager.respondToClient = mockRespondToClient;
-
-      const callbacks: TestStreamCallbacks = {
-        onToken: vi.fn(),
-        onThinking: vi.fn(),
-        onToolCall: (call: any) => {
-          mockRespondToClient('client-id', {
-            type: 'chat_stream_tool_call',
-            sessionId: session.id,
-            messageId: 'msg-123',
-            toolCall: call,
-          });
-        },
-        onUsage: vi.fn(),
-        onDone: vi.fn(),
-      };
-
-      vi.spyOn(decisionClient, 'decideStream').mockImplementation(
-        async (_context: DecisionContext, cb: TestStreamCallbacks) => {
-          cb.onToolCall!(mockToolCall);
-          cb.onDone!();
-        }
-      );
-
-      await decisionClient.decideStream?.(
-        {
-          screenshot: '',
-          dom: { snapshot_id: 'test', annotated_screenshot_base64: '', elements_map: {}, simplified_dom: { elements: [], viewport: { width: 1920, height: 1080 } }, version: '2.0' as const },
-          elements: [],
-          instruction: '',
-          previousActions: [],
-          sessionId: session.id,
-          messages: [],
-          provider: 'test',
-          model: 'test-model',
-        } as DecisionContext,
-        callbacks
-      );
-
-      expect(mockRespondToClient).toHaveBeenCalledWith('client-id', {
-        type: 'chat_stream_tool_call',
-        sessionId: session.id,
-        messageId: 'msg-123',
-        toolCall: mockToolCall,
-      });
     });
   });
 

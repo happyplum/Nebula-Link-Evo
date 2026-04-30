@@ -3,7 +3,6 @@ import type { ResolvedConfig } from '../../../config/schema.js';
 import type { SessionStatus } from '../../../conversation/types.js';
 import { ChatHandler } from '../../../conversation/chat-handler.js';
 import { ConversationManager } from '../../../conversation/manager.js';
-import { DebugWebSocketManager } from '../../../websocket-manager.js';
 import { ChatSessionController } from '../../../services/chat-session-controller.js';
 
 function createResolvedConfig(): ResolvedConfig {
@@ -43,7 +42,6 @@ function createResolvedConfig(): ResolvedConfig {
 
 describe('chat loop guard resume policy contract', () => {
   let manager: ConversationManager;
-  let wsManager: DebugWebSocketManager;
   let chatHandler: ChatHandler;
   let sessionId: string;
 
@@ -51,9 +49,6 @@ describe('chat loop guard resume policy contract', () => {
     vi.clearAllMocks();
     manager = new ConversationManager(':memory:');
     manager.initialize();
-    wsManager = DebugWebSocketManager.getInstance();
-    wsManager.setTaskCommandHandler(() => {});
-
     sessionId = `loop-guard-resume-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     manager.createSession({
       id: sessionId,
@@ -62,7 +57,7 @@ describe('chat loop guard resume policy contract', () => {
       model: 'moonshot-v1-vision-preview',
     });
 
-    chatHandler = new ChatHandler(manager, createResolvedConfig(), wsManager);
+    chatHandler = new ChatHandler(manager, createResolvedConfig());
     vi.spyOn(
       chatHandler as unknown as {
         executeAIResponse: (...args: unknown[]) => Promise<void>;

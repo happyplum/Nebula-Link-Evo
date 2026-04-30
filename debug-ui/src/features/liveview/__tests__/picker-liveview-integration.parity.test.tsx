@@ -12,8 +12,6 @@ global.ResizeObserver = class ResizeObserver {
   disconnect = vi.fn();
 } as any;
 
-// Mock setup with hoisted for vi.mock factory references
-const mockOnMessageSubscribe = vi.fn(() => vi.fn()); // subscribe returns unsubscribe
 const mockUseControlStore = vi.hoisted(() => ({
   state: {
     elementPickerEnabled: false,
@@ -27,22 +25,15 @@ const mockUseControlStore = vi.hoisted(() => ({
   },
 }));
 
-// Mock runtime store to prevent MJPEG stream and control connection status
+// Mock runtime store to prevent MJPEG stream
 vi.mock('@/features/runtime/store/index.js', () => ({
-  selectConnectionStatus: () => 'disconnected',
   selectPlaywrightIsOpen: () => false,
   selectLiveviewRefreshKey: () => 0,
   useRuntimeStore: (selector: (s: any) => any) => selector({
-    connectionStatus: 'disconnected',
     playwrightIsOpen: false,
     liveviewRefreshKey: 0,
     setLastScreenshotDataUrl: vi.fn(),
   }),
-}));
-
-// Mock useDebugSocket hook
-vi.mock('@/features/runtime/hooks/index.js', () => ({
-  useDebugSocket: () => ({ onMessage: mockOnMessageSubscribe }),
 }));
 
 // Mock control store
@@ -101,7 +92,6 @@ describe('LiveViewCanvas - picker & DOM highlight integration parity', () => {
     mockUseControlStore.state.selectedElement = null;
     mockUseControlStore.state.domElements = [];
     mockUseControlStore.state.markerToggle = false;
-    mockOnMessageSubscribe.mockClear();
   });
 
   it('renders picker toggle button with correct testid and initial state', () => {
@@ -143,53 +133,6 @@ describe('LiveViewCanvas - picker & DOM highlight integration parity', () => {
     expect(updatedOverlayCanvas?.className).toContain('overlayCanvasInteractive');
   });
 
-  it('calls onElementSelect callback when overlay message with selector arrives', () => {
-    const onElementSelect = vi.fn();
-
-    render(<LiveViewCanvas onElementSelect={onElementSelect} />);
-
-    // Get the subscribe handler and simulate a message
-    expect(mockOnMessageSubscribe).toHaveBeenCalled();
-    // @ts-expect-error - TypeScript doesn't know mock was called, but it always is
-    const subscribeHandler = mockOnMessageSubscribe.mock.calls[0][0] as (data: unknown) => void;
-
-    // Simulate overlay message with selector
-    subscribeHandler({
-      type: 'hover',
-      bbox: {
-        x: 10,
-        y: 20,
-        width: 100,
-        height: 50,
-        selector: '#test-button',
-      },
-    });
-
-    expect(onElementSelect).toHaveBeenCalledWith('#test-button');
-  });
-
-  it('does not call onElementSelect when overlay message lacks selector', () => {
-    const onElementSelect = vi.fn();
-
-    render(<LiveViewCanvas onElementSelect={onElementSelect} />);
-
-    // @ts-expect-error - TypeScript doesn't know mock was called, but it always is
-    const subscribeHandler = mockOnMessageSubscribe.mock.calls[0][0] as (data: unknown) => void;
-
-    // Simulate overlay message without selector
-    subscribeHandler({
-      type: 'highlight',
-      bbox: {
-        x: 10,
-        y: 20,
-        width: 100,
-        height: 50,
-      },
-    });
-
-    expect(onElementSelect).not.toHaveBeenCalled();
-  });
-
   it('calls onCoordinateCapture when overlay is clicked while picker is enabled', () => {
     mockUseControlStore.state.elementPickerEnabled = true;
     const onCoordinateCapture = vi.fn();
@@ -219,25 +162,4 @@ describe('LiveViewCanvas - picker & DOM highlight integration parity', () => {
     expect(onCoordinateCapture).toBeDefined();
   });
 
-  it('handles marker messages and updates marker-count data attribute', () => {
-    render(<LiveViewCanvas />);
-
-    // @ts-expect-error - TypeScript doesn't know mock was called, but it always is
-    const subscribeHandler = mockOnMessageSubscribe.mock.calls[0][0] as (data: unknown) => void;
-
-    // Verify subscribe handler is set up (integration contract)
-    expect(mockOnMessageSubscribe).toHaveBeenCalled();
-    expect(subscribeHandler).toBeDefined();
-
-    // Simulate marker message
-    subscribeHandler({
-      type: 'marker',
-      x: 100,
-      y: 200,
-    });
-
-    // Note: This is testing the integration contract - that the component subscribes to
-    // WebSocket messages and has a handler that can process marker messages
-    // The actual marker rendering on canvas is implementation detail
-  });
 });
