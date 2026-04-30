@@ -17,14 +17,14 @@
                               │ HTTP
 ┌─────────────────────────────┴───────────────────────────────────────┐
 │                    proxy-adapter (:3000)                              │
-│  ┌──────────┐  ┌──────────┐  ┌──────────────┐  ┌──────────────────┐  │
-│  │ Task API │  │ Chat API │  │ Debug API    │  │ WebSocket        │  │
-│  │/api/task │  │/api/chat │  │/debug/api    │  │/ws/* /debug/ws   │  │
-│  └────┬─────┘  └────┬─────┘  └──────┬───────┘  └────────┬─────────┘  │
-│       │              │               │                     │            │
-│  ┌────▼──────────────▼───────────────▼─────────────────────▼───────┐  │
+│  ┌──────────┐  ┌──────────┐  ┌──────────────┐                       │
+│  │ Chat API │  │ Debug API │  │ SSE Stream   │                       │
+│  │/api/chat │  │/debug/api │  │/api/chat/...│                       │
+│  └────┬─────┘  └────┬─────┘  └──────┬───────┘                       │
+│       │              │               │                                  │
+│  ┌────▼──────────────▼──────────────▼──────────────────────────────┐  │
 │  │                   Services Layer                              │  │
-│  │ TaskService │ ChatHandler │ TaskOrchestrator │ StepRunner    │  │
+│  │ ChatHandler │ ConversationManager │ SessionEventHub              │  │
 │  │ ActionExecutor │ ConversationManager │ SessionEventHub    │  │
 │  │                     @nebula-link-evo/shared                  │  │
 │  └────────────────────────┬──────────────────────────────────────┘  │
@@ -56,25 +56,23 @@
 
 ```
 Browser (http://localhost:5173)
-    │ /api, /ws, /debug/api
-    ▼
+     │ /api, /debug/api
+     ▼
 proxy-adapter (:3000)
 ```
 
-debug-ui 通过 Vite dev server (`:5173`) 独立运行，直接将 `/api`、`/ws`、`/debug/api` 请求代理到 proxy-adapter。proxy-adapter 不再反向代理 `/debug*` 到 Vite。
+debug-ui 通过 Vite dev server (`:5173`) 独立运行，直接将 `/api`、`/debug/api` 请求代理到 proxy-adapter。proxy-adapter 不再反向代理 `/debug*` 到 Vite。
 
 ### 生产模式
 
 ```
 Browser → debug-ui (独立部署 / CDN)
-    │ /api, /ws, /debug/api
-    ▼
+     │ /api, /debug/api
+     ▼
 proxy-adapter (:3000)
-    │
-    ├─ API routes (health → config → task → chat → ws/chat → ws/debug → api/chat → debug)
-    ├─ /debug/api/* → debugRoutes
-    ├─ /ws/debug → debugSocketRoutes
-    └─ /ws/chat → chatSocketRoutes
+     │
+     ├─ API routes (health → config → chat → api/chat → debug)
+     └─ /debug/api/* → debugRoutes
 ```
 
 **proxy-adapter 行为:**
@@ -91,7 +89,6 @@ Browser
     │ http://localhost:5173/debug (Vite dev server)
     │
     ├─ /api/* → proxy-adapter (:3000)
-    ├─ /ws → proxy-adapter (:3000)
     ├─ /debug/api/* → proxy-adapter (:3000)
     └─ /debug/* (其他) → Vite 本地处理
 ```
@@ -103,7 +100,6 @@ Browser
     │ http://localhost:5173/debug (debug-ui 独立部署/Vite dev server)
     │
      ├─ /api/* → proxy-adapter (:3000)
-     ├─ /ws/* → proxy-adapter (:3000)
      └─ /debug/api/* → proxy-adapter (:3000)
 ```
 
@@ -126,25 +122,6 @@ playwright-server (:3001)
 - proxy-adapter 通过 HTTP 调用 playwright-server（无 WebSocket）
 - 所有浏览器操作统一通过 playwright-server 的 HTTP API
 - playwright-server 不包含业务逻辑，仅控制浏览器
-
-## WebSocket 通道
-
-| 端点        | 类型 | 用途                                   |
-| ----------- | ---- | -------------------------------------- |
-| `/ws/debug` | 正式 | Debug WebSocket（实时任务/浏览器更新） |
-| `/ws/chat`  | 正式 | Chat WebSocket（会话订阅）             |
-| `/debug/ws` | 遗留 | Debug WebSocket（兼容旧版本）          |
-| `/chat/ws`  | 遗留 | Chat WebSocket（兼容旧版本）           |
-
-**注册顺序:**
-
-```
-1. await app.register(chatRoutes, { prefix: '/chat' })        // 遗留: /chat/ws
-2. await app.register(chatSocketRoutes, { prefix: '/ws' })     // /ws/chat
-3. await app.register(debugSocketRoutes, { prefix: '/ws' })    // /ws/debug
-4. await app.register(apiChatRoutes, { prefix: '/api/chat' })  // /api/chat/*
-5. await app.register(debugRoutes, { prefix: '/debug' })       // /debug/api/*, /debug/ws
-```
 
 ## 数据持久化
 
@@ -178,4 +155,4 @@ playwright-server (:3001)
 ## 参考文档
 
 - [AI Operation Flow](reference/ai-operation-flow.md) — AI 操作流程与执行模型
-- [Debug Page Integration API Reference](reference/debug-page-integration-api-reference.md) — 完整的 API 端点、SSE 事件、WebSocket 消息参考
+- [Debug Page Integration API Reference](reference/debug-page-integration-api-reference.md) — 完整的 API 端点、SSE 事件参考

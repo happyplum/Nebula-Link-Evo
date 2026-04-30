@@ -8,7 +8,7 @@ Nebula-Link Evo 是一个基于 AI 的浏览器自动化平台，通过视觉感
 
 ```
 Browser ←→ Debug UI (:5173 dev / standalone build)
-                  ↕ HTTP/WebSocket
+                  ↕ HTTP/SSE
              Proxy Adapter (:3000) → AI Providers (GLM, OpenAI, Anthropic, Kimi, NVIDIA)
                   ↕ HTTP
           Playwright Server (:3001) → Chromium
@@ -24,13 +24,11 @@ Browser ←→ Debug UI (:5173 dev / standalone build)
 
 **视觉标记**：Vision Marker System 将 AI 返回的操作坐标与 DOM 元素关联，提供 Vision 和 Unified 两种工作模式，满足不同精度需求。
 
-### Agent 自主执行
-
-**执行引擎**：TaskService → Orchestrator → StepRunner → ActionExecutor 构成完整的任务执行循环，支持多步骤自动化流程。
+### Agent Chat 会话
 
 **会话状态机**：idle → running ↔ paused，interrupt → interrupted，cancel → cancelled，completed。每个会话通过互斥锁保证同一时间只有一个活跃执行，支持暂停、恢复、中断等操作。
 
-**工具与扩展**：6 个核心工具、Skills（YAML 工作流）和 MCP（Model Context Protocol，从 stdio 服务器自动发现），提供丰富的扩展能力。
+**工具与扩展**：MCP（Model Context Protocol，从 stdio 服务器自动发现）提供丰富的扩展能力。
 
 **上下文管理**：消息数超过 20 时自动压缩上下文，Chat SSE 每次建连都会先发送完整 `session.snapshot` 再继续 live stream，后台任务队列支持 3 次重试和 10 分钟空闲清理。
 
