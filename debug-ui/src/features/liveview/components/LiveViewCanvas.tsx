@@ -7,7 +7,6 @@ import {
 } from '@/features/liveview/lib/index.js';
 import type { ImageFitRect } from '@/features/liveview/lib/index.js';
 import {
-  selectConnectionStatus,
   selectLiveviewRefreshKey,
   selectPlaywrightIsOpen,
   useRuntimeStore,
@@ -56,7 +55,6 @@ export function LiveViewCanvas({
 
   const isPlaywrightConnected = useRuntimeStore(selectPlaywrightIsOpen);
   const liveviewRefreshKey = useRuntimeStore(selectLiveviewRefreshKey);
-  const connectionStatus = useRuntimeStore(selectConnectionStatus);
   const setLastScreenshotDataUrl = useRuntimeStore((s) => s.setLastScreenshotDataUrl);
 
   // Track connection state for cleanup: distinguish tab-switch refresh from real disconnect
@@ -343,7 +341,6 @@ export function LiveViewCanvas({
       ref={containerRef}
       className={containerClassName}
       data-testid={testIds.liveviewCanvas}
-      data-connection-status={connectionStatus}
     >
       <canvas ref={renderCanvasRef} className={styles.renderCanvas} />
       <LiveViewOverlayLayer

@@ -7,11 +7,6 @@ describe('REST endpoint constants', () => {
     expect(endpoints.API_HEALTH).toBe('/api/health');
   });
 
-  it('should define debug task endpoints', () => {
-    expect(endpoints.DEBUG_TASKS).toBe('/debug/api/tasks');
-    expect(endpoints.debugTaskDetail('abc-123')).toBe('/debug/api/tasks/abc-123');
-  });
-
   it('should define debug AI endpoints', () => {
     expect(endpoints.DEBUG_TEST_AI).toBe('/debug/api/test-ai');
     expect(endpoints.DEBUG_VERIFY_KEYS).toBe('/debug/api/verify-keys');
@@ -61,7 +56,6 @@ describe('REST endpoint constants', () => {
 
   it('should have all factory functions return strings starting with /', () => {
     const factories = [
-      endpoints.debugTaskDetail,
       endpoints.apiChatSession,
       endpoints.apiChatSessionMessages,
       endpoints.apiChatSessionInterrupt,
