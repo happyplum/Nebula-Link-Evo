@@ -3,7 +3,7 @@ import { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import { browserClient } from '../../../browser-client.js';
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { TaskService } from '../../../services/index.js';
+import { AppService } from '../../../services/index.js';
 import { DatabaseManager } from '../../../conversation/db.js';
 import { getServiceEndpointsCached } from '../../../config/services.js';
 import type { ResolvedProvider } from '../../../config/schema.js';
@@ -20,7 +20,7 @@ interface InteractionQuery {
 
 const PLAYWRIGHT_URL = getServiceEndpointsCached().playwright.url;
 const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
-  const taskService = TaskService.getInstance();
+  const appService = AppService.getInstance();
 
   fastify.get(
     '/api/health',
@@ -105,7 +105,7 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       },
     },
     async () => {
-      return await taskService.testAIConnectivity();
+      return await appService.testAIConnectivity();
     }
   );
 
@@ -137,7 +137,7 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       },
     },
     async () => {
-      const config = taskService.getConfig();
+      const config = appService.getConfig();
       if (!config?.providers) {
         return { keys: [] };
       }
@@ -785,7 +785,7 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       },
     },
     async () => {
-      return taskService.getMCPStatus();
+      return appService.getMCPStatus();
     }
   );
 
@@ -816,7 +816,7 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       },
     },
     async () => {
-      const tools = taskService.getMCPTools();
+      const tools = appService.getMCPTools();
       return { tools };
     }
   );
@@ -845,7 +845,7 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         args = {},
       } = request.body as { server: string; tool: string; args?: Record<string, any> };
       try {
-        const mcpClient = taskService.getMCPSDKClient();
+        const mcpClient = appService.getMCPSDKClient();
         if (!mcpClient) {
           return { success: false, error: 'MCP client not initialized' };
         }

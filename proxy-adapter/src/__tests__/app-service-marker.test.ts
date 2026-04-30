@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { TaskService } from '../services/index.js';
+import { AppService } from '../services/index.js';
 import { browserClient } from '../browser-client.js';
 import type { Action } from '../config/schema.js';
 import { failureSampleCollector } from '../services/failure-sample-collector.js';
 
-describe('TaskService - Marker Operations', () => {
+describe('AppService - Marker Operations', () => {
   const mockSnapshotId = 'snapshot-123';
   const mockNebulaId = 42;
 
@@ -34,7 +34,7 @@ describe('TaskService - Marker Operations', () => {
         },
       };
 
-      const result = await TaskService.getInstance().executeAction(action);
+      const result = await AppService.getInstance().executeAction(action);
 
       expect(result.success).toBe(true);
       expect(result.message).toBe(`Clicked marker: ${mockSnapshotId}/${mockNebulaId}`);
@@ -55,7 +55,7 @@ describe('TaskService - Marker Operations', () => {
         },
       };
 
-      const result = await TaskService.getInstance().executeAction(action);
+      const result = await AppService.getInstance().executeAction(action);
 
       expect(result.success).toBe(true);
       expect(clickSpy).toHaveBeenCalledWith(mockSnapshotId, mockNebulaId);
@@ -70,7 +70,7 @@ describe('TaskService - Marker Operations', () => {
         },
       };
 
-      const result = await TaskService.getInstance().executeAction(action);
+      const result = await AppService.getInstance().executeAction(action);
 
       expect(result.success).toBe(false);
       expect(result.message).toContain('Click action requires x,y, marker target, or selector');
@@ -86,7 +86,7 @@ describe('TaskService - Marker Operations', () => {
         },
       };
 
-      const result = await TaskService.getInstance().executeAction(action);
+      const result = await AppService.getInstance().executeAction(action);
 
       expect(result.success).toBe(false);
       expect(result.message).toContain('Marker action requires snapshot_id and nebula_id');
@@ -107,7 +107,7 @@ describe('TaskService - Marker Operations', () => {
         },
       };
 
-      await TaskService.getInstance().executeAction(action);
+      await AppService.getInstance().executeAction(action);
 
       expect(clickSelectorSpy).toHaveBeenCalledWith('#test-button');
     });
@@ -125,7 +125,7 @@ describe('TaskService - Marker Operations', () => {
         },
       };
 
-      await TaskService.getInstance().executeAction(action);
+      await AppService.getInstance().executeAction(action);
 
       expect(clickSelectorSpy).toHaveBeenCalledWith('#submit-btn');
     });
@@ -146,7 +146,7 @@ describe('TaskService - Marker Operations', () => {
         },
       };
 
-      const result = await TaskService.getInstance().executeAction(action);
+      const result = await AppService.getInstance().executeAction(action);
 
       expect(result.success).toBe(false);
       expect(result.message).toContain('Marker click failed');
@@ -163,7 +163,7 @@ describe('TaskService - Marker Operations', () => {
         },
       };
 
-      const result = await TaskService.getInstance().executeAction(action);
+      const result = await AppService.getInstance().executeAction(action);
 
       expect(result.success).toBe(false);
       expect(result.message).toContain('Marker action requires snapshot_id and nebula_id');
@@ -180,7 +180,7 @@ describe('TaskService - Marker Operations', () => {
         },
       };
 
-      const result = await TaskService.getInstance().executeAction(action);
+      const result = await AppService.getInstance().executeAction(action);
 
       expect(result.success).toBe(false);
       expect(result.message).toContain('Marker action requires snapshot_id and nebula_id');
@@ -198,7 +198,7 @@ describe('TaskService - Marker Operations', () => {
         },
       };
 
-      const result = await TaskService.getInstance().executeAction(action);
+      const result = await AppService.getInstance().executeAction(action);
 
       expect(result.success).toBe(false);
     });
@@ -216,7 +216,7 @@ describe('TaskService - Marker Operations', () => {
         },
       };
 
-      const result = await TaskService.getInstance().executeAction(action);
+      const result = await AppService.getInstance().executeAction(action);
 
       expect(result.success).toBe(false);
       expect(result.message).toContain('Selector click failed');
@@ -238,7 +238,7 @@ describe('TaskService - Marker Operations', () => {
         },
       };
 
-      await TaskService.getInstance().executeAction(action);
+      await AppService.getInstance().executeAction(action);
 
       expect(clickSpy).toHaveBeenCalledWith(mockSnapshotId, mockNebulaId);
     });
@@ -257,7 +257,7 @@ describe('TaskService - Marker Operations', () => {
         },
       };
 
-      await TaskService.getInstance().executeAction(action);
+      await AppService.getInstance().executeAction(action);
 
       expect(clickSpy).toHaveBeenCalledWith(mockSnapshotId, mockNebulaId);
     });
@@ -277,7 +277,7 @@ describe('TaskService - Marker Operations', () => {
         },
       };
 
-      await TaskService.getInstance().executeAction(action);
+      await AppService.getInstance().executeAction(action);
 
       expect(clickSpy).toHaveBeenCalledWith(mockSnapshotId, 100);
     });
@@ -296,7 +296,7 @@ describe('TaskService - Marker Operations', () => {
         },
       };
 
-      await TaskService.getInstance().executeAction(action);
+      await AppService.getInstance().executeAction(action);
 
       expect(clickSpy).toHaveBeenCalledWith(mockSnapshotId, mockNebulaId);
     });
@@ -315,7 +315,7 @@ describe('TaskService - Marker Operations', () => {
         },
       };
 
-      await TaskService.getInstance().executeAction(action);
+      await AppService.getInstance().executeAction(action);
 
       expect(clickSpy).toHaveBeenCalledWith(mockSnapshotId, mockNebulaId);
     });
@@ -333,7 +333,7 @@ describe('TaskService - Marker Operations', () => {
         },
       };
 
-      const result = await TaskService.getInstance().executeAction(action);
+      const result = await AppService.getInstance().executeAction(action);
 
       expect(result.success).toBe(true);
       expect(result.message).toBe('Clicked at (100, 200)');
@@ -357,7 +357,7 @@ describe('TaskService - Marker Operations', () => {
         },
       };
 
-      const result = await TaskService.getInstance().executeAction(action);
+      const result = await AppService.getInstance().executeAction(action);
 
       expect(result.success).toBe(true);
       expect(result.message).toBe('Clicked at (50, 60)');
@@ -377,7 +377,7 @@ describe('TaskService - Marker Operations', () => {
         },
       };
 
-      const result = await TaskService.getInstance().executeAction(action);
+      const result = await AppService.getInstance().executeAction(action);
 
       expect(result.success).toBe(true);
       expect(result.message).toBe('Clicked selector: #my-button');

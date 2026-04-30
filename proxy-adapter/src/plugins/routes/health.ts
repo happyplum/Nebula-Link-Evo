@@ -1,7 +1,7 @@
 import { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import { HealthResponseSchema } from '../../schemas/health.js';
 import { getServiceEndpointsCached } from '../../config/services.js';
-import { TaskService } from '../../services/index.js';
+import { AppService } from '../../services/index.js';
 const healthRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
   fastify.get(
     '/',
@@ -15,9 +15,9 @@ const healthRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       },
     },
     async () => {
-      const taskService = TaskService.getInstance();
-      const config = taskService.getConfig();
-      const mcpStatus = taskService.getMCPStatus();
+      const appService = AppService.getInstance();
+      const config = appService.getConfig();
+      const mcpStatus = appService.getMCPStatus();
       const endpoints = getServiceEndpointsCached();
       return {
         status: 'healthy',

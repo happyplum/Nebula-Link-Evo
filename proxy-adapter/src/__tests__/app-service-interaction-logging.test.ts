@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { browserClient } from '../browser-client.js';
 import type { Action } from '../config/schema.js';
-import { TaskService } from '../services/index.js';
+import { AppService } from '../services/index.js';
 import { interactionLogger } from '../services/interaction-logger.js';
 
-describe('TaskService interaction logging', () => {
+describe('AppService interaction logging', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -22,7 +22,7 @@ describe('TaskService interaction logging', () => {
       params: { x: 120, y: 260 },
     };
 
-    const result = await TaskService.getInstance().executeAction(action);
+    const result = await AppService.getInstance().executeAction(action);
 
     expect(result.success).toBe(true);
     expect(logSpy).toHaveBeenCalledWith(
@@ -46,7 +46,7 @@ describe('TaskService interaction logging', () => {
       params: { x: 120, y: 260 },
     };
 
-    const result = await TaskService.getInstance().executeAction(action);
+    const result = await AppService.getInstance().executeAction(action);
 
     expect(result.success).toBe(false);
     expect(logSpy).toHaveBeenCalledWith(

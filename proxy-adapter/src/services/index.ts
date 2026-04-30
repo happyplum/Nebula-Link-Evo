@@ -5,6 +5,6 @@
  */
 
 export { ActionExecutor, type ActionResult, type ActionExecutorDeps } from './action-executor.js';
-export { TaskService, taskService } from './task-service.js';
+export { AppService, appService } from './app-service.js';
 export { interactionLogger } from './interaction-logger.js';
 export { failureSampleCollector } from './failure-sample-collector.js';

@@ -8,7 +8,7 @@ vi.mock('fs');
 vi.mock('@fastify/cors');
 vi.mock('@fastify/static');
 vi.mock('../services/index.js', () => ({
-  taskService: {
+  appService: {
     initialize: vi.fn().mockResolvedValue(undefined),
     getConfig: vi.fn().mockReturnValue({
       provider: 'test',
@@ -191,8 +191,8 @@ describe('server initialization', () => {
       console.error('Server start error:', mockFastifyInstance.log.error.mock.calls[0][0]);
     }
     
-    const { taskService } = await import('../services/index.js');
-    expect(taskService.initialize).toHaveBeenCalled();
+    const { appService } = await import('../services/index.js');
+    expect(appService.initialize).toHaveBeenCalled();
   });
 
   it('should get config from task service', async () => {
@@ -200,8 +200,8 @@ describe('server initialization', () => {
     vi.mocked(fs.existsSync).mockReturnValue(false);
     await import('../server.js');
     await new Promise(resolve => setTimeout(resolve, 10));
-    const { taskService } = await import('../services/index.js');
-    expect(taskService.getConfig).toHaveBeenCalled();
+    const { appService } = await import('../services/index.js');
+    expect(appService.getConfig).toHaveBeenCalled();
   });
 
   it('should get MCP status from task service', async () => {
@@ -209,8 +209,8 @@ describe('server initialization', () => {
     vi.mocked(fs.existsSync).mockReturnValue(false);
     await import('../server.js');
     await new Promise(resolve => setTimeout(resolve, 10));
-    const { taskService } = await import('../services/index.js');
-    expect(taskService.getMCPStatus).toHaveBeenCalled();
+    const { appService } = await import('../services/index.js');
+    expect(appService.getMCPStatus).toHaveBeenCalled();
   });
 
   it('should initialize conversation services', async () => {
