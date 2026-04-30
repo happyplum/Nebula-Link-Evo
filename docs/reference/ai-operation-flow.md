@@ -7,21 +7,20 @@
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                        Client Layer                             │
-│  Debug UI (Vite :5173)  │  WebSocket Clients  │  External APIs  │
-└────────┬─────────────────┼────────────────────┼────────────────┘
-         │                 │                    │
-┌────────▼─────────────────▼────────────────────▼────────────────┐
+│  Debug UI (Vite :5173)  │  External APIs                         │
+└────────┬─────────────────┼──────────────────────────────────────┘
+          │                 │
+┌────────▼─────────────────▼──────────────────────────────────────┐
 │                     proxy-adapter (:3000)                       │
-│  ┌──────────┐  ┌──────────┐  ┌───────────┐  ┌──────────────┐  │
-│  │ Task API │  │ Chat API │  │ Debug API │  │ WebSocket    │  │
-│  │ /api/task│  │ /api/chat│  │ /debug/api│  │ /chat /debug │  │
-│  └────┬─────┘  └────┬─────┘  └─────┬─────┘  └──────┬───────┘  │
-│       │              │              │                │          │
-│  ┌────▼──────────────▼──────────────▼────────────────▼───────┐ │
+│  ┌──────────┐  ┌──────────┐  ┌───────────┐                      │
+│  │ Chat API │  │ Debug API │  │ SSE Stream │                      │
+│  │ /api/chat│  │ /debug/api│  │ /api/chat/ │                      │
+│  └────┬─────┘  └────┬─────┘  └─────┬─────┘                      │
+│       │              │              │                             │
+│  ┌────▼──────────────▼──────────────▼──────────────────────────┐ │
 │  │                   Services Layer                          │ │
-│  │ TaskService │ ChatHandler │ ChatSessionController │       │ │
-│  │ TaskOrchestrator │ StepRunner │ ActionExecutor    │       │ │
-│  │ ConversationManager │ SessionEventHub │ MCPSDKClient│     │ │
+│  │ ChatHandler │ ConversationManager │ SessionEventHub          │ │
+│  │ ChatSessionController │ MCPSDKClient │ ActionExecutor        │ │
 │  └─────────────────────┬─────────────────────────────────────┘ │
 │                        │                                       │
 │  ┌─────────────────────▼─────────────────────────────────────┐ │
@@ -38,52 +37,7 @@
 
 ---
 
-## Mode A: Task Execution Flow
-
-```
-POST /api/task
-    │
-    ▼
-TaskService.execute()
-    │
-    ├─ skill-based ──▶ TaskOrchestrator.executeSkill()
-    │                     │ Iterate predefined steps
-    │                     │ ActionExecutor.execute() per step
-    │
-    └─ ai-driven ───▶ TaskOrchestrator.executeAITask()
-                          │ Loop up to maxSteps
-                          │
-                          ▼
-                      StepRunner.runStep()
-                          │
-                          ├─ 1. Screenshot (via playwright-server)
-                          ├─ 2. getDOM (via playwright-server)
-                          ├─ 3. AI Decision (unified or split mode)
-                          └─ 4. ActionExecutor.execute()
-                                  │
-                                  ├─ Targeting: coordinates │ selector │ marker
-                                  ├─ 13 action types: click, type, focus, blur,
-                                  │   hover, value, dispatch, scroll, navigate,
-                                  │   wait, screenshot, mcp_call, finish
-                                  └─ Failure sample collection + interaction log
-```
-
-### WS Events (Task Lifecycle)
-
-| Event | Trigger |
-|---|---|
-| `task_started` | Task begins execution |
-| `task_step` | Each step completes |
-| `task_completed` | Task finishes successfully |
-| `task_failed` | Task encounters error |
-
-### Task Commands (via WS)
-
-- `pause` / `resume` / `cancel` / `modify` / `manual_action`
-
----
-
-## Mode B: Agent Chat Flow
+## Agent Chat Flow
 
 ```
 Session Lifecycle
@@ -189,12 +143,6 @@ Client connects ──▶ SessionEventHub.subscribe()
 
 ## API Endpoints Reference
 
-### Task API
-
-| Method | Path | Description |
-|---|---|---|
-| POST | `/api/task` | Execute a task (skill-based or AI-driven) |
-
 ### Chat Session API
 
 | Method | Path | Description |
@@ -229,7 +177,6 @@ Client connects ──▶ SessionEventHub.subscribe()
 | Method | Path | Description |
 |---|---|---|
 | GET | `/debug/api/health` | Service health check |
-| GET | `/debug/api/tasks/history` | Task execution history |
 | POST | `/debug/api/ai/test` | Test AI provider connectivity |
 | POST | `/debug/api/key/verify` | Verify API keys |
 | GET | `/debug/api/playwright/status` | Browser service status |
@@ -248,27 +195,11 @@ Client connects ──▶ SessionEventHub.subscribe()
 | GET | `/debug/api/interactions/stats` | Interaction statistics |
 | GET | `/debug/api/failure-samples` | Failure sample collection |
 
-### WebSocket Channels
-
-| Path | Manager | Status |
-|---|---|---|
-| `/chat` | ChatWebSocketManager | Active |
-| `/debug` | DebugWebSocketManager | Active |
-| `/debug/ws` | Legacy debug WS | Deprecated |
-
 ---
 
 ## Core Component Dependencies
 
 ```
-TaskService (singleton facade)
-├── Config (loader + resolver + validator)
-├── ClientFactory (AI provider selection)
-├── MCPSDKClient (tool execution)
-├── ActionExecutor (13 action types)
-├── StepRunner (per-step AI loop)
-└── TaskOrchestrator (execution branching)
-
 ChatHandler (agent loop)
 ├── MCPSDKClient (tool calls)
 ├── ConversationManager (DB operations)
@@ -290,6 +221,5 @@ SessionEventHub (SSE streaming)
 | Sessions | SQLite | Session metadata, config, state |
 | Messages | SQLite | User + assistant + tool messages |
 | Events | SQLite | Session events for replay |
-| Task History | SQLite | Task execution records |
 | Failure Samples | Filesystem | Interaction failure logs |
 | Stream Buffer | Memory + Filesystem | SSE replay buffer |

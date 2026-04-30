@@ -196,36 +196,6 @@ GET    /debug/api/failure-sample              ?path Sample data
 
 ---
 
-## WebSocket
-
-### Connection
-
-```
-ws://localhost:3000/ws/debug
-```
-
-Client connects → receives `{type: 'service_status', clientId}` → bi-directional messaging.
-
-### Message Routes (client → server)
-
-| Route              | Payload             | Action       |
-| ------------------ | ------------------- | ------------ |
-| `task_pause`       | `{taskId}`          | Pause task   |
-| `task_resume`      | `{taskId}`          | Resume task  |
-| `task_single_step` | `{taskId}`          | Single step  |
-| `task_command`     | `{taskId, command}` | Send command |
-
-### Message Routes (server → client)
-
-| Route            | Payload           | Action                                   |
-| ---------------- | ----------------- | ---------------------------------------- |
-| `service_status` | `{clientId, ...}` | Connection confirmed                     |
-| `task_*`         | Various           | Task lifecycle events                    |
-| `chat_stream_*`  | Various           | Legacy chat stream (deprecated, use SSE) |
-| `error`          | `{message}`       | Error notification                       |
-
----
-
 ## Global Objects (window.\*)
 
 ### Core
@@ -233,7 +203,6 @@ Client connects → receives `{type: 'service_status', clientId}` → bi-directi
 | Object                 | Type              | Description                 |
 | ---------------------- | ----------------- | --------------------------- |
 | `window.chatManager`   | ChatManager       | Chat session management     |
-| `window.ws`            | WebSocket manager | /ws/debug connection        |
 | `window.liveView`      | LiveView          | Dual-canvas browser preview |
 | `window.router`        | Navigo            | Hash router                 |
 | `window.chatComponent` | ChatComponent     | Full-screen overlay         |
@@ -290,6 +259,6 @@ Client connects → receives `{type: 'service_status', clientId}` → bi-directi
 
 | Service             | Port | Protocol |
 | ------------------- | ---- | -------- |
-| proxy-adapter       | 3000 | HTTP/WS  |
+| proxy-adapter       | 3000 | HTTP     |
 | playwright-server   | 3001 | HTTP     |
 | debug-ui (Vite dev) | 5173 | HTTP     |
