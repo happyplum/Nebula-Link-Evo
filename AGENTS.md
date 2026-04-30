@@ -2,7 +2,7 @@
 
 ## Scope & routing
 
-- Root `AGENTS.md` only covers repo-wide landmines. Prefer nearer docs when working in `debug-ui/`, `proxy-adapter/`, `playwright-server/`, `shared/`, `config/`, `skills/`, or `tools/`.
+- Root `AGENTS.md` only covers repo-wide landmines. Prefer nearer docs when working in `debug-ui/`, `proxy-adapter/`, `playwright-server/`, `shared/`, `config/`, or `tools/`.
 - `debug-ui/` owns all frontend code. Do not revive `proxy-adapter/src/static/debug/` or move frontend source back under the backend package.
 - Cross-package imports use `@nebula-link-evo/shared`. Do not reintroduce stale `@shared/*` aliases.
 
@@ -10,7 +10,7 @@
 
 - Build order is strict: `shared` → `debug-ui` → `playwright-server` → `proxy-adapter`.
 - `start.bat` is not a thin wrapper around `pnpm build`: it builds `shared`, starts LiveKit, verifies ports, then builds/starts `playwright-server` and `proxy-adapter`.
-- `proxy-adapter` startup order matters: env/config load → DB backup init outside tests → plugin registration → `TaskService.initialize()` → provider preflight → conversation/session/chat surfaces.
+- `proxy-adapter` startup order matters: env/config load → DB backup init outside tests → plugin registration → `AppService.initialize()` → provider preflight → conversation/session/chat surfaces.
 - Chat reconnect always reboots from a fresh `session.snapshot`; there is no `Last-Event-ID` replay contract to preserve.
 
 ## Repository-wide constraints
@@ -38,5 +38,4 @@
 - `playwright-server/AGENTS.md`
 - `shared/AGENTS.md`
 - `config/AGENTS.md`
-- `skills/AGENTS.md`
 - `tools/AGENTS.md`
