@@ -1,5 +1,5 @@
 /**
- * TaskService - Facade for configuration, MCP, and provider registry
+ * AppService - Facade for configuration, MCP, and provider registry
  *
  * Provides config loading, MCP client management, provider registry,
  * and connectivity testing. Task execution orchestration removed.
@@ -14,7 +14,7 @@ import type { ProviderConfig } from './provider/types.js';
 import type { Logger } from 'pino';
 import { createWorkerLogger } from './logger.js';
 
-export class TaskService {
+export class AppService {
   private config: ResolvedConfig | null = null;
   private configPath: string = '';
   private registry: ProviderRegistry | null = null;
@@ -23,7 +23,7 @@ export class TaskService {
   private logger: Logger;
 
   constructor(logger?: Logger) {
-    this.logger = logger ?? createWorkerLogger('TaskService');
+    this.logger = logger ?? createWorkerLogger('AppService');
     this.actionExecutor = new ActionExecutor({ mcpClient: null });
   }
 
@@ -112,17 +112,17 @@ export class TaskService {
   /**
    * Get singleton instance (backward compatibility)
    */
-  static getInstance(): TaskService {
-    if (!TaskService.instance) {
-      TaskService.instance = new TaskService();
+  static getInstance(): AppService {
+    if (!AppService.instance) {
+      AppService.instance = new AppService();
     }
-    return TaskService.instance;
+    return AppService.instance;
   }
 
-  private static instance: TaskService | null = null;
+  private static instance: AppService | null = null;
 
-  static setInstance(instance: TaskService): void {
-    TaskService.instance = instance;
+  static setInstance(instance: AppService): void {
+    AppService.instance = instance;
   }
 
   async testAIConnectivity(): Promise<{
@@ -309,6 +309,6 @@ export class TaskService {
   }
 }
 
-const taskService = new TaskService();
-TaskService.setInstance(taskService);
-export { taskService };
+const appService = new AppService();
+AppService.setInstance(appService);
+export { appService };

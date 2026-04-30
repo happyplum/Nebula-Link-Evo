@@ -1,6 +1,6 @@
 import { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import { ConfigResponseSchema } from '../../schemas/config.js';
-import { TaskService } from '../../services/index.js';
+import { AppService } from '../../services/index.js';
 
 const configRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
   fastify.get(
@@ -16,8 +16,8 @@ const configRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       },
     },
     async () => {
-      const taskService = TaskService.getInstance();
-      const config = taskService.getConfig();
+      const appService = AppService.getInstance();
+      const config = appService.getConfig();
       if (!config) {
         return { error: 'Config not loaded' };
       }

@@ -47,10 +47,10 @@ vi.mock('../../services/index.js', () => {
   };
 
   return {
-    TaskService: {
+    AppService: {
       getInstance: vi.fn(() => mockTaskServiceInstance),
     },
-    taskService: mockTaskServiceInstance,
+    appService: mockTaskServiceInstance,
   };
 });
 

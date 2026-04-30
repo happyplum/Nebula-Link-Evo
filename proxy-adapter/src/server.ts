@@ -3,7 +3,7 @@ import cors from '@fastify/cors';
 import dotenv from 'dotenv';
 import * as path from 'path';
 import * as fs from 'fs';
-import { taskService } from './services/index.js';
+import { appService } from './services/index.js';
 import { browserClient } from './browser-client.js';
 import { ConversationManager, ChatHandler } from './conversation/index.js';
 import { DatabaseManager } from './conversation/db.js';
@@ -56,23 +56,23 @@ async function start() {
       credentials: true,
     });
 
-    await app.decorate('taskExecutor', taskService);
+    await app.decorate('taskExecutor', appService);
     await app.decorate('browserClient', browserClient);
 
     // Initialize task service first to load configuration
     // This must happen before route registration to ensure config is available
-    await taskService.initialize();
+    await appService.initialize();
 
     // Run provider preflight checks
-    const registry = taskService.getRegistry();
-    const preflightConfig = taskService.getConfig();
+    const registry = appService.getRegistry();
+    const preflightConfig = appService.getConfig();
     if (registry && preflightConfig) {
       const providerKeys = Object.keys(preflightConfig.providers ?? {}).filter(k => preflightConfig.providers[k].enabled);
       await runPreflight(registry, providerKeys);
     }
 
     // Get config for chat handler
-    const config = taskService.getConfig();
+    const config = appService.getConfig();
     if (!config) {
       throw new Error('Task service configuration is unavailable');
     }
@@ -104,7 +104,7 @@ async function start() {
     chatHandler = new ChatHandler(
       conversationManager,
       config,
-      taskService.getMCPSDKClient() || undefined,
+      appService.getMCPSDKClient() || undefined,
       sessionEventsDAO,
       sessionEventHub
     );
@@ -125,8 +125,8 @@ async function start() {
     await app.register(debugRoutes, { prefix: '/debug' });
     app.log.info({ prefix: '/debug' }, 'Debug routes registered');
 
-    const mcpStatus = taskService.getMCPStatus();
-    app.log.info({ configPath: taskService.getConfigPath() }, 'Configuration loaded');
+    const mcpStatus = appService.getMCPStatus();
+    app.log.info({ configPath: appService.getConfigPath() }, 'Configuration loaded');
     app.log.info(
       { browser: mcpStatus.enabled ? 'OK' : 'Disabled', file: mcpStatus.enabled ? 'OK' : 'Disabled' },
       'MCP Systems status'
@@ -183,7 +183,7 @@ process.on('SIGINT', async () => {
   if (conversationManager) {
     await conversationManager.close();
   }
-  await taskService.shutdown();
+  await appService.shutdown();
   await app.close();
   process.exit(0);
 });
@@ -193,7 +193,7 @@ process.on('SIGTERM', async () => {
   if (conversationManager) {
     await conversationManager.close();
   }
-  await taskService.shutdown();
+  await appService.shutdown();
   await app.close();
   process.exit(0);
 });

@@ -54,7 +54,7 @@ const { mockConfig, mockGetConfig, mockRegistry } = vi.hoisted(() => {
 });
 
 vi.mock('../../../../../services/index.js', () => ({
-  TaskService: {
+  AppService: {
     getInstance: vi.fn().mockReturnValue({
       getConfig: mockGetConfig,
       getRegistry: vi.fn().mockReturnValue(mockRegistry),
@@ -207,8 +207,8 @@ describe('PATCH /api/chat/sessions/:id/models', () => {
 
   it('returns 500 when registry is unavailable', async () => {
     // Override getRegistry for this test to return null
-    const { TaskService } = await import('../../../../../services/index.js');
-    vi.mocked(TaskService.getInstance).mockReturnValueOnce({
+    const { AppService } = await import('../../../../../services/index.js');
+    vi.mocked(AppService.getInstance).mockReturnValueOnce({
       getConfig: mockGetConfig,
       getRegistry: vi.fn().mockReturnValue(null),
     } as never);

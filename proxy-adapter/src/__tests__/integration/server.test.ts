@@ -28,10 +28,10 @@ vi.mock('../../services/index.js', () => {
   };
 
   return {
-    TaskService: {
+    AppService: {
       getInstance: vi.fn(() => mockTaskServiceInstance),
     },
-    taskService: mockTaskServiceInstance,
+    appService: mockTaskServiceInstance,
   };
 });
 
@@ -231,13 +231,13 @@ describe('Server Initialization', () => {
   });
 
   describe('Service Module Availability', () => {
-    it('should export taskService', async () => {
-      const { taskService } = await import('../../services/index.js');
+    it('should export appService', async () => {
+      const { appService } = await import('../../services/index.js');
 
-      expect(taskService).toBeDefined();
-      expect(taskService.initialize).toBeDefined();
-      expect(taskService.getConfig).toBeDefined();
-      expect(taskService.shutdown).toBeDefined();
+      expect(appService).toBeDefined();
+      expect(appService.initialize).toBeDefined();
+      expect(appService.getConfig).toBeDefined();
+      expect(appService.shutdown).toBeDefined();
     });
 
     it('should export browserClient', async () => {

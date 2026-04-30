@@ -15,7 +15,7 @@ import { DatabaseManager } from '../../../../conversation/db.js';
 import { ServiceUnavailableError } from '../../../../errors/http-errors.js';
 import { MAX_SCREENSHOT_SIZE_BYTES, type MessageCreatedEvent } from '@nebula-link-evo/shared';
 import { connectivityGateService } from '../../../../services/connectivity-gate-service.js';
-import { TaskService } from '../../../../services/index.js';
+import { AppService } from '../../../../services/index.js';
 import { validateProviderModel } from '../../../../config/validator.js';
 import { AgentStateSchema, SessionStatusSchema, getRuntimeSessionState } from './runtime-state.js';
 
@@ -128,7 +128,7 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     async (request, reply) => {
       try {
         const { title = '新会话', provider, model } = request.body || {};
-        const config = TaskService.getInstance().getConfig();
+        const config = AppService.getInstance().getConfig();
         if (config === null) {
           reply.status(500);
           return { error: 'Server configuration unavailable' };
@@ -140,7 +140,7 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         }
 
         // Check provider availability after config validation passes
-        const registry = TaskService.getInstance().getRegistry();
+        const registry = AppService.getInstance().getRegistry();
         if (registry && !registry.isAvailable(provider)) {
           const errorDetail = registry.getAvailabilityError(provider);
           throw new ServiceUnavailableError(
@@ -311,7 +311,7 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           return { error: `Session ${sessionId} not found` };
         }
 
-        const registry = TaskService.getInstance().getRegistry();
+        const registry = AppService.getInstance().getRegistry();
         if (!registry) {
           reply.status(500);
           return { error: 'Provider registry unavailable' };

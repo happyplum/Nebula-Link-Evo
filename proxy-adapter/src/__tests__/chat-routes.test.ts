@@ -47,7 +47,7 @@ const { mockConfig, mockGetConfig } = vi.hoisted(() => {
 });
 
 vi.mock('../services/index.js', () => ({
-  TaskService: {
+  AppService: {
     getInstance: vi.fn().mockReturnValue({
       getConfig: mockGetConfig,
       getRegistry: vi.fn().mockReturnValue(null),
