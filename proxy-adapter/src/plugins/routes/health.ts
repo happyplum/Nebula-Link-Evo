@@ -16,27 +16,17 @@ const healthRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
     async () => {
       const taskService = TaskService.getInstance();
-      const wsManager = fastify.wsManager;
       const config = taskService.getConfig();
       const mcpStatus = taskService.getMCPStatus();
       const endpoints = getServiceEndpointsCached();
-      const healthInfo = {
+      return {
         status: 'healthy',
         config: config ? 'loaded' : 'not_loaded',
         mcp: mcpStatus,
         services: {
           playwright: endpoints.playwright.url,
         },
-        websocketConnections: wsManager?.getClientCount() ?? 0,
       };
-      if (wsManager?.broadcast) {
-        wsManager.broadcast({
-          type: 'health_update',
-          data: healthInfo,
-          timestamp: new Date().toISOString(),
-        });
-      }
-      return healthInfo;
     }
   );
 };
