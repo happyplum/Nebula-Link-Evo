@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import Fastify from 'fastify';
 import { ConversationManager } from '../../../../../conversation/manager.js';
 import { ChatHandler } from '../../../../../conversation/chat-handler.js';
-import { DebugWebSocketManager } from '../../../../../websocket-manager.js';
 import type { ResolvedConfig } from '../../../../../config/schema.js';
 import apiChatRoutes from '../index.js';
 import errorHandler from '../../../../03-error-handler.plugin.js';
@@ -73,8 +72,7 @@ describe('PATCH /api/chat/sessions/:id/models', () => {
     manager = new ConversationManager(':memory:');
     manager.initialize();
 
-    const wsManager = DebugWebSocketManager.getInstance();
-    chatHandler = new ChatHandler(manager, mockConfig, wsManager);
+    chatHandler = new ChatHandler(manager, mockConfig);
 
     app.register(swaggerPlugin);
     app.register(errorHandler);

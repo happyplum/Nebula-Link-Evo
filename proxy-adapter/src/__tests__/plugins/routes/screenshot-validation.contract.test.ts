@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Fastify from 'fastify';
 import { ConversationManager } from '../../../conversation/manager.js';
 import { ChatHandler } from '../../../conversation/chat-handler.js';
-import { DebugWebSocketManager } from '../../../websocket-manager.js';
 import { SessionLock } from '../../../services/session-lock.js';
 import type { ResolvedConfig } from '../../../config/schema.js';
 import apiChatRoutes from '../../../plugins/routes/api/chat/index.js';
@@ -46,8 +45,7 @@ describe('screenshot validation contract', () => {
     manager = new ConversationManager(':memory:');
     manager.initialize();
 
-    const wsManager = DebugWebSocketManager.getInstance();
-    chatHandler = new ChatHandler(manager, mockConfig, wsManager);
+    chatHandler = new ChatHandler(manager, mockConfig);
 
     sessionLock = SessionLock.getInstance();
     sessionLock.clear();
@@ -117,7 +115,7 @@ describe('screenshot validation contract', () => {
       model: 'moonshot-v1-vision-preview',
     });
 
-    // 1KB base64 string â€” well under 10MB
+    // 1KB base64 string â€?well under 10MB
     const smallBase64 = 'a'.repeat(1024);
 
     const response = await app.inject({

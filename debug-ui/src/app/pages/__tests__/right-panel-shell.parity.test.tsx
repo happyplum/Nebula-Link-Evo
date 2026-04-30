@@ -8,16 +8,6 @@ import { useLayoutStore } from '@/features/layout/store/layout.store.js';
 import fs from 'node:fs';
 import path from 'node:path';
 
-// Mock useDebugSocket to prevent actual WebSocket connections
-vi.mock('@/features/runtime/hooks/useDebugSocket.js', () => ({
-  useDebugSocket: vi.fn(() => ({
-    sendMessage: vi.fn(),
-    disconnect: vi.fn(),
-    reconnect: vi.fn(),
-    onMessage: vi.fn(() => vi.fn()),
-  })),
-}));
-
 // Mock useDebugSession to prevent actual API calls
 vi.mock('@/features/runtime/hooks/useDebugSession.js', () => ({
   useDebugSession: vi.fn(() => ({ data: null, isLoading: false, error: null })),

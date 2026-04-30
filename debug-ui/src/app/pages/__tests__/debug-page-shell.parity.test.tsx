@@ -7,16 +7,6 @@ import { testIds } from '@/shared/testing/testids.js';
 import fs from 'node:fs';
 import path from 'node:path';
 
-// Mock the WebSocket hook to prevent actual connections during tests
-vi.mock('@/features/runtime/hooks/useDebugSocket.js', () => ({
-  useDebugSocket: vi.fn(() => ({
-    sendMessage: vi.fn(),
-    disconnect: vi.fn(),
-    reconnect: vi.fn(),
-    onMessage: vi.fn(() => vi.fn()),
-  })),
-}));
-
 // Mock useDebugSession to prevent actual API calls
 vi.mock('@/features/runtime/hooks/useDebugSession.js', () => ({
   useDebugSession: vi.fn(() => ({ data: null, isLoading: false, error: null })),
