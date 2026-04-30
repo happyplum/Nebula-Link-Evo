@@ -27,7 +27,7 @@ export function useConfig() {
   });
 }
 
-/** System health (services, MCP, WebSocket connections) */
+/** System health (services, MCP) */
 export function useHealth() {
   return useQuery({
     queryKey: queryKeys.health,

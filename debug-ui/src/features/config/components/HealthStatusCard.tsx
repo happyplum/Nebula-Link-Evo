@@ -58,11 +58,6 @@ export function HealthStatusCard() {
         </div>
         
         <div className={styles.item}>
-          <span className={styles.label}>WebSocket 连接</span>
-          <span className={styles.value}>{health.websocketConnections} active</span>
-        </div>
-        
-        <div className={styles.item}>
           <span className={styles.label}>MCP 状态</span>
           <div className={styles.valueRow}>
             <StatusIndicator 

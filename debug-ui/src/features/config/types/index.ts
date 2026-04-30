@@ -31,7 +31,6 @@ export interface HealthResponse {
   services: {
     playwright: string;
   };
-  websocketConnections: number;
 }
 
 // --- MCP ---
