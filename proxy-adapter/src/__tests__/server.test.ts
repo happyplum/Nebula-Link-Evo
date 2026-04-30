@@ -6,7 +6,6 @@ import * as fs from 'fs';
 vi.mock('dotenv');
 vi.mock('fs');
 vi.mock('@fastify/cors');
-vi.mock('@fastify/websocket');
 vi.mock('@fastify/static');
 vi.mock('../services/index.js', () => ({
   taskService: {
@@ -149,13 +148,6 @@ describe('server initialization', () => {
   });
 
   it('should register CORS plugin', async () => {
-    vi.clearAllMocks();
-    vi.mocked(fs.existsSync).mockReturnValue(false);
-    await import('../server.js');
-    expect(mockFastifyInstance.register).toHaveBeenCalled();
-  });
-
-  it('should register WebSocket plugin', async () => {
     vi.clearAllMocks();
     vi.mocked(fs.existsSync).mockReturnValue(false);
     await import('../server.js');
