@@ -14,14 +14,6 @@ import * as controlAdapters from '@/features/playwright-control/api/control.adap
  * Verifies structural elements, testids, and state management.
  */
 
-// Mock the WebSocket hook to prevent actual connections during tests
-vi.mock('@/features/runtime/hooks/useDebugSocket.js', () => ({
-  useDebugSocket: () => ({
-    sendMessage: vi.fn(),
-    onMessage: vi.fn(),
-  }),
-}));
-
 // Mock the LiveViewCanvas to avoid canvas rendering issues in JSDOM
 vi.mock('@/features/liveview/components/LiveViewCanvas.js', () => ({
   LiveViewCanvas: () => <div data-testid="mock-liveview-canvas">LiveViewCanvas</div>,

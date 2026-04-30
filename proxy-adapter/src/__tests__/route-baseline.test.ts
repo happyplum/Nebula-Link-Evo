@@ -54,13 +54,6 @@ vi.mock('../../services/index.js', () => {
   };
 });
 
-vi.mock('../../websocket-manager.js', () => ({
-  DebugWebSocketManager: {
-    getInstance: vi.fn(() => ({
-      setChatHandler: vi.fn(),
-    })),
-  },
-}));
 
 vi.mock('../../services/stream-persist-worker.js', () => ({
   StreamPersistWorker: vi.fn().mockImplementation(() => ({
