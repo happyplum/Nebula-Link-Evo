@@ -1,9 +1,8 @@
 /**
- * TaskService - Facade for task execution
+ * TaskService - Facade for configuration, MCP, and provider registry
  *
- * Provides backward-compatible API for routes while delegating
- * execution logic to TaskOrchestrator, StepRunner, and ActionExecutor.
- * Manages configuration, MCP client, and connectivity testing.
+ * Provides config loading, MCP client management, provider registry,
+ * and connectivity testing. Task execution orchestration removed.
  */
 
 import { loadConfig, validateConfig } from '../config/index.js';
@@ -13,14 +12,9 @@ import type {
   TaskResponse,
   ResolvedConfig,
 } from '../config/schema.js';
-import { DebugWebSocketManager } from '../websocket-manager.js';
 import { ActionExecutor } from './action-executor.js';
-import { StepRunner } from './step-runner.js';
-import { TaskOrchestrator } from './task-orchestrator.js';
-import { streamTask } from '../clients/vercel-ai/streaming.js';
 import { ProviderRegistry } from './provider/registry.js';
 import type { ProviderConfig } from './provider/types.js';
-import type { ModelMessage } from 'ai';
 import type { Logger } from 'pino';
 import { createWorkerLogger } from './logger.js';
 
@@ -29,16 +23,11 @@ export class TaskService {
   private configPath: string = '';
   private registry: ProviderRegistry | null = null;
   private mcpClient: MCPSDKClient | null = null;
-  private wsManager: DebugWebSocketManager;
   private actionExecutor: ActionExecutor;
-  private stepRunner: StepRunner | null = null;
-  private taskOrchestrator: TaskOrchestrator | null = null;
   private logger: Logger;
 
   constructor(logger?: Logger) {
     this.logger = logger ?? createWorkerLogger('TaskService');
-    this.wsManager = DebugWebSocketManager.getInstance();
-    this.wsManager.setMCPStatusProvider(() => this.getMCPStatus());
     this.actionExecutor = new ActionExecutor({ mcpClient: null });
   }
 
@@ -78,32 +67,6 @@ export class TaskService {
     } catch (error) {
       this.logger.warn({ err: error }, 'MCP initialization failed, continuing without MCP');
     }
-
-    this.stepRunner = new StepRunner({
-      actionExecutor: this.actionExecutor,
-      registry: this.registry,
-      defaults: {
-        decision: `${this.config.defaults.decision.provider}/${this.config.defaults.decision.model}`,
-        vision: `${this.config.defaults.vision.provider}/${this.config.defaults.vision.model}`,
-      },
-      getMCPTools: () => this.getMCPTools(),
-      visionTool: this.config.visionTool,
-    });
-
-    this.taskOrchestrator = new TaskOrchestrator({
-      actionExecutor: this.actionExecutor,
-      stepRunner: this.stepRunner,
-      getConfig: () => this.getConfig(),
-    });
-
-    this.wsManager.setTaskCommandHandler((message) => this.handleTaskCommand(message));
-  }
-
-  async execute(request: TaskRequest): Promise<TaskResponse> {
-    if (!this.taskOrchestrator) {
-      throw new Error('TaskService not initialized');
-    }
-    return this.taskOrchestrator.execute(request);
   }
 
   getConfig(): ResolvedConfig | null {
@@ -133,24 +96,8 @@ export class TaskService {
     return this.mcpClient;
   }
 
-  getHistory(limit?: number) {
-    return this.taskOrchestrator?.getHistory(limit) || [];
-  }
-
-  getHistoryById(id: string) {
-    return this.taskOrchestrator?.getHistoryById(id) || null;
-  }
-
-  clearHistory() {
-    this.taskOrchestrator?.clearHistory();
-  }
-
   getActionExecutor(): ActionExecutor {
     return this.actionExecutor;
-  }
-
-  getTaskOrchestrator(): TaskOrchestrator | null {
-    return this.taskOrchestrator;
   }
 
   async shutdown(): Promise<void> {
@@ -158,39 +105,8 @@ export class TaskService {
       await this.mcpClient.shutdown();
     }
   }
-  async streamTaskStream(options: {
-    provider: string;
-    model: string;
-    messages: ModelMessage[];
-  }): Promise<void> {
-    if (!this.taskOrchestrator) {
-      throw new Error('TaskService not initialized');
-    }
 
-    const taskId = crypto.randomUUID();
-    const onEvent = this.createStreamEventHandler(taskId);
-
-    await streamTask({
-      provider: options.provider,
-      model: options.model,
-      messages: options.messages,
-      executor: this.actionExecutor,
-      taskOrchestrator: this.taskOrchestrator,
-      config: this.config!,
-      onEvent,
-    });
-  }
-
-  private createStreamEventHandler(taskId: string): (event: { type: string; [key: string]: unknown }) => void {
-    return (event) => {
-      this.wsManager.broadcast({
-        taskId,
-        ...event,
-        timestamp: new Date().toISOString(),
-      });
-    };
-  }
-/**
+  /**
    * Execute a single action (backward compatibility)
    */
   async executeAction(action: import('../types.js').Action): Promise<import('../types.js').ActionResult> {
@@ -393,50 +309,6 @@ export class TaskService {
       return intro.trim();
     } catch {
       return `我是 ${model} 决策模型，由 ${this.getProviderDisplayName(provider)} 提供。`;
-    }
-  }
-
-  private handleTaskCommand(message: {
-    type: string;
-    taskId?: string;
-    instruction?: unknown;
-    action?: unknown;
-  }): void {
-    switch (message.type) {
-      case 'pause':
-        this.logger.info('Pause command received');
-        this.wsManager.broadcast({
-          type: 'task_paused',
-          taskId: message.taskId,
-          timestamp: new Date().toISOString(),
-        });
-        break;
-      case 'resume':
-        this.logger.info('Resume command received');
-        this.wsManager.broadcast({
-          type: 'task_resumed',
-          taskId: message.taskId,
-          timestamp: new Date().toISOString(),
-        });
-        break;
-      case 'modify':
-        this.logger.info({ message }, 'Modify command received');
-        this.wsManager.broadcast({
-          type: 'task_modified',
-          taskId: message.taskId,
-          instruction: message.instruction,
-          timestamp: new Date().toISOString(),
-        });
-        break;
-      case 'manual_action':
-        this.logger.info({ message }, 'Manual action command received');
-        this.wsManager.broadcast({
-          type: 'manual_action_executed',
-          taskId: message.taskId,
-          action: message.action,
-          timestamp: new Date().toISOString(),
-        });
-        break;
     }
   }
 }
