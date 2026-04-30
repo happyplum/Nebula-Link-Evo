@@ -50,7 +50,6 @@ const healthData = {
     servers: [{ name: 'fs-server', running: true, toolsCount: 3 }],
   },
   services: { playwright: 'running' },
-  websocketConnections: 2,
 };
 
 const mcpStatusData = {
@@ -132,7 +131,6 @@ describe('config.queries', () => {
       expect(data.mcp.servers).toHaveLength(1);
       expect(data.mcp.servers[0].toolsCount).toBe(3);
       expect(data.services.playwright).toBe('running');
-      expect(data.websocketConnections).toBe(2);
     });
 
     it('fetches /api/health endpoint', async () => {

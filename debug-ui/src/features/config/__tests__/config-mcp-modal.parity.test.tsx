@@ -12,7 +12,7 @@ const mockUseMcpCall = vi.fn();
 // Mock all config API hooks to prevent actual network calls
 vi.mock('@/features/config/api/config.queries.js', () => ({
   useConfig: vi.fn(() => ({ data: { mode: 'dev', vision: { provider: 'openai', model: 'gpt-4o' }, decision: { provider: 'openai', model: 'gpt-4o' } }, isLoading: false, error: null })),
-  useHealth: vi.fn(() => ({ data: { status: 'ok', services: { playwright: 'ok' }, websocketConnections: 2, mcp: { enabled: true, servers: [] } }, isLoading: false, error: null })),
+  useHealth: vi.fn(() => ({ data: { status: 'ok', services: { playwright: 'ok' }, mcp: { enabled: true, servers: [] } }, isLoading: false, error: null })),
   useMcpStatus: () => mockUseMcpStatus(),
   useMcpTools: () => mockUseMcpTools(),
   useVerifyKeys: vi.fn(() => ({ data: { keys: [{ provider: 'openai', displayName: 'OpenAI', status: 'valid', keyPreview: 'sk-...xyz' }] }, isLoading: false, error: null })),

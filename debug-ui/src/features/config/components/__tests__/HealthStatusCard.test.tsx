@@ -54,7 +54,6 @@ describe('HealthStatusCard', () => {
         services: {
           playwright: 'ok',
         },
-        websocketConnections: 2,
       },
       isLoading: false,
       error: null,
@@ -65,7 +64,6 @@ describe('HealthStatusCard', () => {
     expect(screen.getByText('服务状态')).toBeInTheDocument();
     expect(screen.getByText('正常')).toBeInTheDocument();
     expect(screen.getByText('已连接')).toBeInTheDocument();
-    expect(screen.getByText('2 active')).toBeInTheDocument();
     expect(screen.getByText('1 servers')).toBeInTheDocument();
   });
 
@@ -81,7 +79,6 @@ describe('HealthStatusCard', () => {
         services: {
           playwright: 'error',
         },
-        websocketConnections: 0,
       },
       isLoading: false,
       error: null,
@@ -91,7 +88,6 @@ describe('HealthStatusCard', () => {
     
     expect(screen.getByText('异常')).toBeInTheDocument();
     expect(screen.getByText('未连接')).toBeInTheDocument();
-    expect(screen.getByText('0 active')).toBeInTheDocument();
     expect(screen.getByText('Disabled')).toBeInTheDocument();
   });
 });
