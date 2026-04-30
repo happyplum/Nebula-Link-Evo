@@ -4,8 +4,6 @@ import type {
   DOMElement,
   Action,
   ActionResult,
-  TaskRequest,
-  TaskResponse,
 } from '../types.js';
 import type { DOMSnapshotResponse as SharedDOMSnapshotResponse } from '@nebula-link-evo/shared';
 
@@ -15,8 +13,6 @@ export type {
   DOMElement,
   Action,
   ActionResult,
-  TaskRequest,
-  TaskResponse,
 };
 
 export type DOMSnapshotResponse = SharedDOMSnapshotResponse;

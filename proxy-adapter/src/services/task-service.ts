@@ -7,11 +7,7 @@
 
 import { loadConfig, validateConfig } from '../config/index.js';
 import { MCPSDKClient } from '../clients/mcp/sdk-client.js';
-import type {
-  TaskRequest,
-  TaskResponse,
-  ResolvedConfig,
-} from '../config/schema.js';
+import type { ResolvedConfig } from '../config/schema.js';
 import { ActionExecutor } from './action-executor.js';
 import { ProviderRegistry } from './provider/registry.js';
 import type { ProviderConfig } from './provider/types.js';
