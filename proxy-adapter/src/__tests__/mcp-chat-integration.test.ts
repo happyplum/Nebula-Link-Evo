@@ -321,6 +321,56 @@ const mockConfig: ResolvedConfig = {
     });
   });
 
+  describe('WebSocket tool_call streaming', () => {
+    it('should handle tool_call in stream callbacks', async () => {
+      const mockRespondToClient = vi.fn();
+
+      const callbacks: TestStreamCallbacks = {
+        onToken: vi.fn(),
+        onThinking: vi.fn(),
+        onToolCall: (call: any) => {
+          mockRespondToClient('client-id', {
+            type: 'chat_stream_tool_call',
+            sessionId: session.id,
+            messageId: 'msg-123',
+            toolCall: call,
+          });
+        },
+        onUsage: vi.fn(),
+        onDone: vi.fn(),
+      };
+
+      vi.spyOn(decisionClient, 'decideStream').mockImplementation(
+        async (_context: DecisionContext, cb: TestStreamCallbacks) => {
+          cb.onToolCall!(mockToolCall);
+          cb.onDone!();
+        }
+      );
+
+      await decisionClient.decideStream?.(
+        {
+          screenshot: '',
+          dom: { snapshot_id: 'test', annotated_screenshot_base64: '', elements_map: {}, simplified_dom: { elements: [], viewport: { width: 1920, height: 1080 } }, version: '2.0' as const },
+          elements: [],
+          instruction: '',
+          previousActions: [],
+          sessionId: session.id,
+          messages: [],
+          provider: 'test',
+          model: 'test-model',
+        } as DecisionContext,
+        callbacks
+      );
+
+      expect(mockRespondToClient).toHaveBeenCalledWith('client-id', {
+        type: 'chat_stream_tool_call',
+        sessionId: session.id,
+        messageId: 'msg-123',
+        toolCall: mockToolCall,
+      });
+    });
+  });
+
   describe('system prompt with MCP tools', () => {
     it('should inject available MCP tools into system prompt', () => {
       const tools = mcpClient.getAvailableTools();

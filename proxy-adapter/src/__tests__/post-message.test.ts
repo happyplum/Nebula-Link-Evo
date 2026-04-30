@@ -89,7 +89,7 @@ describe('POST /sessions/:id/messages', () => {
     it('should return 202 Accepted with jobId and runId', async () => {
       const response = await app.inject({
         method: 'POST',
-        url: \/sessions/\/messages\,
+        url: `/sessions/${sessionId}/messages`,
         payload: {
           content: 'Hello, how are you?',
         },
@@ -98,9 +98,9 @@ describe('POST /sessions/:id/messages', () => {
       expect(response.statusCode).toBe(202);
       const body = JSON.parse(response.payload);
       expect(body.jobId).toBeDefined();
-      expect(body.jobId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\$/i);
+      expect(body.jobId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
       expect(body.runId).toBeDefined();
-      expect(body.runId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\$/i);
+      expect(body.runId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
       expect(body.sessionId).toBe(sessionId);
       expect(body.messageId).toBeDefined();
     });
@@ -108,7 +108,7 @@ describe('POST /sessions/:id/messages', () => {
     it('should persist message in database', async () => {
       const response = await app.inject({
         method: 'POST',
-        url: \/sessions/\/messages\,
+        url: `/sessions/${sessionId}/messages`,
         payload: {
           content: 'Test message content',
         },
@@ -125,7 +125,7 @@ describe('POST /sessions/:id/messages', () => {
     it('should persist message.created event', async () => {
       const response = await app.inject({
         method: 'POST',
-        url: \/sessions/\/messages\,
+        url: `/sessions/${sessionId}/messages`,
         payload: {
           content: 'Event test message',
         },
@@ -149,7 +149,7 @@ describe('POST /sessions/:id/messages', () => {
     it('should trim message content', async () => {
       const response = await app.inject({
         method: 'POST',
-        url: \/sessions/\/messages\,
+        url: `/sessions/${sessionId}/messages`,
         payload: {
           content: '  trimmed message  ',
         },
@@ -178,7 +178,7 @@ describe('POST /sessions/:id/messages', () => {
       // First request - should succeed
       const response1 = app.inject({
         method: 'POST',
-        url: \/sessions/\/messages\,
+        url: `/sessions/${sessionId}/messages`,
         payload: {
           content: 'First message',
         },
@@ -187,7 +187,7 @@ describe('POST /sessions/:id/messages', () => {
       // Immediately send second request without waiting
       const response2 = app.inject({
         method: 'POST',
-        url: \/sessions/\/messages\,
+        url: `/sessions/${sessionId}/messages`,
         payload: {
           content: 'Second message',
         },
@@ -207,7 +207,7 @@ describe('POST /sessions/:id/messages', () => {
 
       const response = await app.inject({
         method: 'POST',
-        url: \/sessions/\/messages\,
+        url: `/sessions/${sessionId}/messages`,
         payload: {
           content: 'Test message',
         },
@@ -225,7 +225,7 @@ describe('POST /sessions/:id/messages', () => {
 
       const response = await app.inject({
         method: 'POST',
-        url: \/sessions/\/messages\,
+        url: `/sessions/${sessionId}/messages`,
         payload: {
           content: 'New message after release',
         },
@@ -250,7 +250,7 @@ describe('POST /sessions/:id/messages', () => {
     it('should return 400 for empty message', async () => {
       const response = await app.inject({
         method: 'POST',
-        url: \/sessions/\/messages\,
+        url: `/sessions/${sessionId}/messages`,
         payload: {
           content: '',
         },
@@ -264,7 +264,7 @@ describe('POST /sessions/:id/messages', () => {
     it('should return 400 for whitespace-only message', async () => {
       const response = await app.inject({
         method: 'POST',
-        url: \/sessions/\/messages\,
+        url: `/sessions/${sessionId}/messages`,
         payload: {
           content: '   ',
         },

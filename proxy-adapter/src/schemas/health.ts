@@ -16,7 +16,6 @@ export const HealthResponseSchema = Type.Object({
   services: Type.Object({
     playwright: Type.String(),
   }),
-  websocketConnections: Type.Number(),
 });
 
 export type HealthResponse = Static<typeof HealthResponseSchema>;
