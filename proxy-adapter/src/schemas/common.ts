@@ -16,12 +16,6 @@ export const PaginationQuerySchema = Type.Object({
   offset: Type.Optional(Type.Number({ default: 0 })),
 });
 
-export const ContextSchema = Type.Object({
-  maxSteps: Type.Optional(Type.Number({ default: 10 })),
-  previousActions: Type.Optional(Type.Array(Type.Any())),
-});
-
 export type SuccessResponse = Static<typeof SuccessResponseSchema>;
 export type ErrorResponse = Static<typeof ErrorResponseSchema>;
 export type PaginationQuery = Static<typeof PaginationQuerySchema>;
-export type Context = Static<typeof ContextSchema>;
