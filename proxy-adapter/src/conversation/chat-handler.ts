@@ -1,5 +1,4 @@
 import { ConversationManager } from './manager.js';
-import { DebugWebSocketManager } from '../websocket-manager.js';
 import { MCPSDKClient } from '../clients/mcp/sdk-client.js';
 import type { ResolvedConfig } from '../config/schema.js';
 import { ChatSessionController } from '../services/chat-session-controller.js';
@@ -20,7 +19,6 @@ import { LoopGuardService } from '../services/loop-guard/loop-guard-service.js';
 import { InterventionEngine } from '../services/loop-guard/intervention.js';
 import { hashArgs, hashResult } from '../services/loop-guard/fingerprint.js';
 import type { LoopGuardVerdict } from '../services/loop-guard/types.js';
-import WebSocket from 'ws';
 
 interface ChatSendParams {
   sessionId: string;
@@ -54,7 +52,6 @@ type TerminalReason = 'stop' | 'max_steps_reached' | 'tool_error' | 'abort' | 'p
 class ChatHandler {
   private conversationManager: ConversationManager;
   private config: ResolvedConfig;
-  private wsManager: DebugWebSocketManager;
   private mcpClient: MCPSDKClient | null = null;
   private sessionEventsDAO?: SessionEventsDAO;
   private sessionEventHub: SessionEventHub;
@@ -69,14 +66,12 @@ class ChatHandler {
   constructor(
     conversationManager: ConversationManager,
     config: ResolvedConfig,
-    wsManager: DebugWebSocketManager,
     mcpClient?: MCPSDKClient,
     sessionEventsDAO?: SessionEventsDAO,
     sessionEventHub?: SessionEventHub
   ) {
     this.conversationManager = conversationManager;
     this.config = config;
-    this.wsManager = wsManager;
     this.mcpClient = mcpClient || null;
     this.sessionEventsDAO = sessionEventsDAO || this.resolveSessionEventsDAO();
     this.sessionEventHub = sessionEventHub || SessionEventHub.getInstance();
@@ -315,21 +310,6 @@ class ChatHandler {
     } finally {
       sessionController.cleanup(sessionId);
     }
-  }
-
-  async handleMessage(data: ChatMessageData, ws: WebSocket): Promise<void> {
-    const { sessionId, message, screenshot } = data;
-    if (!sessionId || !message) {
-      throw new Error('sessionId and message are required');
-    }
-
-    const client = Array.from(this.wsManager['clients']).find(([_, client]) => client === ws);
-    if (!client) {
-      throw new Error('WebSocket client not found');
-    }
-    const clientId = client[0];
-
-    await this.handleChatSend(clientId, { sessionId, message, screenshot });
   }
 
   async resumeSession(clientId: string, sessionId: string): Promise<void> {
@@ -662,7 +642,6 @@ class ChatHandler {
         completionStatus,
         nextAgentState
       );
-      this.sendSessionUpdate();
 
       if (pauseRequested) {
         return;
@@ -868,14 +847,6 @@ class ChatHandler {
     );
   }
 
-  sendSessionUpdate(): void {
-    const sessions = this.conversationManager.listSessions();
-    this.wsManager.broadcast({
-      type: 'chat_session_update',
-      sessions,
-      timestamp: new Date().toISOString(),
-    });
-  }
 }
 
 export { ChatHandler };
