@@ -2,14 +2,14 @@
 
 ## Overview
 
-Backend source for task execution, AI clients, conversations, debug APIs, and websocket flows.
+Backend source for AI clients, conversations, debug APIs, and chat session coordination.
 
 ## Where To Look
 
 | Area             | Path            | Notes                                                          |
 | ---------------- | --------------- | -------------------------------------------------------------- |
-| Server bootstrap | `server.ts`     | Route registration, WebSocket, service init                    |
-| Services         | `services/`     | Task execution, session control, stream persistence, websocket |
+| Server bootstrap | `server.ts`     | Route registration, service init                               |
+| Services         | `services/`     | Config facade, session control, stream persistence, chat       |
 | Plugins          | `plugins/`      | Fastify plugins and route modules                              |
 | Clients          | `clients/`      | Decision, vision, MCP, Vercel AI SDK                           |
 | Conversation     | `conversation/` | SQLite storage, compression, manager                           |
@@ -17,7 +17,6 @@ Backend source for task execution, AI clients, conversations, debug APIs, and we
 | Debug helpers    | `debug/`        | Debug-specific types and helpers                               |
 | Errors           | `errors/`       | Typed error classes                                            |
 | Schemas          | `schemas/`      | TypeBox request/response schemas                               |
-| Skills           | `skills/`       | Skill execution manager                                        |
 | Tests            | `__tests__/`    | Unit, integration, e2e                                         |
 
 ## Working Rules

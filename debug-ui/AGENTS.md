@@ -19,7 +19,7 @@ pnpm type-check   # tsc --noEmit
 | ----------- | --------------------- | ------------------------------------------------------------------------------------------------ |
 | Vite config | `vite.config.ts`      | base `/debug/`, dev proxies to `:3000`, `@/` alias                                               |
 | App shell   | `src/app/`            | App.tsx, routes, layout                                                                          |
-| Features    | `src/features/`       | Feature-based architecture: layout, runtime, chat, playwright-control, config, history, liveview |
+| Features    | `src/features/`       | Feature-based architecture: layout, runtime, chat, playwright-control, config, liveview |
 | Shared UI   | `src/shared/`         | Reusable components, hooks, utilities, testids                                                   |
 | E2E         | `e2e/`                | Playwright specs, custom fixtures, websocket monitoring                                          |
 | Styles      | `src/**/*.module.css` | CSS Modules for component styling                                                                |
@@ -41,15 +41,15 @@ pnpm type-check   # tsc --noEmit
 - **Dev**: Vite dev server (`:5173`), proxies `/api`, `/debug/api`, `/ws` → `:3000`
 - **Prod**: Standalone build, accessed directly (not served by proxy-adapter)
 - Routes: `/` → DebugPage, `/chat` → ChatPage (via HashRouter)
-- Modules use same-origin paths: `/api`, `/debug/api`, `/ws/debug`, `/ws/chat`
+- Modules use same-origin paths: `/api`, `/debug/api`
 
 ## Architecture
 
 - **App Shell**: App.tsx with HashRouter, routes defined in src/app/
 - **Feature-based**: Each feature (layout, runtime, chat, etc.) has its own directory with components and hooks
-- **State Management**: Zustand stores for global state (layout, runtime, chat, playwright-control, config, history)
+- **State Management**: Zustand stores for global state (layout, runtime, chat, playwright-control, config)
 - **Data Fetching**: TanStack Query for REST API calls (sessions, messages, playwright, etc.)
-- **SSE/WebSocket**: Custom hooks for streaming (useDebugSession, useChatSession) and WebSocket (useWebSocket)
+- **SSE**: Custom hooks for streaming (useChatSession)
 - **Liveview**: Imperative canvas island (LiveViewCanvas.tsx) for MJPEG stream and DOM overlay
 
 ## Conventions
@@ -79,8 +79,7 @@ pnpm type-check   # tsc --noEmit
 - `src/features/AGENTS.md` — feature-level guidance
 - `src/features/chat/AGENTS.md` — SSE + optimistic chat streaming
 - `src/features/config/AGENTS.md` — health, MCP tools, API keys, AI test
-- `src/features/history/AGENTS.md` — task execution history, interaction inspection
-- `src/features/runtime/AGENTS.md` — shared debug WebSocket lifecycle
+- `src/features/runtime/AGENTS.md` — runtime store and service status sync
 - `src/features/liveview/AGENTS.md` — MJPEG canvas and overlay rules
 - `src/features/playwright-control/AGENTS.md` — browser control/store rules
 - `src/shared/AGENTS.md` — shared REST/query/testid/date conventions

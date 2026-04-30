@@ -14,7 +14,7 @@ Vitest unit/integration coverage plus Playwright e2e tests for backend and Debug
 | E2E                | `e2e/`, `e2e/debug-ui/`          | Browser-driven Debug UI and workflow coverage          |
 | Conversation       | `conversation/`                  | Persistence and config behavior                        |
 | Config             | `config/`                        | Config loading/validation                              |
-| AI/provider        | `vercel-ai/`, client tests       | Provider integration                                   |
+| AI/provider        | `vercel-ai/core-tools.test.ts`  | Core tool integration                                  |
 | Helpers/fixtures   | `helpers/`, `fixtures/`          | Shared test setup                                      |
 
 ## Commands
@@ -28,10 +28,9 @@ pnpm test:debug    # Debug page smoke check
 
 ## Working Rules
 
-- Prefer real request lifecycles (`app.inject()`, fetch, websocket clients) for route/proxy regressions.
+- Prefer real request lifecycles (`app.inject()`, fetch) for route/proxy regressions.
 - No tautological tests that restate constants or path strings.
 - Use `shared/test-utils/` carefully — not part of normal shared build output.
-- Keep e2e aligned with extracted `debug-ui/` and current `/ws/debug` canonical endpoint.
 
 ## Anti-Patterns
 
