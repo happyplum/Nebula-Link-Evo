@@ -21,7 +21,7 @@ pnpm type-check   # tsc --noEmit
 | App shell   | `src/app/`            | App.tsx, routes, layout                                                                          |
 | Features    | `src/features/`       | Feature-based architecture: layout, runtime, chat, playwright-control, config, liveview |
 | Shared UI   | `src/shared/`         | Reusable components, hooks, utilities, testids                                                   |
-| E2E         | `e2e/`                | Playwright specs, custom fixtures, websocket monitoring                                          |
+| E2E         | `e2e/`                | Playwright specs, custom fixtures                              |
 | Styles      | `src/**/*.module.css` | CSS Modules for component styling                                                                |
 | Tests       | `src/**/*.test.tsx`   | Vitest unit tests                                                                                |
 
@@ -38,7 +38,7 @@ pnpm type-check   # tsc --noEmit
 
 ## Runtime Model
 
-- **Dev**: Vite dev server (`:5173`), proxies `/api`, `/debug/api`, `/ws` → `:3000`
+- **Dev**: Vite dev server (`:5173`), proxies `/api`, `/debug/api` → `:3000`
 - **Prod**: Standalone build, accessed directly (not served by proxy-adapter)
 - Routes: `/` → DebugPage, `/chat` → ChatPage (via HashRouter)
 - Modules use same-origin paths: `/api`, `/debug/api`

@@ -2,32 +2,25 @@
 
 ## Overview
 
-Runtime owns the shared debug WebSocket, reconnect policy, execution log fan-out, and cross-store service-status sync.
+Runtime owns the Monitor sidebar/main shell components, LiveView canvas integration, and the Zustand runtime store for Playwright status and LiveView state.
 
 ## Where To Look
 
-| Area                | Path                      | Notes                                                          |
-| ------------------- | ------------------------- | -------------------------------------------------------------- |
-| Debug socket hook   | `hooks/useDebugSocket.ts` | Shared singleton WebSocket, reconnect timer, consumer counting |
-| Generic socket hook | `hooks/useWebSocket.ts`   | Lower-level socket helper                                      |
-| Store               | `store/runtime.store.ts`  | Connection status, execution messages, transport state         |
+| Area                | Path                                    | Notes                                                       |
+| ------------------- | --------------------------------------- | ----------------------------------------------------------- |
+| Monitor sidebar     | `components/MonitorSidebarShell.tsx`    | Browser status, DOM screenshot, browser tabs cards         |
+| Monitor main        | `components/MonitorMainShell.tsx`       | LiveView canvas, download/refresh controls                  |
+| Runtime store       | `store/runtime.store.ts`                | Playwright status, LiveView state, snapshot version         |
 
 ## Working Rules
 
-- Keep `sharedWs`, reconnect timers, and consumer count at module scope; the design assumes one shared connection across consumers.
-- Invalidate MCP query keys when `service_status` includes MCP payloads.
-- Mirror service-status updates into both runtime and playwright-control stores so browser state stays coherent.
-- Close the socket only when the last consumer unmounts or an explicit manual disconnect is requested.
-- Append execution messages through the store’s capped buffer.
-
-## Contributor Traps
-
-- `sharedManualClose` changes reconnect behavior; forgetting it creates reconnect loops after intentional disconnect.
-- Reconnect delay is jittered, not fixed.
-- Adding backend WS commands requires updating both hook filtering and server handling.
+- Playwright status (isOpen, url) is synced via TanStack Query polling (`useHealth`).
+- LiveView transport and refresh state live in the runtime store.
+- Monitor shells compose cards from REST API data — no real-time push.
+- Snapshot version tracks LiveView canvas invalidation.
 
 ## Anti-Patterns
 
-- No per-component `new WebSocket('/ws/debug')` instances.
-- No direct lifecycle mutation from components.
+- No per-component polling — use shared TanStack Query hooks.
 - No duplicated browser-open/url bookkeeping outside runtime/control stores.
+- No WebSocket references — all real-time updates go through SSE (chat feature).
