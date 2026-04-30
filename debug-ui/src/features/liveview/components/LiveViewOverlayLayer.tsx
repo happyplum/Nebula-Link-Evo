@@ -11,7 +11,6 @@ import {
   type SelectedElement,
   useControlStore,
 } from '@/features/playwright-control/store/control.store.js';
-import { useDebugSocket } from '@/features/runtime/hooks/index.js';
 import styles from './LiveViewOverlayLayer.module.css';
 
 const MARKER_LIFETIME = 5000;
@@ -40,81 +39,10 @@ interface PickerCursor {
   pageY: number;
 }
 
-interface LiveViewMarkerMessage {
-  type: string;
-  x: number;
-  y: number;
-}
-
-interface LiveViewOverlayMessage {
-  type: string;
-  bbox: OverlayBBox;
-}
-
 interface LiveViewOverlayLayerProps {
   fitRect: ImageFitRect | null;
   onElementSelect?: (selector: string) => void;
   onCoordinateCapture?: (coords: { x: number; y: number }) => void;
-}
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
-}
-
-function isObjectRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function normalizeMarkerMessage(payload: unknown): LiveViewMarkerMessage | null {
-  if (!isObjectRecord(payload) || typeof payload.type !== 'string') {
-    return null;
-  }
-
-  if (!payload.type.includes('marker')) {
-    return null;
-  }
-
-  const x = payload.x;
-  const y = payload.y;
-  if (!isFiniteNumber(x) || !isFiniteNumber(y)) {
-    return null;
-  }
-
-  return { type: payload.type, x, y };
-}
-
-function normalizeOverlayMessage(payload: unknown): LiveViewOverlayMessage | null {
-  if (!isObjectRecord(payload) || typeof payload.type !== 'string') {
-    return null;
-  }
-
-  if (!payload.type.includes('hover') && !payload.type.includes('highlight')) {
-    return null;
-  }
-
-  const bbox = payload.bbox;
-  if (!isObjectRecord(bbox)) {
-    return null;
-  }
-
-  const x = bbox.x;
-  const y = bbox.y;
-  const width = bbox.width;
-  const height = bbox.height;
-  if (
-    !isFiniteNumber(x) ||
-    !isFiniteNumber(y) ||
-    !isFiniteNumber(width) ||
-    !isFiniteNumber(height)
-  ) {
-    return null;
-  }
-
-  const selector = typeof bbox.selector === 'string' ? bbox.selector : undefined;
-  return {
-    type: payload.type,
-    bbox: { x, y, width, height, selector },
-  };
 }
 
 export function LiveViewOverlayLayer({
@@ -140,7 +68,6 @@ export function LiveViewOverlayLayer({
   const [overlayBBox, setOverlayBBox] = useState<OverlayBBox | null>(null);
   const [hoveredElement, setHoveredElement] = useState<SelectedElement | null>(null);
 
-  const { onMessage } = useDebugSocket();
   const elementPickerEnabled = useControlStore((s) => s.elementPickerEnabled);
   const setElementPickerEnabled = useControlStore((s) => s.setElementPickerEnabled);
   const setCapturedCoordinates = useControlStore((s) => s.setCapturedCoordinates);
@@ -629,38 +556,6 @@ export function LiveViewOverlayLayer({
       }
     };
   }, [drawOverlayFrame, markers.length, overlayBBox, hoveredElement, elementPickerEnabled]);
-
-  useEffect(() => {
-    const unsubscribe = onMessage((payload) => {
-      const markerPayload = normalizeMarkerMessage(payload);
-      if (markerPayload && fitRectRef.current) {
-        const point = pageToCanvasCoords(markerPayload.x, markerPayload.y, fitRectRef.current);
-        const now = Date.now();
-        setMarkers((prev) => [
-          ...prev,
-          {
-            canvasX: point.x,
-            canvasY: point.y,
-            pageX: markerPayload.x,
-            pageY: markerPayload.y,
-            timestamp: now,
-          },
-        ]);
-      }
-
-      const overlayPayload = normalizeOverlayMessage(payload);
-      if (!overlayPayload) {
-        return;
-      }
-
-      setOverlayBBox(overlayPayload.bbox);
-      if (overlayPayload.bbox.selector) {
-        onElementSelect?.(overlayPayload.bbox.selector);
-      }
-    });
-
-    return unsubscribe;
-  }, [onElementSelect, onMessage]);
 
   useEffect(() => {
     if (!elementPickerEnabled) {
