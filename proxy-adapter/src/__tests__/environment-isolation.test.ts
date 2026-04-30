@@ -10,10 +10,12 @@ import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 // Mock external dependencies before imports
 vi.mock('../../browser-client.js', () => ({
   browserClient: {},
+}));
 
 vi.mock('../../conversation/index.js', () => ({
   ConversationManager: vi.fn(),
   ChatHandler: vi.fn(),
+}));
 
 vi.mock('../../services/index.js', () => {
   const mockTaskServiceInstance = {
@@ -45,6 +47,12 @@ vi.mock('dotenv', () => ({
   config: vi.fn(),
 }));
 
+vi.mock('../config/services.js', () => ({
+  getServiceEndpointsCached: vi.fn(() => ({
+    playwright: { url: 'http://localhost:9222' },
+  })),
+}));
+
 describe('Production Environment Isolation', () => {
   let originalNodeEnv: string | undefined;
 
@@ -71,7 +79,7 @@ describe('Production Environment Isolation', () => {
   });
 
   describe('Debug API Routes', () => {
-    it('should return 200 for /debug/api/tasks in production', async () => {
+    it('should return 200 for /debug/api/health in production', async () => {
       const { default: Fastify } = await import('fastify');
       const debugRoutes = await import('../plugins/routes/debug/index.js');
 
@@ -82,7 +90,7 @@ describe('Production Environment Isolation', () => {
 
       const response = await app.inject({
         method: 'GET',
-        url: '/debug/api/tasks',
+        url: '/debug/api/health',
       });
 
       // Debug API routes should be accessible in production

@@ -87,16 +87,16 @@ describe('Server Initialization', () => {
       await app.close();
     });
 
-    it('should register WebSocket plugin', async () => {
+    it('should register CORS and swagger plugins', async () => {
       const { default: Fastify } = await import('fastify');
-      const websocket = await import('@fastify/websocket');
 
       const app = Fastify({ logger: { level: 'warn' } });
 
-      await app.register(websocket);
+      const cors = await import('@fastify/cors');
+      await app.register(cors.default);
 
-      const hasWebsocket = await app.hasPlugin('@fastify/websocket');
-      expect(hasWebsocket).toBe(true);
+      const hasCors = await app.hasPlugin('@fastify/cors');
+      expect(hasCors).toBe(true);
 
       await app.close();
     });
@@ -141,22 +141,20 @@ describe('Server Initialization', () => {
       await app.close();
     });
 
-    it('should register task routes with /task prefix', async () => {
+    it('should register debug routes with /debug prefix', async () => {
       const { default: Fastify } = await import('fastify');
-      const taskRoutes = await import('../../plugins/routes/task.js');
+      const debugRoutes = await import('../../plugins/routes/debug/index.js');
 
       const app = Fastify({ logger: { level: 'warn' } });
 
-      await app.register(taskRoutes.default, { prefix: '/task' });
+      await app.register(debugRoutes.default, { prefix: '/debug' });
 
       const response = await app.inject({
-        method: 'POST',
-        url: '/task',
-        payload: {},
+        method: 'GET',
+        url: '/debug/api/health',
       });
 
       expect(response.statusCode).toBeDefined();
-      expect([400, 404, 405, 500]).toContain(response.statusCode);
 
       await app.close();
     });

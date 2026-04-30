@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { randomUUID } from 'node:crypto';
 import { ChatHandler } from '../conversation/chat-handler.js';
 import { ConversationManager } from '../conversation/manager.js';
 import type { DecisionClient } from '../clients/types.js';
@@ -53,7 +54,7 @@ describe('ChatHandler', () => {
   let mockSessionId: string;
 
   beforeEach(() => {
-    mockSessionId = \	est-session-\-\;
+    mockSessionId = randomUUID();
 
     conversationManager = new ConversationManager(':memory:');
     conversationManager.initialize();

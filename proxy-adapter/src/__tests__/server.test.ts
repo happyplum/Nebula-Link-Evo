@@ -174,7 +174,7 @@ describe('server initialization', () => {
 
     expect(prefixes).toContain('/api/health');
     expect(prefixes).toContain('/api/config');
-    expect(prefixes).toContain('/api/task');
+    expect(prefixes).toContain('/debug');
   });
 
   it('should register root route', async () => {

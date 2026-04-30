@@ -33,7 +33,7 @@ type StreamCallbacks = {
   onDone: () => Promise<void>;
 };
 import type { ResolvedConfig } from '../config/schema.js';
-import chatRoutes from '../plugins/routes/chat/index.js';
+
 import apiChatRoutes from '../plugins/routes/api/chat/index.js';
 import errorHandler from '../plugins/03-error-handler.plugin.js';
 import swaggerPlugin from '../plugins/02-swagger.plugin.js';
@@ -308,7 +308,6 @@ describe.skipIf(isCI)('SSE Load Tests', () => {
     app.register(errorHandler);
     app.decorate('conversationManager', manager);
     app.decorate('chatHandler', chatHandler);
-    app.register(chatRoutes, { prefix: '/chat' });
     app.register(apiChatRoutes, { prefix: '/api/chat' });
     await app.ready();
     await app.listen({ port: 0, host: '127.0.0.1' });
