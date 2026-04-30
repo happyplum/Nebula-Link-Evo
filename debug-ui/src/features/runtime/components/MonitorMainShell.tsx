@@ -90,15 +90,15 @@ export function MonitorMainShell() {
       </div>
 
       {/* Task Strip */}
-      <div className={styles.taskStrip} data-testid={testIds.monitorMainTaskStrip}>
-        <span className={indicatorClass} data-testid={testIds.monitorMainTaskIndicator} />
-        <span className={styles.taskStatusText} data-testid={testIds.monitorMainTaskStatusText}>
+      <div className={styles.taskStrip}>
+        <span className={indicatorClass} />
+        <span className={styles.taskStatusText}>
           {TASK_STATUS_LABEL[playwrightStatus]}
         </span>
       </div>
 
       {/* Quick Actions */}
-      <div className={styles.quickActions} data-testid={testIds.monitorMainQuickActions}>
+      <div className={styles.quickActions}>
         <button
           type="button"
           className={`${styles.actionBtn}${!lastScreenshotDataUrl ? ` ${styles.disabled}` : ''}`}
