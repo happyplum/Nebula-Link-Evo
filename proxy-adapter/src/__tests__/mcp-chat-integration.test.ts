@@ -321,7 +321,7 @@ const mockConfig: ResolvedConfig = {
     });
   });
 
-  describe('WebSocket tool_call streaming', () => {
+  describe('SSE tool_call streaming', () => {
     it('should handle tool_call in stream callbacks', async () => {
       const mockRespondToClient = vi.fn();
 
