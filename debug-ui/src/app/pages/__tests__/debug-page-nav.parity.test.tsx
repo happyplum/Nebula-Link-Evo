@@ -94,36 +94,33 @@ describe('DebugPage Navigation Parity Test', () => {
     useLayoutStore.setState({ activeActivityIcon: 'monitor' });
   });
 
-  it('asserts 4 activity buttons render with correct data-testid values', () => {
+  it('asserts 3 activity buttons render with correct data-testid values', () => {
     renderWithProviders(<DebugPage />);
 
     expect(screen.getByTestId(testIds.activityBtnMonitor)).toBeInTheDocument();
     expect(screen.getByTestId(testIds.activityBtnControl)).toBeInTheDocument();
     expect(screen.getByTestId(testIds.activityBtnAi)).toBeInTheDocument();
-    expect(screen.getByTestId(testIds.activityBtnExecution)).toBeInTheDocument();
   });
 
-  it('asserts buttons are in order: monitor, control, ai, execution', () => {
+  it('asserts buttons are in order: monitor, control, ai', () => {
     renderWithProviders(<DebugPage />);
 
     const activityBar = screen.getByTestId(testIds.activityBar);
     const buttons = activityBar.querySelectorAll('button');
 
-    expect(buttons.length).toBe(4);
+    expect(buttons.length).toBe(3);
 
     expect(buttons[0]).toHaveAttribute('data-testid', testIds.activityBtnMonitor);
     expect(buttons[1]).toHaveAttribute('data-testid', testIds.activityBtnControl);
     expect(buttons[2]).toHaveAttribute('data-testid', testIds.activityBtnAi);
-    expect(buttons[3]).toHaveAttribute('data-testid', testIds.activityBtnExecution);
   });
 
-  it('asserts non-chat buttons call setActiveIcon, execution button navigates', () => {
+  it('asserts activity buttons call setActiveIcon', () => {
     renderWithProviders(<DebugPage />);
 
     const monitorButton = screen.getByTestId(testIds.activityBtnMonitor);
     const controlButton = screen.getByTestId(testIds.activityBtnControl);
     const aiButton = screen.getByTestId(testIds.activityBtnAi);
-    const executionButton = screen.getByTestId(testIds.activityBtnExecution);
 
     fireEvent.click(monitorButton);
     expect(useLayoutStore.getState().activeActivityIcon).toBe('monitor');
@@ -133,9 +130,6 @@ describe('DebugPage Navigation Parity Test', () => {
 
     fireEvent.click(aiButton);
     expect(useLayoutStore.getState().activeActivityIcon).toBe('ai');
-
-    fireEvent.click(executionButton);
-    expect(mockNavigate).toHaveBeenCalledWith('/execution');
   });
 
   it('asserts activity button icons render correctly', () => {
@@ -147,7 +141,6 @@ describe('DebugPage Navigation Parity Test', () => {
     expect(buttons[0]).toHaveTextContent('📊');
     expect(buttons[1]).toHaveTextContent('🎮');
     expect(buttons[2]).toHaveTextContent('🤖');
-    expect(buttons[3]).toHaveTextContent('📋');
   });
 
   it('asserts activity button titles render correctly', () => {
@@ -159,6 +152,5 @@ describe('DebugPage Navigation Parity Test', () => {
     expect(buttons[0]).toHaveAttribute('title', '状态');
     expect(buttons[1]).toHaveAttribute('title', '控制');
     expect(buttons[2]).toHaveAttribute('title', 'AI');
-    expect(buttons[3]).toHaveAttribute('title', '执行记录');
   });
 });

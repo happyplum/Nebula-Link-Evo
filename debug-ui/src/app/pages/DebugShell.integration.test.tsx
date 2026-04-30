@@ -39,8 +39,6 @@ describe('DebugShell Integration', () => {
     expect(screen.getByTitle('状态')).toBeInTheDocument();
     expect(screen.getByTitle('控制')).toBeInTheDocument();
     expect(screen.getByTitle('AI')).toBeInTheDocument();
-    // TODO(renamed-activity): '对话测试' was renamed to '执行记录' (route-based, not sidebar)
-    expect(screen.getByTitle('执行记录')).toBeInTheDocument();
     
     // Check sidebar header
     expect(screen.getByText('🌌 Nebula Debug')).toBeInTheDocument();

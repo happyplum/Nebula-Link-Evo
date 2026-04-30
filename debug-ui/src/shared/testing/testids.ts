@@ -33,7 +33,7 @@ export const testIds = {
   activityBtnControl: 'activity-btn-control',
   activityBtnAi: 'activity-btn-ai',
   activityBtnChat: 'activity-btn-chat',
-  activityBtnExecution: 'activity-btn-execution',
+
   debugSidebar: 'debug-sidebar',
   debugMain: 'debug-main',
   debugRightPanel: 'debug-right-panel',
