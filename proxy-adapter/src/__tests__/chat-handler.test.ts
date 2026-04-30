@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ChatHandler } from '../conversation/chat-handler.js';
 import { ConversationManager } from '../conversation/manager.js';
-import { DebugWebSocketManager } from '../websocket-manager.js';
 import type { DecisionClient } from '../clients/types.js';
 import type { ResolvedConfig } from '../config/schema.js';
 import { MCPSDKClient } from '../clients/mcp/sdk-client.js';
@@ -47,7 +46,6 @@ const mockConfig: ResolvedConfig = {
 describe('ChatHandler', () => {
   let chatHandler: ChatHandler;
   let conversationManager: ConversationManager;
-  let wsManager: DebugWebSocketManager;
   let mockDecisionClient: DecisionClient;
   let mcpClient: MCPSDKClient;
 
@@ -55,7 +53,7 @@ describe('ChatHandler', () => {
   let mockSessionId: string;
 
   beforeEach(() => {
-    mockSessionId = `test-session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    mockSessionId = \	est-session-\-\;
 
     conversationManager = new ConversationManager(':memory:');
     conversationManager.initialize();
@@ -67,9 +65,6 @@ describe('ChatHandler', () => {
       model: 'moonshot-v1-vision-preview',
       systemPrompt: 'You are a helpful assistant.',
     });
-
-    wsManager = DebugWebSocketManager.getInstance();
-    wsManager.setTaskCommandHandler(() => {});
 
     mcpClient = new MCPSDKClient(mockConfig);
     vi.spyOn(mcpClient, 'initialize').mockResolvedValue(undefined);
@@ -95,7 +90,7 @@ describe('ChatHandler', () => {
       }),
     } as unknown as DecisionClient;
 
-    chatHandler = new ChatHandler(conversationManager, mockConfig, wsManager, mcpClient);
+    chatHandler = new ChatHandler(conversationManager, mockConfig, mcpClient);
     // Override resolveDecisionModel to return mock
     (chatHandler as any).resolveDecisionModel = () => mockDecisionClient;
   });
@@ -138,7 +133,6 @@ describe('ChatHandler', () => {
       expect(chatHandler).toBeInstanceOf(ChatHandler);
       expect((chatHandler as any).conversationManager).toBe(conversationManager);
       expect((chatHandler as any).config).toBe(mockConfig);
-      expect((chatHandler as any).wsManager).toBe(wsManager);
     });
 
     it('should initialize with MCP client when provided', () => {
@@ -150,7 +144,6 @@ describe('ChatHandler', () => {
       const testChatHandler = new ChatHandler(
         conversationManager,
         mockConfig,
-        wsManager,
         testMCPClient
       );
 
@@ -160,8 +153,7 @@ describe('ChatHandler', () => {
     it('should initialize without MCP client when not provided', () => {
       const testChatHandler = new ChatHandler(
         conversationManager,
-        mockConfig,
-        wsManager
+        mockConfig
       );
 
       expect((testChatHandler as any).mcpClient).toBeNull();
@@ -190,7 +182,6 @@ describe('ChatHandler', () => {
 
 
 
-
     it('should throw error for non-existent session', async () => {
       await expect(
         chatHandler.handleChatSend(mockClientId, {
@@ -204,16 +195,16 @@ describe('ChatHandler', () => {
   describe('abort behavior', () => {
     it('should stop execution when aborted', async () => {
       const sessionController = ChatSessionController.getInstance();
-      
+
       // Start execution
       const promise = chatHandler.handleChatSend(mockClientId, {
         sessionId: mockSessionId,
         message: 'test'
       });
-      
+
       // Abort immediately
       await sessionController.interrupt(mockSessionId);
-      
+
       // Should complete without error but stop execution
       await expect(promise).resolves.not.toThrow();
     });
@@ -286,63 +277,6 @@ describe('ChatHandler', () => {
     });
   });
 
-
-  describe('sendSessionUpdate', () => {
-    it('should broadcast chat_session_update message', () => {
-      const broadcastSpy = vi.spyOn(wsManager, 'broadcast');
-
-      chatHandler.sendSessionUpdate();
-
-      expect(broadcastSpy).toHaveBeenCalledWith({
-        type: 'chat_session_update',
-        sessions: expect.any(Array),
-        timestamp: expect.any(String),
-      });
-    });
-
-    it('should include all sessions in update', () => {
-      const broadcastSpy = vi.spyOn(wsManager, 'broadcast');
-
-      chatHandler.sendSessionUpdate();
-
-      const call = broadcastSpy.mock.calls[broadcastSpy.mock.calls.length - 1];
-      const sessions = call[0]?.sessions as Array<{ id: string }>;
-      expect(sessions.length).toBeGreaterThan(0);
-      const testSession = sessions.find((s) => s.id === mockSessionId);
-      expect(testSession).toBeDefined();
-      expect(testSession?.id).toBe(mockSessionId);
-    });
-  });
-
-  describe('WebSocket message handling integration', () => {
-    it('should handle chat_send message from WebSocket client', async () => {
-      const handleMessageSpy = vi.spyOn(chatHandler, 'handleMessage').mockResolvedValue();
-
-      wsManager.setChatHandler(chatHandler);
-
-      const mockWs = { send: vi.fn() } as any;
-      wsManager['clients'].set(mockClientId, mockWs);
-
-      wsManager['handleClientMessage'](mockClientId, {
-        type: 'chat_send',
-        sessionId: mockSessionId,
-        message: 'Test from WebSocket',
-      });
-
-      await new Promise((resolve) => setTimeout(resolve, 10));
-
-      expect(handleMessageSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: 'chat_send',
-          sessionId: mockSessionId,
-          message: 'Test from WebSocket',
-        }),
-        mockWs
-      );
-
-      wsManager['clients'].delete(mockClientId);
-    });
-  });
 
   describe('metadata enrichment', () => {
     it('should enrich assistant message metadata with phase, provider, model, and runId', async () => {

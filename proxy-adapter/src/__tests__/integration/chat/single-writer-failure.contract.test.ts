@@ -4,7 +4,6 @@ import type { SessionEventType } from '@nebula-link-evo/shared/types/sse-events'
 import { ChatHandler } from '../../../conversation/chat-handler.js';
 import { ConversationManager } from '../../../conversation/manager.js';
 import { DatabaseManager } from '../../../conversation/db.js';
-import { DebugWebSocketManager } from '../../../websocket-manager.js';
 import { MCPSDKClient } from '../../../clients/mcp/sdk-client.js';
 import { SessionEventsDAO } from '../../../conversation/session-events-dao.js';
 import { SessionEventHub } from '../../../services/session-event-hub.js';
@@ -56,16 +55,12 @@ function getEmitSessionEvent(handler: ChatHandler): EmitSessionEvent {
 
 describe('single writer failure contract', () => {
   let manager: ConversationManager;
-  let wsManager: DebugWebSocketManager;
   let mcpClient: MCPSDKClient;
   let sessionId: string;
 
   beforeEach(() => {
     manager = new ConversationManager(':memory:');
     manager.initialize();
-    wsManager = DebugWebSocketManager.getInstance();
-    wsManager.setTaskCommandHandler(() => {});
-
     mcpClient = new MCPSDKClient(createResolvedConfig());
     vi.spyOn(mcpClient, 'isEnabled').mockReturnValue(false);
 
@@ -93,7 +88,6 @@ describe('single writer failure contract', () => {
     const chatHandler = new ChatHandler(
       manager,
       createResolvedConfig(),
-      wsManager,
       mcpClient,
       { appendEvent } as unknown as SessionEventsDAO,
       { publish } as unknown as SessionEventHub
@@ -128,7 +122,6 @@ describe('single writer failure contract', () => {
     const chatHandler = new ChatHandler(
       manager,
       createResolvedConfig(),
-      wsManager,
       mcpClient,
       dao,
       { publish } as unknown as SessionEventHub

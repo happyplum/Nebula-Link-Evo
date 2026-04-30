@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import Fastify from 'fastify';
 import { ConversationManager } from '../conversation/manager.js';
 import { ChatHandler } from '../conversation/chat-handler.js';
-import { DebugWebSocketManager } from '../websocket-manager.js';
 import type { DecisionClient } from '../clients/types.js';
 import type { ResolvedConfig } from '../config/schema.js';
 import apiChatRoutes from '../plugins/routes/api/chat/index.js';
@@ -60,15 +59,12 @@ describe('Chat Routes', () => {
   let app: ReturnType<typeof Fastify>;
   let manager: ConversationManager;
   let mockDecisionClient: DecisionClient;
-  let wsManager: DebugWebSocketManager;
   let chatHandler: ChatHandler;
 
   beforeEach(() => {
     app = Fastify();
     manager = new ConversationManager(':memory:');
     manager.initialize();
-
-    wsManager = DebugWebSocketManager.getInstance();
 
     mockDecisionClient = {
       provider: 'kimi',
@@ -77,7 +73,7 @@ describe('Chat Routes', () => {
       decideStream: vi.fn(),
     } as unknown as DecisionClient;
 
-    chatHandler = new ChatHandler(manager, mockConfig, wsManager);
+    chatHandler = new ChatHandler(manager, mockConfig);
     (chatHandler as any).resolveDecisionModel = () => mockDecisionClient;
 
     app.register(swaggerPlugin);
@@ -227,7 +223,7 @@ describe('Chat Routes', () => {
     it('should get session details', async () => {
       const response = await app.inject({
         method: 'GET',
-        url: `/api/chat/sessions/${sessionId}`,
+        url: \/api/chat/sessions/\,
       });
 
       expect(response.statusCode).toBe(200);
@@ -266,7 +262,7 @@ describe('Chat Routes', () => {
 
       const response = await app.inject({
         method: 'GET',
-        url: `/api/chat/sessions/${sessionId}`,
+        url: \/api/chat/sessions/\,
       });
 
       expect(response.statusCode).toBe(200);
@@ -305,7 +301,7 @@ describe('Chat Routes', () => {
     it('should get all messages for session', async () => {
       const response = await app.inject({
         method: 'GET',
-        url: `/api/chat/sessions/${sessionId}/messages`,
+        url: \/api/chat/sessions/\/messages\,
       });
 
       expect(response.statusCode).toBe(200);
@@ -320,7 +316,7 @@ describe('Chat Routes', () => {
     it('should support limit parameter', async () => {
       const response = await app.inject({
         method: 'GET',
-        url: `/api/chat/sessions/${sessionId}/messages?limit=2`,
+        url: \/api/chat/sessions/\/messages?limit=2\,
       });
 
       expect(response.statusCode).toBe(200);
@@ -331,7 +327,7 @@ describe('Chat Routes', () => {
     it('should support offset parameter', async () => {
       const response = await app.inject({
         method: 'GET',
-        url: `/api/chat/sessions/${sessionId}/messages?offset=2`,
+        url: \/api/chat/sessions/\/messages?offset=2\,
       });
 
       expect(response.statusCode).toBe(200);
@@ -343,7 +339,7 @@ describe('Chat Routes', () => {
     it('should support combined limit and offset', async () => {
       const response = await app.inject({
         method: 'GET',
-        url: `/api/chat/sessions/${sessionId}/messages?offset=1&limit=2`,
+        url: \/api/chat/sessions/\/messages?offset=1&limit=2\,
       });
 
       expect(response.statusCode).toBe(200);
@@ -374,7 +370,7 @@ describe('Chat Routes', () => {
 
       const response = await app.inject({
         method: 'GET',
-        url: `/api/chat/sessions/${newSession.id}/messages`,
+        url: \/api/chat/sessions/\/messages\,
       });
 
       expect(response.statusCode).toBe(200);
@@ -396,7 +392,7 @@ describe('Chat Routes', () => {
 
       const response = await app.inject({
         method: 'DELETE',
-        url: `/api/chat/sessions/${session.id}`,
+        url: \/api/chat/sessions/\,
       });
 
       expect(response.statusCode).toBe(200);

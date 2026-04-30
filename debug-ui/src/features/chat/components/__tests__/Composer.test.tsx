@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { Composer } from '../Composer.js';
 import { useChatStore } from '../../store/chat.store.js';
-import { useRuntimeStore } from '@/features/runtime/store/index.js';
 import { testIds } from '@/shared/testing/testids.js';
 
 vi.mock('../../store/chat.store.js', () => ({
@@ -10,11 +9,6 @@ vi.mock('../../store/chat.store.js', () => ({
   selectScreenshotData: (s: any) => s.screenshotData,
   selectStreamingState: (s: any) => s.streamingState,
   selectActiveSessionId: (s: any) => s.activeSessionId,
-}));
-
-vi.mock('@/features/runtime/store/index.js', () => ({
-  useRuntimeStore: vi.fn(),
-  selectConnectionStatus: (s: { connectionStatus: string }) => s.connectionStatus,
 }));
 
 describe('Composer', () => {
@@ -34,9 +28,6 @@ describe('Composer', () => {
     };
 
     (useChatStore as any).mockImplementation((selector: any) => selector(state));
-    (useRuntimeStore as any).mockImplementation((selector: any) =>
-      selector({ connectionStatus: 'connected' })
-    );
   });
 
   it('renders input and send button', () => {
@@ -57,10 +48,6 @@ describe('Composer', () => {
         clearScreenshotData: vi.fn(),
       })
     );
-    (useRuntimeStore as any).mockImplementation((selector: any) =>
-      selector({ connectionStatus: 'connected' })
-    );
-
     render(<Composer />);
     expect(screen.getByTestId(testIds.composerInput)).toBeDisabled();
     expect(screen.getByTestId(testIds.sendButton)).toBeDisabled();
@@ -78,10 +65,6 @@ describe('Composer', () => {
         clearScreenshotData: vi.fn(),
       })
     );
-    (useRuntimeStore as any).mockImplementation((selector: any) =>
-      selector({ connectionStatus: 'connected' })
-    );
-
     render(<Composer />);
     expect(screen.getByTestId(testIds.composerInput)).toBeDisabled();
     expect(screen.getByTestId(testIds.sendButton)).toBeDisabled();
@@ -102,20 +85,4 @@ describe('Composer', () => {
     expect(input).toHaveValue('');
   });
 
-  it('still allows sending when runtime socket is disconnected', () => {
-    (useRuntimeStore as any).mockImplementation((selector: any) =>
-      selector({ connectionStatus: 'disconnected' })
-    );
-
-    render(<Composer />);
-
-    const input = screen.getByTestId(testIds.composerInput);
-    const button = screen.getByTestId(testIds.sendButton);
-
-    fireEvent.change(input, { target: { value: 'Send without ws/debug' } });
-    expect(button).not.toBeDisabled();
-
-    fireEvent.click(button);
-    expect(mockAddOptimisticMessage).toHaveBeenCalledWith('session-1', 'Send without ws/debug');
-  });
 });

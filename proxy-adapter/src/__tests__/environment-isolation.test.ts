@@ -10,12 +10,10 @@ import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 // Mock external dependencies before imports
 vi.mock('../../browser-client.js', () => ({
   browserClient: {},
-}));
 
 vi.mock('../../conversation/index.js', () => ({
   ConversationManager: vi.fn(),
   ChatHandler: vi.fn(),
-}));
 
 vi.mock('../../services/index.js', () => {
   const mockTaskServiceInstance = {
@@ -34,19 +32,6 @@ vi.mock('../../services/index.js', () => {
     taskService: mockTaskServiceInstance,
   };
 });
-
-vi.mock('../../websocket-manager.js', () => ({
-  DebugWebSocketManager: {
-    getInstance: vi.fn(() => ({
-      setChatHandler: vi.fn(),
-      setTaskCommandHandler: vi.fn(),
-      setMCPStatusProvider: vi.fn(),
-      respondToClient: vi.fn(),
-      broadcast: vi.fn(),
-      close: vi.fn(),
-    })),
-  },
-}));
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs')>();

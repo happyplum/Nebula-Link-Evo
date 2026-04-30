@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatHandler } from '../conversation/chat-handler.js';
 import { ConversationManager } from '../conversation/manager.js';
-import { DebugWebSocketManager } from '../websocket-manager.js';
 import type { ResolvedConfig } from '../config/schema.js';
 import { MCPSDKClient } from '../clients/mcp/sdk-client.js';
 import { SessionEventsDAO } from '../conversation/session-events-dao.js';
@@ -73,7 +72,6 @@ const mockConfig: ResolvedConfig = {
 
 describe('ChatHandler SSE integration', () => {
   let conversationManager: ConversationManager;
-  let wsManager: DebugWebSocketManager;
   let mcpClient: MCPSDKClient;
   let sessionId: string;
 
@@ -87,9 +85,6 @@ describe('ChatHandler SSE integration', () => {
       provider: 'kimi',
       model: 'moonshot-v1-vision-preview',
     });
-
-    wsManager = DebugWebSocketManager.getInstance();
-    wsManager.setTaskCommandHandler(() => {});
 
     mcpClient = new MCPSDKClient(mockConfig);
     vi.spyOn(mcpClient, 'initialize').mockResolvedValue(undefined);
@@ -153,7 +148,6 @@ describe('ChatHandler SSE integration', () => {
     const chatHandler = new ChatHandler(
       conversationManager,
       mockConfig,
-      wsManager,
       mcpClient,
       sessionEventsDAO,
       sessionEventHub
@@ -228,7 +222,6 @@ describe('ChatHandler SSE integration', () => {
     const chatHandler = new ChatHandler(
       conversationManager,
       mockConfig,
-      wsManager,
       mcpClient,
       sessionEventsDAO,
       sessionEventHub

@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import Fastify from 'fastify';
 import { ConversationManager } from '../conversation/manager.js';
 import { ChatHandler } from '../conversation/chat-handler.js';
-import { DebugWebSocketManager } from '../websocket-manager.js';
 import { SessionLock } from '../services/session-lock.js';
 import { DatabaseManager } from '../conversation/db.js';
 import type { DecisionClient } from '../clients/types.js';
@@ -40,7 +39,6 @@ describe('POST /sessions/:id/messages', () => {
   let app: ReturnType<typeof Fastify>;
   let manager: ConversationManager;
   let mockDecisionClient: DecisionClient;
-  let wsManager: DebugWebSocketManager;
   let chatHandler: ChatHandler;
   let sessionLock: SessionLock;
 
@@ -49,8 +47,6 @@ describe('POST /sessions/:id/messages', () => {
     manager = new ConversationManager(':memory:');
     manager.initialize();
 
-    wsManager = DebugWebSocketManager.getInstance();
-
     mockDecisionClient = {
       provider: 'kimi',
       model: 'moonshot-v1-vision-preview',
@@ -58,7 +54,7 @@ describe('POST /sessions/:id/messages', () => {
       decideStream: vi.fn(),
     } as unknown as DecisionClient;
 
-    chatHandler = new ChatHandler(manager, mockConfig, wsManager);
+    chatHandler = new ChatHandler(manager, mockConfig);
     (chatHandler as any).resolveDecisionModel = () => mockDecisionClient;
 
     sessionLock = SessionLock.getInstance();
@@ -93,7 +89,7 @@ describe('POST /sessions/:id/messages', () => {
     it('should return 202 Accepted with jobId and runId', async () => {
       const response = await app.inject({
         method: 'POST',
-        url: `/sessions/${sessionId}/messages`,
+        url: \/sessions/\/messages\,
         payload: {
           content: 'Hello, how are you?',
         },
@@ -102,9 +98,9 @@ describe('POST /sessions/:id/messages', () => {
       expect(response.statusCode).toBe(202);
       const body = JSON.parse(response.payload);
       expect(body.jobId).toBeDefined();
-      expect(body.jobId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+      expect(body.jobId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\$/i);
       expect(body.runId).toBeDefined();
-      expect(body.runId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+      expect(body.runId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\$/i);
       expect(body.sessionId).toBe(sessionId);
       expect(body.messageId).toBeDefined();
     });
@@ -112,7 +108,7 @@ describe('POST /sessions/:id/messages', () => {
     it('should persist message in database', async () => {
       const response = await app.inject({
         method: 'POST',
-        url: `/sessions/${sessionId}/messages`,
+        url: \/sessions/\/messages\,
         payload: {
           content: 'Test message content',
         },
@@ -129,7 +125,7 @@ describe('POST /sessions/:id/messages', () => {
     it('should persist message.created event', async () => {
       const response = await app.inject({
         method: 'POST',
-        url: `/sessions/${sessionId}/messages`,
+        url: \/sessions/\/messages\,
         payload: {
           content: 'Event test message',
         },
@@ -153,7 +149,7 @@ describe('POST /sessions/:id/messages', () => {
     it('should trim message content', async () => {
       const response = await app.inject({
         method: 'POST',
-        url: `/sessions/${sessionId}/messages`,
+        url: \/sessions/\/messages\,
         payload: {
           content: '  trimmed message  ',
         },
@@ -182,7 +178,7 @@ describe('POST /sessions/:id/messages', () => {
       // First request - should succeed
       const response1 = app.inject({
         method: 'POST',
-        url: `/sessions/${sessionId}/messages`,
+        url: \/sessions/\/messages\,
         payload: {
           content: 'First message',
         },
@@ -191,7 +187,7 @@ describe('POST /sessions/:id/messages', () => {
       // Immediately send second request without waiting
       const response2 = app.inject({
         method: 'POST',
-        url: `/sessions/${sessionId}/messages`,
+        url: \/sessions/\/messages\,
         payload: {
           content: 'Second message',
         },
@@ -211,7 +207,7 @@ describe('POST /sessions/:id/messages', () => {
 
       const response = await app.inject({
         method: 'POST',
-        url: `/sessions/${sessionId}/messages`,
+        url: \/sessions/\/messages\,
         payload: {
           content: 'Test message',
         },
@@ -229,7 +225,7 @@ describe('POST /sessions/:id/messages', () => {
 
       const response = await app.inject({
         method: 'POST',
-        url: `/sessions/${sessionId}/messages`,
+        url: \/sessions/\/messages\,
         payload: {
           content: 'New message after release',
         },
@@ -254,7 +250,7 @@ describe('POST /sessions/:id/messages', () => {
     it('should return 400 for empty message', async () => {
       const response = await app.inject({
         method: 'POST',
-        url: `/sessions/${sessionId}/messages`,
+        url: \/sessions/\/messages\,
         payload: {
           content: '',
         },
@@ -268,7 +264,7 @@ describe('POST /sessions/:id/messages', () => {
     it('should return 400 for whitespace-only message', async () => {
       const response = await app.inject({
         method: 'POST',
-        url: `/sessions/${sessionId}/messages`,
+        url: \/sessions/\/messages\,
         payload: {
           content: '   ',
         },

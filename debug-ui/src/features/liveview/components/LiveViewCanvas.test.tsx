@@ -3,26 +3,14 @@ import { render, screen } from '@testing-library/react';
 import { LiveViewCanvas } from './LiveViewCanvas.js';
 import { useControlStore } from '@/features/playwright-control/store/control.store.js';
 
-const onMessageMock = vi.fn();
 const runtimeState = {
-  connectionStatus: 'connected',
   playwrightIsOpen: true,
   liveviewRefreshKey: 0,
   setLastScreenshotDataUrl: vi.fn(),
 };
 
-vi.mock('@/features/runtime/hooks/index.js', () => ({
-  useDebugSocket: () => ({
-    onMessage: onMessageMock,
-    sendMessage: vi.fn(),
-    reconnect: vi.fn(),
-    disconnect: vi.fn(),
-  }),
-}));
-
 vi.mock('@/features/runtime/store/index.js', () => ({
   useRuntimeStore: (selector: (state: typeof runtimeState) => unknown) => selector(runtimeState),
-  selectConnectionStatus: (state: typeof runtimeState) => state.connectionStatus,
   selectPlaywrightIsOpen: (state: typeof runtimeState) => state.playwrightIsOpen,
   selectLiveviewRefreshKey: (state: typeof runtimeState) => state.liveviewRefreshKey,
 }));
@@ -68,22 +56,10 @@ describe('LiveViewCanvas', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    runtimeState.connectionStatus = 'connected';
     runtimeState.playwrightIsOpen = true;
     runtimeState.liveviewRefreshKey = 0;
     runtimeState.setLastScreenshotDataUrl = vi.fn();
     useControlStore.getState().reset();
-
-    onMessageMock.mockImplementation((handler: (payload: unknown) => void) => {
-      (
-        globalThis as { __liveviewMessageHandler?: (payload: unknown) => void }
-      ).__liveviewMessageHandler = handler;
-      return () => {
-        (
-          globalThis as { __liveviewMessageHandler?: (payload: unknown) => void }
-        ).__liveviewMessageHandler = undefined;
-      };
-    });
 
     globalThis.createImageBitmap = vi.fn().mockResolvedValue({
       width: 1280,

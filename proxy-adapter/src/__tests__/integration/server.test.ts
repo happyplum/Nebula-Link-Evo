@@ -35,18 +35,6 @@ vi.mock('../../services/index.js', () => {
   };
 });
 
-vi.mock('../../websocket-manager.js', () => ({
-  DebugWebSocketManager: {
-    getInstance: vi.fn(() => ({
-      setChatHandler: vi.fn(),
-      setTaskCommandHandler: vi.fn(),
-      setMCPStatusProvider: vi.fn(),
-      respondToClient: vi.fn(),
-      broadcast: vi.fn(),
-      close: vi.fn(),
-    })),
-  },
-}));
 
 vi.mock('node:fs', () => ({
   existsSync: vi.fn(() => false),
@@ -231,30 +219,6 @@ describe('Server Initialization', () => {
     });
   });
 
-  describe('WebSocket Manager Integration', () => {
-    it('should get singleton instance', async () => {
-      const { DebugWebSocketManager } = await import('../../websocket-manager.js');
-
-      const instance1 = DebugWebSocketManager.getInstance();
-      const instance2 = DebugWebSocketManager.getInstance();
-
-      expect(DebugWebSocketManager.getInstance).toHaveBeenCalled();
-      expect(instance1).toBeDefined();
-      expect(instance2).toBeDefined();
-    });
-
-    it('should have required methods', async () => {
-      const { DebugWebSocketManager } = await import('../../websocket-manager.js');
-
-      const instance = DebugWebSocketManager.getInstance();
-
-      expect(instance.setChatHandler).toBeDefined();
-      expect(instance.setTaskCommandHandler).toBeDefined();
-      expect(instance.setMCPStatusProvider).toBeDefined();
-      expect(instance.respondToClient).toBeDefined();
-      expect(instance.broadcast).toBeDefined();
-    });
-  });
 
   describe('Graceful Shutdown Signal Handling', () => {
     it('registers signal listeners during server setup', () => {

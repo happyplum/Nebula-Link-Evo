@@ -5,7 +5,6 @@ import swaggerPlugin from '../../../plugins/02-swagger.plugin.js';
 import errorHandler from '../../../plugins/03-error-handler.plugin.js';
 import { ConversationManager } from '../../../conversation/manager.js';
 import { ChatHandler } from '../../../conversation/chat-handler.js';
-import { DebugWebSocketManager } from '../../../websocket-manager.js';
 import type { DecisionClient } from '../../../clients/types.js';
 import type { ResolvedConfig } from '../../../config/schema.js';
 
@@ -65,7 +64,6 @@ describe('Canonical endpoint contract', () => {
     manager = new ConversationManager(':memory:');
     manager.initialize();
 
-    const wsManager = DebugWebSocketManager.getInstance();
     const mockDecisionClient = {
       provider: 'kimi',
       model: 'moonshot-v1-vision-preview',
@@ -73,7 +71,7 @@ describe('Canonical endpoint contract', () => {
       decideStream: vi.fn(),
     } as unknown as DecisionClient;
 
-    chatHandler = new ChatHandler(manager, mockConfig, wsManager);
+    chatHandler = new ChatHandler(manager, mockConfig);
     (chatHandler as any).resolveDecisionModel = () => mockDecisionClient;
 
     await app.register(swaggerPlugin);
