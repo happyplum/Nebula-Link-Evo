@@ -12,6 +12,7 @@ import {
   selectPlaywrightIsOpen,
   type ServiceStatus,
 } from '@/features/runtime/store/runtime.store.js';
+import { useBrowserStatus } from '@/features/runtime/hooks/useBrowserStatus.js';
 import styles from './MonitorMainShell.module.css';
 
 const TASK_STATUS_LABEL: Record<ServiceStatus, string> = {
@@ -21,6 +22,8 @@ const TASK_STATUS_LABEL: Record<ServiceStatus, string> = {
 };
 
 export function MonitorMainShell() {
+  useBrowserStatus();
+
   const playwrightStatus = useRuntimeStore((s) => s.playwrightStatus);
   const playwrightUrl = useRuntimeStore(selectPlaywrightUrl);
   const lastScreenshotDataUrl = useRuntimeStore((s) => s.lastScreenshotDataUrl);
