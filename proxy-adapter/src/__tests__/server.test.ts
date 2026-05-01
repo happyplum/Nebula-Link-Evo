@@ -73,8 +73,6 @@ vi.mock('../plugins/routes/debug/index.js', () => ({ default: vi.fn().mockResolv
 vi.mock('../plugins/routes/api/livekit-token.js', () => ({ default: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('../plugins/routes/api/chat/index.js', () => ({ default: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('../plugins/routes/chat/index.js', () => ({ default: vi.fn().mockResolvedValue(undefined) }));
-vi.mock('../plugins/routes/ws/chat-socket.js', () => ({ default: vi.fn().mockResolvedValue(undefined) }));
-vi.mock('../plugins/routes/ws/debug-socket.js', () => ({ default: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('../services/provider/preflight.js', () => ({
   runPreflight: vi.fn().mockResolvedValue(undefined),
 }));
