@@ -14,13 +14,13 @@ Runtime owns the Monitor sidebar/main shell components, LiveView canvas integrat
 
 ## Working Rules
 
-- Playwright status (isOpen, url) is synced via TanStack Query polling (`useHealth`).
+- Playwright status (isOpen, url, status) is synced via `useBrowserStatus` hook polling `/debug/api/health` every 4s; the hook updates both `runtime.store` and `control.store`.
 - LiveView transport and refresh state live in the runtime store.
 - Monitor shells compose cards from REST API data — no real-time push.
 - Snapshot version tracks LiveView canvas invalidation.
 
 ## Anti-Patterns
 
-- No per-component polling — use shared TanStack Query hooks.
+- No per-component polling — use the shared `useBrowserStatus` hook.
 - No duplicated browser-open/url bookkeeping outside runtime/control stores.
 - No WebSocket references — all real-time updates go through SSE (chat feature).
