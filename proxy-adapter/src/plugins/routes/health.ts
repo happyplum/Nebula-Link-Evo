@@ -19,13 +19,21 @@ const healthRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       const config = appService.getConfig();
       const mcpStatus = appService.getMCPStatus();
       const endpoints = getServiceEndpointsCached();
+
+      // Probe playwright-server health instead of returning the URL
+      let playwright: string;
+      try {
+        const res = await fetch(`${endpoints.playwright.url}/health`);
+        playwright = res.ok ? 'ok' : 'error';
+      } catch {
+        playwright = 'error';
+      }
+
       return {
         status: 'healthy',
         config: config ? 'loaded' : 'not_loaded',
         mcp: mcpStatus,
-        services: {
-          playwright: endpoints.playwright.url,
-        },
+        services: { playwright },
       };
     }
   );

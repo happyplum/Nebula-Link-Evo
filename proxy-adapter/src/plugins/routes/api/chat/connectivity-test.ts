@@ -23,7 +23,7 @@ const ConnectivityTestResponseSchema = Type.Object({
 
 const connectivityTestRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
   fastify.post<{ Body: Static<typeof ConnectivityTestBodySchema> }>(
-    '/connectivity/test',
+    '/connectivity-test',
     {
       schema: {
         description: 'Test connectivity to an AI provider',
