@@ -53,7 +53,7 @@ interface ChatState {
   setStreamingState: (state: StreamingState) => void;
   appendStreamingContent: (token: string) => void;
   appendStreamingThinking: (token: string) => void;
-  flushStreamingToMessage: (sessionId: string) => void;
+  flushStreamingToMessage: (sessionId: string, force?: boolean) => void;
   resetStreaming: () => void;
 
   // Loading actions
@@ -208,9 +208,11 @@ export const useChatStore = create<ChatState>()((set) => ({
   appendStreamingThinking: (token) =>
     set((s) => ({ streamingThinking: s.streamingThinking + token })),
 
-  flushStreamingToMessage: (sessionId) =>
+  // `force=true` creates a message even with empty content, used by
+  // assistant.completed when pending tool calls exist (tool-call-only responses).
+  flushStreamingToMessage: (sessionId, force) =>
     set((s) => {
-      if (!s.streamingContent && !s.streamingThinking) return s;
+      if (!force && !s.streamingContent && !s.streamingThinking) return s;
       const message: ChatMessage = {
         id: `stream-${Date.now()}`,
         role: 'assistant',
