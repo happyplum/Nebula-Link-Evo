@@ -1,7 +1,7 @@
+import './env.js';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import websocket from '@fastify/websocket';
-import dotenv from 'dotenv';
 import swaggerPlugin from './plugins/02-swagger.plugin.js';
 import browserRoutesPlugin from './plugins/routes/browser.js';
 import actionRoutesPlugin from './plugins/routes/action.js';
@@ -10,8 +10,6 @@ import healthRoutesPlugin from './plugins/routes/health.js';
 import streamRoutesPlugin from './plugins/routes/stream.js';
 import cdpRoutesPlugin from './plugins/routes/cdp.js';
 import livekitTokenRoutes from './plugins/routes/livekit-token.js';
-
-dotenv.config();
 
 const app = Fastify({
   logger: {
