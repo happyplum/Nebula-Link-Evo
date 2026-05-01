@@ -52,31 +52,55 @@ async function buildSnapshotEvent(
   const thinkingMap =
     sessionEventsDAO?.getThinkingForSession(sessionId, assistantIds) ?? new Map<string, string>();
 
+  // Build tool result lookup: tool_call_id → result string
+  const toolResultMap = new Map<string, string>();
+  for (const m of messages) {
+    if (m.role === 'tool' && m.metadata?.tool_call_id) {
+      toolResultMap.set(m.metadata.tool_call_id as string, m.content);
+    }
+  }
+
   return {
     type: 'session.snapshot',
     seq: 0,
     sessionId,
-    messages: messages.map((m) => {
-      const result: {
-        id: string;
-        role: string;
-        content: string;
-        thinking?: string;
-        created_at: string;
-      } = {
-        id: m.id,
-        role: m.role,
-        content: m.content,
-        created_at: m.created_at,
-      };
+    messages: messages
+      .filter((m) => m.role !== 'tool')
+      .map((m) => {
+        const result: {
+          id: string;
+          role: string;
+          content: string;
+          thinking?: string;
+          tool_calls?: import('@nebula-link-evo/shared/types/sse-events').ToolCall[];
+          created_at: string;
+        } = {
+          id: m.id,
+          role: m.role,
+          content: m.content,
+          created_at: m.created_at,
+        };
 
-      const thinking = thinkingMap.get(m.id);
-      if (thinking) {
-        result.thinking = thinking;
-      }
+        const thinking = thinkingMap.get(m.id);
+        if (thinking) {
+          result.thinking = thinking;
+        }
 
-      return result;
-    }),
+        // Extract tool_calls stored in message metadata for assistant messages,
+        // merging tool results from tool-role messages so the snapshot is self-contained.
+        if (m.role === 'assistant' && m.metadata?.tool_calls) {
+          const calls = m.metadata.tool_calls as import('@nebula-link-evo/shared/types/sse-events').ToolCall[];
+          result.tool_calls = calls.map((tc) => {
+            const tcId = (tc as Record<string, unknown>).id as string | undefined;
+            if (tcId && toolResultMap.has(tcId)) {
+              return { ...tc, result: toolResultMap.get(tcId) };
+            }
+            return tc;
+          });
+        }
+
+        return result;
+      }),
     state: runtimeState.status as SessionState,
     jobId: runtimeState.jobId,
     agentState: runtimeState.agentState,
