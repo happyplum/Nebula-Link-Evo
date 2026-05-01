@@ -35,6 +35,20 @@ function adaptSnapshotMessage(m: SessionSnapshotEvent['messages'][number]): Chat
     role: m.role as ChatMessage['role'],
     content: m.content,
     thinking: m.thinking,
+    toolCalls: m.tool_calls?.map((tc) => {
+      const rec = tc as Record<string, unknown>;
+      return {
+        id: (rec.id as string) ?? `tc-${Date.now()}`,
+        name: rec.function
+          ? ((rec.function as Record<string, unknown>).name as string)
+          : 'unknown',
+        arguments: typeof rec.arguments === 'string'
+          ? (rec.arguments as string)
+          : JSON.stringify(rec.arguments),
+        result: typeof rec.result === 'string' ? rec.result : undefined,
+        status: 'completed' as const,
+      };
+    }),
     created_at: m.created_at,
   };
 }
@@ -262,6 +276,11 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
       });
 
       // assistant.tool_call
+      // NOTE: Dual-write path — tool_call events arrive during streaming but the
+      // assistant message may not exist yet (not flushed). In that case, the ref
+      // accumulates calls and they are attached in the assistant.completed handler.
+      // If assistant.started ever creates a placeholder message immediately, this
+      // will need restructuring to avoid double-setting toolCalls.
       es.addEventListener('assistant.tool_call', (e: MessageEvent) => {
         const evt = JSON.parse(e.data) as AssistantToolCallEvent;
         if (isDuplicate(evt)) return;
@@ -309,7 +328,7 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
 
         const store = getChatStore();
         if (!store) return;
-        store.flushStreamingToMessage(sid);
+        store.flushStreamingToMessage(sid, pendingToolCallsRef.current.length > 0);
 
         // Attach pending tool calls to the just-flushed message
         if (pendingToolCallsRef.current.length > 0) {
