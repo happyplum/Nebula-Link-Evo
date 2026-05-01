@@ -83,6 +83,7 @@ export interface SessionSnapshotEvent {
     role: string;
     content: string;
     thinking?: string;
+    tool_calls?: ToolCall[];
     created_at: string;
   }>;
   /** Current session state */
