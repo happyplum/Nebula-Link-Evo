@@ -1,3 +1,7 @@
+import type {
+  DebugPlaywrightState,
+  DebugStatusReason,
+} from '@nebula-link-evo/shared/types/debug-events.js';
 import type { Page } from 'playwright';
 import type { SimplifiedDOMResponse } from '../types.js';
 import { BrowserLifecycle, type StateChangeReason } from './browser-lifecycle.js';
@@ -241,7 +245,29 @@ export class BrowserService {
   setOnStateChange(callback: ((reason: StateChangeReason) => void) | null): void {
     this.lifecycle.setOnStateChange(callback);
   }
+
+  /** Build a unified debug status snapshot */
+  async getDebugStatus(reason?: DebugStatusReason): Promise<DebugPlaywrightState> {
+    const isOpen = this.isOpen();
+    let title: string | null = null;
+
+    if (isOpen) {
+      try {
+        title = (await this.getTitle()) ?? null;
+      } catch {
+        // Browser/page teardown may race status snapshots.
+      }
+    }
+
+    return {
+      isOpen,
+      url: this.getCurrentUrl() ?? null,
+      title,
+      status: isOpen ? 'ready' : 'unknown',
+      viewport: this.getViewport() ?? undefined,
+      reason,
+    };
+  }
 }
 
 export const browserService = BrowserService.getInstance();
-

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as dotenv from 'dotenv';
 
 vi.mock('dotenv');
@@ -13,8 +13,33 @@ vi.mock('./plugins/routes/dom.js', () => ({ default: vi.fn().mockResolvedValue(u
 vi.mock('./plugins/routes/health.js', () => ({ default: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('./plugins/routes/stream.js', () => ({ default: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('./plugins/routes/cdp.js', () => ({ default: vi.fn().mockResolvedValue(undefined) }));
-vi.mock('./plugins/routes/livekit-token.js', () => ({
-  default: vi.fn().mockResolvedValue(undefined),
+vi.mock('./plugins/routes/debug-stream.js', () => ({ default: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('./plugins/routes/livekit-token.js', () => ({ default: vi.fn().mockResolvedValue(undefined) }));
+
+const mockSetOnStateChange = vi.fn();
+const mockGetDebugStatus = vi.fn().mockResolvedValue({
+  isOpen: false,
+  url: null,
+  title: null,
+  status: 'unknown',
+});
+const mockPublishStatus = vi.fn();
+
+vi.mock('./services/browser-service.js', () => ({
+  BrowserService: {
+    getInstance: vi.fn().mockReturnValue({
+      setOnStateChange: mockSetOnStateChange,
+      getDebugStatus: mockGetDebugStatus,
+    }),
+  },
+}));
+
+vi.mock('./services/debug-event-hub.js', () => ({
+  DebugEventHub: {
+    getInstance: vi.fn().mockReturnValue({
+      publishStatus: mockPublishStatus,
+    }),
+  },
 }));
 
 const mockFastifyInstance = {
@@ -22,6 +47,7 @@ const mockFastifyInstance = {
   listen: vi.fn().mockResolvedValue(undefined),
   close: vi.fn().mockResolvedValue(undefined),
   log: {
+    info: vi.fn(),
     error: vi.fn(),
   },
 };
@@ -34,19 +60,19 @@ describe('Server Initialization', () => {
     process.env.PLAYWRIGHT_PORT = '3001';
     vi.clearAllMocks();
     vi.resetModules();
-    vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
+    vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
   });
 
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  it('should load environment configuration', async () => {
+  it('loads environment configuration', async () => {
     await import('../server.js');
     expect(dotenv.config).toHaveBeenCalled();
   });
 
-  it('should create Fastify instance', async () => {
+  it('creates the Fastify instance', async () => {
     await import('../server.js');
     expect(mockFastifyConstructor).toHaveBeenCalledWith({
       logger: {
@@ -55,7 +81,7 @@ describe('Server Initialization', () => {
     });
   });
 
-  it('should register plugins and routes', async () => {
+  it('registers plugins and routes including the internal debug stream', async () => {
     await import('../server.js');
     await new Promise((resolve) => setTimeout(resolve, 10));
 
@@ -71,18 +97,18 @@ describe('Server Initialization', () => {
     expect(prefixes).toContain('/dom');
     expect(prefixes).toContain('/execute');
     expect(prefixes).toContain('/health');
-
-    expect(registerCalls).toHaveLength(11);
+    expect(prefixes).toContain('/internal/debug');
+    expect(registerCalls).toHaveLength(12);
   });
 
-  it('should start listening on port', async () => {
+  it('starts listening on the configured port', async () => {
     await import('../server.js');
     await new Promise((resolve) => setTimeout(resolve, 10));
 
     expect(mockFastifyInstance.listen).toHaveBeenCalledWith({ port: 3001, host: '0.0.0.0' });
   });
 
-  it('should handle startup errors', async () => {
+  it('handles startup errors', async () => {
     mockFastifyInstance.listen.mockRejectedValueOnce(new Error('Startup failed'));
 
     await import('../server.js');
