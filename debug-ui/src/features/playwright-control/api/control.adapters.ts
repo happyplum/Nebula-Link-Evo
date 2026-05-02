@@ -239,7 +239,7 @@ export async function navigateToUrl(url: string): Promise<ActionResponse> {
 
 /** Fetch DOM snapshot with annotated screenshot and elements map */
 export async function fetchDomSnapshot(): Promise<DomSnapshotResponse> {
-  return apiClient.get<DomSnapshotResponse>(DEBUG_DOM, { version: '2.0' });
+  return apiClient.get<DomSnapshotResponse>(DEBUG_DOM);
 }
 
 export async function getElementAt(x: number, y: number): Promise<ElementAtResponse> {
