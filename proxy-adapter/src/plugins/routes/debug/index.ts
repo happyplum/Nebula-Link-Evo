@@ -6,8 +6,10 @@ import { join } from 'node:path';
 import { AppService } from '../../../services/index.js';
 import { DatabaseManager } from '../../../conversation/db.js';
 import { getServiceEndpointsCached } from '../../../config/services.js';
+import debugStreamRoutes from './stream.js';
 import type { ResolvedProvider } from '../../../config/schema.js';
 import { createFrameCounter } from '@nebula-link-evo/shared';
+import { debugEventHub } from '../../../services/debug-event-hub.js';
 
 interface InteractionQuery {
   limit?: number;
@@ -21,6 +23,8 @@ interface InteractionQuery {
 const PLAYWRIGHT_URL = getServiceEndpointsCached().playwright.url;
 const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
   const appService = AppService.getInstance();
+
+  await fastify.register(debugStreamRoutes, { prefix: '/api' });
 
   fastify.get(
     '/api/health',
@@ -850,6 +854,18 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           return { success: false, error: 'MCP client not initialized' };
         }
         const result = await mcpClient.callTool(server, tool, args);
+
+        try {
+          debugEventHub.publish({
+            type: 'debug.mcp_invalidated',
+            scope: 'all',
+            reason: 'tool_call',
+            emittedAt: new Date().toISOString(),
+          });
+        } catch {
+          // Best-effort only: MCP response must not fail if debug fan-out throws.
+        }
+
         return { success: true, result };
       } catch (error) {
         return { success: false, error: (error as Error).message };
