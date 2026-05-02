@@ -6,6 +6,8 @@ export type LiveviewTransport = 'webrtc' | 'mjpeg';
 interface RuntimeState {
   playwrightStatus: ServiceStatus;
   playwrightIsOpen: boolean;
+  /** true once the first health poll completes — distinguishes "unprobed" from "confirmed closed". */
+  playwrightStatusHydrated: boolean;
   playwrightUrl: string | null;
   snapshotVersion: number;
   liveviewRefreshKey: number;
@@ -14,6 +16,7 @@ interface RuntimeState {
 
   setPlaywrightStatus: (status: ServiceStatus) => void;
   setPlaywrightIsOpen: (isOpen: boolean) => void;
+  setPlaywrightStatusHydrated: (hydrated: boolean) => void;
   setPlaywrightUrl: (url: string | null) => void;
   incrementSnapshotVersion: () => void;
   incrementLiveviewRefreshKey: () => void;
@@ -34,6 +37,7 @@ const persistedTransport = (() => {
 const initialState = {
   playwrightStatus: 'unknown' as ServiceStatus,
   playwrightIsOpen: false,
+  playwrightStatusHydrated: false,
   playwrightUrl: null as string | null,
   snapshotVersion: 0,
   liveviewRefreshKey: 0,
@@ -45,6 +49,7 @@ export const useRuntimeStore = create<RuntimeState>()((set) => ({
   ...initialState,
   setPlaywrightStatus: (status) => set({ playwrightStatus: status }),
   setPlaywrightIsOpen: (isOpen) => set({ playwrightIsOpen: isOpen }),
+  setPlaywrightStatusHydrated: (hydrated) => set({ playwrightStatusHydrated: hydrated }),
   setPlaywrightUrl: (url) => set({ playwrightUrl: url }),
   incrementSnapshotVersion: () => set((s) => ({ snapshotVersion: s.snapshotVersion + 1 })),
   incrementLiveviewRefreshKey: () => set((s) => ({ liveviewRefreshKey: s.liveviewRefreshKey + 1 })),
@@ -66,3 +71,4 @@ export const selectPlaywrightIsOpen = (s: RuntimeState) => s.playwrightIsOpen;
 export const selectPlaywrightUrl = (s: RuntimeState) => s.playwrightUrl;
 export const selectLiveviewTransport = (s: RuntimeState) => s.liveviewTransport;
 export const selectLiveviewRefreshKey = (s: RuntimeState) => s.liveviewRefreshKey;
+export const selectPlaywrightStatusHydrated = (s: RuntimeState) => s.playwrightStatusHydrated;
