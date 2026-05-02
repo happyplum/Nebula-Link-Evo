@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } 
 import Fastify from 'fastify';
 import actionRoutesPlugin from '../plugins/routes/action.js';
 import { browserService } from '../services/browser-service.js';
+import { debugEventHub } from '../services/debug-event-hub.js';
 
 vi.mock('../livekit-publisher.js', () => ({
   startPublisher: vi.fn().mockResolvedValue(undefined),
@@ -21,12 +22,14 @@ describe('/action/click-by-marker endpoint', () => {
   });
 
   beforeEach(() => {
+    debugEventHub.resetForTests();
     app = Fastify();
     app.register(actionRoutesPlugin, { prefix: '/action' });
   });
 
   afterEach(async () => {
     await app.close();
+    vi.restoreAllMocks();
   });
 
   it('should return error response when element not found', async () => {
@@ -99,5 +102,81 @@ describe('/action/click-by-marker endpoint', () => {
     expect(body.success).toBe(false);
     expect(body.error).toHaveProperty('code');
     expect(body.error).toHaveProperty('message');
+  });
+
+  it('publishes marker and overlay debug events after a successful marker click', async () => {
+    await app.ready();
+    const nebulaId = 42;
+    const snapshotId = 'snapshot-click-marker';
+    vi.spyOn(browserService, 'clickByMarker').mockResolvedValue({
+      success: true,
+      strategy_used: 'nebula-id',
+      attempts: 1,
+      latency_ms: 12,
+      nebulaId,
+      selector: '[data-nebula-id="42"]',
+      bbox: {
+        x: 100,
+        y: 200,
+        width: 80,
+        height: 24,
+      },
+    });
+
+    const publishSpy = vi.spyOn(debugEventHub, 'publish');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/action/click-by-marker',
+      payload: {
+        snapshot_id: snapshotId,
+        nebula_id: nebulaId,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+
+    const body = JSON.parse(response.payload);
+    expect(body.success).toBe(true);
+    expect(publishSpy).toHaveBeenCalledTimes(2);
+    expect(publishSpy).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        type: 'debug.marker',
+        marker: expect.objectContaining({
+          source: 'ai',
+          action: 'click',
+          ttlMs: 5000,
+          nebulaId,
+          selector: '[data-nebula-id="42"]',
+          bbox: expect.objectContaining({
+            x: 100,
+            y: 200,
+            width: 80,
+            height: 24,
+          }),
+          pageX: 140,
+          pageY: 212,
+        }),
+      })
+    );
+    expect(publishSpy).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        type: 'debug.overlay',
+        overlay: expect.objectContaining({
+          kind: 'highlight',
+          source: 'ai',
+          ttlMs: 5000,
+          selector: '[data-nebula-id="42"]',
+          bbox: expect.objectContaining({
+            x: 100,
+            y: 200,
+            width: 80,
+            height: 24,
+          }),
+        }),
+      })
+    );
   });
 });

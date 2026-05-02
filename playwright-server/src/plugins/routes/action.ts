@@ -1,6 +1,7 @@
 import { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import { BrowserService } from '../../services/browser-service.js';
 import type { MarkerActionResult } from '../../services/page-actions.js';
+import type { DebugMarkerEvent, DebugOverlayEvent } from '@nebula-link-evo/shared/types/debug-events';
 import {
   ClickRequestSchema,
   ClickBySelectorRequestSchema,
@@ -18,6 +19,57 @@ import type {
   ExecuteByMarkerRequest,
 } from '../../schemas/action.js';
 import { SuccessResponseSchema, ErrorResponseSchema } from '../../schemas/common.js';
+
+const DEBUG_MARKER_TTL_MS = 5000;
+
+type MarkerDebugAction = NonNullable<DebugMarkerEvent['marker']['action']>;
+
+async function publishMarkerDebugEvents(
+  action: MarkerDebugAction,
+  result: MarkerActionResult
+): Promise<void> {
+  if (!result.bbox) {
+    return;
+  }
+
+  try {
+    const { debugEventHub } = await import('../../services/debug-event-hub.js');
+    const pageX = result.bbox.x + result.bbox.width / 2;
+    const pageY = result.bbox.y + result.bbox.height / 2;
+
+    const markerEvent: DebugMarkerEvent = {
+      type: 'debug.marker',
+      marker: {
+        source: 'ai',
+        action,
+        pageX,
+        pageY,
+        bbox: result.bbox,
+        selector: result.selector,
+        nebulaId: result.nebulaId,
+        ttlMs: DEBUG_MARKER_TTL_MS,
+      },
+      emittedAt: new Date().toISOString(),
+    };
+
+    const overlayEvent: DebugOverlayEvent = {
+      type: 'debug.overlay',
+      overlay: {
+        kind: 'highlight',
+        source: 'ai',
+        bbox: result.bbox,
+        selector: result.selector,
+        ttlMs: DEBUG_MARKER_TTL_MS,
+      },
+      emittedAt: new Date().toISOString(),
+    };
+
+    debugEventHub.publish(markerEvent);
+    debugEventHub.publish(overlayEvent);
+  } catch {
+    // Best-effort only: debug push must never affect HTTP responses.
+  }
+}
 
 const routes: FastifyPluginAsyncTypebox = async (fastify) => {
   fastify.post(
@@ -142,6 +194,8 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
         const result = await BrowserService.getInstance().clickByMarker(snapshot_id, nebula_id);
 
         if (result.success) {
+          await publishMarkerDebugEvents('click', result);
+
           return {
             success: true,
             strategy_used: result.strategy_used,
@@ -447,6 +501,8 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
         }
 
         if (result.success) {
+          await publishMarkerDebugEvents(action as MarkerDebugAction, result);
+
           return {
             success: true,
             strategy_used: result.strategy_used,
