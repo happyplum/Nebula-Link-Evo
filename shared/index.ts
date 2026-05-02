@@ -33,5 +33,22 @@ export {
   eventToSSEFormat,
 } from './types/sse-events.js';
 
+// Debug SSE Events
+export type {
+  DebugStreamEvent,
+  DebugPlaywrightState,
+  DebugServiceStatus,
+  DebugStatusReason,
+  DebugSnapshotEvent,
+  DebugStatusEvent,
+  DebugErrorEvent,
+  DebugMarkerEvent,
+  DebugMarkerPayload,
+  DebugOverlayEvent,
+  DebugOverlayPayload,
+  DebugMcpInvalidatedEvent,
+  DebugKeepaliveEvent,
+} from './types/debug-events.js';
+
 // Utilities module
 export * from './utils/index.js';

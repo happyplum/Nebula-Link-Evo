@@ -27,6 +27,10 @@
       "types": "./dist/types/action.d.ts",
       "import": "./dist/types/action.js"
     },
+    "./types/debug-events": {
+      "types": "./dist/types/debug-events.d.ts",
+      "import": "./dist/types/debug-events.js"
+    },
     "./utils": {
       "types": "./dist/utils/index.d.ts",
       "import": "./dist/utils/index.js"

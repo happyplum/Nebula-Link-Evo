@@ -275,8 +275,8 @@ export interface SSEFormattedEvent {
  * @param eventId - Optional event ID
  * @returns SSE formatted event object
  */
-export function eventToSSEFormat(
-  event: SessionEvent,
+export function eventToSSEFormat<T extends { type: string }>(
+  event: T,
   eventId?: string
 ): SSEFormattedEvent {
   return {
