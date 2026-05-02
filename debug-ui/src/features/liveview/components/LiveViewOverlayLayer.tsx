@@ -11,6 +11,8 @@ import {
   type SelectedElement,
   useControlStore,
 } from '@/features/playwright-control/store/control.store.js';
+import type { DebugMarkerEvent, DebugOverlayEvent } from '@nebula-link-evo/shared/types/debug-events';
+import { debugStreamClient } from '@/features/runtime/lib/debug-stream-client.js';
 import styles from './LiveViewOverlayLayer.module.css';
 
 const MARKER_LIFETIME = 5000;
@@ -368,6 +370,52 @@ export function LiveViewOverlayLayer({
   const pushMarker = useCallback((marker: Marker) => {
     setMarkers((prev) => [...prev, marker]);
   }, []);
+
+  // SSE marker/overlay subscription from debug stream
+  useEffect(() => {
+    const unsubMarker = debugStreamClient.subscribe('debug.marker', (event) => {
+      try {
+        const data: DebugMarkerEvent = JSON.parse(event.data);
+        const currentFitRect = fitRectRef.current;
+        if (!currentFitRect) return;
+        const canvasCoords = pageToCanvasCoords(data.marker.pageX, data.marker.pageY, currentFitRect);
+        if (!canvasCoords) return;
+        pushMarker({
+          canvasX: canvasCoords.x,
+          canvasY: canvasCoords.y,
+          pageX: data.marker.pageX,
+          pageY: data.marker.pageY,
+          timestamp: Date.now(),
+        });
+      } catch {
+        // Ignore malformed marker events
+      }
+    });
+
+    const unsubOverlay = debugStreamClient.subscribe('debug.overlay', (event) => {
+      try {
+        const data: DebugOverlayEvent = JSON.parse(event.data);
+        if (data.overlay === null) {
+          setOverlayBBox(null);
+        } else {
+          setOverlayBBox({
+            x: data.overlay.bbox.x,
+            y: data.overlay.bbox.y,
+            width: data.overlay.bbox.width,
+            height: data.overlay.bbox.height,
+            selector: data.overlay.selector,
+          });
+        }
+      } catch {
+        // Ignore malformed overlay events
+      }
+    });
+
+    return () => {
+      unsubMarker();
+      unsubOverlay();
+    };
+  }, [pushMarker]);
 
   const handleOverlayClick = useCallback(
     (event: ReactMouseEvent<HTMLCanvasElement>) => {

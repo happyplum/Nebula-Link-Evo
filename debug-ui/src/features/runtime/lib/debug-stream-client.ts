@@ -2,6 +2,8 @@ import type {
   DebugErrorEvent,
   DebugKeepaliveEvent,
   DebugMcpInvalidatedEvent,
+  DebugMarkerEvent,
+  DebugOverlayEvent,
   DebugSnapshotEvent,
   DebugStatusEvent,
 } from '@nebula-link-evo/shared/types/debug-events';
@@ -20,6 +22,8 @@ type DebugStreamEventMap = {
   'debug.mcp_invalidated': DebugMcpInvalidatedEvent;
   'debug.error': DebugErrorEvent;
   'debug.keepalive': DebugKeepaliveEvent;
+  'debug.marker': DebugMarkerEvent;
+  'debug.overlay': DebugOverlayEvent;
 };
 
 type DebugStreamEventType = keyof DebugStreamEventMap;
@@ -133,6 +137,14 @@ function connect(): void {
 
   es.addEventListener('debug.keepalive', (event) => {
     notifySubscribers('debug.keepalive', event as MessageEvent<string>);
+  });
+
+  es.addEventListener('debug.marker', (event) => {
+    notifySubscribers('debug.marker', event as MessageEvent<string>);
+  });
+
+  es.addEventListener('debug.overlay', (event) => {
+    notifySubscribers('debug.overlay', event as MessageEvent<string>);
   });
 
   es.onerror = () => {
