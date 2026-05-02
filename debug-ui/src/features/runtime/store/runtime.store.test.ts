@@ -51,6 +51,21 @@ describe('runtime.store', () => {
     });
   });
 
+  describe('setPlaywrightState', () => {
+    it('updates status, open state, and url atomically', () => {
+      useRuntimeStore.getState().setPlaywrightState({
+        status: 'ready',
+        isOpen: true,
+        url: 'https://example.com',
+      });
+
+      const s = useRuntimeStore.getState();
+      expect(s.playwrightStatus).toBe('ready');
+      expect(s.playwrightIsOpen).toBe(true);
+      expect(s.playwrightUrl).toBe('https://example.com');
+    });
+  });
+
   describe('reset', () => {
     it('returns all state to initial values', () => {
       const store = useRuntimeStore.getState();
