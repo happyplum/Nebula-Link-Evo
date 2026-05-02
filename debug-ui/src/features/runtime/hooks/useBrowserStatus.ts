@@ -4,9 +4,6 @@ import {
   useRuntimeStore,
   type ServiceStatus,
 } from '@/features/runtime/store/runtime.store.js';
-import {
-  useControlStore,
-} from '@/features/playwright-control/store/control.store.js';
 
 /** Debug health endpoint returns rich playwright state. */
 interface DebugHealthPlaywright {
@@ -45,8 +42,6 @@ export function useBrowserStatus(): { refreshNow: () => Promise<void> } {
   const setPlaywrightUrl = useRuntimeStore((s) => s.setPlaywrightUrl);
   const setPlaywrightStatus = useRuntimeStore((s) => s.setPlaywrightStatus);
   const setPlaywrightStatusHydrated = useRuntimeStore((s) => s.setPlaywrightStatusHydrated);
-  const setBrowserOpen = useControlStore((s) => s.setBrowserOpen);
-  const setBrowserUrl = useControlStore((s) => s.setBrowserUrl);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -59,16 +54,12 @@ export function useBrowserStatus(): { refreshNow: () => Promise<void> } {
     setPlaywrightUrl,
     setPlaywrightStatus,
     setPlaywrightStatusHydrated,
-    setBrowserOpen,
-    setBrowserUrl,
   });
   settersRef.current = {
     setPlaywrightIsOpen,
     setPlaywrightUrl,
     setPlaywrightStatus,
     setPlaywrightStatusHydrated,
-    setBrowserOpen,
-    setBrowserUrl,
   };
 
   const pollOnce = useCallback(async () => {
@@ -96,8 +87,6 @@ export function useBrowserStatus(): { refreshNow: () => Promise<void> } {
       settersRef.current.setPlaywrightIsOpen(pw.isOpen);
       settersRef.current.setPlaywrightUrl(pw.url ?? null);
       settersRef.current.setPlaywrightStatus(toServiceStatus(pw.status));
-      settersRef.current.setBrowserOpen(pw.isOpen);
-      settersRef.current.setBrowserUrl(pw.url ?? '');
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') return;
       // Network error — keep last known state, retry next cycle

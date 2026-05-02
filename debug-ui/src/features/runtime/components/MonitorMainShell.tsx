@@ -51,6 +51,11 @@ export function MonitorMainShell() {
   const effectiveTransport =
     preferredTransport === 'webrtc' && webrtcFailed ? 'mjpeg' : preferredTransport;
 
+  // Reset WebRTC failure when browser reopens — publisher restarts fresh
+  useEffect(() => {
+    if (playwrightIsOpen) setWebrtcFailed(false);
+  }, [playwrightIsOpen]);
+
   const handleDownload = useCallback(() => {
     if (!lastScreenshotDataUrl) return;
     const a = document.createElement('a');
@@ -87,11 +92,8 @@ export function MonitorMainShell() {
         <div className={styles.liveviewHeaderBar}>
           <h3 className={styles.liveviewTitle}>实时画面</h3>
           <div className={styles.liveviewHeaderMeta}>
-            {webrtcFailed && preferredTransport === 'webrtc' && (
-              <span className={styles.degradedIndicator}>已降级</span>
-            )}
             <TransportToggle
-              transport={preferredTransport}
+              transport={effectiveTransport}
               onTransportChange={handleTransportChange}
               webrtcAvailable={!webrtcFailed}
             />
