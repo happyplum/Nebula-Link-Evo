@@ -10,6 +10,8 @@ import { DatabaseManager } from './conversation/db.js';
 import { createCompressionClient } from './clients/compression.js';
 import { ChatSessionController } from './services/chat-session-controller.js';
 import { SessionEventHub } from './services/session-event-hub.js';
+import { debugEventHub } from './services/debug-event-hub.js';
+import { debugStreamBridge } from './services/debug-stream-bridge.js';
 import { initializeWithBackup } from './utils/db-backup.js';
 import { normalizeLogLevel } from './services/logger.js';
 import healthRoutes from './plugins/routes/health.js';
@@ -62,6 +64,7 @@ async function start() {
     // Initialize task service first to load configuration
     // This must happen before route registration to ensure config is available
     await appService.initialize();
+    debugStreamBridge.start();
 
     // Run provider preflight checks
     const registry = appService.getRegistry();
@@ -124,6 +127,7 @@ async function start() {
     // Register Debug routes
     await app.register(debugRoutes, { prefix: '/debug' });
     app.log.info({ prefix: '/debug' }, 'Debug routes registered');
+    app.log.info({ subscribers: debugEventHub.getSubscriberCount() }, 'Debug event hub ready');
 
     const mcpStatus = appService.getMCPStatus();
     app.log.info({ configPath: appService.getConfigPath() }, 'Configuration loaded');
@@ -173,6 +177,7 @@ async function start() {
     app.log.info({ endpoint: 'GET  /api/chat/*    - Chat API (SSE)' });
     app.log.info({ endpoint: 'GET  /debug/api/*    - Debug API' });
   } catch (err) {
+    await debugStreamBridge.stop();
     app.log.error(err);
     process.exit(1);
   }
@@ -183,6 +188,7 @@ process.on('SIGINT', async () => {
   if (conversationManager) {
     await conversationManager.close();
   }
+  await debugStreamBridge.stop();
   await appService.shutdown();
   await app.close();
   process.exit(0);
@@ -193,6 +199,7 @@ process.on('SIGTERM', async () => {
   if (conversationManager) {
     await conversationManager.close();
   }
+  await debugStreamBridge.stop();
   await appService.shutdown();
   await app.close();
   process.exit(0);
