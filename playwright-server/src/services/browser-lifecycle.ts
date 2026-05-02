@@ -276,7 +276,9 @@ export class BrowserLifecycle {
         this.pageIds.set(this.state.page, crypto.randomUUID());
         this.state.page.on('close', this.handlePageClose);
         this.state.lastViewport = { ...viewport };
-        await startPublisher(this.state.page, viewport).catch((err) => {
+        // Fire-and-forget: publisher connects to LiveKit and may block
+        // if the server is unavailable. Don't delay open() response.
+        startPublisher(this.state.page, viewport).catch((err) => {
           this.logger.warn({ err }, 'Publisher failed to start');
         });
       }
@@ -315,7 +317,9 @@ export class BrowserLifecycle {
     this.state.lastHeadless = headless;
     this.state.lastViewport = { ...viewport };
     this.state.lastCdpPort = nextCdpPort;
-    await startPublisher(this.state.page, viewport).catch((err) => {
+    // Fire-and-forget: publisher connects to LiveKit and may block
+    // if the server is unavailable. Don't delay open() response.
+    startPublisher(this.state.page, viewport).catch((err) => {
       this.logger.warn({ err }, 'Publisher failed to start');
     });
   }
