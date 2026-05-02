@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } 
 import Fastify from 'fastify';
 import actionRoutesPlugin from '../plugins/routes/action.js';
 import { browserService } from '../services/browser-service.js';
+import { debugEventHub } from '../services/debug-event-hub.js';
 
 vi.mock('../livekit-publisher.js', () => ({
   startPublisher: vi.fn().mockResolvedValue(undefined),
@@ -21,12 +22,14 @@ describe('/action/execute-by-marker endpoint', () => {
   });
 
   beforeEach(() => {
+    debugEventHub.resetForTests();
     app = Fastify();
     app.register(actionRoutesPlugin, { prefix: '/action' });
   });
 
   afterEach(async () => {
     await app.close();
+    vi.restoreAllMocks();
   });
 
   describe('click action', () => {
@@ -316,6 +319,125 @@ describe('/action/execute-by-marker endpoint', () => {
       expect(body.success).toBe(false);
       expect(body.error).toHaveProperty('code');
       expect(body.error).toHaveProperty('message');
+    });
+
+    it('publishes marker and overlay debug events with the requested action', async () => {
+      await app.ready();
+      const nebulaId = 51;
+      const snapshotId = 'snapshot-hover-marker';
+      vi.spyOn(browserService, 'hoverByMarker').mockResolvedValue({
+        success: true,
+        strategy_used: 'nebula-id',
+        attempts: 1,
+        latency_ms: 9,
+        nebulaId,
+        selector: '[data-nebula-id="51"]',
+        bbox: {
+          x: 50,
+          y: 60,
+          width: 120,
+          height: 30,
+        },
+      });
+
+      const publishSpy = vi.spyOn(debugEventHub, 'publish');
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/action/execute-by-marker',
+        payload: {
+          snapshot_id: snapshotId,
+          nebula_id: nebulaId,
+          action: 'hover',
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+
+      const body = JSON.parse(response.payload);
+      expect(body.success).toBe(true);
+      expect(publishSpy).toHaveBeenCalledTimes(2);
+      expect(publishSpy).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          type: 'debug.marker',
+          marker: expect.objectContaining({
+            source: 'ai',
+            action: 'hover',
+            ttlMs: 5000,
+            nebulaId,
+            selector: '[data-nebula-id="51"]',
+            bbox: expect.objectContaining({
+              x: 50,
+              y: 60,
+              width: 120,
+              height: 30,
+            }),
+            pageX: 110,
+            pageY: 75,
+          }),
+        })
+      );
+      expect(publishSpy).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          type: 'debug.overlay',
+          overlay: expect.objectContaining({
+            kind: 'highlight',
+            source: 'ai',
+            ttlMs: 5000,
+            selector: '[data-nebula-id="51"]',
+            bbox: expect.objectContaining({
+              x: 50,
+              y: 60,
+              width: 120,
+              height: 30,
+            }),
+          }),
+        })
+      );
+    });
+  });
+
+  describe('best-effort debug publishing', () => {
+    it('does not fail the HTTP response when debug event publish throws', async () => {
+      await app.ready();
+      vi.spyOn(browserService, 'clickByMarker').mockResolvedValue({
+        success: true,
+        strategy_used: 'nebula-id',
+        attempts: 1,
+        latency_ms: 5,
+        nebulaId: 61,
+        selector: '[data-nebula-id="61"]',
+        bbox: {
+          x: 10,
+          y: 20,
+          width: 30,
+          height: 40,
+        },
+      });
+
+      vi.spyOn(debugEventHub, 'publish').mockImplementationOnce(() => {
+        throw new Error('publish failed');
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/action/execute-by-marker',
+        payload: {
+          snapshot_id: 'snapshot-best-effort',
+          nebula_id: 61,
+          action: 'click',
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+
+      const body = JSON.parse(response.payload);
+      expect(body.success).toBe(true);
+      expect(body).toHaveProperty('strategy_used');
+      expect(body).toHaveProperty('attempts');
+      expect(body).toHaveProperty('latency_ms');
     });
   });
 

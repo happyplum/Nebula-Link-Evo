@@ -1,4 +1,5 @@
 import { Page } from 'playwright';
+import type { BoundingBox } from '../types.js';
 import { ClickResolutionService, ResolvedTarget } from './click-resolution.js';
 
 export interface MarkerActionResult {
@@ -6,6 +7,9 @@ export interface MarkerActionResult {
   strategy_used: string;
   attempts: number;
   latency_ms: number;
+  bbox?: BoundingBox;
+  nebulaId?: number;
+  selector?: string;
   error?: {
     code: string;
     message: string;
@@ -59,6 +63,27 @@ export class PageActions {
       : 'unknown';
   }
 
+  private buildMarkerActionSuccessResult(
+    startTime: number,
+    strategy: string,
+    attempts: number,
+    resolved: ResolvedTarget
+  ): MarkerActionResult {
+    const parsedNebulaId = resolved.nebulaId ? Number.parseInt(resolved.nebulaId, 10) : undefined;
+
+    return {
+      success: true,
+      strategy_used: strategy,
+      attempts,
+      latency_ms: Date.now() - startTime,
+      bbox: resolved.bbox,
+      nebulaId: typeof parsedNebulaId === 'number' && Number.isFinite(parsedNebulaId)
+        ? parsedNebulaId
+        : undefined,
+      selector: resolved.locators[0],
+    };
+  }
+
   async click(x: number, y: number): Promise<void> {
     const page = this.requirePage();
     await page.mouse.click(x, y);
@@ -102,12 +127,7 @@ export class PageActions {
 
       await resolutionService.executeWithFallback(resolved);
 
-      return {
-        success: true,
-        strategy_used: strategy,
-        attempts,
-        latency_ms: Date.now() - startTime,
-      };
+      return this.buildMarkerActionSuccessResult(startTime, strategy, attempts, resolved);
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       return {
@@ -178,12 +198,7 @@ export class PageActions {
 
       await this.type(resolved.locators[0], text, options);
 
-      return {
-        success: true,
-        strategy_used: strategy,
-        attempts,
-        latency_ms: Date.now() - startTime,
-      };
+      return this.buildMarkerActionSuccessResult(startTime, strategy, attempts, resolved);
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       return {
@@ -230,12 +245,7 @@ export class PageActions {
 
       await this.focus(resolved.locators[0]);
 
-      return {
-        success: true,
-        strategy_used: strategy,
-        attempts,
-        latency_ms: Date.now() - startTime,
-      };
+      return this.buildMarkerActionSuccessResult(startTime, strategy, attempts, resolved);
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       return {
@@ -277,12 +287,7 @@ export class PageActions {
 
       await this.blur(resolved.locators[0]);
 
-      return {
-        success: true,
-        strategy_used: strategy,
-        attempts,
-        latency_ms: Date.now() - startTime,
-      };
+      return this.buildMarkerActionSuccessResult(startTime, strategy, attempts, resolved);
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       return {
@@ -319,12 +324,7 @@ export class PageActions {
 
       await this.hover(resolved.locators[0]);
 
-      return {
-        success: true,
-        strategy_used: strategy,
-        attempts,
-        latency_ms: Date.now() - startTime,
-      };
+      return this.buildMarkerActionSuccessResult(startTime, strategy, attempts, resolved);
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       return {
@@ -379,12 +379,7 @@ export class PageActions {
 
       await this.setValue(resolved.locators[0], value);
 
-      return {
-        success: true,
-        strategy_used: strategy,
-        attempts,
-        latency_ms: Date.now() - startTime,
-      };
+      return this.buildMarkerActionSuccessResult(startTime, strategy, attempts, resolved);
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       return {
@@ -434,12 +429,7 @@ export class PageActions {
 
       await this.dispatchEvent(resolved.locators[0], eventType);
 
-      return {
-        success: true,
-        strategy_used: strategy,
-        attempts,
-        latency_ms: Date.now() - startTime,
-      };
+      return this.buildMarkerActionSuccessResult(startTime, strategy, attempts, resolved);
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       return {
