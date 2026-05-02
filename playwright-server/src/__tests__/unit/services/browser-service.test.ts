@@ -10,8 +10,12 @@ vi.mock('../../../services/browser-lifecycle.js', () => ({
       getPage: vi.fn().mockReturnValue({}),
       getCdpPort: vi.fn().mockReturnValue(9222),
       getCurrentUrl: vi.fn().mockReturnValue('https://example.com'),
+      getViewport: vi.fn().mockReturnValue({ width: 1920, height: 1080 }),
       getCdpEndpoint: vi.fn().mockResolvedValue('ws://localhost:9222'),
       getTitle: vi.fn().mockResolvedValue('Test Page'),
+      getTabs: vi.fn().mockResolvedValue([]),
+      switchTab: vi.fn().mockResolvedValue({}),
+      setOnStateChange: vi.fn(),
       isOpen: vi.fn().mockReturnValue(true),
       screenshot: vi.fn().mockResolvedValue({
         screenshot: 'base64image',
@@ -138,6 +142,36 @@ describe('BrowserService', () => {
     it('should get current URL', () => {
       const service = BrowserService.getInstance();
       expect(service.getCurrentUrl()).toBe('https://example.com');
+    });
+
+    it('should build debug status from lifecycle state', async () => {
+      const service = BrowserService.getInstance();
+
+      await expect(service.getDebugStatus('navigate')).resolves.toEqual({
+        isOpen: true,
+        url: 'https://example.com',
+        title: 'Test Page',
+        status: 'ready',
+        viewport: { width: 1920, height: 1080 },
+        reason: 'navigate',
+      });
+    });
+
+    it('should build closed debug status without requesting the title', async () => {
+      const service = BrowserService.getInstance();
+      service['lifecycle'].isOpen.mockReturnValue(false);
+      service['lifecycle'].getCurrentUrl.mockReturnValue(undefined);
+      service['lifecycle'].getViewport.mockReturnValue(null);
+
+      await expect(service.getDebugStatus('close')).resolves.toEqual({
+        isOpen: false,
+        url: null,
+        title: null,
+        status: 'unknown',
+        viewport: undefined,
+        reason: 'close',
+      });
+      expect(service['lifecycle'].getTitle).not.toHaveBeenCalled();
     });
 
     it('should get CDP endpoint', async () => {

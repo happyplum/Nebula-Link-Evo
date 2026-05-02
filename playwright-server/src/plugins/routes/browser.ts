@@ -1,4 +1,5 @@
 import { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
+import type { DebugStatusReason } from '@nebula-link-evo/shared/types/debug-events.js';
 import { BrowserService } from '../../services/browser-service.js';
 import {
   BrowserOpenRequestSchema,
@@ -14,14 +15,28 @@ import type {
   BrowserSwitchTabRequest,
 } from '../../schemas/browser.js';
 import { SuccessResponseSchema, ErrorResponseSchema } from '../../schemas/common.js';
+import { debugEventHub } from '../../services/debug-event-hub.js';
+
+async function publishDebugStatus(browserService: BrowserService, reason: DebugStatusReason): Promise<void> {
+  try {
+    debugEventHub.publish({
+      type: 'debug.status',
+      status: await browserService.getDebugStatus(reason),
+      emittedAt: new Date().toISOString(),
+    });
+  } catch {
+    // Best-effort publishing must never affect HTTP responses.
+  }
+}
 
 const routes: FastifyPluginAsyncTypebox = async (fastify) => {
+  const browserService = BrowserService.getInstance();
+
   fastify.post(
     '/open',
     {
       schema: {
-        description:
-          'Open a new browser instance with optional headless mode and viewport settings',
+        description: 'Open a new browser instance with optional headless mode and viewport settings',
         tags: ['Browser'],
         summary: 'Open browser',
         body: BrowserOpenRequestSchema,
@@ -34,7 +49,8 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
     async (request, reply) => {
       try {
         const { headless = false, viewport, cdpPort } = (request.body ?? {}) as BrowserOpenRequest;
-        await BrowserService.getInstance().open(headless, viewport, cdpPort);
+        await browserService.open(headless, viewport, cdpPort);
+        await publishDebugStatus(browserService, 'open');
         return { success: true, message: 'Browser opened successfully' };
       } catch (error) {
         reply.status(500);
@@ -60,12 +76,12 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
     async (request, reply) => {
       try {
         const { url, waitUntil = 'networkidle' } = request.body as BrowserNavigateRequest;
-        await BrowserService.getInstance().navigate(url, waitUntil as 'load' | 'domcontentloaded' | 'networkidle');
+        await browserService.navigate(url, waitUntil as 'load' | 'domcontentloaded' | 'networkidle');
+        await publishDebugStatus(browserService, 'navigate');
         return {
-          success: true,
-          isOpen: BrowserService.getInstance().isOpen(),
-          currentUrl: BrowserService.getInstance().getCurrentUrl(),
-          title: await BrowserService.getInstance().getTitle(),
+          isOpen: browserService.isOpen(),
+          currentUrl: browserService.getCurrentUrl(),
+          title: await browserService.getTitle(),
         };
       } catch (error) {
         reply.status(500);
@@ -90,7 +106,7 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
     async (request, reply) => {
       try {
         const { fullPage = false }: { fullPage?: boolean } = request.body ?? {};
-        const result = await BrowserService.getInstance().screenshot(fullPage);
+        const result = await browserService.screenshot(fullPage);
         return { success: true, ...result };
       } catch (error) {
         reply.status(500);
@@ -114,7 +130,8 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
     async (request, reply) => {
       try {
-        await BrowserService.getInstance().close();
+        await browserService.close();
+        await publishDebugStatus(browserService, 'close');
         return { success: true, message: 'Browser closed successfully' };
       } catch (error) {
         reply.status(500);
@@ -137,10 +154,10 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
     async () => {
       return {
-        isOpen: BrowserService.getInstance().isOpen(),
-        currentUrl: BrowserService.getInstance().getCurrentUrl(),
-        title: await BrowserService.getInstance().getTitle(),
-        viewport: BrowserService.getInstance().getViewport(),
+        isOpen: browserService.isOpen(),
+        currentUrl: browserService.getCurrentUrl(),
+        title: await browserService.getTitle(),
+        viewport: browserService.getViewport(),
       };
     }
   );
@@ -160,7 +177,7 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
     async (request, reply) => {
       try {
-        const tabs = await BrowserService.getInstance().getTabs();
+        const tabs = await browserService.getTabs();
         return { tabs };
       } catch (error) {
         reply.status(500);
@@ -185,7 +202,8 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
     async (request, reply) => {
       try {
-        await BrowserService.getInstance().switchTab((request.body as BrowserSwitchTabRequest).id);
+        await browserService.switchTab((request.body as BrowserSwitchTabRequest).id);
+        await publishDebugStatus(browserService, 'switch_tab');
         return { success: true, message: 'Switched tab successfully' };
       } catch (error) {
         reply.status(500);
