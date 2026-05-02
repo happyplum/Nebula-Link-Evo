@@ -1,9 +1,10 @@
+import { randomUUID } from 'node:crypto';
 import type {
   DebugPlaywrightState,
   DebugSnapshotEvent,
   DebugStatusEvent,
   DebugStreamEvent,
-} from '@nebula-link-evo/shared/types/debug-events.js';
+} from '@nebula-link-evo/shared';
 
 export type DebugEventSubscriber = (event: DebugStreamEvent) => void;
 
@@ -12,31 +13,28 @@ function isStatusEvent(event: DebugStreamEvent): event is DebugSnapshotEvent | D
 }
 
 export class DebugEventHub {
+  private static instance: DebugEventHub | null = null;
+
   private subscribers = new Map<string, DebugEventSubscriber>();
   private latestStatus: DebugPlaywrightState | null = null;
-  private nextSeq = 1;
+  private nextSeqValue = 1;
 
-  publish(event: DebugStreamEvent): void {
-    const sequencedEvent = {
-      ...event,
-      seq: event.seq ?? this.getNextSeq(),
-    } as DebugStreamEvent;
+  private constructor() {}
 
-    if (isStatusEvent(sequencedEvent)) {
-      this.latestStatus = sequencedEvent.status;
+  static getInstance(): DebugEventHub {
+    if (!DebugEventHub.instance) {
+      DebugEventHub.instance = new DebugEventHub();
     }
 
-    for (const callback of this.subscribers.values()) {
-      try {
-        callback(sequencedEvent);
-      } catch {
-        // Continue delivering even if one subscriber throws.
-      }
-    }
+    return DebugEventHub.instance;
+  }
+
+  static resetInstance(): void {
+    DebugEventHub.instance = null;
   }
 
   subscribe(callback: DebugEventSubscriber): () => void {
-    const subscriberId = crypto.randomUUID();
+    const subscriberId = randomUUID();
     this.subscribers.set(subscriberId, callback);
 
     let unsubscribed = false;
@@ -50,25 +48,52 @@ export class DebugEventHub {
     };
   }
 
+  getSubscriberCount(): number {
+    return this.subscribers.size;
+  }
+
   getLatestStatus(): DebugPlaywrightState | null {
     return this.latestStatus;
   }
 
   getNextSeq(): number {
-    const seq = this.nextSeq;
-    this.nextSeq += 1;
+    const seq = this.nextSeqValue;
+    this.nextSeqValue += 1;
     return seq;
   }
 
-  getSubscriberCount(): number {
-    return this.subscribers.size;
+  publish(event: DebugStreamEvent): void {
+    const sequencedEvent: DebugStreamEvent = {
+      ...event,
+      seq: event.seq ?? this.getNextSeq(),
+    };
+
+    if (isStatusEvent(sequencedEvent)) {
+      this.latestStatus = sequencedEvent.status;
+    }
+
+    for (const callback of this.subscribers.values()) {
+      try {
+        callback(sequencedEvent);
+      } catch {
+        // Continue delivering to remaining subscribers.
+      }
+    }
+  }
+
+  publishStatus(status: DebugPlaywrightState): void {
+    this.publish({
+      type: 'debug.status',
+      status,
+      emittedAt: new Date().toISOString(),
+    });
   }
 
   resetForTests(): void {
     this.subscribers.clear();
     this.latestStatus = null;
-    this.nextSeq = 1;
+    this.nextSeqValue = 1;
   }
 }
 
-export const debugEventHub = new DebugEventHub();
+export const debugEventHub = DebugEventHub.getInstance();
