@@ -70,5 +70,22 @@ export {
   eventToSSEFormat,
 } from './sse-events.js';
 
+// Debug SSE event types
+export type {
+  DebugStreamEvent,
+  DebugPlaywrightState,
+  DebugServiceStatus,
+  DebugStatusReason,
+  DebugSnapshotEvent,
+  DebugStatusEvent,
+  DebugErrorEvent,
+  DebugMarkerEvent,
+  DebugMarkerPayload,
+  DebugOverlayEvent,
+  DebugOverlayPayload,
+  DebugMcpInvalidatedEvent,
+  DebugKeepaliveEvent,
+} from './debug-events.js';
+
 // Constants
 export { MAX_SCREENSHOT_SIZE_BYTES } from './constants.js';
