@@ -2,7 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createFrameCounter } from '@nebula-link-evo/shared';
 import type { FrameCounter } from '@nebula-link-evo/shared';
 import { getImageFitRect, type ImageFitRect } from '@/features/liveview/lib/index.js';
-import { selectPlaywrightIsOpen, useRuntimeStore } from '@/features/runtime/store/index.js';
+import {
+  selectPlaywrightIsOpen,
+  selectPlaywrightStatusHydrated,
+  useRuntimeStore,
+} from '@/features/runtime/store/index.js';
 import { LiveViewOverlayLayer } from './LiveViewOverlayLayer.js';
 import { useLiveKit } from '../hooks/useLiveKit.js';
 import styles from './LiveKitView.module.css';
@@ -33,13 +37,22 @@ export default function LiveKitView({
   const [fitRect, setFitRect] = useState<ImageFitRect | null>(null);
   const { isConnected, trackStatus, connect, disconnect, videoElement } = useLiveKit();
   const isPlaywrightOpen = useRuntimeStore(selectPlaywrightIsOpen);
+  const playwrightStatusHydrated = useRuntimeStore(selectPlaywrightStatusHydrated);
   const setLastScreenshotDataUrl = useRuntimeStore((s) => s.setLastScreenshotDataUrl);
-  const lastFrameDataRef = useRef<ImageData | null>(null);
-  const isPlaywrightOpenRef = useRef(isPlaywrightOpen);
+
+  // Offscreen canvas caches the last video frame for resize redraw
+  const lastFrameCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const debugCounterRef = useRef<FrameCounter | null>(null);
 
-  // Track connection state: distinguish real disconnect from transport disruption
-  isPlaywrightOpenRef.current = isPlaywrightOpen;
+  // rVFC lifecycle: track callback ID for explicit cancel
+  const videoFrameCallbackIdRef = useRef<number | null>(null);
+
+  // Optimistic bootstrap: start before health confirms open.
+  const shouldStartTransport = isPlaywrightOpen || !playwrightStatusHydrated;
+  const isConfirmedClosed = playwrightStatusHydrated && !isPlaywrightOpen;
+
+  const isConfirmedClosedRef = useRef(isConfirmedClosed);
+  isConfirmedClosedRef.current = isConfirmedClosed;
 
   const captureScreenshot = useCallback(
     (canvas: HTMLCanvasElement) => {
@@ -61,76 +74,110 @@ export default function LiveKitView({
         setLastScreenshotDataUrl(url);
       }, 'image/jpeg', 0.9);
     },
-    [setLastScreenshotDataUrl]
+    [setLastScreenshotDataUrl],
   );
 
-  const startOverlayLoop = useCallback(() => {
-    // NOTE: This callback has empty deps [] — closures inside renderFrame
-    // rely on stable useCallback references (e.g., captureScreenshot added in later tasks).
-    // Zustand store actions are stable references, so this is safe.
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    if (!video || !canvas) {
-      return;
-    }
+  /** Draw a CanvasImageSource (video or offscreen canvas) to the display canvas with fit-rect. */
+  const drawSourceToCanvas = useCallback(
+    (source: CanvasImageSource, sourceW: number, sourceH: number) => {
+      const canvas = canvasRef.current;
+      const ctx = canvas?.getContext('2d');
+      if (!canvas || !ctx) return;
 
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      return;
+      const dpr = window.devicePixelRatio || 1;
+      const fit = getImageFitRect(sourceW, sourceH, canvas.width / dpr, canvas.height / dpr);
+      if (!fit) {
+        setFitRect(null);
+        return;
+      }
+
+      setFitRect(fit);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(
+        source,
+        fit.offsetX * dpr,
+        fit.offsetY * dpr,
+        fit.drawW * dpr,
+        fit.drawH * dpr,
+      );
+    },
+    [],
+  );
+
+  /** Cache the current video frame to an offscreen canvas for later resize redraw. */
+  const cacheVideoFrame = useCallback((video: HTMLVideoElement) => {
+    const { videoWidth, videoHeight } = video;
+    if (videoWidth === 0 || videoHeight === 0) return;
+
+    const buffer = lastFrameCanvasRef.current ?? document.createElement('canvas');
+    buffer.width = videoWidth;
+    buffer.height = videoHeight;
+
+    const bufferCtx = buffer.getContext('2d');
+    if (!bufferCtx) return;
+
+    bufferCtx.clearRect(0, 0, videoWidth, videoHeight);
+    bufferCtx.drawImage(video, 0, 0, videoWidth, videoHeight);
+    lastFrameCanvasRef.current = buffer;
+  }, []);
+
+  /** Cancel any active rVFC or RAF loop. */
+  const cancelVideoFrameLoop = useCallback(() => {
+    const video = videoRef.current;
+    if (
+      video &&
+      videoFrameCallbackIdRef.current !== null &&
+      'cancelVideoFrameCallback' in video
+    ) {
+      (video as HTMLVideoElement & { cancelVideoFrameCallback: (id: number) => void })
+        .cancelVideoFrameCallback(videoFrameCallbackIdRef.current);
     }
+    videoFrameCallbackIdRef.current = null;
+
+    if (overlayRafRef.current) {
+      cancelAnimationFrame(overlayRafRef.current);
+      overlayRafRef.current = 0;
+    }
+  }, []);
+
+  /** Start the rVFC (or RAF fallback) render loop. */
+  const startVideoFrameLoop = useCallback(() => {
+    cancelVideoFrameLoop();
 
     const renderFrame = () => {
       const currentVideo = videoRef.current;
       const currentCanvas = canvasRef.current;
-      if (!currentVideo || !currentCanvas) {
-        return;
-      }
+      if (!currentVideo || !currentCanvas) return;
 
       const { videoWidth, videoHeight } = currentVideo;
-      const { clientWidth, clientHeight } = currentCanvas;
       if (videoWidth === 0 || videoHeight === 0) {
         // Don't clear fitRect — preserve overlay during transient video pauses
         if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
-          currentVideo.requestVideoFrameCallback(renderFrame);
+          videoFrameCallbackIdRef.current =
+            currentVideo.requestVideoFrameCallback(renderFrame);
         }
         return;
       }
 
-      const dpr = window.devicePixelRatio || 1;
-      const canvasW = clientWidth * dpr;
-      const canvasH = clientHeight * dpr;
-      const scale = Math.min(canvasW / videoWidth, canvasH / videoHeight);
-      const drawWidth = videoWidth * scale;
-      const drawHeight = videoHeight * scale;
-      const offsetX = (canvasW - drawWidth) / 2;
-      const offsetY = (canvasH - drawHeight) / 2;
-
-      // Video track dimensions are the source of truth for coordinate mapping.
-      // adaptiveStream is disabled in useLiveKit, so video resolution matches browser viewport.
-      setFitRect(getImageFitRect(videoWidth, videoHeight, clientWidth, clientHeight));
-      ctx.clearRect(0, 0, canvasW, canvasH);
-      ctx.drawImage(currentVideo, offsetX, offsetY, drawWidth, drawHeight);
-
-      // Cache frame for redraw on resize after disconnect
-      try {
-        lastFrameDataRef.current = ctx.getImageData(0, 0, canvasW, canvasH);
-      } catch {
-        // SecurityError if canvas is tainted (cross-origin video)
-        lastFrameDataRef.current = null;
-      }
-
-      // Capture screenshot for download (throttled to once per second)
+      drawSourceToCanvas(currentVideo, videoWidth, videoHeight);
+      cacheVideoFrame(currentVideo);
       captureScreenshot(currentCanvas);
-
       debugCounterRef.current?.recordFrame();
 
       if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
-        currentVideo.requestVideoFrameCallback(renderFrame);
+        videoFrameCallbackIdRef.current =
+          currentVideo.requestVideoFrameCallback(renderFrame);
+        return;
       }
+
+      overlayRafRef.current = requestAnimationFrame(renderFrame);
     };
 
+    const video = videoRef.current;
+    if (!video) return;
+
     if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
-      video.requestVideoFrameCallback(renderFrame);
+      videoFrameCallbackIdRef.current = video.requestVideoFrameCallback(renderFrame);
       return;
     }
 
@@ -138,12 +185,13 @@ export default function LiveKitView({
       renderFrame();
       overlayRafRef.current = requestAnimationFrame(rafLoop);
     };
-
     rafLoop();
-  }, []);
+  }, [cancelVideoFrameLoop, drawSourceToCanvas, cacheVideoFrame, captureScreenshot]);
 
+  // Fetch LiveKit token when transport should start
   useEffect(() => {
-    if (!isPlaywrightOpen) {
+    if (!shouldStartTransport) {
+      setTokenData(null);
       return;
     }
 
@@ -152,9 +200,7 @@ export default function LiveKitView({
     fetch('/api/livekit-token')
       .then((response) => response.json() as Promise<{ token?: string; url?: string }>)
       .then((data) => {
-        if (cancelled) {
-          return;
-        }
+        if (cancelled) return;
 
         if (data.token && data.url) {
           setTokenData({ token: data.token, url: data.url });
@@ -166,7 +212,7 @@ export default function LiveKitView({
       .catch((error: unknown) => {
         if (!cancelled) {
           onRenderError?.(
-            error instanceof Error ? error : new Error('Failed to fetch LiveKit token')
+            error instanceof Error ? error : new Error('Failed to fetch LiveKit token'),
           );
         }
       });
@@ -174,24 +220,24 @@ export default function LiveKitView({
     return () => {
       cancelled = true;
     };
-  }, [isPlaywrightOpen, onRenderError]);
+  }, [shouldStartTransport, onRenderError]);
 
+  // Connect to LiveKit when token available
   useEffect(() => {
-    if (!tokenData || isConnected) {
-      return;
-    }
+    if (!tokenData || isConnected) return;
 
     connect(tokenData).catch((error: unknown) => {
       onRenderError?.(error instanceof Error ? error : new Error('Failed to connect to LiveKit'));
     });
   }, [connect, isConnected, onRenderError, tokenData]);
 
+  // Disconnect on confirmed close
   useEffect(() => {
-    if (!isPlaywrightOpen && isConnected) {
+    if (isConfirmedClosed && isConnected) {
       disconnect();
       setTokenData(null);
     }
-  }, [disconnect, isConnected, isPlaywrightOpen]);
+  }, [disconnect, isConnected, isConfirmedClosed]);
 
   // Initialize debug frame counter when VIDEO_DEBUG is true
   useEffect(() => {
@@ -220,6 +266,7 @@ export default function LiveKitView({
     }
   }, [trackStatus, onRenderError]);
 
+  // Manage video element attachment and render loop lifecycle
   useEffect(() => {
     videoRef.current = videoElement;
 
@@ -227,51 +274,46 @@ export default function LiveKitView({
       videoElement.style.cssText =
         'position:absolute;width:0;height:0;opacity:0;pointer-events:none;';
       containerRef.current?.appendChild(videoElement);
-      startOverlayLoop();
+      startVideoFrameLoop();
     }
 
     return () => {
+      cancelVideoFrameLoop();
       if (videoElement && videoElement.parentNode) {
         videoElement.parentNode.removeChild(videoElement);
       }
-      // Only clear overlay on real disconnect (browser closed),
-      // not on transport disruption — matches MJPEG isPlaywrightConnectedRef pattern.
-      if (!isPlaywrightOpenRef.current) {
+      // Only clear overlay on confirmed close, not during optimistic bootstrap
+      if (isConfirmedClosedRef.current) {
         setFitRect(null);
-        lastFrameDataRef.current = null;
+        lastFrameCanvasRef.current = null;
       }
     };
-  }, [startOverlayLoop, videoElement]);
+  }, [videoElement, startVideoFrameLoop, cancelVideoFrameLoop]);
 
-  useEffect(() => {
-    return () => {
-      if (overlayRafRef.current) {
-        cancelAnimationFrame(overlayRafRef.current);
-      }
-    };
-  }, []);
-
+  // Resize handler: redraw cached frame with proper fitRect scaling
   const handleResize = useCallback(() => {
     const container = containerRef.current;
     const canvas = canvasRef.current;
-    if (!container || !canvas) {
-      return;
-    }
+    if (!container || !canvas) return;
 
     const rect = container.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
     canvas.width = Math.floor(rect.width * dpr);
     canvas.height = Math.floor(rect.height * dpr);
 
-    // Redraw cached frame after resize to prevent black canvas
-    const cached = lastFrameDataRef.current;
-    if (cached) {
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.putImageData(cached, 0, 0);
-      }
+    // Try live video first
+    const video = videoRef.current;
+    if (video?.videoWidth && video?.videoHeight) {
+      drawSourceToCanvas(video, video.videoWidth, video.videoHeight);
+      return;
     }
-  }, []);
+
+    // Fall back to cached offscreen canvas
+    const cached = lastFrameCanvasRef.current;
+    if (cached) {
+      drawSourceToCanvas(cached, cached.width, cached.height);
+    }
+  }, [drawSourceToCanvas]);
 
   useEffect(() => {
     const observer = new ResizeObserver(handleResize);
@@ -295,6 +337,21 @@ export default function LiveKitView({
       setLastScreenshotDataUrl(null);
     };
   }, [setLastScreenshotDataUrl]);
+
+  // Immediately redraw current video frame when tab becomes visible
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState !== 'visible') return;
+
+      const video = videoRef.current;
+      if (!video || !video.videoWidth || !video.videoHeight) return;
+
+      drawSourceToCanvas(video, video.videoWidth, video.videoHeight);
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [drawSourceToCanvas]);
 
   const containerClassName = className ? `${styles.container} ${className}` : styles.container;
 

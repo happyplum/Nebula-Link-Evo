@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { testIds } from '@/shared/testing/testids.js';
 import {
   LiveKitView,
@@ -22,7 +22,7 @@ const TASK_STATUS_LABEL: Record<ServiceStatus, string> = {
 };
 
 export function MonitorMainShell() {
-  useBrowserStatus();
+  const { refreshNow } = useBrowserStatus();
 
   const playwrightStatus = useRuntimeStore((s) => s.playwrightStatus);
   const playwrightUrl = useRuntimeStore(selectPlaywrightUrl);
@@ -31,6 +31,20 @@ export function MonitorMainShell() {
   const preferredTransport = useRuntimeStore(selectLiveviewTransport);
   const playwrightIsOpen = useRuntimeStore(selectPlaywrightIsOpen);
   const setLiveviewTransport = useRuntimeStore((s) => s.setLiveviewTransport);
+
+  const incrementLiveviewRefreshKey = useRuntimeStore((s) => s.incrementLiveviewRefreshKey);
+
+  // Reconnect MJPEG stream + refresh health when tab becomes visible after backgrounding
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void refreshNow();
+        incrementLiveviewRefreshKey();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [incrementLiveviewRefreshKey, refreshNow]);
 
   const [webrtcFailed, setWebrtcFailed] = useState(false);
   const handleRenderError = useCallback(() => setWebrtcFailed(true), []);
@@ -53,8 +67,9 @@ export function MonitorMainShell() {
     (mode: 'webrtc' | 'mjpeg') => {
       setLiveviewTransport(mode);
       if (mode === 'webrtc') setWebrtcFailed(false);
+      void refreshNow();
     },
-    [setLiveviewTransport]
+    [setLiveviewTransport, refreshNow],
   );
 
   const indicatorClass =

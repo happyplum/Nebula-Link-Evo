@@ -9,6 +9,7 @@ import type { ImageFitRect } from '@/features/liveview/lib/index.js';
 import {
   selectLiveviewRefreshKey,
   selectPlaywrightIsOpen,
+  selectPlaywrightStatusHydrated,
   useRuntimeStore,
 } from '@/features/runtime/store/index.js';
 import { testIds } from '@/shared/testing/testids.js';
@@ -45,6 +46,7 @@ export function LiveViewCanvas({
   const renderCtxRef = useRef<ImageBitmapRenderingContext | null>(null);
   const fitRectRef = useRef<ImageFitRect | null>(null);
   const currentBitmapRef = useRef<ImageBitmap | null>(null);
+  const lastBitmapSizeRef = useRef<{ w: number; h: number } | null>(null);
   const downloadUrlRef = useRef<string | null>(null);
   const lastFrameBlobRef = useRef<Blob | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
@@ -54,12 +56,18 @@ export function LiveViewCanvas({
   const [fitRect, setFitRect] = useState<ImageFitRect | null>(null);
 
   const isPlaywrightConnected = useRuntimeStore(selectPlaywrightIsOpen);
+  const playwrightStatusHydrated = useRuntimeStore(selectPlaywrightStatusHydrated);
   const liveviewRefreshKey = useRuntimeStore(selectLiveviewRefreshKey);
   const setLastScreenshotDataUrl = useRuntimeStore((s) => s.setLastScreenshotDataUrl);
 
+  // Optimistic bootstrap: start transport before health confirms browser is open.
+  // Only skip/cleanup when health has confirmed the browser is CLOSED.
+  const shouldStartTransport = isPlaywrightConnected || !playwrightStatusHydrated;
+  const isConfirmedDisconnected = playwrightStatusHydrated && !isPlaywrightConnected;
+
   // Track connection state for cleanup: distinguish tab-switch refresh from real disconnect
-  const isPlaywrightConnectedRef = useRef(isPlaywrightConnected);
-  isPlaywrightConnectedRef.current = isPlaywrightConnected;
+  const isConfirmedDisconnectedRef = useRef(isConfirmedDisconnected);
+  isConfirmedDisconnectedRef.current = isConfirmedDisconnected;
 
   const replaceDownloadUrl = useCallback(
     (nextBlob: Blob | null, revokeCurrent: boolean) => {
@@ -117,6 +125,7 @@ export function LiveViewCanvas({
     renderCanvas.style.height = `${nextFitRect.drawH}px`;
 
     bitmapCtx.transferFromImageBitmap(bitmap);
+    lastBitmapSizeRef.current = { w: bitmap.width, h: bitmap.height };
     currentBitmapRef.current = null;
     debugCounterRef.current?.recordFrame();
   }, []);
@@ -131,6 +140,22 @@ export function LiveViewCanvas({
     const rect = container.getBoundingClientRect();
     const width = Math.floor(rect.width);
     const height = Math.floor(rect.height);
+
+    // bitmaprenderer backing store persists after transferFromImageBitmap.
+    // On resize we only need to recalculate CSS dimensions for correct aspect ratio.
+    const lastSize = lastBitmapSizeRef.current;
+    if (lastSize) {
+      const fit = getImageFitRect(lastSize.w, lastSize.h, width, height);
+      if (fit) {
+        fitRectRef.current = fit;
+        setFitRect(fit);
+        renderCanvas.style.left = `${fit.offsetX}px`;
+        renderCanvas.style.top = `${fit.offsetY}px`;
+        renderCanvas.style.width = `${fit.drawW}px`;
+        renderCanvas.style.height = `${fit.drawH}px`;
+        return;
+      }
+    }
 
     renderCanvas.style.left = '0';
     renderCanvas.style.top = '0';
@@ -186,6 +211,7 @@ export function LiveViewCanvas({
     const clearVisualState = () => {
       fitRectRef.current = null;
       setFitRect(null);
+      lastBitmapSizeRef.current = null;
       replaceDownloadUrl(null, true);
     };
 
@@ -209,7 +235,7 @@ export function LiveViewCanvas({
       closeBitmap();
     };
 
-    if (!isPlaywrightConnected) {
+    if (!shouldStartTransport) {
       stopStream();
       return undefined;
     }
@@ -267,8 +293,12 @@ export function LiveViewCanvas({
               break;
             }
 
+            // Close previous unrendered bitmap instead of skipping frames.
+            // The old skip logic (continue) caused permanent frame starvation
+            // if drawRenderFrame ever failed — all subsequent frames were discarded.
             if (currentBitmapRef.current) {
-              continue;
+              currentBitmapRef.current.close();
+              currentBitmapRef.current = null;
             }
 
             const frameBlob = new Blob([value.slice()], { type: 'image/jpeg' });
@@ -304,13 +334,13 @@ export function LiveViewCanvas({
         currentBitmapRef.current.close();
         currentBitmapRef.current = null;
       }
-      // Only clear visual state on real disconnect (browser closed),
-      // not on tab-switch refresh — keep the last frame visible during transition.
-      if (!isPlaywrightConnectedRef.current) {
+      // Only clear visual state on confirmed disconnect (hydrated && closed),
+      // not on tab-switch refresh or optimistic bootstrap phase — keep the last frame visible.
+      if (isConfirmedDisconnectedRef.current) {
         clearVisualState();
       }
     };
-  }, [drawRenderFrame, isPlaywrightConnected, liveviewRefreshKey, replaceDownloadUrl]);
+  }, [drawRenderFrame, shouldStartTransport, liveviewRefreshKey, replaceDownloadUrl]);
 
   useEffect(() => {
     return () => {
@@ -327,6 +357,7 @@ export function LiveViewCanvas({
         currentBitmapRef.current = null;
       }
       fitRectRef.current = null;
+      lastBitmapSizeRef.current = null;
       setFitRect(null);
       replaceDownloadUrl(null, true);
     };
