@@ -1,4 +1,3 @@
-import type { FrameCounter } from '@nebula-link-evo/shared';
 import { createFrameCounter } from '@nebula-link-evo/shared';
 
 const encoder = new TextEncoder();

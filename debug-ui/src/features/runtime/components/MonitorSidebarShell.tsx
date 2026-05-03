@@ -44,8 +44,6 @@ const PLAYWRIGHT_LABEL_MAP: Record<ServiceStatus, string> = {
   unknown: '未知',
 };
 
-type StatusIndicatorProps = Parameters<typeof StatusIndicator>[0];
-
 export function MonitorSidebarShell() {
   const playwrightStatus = useRuntimeStore((s) => s.playwrightStatus);
   const snapshotVersion = useRuntimeStore((s) => s.snapshotVersion);
