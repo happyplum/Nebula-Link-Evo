@@ -7,6 +7,7 @@ import {
   selectPlaywrightStatusHydrated,
   useRuntimeStore,
 } from '@/features/runtime/store/index.js';
+import { selectViewport, useControlStore } from '@/features/playwright-control/store/index.js';
 import { LiveViewOverlayLayer } from './LiveViewOverlayLayer.js';
 import { useLiveKit } from '../hooks/useLiveKit.js';
 import styles from './LiveKitView.module.css';
@@ -39,10 +40,15 @@ export default function LiveKitView({
   const isPlaywrightOpen = useRuntimeStore(selectPlaywrightIsOpen);
   const playwrightStatusHydrated = useRuntimeStore(selectPlaywrightStatusHydrated);
   const setLastScreenshotDataUrl = useRuntimeStore((s) => s.setLastScreenshotDataUrl);
+  const viewport = useControlStore(selectViewport);
 
   // Offscreen canvas caches the last video frame for resize redraw
   const lastFrameCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const debugCounterRef = useRef<FrameCounter | null>(null);
+
+  // Viewport ref for use inside render loop callbacks (avoids stale closure)
+  const viewportRef = useRef(viewport);
+  viewportRef.current = viewport;
 
   // rVFC lifecycle: track callback ID for explicit cancel
   const videoFrameCallbackIdRef = useRef<number | null>(null);
@@ -77,7 +83,10 @@ export default function LiveKitView({
     [setLastScreenshotDataUrl],
   );
 
-  /** Draw a CanvasImageSource (video or offscreen canvas) to the display canvas with fit-rect. */
+  /** Draw a CanvasImageSource (video or offscreen canvas) to the display canvas with fit-rect.
+   *  Uses viewport dimensions for coordinate mapping so that WebRTC resolution
+   *  adaptation does not distort click coordinates. Visual rendering still uses
+   *  the actual source dimensions (drawImage handles the scaling). */
   const drawSourceToCanvas = useCallback(
     (source: CanvasImageSource, sourceW: number, sourceH: number) => {
       const canvas = canvasRef.current;
@@ -85,7 +94,18 @@ export default function LiveKitView({
       if (!canvas || !ctx) return;
 
       const dpr = window.devicePixelRatio || 1;
-      const fit = getImageFitRect(sourceW, sourceH, canvas.width / dpr, canvas.height / dpr);
+      const containerW = canvas.width / dpr;
+      const containerH = canvas.height / dpr;
+
+      // Use viewport dimensions for coordinate mapping fitRect.
+      // WebRTC may downscale the video stream, but the content always represents
+      // the full browser viewport. Falling back to source dimensions when viewport
+      // is not yet available.
+      const vp = viewportRef.current;
+      const coordW = vp?.width ?? sourceW;
+      const coordH = vp?.height ?? sourceH;
+
+      const fit = getImageFitRect(coordW, coordH, containerW, containerH);
       if (!fit) {
         setFitRect(null);
         return;

@@ -11,4 +11,5 @@ export function applyPlaywrightStatus(state: DebugPlaywrightState): void {
 
   useControlStore.getState().setBrowserOpen(state.isOpen);
   useControlStore.getState().setBrowserUrl(state.url ?? '');
+  useControlStore.getState().setViewport(state.viewport ?? null);
 }
