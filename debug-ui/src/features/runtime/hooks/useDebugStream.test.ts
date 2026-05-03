@@ -195,6 +195,47 @@ describe('useDebugStream', () => {
     unmount();
   });
 
+  it('updates health state on debug.error events', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { useDebugStream } = await loadRuntimeModules();
+
+    const { result } = renderHook(() => useDebugStream(), { wrapper: createWrapper(client) });
+    await flushAsyncWork();
+
+    act(() => {
+      MockEventSource.instances[0]!.open();
+      MockEventSource.instances[0]!.emit('debug.error', {
+        type: 'debug.error',
+        code: 'upstream_disconnected',
+        message: 'test error',
+        emittedAt: '2026-05-03T00:00:03.000Z',
+      });
+    });
+
+    expect(warn).toHaveBeenCalledWith('[debug-stream]', 'test error');
+    expect(result.current.lastErrorAt).toBeGreaterThan(0);
+  });
+
+  it('updates keepalive timestamp on debug.keepalive events', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { useDebugStream } = await loadRuntimeModules();
+
+    const { result } = renderHook(() => useDebugStream(), { wrapper: createWrapper(client) });
+    await flushAsyncWork();
+
+    act(() => {
+      MockEventSource.instances[0]!.open();
+      MockEventSource.instances[0]!.emit('debug.keepalive', {
+        type: 'debug.keepalive',
+        emittedAt: '2026-05-03T00:00:04.000Z',
+      });
+    });
+
+    expect(result.current.lastKeepaliveAt).toBeGreaterThan(0);
+    expect(result.current.lastMessageAt).toBeGreaterThan(0);
+  });
+
   it('reconnects after the EventSource errors', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { useDebugStream } = await loadRuntimeModules();
