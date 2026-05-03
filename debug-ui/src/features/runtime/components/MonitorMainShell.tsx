@@ -52,9 +52,11 @@ export function MonitorMainShell() {
     preferredTransport === 'webrtc' && webrtcFailed ? 'mjpeg' : preferredTransport;
 
   // Reset WebRTC failure when browser reopens — publisher restarts fresh
-  useEffect(() => {
+  const [prevPlaywrightIsOpen, setPrevPlaywrightIsOpen] = useState(playwrightIsOpen);
+  if (prevPlaywrightIsOpen !== playwrightIsOpen) {
+    setPrevPlaywrightIsOpen(playwrightIsOpen);
     if (playwrightIsOpen) setWebrtcFailed(false);
-  }, [playwrightIsOpen]);
+  }
 
   const handleDownload = useCallback(() => {
     if (!lastScreenshotDataUrl) return;

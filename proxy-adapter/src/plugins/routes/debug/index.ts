@@ -847,7 +847,7 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         server,
         tool,
         args = {},
-      } = request.body as { server: string; tool: string; args?: Record<string, any> };
+      } = request.body as { server: string; tool: string; args?: Record<string, unknown> };
       try {
         const mcpClient = appService.getMCPSDKClient();
         if (!mcpClient) {

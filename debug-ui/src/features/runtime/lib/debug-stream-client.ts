@@ -27,7 +27,7 @@ type DebugStreamEventMap = {
 };
 
 type DebugStreamEventType = keyof DebugStreamEventMap;
-type EventSubscriber<TEvent extends DebugStreamEventType> = (
+type EventSubscriber = (
   event: MessageEvent<string>,
 ) => void | Promise<void>;
 type SubscriberSet = Set<(event: MessageEvent<string>) => void | Promise<void>>;
@@ -176,7 +176,7 @@ export const debugStreamClient = {
 
   subscribe<TEvent extends DebugStreamEventType>(
     type: TEvent,
-    handler: EventSubscriber<TEvent>,
+    handler: EventSubscriber,
   ): () => void {
     if (!subscribersByEventType.has(type)) {
       subscribersByEventType.set(type, new Set());

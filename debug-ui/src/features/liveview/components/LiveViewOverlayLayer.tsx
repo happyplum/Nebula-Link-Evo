@@ -49,7 +49,6 @@ interface LiveViewOverlayLayerProps {
 
 export function LiveViewOverlayLayer({
   fitRect,
-  onElementSelect,
   onCoordinateCapture,
 }: LiveViewOverlayLayerProps) {
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
