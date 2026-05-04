@@ -31,7 +31,7 @@ export function HealthStatusCard() {
     );
   }
 
-  const isHealthy = health.status === 'ok';
+  const isHealthy = health.status === 'healthy';
 
   return (
     <div className={styles.container} data-testid={testIds.healthStatusCard}>

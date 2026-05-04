@@ -115,34 +115,7 @@
   white-space: pre-wrap;
 }
 
-.toolCalls {
-  margin-top: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
 
-.toolCall {
-  font-size: 12px;
-  padding: 6px 10px;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
-  font-family: 'JetBrains Mono', monospace;
-}
-
-.toolCallName {
-  color: var(--accent-info);
-  font-weight: 600;
-}
-
-.toolCallStatus {
-  margin-left: 8px;
-  font-size: 10px;
-  text-transform: uppercase;
-  opacity: 0.7;
-}
 
 .screenshot {
   margin-top: 8px;

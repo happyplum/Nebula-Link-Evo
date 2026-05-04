@@ -17,7 +17,7 @@ export function ConnectivityTest() {
   const setConnectivityResult = useChatStore((s) => s.setConnectivityResult);
 
   const mutation = useMutation({
-    mutationFn: () => apiClient.post<ConnectivityResult>(API_CHAT_CONNECTIVITY_TEST),
+    mutationFn: () => apiClient.post<ConnectivityResult>(API_CHAT_CONNECTIVITY_TEST, {}),
     onSuccess: (data) => {
       setResult(data);
       setConnectivityResult(data);

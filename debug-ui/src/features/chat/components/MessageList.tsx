@@ -6,8 +6,10 @@ import {
   selectStreamingState,
   selectStreamingContent,
   selectStreamingThinking,
+  selectStreamingToolCalls,
 } from '../store/chat.store.js';
 import { MessageBubble } from './MessageBubble.js';
+import { ToolCallCard } from './ToolCallCard.js';
 import { testIds } from '@/shared/testing/testids.js';
 import styles from './MessageList.module.css';
 
@@ -19,11 +21,12 @@ export const MessageList: React.FC = () => {
   const streamingState = useChatStore(selectStreamingState);
   const streamingContent = useChatStore(selectStreamingContent);
   const streamingThinking = useChatStore(selectStreamingThinking);
+  const streamingToolCalls = useChatStore(selectStreamingToolCalls);
 
   const isStreaming = streamingState === 'streaming';
 
   const streamingMessage = useMemo(() => {
-    if (!isStreaming || (!streamingContent && !streamingThinking)) return null;
+    if (!isStreaming || (!streamingContent && !streamingThinking && streamingToolCalls.length === 0)) return null;
     return {
       id: '__streaming__',
       role: 'assistant' as const,
@@ -32,7 +35,7 @@ export const MessageList: React.FC = () => {
       isStreaming: true,
       timestamp: Date.now(),
     };
-  }, [isStreaming, streamingContent, streamingThinking]);
+  }, [isStreaming, streamingContent, streamingThinking, streamingToolCalls]);
   const visibleCount = useChatStore((s) =>
     activeSessionId ? (s.visibleMessageCounts[activeSessionId] ?? DEFAULT_PAGE_SIZE) : DEFAULT_PAGE_SIZE,
   );
@@ -40,6 +43,7 @@ export const MessageList: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const isUserScrolling = useRef(false);
   const prevLengthRef = useRef(0);
+  const prevToolCallsRef = useRef(0);
 
   // Determine visible messages (most recent N)
   const hasMore = messages.length > visibleCount;
@@ -47,16 +51,17 @@ export const MessageList: React.FC = () => {
     ? messages.slice(messages.length - visibleCount)
     : messages;
 
-  // Auto-scroll to bottom when new messages arrive
+  // Auto-scroll to bottom when new messages arrive or streaming tool calls update
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || messages.length === 0) return;
+    if (!container || (messages.length === 0 && streamingToolCalls.length === 0)) return;
 
-    if (!isUserScrolling.current || messages.length > prevLengthRef.current) {
+    if (!isUserScrolling.current || messages.length > prevLengthRef.current || streamingToolCalls.length > prevToolCallsRef.current) {
       container.scrollTop = container.scrollHeight;
     }
     prevLengthRef.current = messages.length;
-  }, [messages]);
+    prevToolCallsRef.current = streamingToolCalls.length;
+  }, [messages, streamingToolCalls]);
 
   const handleScroll = () => {
     const container = containerRef.current;
@@ -102,9 +107,25 @@ export const MessageList: React.FC = () => {
           </button>
         </div>
       )}
-      {visibleMessages.map((message) => (
-        <MessageBubble key={message.id} message={message} />
-      ))}
+      {visibleMessages.flatMap((message) => {
+        const items: React.ReactNode[] = [];
+        if (message.toolCalls?.length) {
+          message.toolCalls.forEach((tc) => {
+            items.push(<ToolCallCard key={`tc-${message.id}-${tc.id}`} toolCall={tc} />);
+          });
+        }
+        // Only render assistant bubble if there's actual content (text, thinking, or screenshot)
+        if (message.role === 'assistant' && !message.content && !message.thinking && !message.screenshot) {
+          // Tool-only message - skip the bubble, tool calls render above
+        } else {
+          items.push(<MessageBubble key={message.id} message={message} />);
+        }
+        return items;
+      })}
+      {isStreaming && streamingToolCalls.length > 0 &&
+        streamingToolCalls.map((tc) => (
+          <ToolCallCard key={`stc-${tc.id}`} toolCall={tc} />
+        ))}
       {streamingMessage && (
         <MessageBubble key={streamingMessage.id} message={streamingMessage} />
       )}

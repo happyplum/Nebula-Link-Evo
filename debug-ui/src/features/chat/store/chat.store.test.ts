@@ -33,13 +33,13 @@ describe('chat.store', () => {
       expect(s.streamingState).toBe('idle');
       expect(s.streamingContent).toBe('');
       expect(s.streamingThinking).toBe('');
+      expect(s.streamingToolCalls).toEqual([]);
       expect(s.isLoadingSessions).toBe(false);
       expect(s.isLoadingMessages).toBe(false);
     });
   });
 
-  // ── Session CRUD ────────────────────────────────────────────────────
-
+  // ── Session CRUD
   describe('setSessions', () => {
     it('replaces the session list', () => {
       const sessions = [makeSession({ id: 'a' }), makeSession({ id: 'b' })];
@@ -301,6 +301,7 @@ describe('chat.store', () => {
       store.setStreamingState('streaming');
       store.appendStreamingContent('abc');
       store.appendStreamingThinking('xyz');
+      store.appendStreamingToolCall({ id: 'tc-1', name: 'test', arguments: '{}', status: 'running' });
 
       useChatStore.getState().resetStreaming();
 
@@ -308,6 +309,7 @@ describe('chat.store', () => {
       expect(s.streamingState).toBe('idle');
       expect(s.streamingContent).toBe('');
       expect(s.streamingThinking).toBe('');
+      expect(s.streamingToolCalls).toEqual([]);
     });
   });
 
@@ -370,8 +372,84 @@ describe('chat.store', () => {
       expect(s.streamingState).toBe('idle');
       expect(s.streamingContent).toBe('');
       expect(s.streamingThinking).toBe('');
+      expect(s.streamingToolCalls).toEqual([]);
       expect(s.isLoadingSessions).toBe(false);
       expect(s.isLoadingMessages).toBe(false);
+    });
+  });
+
+  // ── Streaming tool calls ────────────────────────────────────────────
+
+  describe('appendStreamingToolCall', () => {
+    it('appends tool calls to the streaming buffer', () => {
+      useChatStore.getState().appendStreamingToolCall({
+        id: 'tc-1', name: 'browser_navigate', arguments: '{"url":"https://example.com"}', status: 'running',
+      });
+      expect(useChatStore.getState().streamingToolCalls).toHaveLength(1);
+      expect(useChatStore.getState().streamingToolCalls[0].name).toBe('browser_navigate');
+    });
+  });
+
+  describe('updateStreamingToolCallResult', () => {
+    it('updates result and status of a streaming tool call', () => {
+      useChatStore.getState().appendStreamingToolCall({
+        id: 'tc-1', name: 'test', arguments: '{}', status: 'running',
+      });
+      useChatStore.getState().updateStreamingToolCallResult('tc-1', '{"ok":true}');
+
+      const tc = useChatStore.getState().streamingToolCalls[0];
+      expect(tc.result).toBe('{"ok":true}');
+      expect(tc.status).toBe('completed');
+    });
+
+    it('does not affect other tool calls', () => {
+      useChatStore.getState().appendStreamingToolCall({
+        id: 'tc-1', name: 'a', arguments: '{}', status: 'running',
+      });
+      useChatStore.getState().appendStreamingToolCall({
+        id: 'tc-2', name: 'b', arguments: '{}', status: 'running',
+      });
+      useChatStore.getState().updateStreamingToolCallResult('tc-1', 'result-1');
+
+      const calls = useChatStore.getState().streamingToolCalls;
+      expect(calls[0].status).toBe('completed');
+      expect(calls[1].status).toBe('running');
+    });
+  });
+
+  describe('flushStreamingToMessage with tool calls', () => {
+    it('atomically includes streamingToolCalls in the flushed message', () => {
+      const store = useChatStore.getState();
+      store.setStreamingState('streaming');
+      store.appendStreamingContent('Hello');
+      store.appendStreamingToolCall({
+        id: 'tc-1', name: 'browser_snapshot', arguments: '{}', status: 'completed',
+      });
+
+      useChatStore.getState().flushStreamingToMessage('s1');
+
+      const s = useChatStore.getState();
+      const msg = s.messagesBySession['s1'][0];
+      expect(msg.role).toBe('assistant');
+      expect(msg.content).toBe('Hello');
+      expect(msg.toolCalls).toHaveLength(1);
+      expect(msg.toolCalls![0].name).toBe('browser_snapshot');
+      expect(s.streamingToolCalls).toEqual([]);
+    });
+
+    it('flushes tool-call-only responses without text content', () => {
+      const store = useChatStore.getState();
+      store.setStreamingState('streaming');
+      store.appendStreamingToolCall({
+        id: 'tc-1', name: 'browser_navigate', arguments: '{}', status: 'completed',
+      });
+
+      useChatStore.getState().flushStreamingToMessage('s1');
+
+      const s = useChatStore.getState();
+      expect(s.messagesBySession['s1']).toHaveLength(1);
+      expect(s.messagesBySession['s1'][0].toolCalls).toHaveLength(1);
+      expect(s.streamingToolCalls).toEqual([]);
     });
   });
 });

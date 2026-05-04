@@ -377,6 +377,95 @@ describe('ConversationManager', () => {
     });
   });
 
+  describe('activeToolCalls', () => {
+    it('should store and retrieve tool calls by sessionId', () => {
+      const session = manager.createSession({
+        title: 'ActiveToolCalls Test',
+        provider: 'kimi',
+        model: 'moonshot-v1-vision-preview',
+      });
+
+      const toolCalls = [
+        { id: 'tc-1', type: 'function', function: { name: 'click', arguments: '{"x":10}' } },
+      ];
+      manager.setActiveToolCalls(session.id, toolCalls);
+
+      const retrieved = manager.getActiveToolCalls(session.id);
+      expect(retrieved).toHaveLength(1);
+      expect(retrieved[0].id).toBe('tc-1');
+      expect((retrieved[0].function as any).name).toBe('click');
+    });
+
+    it('should return empty array for session with no stored tool calls', () => {
+      const result = manager.getActiveToolCalls('non-existent-session');
+      expect(result).toEqual([]);
+    });
+
+    it('should clear stored tool calls for a session', () => {
+      const session = manager.createSession({
+        title: 'ClearToolCalls Test',
+        provider: 'kimi',
+        model: 'moonshot-v1-vision-preview',
+      });
+
+      manager.setActiveToolCalls(session.id, [
+        { id: 'tc-1', type: 'function', function: { name: 'click', arguments: '{}' } },
+      ]);
+      expect(manager.getActiveToolCalls(session.id)).toHaveLength(1);
+
+      manager.clearActiveToolCalls(session.id);
+      expect(manager.getActiveToolCalls(session.id)).toEqual([]);
+    });
+
+    it('should clean up activeToolCalls when session is deleted', () => {
+      const session = manager.createSession({
+        title: 'DeleteCleanup Test',
+        provider: 'kimi',
+        model: 'moonshot-v1-vision-preview',
+      });
+
+      manager.setActiveToolCalls(session.id, [
+        { id: 'tc-1', type: 'function', function: { name: 'screenshot', arguments: '{}' } },
+      ]);
+      expect(manager.getActiveToolCalls(session.id)).toHaveLength(1);
+
+      manager.deleteSession(session.id);
+
+      // After deleteSession, getActiveToolCalls should return empty
+      expect(manager.getActiveToolCalls(session.id)).toEqual([]);
+    });
+
+    it('should isolate tool calls between different sessions', () => {
+      const sessionA = manager.createSession({
+        title: 'Session A',
+        provider: 'kimi',
+        model: 'moonshot-v1-vision-preview',
+      });
+      const sessionB = manager.createSession({
+        title: 'Session B',
+        provider: 'kimi',
+        model: 'moonshot-v1-vision-preview',
+      });
+
+      manager.setActiveToolCalls(sessionA.id, [
+        { id: 'tc-a1', type: 'function', function: { name: 'click', arguments: '{}' } },
+      ]);
+      manager.setActiveToolCalls(sessionB.id, [
+        { id: 'tc-b1', type: 'function', function: { name: 'screenshot', arguments: '{}' } },
+      ]);
+
+      expect(manager.getActiveToolCalls(sessionA.id)).toHaveLength(1);
+      expect(manager.getActiveToolCalls(sessionA.id)[0].id).toBe('tc-a1');
+      expect(manager.getActiveToolCalls(sessionB.id)).toHaveLength(1);
+      expect(manager.getActiveToolCalls(sessionB.id)[0].id).toBe('tc-b1');
+
+      // Clear one session should not affect the other
+      manager.clearActiveToolCalls(sessionA.id);
+      expect(manager.getActiveToolCalls(sessionA.id)).toEqual([]);
+      expect(manager.getActiveToolCalls(sessionB.id)).toHaveLength(1);
+    });
+  });
+
   describe('session activation', () => {
     it('should activate idle/completed session to running and load context', async () => {
       const session = manager.createSession({

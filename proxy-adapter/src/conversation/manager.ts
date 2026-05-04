@@ -11,6 +11,7 @@ import type {
   UpdateSessionStateParams,
 } from './types.js';
 import type { AIClient as CompressorAIClient } from './compressor.js';
+import type { ToolCall } from '@nebula-link-evo/shared';
 
 interface ListOptions {
   limit?: number;
@@ -44,6 +45,7 @@ class ConversationManager {
   private compressor: SessionCompressor;
   private aiClient: CompressorAIClient | null = null;
   private logger = createWorkerLogger('conversation-manager');
+  private activeToolCalls = new Map<string, ToolCall[]>();
 
   constructor(dbPath: string = ':memory:') {
     this.db = DatabaseManager.getInstance();
@@ -109,7 +111,20 @@ class ConversationManager {
     if (!session) {
       return;
     }
+    this.activeToolCalls.delete(id);
     this.db.deleteSession(id);
+  }
+
+  setActiveToolCalls(sessionId: string, calls: ToolCall[]): void {
+    this.activeToolCalls.set(sessionId, calls);
+  }
+
+  getActiveToolCalls(sessionId: string): ToolCall[] {
+    return this.activeToolCalls.get(sessionId) || [];
+  }
+
+  clearActiveToolCalls(sessionId: string): void {
+    this.activeToolCalls.delete(sessionId);
   }
 
   addMessage(sessionId: string, message: AddMessageParams): Message {

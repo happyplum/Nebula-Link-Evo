@@ -52,16 +52,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
             <img src={message.screenshot} alt="Screenshot" className={styles.screenshot} />
           )}
 
-          {message.toolCalls && message.toolCalls.length > 0 && (
-            <div className={styles.toolCalls}>
-              {message.toolCalls.map((tool) => (
-                <div key={tool.id} className={styles.toolCall}>
-                  <span className={styles.toolCallName}>{tool.name}</span>
-                  {tool.status && <span className={styles.toolCallStatus}>[{tool.status}]</span>}
-                </div>
-              ))}
-            </div>
-          )}
+
         </div>
         <div className={styles.meta}>{metaLabel}</div>
       </div>

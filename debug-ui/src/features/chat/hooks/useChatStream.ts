@@ -11,6 +11,7 @@ import type {
   RunErrorEvent,
   SessionEvent,
   SessionSnapshotEvent,
+  ToolCall,
 } from '@nebula-link-evo/shared/types/sse-events';
 
 import { useChatStore } from '@/features/chat/store/chat.store.js';
@@ -37,14 +38,13 @@ function adaptSnapshotMessage(m: SessionSnapshotEvent['messages'][number]): Chat
     thinking: m.thinking,
     toolCalls: m.tool_calls?.map((tc) => {
       const rec = tc as Record<string, unknown>;
+      const fn = rec.function as Record<string, unknown> | undefined;
       return {
         id: (rec.id as string) ?? `tc-${Date.now()}`,
-        name: rec.function
-          ? ((rec.function as Record<string, unknown>).name as string)
-          : 'unknown',
-        arguments: typeof rec.arguments === 'string'
-          ? (rec.arguments as string)
-          : JSON.stringify(rec.arguments),
+        name: fn ? (fn.name as string) : 'unknown',
+        arguments: typeof fn?.arguments === 'string'
+          ? (fn.arguments as string)
+          : JSON.stringify(fn?.arguments ?? rec.arguments),
         result: typeof rec.result === 'string' ? rec.result : undefined,
         status: 'completed' as const,
       };
@@ -55,10 +55,25 @@ function adaptSnapshotMessage(m: SessionSnapshotEvent['messages'][number]): Chat
 
 function adaptToolCall(evt: AssistantToolCallEvent): LocalToolCall {
   const tc = evt.toolCall;
+  const rec = tc as Record<string, unknown>;
+  const fn = rec.function as Record<string, unknown> | undefined;
   return {
-    id: evt.toolCallId ?? tc.function?.name ?? `tc-${Date.now()}`,
-    name: tc.function?.name ?? 'unknown',
-    arguments: typeof tc.arguments === 'string' ? tc.arguments : JSON.stringify(tc),
+    id: evt.toolCallId ?? (rec.id as string | undefined) ?? (fn?.name as string | undefined) ?? `tc-${Date.now()}`,
+    name: (fn?.name as string | undefined) ?? 'unknown',
+    arguments: typeof fn?.arguments === 'string' ? (fn.arguments as string) : JSON.stringify(fn?.arguments ?? tc),
+    status: 'running',
+  };
+}
+
+function adaptActiveToolCall(tc: ToolCall): LocalToolCall {
+  const rec = tc as Record<string, unknown>;
+  const fn = rec.function as Record<string, unknown> | undefined;
+  return {
+    id: (rec.id as string) ?? `tc-${Date.now()}`,
+    name: fn ? (fn.name as string) : 'unknown',
+    arguments: typeof fn?.arguments === 'string'
+      ? (fn.arguments as string)
+      : JSON.stringify(fn?.arguments ?? rec.arguments),
     status: 'running',
   };
 }
@@ -91,7 +106,6 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
   const reconnectAttemptRef = useRef(0);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevSessionIdRef = useRef<string | null>(null);
-  const pendingToolCallsRef = useRef<LocalToolCall[]>([]);
   const currentMessageIdRef = useRef<string | null>(null);
   const sessionIdRef = useRef(sessionId);
   sessionIdRef.current = sessionId;
@@ -136,6 +150,7 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
 
   const cleanupConnection = useCallback(() => {
     immediateFlush();
+    getChatStore()?.resetStreaming();
     if (reconnectTimeoutRef.current !== null) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
@@ -153,7 +168,6 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
     (sid: string) => {
       cleanupConnection();
       highestSeqRef.current = -1;
-      pendingToolCallsRef.current = [];
       currentMessageIdRef.current = null;
 
       const es = new EventSource(`/api/chat/sessions/${sid}/stream`);
@@ -174,6 +188,7 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
         if (reconnectAttemptRef.current >= 5) {
           setError('Connection failed after 5 attempts.');
           getChatStore()?.setStreamingState('error');
+          getChatStore()?.resetStreaming();
           return;
         }
 
@@ -217,6 +232,14 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
           store.setStreamingState('idle');
         }
         store.setMessages(sid, evt.messages.map(adaptSnapshotMessage));
+
+        // Restore in-progress tool calls from snapshot
+        if (evt.activeToolCalls && evt.activeToolCalls.length > 0) {
+          for (const tc of evt.activeToolCalls) {
+            store.appendStreamingToolCall(adaptActiveToolCall(tc));
+          }
+          store.setStreamingState('streaming');
+        }
       });
 
       // message.created
@@ -253,7 +276,6 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
         if (!store) return;
         store.resetStreaming();
         store.setStreamingState('streaming');
-        pendingToolCallsRef.current = [];
         if (evt.messageId) {
           currentMessageIdRef.current = evt.messageId;
         }
@@ -276,47 +298,24 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
       });
 
       // assistant.tool_call
-      // NOTE: Dual-write path — tool_call events arrive during streaming but the
-      // assistant message may not exist yet (not flushed). In that case, the ref
-      // accumulates calls and they are attached in the assistant.completed handler.
-      // If assistant.started ever creates a placeholder message immediately, this
-      // will need restructuring to avoid double-setting toolCalls.
       es.addEventListener('assistant.tool_call', (e: MessageEvent) => {
         const evt = JSON.parse(e.data) as AssistantToolCallEvent;
         if (isDuplicate(evt)) return;
         const localTc = adaptToolCall(evt);
-        pendingToolCallsRef.current = [...pendingToolCallsRef.current, localTc];
-        const mid = evt.messageId ?? currentMessageIdRef.current;
-        if (mid) {
-          const store = getChatStore();
-          if (!store) return;
-          const msgs = store.messagesBySession[sid] ?? [];
-          const existing = msgs.find((m) => m.id === mid);
-          if (existing) {
-            store.updateMessage(sid, mid, {
-              toolCalls: [...(existing.toolCalls ?? []), localTc],
-            });
-          }
-        }
+        const store = getChatStore();
+        if (!store) return;
+        store.appendStreamingToolCall(localTc);
       });
 
       // assistant.tool_result
       es.addEventListener('assistant.tool_result', (e: MessageEvent) => {
         const evt = JSON.parse(e.data) as AssistantToolResultEvent;
         if (isDuplicate(evt)) return;
-        const mid = evt.messageId ?? currentMessageIdRef.current;
         const tcId = evt.toolCallId;
-        if (mid && tcId) {
+        if (tcId) {
           const store = getChatStore();
           if (!store) return;
-          const msgs = store.messagesBySession[sid] ?? [];
-          const existing = msgs.find((m) => m.id === mid);
-          if (existing?.toolCalls) {
-            const updated = existing.toolCalls.map((tc) =>
-              tc.id === tcId ? { ...tc, result: evt.result, status: 'completed' as const } : tc
-            );
-            store.updateMessage(sid, mid, { toolCalls: updated });
-          }
+          store.updateStreamingToolCallResult(tcId, evt.result);
         }
       });
 
@@ -328,19 +327,9 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
 
         const store = getChatStore();
         if (!store) return;
-        store.flushStreamingToMessage(sid, pendingToolCallsRef.current.length > 0);
-
-        // Attach pending tool calls to the just-flushed message
-        if (pendingToolCallsRef.current.length > 0) {
-          const msgs = store.messagesBySession[sid] ?? [];
-          const lastAssistant = [...msgs].reverse().find((m) => m.role === 'assistant');
-          if (lastAssistant) {
-            store.updateMessage(sid, lastAssistant.id, {
-              toolCalls: pendingToolCallsRef.current,
-            });
-          }
-          pendingToolCallsRef.current = [];
-        }
+        // flushStreamingToMessage internally checks streamingToolCalls.length
+        // and atomically includes them in the created ChatMessage.
+        store.flushStreamingToMessage(sid);
 
         store.setStreamingState('idle');
         currentMessageIdRef.current = null;
@@ -354,6 +343,7 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
         const store = getChatStore();
         if (!store) return;
         store.flushStreamingToMessage(sid);
+        store.resetStreaming();
         store.setStreamingState('error');
         setError(evt.error);
         currentMessageIdRef.current = null;
@@ -380,13 +370,13 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
   useEffect(() => {
     if (!enabled || !sessionId) {
       cleanupConnection();
+      getChatStore()?.resetStreaming();
       prevSessionIdRef.current = sessionId;
       return;
     }
 
     if (prevSessionIdRef.current !== sessionId) {
       highestSeqRef.current = -1;
-      pendingToolCallsRef.current = [];
       currentMessageIdRef.current = null;
     }
     prevSessionIdRef.current = sessionId;

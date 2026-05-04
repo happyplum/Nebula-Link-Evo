@@ -49,7 +49,7 @@ describe('MessageBubble', () => {
     expect(screen.getByText('Final answer')).toBeInTheDocument();
   });
 
-  it('renders tool calls if present', () => {
+  it('does not render tool calls (handled by ToolCallCard)', () => {
     const message: ChatMessage = {
       id: '4',
       role: 'assistant',
@@ -61,7 +61,8 @@ describe('MessageBubble', () => {
 
     render(<MessageBubble message={message} />);
     
-    expect(screen.getByText('get_weather')).toBeInTheDocument();
-    expect(screen.getByText('[completed]')).toBeInTheDocument();
+    // Tool calls are rendered by ToolCallCard in MessageList, not in MessageBubble
+    expect(screen.getByText('Using tool')).toBeInTheDocument();
+    expect(screen.queryByText('get_weather')).not.toBeInTheDocument();
   });
 });

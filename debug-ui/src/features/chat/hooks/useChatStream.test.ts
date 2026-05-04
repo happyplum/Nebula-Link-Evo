@@ -527,6 +527,214 @@ describe('useChatStream', () => {
     });
   });
 
+  describe('adaptSnapshotMessage — function.arguments field mapping', () => {
+    it('reads tool call arguments from function.arguments (not rec.arguments)', () => {
+      renderStreamHook('s1');
+      openConnection();
+      emitEvent('session.snapshot', {
+        type: 'session.snapshot',
+        sessionId: 's1',
+        seq: 1,
+        messages: [
+          {
+            id: 'm1',
+            role: 'assistant',
+            content: '',
+            created_at: '2026-01-01',
+            tool_calls: [
+              {
+                id: 'tc-1',
+                type: 'function',
+                function: { name: 'click', arguments: '{"x":10}' },
+              },
+            ],
+          },
+        ],
+        state: 'idle',
+      });
+      const msgs = useChatStore.getState().messagesBySession['s1'];
+      expect(msgs).toHaveLength(1);
+      expect(msgs[0].toolCalls).toBeDefined();
+      expect(msgs[0].toolCalls![0].arguments).toBe('{"x":10}');
+      expect(msgs[0].toolCalls![0].name).toBe('click');
+    });
+
+    it('falls back to rec.arguments when function.arguments is absent', () => {
+      renderStreamHook('s1');
+      openConnection();
+      emitEvent('session.snapshot', {
+        type: 'session.snapshot',
+        sessionId: 's1',
+        seq: 1,
+        messages: [
+          {
+            id: 'm1',
+            role: 'assistant',
+            content: '',
+            created_at: '2026-01-01',
+            tool_calls: [
+              {
+                id: 'tc-1',
+                type: 'function',
+                arguments: { fallback: true },
+              },
+            ],
+          },
+        ],
+        state: 'idle',
+      });
+      const msgs = useChatStore.getState().messagesBySession['s1'];
+      expect(msgs[0].toolCalls![0].arguments).toBe('{"fallback":true}');
+    });
+  });
+
+  describe('adaptToolCall — ID fallback chain', () => {
+    it('uses toolCallId from event as primary ID', () => {
+      renderStreamHook('s1');
+      openConnection();
+      emitEvent('assistant.started', {
+        type: 'assistant.started',
+        sessionId: 's1',
+        seq: 1,
+        messageId: 'a1',
+      });
+      emitEvent('assistant.tool_call', {
+        type: 'assistant.tool_call',
+        sessionId: 's1',
+        seq: 2,
+        toolCallId: 'explicit-id',
+        toolCall: {
+          id: 'rec-id',
+          type: 'function',
+          function: { name: 'click', arguments: '{}' },
+        },
+      });
+      const tcs = useChatStore.getState().streamingToolCalls;
+      expect(tcs).toHaveLength(1);
+      expect(tcs[0].id).toBe('explicit-id');
+    });
+
+    it('falls back to rec.id when toolCallId is absent', () => {
+      renderStreamHook('s1');
+      openConnection();
+      emitEvent('assistant.started', {
+        type: 'assistant.started',
+        sessionId: 's1',
+        seq: 1,
+        messageId: 'a1',
+      });
+      emitEvent('assistant.tool_call', {
+        type: 'assistant.tool_call',
+        sessionId: 's1',
+        seq: 2,
+        toolCall: {
+          id: 'rec-fallback-id',
+          type: 'function',
+          function: { name: 'click', arguments: '{}' },
+        },
+      });
+      const tcs = useChatStore.getState().streamingToolCalls;
+      expect(tcs).toHaveLength(1);
+      expect(tcs[0].id).toBe('rec-fallback-id');
+    });
+  });
+
+  describe('snapshot activeToolCalls restore', () => {
+    it('restores activeToolCalls from snapshot and sets streaming state', () => {
+      renderStreamHook('s1');
+      openConnection();
+      emitEvent('session.snapshot', {
+        type: 'session.snapshot',
+        sessionId: 's1',
+        seq: 1,
+        messages: [
+          { id: 'm1', role: 'user', content: 'hello', created_at: '2026-01-01' },
+        ],
+        state: 'running',
+        activeToolCalls: [
+          {
+            id: 'tc-active-1',
+            type: 'function',
+            function: { name: 'screenshot', arguments: '{}' },
+          },
+        ],
+      });
+
+      const store = useChatStore.getState();
+      expect(store.streamingToolCalls).toHaveLength(1);
+      expect(store.streamingToolCalls[0].id).toBe('tc-active-1');
+      expect(store.streamingToolCalls[0].name).toBe('screenshot');
+      expect(store.streamingToolCalls[0].status).toBe('running');
+      expect(store.streamingState).toBe('streaming');
+    });
+
+    it('does not restore streaming state when snapshot has no activeToolCalls', () => {
+      renderStreamHook('s1');
+      openConnection();
+      emitEvent('session.snapshot', {
+        type: 'session.snapshot',
+        sessionId: 's1',
+        seq: 1,
+        messages: [],
+        state: 'idle',
+      });
+      expect(useChatStore.getState().streamingToolCalls).toHaveLength(0);
+      expect(useChatStore.getState().streamingState).toBe('idle');
+    });
+  });
+
+  describe('resetStreaming on exit paths', () => {
+    it('resets streaming state when disabled', () => {
+      const { rerender } = renderStreamHook('s1', { enabled: true });
+      openConnection();
+      emitEvent('assistant.started', {
+        type: 'assistant.started',
+        sessionId: 's1',
+        seq: 1,
+        messageId: 'a1',
+      });
+      emitEvent('assistant.delta', {
+        type: 'assistant.delta',
+        sessionId: 's1',
+        seq: 2,
+        text: 'partial',
+      });
+      flushRAF();
+      expect(useChatStore.getState().streamingContent).toBe('partial');
+
+      // Disable — should trigger resetStreaming
+      rerender({ sessionId: 's1', enabled: false });
+      expect(useChatStore.getState().streamingContent).toBe('');
+      expect(useChatStore.getState().streamingState).toBe('idle');
+    });
+
+    it('resets streaming when sessionId becomes null', () => {
+      const { rerender } = renderStreamHook('s1');
+      openConnection();
+      emitEvent('assistant.started', {
+        type: 'assistant.started',
+        sessionId: 's1',
+        seq: 1,
+        messageId: 'a1',
+      });
+      emitEvent('assistant.tool_call', {
+        type: 'assistant.tool_call',
+        sessionId: 's1',
+        seq: 2,
+        toolCallId: 'tc-1',
+        toolCall: {
+          type: 'function',
+          function: { name: 'click', arguments: '{}' },
+        },
+      });
+      expect(useChatStore.getState().streamingToolCalls).toHaveLength(1);
+
+      rerender({ sessionId: null, enabled: true });
+      expect(useChatStore.getState().streamingToolCalls).toHaveLength(0);
+      expect(useChatStore.getState().streamingState).toBe('idle');
+    });
+  });
+
   describe('disconnect and reconnect actions', () => {
     it('disconnect closes connection and resets state', () => {
       const { result } = renderStreamHook('s1');

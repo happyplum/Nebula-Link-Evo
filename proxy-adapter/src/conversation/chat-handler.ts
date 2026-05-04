@@ -485,6 +485,7 @@ class ChatHandler {
             input: toolInput,
           };
           emittedToolCalls.push(toolCall);
+          this.conversationManager.setActiveToolCalls(sessionId, emittedToolCalls);
 
           this.emitStreamingEvent(sessionId, 'assistant.tool_call', {
             sessionId,
@@ -619,6 +620,7 @@ class ChatHandler {
           tool_calls: emittedToolCalls.length > 0 ? emittedToolCalls : undefined,
         },
       });
+      this.conversationManager.clearActiveToolCalls(sessionId);
 
       const terminalReason: TerminalReason = pauseRequested
         ? 'pause'
@@ -656,6 +658,7 @@ class ChatHandler {
       const errorStack = error instanceof Error ? error.stack : undefined;
       this.logger.error({ sessionId, provider: session.provider, model: session.model, iteration, error: errorMessage, stack: errorStack }, 'Failed to stream AI response');
       await this.flushSessionEvents();
+      this.conversationManager.clearActiveToolCalls(sessionId);
       await this.emitSessionEvent(sessionId, 'run.error', {
         sessionId,
         runId,
