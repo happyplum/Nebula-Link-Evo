@@ -92,6 +92,8 @@ export interface SessionSnapshotEvent {
   jobId?: string;
   /** Runtime agent recovery state */
   agentState?: SessionAgentState;
+  /** In-progress tool calls (only present when session is running) */
+  activeToolCalls?: ToolCall[];
 }
 
 /**

@@ -45,7 +45,7 @@ describe('HealthStatusCard', () => {
   it('renders health data correctly', () => {
     vi.mocked(useHealth).mockReturnValue({
       data: {
-        status: 'ok',
+        status: 'healthy',
         config: 'ok',
         mcp: {
           enabled: true,

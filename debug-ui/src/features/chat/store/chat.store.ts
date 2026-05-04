@@ -9,7 +9,7 @@ function getInitialShowThinking(): boolean {
   return stored == null ? true : stored === 'true';
 }
 
-import type { ChatMessage, ChatSession, StreamingState } from '@/features/chat/types/index.js';
+import type { ChatMessage, ChatSession, StreamingState, ToolCall } from '@/features/chat/types/index.js';
 
 const EMPTY_MESSAGES: ChatMessage[] = [];
 const DEFAULT_PAGE_SIZE = 50;
@@ -24,6 +24,7 @@ interface ChatState {
   streamingState: StreamingState;
   streamingContent: string;
   streamingThinking: string;
+  streamingToolCalls: ToolCall[];
   // UI state
   isLoadingSessions: boolean;
   isLoadingMessages: boolean;
@@ -53,6 +54,8 @@ interface ChatState {
   setStreamingState: (state: StreamingState) => void;
   appendStreamingContent: (token: string) => void;
   appendStreamingThinking: (token: string) => void;
+  appendStreamingToolCall: (toolCall: ToolCall) => void;
+  updateStreamingToolCallResult: (toolCallId: string, result: string) => void;
   flushStreamingToMessage: (sessionId: string, force?: boolean) => void;
   resetStreaming: () => void;
 
@@ -83,6 +86,7 @@ const initialState = {
   streamingState: 'idle' as StreamingState,
   streamingContent: '',
   streamingThinking: '',
+  streamingToolCalls: [] as ToolCall[],
   isLoadingSessions: false,
   isLoadingMessages: false,
   showThinking: getInitialShowThinking(),
@@ -208,16 +212,28 @@ export const useChatStore = create<ChatState>()((set) => ({
   appendStreamingThinking: (token) =>
     set((s) => ({ streamingThinking: s.streamingThinking + token })),
 
+  appendStreamingToolCall: (toolCall) =>
+    set((s) => ({ streamingToolCalls: [...s.streamingToolCalls, toolCall] })),
+
+  updateStreamingToolCallResult: (toolCallId, result) =>
+    set((s) => ({
+      streamingToolCalls: s.streamingToolCalls.map((tc) =>
+        tc.id === toolCallId ? { ...tc, result, status: 'completed' as const } : tc
+      ),
+    })),
+
   // `force=true` creates a message even with empty content, used by
-  // assistant.completed when pending tool calls exist (tool-call-only responses).
+  // run.error when tool calls exist without text content.
   flushStreamingToMessage: (sessionId, force) =>
     set((s) => {
-      if (!force && !s.streamingContent && !s.streamingThinking) return s;
+      const hasToolCalls = s.streamingToolCalls.length > 0;
+      if (!force && !s.streamingContent && !s.streamingThinking && !hasToolCalls) return s;
       const message: ChatMessage = {
         id: `stream-${Date.now()}`,
         role: 'assistant',
         content: s.streamingContent,
         thinking: s.streamingThinking || undefined,
+        toolCalls: hasToolCalls ? s.streamingToolCalls : undefined,
         timestamp: Date.now(),
       };
       const existing = s.messagesBySession[sessionId] ?? [];
@@ -228,12 +244,13 @@ export const useChatStore = create<ChatState>()((set) => ({
         },
         streamingContent: '',
         streamingThinking: '',
+        streamingToolCalls: [],
         streamingState: 'idle' as StreamingState,
       };
     }),
 
   resetStreaming: () =>
-    set({ streamingContent: '', streamingThinking: '', streamingState: 'idle' }),
+    set({ streamingContent: '', streamingThinking: '', streamingToolCalls: [], streamingState: 'idle' }),
 
   // Loading actions
   setIsLoadingSessions: (loading) => set({ isLoadingSessions: loading }),
@@ -281,6 +298,7 @@ export const selectActiveMessages = (s: ChatState) =>
 export const selectStreamingState = (s: ChatState) => s.streamingState;
 export const selectStreamingContent = (s: ChatState) => s.streamingContent;
 export const selectStreamingThinking = (s: ChatState) => s.streamingThinking;
+export const selectStreamingToolCalls = (s: ChatState) => s.streamingToolCalls;
 export const selectIsLoadingSessions = (s: ChatState) => s.isLoadingSessions;
 export const selectIsLoadingMessages = (s: ChatState) => s.isLoadingMessages;
 export const selectShowThinking = (s: ChatState) => s.showThinking;

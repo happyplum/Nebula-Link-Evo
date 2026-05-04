@@ -184,4 +184,49 @@ describe('useChatStream recovery', () => {
     expect(oldEs.close).toHaveBeenCalled();
     expect(mockEs.url).toBe('/api/chat/sessions/s2/stream');
   });
+
+  it('restores activeToolCalls from snapshot on reconnect', () => {
+    renderStream('s1');
+    open();
+
+    // Initial snapshot with no active tool calls
+    emit('session.snapshot', {
+      type: 'session.snapshot',
+      sessionId: 's1',
+      seq: 0,
+      messages: [{ id: 'm1', role: 'user', content: 'hello', created_at: '2026-01-01' }],
+      state: 'running',
+    });
+
+    // Simulate disconnect
+    act(() => {
+      mockEs.onerror?.(new Event('error'));
+    });
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+
+    // Reconnect with active tool calls in snapshot
+    open();
+    emit('session.snapshot', {
+      type: 'session.snapshot',
+      sessionId: 's1',
+      seq: 0,
+      messages: [{ id: 'm1', role: 'user', content: 'hello', created_at: '2026-01-01' }],
+      state: 'running',
+      activeToolCalls: [
+        {
+          id: 'tc-reconnect-1',
+          type: 'function',
+          function: { name: 'click', arguments: '{"x":50}' },
+        },
+      ],
+    });
+
+    const store = useChatStore.getState();
+    expect(store.streamingToolCalls).toHaveLength(1);
+    expect(store.streamingToolCalls[0].id).toBe('tc-reconnect-1');
+    expect(store.streamingToolCalls[0].status).toBe('running');
+    expect(store.streamingState).toBe('streaming');
+  });
 });

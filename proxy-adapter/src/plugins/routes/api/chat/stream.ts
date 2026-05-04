@@ -47,6 +47,7 @@ async function buildSnapshotEvent(
 ): Promise<SessionSnapshotEvent> {
   const messages = conversationManager.getMessages(sessionId);
   const runtimeState = await getRuntimeSessionState(conversationManager, sessionId, baseStatus);
+  const activeToolCalls = conversationManager.getActiveToolCalls(sessionId);
 
   const assistantIds = messages.filter((m) => m.role === 'assistant').map((m) => m.id);
   const thinkingMap =
@@ -104,6 +105,7 @@ async function buildSnapshotEvent(
     state: runtimeState.status as SessionState,
     jobId: runtimeState.jobId,
     agentState: runtimeState.agentState,
+    ...(activeToolCalls.length > 0 ? { activeToolCalls } : {}),
   };
 }
 
