@@ -379,6 +379,7 @@ class ChatHandler {
     let accumulatedContent = '';
     let totalUsage: Record<string, unknown> | undefined;
     const emittedToolCalls: Array<Record<string, unknown>> = [];
+    const completedToolCallIds = new Set<string>();
     let streamError: unknown;
     let pauseRequested = false;
     let stepHadToolResult = false;
@@ -472,7 +473,10 @@ class ChatHandler {
         }
 
         if (part.type === 'tool-call') {
-          const toolCallId = typeof part.toolCallId === 'string' ? part.toolCallId : undefined;
+          // SDK always provides toolCallId as a required string, but generate a
+          // stable fallback so downstream correlation never breaks.
+          const rawId = typeof part.toolCallId === 'string' ? part.toolCallId : undefined;
+          const toolCallId = rawId ?? `tc_${sessionId}_${runId ?? 'run'}_${emittedToolCalls.length}`;
           const toolName = typeof part.toolName === 'string' ? part.toolName : 'unknown.tool';
           const toolInput = this.normalizeToRecord(part.input);
           const toolCall = {
@@ -499,7 +503,29 @@ class ChatHandler {
 
         if (part.type === 'tool-result') {
           stepHadToolResult = true;
-          const toolCallId = typeof part.toolCallId === 'string' ? part.toolCallId : undefined;
+          // Correlate with the matching tool-call by SDK toolCallId; fall back to
+          // the sole unmatched (no result yet) emitted tool call's stable ID so
+          // tool_result always has an ID. Only safe when exactly one pending call
+          // exists — prevents mis-association in multi-tool / parallel scenarios.
+          const rawId = typeof part.toolCallId === 'string' ? part.toolCallId : undefined;
+          let toolCallId = rawId;
+          if (!toolCallId) {
+            const pendingCalls = emittedToolCalls.filter(
+              (tc) => !completedToolCallIds.has(tc.id),
+            );
+            if (pendingCalls.length === 1) {
+              toolCallId = pendingCalls[0].id;
+            } else {
+              this.logger.warn(
+                { sessionId, pendingCount: pendingCalls.length },
+                'tool_result missing toolCallId and %d pending calls — cannot safely correlate',
+                pendingCalls.length,
+              );
+              toolCallId = `tc_orphan_${sessionId}_${Date.now()}`;
+            }
+          }
+          // Track this tool call as completed to avoid reuse in future fallbacks
+          completedToolCallIds.add(toolCallId);
           const toolName = typeof part.toolName === 'string' ? part.toolName : 'unknown.tool';
           const toolInput = this.normalizeToRecord(part.input);
           const output = part.output;

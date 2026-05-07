@@ -213,14 +213,40 @@ export const useChatStore = create<ChatState>()((set) => ({
     set((s) => ({ streamingThinking: s.streamingThinking + token })),
 
   appendStreamingToolCall: (toolCall) =>
-    set((s) => ({ streamingToolCalls: [...s.streamingToolCalls, toolCall] })),
+    set((s) => {
+      // Deduplicate by stable ID — prevents duplicate cards on reconnect or
+      // event replay. If the ID already exists, skip silently.
+      if (s.streamingToolCalls.some((tc) => tc.id === toolCall.id)) return s;
+      return { streamingToolCalls: [...s.streamingToolCalls, toolCall] };
+    }),
 
   updateStreamingToolCallResult: (toolCallId, result) =>
-    set((s) => ({
-      streamingToolCalls: s.streamingToolCalls.map((tc) =>
-        tc.id === toolCallId ? { ...tc, result, status: 'completed' as const } : tc
-      ),
-    })),
+    set((s) => {
+      // Primary: exact ID match
+      const hasExactMatch = s.streamingToolCalls.some((tc) => tc.id === toolCallId);
+      if (hasExactMatch) {
+        return {
+          streamingToolCalls: s.streamingToolCalls.map((tc) =>
+            tc.id === toolCallId ? { ...tc, result, status: 'completed' as const } : tc
+          ),
+        };
+      }
+
+      // Emergency fallback: ONLY when exactly one running call exists in total,
+      // associate the result with that sole call. This is the narrowest safe
+      // rescue — never guess when multiple pending calls could mismatch.
+      const runningCalls = s.streamingToolCalls.filter((tc) => tc.status === 'running');
+      if (runningCalls.length === 1) {
+        return {
+          streamingToolCalls: s.streamingToolCalls.map((tc) =>
+            tc.id === runningCalls[0].id ? { ...tc, result, status: 'completed' as const } : tc
+          ),
+        };
+      }
+
+      // No match found — return unchanged state
+      return s;
+    }),
 
   // `force=true` creates a message even with empty content, used by
   // run.error when tool calls exist without text content.

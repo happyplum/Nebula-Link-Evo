@@ -193,7 +193,7 @@ export interface AssistantToolCallEvent {
   /** Message identifier */
   messageId: string;
   /** Unique tool invocation identifier within a run */
-  toolCallId?: string;
+  toolCallId: string;
   /** Tool call details */
   toolCall: ToolCall;
 }
@@ -212,7 +212,7 @@ export interface AssistantToolResultEvent {
   /** Message identifier */
   messageId: string;
   /** Unique tool invocation identifier within a run */
-  toolCallId?: string;
+  toolCallId: string;
   /** Tool execution result */
   result: string;
 }

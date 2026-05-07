@@ -53,12 +53,15 @@ function adaptSnapshotMessage(m: SessionSnapshotEvent['messages'][number]): Chat
   };
 }
 
-function adaptToolCall(evt: AssistantToolCallEvent): LocalToolCall {
+function adaptToolCall(evt: AssistantToolCallEvent): LocalToolCall | null {
+  // Protocol requires toolCallId as a non-optional string. Reject malformed
+  // events at runtime — the type system can't enforce this for untrusted data.
+  if (typeof evt.toolCallId !== 'string' || !evt.toolCallId) return null;
   const tc = evt.toolCall;
   const rec = tc as Record<string, unknown>;
   const fn = rec.function as Record<string, unknown> | undefined;
   return {
-    id: evt.toolCallId ?? (rec.id as string | undefined) ?? (fn?.name as string | undefined) ?? `tc-${Date.now()}`,
+    id: evt.toolCallId,
     name: (fn?.name as string | undefined) ?? 'unknown',
     arguments: typeof fn?.arguments === 'string' ? (fn.arguments as string) : JSON.stringify(fn?.arguments ?? tc),
     status: 'running',
@@ -302,6 +305,7 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
         const evt = JSON.parse(e.data) as AssistantToolCallEvent;
         if (isDuplicate(evt)) return;
         const localTc = adaptToolCall(evt);
+        if (!localTc) return; // malformed — missing toolCallId
         const store = getChatStore();
         if (!store) return;
         store.appendStreamingToolCall(localTc);
@@ -312,11 +316,10 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
         const evt = JSON.parse(e.data) as AssistantToolResultEvent;
         if (isDuplicate(evt)) return;
         const tcId = evt.toolCallId;
-        if (tcId) {
-          const store = getChatStore();
-          if (!store) return;
-          store.updateStreamingToolCallResult(tcId, evt.result);
-        }
+        if (typeof tcId !== 'string' || tcId.length === 0) return;
+        const store = getChatStore();
+        if (!store) return;
+        store.updateStreamingToolCallResult(tcId, evt.result);
       });
 
       // assistant.completed

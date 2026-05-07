@@ -143,11 +143,11 @@
   align-items: center;
 }
 
-/* Control buttons — legacy: flex-1 px-2 py-1 text-12 bg-xxx text-white rounded */
+/* Control buttons — transparent background with colored border */
 .controlBtn {
   flex: 1 1 0;
   min-width: 50px;
-  border: none;
+  border: 1px solid;
   border-radius: var(--radius-sm);
   padding: 4px 8px;
   font-size: 12px;
@@ -158,6 +158,9 @@
   justify-content: center;
   gap: 4px;
   white-space: nowrap;
+  background: transparent;
+  color: white;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
 .controlBtn:disabled {
@@ -165,29 +168,48 @@
   cursor: not-allowed;
 }
 
-/* legacy: bg-error text-white */
+/* error action — red border */
 .btnError {
+  border-color: var(--accent-error);
+  color: var(--accent-error);
+}
+
+.btnError:hover:not(:disabled) {
   background: var(--accent-error);
   color: white;
 }
 
-/* legacy: bg-warning text-white */
+/* warning action — yellow border */
 .btnWarning {
+  border-color: var(--accent-warning);
+  color: var(--accent-warning);
+}
+
+.btnWarning:hover:not(:disabled) {
   background: var(--accent-warning);
   color: white;
 }
 
-/* legacy: bg-success text-white */
+/* success action — green border */
 .btnSuccess {
+  border-color: var(--accent-success);
+  color: var(--accent-success);
+}
+
+.btnSuccess:hover:not(:disabled) {
   background: var(--accent-success);
   color: white;
 }
 
-/* legacy: bg-secondary text-error border-error */
+/* cancel action — outlined error */
 .btnCancel {
-  background: var(--bg-secondary);
+  border-color: var(--accent-error);
   color: var(--accent-error);
-  border: 1px solid var(--accent-error);
+}
+
+.btnCancel:hover:not(:disabled) {
+  background: var(--accent-error);
+  color: white;
 }
 
 /* Pausing feedback — legacy: #pausing-feedback */
