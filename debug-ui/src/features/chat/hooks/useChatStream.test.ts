@@ -614,9 +614,37 @@ describe('useChatStream', () => {
       expect(tcs[0].id).toBe('explicit-id');
     });
 
-    it('falls back to rec.id when toolCallId is absent', () => {
+    it('requires toolCallId — event without it is rejected by protocol', () => {
       renderStreamHook('s1');
       openConnection();
+      emitEvent('assistant.started', {
+        type: 'assistant.started',
+        sessionId: 's1',
+        seq: 1,
+        messageId: 'a1',
+      });
+      // Protocol now requires toolCallId as a non-optional string.
+      // An event without toolCallId should not produce a streaming tool call.
+      emitEvent('assistant.tool_call', {
+        type: 'assistant.tool_call',
+        sessionId: 's1',
+        seq: 2,
+        // Intentionally no toolCallId — should be ignored or fail gracefully
+        toolCall: {
+          id: 'rec-fallback-id',
+          type: 'function',
+          function: { name: 'click', arguments: '{}' },
+        },
+      } as Record<string, unknown>);
+      const tcs = useChatStore.getState().streamingToolCalls;
+      // With required toolCallId, the event is malformed and should be skipped
+      expect(tcs).toHaveLength(0);
+    });
+
+    it('requires valid toolCallId on tool_result — malformed event ignored', () => {
+      renderStreamHook('s1');
+      openConnection();
+      // Seed a running tool call first
       emitEvent('assistant.started', {
         type: 'assistant.started',
         sessionId: 's1',
@@ -627,15 +655,26 @@ describe('useChatStream', () => {
         type: 'assistant.tool_call',
         sessionId: 's1',
         seq: 2,
+        toolCallId: 'tc-1',
         toolCall: {
-          id: 'rec-fallback-id',
+          id: 'tc-1',
           type: 'function',
           function: { name: 'click', arguments: '{}' },
         },
       });
+      expect(useChatStore.getState().streamingToolCalls).toHaveLength(1);
+
+      // tool_result with missing toolCallId — should not update any call
+      emitEvent('assistant.tool_result', {
+        type: 'assistant.tool_result',
+        sessionId: 's1',
+        seq: 3,
+        // Intentionally no toolCallId
+        result: 'ok',
+      } as Record<string, unknown>);
       const tcs = useChatStore.getState().streamingToolCalls;
       expect(tcs).toHaveLength(1);
-      expect(tcs[0].id).toBe('rec-fallback-id');
+      expect(tcs[0].status).toBe('running'); // unchanged — result not applied
     });
   });
 

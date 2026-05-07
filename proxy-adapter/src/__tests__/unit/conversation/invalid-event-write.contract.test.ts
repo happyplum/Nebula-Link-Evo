@@ -39,14 +39,14 @@ function isRuntimeWritableSessionEvent(value: unknown): value is SessionEvent {
     case 'assistant.tool_call':
       return (
         typeof value.messageId === 'string' &&
-        isOptionalString(value.toolCallId) &&
+        typeof value.toolCallId === 'string' &&
         isObject(value.toolCall)
       );
     case 'assistant.tool_result':
       return (
         typeof value.messageId === 'string' &&
         typeof value.result === 'string' &&
-        isOptionalString(value.toolCallId)
+        typeof value.toolCallId === 'string'
       );
     case 'run.error':
       return typeof value.error === 'string';
@@ -133,8 +133,24 @@ describe('invalid event write contract', () => {
       error: 'boom',
     };
 
+    const missingToolCallId = {
+      type: 'assistant.tool_call',
+      sessionId: 'session-1',
+      messageId: 'msg-1',
+      toolCall: { function: { name: 'browser_click' } },
+    };
+
+    const missingToolResultToolCallId = {
+      type: 'assistant.tool_result',
+      sessionId: 'session-1',
+      messageId: 'msg-1',
+      result: '{}',
+    };
+
     expect(isRuntimeWritableSessionEvent(missingMessageId)).toBe(false);
     expect(isRuntimeWritableSessionEvent(missingSessionId)).toBe(false);
+    expect(isRuntimeWritableSessionEvent(missingToolCallId)).toBe(false);
+    expect(isRuntimeWritableSessionEvent(missingToolResultToolCallId)).toBe(false);
   });
 
   it('rejects unknown event types and session snapshot writes', () => {
