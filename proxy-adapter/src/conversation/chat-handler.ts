@@ -19,6 +19,8 @@ import { LoopGuardService } from '../services/loop-guard/loop-guard-service.js';
 import { InterventionEngine } from '../services/loop-guard/intervention.js';
 import { hashArgs, hashResult } from '../services/loop-guard/fingerprint.js';
 import type { LoopGuardVerdict } from '../services/loop-guard/types.js';
+import { createBrowserLifecycleTools } from '../clients/vercel-ai/browser-lifecycle-tools.js';
+import { browserClient } from '../browser-client.js';
 
 interface ChatSendParams {
   sessionId: string;
@@ -233,6 +235,15 @@ class ChatHandler {
 - 输入文本：调用 browser-control.browser_type
 - 导航页面：调用 browser-control.browser_navigate
 - 截图：调用 browser-control.browser_take_screenshot
+
+## 浏览器生命周期管理
+- 检查浏览器状态：调用 browser_status
+- 打开浏览器：调用 browser_open
+- 关闭浏览器：调用 browser_close
+- 查看标签页列表：调用 browser_list_tabs
+- 切换标签页：调用 browser_switch_tab（需要 id 参数）
+
+注意：关闭浏览器后，所有 MCP 浏览器操作工具将不可用，直到重新调用 browser_open。
 
 ## 响应格式
 当需要调用工具时，使用以下JSON格式：
@@ -749,8 +760,11 @@ class ChatHandler {
   private createSDKTools(): Record<string, unknown> {
     const tools: Record<string, unknown> = {};
 
+    // Browser lifecycle tools are always available regardless of MCP state
+    const browserLifecycleTools = createBrowserLifecycleTools(browserClient);
+
     if (!this.mcpClient || !this.mcpClient.isEnabled()) {
-      return tools;
+      return { ...browserLifecycleTools };
     }
 
     for (const mcpTool of this.mcpClient.getAvailableTools()) {
@@ -771,7 +785,7 @@ class ChatHandler {
       });
     }
 
-    return tools;
+    return { ...browserLifecycleTools, ...tools };
   }
 
   private buildInputSchema(schema: unknown): z.ZodTypeAny {
