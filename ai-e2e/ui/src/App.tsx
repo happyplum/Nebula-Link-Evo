@@ -1,12 +1,7 @@
 import { HashRouter } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { Routes } from './app/routes.js';
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: { retry: 1, staleTime: 30_000 },
-  },
-});
+import { queryClient } from './shared/api/queryClient.js';
 
 export function App() {
   return (
