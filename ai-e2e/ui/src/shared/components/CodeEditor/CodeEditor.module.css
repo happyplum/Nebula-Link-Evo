@@ -1,0 +1,84 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  height: 100%;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.languageBadge {
+  font-size: 12px;
+  padding: 2px 6px;
+  background-color: var(--color-bg-surface);
+  color: var(--color-text-muted);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  text-transform: uppercase;
+}
+
+.editorWrapper {
+  position: relative;
+  flex: 1;
+  min-height: 150px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: #1e1e1e; /* VS Code dark theme background */
+  overflow: hidden;
+}
+
+.editorWrapper:focus-within {
+  border-color: var(--color-border-focus);
+  box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.2);
+}
+
+.textarea {
+  width: 100%;
+  height: 100%;
+  min-height: 150px;
+  padding: 12px;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #d4d4d4; /* VS Code default text color */
+  background-color: transparent;
+  border: none;
+  outline: none;
+  resize: vertical;
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+  tab-size: 2;
+}
+
+.textarea:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  background-color: rgba(0, 0, 0, 0.2);
+}
+
+.hasError {
+  border-color: var(--color-error) !important;
+}
+
+.editorWrapper:has(.hasError):focus-within {
+  border-color: var(--color-error);
+  box-shadow: 0 0 0 2px rgba(244, 67, 54, 0.2);
+}
+
+.errorMessage {
+  font-size: 12px;
+  color: var(--color-error);
+  margin-top: 2px;
+}
