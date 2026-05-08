@@ -33,9 +33,11 @@ export interface VerificationResult {
 
 export class LoginRecorderService {
   private db: DatabaseManager;
+  private client: PlaywrightClient;
 
-  constructor(dbManager: DatabaseManager) {
+  constructor(dbManager: DatabaseManager, playwrightClient: PlaywrightClient) {
     this.db = dbManager;
+    this.client = playwrightClient;
   }
 
   private projectRepo() {
@@ -92,7 +94,7 @@ export class LoginRecorderService {
    * Replay a login script by executing each step via PlaywrightClient.
    * Supports: navigate, fill, click, wait, screenshot.
    */
-  async replayLogin(projectId: string, client: PlaywrightClient): Promise<ReplayResult> {
+  async replayLogin(projectId: string): Promise<ReplayResult> {
     const script = this.getLoginScript(projectId);
     if (!script) {
       return { success: false, error: `Login script not found for project: ${projectId}` };
@@ -105,17 +107,17 @@ export class LoginRecorderService {
         switch (step.type) {
           case 'navigate':
             if (!step.url) throw new Error(`Navigate step missing URL: ${step.description}`);
-            await client.navigate(step.url);
+            await this.client.navigate(step.url);
             break;
           case 'fill':
             if (!step.selector || !step.value) {
               throw new Error(`Fill step missing selector/value: ${step.description}`);
             }
-            await client.type(step.selector, step.value);
+            await this.client.type(step.selector, step.value);
             break;
           case 'click':
             if (!step.selector) throw new Error(`Click step missing selector: ${step.description}`);
-            await client.click(step.selector);
+            await this.client.click(step.selector);
             break;
           case 'wait':
             await new Promise<void>((resolve) => {
@@ -123,7 +125,7 @@ export class LoginRecorderService {
             });
             break;
           case 'screenshot':
-            await client.screenshot();
+            await this.client.screenshot();
             break;
           default:
             throw new Error(`Unknown step type: ${(step as LoginStep).type}`);
@@ -144,7 +146,6 @@ export class LoginRecorderService {
    */
   async verifyLogin(
     projectId: string,
-    client: PlaywrightClient,
     config: VerificationConfig,
   ): Promise<VerificationResult> {
     const script = this.getLoginScript(projectId);
@@ -155,21 +156,21 @@ export class LoginRecorderService {
     try {
       switch (config.method) {
         case 'cookie': {
-          const { cookies } = await client.get_cookies();
+          const { cookies } = await this.client.get_cookies();
           const found = cookies.some((c) => c.name === config.cookieName);
           return found
             ? { success: true, details: `Cookie "${config.cookieName}" found` }
             : { success: false, details: `Cookie "${config.cookieName}" not found` };
         }
         case 'localStorage': {
-          const { data } = await client.get_localStorage();
+          const { data } = await this.client.get_localStorage();
           const found = config.key! in data;
           return found
             ? { success: true, details: `localStorage key "${config.key}" found` }
             : { success: false, details: `localStorage key "${config.key}" not found` };
         }
         case 'element': {
-          const result = await client.executeScript(
+          const result = await this.client.executeScript(
             `!!document.querySelector('${config.selector}')`,
           );
           const visible = !!result.result;

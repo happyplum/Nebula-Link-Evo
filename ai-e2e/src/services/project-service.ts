@@ -6,7 +6,7 @@
 
 import type { DatabaseManager } from '../database/db.js';
 import type { Project } from '../database/repositories/project-repository.js';
-import { isValidTransition } from '../types/state-machine.js';
+import type { StateMachineService } from './state-machine-service.js';
 import type { ProjectStatus } from '../types/project.js';
 
 export interface ConfigureTargetOptions {
@@ -19,9 +19,11 @@ export interface ConfigureTargetOptions {
 
 export class ProjectService {
   private db: DatabaseManager;
+  private stateMachine: StateMachineService;
 
-  constructor(dbManager: DatabaseManager) {
+  constructor(dbManager: DatabaseManager, stateMachineService: StateMachineService) {
     this.db = dbManager;
+    this.stateMachine = stateMachineService;
   }
 
   private repo() {
@@ -62,18 +64,7 @@ export class ProjectService {
    * Throws if the transition is invalid or project not found.
    */
   updateProjectStatus(id: string, newStatus: ProjectStatus): Project {
-    const current = this.repo().findById(id);
-    if (!current) {
-      throw new Error(`Project not found: ${id}`);
-    }
-
-    if (!isValidTransition(current.status as ProjectStatus, newStatus)) {
-      throw new Error(
-        `Invalid transition: ${current.status} → ${newStatus}`,
-      );
-    }
-
-    return this.repo().updateStatus(id, newStatus)!;
+    return this.stateMachine.transition(id, newStatus);
   }
 
   /**

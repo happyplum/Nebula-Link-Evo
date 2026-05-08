@@ -53,6 +53,11 @@ export class URLModuleBindingRepository {
     ).all(projectId) as Record<string, unknown>[]).map(r => this.mapRow(r));
   }
 
+  updateStatus(id: string, status: string): URLModuleBinding | null {
+    this.db.prepare('UPDATE url_module_bindings SET status = ? WHERE id = ?').run(status, id);
+    return this.findById(id);
+  }
+
   delete(id: string): boolean {
     return this.stmtDelete.run(id).changes > 0;
   }

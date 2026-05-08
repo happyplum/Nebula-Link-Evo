@@ -29,6 +29,31 @@ import type {
   LoginStep,
 } from './index.js';
 
+// ========== COMMON SCHEMAS ==========
+
+export const ErrorResponseSchema = Type.Object({
+  error: Type.Object({
+    code: Type.String(),
+    message: Type.String(),
+    details: Type.Optional(Type.Array(Type.String())),
+  }),
+});
+
+export type ErrorResponse = Static<typeof ErrorResponseSchema>;
+
+export const PaginationQuerySchema = Type.Object({
+  page: Type.Optional(Type.Number({ minimum: 1, default: 1 })),
+  page_size: Type.Optional(Type.Number({ minimum: 1, maximum: 100, default: 20 })),
+});
+
+export type PaginationQuery = Static<typeof PaginationQuerySchema>;
+
+export const IdParamSchema = Type.Object({
+  id: Type.String({ description: 'Resource ID' }),
+});
+
+export type IdParam = Static<typeof IdParamSchema>;
+
 // ========== PROJECT SCHEMAS ==========
 
 export const ProjectStatusSchema = Type.Union(
