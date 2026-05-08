@@ -19,6 +19,16 @@ function createDeferredPromise<T>(): {
   return { promise, resolve };
 }
 
+vi.mock('../clients/vercel-ai/browser-lifecycle-tools.js', () => ({
+  createBrowserLifecycleTools: vi.fn().mockReturnValue({
+    browser_status: { description: '检查浏览器当前状态', inputSchema: {}, execute: vi.fn() },
+    browser_open: { description: '打开浏览器', inputSchema: {}, execute: vi.fn() },
+    browser_close: { description: '关闭浏览器', inputSchema: {}, execute: vi.fn() },
+    browser_list_tabs: { description: '获取所有标签页', inputSchema: {}, execute: vi.fn() },
+    browser_switch_tab: { description: '切换标签页', inputSchema: {}, execute: vi.fn() },
+  }),
+}));
+
 const mockConfig: ResolvedConfig = {
   version: '1.0',
   providers: {
@@ -343,6 +353,73 @@ describe('ChatHandler', () => {
       expect(toolMessage?.metadata).toHaveProperty('provider', 'kimi');
       expect(toolMessage?.metadata).toHaveProperty('model', 'moonshot-v1-vision-preview');
       expect(toolMessage?.metadata).toHaveProperty('runId');
+    });
+  });
+
+
+  describe('createSDKTools with browser lifecycle tools', () => {
+    const lifecycleToolKeys = [
+      'browser_status',
+      'browser_open',
+      'browser_close',
+      'browser_list_tabs',
+      'browser_switch_tab',
+    ];
+
+    it('should include browser lifecycle tools when MCP is disabled', () => {
+      vi.spyOn(mcpClient, 'isEnabled').mockReturnValue(false);
+
+      const tools = (chatHandler as any).createSDKTools();
+
+      for (const key of lifecycleToolKeys) {
+        expect(tools).toHaveProperty(key);
+      }
+    });
+
+    it('should include browser lifecycle tools alongside MCP tools when MCP is enabled', () => {
+      vi.spyOn(mcpClient, 'isEnabled').mockReturnValue(true);
+      vi.spyOn(mcpClient, 'getAvailableTools').mockReturnValue([
+        {
+          name: 'server.tool_a',
+          description: 'Tool A',
+          inputSchema: { type: 'object' },
+        },
+      ]);
+
+      const tools = (chatHandler as any).createSDKTools();
+
+      for (const key of lifecycleToolKeys) {
+        expect(tools).toHaveProperty(key);
+      }
+      expect(tools).toHaveProperty('server.tool_a');
+    });
+
+    it('should include browser lifecycle tools when mcpClient is null', () => {
+      // Create a new ChatHandler with no MCP client
+      const handlerWithNullMcp = new ChatHandler(
+        conversationManager,
+        mockConfig,
+        undefined as any, // null mcpClient
+      );
+
+      const tools = (handlerWithNullMcp as any).createSDKTools();
+
+      for (const key of lifecycleToolKeys) {
+        expect(tools).toHaveProperty(key);
+      }
+    });
+
+    it('should include lifecycle management section in system prompt', () => {
+      const session = {};
+      const prompt = (chatHandler as any).getSystemPrompt(session);
+
+      expect(prompt).toContain('## 浏览器生命周期管理');
+      expect(prompt).toContain('browser_status');
+      expect(prompt).toContain('browser_open');
+      expect(prompt).toContain('browser_close');
+      expect(prompt).toContain('browser_list_tabs');
+      expect(prompt).toContain('browser_switch_tab');
+      expect(prompt).toContain('browser-control.browser_snapshot');
     });
   });
 
