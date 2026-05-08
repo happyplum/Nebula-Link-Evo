@@ -3,6 +3,7 @@ packages:
   - shared
   - proxy-adapter
   - playwright-server
+  - ai-e2e
 
 catalog:
   '@fastify/autoload': ^5.10.0
