@@ -10,5 +10,5 @@ export { TestScenarioRepository, type TestScenario, type CreateTestScenarioParam
 export { ScriptRepository, type Script, type CreateScriptParams } from './repositories/script-repository.js';
 export { ExecutionRunRepository, type ExecutionRun, type CreateExecutionRunParams } from './repositories/execution-run-repository.js';
 export { AIInterventionLogRepository, type AIInterventionLog, type CreateAIInterventionLogParams } from './repositories/ai-intervention-log-repository.js';
-export { ExplorationSessionRepository, type ExplorationSession, type CreateExplorationSessionParams } from './repositories/exploration-session-repository.js';
+export { ExplorationSessionRepository, type ExplorationSession, type CreateExplorationSessionParams, type UpdateExplorationSessionParams } from './repositories/exploration-session-repository.js';
 export { LoginScriptRepository, type LoginScript, type CreateLoginScriptParams } from './repositories/login-script-repository.js';

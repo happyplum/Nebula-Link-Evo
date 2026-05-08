@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ProjectRepository, Project as RepoProject, CreateProjectParams, UpdateProjectParams } from '../../database/repositories/project-repository.js';
 import type { LoginScriptRepository } from '../../database/repositories/login-script-repository.js';
 import type { DatabaseManager } from '../../database/db.js';
+import type { StateMachineService } from '../state-machine-service.js';
+import type { ProjectStatus } from '../../types/project.js';
+import { isValidTransition } from '../../types/state-machine.js';
 
 // ---------- Mock factories ----------
 
@@ -87,6 +90,7 @@ describe('ProjectService', () => {
   let projectRepo: ProjectRepository;
   let loginScriptRepo: LoginScriptRepository;
   let dbManager: DatabaseManager;
+  let stateMachineService: StateMachineService;
   let store: Map<string, RepoProject>;
 
   beforeEach(() => {
@@ -95,7 +99,30 @@ describe('ProjectService', () => {
     projectRepo = createMockProjectRepo(store);
     loginScriptRepo = createMockLoginScriptRepo();
     dbManager = createMockDbManager(projectRepo, loginScriptRepo);
-    service = new ProjectService(dbManager);
+    
+    // Mock StateMachineService
+    stateMachineService = {
+      transition: vi.fn((projectId: string, targetStatus: ProjectStatus) => {
+        const current = store.get(projectId);
+        if (!current) {
+          throw new Error(`Project '${projectId}' not found`);
+        }
+
+        if (!isValidTransition(current.status as ProjectStatus, targetStatus)) {
+          throw new Error(
+            `Invalid transition: ${current.status} → ${targetStatus}`,
+          );
+        }
+
+        const updated = projectRepo.updateStatus(projectId, targetStatus);
+        if (!updated) {
+          throw new Error(`Project '${projectId}' not found`);
+        }
+        return updated;
+      }),
+    } as unknown as StateMachineService;
+
+    service = new ProjectService(dbManager, stateMachineService);
   });
 
   // ===== createProject =====

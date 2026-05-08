@@ -21,6 +21,13 @@ export interface ExplorationSession {
   created_at: string;
 }
 
+export interface UpdateExplorationSessionParams {
+  completed_at?: string;
+  pages_visited_json?: string;
+  urls_discovered_json?: string;
+  token_count?: number;
+}
+
 export class ExplorationSessionRepository {
   private stmtInsert: Database.Statement;
   private stmtFindById: Database.Statement;
@@ -59,6 +66,34 @@ export class ExplorationSessionRepository {
   findLatest(projectId: string): ExplorationSession | null {
     const row = this.stmtFindLatest.get(projectId) as Record<string, unknown> | undefined;
     return row ? this.mapRow(row) : null;
+  }
+
+  update(id: string, params: UpdateExplorationSessionParams): ExplorationSession | null {
+    const sets: string[] = [];
+    const values: unknown[] = [];
+
+    if (params.completed_at !== undefined) {
+      sets.push('completed_at = ?');
+      values.push(params.completed_at);
+    }
+    if (params.pages_visited_json !== undefined) {
+      sets.push('pages_visited_json = ?');
+      values.push(params.pages_visited_json);
+    }
+    if (params.urls_discovered_json !== undefined) {
+      sets.push('urls_discovered_json = ?');
+      values.push(params.urls_discovered_json);
+    }
+    if (params.token_count !== undefined) {
+      sets.push('token_count = ?');
+      values.push(params.token_count);
+    }
+
+    if (sets.length === 0) return this.findById(id);
+
+    values.push(id);
+    this.db.prepare(`UPDATE exploration_sessions SET ${sets.join(', ')} WHERE id = ?`).run(...values);
+    return this.findById(id);
   }
 
   delete(id: string): boolean {

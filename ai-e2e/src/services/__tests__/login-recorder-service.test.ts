@@ -112,6 +112,7 @@ describe('LoginRecorderService', () => {
   let dbManager: DatabaseManager;
   let scriptStore: Map<string, RepoLoginScript>;
   let projectStore: Map<string, RepoProject>;
+  let mockClient: PlaywrightClient;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -120,7 +121,8 @@ describe('LoginRecorderService', () => {
     loginScriptRepo = createMockLoginScriptRepo(scriptStore);
     projectRepo = createMockProjectRepo(projectStore);
     dbManager = createMockDbManager(projectRepo, loginScriptRepo);
-    service = new LoginRecorderService(dbManager);
+    mockClient = createMockPlaywrightClient();
+    service = new LoginRecorderService(dbManager, mockClient);
   });
 
   // ===== startRecording =====
@@ -213,19 +215,17 @@ describe('LoginRecorderService', () => {
       service.recordStep(project.id, { type: 'click', description: 'Login', selector: '#login-btn' });
       service.recordStep(project.id, { type: 'wait', description: 'Wait for dashboard', duration: 2000 });
 
-      const client = createMockPlaywrightClient();
-      const result = await service.replayLogin(project.id, client);
+      const result = await service.replayLogin(project.id);
 
       expect(result.success).toBe(true);
-      expect(client.navigate).toHaveBeenCalledWith('https://app.com/login');
-      expect(client.type).toHaveBeenCalledWith('#username', 'admin');
-      expect(client.type).toHaveBeenCalledWith('#password', 'secret');
-      expect(client.click).toHaveBeenCalledWith('#login-btn');
+      expect(mockClient.navigate).toHaveBeenCalledWith('https://app.com/login');
+      expect(mockClient.type).toHaveBeenCalledWith('#username', 'admin');
+      expect(mockClient.type).toHaveBeenCalledWith('#password', 'secret');
+      expect(mockClient.click).toHaveBeenCalledWith('#login-btn');
     });
 
     it('should return failure when no script exists', async () => {
-      const client = createMockPlaywrightClient();
-      const result = await service.replayLogin('nonexistent', client);
+      const result = await service.replayLogin('nonexistent');
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('not found');
@@ -236,10 +236,9 @@ describe('LoginRecorderService', () => {
       service.startRecording(project.id);
       service.recordStep(project.id, { type: 'navigate', description: 'Go', url: 'https://bad.com' });
 
-      const client = createMockPlaywrightClient();
-      (client.navigate as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Network error'));
+      (mockClient.navigate as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Network error'));
 
-      const result = await service.replayLogin(project.id, client);
+      const result = await service.replayLogin(project.id);
       expect(result.success).toBe(false);
       expect(result.error).toContain('Network error');
     });
@@ -253,12 +252,11 @@ describe('LoginRecorderService', () => {
       service.startRecording(project.id);
       service.recordStep(project.id, { type: 'navigate', description: 'Go', url: 'https://app.com' });
 
-      const client = createMockPlaywrightClient();
-      (client.get_cookies as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      (mockClient.get_cookies as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
         cookies: [{ name: 'session', value: 'abc123', domain: 'app.com' }],
       });
 
-      const result = await service.verifyLogin(project.id, client, {
+      const result = await service.verifyLogin(project.id, {
         method: 'cookie',
         cookieName: 'session',
       });
@@ -271,10 +269,9 @@ describe('LoginRecorderService', () => {
       service.startRecording(project.id);
       service.recordStep(project.id, { type: 'navigate', description: 'Go', url: 'https://app.com' });
 
-      const client = createMockPlaywrightClient();
-      (client.get_cookies as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ cookies: [] });
+      (mockClient.get_cookies as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ cookies: [] });
 
-      const result = await service.verifyLogin(project.id, client, {
+      const result = await service.verifyLogin(project.id, {
         method: 'cookie',
         cookieName: 'session',
       });
@@ -287,12 +284,11 @@ describe('LoginRecorderService', () => {
       service.startRecording(project.id);
       service.recordStep(project.id, { type: 'navigate', description: 'Go', url: 'https://app.com' });
 
-      const client = createMockPlaywrightClient();
-      (client.get_localStorage as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      (mockClient.get_localStorage as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
         data: { token: 'jwt-token-123' },
       });
 
-      const result = await service.verifyLogin(project.id, client, {
+      const result = await service.verifyLogin(project.id, {
         method: 'localStorage',
         key: 'token',
       });
@@ -305,25 +301,23 @@ describe('LoginRecorderService', () => {
       service.startRecording(project.id);
       service.recordStep(project.id, { type: 'navigate', description: 'Go', url: 'https://app.com' });
 
-      const client = createMockPlaywrightClient();
-      (client.executeScript as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      (mockClient.executeScript as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
         result: true,
       });
 
-      const result = await service.verifyLogin(project.id, client, {
+      const result = await service.verifyLogin(project.id, {
         method: 'element',
         selector: '.user-avatar',
       });
 
       expect(result.success).toBe(true);
-      expect(client.executeScript).toHaveBeenCalledWith(
+      expect(mockClient.executeScript).toHaveBeenCalledWith(
         expect.stringContaining('.user-avatar'),
       );
     });
 
     it('should fail when no script exists', async () => {
-      const client = createMockPlaywrightClient();
-      const result = await service.verifyLogin('nonexistent', client, {
+      const result = await service.verifyLogin('nonexistent', {
         method: 'cookie',
         cookieName: 'session',
       });
