@@ -1,0 +1,44 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-2) var(--spacing-4);
+  border-bottom: 1px solid var(--color-border);
+  background-color: var(--color-bg-surface);
+}
+
+.status {
+  font-size: 0.75rem;
+}
+
+.saving {
+  color: var(--color-text-secondary);
+}
+
+.unsaved {
+  color: var(--color-warning);
+}
+
+.saved {
+  color: var(--color-success);
+}
+
+.editorContainer {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.editor {
+  flex: 1;
+  height: 100%;
+  border: none !important;
+  border-radius: 0 !important;
+}

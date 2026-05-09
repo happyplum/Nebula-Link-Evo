@@ -1,42 +1,60 @@
 import { Outlet, NavLink } from 'react-router-dom';
+import { useProjects } from '../features/project/store/projectApi';
 import styles from './layout.module.css';
 
 export function Layout() {
+  const { data: projects } = useProjects();
+  
+  // Get up to 5 most recent projects
+  const recentProjects = projects 
+    ? [...projects].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()).slice(0, 5)
+    : [];
+
   return (
     <div className={styles.layout}>
       <div className={styles.mainArea}>
         <aside className={styles.sidebar}>
           <div className={styles.sidebarHeader}>
-            <span role="img" aria-label="logo">🤖</span>
+            <span className={styles.logoIcon}>AI</span>
             <span className={styles.sidebarTitle}>AI E2E 测试工具</span>
           </div>
           
           <nav className={styles.sidebarNav}>
-            <NavLink 
-              to="/" 
-              className={({ isActive }) => 
+            <NavLink
+              to="/"
+              className={({ isActive }) =>
                 `${styles.navLink} ${isActive ? styles.navLinkActive : ''}`
               }
             >
-              🏠 首页
+              首页
             </NavLink>
-            {/* Placeholder for recent projects */}
-            <div style={{ marginTop: '16px', padding: '0 12px', fontSize: '12px', color: 'var(--color-text-muted)' }}>
-              最近项目
-            </div>
-            <NavLink 
-              to="/project/demo-1" 
-              className={({ isActive }) => 
-                `${styles.navLink} ${isActive ? styles.navLinkActive : ''}`
-              }
-            >
-              📁 Demo Project
-            </NavLink>
+            
+            {recentProjects.length > 0 && (
+              <>
+                <div style={{ marginTop: '16px', padding: '0 12px', fontSize: '12px', color: 'var(--color-text-muted)' }}>
+                  最近项目
+                </div>
+                {recentProjects.map(project => (
+                  <NavLink 
+                    key={project.id}
+                    to={`/project/${project.id}`} 
+                    className={({ isActive }) => 
+                      `${styles.navLink} ${isActive ? styles.navLinkActive : ''}`
+                    }
+                    title={project.name}
+                  >
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {project.name}
+                    </span>
+                  </NavLink>
+                ))}
+              </>
+            )}
           </nav>
 
           <div className={styles.sidebarFooter}>
             <a href="#/settings" className={styles.navLink}>
-              ⚙️ 设置
+              设置
             </a>
           </div>
         </aside>
@@ -55,7 +73,7 @@ export function Layout() {
           </div>
         </div>
         <div className={styles.statusRight}>
-          <span>AI Provider: 🟢 Connected</span>
+          <span>AI Provider: Connected</span>
         </div>
       </footer>
     </div>

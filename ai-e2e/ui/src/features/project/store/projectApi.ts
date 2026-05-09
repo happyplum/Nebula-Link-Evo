@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Project } from '../../../../src/types/project';
+import { Project } from '@/types/project';
 
 // Base API URL
 const API_BASE = '/api/projects';

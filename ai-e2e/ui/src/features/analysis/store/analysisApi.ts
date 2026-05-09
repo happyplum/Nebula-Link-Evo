@@ -1,0 +1,181 @@
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+
+export interface AnalysisModule {
+  id: string;
+  name: string;
+  description?: string;
+  parent_id?: string;
+  source?: 'ai' | 'manual';
+  children?: AnalysisModule[];
+}
+
+export interface UploadPRDRequest {
+  content: string;
+  format?: string;
+}
+
+export interface CreateModuleRequest {
+  name: string;
+  description?: string;
+  parent_id?: string;
+}
+
+export interface UpdateModuleRequest {
+  name: string;
+  description?: string;
+}
+
+export interface ReorderModulesRequest {
+  module_ids: string[];
+}
+
+export interface TransitionStateRequest {
+  state: string;
+}
+
+// --- API Functions ---
+
+export const uploadPRD = async (projectId: string, data: UploadPRDRequest): Promise<void> => {
+  const response = await fetch(`/api/projects/${projectId}/analysis/upload`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) throw new Error('Failed to upload PRD');
+};
+
+export const analyzePRD = async (projectId: string, content: string, format?: string): Promise<void> => {
+  const response = await fetch(`/api/projects/${projectId}/analysis/analyze`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content, format }),
+  });
+  if (!response.ok) throw new Error('Failed to start analysis');
+};
+
+export const fetchModules = async (projectId: string): Promise<AnalysisModule[]> => {
+  const response = await fetch(`/api/projects/${projectId}/analysis/modules`);
+  if (!response.ok) throw new Error('Failed to fetch modules');
+  const data = await response.json();
+  return data.data || [];
+};
+
+export const createModule = async (projectId: string, data: CreateModuleRequest): Promise<AnalysisModule> => {
+  const response = await fetch(`/api/projects/${projectId}/analysis/modules`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) throw new Error('Failed to create module');
+  const resData = await response.json();
+  return resData.data;
+};
+
+export const updateModule = async (projectId: string, moduleId: string, data: UpdateModuleRequest): Promise<AnalysisModule> => {
+  const response = await fetch(`/api/projects/${projectId}/analysis/modules/${moduleId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) throw new Error('Failed to update module');
+  const resData = await response.json();
+  return resData.data;
+};
+
+export const deleteModule = async (projectId: string, moduleId: string): Promise<void> => {
+  const response = await fetch(`/api/projects/${projectId}/analysis/modules/${moduleId}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) throw new Error('Failed to delete module');
+};
+
+export const reorderModules = async (projectId: string, data: ReorderModulesRequest): Promise<void> => {
+  const response = await fetch(`/api/projects/${projectId}/analysis/modules/reorder`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) throw new Error('Failed to reorder modules');
+};
+
+export const transitionState = async (projectId: string, data: TransitionStateRequest): Promise<void> => {
+  const response = await fetch(`/api/projects/${projectId}/state/transition`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) throw new Error('Failed to transition state');
+};
+
+// --- React Query Hooks ---
+
+export const analysisKeys = {
+  all: (projectId: string) => ['analysis', projectId] as const,
+  modules: (projectId: string) => [...analysisKeys.all(projectId), 'modules'] as const,
+};
+
+export const useModules = (projectId: string) => {
+  return useQuery({
+    queryKey: analysisKeys.modules(projectId),
+    queryFn: () => fetchModules(projectId),
+    enabled: !!projectId,
+  });
+};
+
+export const useUploadPRD = (projectId: string) => {
+  return useMutation({
+    mutationFn: (data: UploadPRDRequest) => uploadPRD(projectId, data),
+  });
+};
+
+export const useAnalyzePRD = (projectId: string) => {
+  return useMutation({
+    mutationFn: ({ content, format }: { content: string; format?: string }) => analyzePRD(projectId, content, format),
+  });
+};
+
+export const useCreateModule = (projectId: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateModuleRequest) => createModule(projectId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: analysisKeys.modules(projectId) });
+    },
+  });
+};
+
+export const useUpdateModule = (projectId: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ moduleId, data }: { moduleId: string; data: UpdateModuleRequest }) => updateModule(projectId, moduleId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: analysisKeys.modules(projectId) });
+    },
+  });
+};
+
+export const useDeleteModule = (projectId: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (moduleId: string) => deleteModule(projectId, moduleId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: analysisKeys.modules(projectId) });
+    },
+  });
+};
+
+export const useReorderModules = (projectId: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: ReorderModulesRequest) => reorderModules(projectId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: analysisKeys.modules(projectId) });
+    },
+  });
+};
+
+export const useTransitionState = (projectId: string) => {
+  return useMutation({
+    mutationFn: (data: TransitionStateRequest) => transitionState(projectId, data),
+  });
+};
