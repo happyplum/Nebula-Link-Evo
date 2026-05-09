@@ -12,9 +12,13 @@ interface FastifyPluginMetadata {
   encapsulate?: boolean;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyPluginFunction = ((...args: any[]) => any);
+
 type SupportedFastifyPlugin<Options extends FastifyPluginOptions = FastifyPluginOptions> =
   | FastifyPluginAsync<Options>
-  | FastifyPluginCallback<Options>;
+  | FastifyPluginCallback<Options>
+  | AnyPluginFunction;
 
 let pluginCount = 0;
 
