@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "dev": "pnpm --filter shared build && pnpm -r --parallel --filter shared --filter debug-ui --filter proxy-adapter --filter playwright-server dev",
-    "build": "pnpm --filter shared build && pnpm --filter debug-ui build && pnpm --filter playwright-server build && pnpm --filter proxy-adapter build",
+    "build": "pnpm --filter shared build && pnpm --filter debug-ui build && pnpm --filter playwright-server build && pnpm --filter proxy-adapter build && pnpm --filter ai-e2e build",
     "lint": "eslint debug-ui/src proxy-adapter/src playwright-server/src",
     "lint:fix": "eslint debug-ui/src proxy-adapter/src playwright-server/src --fix",
     "format": "prettier --write \"debug-ui/src/**/*.{ts,tsx}\" \"proxy-adapter/src/**/*.ts\" \"playwright-server/src/**/*.ts\"",
@@ -14,6 +14,9 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "sharp"
+    ],
+    "ignoredBuiltDependencies": [
+      "better-sqlite3"
     ]
   },
   "devDependencies": {

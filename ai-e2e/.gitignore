@@ -1,8 +1,10 @@
 node_modules/
 dist/
+ui/dist/
 artifacts/
 data/
 *.db
 *.db-wal
 *.db-shm
 .env
+.env.local
