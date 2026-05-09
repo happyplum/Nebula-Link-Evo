@@ -4,6 +4,7 @@ export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'er
 
 export interface UseSSEOptions<T> {
   url: string;
+  events?: string[];  // Named event types to listen for
   onSnapshot?: (data: T) => void;
   onUpdate?: (event: string, data: any) => void;
   onError?: (error: Event) => void;
@@ -14,6 +15,7 @@ export interface UseSSEOptions<T> {
 
 export function useSSE<T>({
   url,
+  events,
   onSnapshot,
   onUpdate,
   onError,
@@ -49,11 +51,10 @@ export function useSSE<T>({
       };
 
       es.onerror = (err) => {
-        console.error(`SSE Error (${url}):`, err);
         setStatus('error');
         setError(new Error('SSE connection error'));
         onError?.(err);
-        
+
         es.close();
         eventSourceRef.current = null;
 
@@ -68,40 +69,34 @@ export function useSSE<T>({
         }
       };
 
+      // Register named event listeners for specified event types
+      for (const eventType of (events || [])) {
+        es.addEventListener(eventType, (event) => {
+          try {
+            const parsed = JSON.parse(event.data);
+            onUpdate?.(eventType, parsed.data);
+          } catch {
+            // Silently handle parse errors - invalid data is ignored
+          }
+        });
+      }
+
       // Handle snapshot event (full state replacement)
-      es.addEventListener('snapshot', (event) => {
+      // Backend sends this as 'project.status_changed' event
+      es.addEventListener('project.status_changed', (event) => {
         try {
-          const data = JSON.parse(event.data);
-          onSnapshot?.(data);
-        } catch (e) {
-          console.error('Failed to parse snapshot data:', e);
+          const parsed = JSON.parse(event.data);
+          onSnapshot?.(parsed.data);
+        } catch {
+          // Silently handle parse errors - invalid data is ignored
         }
       });
-
-      // Handle generic message events
-      es.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          // If it has a type field, we can treat it as a specific update
-          if (data.type) {
-            onUpdate?.(data.type, data);
-          } else {
-            onUpdate?.('message', data);
-          }
-        } catch (e) {
-          console.error('Failed to parse message data:', e);
-        }
-      };
-
-      // We can also listen to specific custom events if needed,
-      // but typically the backend sends 'snapshot' and then other events.
-      // The user of this hook can pass onUpdate to handle them.
 
     } catch (err) {
       setStatus('error');
       setError(err instanceof Error ? err : new Error(String(err)));
     }
-  }, [url, enabled, maxRetries, reconnectInterval, onSnapshot, onUpdate, onError]);
+  }, [url, events, enabled, maxRetries, reconnectInterval, onSnapshot, onUpdate, onError]);
 
   const disconnect = useCallback(() => {
     if (reconnectTimeoutRef.current) {

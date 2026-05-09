@@ -1,5 +1,10 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { ConfigPanel } from '../../features/project/components/ConfigPanel';
+import { AnalysisPanel } from '../../features/analysis/components/AnalysisPanel';
+import ExplorationPanel from '../../features/exploration/components/ExplorationPanel';
+import ScriptPanel from '../../features/scripts/components/ScriptPanel';
+import ExecutionPanel from '../../features/execution/components/ExecutionPanel';
 import styles from './ProjectPage.module.css';
 
 const TABS = [
@@ -32,11 +37,11 @@ export function ProjectPage() {
       </header>
       
       <div className={styles.content}>
-        {activeTab === 0 && <div>配置面板 (Placeholder)</div>}
-        {activeTab === 1 && <div>PRD 分析面板 (Placeholder)</div>}
-        {activeTab === 2 && <div>探索面板 (Placeholder)</div>}
-        {activeTab === 3 && <div>脚本面板 (Placeholder)</div>}
-        {activeTab === 4 && <div>执行面板 (Placeholder)</div>}
+        {activeTab === 0 && <ConfigPanel />}
+        {activeTab === 1 && <AnalysisPanel />}
+        {activeTab === 2 && <ExplorationPanel />}
+        {activeTab === 3 && <ScriptPanel />}
+        {activeTab === 4 && <ExecutionPanel />}
       </div>
     </div>
   );

@@ -29,6 +29,20 @@
   gap: 8px;
 }
 
+.logoIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-accent);
+  color: white;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
 .sidebarTitle {
   font-size: 16px;
   font-weight: 600;
