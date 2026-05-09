@@ -56,6 +56,10 @@ export class BusinessModuleRepository {
     return this.stmtDelete.run(id).changes > 0;
   }
 
+  updateName(id: string, name: string): void {
+    this.db.prepare('UPDATE business_modules SET name = ? WHERE id = ?').run(name, id);
+  }
+
   reorder(ids: string[]): void {
     const stmt = this.db.prepare('UPDATE business_modules SET sort_order = ? WHERE id = ?');
     this.db.transaction(() => {

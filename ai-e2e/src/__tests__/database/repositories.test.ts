@@ -218,6 +218,13 @@ describe('BusinessModuleRepository', () => {
     expect(found1!.sort_order).toBe(1);
     expect(found2!.sort_order).toBe(0);
   });
+
+  it('should update name', () => {
+    const bm = repo.create({ project_id: String(projectId), name: 'Old Name' });
+    repo.updateName(bm.id, 'New Name');
+    const found = repo.findById(bm.id);
+    expect(found!.name).toBe('New Name');
+  });
 });
 
 describe('FunctionalModuleRepository', () => {
@@ -249,6 +256,32 @@ describe('FunctionalModuleRepository', () => {
     db.prepare("INSERT INTO urls (id, project_id, url) VALUES (?, ?, '/page')").run(urlId, projectId);
     const updated = repo.updateBoundUrl(fm.id, String(urlId));
     expect(updated!.bound_url_id).toBe(String(urlId));
+  });
+
+  it('should update name', () => {
+    const fm = repo.create({ business_module_id: String(bmId), name: 'Old Name' });
+    repo.updateName(fm.id, 'New Name');
+    const found = repo.findById(fm.id);
+    expect(found!.name).toBe('New Name');
+  });
+
+  it('should update description', () => {
+    const fm = repo.create({ business_module_id: String(bmId), name: 'FM' });
+    repo.updateDescription(fm.id, 'Updated description');
+    const found = repo.findById(fm.id);
+    expect(found!.description).toBe('Updated description');
+  });
+
+  it('should reorder modules', () => {
+    const fm1 = repo.create({ business_module_id: String(bmId), name: 'A', sort_order: 0 });
+    const fm2 = repo.create({ business_module_id: String(bmId), name: 'B', sort_order: 1 });
+
+    repo.reorder([fm2.id, fm1.id]);
+
+    const found1 = repo.findById(fm1.id);
+    const found2 = repo.findById(fm2.id);
+    expect(found1!.sort_order).toBe(1);
+    expect(found2!.sort_order).toBe(0);
   });
 });
 

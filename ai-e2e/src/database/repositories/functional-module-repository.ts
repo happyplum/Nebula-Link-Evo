@@ -59,6 +59,23 @@ export class FunctionalModuleRepository {
     return this.findById(id);
   }
 
+  updateName(id: string, name: string): void {
+    this.db.prepare('UPDATE functional_modules SET name = ? WHERE id = ?').run(name, id);
+  }
+
+  updateDescription(id: string, description: string): void {
+    this.db.prepare('UPDATE functional_modules SET description = ? WHERE id = ?').run(description, id);
+  }
+
+  reorder(ids: string[]): void {
+    const stmt = this.db.prepare('UPDATE functional_modules SET sort_order = ? WHERE id = ?');
+    this.db.transaction(() => {
+      for (let i = 0; i < ids.length; i++) {
+        stmt.run(i, ids[i]);
+      }
+    })();
+  }
+
   delete(id: string): boolean {
     return this.stmtDelete.run(id).changes > 0;
   }
