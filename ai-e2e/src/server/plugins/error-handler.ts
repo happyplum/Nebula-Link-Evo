@@ -53,11 +53,6 @@ async function errorHandlerPlugin(fastify: FastifyInstance): Promise<void> {
     reply.status(statusCode).send(toErrorResponse('INTERNAL_ERROR', message));
   });
 
-  fastify.setNotFoundHandler((request, reply) => {
-    reply
-      .status(404)
-      .send(toErrorResponse('NOT_FOUND', `Route ${request.method}:${request.url} not found`));
-  });
 }
 
 export default fp(errorHandlerPlugin, {

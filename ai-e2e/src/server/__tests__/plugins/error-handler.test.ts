@@ -89,17 +89,4 @@ describe('error-handler plugin', () => {
     });
   });
 
-  it('registers a 404 not found handler', async () => {
-    const app = await createApp();
-
-    const response = await app.inject({ method: 'GET', url: '/does-not-exist' });
-
-    expect(response.statusCode).toBe(404);
-    expect(response.json()).toEqual({
-      error: {
-        code: 'NOT_FOUND',
-        message: 'Route GET:/does-not-exist not found',
-      },
-    });
-  });
 });

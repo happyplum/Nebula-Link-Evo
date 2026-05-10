@@ -79,22 +79,6 @@ interface ExplorerRuntimeClient {
   }>;
 }
 
-interface LegacyPlaywrightLike {
-  navigate(url: string): Promise<{ url: string }>;
-  getSnapshot(): Promise<{ elements: Record<string, unknown>; screenshot?: string }>;
-  getPageInfo(): Promise<{ url: string; title: string }>;
-}
-
-interface LegacyTextGeneratorLike {
-  generateText(prompt: string): Promise<{
-    text: string;
-    tokenUsage: {
-      promptTokens: number;
-      completionTokens: number;
-    };
-  }>;
-}
-
 // ---------- Service ----------
 
 export class ExplorerService {
@@ -107,23 +91,12 @@ export class ExplorerService {
 
   constructor(
     db: DatabaseManager,
-    proxyClient: ProxyAdapterClient | LegacyPlaywrightLike,
-    promptManagerOrAiProvider: PromptTemplateManager | LegacyTextGeneratorLike,
-    promptManager?: PromptTemplateManager,
+    proxyClient: ProxyAdapterClient,
+    promptManager: PromptTemplateManager,
   ) {
     this.db = db;
-
-    if (promptManager) {
-      this.proxyClient = this.createLegacyRuntimeClient(
-        proxyClient as LegacyPlaywrightLike,
-        promptManagerOrAiProvider as LegacyTextGeneratorLike,
-      );
-      this.promptManager = promptManager;
-      return;
-    }
-
-    this.proxyClient = proxyClient as ProxyAdapterClient;
-    this.promptManager = promptManagerOrAiProvider as PromptTemplateManager;
+    this.proxyClient = proxyClient;
+    this.promptManager = promptManager;
   }
 
   // ===== Public API =====
@@ -479,18 +452,6 @@ export class ExplorerService {
       }
       return null;
     }
-  }
-
-  private createLegacyRuntimeClient(
-    playwright: LegacyPlaywrightLike,
-    aiProvider: LegacyTextGeneratorLike,
-  ): ExplorerRuntimeClient {
-    return {
-      navigate: url => playwright.navigate(url),
-      getSnapshot: () => playwright.getSnapshot(),
-      getPageInfo: () => playwright.getPageInfo(),
-      generateText: prompt => aiProvider.generateText(prompt),
-    };
   }
 
   /**
