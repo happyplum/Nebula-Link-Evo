@@ -519,13 +519,15 @@ class ChatHandler {
           // tool_result always has an ID. Only safe when exactly one pending call
           // exists — prevents mis-association in multi-tool / parallel scenarios.
           const rawId = typeof part.toolCallId === 'string' ? part.toolCallId : undefined;
-          let toolCallId = rawId;
-          if (!toolCallId) {
+          let toolCallId: string;
+          if (rawId) {
+            toolCallId = rawId;
+          } else {
             const pendingCalls = emittedToolCalls.filter(
-              (tc) => !completedToolCallIds.has(tc.id),
+              (tc) => !completedToolCallIds.has(tc.id as string),
             );
             if (pendingCalls.length === 1) {
-              toolCallId = pendingCalls[0].id;
+              toolCallId = pendingCalls[0].id as string;
             } else {
               this.logger.warn(
                 { sessionId, pendingCount: pendingCalls.length },
