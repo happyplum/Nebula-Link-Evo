@@ -2,12 +2,12 @@
  * Login Recorder Service
  *
  * Records login steps, stores them as LoginScript, and provides
- * replay and verification via PlaywrightClient.
+ * replay and verification via ProxyAdapterClient.
  */
 
 import type { DatabaseManager } from '../database/db.js';
 import type { LoginScript } from '../database/repositories/login-script-repository.js';
-import type { PlaywrightClient } from './playwright-client.js';
+import type { ProxyAdapterClient } from '../infrastructure/proxy-adapter-client.js';
 import type { LoginStep } from '../types/login-script.js';
 
 export interface ReplayResult {
@@ -33,11 +33,11 @@ export interface VerificationResult {
 
 export class LoginRecorderService {
   private db: DatabaseManager;
-  private client: PlaywrightClient;
+  private client: ProxyAdapterClient;
 
-  constructor(dbManager: DatabaseManager, playwrightClient: PlaywrightClient) {
+  constructor(dbManager: DatabaseManager, proxyClient: ProxyAdapterClient) {
     this.db = dbManager;
-    this.client = playwrightClient;
+    this.client = proxyClient;
   }
 
   private projectRepo() {
@@ -91,7 +91,7 @@ export class LoginRecorderService {
   }
 
   /**
-   * Replay a login script by executing each step via PlaywrightClient.
+   * Replay a login script by executing each step via ProxyAdapterClient.
    * Supports: navigate, fill, click, wait, screenshot.
    */
   async replayLogin(projectId: string): Promise<ReplayResult> {
@@ -117,7 +117,7 @@ export class LoginRecorderService {
             break;
           case 'click':
             if (!step.selector) throw new Error(`Click step missing selector: ${step.description}`);
-            await this.client.click(step.selector);
+            await this.client.clickBySelector(step.selector);
             break;
           case 'wait':
             await new Promise<void>((resolve) => {
@@ -156,14 +156,14 @@ export class LoginRecorderService {
     try {
       switch (config.method) {
         case 'cookie': {
-          const { cookies } = await this.client.get_cookies();
+          const { cookies } = await this.client.getCookies();
           const found = cookies.some((c) => c.name === config.cookieName);
           return found
             ? { success: true, details: `Cookie "${config.cookieName}" found` }
             : { success: false, details: `Cookie "${config.cookieName}" not found` };
         }
         case 'localStorage': {
-          const { data } = await this.client.get_localStorage();
+          const { data } = await this.client.getLocalStorage();
           const found = config.key! in data;
           return found
             ? { success: true, details: `localStorage key "${config.key}" found` }

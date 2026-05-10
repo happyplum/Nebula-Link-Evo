@@ -6,8 +6,7 @@ import type { FunctionalModuleRepository, FunctionalModule } from '../../databas
 import type { BusinessModuleRepository, BusinessModule } from '../../database/repositories/business-module-repository.js';
 import type { ProjectRepository, Project } from '../../database/repositories/project-repository.js';
 import type { DatabaseManager } from '../../database/db.js';
-import type { PlaywrightClient } from '../playwright-client.js';
-import type { AIProvider, TextGenerationResult } from '../../ai/provider.js';
+import type { ProxyAdapterClient } from '../../infrastructure/proxy-adapter-client.js';
 import type { PromptTemplateManager } from '../../ai/prompt-manager.js';
 
 // ---------- Mock factories ----------
@@ -155,8 +154,19 @@ function createMockDbManager(deps: {
   } as unknown as DatabaseManager;
 }
 
-function createMockPlaywright(): PlaywrightClient {
+function createMockProxyClient(aiResponseText?: string): ProxyAdapterClient {
+  const defaultAiResponse = JSON.stringify({
+    analysis: 'Test page with navigation links',
+    discovered_links: [],
+    navigation_decision: { action: 'complete', target: '', reason: 'No more pages' },
+  });
+  const responseText = aiResponseText ?? defaultAiResponse;
+
   return {
+    generateText: vi.fn(async () => ({
+      text: responseText,
+      tokenUsage: { promptTokens: 100, completionTokens: 50 },
+    })),
     navigate: vi.fn(async () => ({ success: true, url: 'http://localhost:3001/' })),
     getSnapshot: vi.fn(async () => ({
       elements: { btn1: { tag: 'button', text: 'Login' } },
@@ -165,23 +175,16 @@ function createMockPlaywright(): PlaywrightClient {
     screenshot: vi.fn(async () => ({ base64: '' })),
     getPageInfo: vi.fn(async () => ({ url: 'http://localhost:3001/', title: 'Home' })),
     healthCheck: vi.fn(async () => true),
-  } as unknown as PlaywrightClient;
-}
-
-function createMockAIProvider(responseText?: string): AIProvider {
-  const defaultResponse: TextGenerationResult = {
-    text: JSON.stringify({
-      analysis: 'Test page with navigation links',
-      discovered_links: [],
-      navigation_decision: { action: 'complete', target: '', reason: 'No more pages' },
-    }),
-    tokenUsage: { promptTokens: 100, completionTokens: 50 },
-  };
-  const response = responseText ? { text: responseText, tokenUsage: { promptTokens: 100, completionTokens: 50 } } : defaultResponse;
-  return {
-    generateText: vi.fn(async () => response),
-    initialize: vi.fn(),
-  } as unknown as AIProvider;
+    click: vi.fn(async () => ({ success: true })),
+    clickBySelector: vi.fn(async () => ({ success: true })),
+    type: vi.fn(async () => ({ success: true })),
+    executeScript: vi.fn(async () => ({ result: null })),
+    getCookies: vi.fn(async () => []),
+    getLocalStorage: vi.fn(async () => ({})),
+    getDOM: vi.fn(async () => ({ elements: [], screenshot: '' })),
+    openBrowser: vi.fn(async () => ({ success: true })),
+    closeBrowser: vi.fn(async () => ({ success: true })),
+  } as unknown as ProxyAdapterClient;
 }
 
 function createMockPromptManager(): PromptTemplateManager {
@@ -210,8 +213,7 @@ describe('ExplorerService', () => {
   let bizModuleRepo: BusinessModuleRepository;
   let projectRepo: ProjectRepository;
   let dbManager: DatabaseManager;
-  let playwright: PlaywrightClient;
-  let aiProvider: AIProvider;
+  let proxyClient: ProxyAdapterClient;
   let promptManager: PromptTemplateManager;
 
   const PROJECT_ID = 'proj-1';
@@ -240,11 +242,10 @@ describe('ExplorerService', () => {
     bizModuleRepo = createMockBusinessModuleRepo();
     projectRepo = createMockProjectRepo(projectStore);
     dbManager = createMockDbManager({ urlRepo, bindingRepo, sessionRepo, funcModuleRepo, bizModuleRepo, projectRepo });
-    playwright = createMockPlaywright();
-    aiProvider = createMockAIProvider(aiResponse);
+    proxyClient = createMockProxyClient(aiResponse);
     promptManager = createMockPromptManager();
 
-    service = new ExplorerService(dbManager, playwright, aiProvider, promptManager);
+    service = new ExplorerService(dbManager, proxyClient, promptManager);
   }
 
   beforeEach(() => {
@@ -274,7 +275,7 @@ describe('ExplorerService', () => {
       });
 
       // navigate should be called at least for the base URL
-      expect(playwright.navigate).toHaveBeenCalled();
+      expect(proxyClient.navigate).toHaveBeenCalled();
     });
 
     it('should throw if project not found', async () => {
@@ -295,7 +296,7 @@ describe('ExplorerService', () => {
       setupService(linkResponse);
 
       // Override navigate to return different URLs
-      (playwright.navigate as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) => ({
+      (proxyClient.navigate as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) => ({
         success: true,
         url,
       }));
@@ -313,7 +314,7 @@ describe('ExplorerService', () => {
         navigation_decision: { action: 'navigate', target: '/deep/page', reason: 'explore' },
       }));
 
-      (playwright.navigate as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) => ({
+      (proxyClient.navigate as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) => ({
         success: true,
         url,
       }));
@@ -415,7 +416,7 @@ describe('ExplorerService', () => {
         }]])),
       };
       dbManager = createMockDbManager(newDeps);
-      service = new ExplorerService(dbManager, playwright, aiProvider, promptManager);
+      service = new ExplorerService(dbManager, proxyClient, promptManager);
 
       await expect(service.proposeBindings(PROJECT_ID))
         .rejects.toThrow(/no functional modules/i);
@@ -484,10 +485,10 @@ describe('ExplorerService', () => {
         primary_module: 'User Authentication',
         unclassifiable: false,
       });
-      aiProvider = createMockAIProvider(bindResponse);
+      proxyClient = createMockProxyClient(bindResponse);
       promptManager = createMockPromptManager();
 
-      service = new ExplorerService(dbManager, playwright, aiProvider, promptManager);
+      service = new ExplorerService(dbManager, proxyClient, promptManager);
 
       const bindings = await service.proposeBindings(PROJECT_ID);
 
@@ -521,7 +522,7 @@ describe('ExplorerService', () => {
         projectRepo: createMockProjectRepo(),
       };
       dbManager = createMockDbManager(newDeps);
-      service = new ExplorerService(dbManager, playwright, aiProvider, promptManager);
+      service = new ExplorerService(dbManager, proxyClient, promptManager);
 
       const result = service.confirmBinding('bind-0');
 
@@ -560,7 +561,7 @@ describe('ExplorerService', () => {
         projectRepo: createMockProjectRepo(),
       };
       dbManager = createMockDbManager(newDeps);
-      service = new ExplorerService(dbManager, playwright, aiProvider, promptManager);
+      service = new ExplorerService(dbManager, proxyClient, promptManager);
 
       const result = service.rejectBinding('bind-0');
 
@@ -588,7 +589,7 @@ describe('ExplorerService', () => {
       });
       setupService(externalLinkResponse);
 
-      (playwright.navigate as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) => ({
+      (proxyClient.navigate as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) => ({
         success: true,
         url,
       }));
@@ -596,7 +597,7 @@ describe('ExplorerService', () => {
       await service.startExploration(PROJECT_ID);
 
       // Verify navigate was never called with an external URL
-      const calls = (playwright.navigate as ReturnType<typeof vi.fn>).mock.calls;
+      const calls = (proxyClient.navigate as ReturnType<typeof vi.fn>).mock.calls;
       for (const call of calls) {
         const url: string = call[0];
         expect(url.startsWith(BASE_URL) || url.startsWith('/')).toBe(true);
@@ -619,7 +620,7 @@ describe('ExplorerService', () => {
 
       // Navigate resolves quickly, but we have many pages to explore
       let callCount = 0;
-      (playwright.navigate as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+      (proxyClient.navigate as ReturnType<typeof vi.fn>).mockImplementation(async () => {
         callCount++;
         return { success: true, url: `${BASE_URL}/page-${callCount}` };
       });

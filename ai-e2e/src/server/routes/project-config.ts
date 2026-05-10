@@ -202,7 +202,7 @@ const configRoutes: FastifyPluginAsyncTypebox<ConfigRouteOptions> = async (fasti
       const { id: projectId } = request.params as { id: string };
 
       if (!loginRecorder) {
-        throw ServiceError.internal('Login recorder service not available');
+        throw ServiceError.unavailable('Login recorder service not available');
       }
 
       const result = await loginRecorder.replayLogin(projectId);

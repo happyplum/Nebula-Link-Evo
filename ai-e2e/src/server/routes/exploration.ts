@@ -11,7 +11,16 @@ import fp from '../plugins/fastify-plugin.js';
 import { DatabaseManager } from '../../database/db.js';
 import { ExplorerService } from '../../services/explorer-service.js';
 import { ServiceError } from '../../services/service-error.js';
+import type { ProxyAdapterClient } from '../../infrastructure/proxy-adapter-client.js';
+import type { PromptTemplateManager } from '../../ai/prompt-manager.js';
 import type { BindingStatus } from '../../types/url.js';
+
+// ---------- Options ----------
+
+export interface ExplorationRouteOptions {
+  proxyClient?: ProxyAdapterClient | null;
+  promptManager?: PromptTemplateManager;
+}
 
 // ---------- Schemas ----------
 
@@ -85,15 +94,31 @@ type UpdateBindingRequest = Static<typeof UpdateBindingRequestSchema>;
 
 // ---------- Route Plugin ----------
 
-const explorationRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
+const explorationRoutes: FastifyPluginAsyncTypebox<ExplorationRouteOptions> = async (fastify, options) => {
+  const { proxyClient = null, promptManager: promptManagerOpt } = options;
+
+  function requireProxyClient(): ProxyAdapterClient {
+    if (!proxyClient) {
+      throw ServiceError.unavailable('AI service not configured (PROXY_ADAPTER_URL is empty)');
+    }
+    return proxyClient;
+  }
+
+  function requirePromptManager(): PromptTemplateManager {
+    if (!promptManagerOpt) {
+      throw ServiceError.internal('Prompt manager not configured');
+    }
+    return promptManagerOpt;
+  }
+
   /**
    * Create an ExplorerService for the given request.
-   * In production this would use injected dependencies; for now, we use
-   * the DatabaseManager singleton and mock-ready constructor signature.
    */
   function getExplorerService(): ExplorerService {
+    const client = requireProxyClient();
+    const manager = requirePromptManager();
     const db = DatabaseManager.getInstance();
-    return new ExplorerService(db, null as never, null as never, null as never);
+    return new ExplorerService(db, client, manager);
   }
 
   // POST /start — trigger web exploration

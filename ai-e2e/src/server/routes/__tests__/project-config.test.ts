@@ -189,7 +189,7 @@ describe('POST /api/projects/:id/config/login-script/test', () => {
     expect(res.json().error).toBe('Script not found');
   });
 
-  it('returns 500 when login recorder is not configured', async () => {
+  it('returns 503 when login recorder is not configured', async () => {
     const app = await buildApp(); // no loginRecorder
 
     const res = await app.inject({
@@ -197,6 +197,6 @@ describe('POST /api/projects/:id/config/login-script/test', () => {
       url: '/api/projects/some-project/config/login-script/test',
     });
 
-    expect(res.statusCode).toBe(500);
+    expect(res.statusCode).toBe(503);
   });
 });

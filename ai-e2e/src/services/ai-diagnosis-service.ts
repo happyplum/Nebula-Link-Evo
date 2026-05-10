@@ -9,7 +9,7 @@
  * - Max retries: 3 auto-fix attempts per execution
  * - Auto-fix only allowed for: selectors, wait strategies, assertion values
  */
-import type { AIProvider } from '../ai/provider.js';
+import type { ProxyAdapterClient } from '../infrastructure/proxy-adapter-client.js';
 import type { PromptTemplateManager } from '../ai/prompt-manager.js';
 import type { ExecutionRunRepository, ExecutionRun } from '../database/repositories/execution-run-repository.js';
 import type { AIInterventionLogRepository, AIInterventionLog } from '../database/repositories/ai-intervention-log-repository.js';
@@ -35,7 +35,7 @@ export interface AutoFixResult {
 
 export class AIDiagnosisService {
   constructor(
-    private aiProvider: AIProvider,
+    private proxyClient: ProxyAdapterClient,
     private promptManager: PromptTemplateManager,
     private runRepo: ExecutionRunRepository,
     private interventionRepo: AIInterventionLogRepository,
@@ -77,7 +77,7 @@ export class AIDiagnosisService {
     });
 
     // Call AI
-    const result = await this.aiProvider.generateText(prompt);
+    const result = await this.proxyClient.generateText(prompt);
 
     // Store intervention log
     const diagnosis = result.text;
@@ -154,7 +154,7 @@ export class AIDiagnosisService {
     });
 
     // Call AI for fix
-    const result = await this.aiProvider.generateText(prompt);
+    const result = await this.proxyClient.generateText(prompt);
     const fixedContent = result.text;
 
     // Calculate line diff ratio

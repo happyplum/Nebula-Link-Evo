@@ -1,4 +1,4 @@
-import type { AIProvider } from '../ai/provider.js';
+import type { ProxyAdapterClient } from '../infrastructure/proxy-adapter-client.js';
 import type { PromptTemplateManager } from '../ai/prompt-manager.js';
 import type { TokenBudgetTracker } from '../ai/token-tracker.js';
 import type { DatabaseManager } from '../database/db.js';
@@ -56,7 +56,7 @@ export interface AnalysisResult {
 
 export class PRDAnalyzerService {
   constructor(
-    private readonly provider: AIProvider,
+    private readonly proxyClient: ProxyAdapterClient,
     private readonly promptManager: PromptTemplateManager,
     private readonly tokenTracker: TokenBudgetTracker,
     private readonly db: DatabaseManager,
@@ -99,7 +99,7 @@ export class PRDAnalyzerService {
       format: AI_RESPONSE_FORMAT,
     });
 
-    const result = await this.provider.generateText(prompt);
+    const result = await this.proxyClient.generateText(prompt);
 
     // Track token usage
     this.tokenTracker.record('prd-analysis', result.tokenUsage.promptTokens, result.tokenUsage.completionTokens);
@@ -172,7 +172,7 @@ export class PRDAnalyzerService {
       prd_context: prdContext,
     });
 
-    const result = await this.provider.generateText(prompt);
+    const result = await this.proxyClient.generateText(prompt);
 
     // Track token usage
     this.tokenTracker.record('prd-decomposition', result.tokenUsage.promptTokens, result.tokenUsage.completionTokens);
@@ -227,7 +227,7 @@ export class PRDAnalyzerService {
       business_context: businessContext,
     });
 
-    const result = await this.provider.generateText(prompt);
+    const result = await this.proxyClient.generateText(prompt);
 
     // Track token usage
     this.tokenTracker.record('test-scenario-generation', result.tokenUsage.promptTokens, result.tokenUsage.completionTokens);

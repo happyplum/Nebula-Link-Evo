@@ -83,6 +83,52 @@ export class BrowserClient {
     await axios.post(`${PLAYWRIGHT_URL}/action/click-by-selector`, { selector }, { timeout: BROWSER_TIMEOUT_MS });
   }
 
+  async executeScript(script: string, args?: unknown[]): Promise<unknown> {
+    const response = await axios.post(`${PLAYWRIGHT_URL}/dom/script`, {
+      script,
+      args: args ?? [],
+    }, { timeout: BROWSER_TIMEOUT_MS });
+    return response.data.result;
+  }
+
+  async getCookies(): Promise<Array<{ name: string; value: string; domain: string }>> {
+    const result = await this.executeScript(
+      `(() => window.document['cookie']
+        .split(';')
+        .map((cookie) => cookie.trim())
+        .filter(Boolean)
+        .map((cookie) => {
+          const [name, ...rest] = cookie.split('=');
+          return {
+            name,
+            value: rest.join('='),
+            domain: window.location.hostname,
+          };
+        }))()`
+    );
+    return Array.isArray(result)
+      ? (result as Array<{ name: string; value: string; domain: string }>)
+      : [];
+  }
+
+  async getLocalStorage(): Promise<Record<string, string>> {
+    const result = await this.executeScript(
+      `(() => {
+        const data = {};
+        for (let index = 0; index < localStorage.length; index += 1) {
+          const key = localStorage.key(index);
+          if (key) {
+            data[key] = localStorage.getItem(key) ?? '';
+          }
+        }
+        return data;
+      })()`
+    );
+    return result && typeof result === 'object' && !Array.isArray(result)
+      ? (result as Record<string, string>)
+      : {};
+  }
+
   async clickByMarker(snapshotId: string, nebulaId: number): Promise<void> {
     await axios.post(`${PLAYWRIGHT_URL}/action/click-by-marker`, {
       snapshot_id: snapshotId,
