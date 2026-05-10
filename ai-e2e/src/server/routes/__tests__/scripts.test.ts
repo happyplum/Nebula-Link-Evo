@@ -7,6 +7,8 @@ import { DatabaseManager } from '../../../database/db.js';
 import errorHandlerPlugin from '../../plugins/error-handler.js';
 import sseEmitterPlugin from '../../plugins/sse-emitter.js';
 import { default as scriptsRoutes } from '../scripts.js';
+import type { ProxyAdapterClient } from '../../../infrastructure/proxy-adapter-client.js';
+import type { PromptTemplateManager } from '../../../ai/prompt-manager.js';
 
 // ---------- Mocks ----------
 
@@ -22,6 +24,30 @@ vi.mock('../../../services/script-generator-service.js', () => ({
   ScriptGeneratorService: vi.fn(function () { return mockScriptGeneratorService; }),
 }));
 
+const mockProxyClient = {
+  generateText: vi.fn(),
+  navigate: vi.fn(),
+  getSnapshot: vi.fn(),
+  screenshot: vi.fn(),
+  getPageInfo: vi.fn(),
+  healthCheck: vi.fn(),
+  click: vi.fn(),
+  clickBySelector: vi.fn(),
+  type: vi.fn(),
+  executeScript: vi.fn(),
+  getCookies: vi.fn(),
+  getLocalStorage: vi.fn(),
+  getDOM: vi.fn(),
+  openBrowser: vi.fn(),
+  closeBrowser: vi.fn(),
+} as unknown as ProxyAdapterClient;
+
+const mockPromptManager = {
+  render: vi.fn(),
+  load: vi.fn(),
+  listTemplates: vi.fn(),
+} as unknown as PromptTemplateManager;
+
 // ---------- Helpers ----------
 
 const apps = new Set<FastifyInstance>();
@@ -35,7 +61,11 @@ async function buildApp(): Promise<FastifyInstance> {
   app.register(cors, { origin: true, credentials: true });
   app.register(errorHandlerPlugin);
   app.register(sseEmitterPlugin);
-  app.register(scriptsRoutes, { prefix: '/api/projects/:id/scripts' });
+  app.register(scriptsRoutes, {
+    prefix: '/api/projects/:id/scripts',
+    proxyClient: mockProxyClient,
+    promptManager: mockPromptManager,
+  });
   await app.ready();
   apps.add(app);
   return app;

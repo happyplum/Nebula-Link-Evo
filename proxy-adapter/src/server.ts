@@ -17,6 +17,7 @@ import { normalizeLogLevel } from './services/logger.js';
 import healthRoutes from './plugins/routes/health.js';
 import configRoutes from './plugins/routes/config.js';
 import livekitTokenRoutes from './plugins/routes/api/livekit-token.js';
+import aiServiceRoutes from './plugins/routes/api/ai-service.js';
 import debugRoutes from './plugins/routes/debug/index.js';
 import apiChatRoutes from './plugins/routes/api/chat/index.js';
 import { runPreflight } from './services/provider/preflight.js';
@@ -119,10 +120,12 @@ async function start() {
     await app.register(healthRoutes, { prefix: '/api/health' });
     await app.register(configRoutes, { prefix: '/api/config' });
     await app.register(livekitTokenRoutes, { prefix: '/api' });
+    await app.register(aiServiceRoutes, { prefix: '/api/ai' });
 
     // Register API chat routes - Async message handling and SSE streaming
     await app.register(apiChatRoutes, { prefix: '/api/chat' });
     app.log.info({ prefix: '/api/chat' }, 'API chat routes registered');
+    app.log.info({ prefix: '/api/ai' }, 'AI service routes registered');
 
     // Register Debug routes
     await app.register(debugRoutes, { prefix: '/debug' });
@@ -157,15 +160,16 @@ async function start() {
       },
       async () => {
         return {
-          service: 'Proxy Adapter',
-          version: '2.0.0',
-          mode: 'multi-model',
-          endpoints: {
-            'GET /api/health': 'Health check',
-            'GET /api/config': 'Show current configuration',
-            'GET /debug/api/*': 'Debug API endpoints',
-          },
-        };
+              service: 'Proxy Adapter',
+              version: '2.0.0',
+              mode: 'multi-model',
+              endpoints: {
+                'GET /api/health': 'Health check',
+                'GET /api/config': 'Show current configuration',
+                'POST /api/ai/generate': 'Generate plain text with the decision model',
+                'GET /debug/api/*': 'Debug API endpoints',
+              },
+            };
       }
     );
 
@@ -174,6 +178,7 @@ async function start() {
     app.log.info('Available endpoints:');
     app.log.info({ endpoint: 'GET  /api/health' });
     app.log.info({ endpoint: 'GET  /api/config' });
+    app.log.info({ endpoint: 'POST /api/ai/generate' });
     app.log.info({ endpoint: 'GET  /api/chat/*    - Chat API (SSE)' });
     app.log.info({ endpoint: 'GET  /debug/api/*    - Debug API' });
   } catch (err) {

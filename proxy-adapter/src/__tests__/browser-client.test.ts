@@ -108,6 +108,36 @@ describe('BrowserClient', () => {
       expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/action/click-by-selector'), { selector: '#test' }, { timeout: 30000 });
     });
 
+    it('should call executeScript', async () => {
+      vi.mocked(axios.post).mockResolvedValueOnce({ data: { result: { ok: true } } });
+      const result = await client.executeScript('return true', ['arg']);
+      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/dom/script'), {
+        script: 'return true',
+        args: ['arg']
+      }, { timeout: 30000 });
+      expect(result).toEqual({ ok: true });
+    });
+
+    it('should get cookies via executeScript', async () => {
+      const cookies = [{ name: 'session', value: 'abc', domain: 'example.com' }];
+      vi.mocked(axios.post).mockResolvedValueOnce({ data: { result: cookies } });
+      const result = await client.getCookies();
+      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/dom/script'), expect.objectContaining({
+        args: []
+      }), { timeout: 30000 });
+      expect(result).toEqual(cookies);
+    });
+
+    it('should get localStorage via executeScript', async () => {
+      const storage = { token: 'abc' };
+      vi.mocked(axios.post).mockResolvedValueOnce({ data: { result: storage } });
+      const result = await client.getLocalStorage();
+      expect(axios.post).toHaveBeenCalledWith(expect.stringContaining('/dom/script'), expect.objectContaining({
+        args: []
+      }), { timeout: 30000 });
+      expect(result).toEqual(storage);
+    });
+
     it('should call clickByMarker', async () => {
       vi.mocked(axios.post).mockResolvedValueOnce({ data: { success: true } });
       await client.clickByMarker('snap-1', 123);

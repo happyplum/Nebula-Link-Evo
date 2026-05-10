@@ -17,15 +17,12 @@
     "lint": "eslint ."
   },
   "dependencies": {
-    "@ai-sdk/openai-compatible": "^2.0.31",
-    "@ai-sdk/provider": "^3.0.8",
     "@fastify/autoload": "catalog:",
     "@fastify/cors": "catalog:",
     "@fastify/static": "^8.0.0",
     "@fastify/type-provider-typebox": "catalog:",
     "@nebula-link-evo/shared": "workspace:*",
     "@sinclair/typebox": "catalog:",
-    "ai": "^6.0.105",
     "axios": "catalog:",
     "better-sqlite3": "^11.0.0",
     "dotenv": "catalog:",

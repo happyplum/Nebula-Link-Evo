@@ -12,13 +12,18 @@ import {
   BusinessModuleSchema,
   ErrorResponseSchema,
 } from '../../types/api.js';
-import type { PRDAnalyzerService } from '../../services/prd-analyzer-service.js';
+import { PRDAnalyzerService } from '../../services/prd-analyzer-service.js';
 import { DatabaseManager } from '../../database/db.js';
 import { ServiceError } from '../../services/service-error.js';
+import type { ProxyAdapterClient } from '../../infrastructure/proxy-adapter-client.js';
+import type { PromptTemplateManager } from '../../ai/prompt-manager.js';
+import type { TokenBudgetTracker } from '../../ai/token-tracker.js';
 import type { SourceOrigin } from '../../types/business-module.js';
 
 export interface AnalysisRouteOptions {
-  prdAnalyzer?: PRDAnalyzerService;
+  proxyClient?: ProxyAdapterClient | null;
+  promptManager?: PromptTemplateManager;
+  tokenTracker?: TokenBudgetTracker;
 }
 
 const ModuleIdParamSchema = Type.Object({
@@ -108,11 +113,20 @@ function requireProject(projectId: string): void {
 }
 
 const analysisRoutes: FastifyPluginAsyncTypebox<AnalysisRouteOptions> = async (fastify, options) => {
-  const prdAnalyzerOverride = options.prdAnalyzer;
+  const { proxyClient = null, promptManager: promptManagerOpt, tokenTracker: tokenTrackerOpt } = options;
 
   function getAnalyzer(): PRDAnalyzerService {
-    if (prdAnalyzerOverride) return prdAnalyzerOverride;
-    throw ServiceError.internal('PRD analyzer service not configured');
+    if (!proxyClient) {
+      throw ServiceError.unavailable('AI service not configured (PROXY_ADAPTER_URL is empty)');
+    }
+    if (!promptManagerOpt) {
+      throw ServiceError.internal('Prompt manager not configured');
+    }
+    if (!tokenTrackerOpt) {
+      throw ServiceError.internal('Token tracker not configured');
+    }
+    const db = DatabaseManager.getInstance();
+    return new PRDAnalyzerService(proxyClient, promptManagerOpt, tokenTrackerOpt, db);
   }
 
   // POST /upload — upload PRD content

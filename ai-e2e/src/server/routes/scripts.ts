@@ -11,8 +11,17 @@ import fp from '../plugins/fastify-plugin.js';
 import { DatabaseManager } from '../../database/db.js';
 import { ScriptGeneratorService } from '../../services/script-generator-service.js';
 import { ServiceError } from '../../services/service-error.js';
+import type { ProxyAdapterClient } from '../../infrastructure/proxy-adapter-client.js';
+import type { PromptTemplateManager } from '../../ai/prompt-manager.js';
 import type { Script as ScriptEntity } from '../../types/script.js';
 import type { GeneratedValue as GeneratedValueType, ScriptStatus as ScriptStatusType } from '../../types/script.js';
+
+// ---------- Options ----------
+
+export interface ScriptsRouteOptions {
+  proxyClient?: ProxyAdapterClient | null;
+  promptManager?: PromptTemplateManager;
+}
 
 // ---------- Schemas ----------
 
@@ -73,16 +82,33 @@ type EditScriptRequest = Static<typeof EditScriptRequestSchema>;
 
 // ---------- Route Plugin ----------
 
-const scriptsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
+const scriptsRoutes: FastifyPluginAsyncTypebox<ScriptsRouteOptions> = async (fastify, options) => {
+  const { proxyClient = null, promptManager: promptManagerOpt } = options;
+
+  function requireProxyClient(): ProxyAdapterClient {
+    if (!proxyClient) {
+      throw ServiceError.unavailable('AI service not configured (PROXY_ADAPTER_URL is empty)');
+    }
+    return proxyClient;
+  }
+
+  function requirePromptManager(): PromptTemplateManager {
+    if (!promptManagerOpt) {
+      throw ServiceError.internal('Prompt manager not configured');
+    }
+    return promptManagerOpt;
+  }
+
   /**
    * Create a ScriptGeneratorService for the given request.
-   * In production, dependencies would be injected via Fastify decorators.
    */
   function getScriptGeneratorService(): ScriptGeneratorService {
+    const client = requireProxyClient();
+    const manager = requirePromptManager();
     const db = DatabaseManager.getInstance();
     return new ScriptGeneratorService({
-      aiProvider: null as never,
-      promptManager: null as never,
+      proxyClient: client,
+      promptManager: manager,
       scriptRepo: db.getScriptRepo(),
       scenarioRepo: db.getTestScenarioRepo(),
       urlRepo: db.getURLRepo(),

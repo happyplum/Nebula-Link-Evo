@@ -527,6 +527,41 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
   );
 
   fastify.post(
+    '/api/playwright/click-by-selector',
+    {
+      schema: {
+        description: 'Click element by selector',
+        tags: ['Debug'],
+        body: {
+          type: 'object',
+          properties: {
+            selector: { type: 'string' },
+          },
+          required: ['selector'],
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              message: { type: 'string' },
+            },
+          },
+        },
+      },
+    },
+    async (request, _reply) => {
+      const { selector } = request.body as { selector: string };
+      try {
+        await browserClient.clickBySelector(selector);
+        return { success: true, message: `已点击元素 ${selector}` };
+      } catch (error) {
+        return { success: false, error: (error as Error).message };
+      }
+    }
+  );
+
+  fastify.post(
     '/api/playwright/click',
     {
       schema: {
@@ -548,6 +583,112 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       try {
         await browserClient.click(x, y);
         return { success: true, message: `已点击坐标 (${x}, ${y})` };
+      } catch (error) {
+        return { success: false, error: (error as Error).message };
+      }
+    }
+  );
+
+  fastify.post(
+    '/api/playwright/execute-script',
+    {
+      schema: {
+        description: 'Execute script in browser context',
+        tags: ['Debug'],
+        body: {
+          type: 'object',
+          properties: {
+            script: { type: 'string' },
+            args: {
+              type: 'array',
+              items: {},
+            },
+          },
+          required: ['script'],
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              result: {},
+            },
+          },
+        },
+      },
+    },
+    async (request, _reply) => {
+      const { script, args } = request.body as { script: string; args?: unknown[] };
+      try {
+        const result = await browserClient.executeScript(script, args);
+        return { success: true, result };
+      } catch (error) {
+        return { success: false, error: (error as Error).message };
+      }
+    }
+  );
+
+  fastify.get(
+    '/api/playwright/cookies',
+    {
+      schema: {
+        description: 'Get document cookies from current page',
+        tags: ['Debug'],
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              cookies: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    name: { type: 'string' },
+                    value: { type: 'string' },
+                    domain: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    async () => {
+      try {
+        const cookies = await browserClient.getCookies();
+        return { success: true, cookies };
+      } catch (error) {
+        return { success: false, error: (error as Error).message };
+      }
+    }
+  );
+
+  fastify.get(
+    '/api/playwright/local-storage',
+    {
+      schema: {
+        description: 'Get localStorage data from current page',
+        tags: ['Debug'],
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              data: {
+                type: 'object',
+                additionalProperties: { type: 'string' },
+              },
+            },
+          },
+        },
+      },
+    },
+    async () => {
+      try {
+        const data = await browserClient.getLocalStorage();
+        return { success: true, data };
       } catch (error) {
         return { success: false, error: (error as Error).message };
       }

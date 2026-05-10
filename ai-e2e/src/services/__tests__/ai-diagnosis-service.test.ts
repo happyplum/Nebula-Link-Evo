@@ -1,11 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { AIDiagnosisService } from '../ai-diagnosis-service.js';
-import type { AIProvider } from '../../ai/provider.js';
+import type { ProxyAdapterClient } from '../../infrastructure/proxy-adapter-client.js';
 import type { PromptTemplateManager } from '../../ai/prompt-manager.js';
 import type { ExecutionRunRepository, ExecutionRun } from '../../database/repositories/execution-run-repository.js';
 import type { AIInterventionLogRepository, AIInterventionLog } from '../../database/repositories/ai-intervention-log-repository.js';
 import type { ScriptRepository, Script } from '../../database/repositories/script-repository.js';
-import { TextGenerationResult } from '../../ai/provider.js';
 
 // ---------- Repository & Provider mocks ----------
 
@@ -133,7 +132,7 @@ test("login flow", async ({ page }) => {
   } as unknown as ScriptRepository;
 }
 
-function createMockAIProvider(response?: Partial<TextGenerationResult>): AIProvider {
+function createMockProxyClient(response?: { text: string; tokenUsage: { promptTokens: number; completionTokens: number } }): ProxyAdapterClient {
   return {
     generateText: vi.fn(() => Promise.resolve({
       text: JSON.stringify({
@@ -149,10 +148,21 @@ function createMockAIProvider(response?: Partial<TextGenerationResult>): AIProvi
       tokenUsage: { promptTokens: 100, completionTokens: 50 },
       ...response,
     })),
-    initialize: vi.fn(() => Promise.resolve()),
-    getModel: vi.fn(),
-    streamText: vi.fn(),
-  } as unknown as AIProvider;
+    navigate: vi.fn(),
+    getSnapshot: vi.fn(),
+    screenshot: vi.fn(),
+    getPageInfo: vi.fn(),
+    healthCheck: vi.fn(),
+    click: vi.fn(),
+    clickBySelector: vi.fn(),
+    type: vi.fn(),
+    executeScript: vi.fn(),
+    getCookies: vi.fn(),
+    getLocalStorage: vi.fn(),
+    getDOM: vi.fn(),
+    openBrowser: vi.fn(),
+    closeBrowser: vi.fn(),
+  } as unknown as ProxyAdapterClient;
 }
 
 function createMockPromptManager(): PromptTemplateManager {
@@ -171,7 +181,7 @@ const { AIDiagnosisService: ADS } = await import('../ai-diagnosis-service.js');
 
 describe('AIDiagnosisService', () => {
   let service: AIDiagnosisService;
-  let aiProvider: AIProvider;
+  let proxyClient: ProxyAdapterClient;
   let promptManager: PromptTemplateManager;
   let runRepo: ExecutionRunRepository;
   let interventionRepo: AIInterventionLogRepository;
@@ -179,12 +189,12 @@ describe('AIDiagnosisService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    aiProvider = createMockAIProvider();
+    proxyClient = createMockProxyClient();
     promptManager = createMockPromptManager();
     runRepo = createMockRunRepo();
     interventionRepo = createMockInterventionRepo();
     scriptRepo = createMockScriptRepo();
-    service = new ADS(aiProvider, promptManager, runRepo, interventionRepo, scriptRepo);
+    service = new ADS(proxyClient, promptManager, runRepo, interventionRepo, scriptRepo);
   });
 
   // ===== diagnoseFailure =====
@@ -193,7 +203,7 @@ describe('AIDiagnosisService', () => {
     it('should collect context, call AI, and store intervention log', async () => {
       const result = await service.diagnoseFailure('run-1');
 
-      expect(aiProvider.generateText).toHaveBeenCalled();
+      expect(proxyClient.generateText).toHaveBeenCalled();
       expect(interventionRepo.create).toHaveBeenCalledWith(
         expect.objectContaining({
           execution_run_id: 'run-1',
@@ -221,7 +231,7 @@ describe('AIDiagnosisService', () => {
   describe('attemptAutoFix', () => {
     it('should apply fix and create new script version when change is <30%', async () => {
       // AI returns a fix that only changes selectors (small diff)
-      const fixResponse: Partial<TextGenerationResult> = {
+      const fixResponse: { text: string; tokenUsage: { promptTokens: number; completionTokens: number } } = {
         text: `import { test, expect } from "@playwright/test";
 
 test("login flow", async ({ page }) => {
@@ -255,8 +265,8 @@ test("login flow", async ({ page }) => {
   await page.waitForSelector("#login-form");
 });`,
       };
-      const fixProvider = createMockAIProvider(fixResponse);
-      service = new ADS(fixProvider, promptManager, runRepo, interventionRepo, scriptRepo);
+      const fixClient = createMockProxyClient(fixResponse);
+      service = new ADS(fixClient, promptManager, runRepo, interventionRepo, scriptRepo);
 
       // Provide a prior diagnosis log
       (interventionRepo.findByRunId as ReturnType<typeof vi.fn>).mockReturnValueOnce([
@@ -281,7 +291,7 @@ test("login flow", async ({ page }) => {
 
     it('should request human review when change is >=30%', async () => {
       // AI returns a drastically different script (>=30% line change)
-      const bigChangeResponse: Partial<TextGenerationResult> = {
+      const bigChangeResponse: { text: string; tokenUsage: { promptTokens: number; completionTokens: number } } = {
         text: `import { test } from "playwright";
 // This is a completely rewritten script
 test("completely new test", async ({ page }) => {
@@ -298,8 +308,8 @@ test("completely new test", async ({ page }) => {
   // Line 12
 });`,
       };
-      const fixProvider = createMockAIProvider(bigChangeResponse);
-      service = new ADS(fixProvider, promptManager, runRepo, interventionRepo, scriptRepo);
+      const bigChangeClient = createMockProxyClient(bigChangeResponse);
+      service = new ADS(bigChangeClient, promptManager, runRepo, interventionRepo, scriptRepo);
 
       // Provide a prior diagnosis log
       (interventionRepo.findByRunId as ReturnType<typeof vi.fn>).mockReturnValueOnce([

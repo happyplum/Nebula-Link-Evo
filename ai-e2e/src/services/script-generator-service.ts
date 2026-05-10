@@ -8,7 +8,7 @@
  * - Version management (each edit creates a new version)
  */
 
-import type { AIProvider } from '../ai/provider.js';
+import type { ProxyAdapterClient } from '../infrastructure/proxy-adapter-client.js';
 import type { PromptTemplateManager } from '../ai/prompt-manager.js';
 import type { ScriptRepository, Script } from '../database/repositories/script-repository.js';
 import type { TestScenarioRepository } from '../database/repositories/test-scenario-repository.js';
@@ -18,7 +18,7 @@ import type { URLModuleBindingRepository } from '../database/repositories/url-mo
 // ---------- types ----------
 
 export interface ScriptGeneratorDeps {
-  aiProvider: AIProvider;
+  proxyClient: ProxyAdapterClient;
   promptManager: PromptTemplateManager;
   scriptRepo: ScriptRepository;
   scenarioRepo: TestScenarioRepository;
@@ -40,7 +40,7 @@ const TEST_DATA_GENERATION_TEMPLATE = 'test-data-generation';
 // ---------- service ----------
 
 export class ScriptGeneratorService {
-  private readonly aiProvider: AIProvider;
+  private readonly proxyClient: ProxyAdapterClient;
   private readonly promptManager: PromptTemplateManager;
   private readonly scriptRepo: ScriptRepository;
   private readonly scenarioRepo: TestScenarioRepository;
@@ -48,7 +48,7 @@ export class ScriptGeneratorService {
   private readonly urlBindingRepo: URLModuleBindingRepository;
 
   constructor(deps: ScriptGeneratorDeps) {
-    this.aiProvider = deps.aiProvider;
+    this.proxyClient = deps.proxyClient;
     this.promptManager = deps.promptManager;
     this.scriptRepo = deps.scriptRepo;
     this.scenarioRepo = deps.scenarioRepo;
@@ -77,7 +77,7 @@ export class ScriptGeneratorService {
     let currentPrompt = prompt;
 
     for (let attempt = 1; attempt <= MAX_GENERATION_ATTEMPTS; attempt++) {
-      const { text } = await this.aiProvider.generateText(currentPrompt, { temperature: 0.3 });
+      const { text } = await this.proxyClient.generateText(currentPrompt, { temperature: 0.3 });
       const validation = this.validateScriptSyntax(text);
 
       if (validation.valid) {
@@ -113,7 +113,7 @@ export class ScriptGeneratorService {
       page_fields: pageSnapshot,
     });
 
-    const { text } = await this.aiProvider.generateText(prompt, { temperature: 0.3 });
+    const { text } = await this.proxyClient.generateText(prompt, { temperature: 0.3 });
 
     return this.extractJSON(text);
   }

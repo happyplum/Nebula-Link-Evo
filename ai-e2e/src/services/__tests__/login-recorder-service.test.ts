@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { LoginScriptRepository, LoginScript as RepoLoginScript, CreateLoginScriptParams, UpdateLoginScriptParams } from '../../database/repositories/login-script-repository.js';
 import type { ProjectRepository, Project as RepoProject } from '../../database/repositories/project-repository.js';
 import type { DatabaseManager } from '../../database/db.js';
-import type { PlaywrightClient } from '../playwright-client.js';
+import type { ProxyAdapterClient } from '../../infrastructure/proxy-adapter-client.js';
 import type { LoginStep } from '../../types/login-script.js';
 
 // ---------- Mock factories ----------
@@ -73,20 +73,24 @@ function createMockProjectRepo(store?: Map<string, RepoProject>): ProjectReposit
   } as unknown as ProjectRepository;
 }
 
-function createMockPlaywrightClient(): PlaywrightClient {
+function createMockProxyClient(): ProxyAdapterClient {
   return {
     navigate: vi.fn(() => Promise.resolve({ success: true, url: 'https://example.com' })),
     click: vi.fn(() => Promise.resolve({ success: true })),
+    clickBySelector: vi.fn(() => Promise.resolve({ success: true })),
     type: vi.fn(() => Promise.resolve({ success: true })),
     screenshot: vi.fn(() => Promise.resolve({ base64: 'fake-screenshot' })),
-    get_cookies: vi.fn(() => Promise.resolve({ cookies: [] })),
-    get_localStorage: vi.fn(() => Promise.resolve({ data: {} })),
+    getCookies: vi.fn(() => Promise.resolve({ cookies: [] })),
+    getLocalStorage: vi.fn(() => Promise.resolve({ data: {} })),
     executeScript: vi.fn(() => Promise.resolve({ result: null })),
     getSnapshot: vi.fn(() => Promise.resolve({ elements: {} })),
     getDOM: vi.fn(() => Promise.resolve({ html: '<html></html>' })),
     getPageInfo: vi.fn(() => Promise.resolve({ url: 'https://example.com', title: 'Test' })),
     healthCheck: vi.fn(() => Promise.resolve(true)),
-  } as unknown as PlaywrightClient;
+    generateText: vi.fn(() => Promise.resolve({ text: '', tokenUsage: { promptTokens: 0, completionTokens: 0 } })),
+    openBrowser: vi.fn(() => Promise.resolve({ success: true })),
+    closeBrowser: vi.fn(() => Promise.resolve({ success: true })),
+  } as unknown as ProxyAdapterClient;
 }
 
 function createMockDbManager(
@@ -112,7 +116,7 @@ describe('LoginRecorderService', () => {
   let dbManager: DatabaseManager;
   let scriptStore: Map<string, RepoLoginScript>;
   let projectStore: Map<string, RepoProject>;
-  let mockClient: PlaywrightClient;
+  let mockClient: ProxyAdapterClient;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -121,7 +125,7 @@ describe('LoginRecorderService', () => {
     loginScriptRepo = createMockLoginScriptRepo(scriptStore);
     projectRepo = createMockProjectRepo(projectStore);
     dbManager = createMockDbManager(projectRepo, loginScriptRepo);
-    mockClient = createMockPlaywrightClient();
+    mockClient = createMockProxyClient();
     service = new LoginRecorderService(dbManager, mockClient);
   });
 
@@ -205,7 +209,7 @@ describe('LoginRecorderService', () => {
   // ===== replayLogin =====
 
   describe('replayLogin', () => {
-    it('should execute steps in order via PlaywrightClient', async () => {
+    it('should execute steps in order via ProxyAdapterClient', async () => {
       const project = projectRepo.create({ name: 'Replay' });
       service.startRecording(project.id);
 
@@ -221,7 +225,7 @@ describe('LoginRecorderService', () => {
       expect(mockClient.navigate).toHaveBeenCalledWith('https://app.com/login');
       expect(mockClient.type).toHaveBeenCalledWith('#username', 'admin');
       expect(mockClient.type).toHaveBeenCalledWith('#password', 'secret');
-      expect(mockClient.click).toHaveBeenCalledWith('#login-btn');
+      expect(mockClient.clickBySelector).toHaveBeenCalledWith('#login-btn');
     });
 
     it('should return failure when no script exists', async () => {
@@ -231,7 +235,7 @@ describe('LoginRecorderService', () => {
       expect(result.error).toContain('not found');
     });
 
-    it('should handle PlaywrightClient errors gracefully', async () => {
+    it('should handle ProxyAdapterClient errors gracefully', async () => {
       const project = projectRepo.create({ name: 'FailReplay' });
       service.startRecording(project.id);
       service.recordStep(project.id, { type: 'navigate', description: 'Go', url: 'https://bad.com' });
@@ -252,7 +256,7 @@ describe('LoginRecorderService', () => {
       service.startRecording(project.id);
       service.recordStep(project.id, { type: 'navigate', description: 'Go', url: 'https://app.com' });
 
-      (mockClient.get_cookies as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      (mockClient.getCookies as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
         cookies: [{ name: 'session', value: 'abc123', domain: 'app.com' }],
       });
 
@@ -269,7 +273,7 @@ describe('LoginRecorderService', () => {
       service.startRecording(project.id);
       service.recordStep(project.id, { type: 'navigate', description: 'Go', url: 'https://app.com' });
 
-      (mockClient.get_cookies as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ cookies: [] });
+      (mockClient.getCookies as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ cookies: [] });
 
       const result = await service.verifyLogin(project.id, {
         method: 'cookie',
@@ -284,7 +288,7 @@ describe('LoginRecorderService', () => {
       service.startRecording(project.id);
       service.recordStep(project.id, { type: 'navigate', description: 'Go', url: 'https://app.com' });
 
-      (mockClient.get_localStorage as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      (mockClient.getLocalStorage as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
         data: { token: 'jwt-token-123' },
       });
 

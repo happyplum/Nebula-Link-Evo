@@ -6,6 +6,9 @@ import dotenv from 'dotenv';
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseManager } from '../database/db.js';
+import { ProxyAdapterClient } from '../infrastructure/proxy-adapter-client.js';
+import { PromptTemplateManager, TokenBudgetTracker } from '../ai/index.js';
+import { LoginRecorderService } from '../services/login-recorder-service.js';
 import errorHandlerPlugin from './plugins/error-handler.js';
 import sseEmitterPlugin from './plugins/sse-emitter.js';
 import executionRoutes from './routes/execution.js';
@@ -30,6 +33,7 @@ if (fs.existsSync(envLocalPath)) {
 
 const DEFAULT_PORT = 3002;
 const DEFAULT_DB_PATH = './data/ai-e2e.sqlite';
+const DEFAULT_TOKEN_BUDGET = 500_000;
 
 let shutdownHandlersRegistered = false;
 
@@ -42,7 +46,14 @@ function ensureDatabaseDirectory(dbPath: string): void {
   fs.mkdirSync(path.dirname(resolvedPath), { recursive: true });
 }
 
-export function createServer() {
+export interface ServerOptions {
+  proxyClient?: ProxyAdapterClient | null;
+  promptManager?: PromptTemplateManager;
+  tokenTracker?: TokenBudgetTracker;
+  loginRecorder?: LoginRecorderService;
+}
+
+export function createServer(options: Partial<ServerOptions> = {}) {
   const app = Fastify({
     logger: true,
     disableRequestLogging: true,
@@ -55,12 +66,25 @@ export function createServer() {
   app.register(errorHandlerPlugin);
   app.register(sseEmitterPlugin);
   app.register(projectRoutes, { prefix: '/api/projects' });
-  app.register(projectConfigRoutes, { prefix: '/api/projects/:id/config' });
-  app.register(projectAnalysisRoutes, { prefix: '/api/projects/:id/analysis' });
+  app.register(projectConfigRoutes, { prefix: '/api/projects/:id/config', loginRecorder: options.loginRecorder });
+  app.register(projectAnalysisRoutes, {
+    prefix: '/api/projects/:id/analysis',
+    proxyClient: options.proxyClient,
+    promptManager: options.promptManager,
+    tokenTracker: options.tokenTracker,
+  });
   app.register(executionRoutes, { prefix: '/api/projects/:id/execution' });
   app.register(stateRoutes, { prefix: '/api/projects/:id/state' });
-  app.register(explorationRoutes, { prefix: '/api/projects/:id/exploration' });
-  app.register(scriptsRoutes, { prefix: '/api/projects/:id/scripts' });
+  app.register(explorationRoutes, {
+    prefix: '/api/projects/:id/exploration',
+    proxyClient: options.proxyClient,
+    promptManager: options.promptManager,
+  });
+  app.register(scriptsRoutes, {
+    prefix: '/api/projects/:id/scripts',
+    proxyClient: options.proxyClient,
+    promptManager: options.promptManager,
+  });
   app.register(eventsRoutes, { prefix: '/api/projects/:id/events' });
 
   // Serve built frontend (ui/dist/) at /ai-e2e/ prefix
@@ -120,14 +144,27 @@ function registerGracefulShutdown(app: AppServer, databaseManager: DatabaseManag
 }
 
 export async function start() {
-  const app = createServer();
+  // Create AI service instances
+  const proxyClient = new ProxyAdapterClient();
+  const promptsDir = path.join(process.cwd(), 'prompts');
+  const promptManager = new PromptTemplateManager(promptsDir);
+  const tokenTracker = new TokenBudgetTracker(DEFAULT_TOKEN_BUDGET);
+
+  // Initialize database before creating services that depend on it
   const databaseManager = DatabaseManager.getInstance();
   const port = Number.parseInt(process.env.AI_E2E_PORT ?? `${DEFAULT_PORT}`, 10);
   const dbPath = process.env.AI_E2E_DB_PATH ?? DEFAULT_DB_PATH;
 
+  ensureDatabaseDirectory(dbPath);
+  databaseManager.init(dbPath);
+
+  // Create login recorder service (depends on DB and proxyClient)
+  const loginRecorder = new LoginRecorderService(databaseManager, proxyClient);
+
+  // Create server with all dependencies
+  const app = createServer({ proxyClient, promptManager, tokenTracker, loginRecorder });
+
   try {
-    ensureDatabaseDirectory(dbPath);
-    databaseManager.init(dbPath);
     registerGracefulShutdown(app, databaseManager);
 
     await app.listen({

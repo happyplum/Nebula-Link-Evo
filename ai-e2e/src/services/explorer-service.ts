@@ -9,8 +9,7 @@
 import type { DatabaseManager } from '../database/db.js';
 import type { ExplorationSession } from '../database/repositories/exploration-session-repository.js';
 import type { URLModuleBinding } from '../database/repositories/url-module-binding-repository.js';
-import type { PlaywrightClient } from './playwright-client.js';
-import type { AIProvider } from '../ai/provider.js';
+import type { ProxyAdapterClient } from '../infrastructure/proxy-adapter-client.js';
 import type { PromptTemplateManager } from '../ai/prompt-manager.js';
 
 // ---------- Configuration ----------
@@ -67,12 +66,40 @@ interface AIBindingResponse {
   unclassifiable: boolean;
 }
 
+interface ExplorerRuntimeClient {
+  navigate(url: string): Promise<{ url: string }>;
+  getSnapshot(): Promise<{ elements: Record<string, unknown>; screenshot?: string }>;
+  getPageInfo(): Promise<{ url: string; title: string }>;
+  generateText(prompt: string): Promise<{
+    text: string;
+    tokenUsage: {
+      promptTokens: number;
+      completionTokens: number;
+    };
+  }>;
+}
+
+interface LegacyPlaywrightLike {
+  navigate(url: string): Promise<{ url: string }>;
+  getSnapshot(): Promise<{ elements: Record<string, unknown>; screenshot?: string }>;
+  getPageInfo(): Promise<{ url: string; title: string }>;
+}
+
+interface LegacyTextGeneratorLike {
+  generateText(prompt: string): Promise<{
+    text: string;
+    tokenUsage: {
+      promptTokens: number;
+      completionTokens: number;
+    };
+  }>;
+}
+
 // ---------- Service ----------
 
 export class ExplorerService {
   private db: DatabaseManager;
-  private playwright: PlaywrightClient;
-  private aiProvider: AIProvider;
+  private proxyClient: ExplorerRuntimeClient;
   private promptManager: PromptTemplateManager;
 
   /** Active explorations keyed by projectId */
@@ -80,14 +107,23 @@ export class ExplorerService {
 
   constructor(
     db: DatabaseManager,
-    playwright: PlaywrightClient,
-    aiProvider: AIProvider,
-    promptManager: PromptTemplateManager,
+    proxyClient: ProxyAdapterClient | LegacyPlaywrightLike,
+    promptManagerOrAiProvider: PromptTemplateManager | LegacyTextGeneratorLike,
+    promptManager?: PromptTemplateManager,
   ) {
     this.db = db;
-    this.playwright = playwright;
-    this.aiProvider = aiProvider;
-    this.promptManager = promptManager;
+
+    if (promptManager) {
+      this.proxyClient = this.createLegacyRuntimeClient(
+        proxyClient as LegacyPlaywrightLike,
+        promptManagerOrAiProvider as LegacyTextGeneratorLike,
+      );
+      this.promptManager = promptManager;
+      return;
+    }
+
+    this.proxyClient = proxyClient as ProxyAdapterClient;
+    this.promptManager = promptManagerOrAiProvider as PromptTemplateManager;
   }
 
   // ===== Public API =====
@@ -229,7 +265,7 @@ export class ExplorerService {
           functional_modules: JSON.stringify(functionalModules),
         });
 
-        const result = await this.aiProvider.generateText(prompt);
+        const result = await this.proxyClient.generateText(prompt);
         const parsed = this.parseAIResponse<AIBindingResponse>(result.text);
 
         if (!parsed || parsed.unclassifiable || parsed.bindings.length === 0) {
@@ -320,16 +356,16 @@ export class ExplorerService {
     if (!active || active.abortController.signal.aborted) return false;
 
     // Navigate to the page with abort awareness
-    const navResult = await this.withAbort(active, () => this.playwright.navigate(item.url));
+    const navResult = await this.withAbort(active, () => this.proxyClient.navigate(item.url));
     if (!navResult) return false;
     const currentUrl = navResult.url;
 
     // Get page info
-    const pageInfo = await this.withAbort(active, () => this.playwright.getPageInfo());
+    const pageInfo = await this.withAbort(active, () => this.proxyClient.getPageInfo());
     if (!pageInfo) return false;
 
     // Get snapshot
-    const snapshot = await this.withAbort(active, () => this.playwright.getSnapshot());
+    const snapshot = await this.withAbort(active, () => this.proxyClient.getSnapshot());
     if (!snapshot) return false;
 
     // Store discovered URL
@@ -354,7 +390,7 @@ export class ExplorerService {
     );
     if (prompt === null) return false;
 
-    const result = await this.withAbort(active, () => this.aiProvider.generateText(prompt));
+    const result = await this.withAbort(active, () => this.proxyClient.generateText(prompt));
     if (!result) return false;
 
     active.tokenCount += result.tokenUsage.promptTokens + result.tokenUsage.completionTokens;
@@ -443,6 +479,18 @@ export class ExplorerService {
       }
       return null;
     }
+  }
+
+  private createLegacyRuntimeClient(
+    playwright: LegacyPlaywrightLike,
+    aiProvider: LegacyTextGeneratorLike,
+  ): ExplorerRuntimeClient {
+    return {
+      navigate: url => playwright.navigate(url),
+      getSnapshot: () => playwright.getSnapshot(),
+      getPageInfo: () => playwright.getPageInfo(),
+      generateText: prompt => aiProvider.generateText(prompt),
+    };
   }
 
   /**

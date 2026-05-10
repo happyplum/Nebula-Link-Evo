@@ -44,4 +44,8 @@ export class ServiceError extends Error {
   static internal(message: string): ServiceError {
     return new ServiceError(message, 500, 'INTERNAL_ERROR');
   }
+
+  static unavailable(message: string): ServiceError {
+    return new ServiceError(message, 503, 'SERVICE_UNAVAILABLE');
+  }
 }

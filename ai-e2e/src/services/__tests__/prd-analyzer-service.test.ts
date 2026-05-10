@@ -3,14 +3,30 @@ import { PRDAnalyzerService } from '../prd-analyzer-service.js';
 import { DatabaseManager } from '../../database/db.js';
 import { PromptTemplateManager } from '../../ai/prompt-manager.js';
 import { TokenBudgetTracker } from '../../ai/token-tracker.js';
-import type { AIProvider } from '../../ai/provider.js';
+import type { ProxyAdapterClient } from '../../infrastructure/proxy-adapter-client.js';
 
-// ---------- Mock AI Provider ----------
+// ---------- Mock ProxyAdapterClient ----------
 
 const mockGenerateText = vi.fn();
 
-function createMockProvider(): AIProvider {
-  return { generateText: mockGenerateText } as unknown as AIProvider;
+function createMockProxyClient(): ProxyAdapterClient {
+  return {
+    generateText: mockGenerateText,
+    navigate: vi.fn(),
+    getSnapshot: vi.fn(),
+    screenshot: vi.fn(),
+    getPageInfo: vi.fn(),
+    healthCheck: vi.fn(),
+    click: vi.fn(),
+    clickBySelector: vi.fn(),
+    type: vi.fn(),
+    executeScript: vi.fn(),
+    getCookies: vi.fn(),
+    getLocalStorage: vi.fn(),
+    getDOM: vi.fn(),
+    openBrowser: vi.fn(),
+    closeBrowser: vi.fn(),
+  } as unknown as ProxyAdapterClient;
 }
 
 // ---------- Helpers ----------
@@ -25,7 +41,7 @@ function seedProject(projectId: string): void {
 }
 
 function createService(): PRDAnalyzerService {
-  const provider = createMockProvider();
+  const proxyClient = createMockProxyClient();
   const promptManager = new PromptTemplateManager(PROMPTS_DIR);
   const tokenTracker = new TokenBudgetTracker(100000);
   const db = DatabaseManager.getInstance();
@@ -33,7 +49,7 @@ function createService(): PRDAnalyzerService {
   seedProject('proj-1');
   seedProject('proj-2');
   seedProject('proj-3');
-  return new PRDAnalyzerService(provider, promptManager, tokenTracker, db);
+  return new PRDAnalyzerService(proxyClient, promptManager, tokenTracker, db);
 }
 
 // ---------- Sample Data ----------
