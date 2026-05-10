@@ -8,10 +8,10 @@ Nebula-Link Evo 是一个基于 AI 的浏览器自动化平台，通过视觉感
 
 ```
 Browser ←→ Debug UI (:5173 dev / standalone build)
-                  ↕ HTTP/SSE
-             Proxy Adapter (:3000) → AI Providers (GLM, OpenAI, Anthropic, Kimi, NVIDIA)
-                  ↕ HTTP
-          Playwright Server (:3001) → Chromium
+                   ↕ HTTP/SSE
+              Proxy Adapter (:3000) → AI Providers (GLM, OpenAI, Anthropic, Kimi, NVIDIA)
+                   ↕ HTTP                  ↕ HTTP (AI + Playwright)
+           Playwright Server (:3001) → Chromium      AI E2E (:3002) — 自动化测试编排
 ```
 
 ## Core Features
@@ -52,6 +52,16 @@ Browser ←→ Debug UI (:5173 dev / standalone build)
 | AI       | Vercel AI SDK (@ai-sdk/openai-compatible, @ai-sdk/openai, GLM JWT adapter) |
 | Protocol | MCP (Model Context Protocol)                                               |
 | Storage  | SQLite (sessions, messages, events)                                        |
+
+## Packages
+
+| Package | Port | Role |
+|---------|------|------|
+| `proxy-adapter` | :3000 | AI 编排、Playwright 浏览器控制、会话管理 |
+| `playwright-server` | :3001 | Playwright Chromium 实例 |
+| `debug-ui` | :5173 | 实时调试监控面板 |
+| `ai-e2e` | :3002 | AI 驱动的 E2E 自动化测试编排（通过 HTTP 消费 proxy-adapter 的 AI 和 Playwright 服务） |
+| `shared` | — | 共享类型和工具库 |
 
 ## Quick Start
 
@@ -106,6 +116,7 @@ curl http://localhost:3000/api/health
 debug-ui/           # Frontend (React 19 + TypeScript + Vite)
 proxy-adapter/      # Backend (Fastify, AI orchestration)
 playwright-server/  # Browser service (Playwright)
+ai-e2e/             # E2E automation orchestrator (consumes proxy-adapter HTTP API)
 shared/             # Shared types & utils (@nebula-link-evo/shared)
 docs/               # Documentation
 ```
