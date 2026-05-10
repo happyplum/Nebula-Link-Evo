@@ -173,6 +173,7 @@ export async function start() {
     });
 
     app.log.info({ port, dbPath }, 'AI E2E server listening');
+    app.log.info(`UI: http://localhost:${port}/ai-e2e/`);
     return app;
   } catch (error) {
     app.log.error({ err: error }, 'Failed to start AI E2E server');
