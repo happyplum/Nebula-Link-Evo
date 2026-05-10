@@ -88,7 +88,7 @@ export function createServer(options: Partial<ServerOptions> = {}) {
   app.register(eventsRoutes, { prefix: '/api/projects/:id/events' });
 
   // Serve built frontend (ui/dist/) at /ai-e2e/ prefix
-  const uiDistPath = path.join(__dirname, '..', '..', 'ui', 'dist');
+  const uiDistPath = path.join(import.meta.dirname, '..', '..', 'ui', 'dist');
   app.register(fastifyStatic, {
     root: uiDistPath,
     prefix: '/ai-e2e/',
