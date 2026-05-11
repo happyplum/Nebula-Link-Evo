@@ -1,14 +1,41 @@
 # Nebula-Link Evo
 
+## Overview
+
+AI-assisted browser automation platform. `proxy-adapter` is the core backend (AI provider orchestration + browser control via `playwright-server`). `debug-ui` provides the primary web UI. `ai-e2e` is an AI-driven E2E test orchestration subsystem with its own React SPA at `/ai-e2e/`.
+
+## Structure
+
+```text
+shared/             Shared types and utilities (no src/ dir — source at package root)
+proxy-adapter/      Core backend — Fastify, AI providers, browser control (:3000)
+playwright-server/  Playwright automation service (:3001)
+debug-ui/           Primary web UI — React SPA, Vite (:5173)
+ai-e2e/             AI E2E test orchestration (:3002)
+  ui/               Nested workspace — React SPA served at /ai-e2e/ (:5174 dev)
+config/             Shared config templates (not a package)
+tools/              Utility scripts (not a package)
+```
+
+## Commands
+
+```bash
+pnpm dev            # shared build + parallel dev for shared/debug-ui/proxy-adapter/playwright-server
+pnpm build          # shared → debug-ui → playwright-server → proxy-adapter → ai-e2e
+pnpm test           # pnpm -r test (vitest everywhere)
+pnpm lint           # eslint debug-ui/src proxy-adapter/src playwright-server/src
+pnpm format         # prettier --write on same 3 packages
+```
+
 ## Scope & routing
 
-- Root `AGENTS.md` only covers repo-wide landmines. Prefer nearer docs when working in `debug-ui/`, `proxy-adapter/`, `playwright-server/`, `shared/`, `config/`, or `tools/`.
+- Root `AGENTS.md` only covers repo-wide landmines. Prefer nearer docs when working in `debug-ui/`, `proxy-adapter/`, `playwright-server/`, `shared/`, `ai-e2e/`, `config/`, or `tools/`.
 - `debug-ui/` owns all frontend code. Do not revive `proxy-adapter/src/static/debug/` or move frontend source back under the backend package.
 - Cross-package imports use `@nebula-link-evo/shared`. Do not reintroduce stale `@shared/*` aliases.
 
 ## Hidden runtime order
 
-- Build order is strict: `shared` → `debug-ui` → `playwright-server` → `proxy-adapter`.
+- Build order is strict: `shared` → `debug-ui` → `playwright-server` → `proxy-adapter` → `ai-e2e`.
 - `start.bat` is not a thin wrapper around `pnpm build`: it builds `shared`, starts LiveKit, verifies ports, then builds/starts `playwright-server` and `proxy-adapter`.
 - `proxy-adapter` startup order matters: env/config load → DB backup init outside tests → plugin registration → `AppService.initialize()` → provider preflight → conversation/session/chat surfaces.
 - Chat reconnect always reboots from a fresh `session.snapshot`; there is no `Last-Event-ID` replay contract to preserve.
@@ -37,5 +64,7 @@
 - `proxy-adapter/AGENTS.md`
 - `playwright-server/AGENTS.md`
 - `shared/AGENTS.md`
+- `ai-e2e/AGENTS.md`
+- `ai-e2e/ui/AGENTS.md`
 - `config/AGENTS.md`
 - `tools/AGENTS.md`
