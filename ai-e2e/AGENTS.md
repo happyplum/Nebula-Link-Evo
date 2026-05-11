@@ -2,76 +2,160 @@
 
 ## Overview
 
-AI 驱动的 E2E 自动化测试编排服务，运行在端口 `3002`。通过 HTTP 消费 `proxy-adapter` 的 AI 生成和 Playwright 浏览器控制服务，自身不直连 AI provider 或 Playwright。
+`ai-e2e` 是一个 **AI 驱动的 E2E 自动化测试编排子包**。它自身不直连 AI provider，也不直连 Playwright，而是统一通过 `ProxyAdapterClient` 调用 `proxy-adapter` 暴露的 AI 与浏览器控制 HTTP API。
+
+它的核心职责不是“浏览器自动化底座”，而是：
+
+- 需求 / PRD 分析
+- 站点探索与 URL 绑定
+- Playwright 脚本生成与版本化
+- 脚本执行
+- 单次运行失败诊断与可选自动修复
 
 ## Commands
 
 ```bash
-pnpm dev          # tsx watch src/server/index.ts
-pnpm build        # tsc → dist/ + vite build ui/
-pnpm start        # node dist/server/index.js
-pnpm test         # Vitest
+pnpm dev          # tsx watch src/server.ts
+pnpm build        # tsc -b && cd ui && pnpm build
+pnpm start        # node dist/server.js
+pnpm test         # vitest run
+pnpm type-check   # tsc --noEmit
 ```
+
+## Entry Points
+
+- Runtime entry: `src/server.ts`
+- Bootstrap implementation: `src/server/index.ts`
+- UI mount prefix: `/ai-e2e/`
 
 ## Architecture
 
-```
+```text
 ai-e2e (:3002)
-├── ProxyAdapterClient (HTTP client) ──→ proxy-adapter (:3000)
-│   ├── POST /api/ai/generate          AI 文本生成 (defaults.decision)
-│   └── /debug/api/playwright/*        浏览器控制 (navigate, click, type, ...)
-├── PromptTemplateManager              提示词模板管理 (prompts/*.md)
-├── TokenBudgetTracker                 Token 预算追踪
-├── DatabaseManager                    SQLite (项目、探索、脚本、诊断)
-└── Fastify server                     REST API + SSE + SPA 静态服务
+├── src/server.ts                     # 真实启动入口
+├── src/server/index.ts               # createServer()/start()、DI、路由注册
+├── ProxyAdapterClient                # 唯一外部能力入口
+│   ├── POST /api/ai/generate
+│   └── /debug/api/playwright/*
+├── PromptTemplateManager             # prompts/*.md
+├── TokenBudgetTracker                # token 预算统计
+├── DatabaseManager                   # SQLite
+├── Business Services                 # analysis/exploration/scripts/execution/diagnosis
+└── React SPA                         # /ai-e2e/
 ```
 
 ## Startup Order
 
-1. `dotenv` 加载
-2. `ProxyAdapterClient` 实例化（读 `PROXY_ADAPTER_URL` env，默认 `http://localhost:3000`）
-3. `PromptTemplateManager` 初始化（读 `prompts/` 目录）
-4. `TokenBudgetTracker` 初始化（默认预算 500,000 tokens）
-5. `DatabaseManager` 初始化（SQLite）
-6. `LoginRecorderService` 创建（依赖 DB + ProxyAdapterClient）
-7. `createServer()` 注入所有服务到路由插件 options
-8. `app.listen()`
+1. 加载 `.env.local` / 上级 `.env` / 当前 `.env`
+2. 创建 `ProxyAdapterClient`
+3. 创建 `PromptTemplateManager`
+4. 创建 `TokenBudgetTracker`
+5. 初始化 `DatabaseManager`
+6. 创建 `LoginRecorderService`
+7. `createServer({ proxyClient, promptManager, tokenTracker, loginRecorder })`
+8. 注册路由、SSE、静态 UI、404 处理
+9. `app.listen()`
+
+## Runtime Facts
+
+- 默认端口：`3002`
+- 默认数据库路径：`./data/ai-e2e.sqlite`
+- 当前 `start()` 读取的 env 名是：
+  - `PROXY_ADAPTER_URL`
+  - `AI_E2E_PORT`
+  - `AI_E2E_DB_PATH`
+- 启动成功后会打印：
+  - `AI E2E server listening`
+  - `UI: http://localhost:<port>/ai-e2e/`
 
 ## Where To Look
 
 | Area | Path | Notes |
-|------|------|-------|
-| Server entry | `src/server/index.ts` | Bootstrap、DI、路由注册 |
-| HTTP client | `src/infrastructure/proxy-adapter-client.ts` | AI + Playwright 调用、契约适配、错误映射 |
-| Service error | `src/services/service-error.ts` | 统一错误类型（含 `unavailable(503)`） |
-| Business services | `src/services/` | PRD 分析、脚本生成、探索、诊断、登录录制 |
-| Prompts | `prompts/*.md` | Mustache 模板，**不可删除** |
-| AI infrastructure | `src/ai/` | PromptTemplateManager + TokenBudgetTracker（**非** AIProvider，已移除） |
-| Routes | `src/server/routes/` | Fastify 路由，通过 plugin options 接收服务实例 |
-| Tests | `src/__tests__/`, `src/**/__tests__/` | Vitest，mock ProxyAdapterClient |
+|---|---|---|
+| Runtime entry | `src/server.ts` | 仅负责调用 `start()` |
+| Bootstrap / DI | `src/server/index.ts` | 路由注册、静态 UI、SSE、env 读取 |
+| HTTP client | `src/infrastructure/proxy-adapter-client.ts` | AI / Playwright API、契约适配、错误映射 |
+| Services | `src/services/` | PRD 分析、探索、脚本、执行、诊断、状态机 |
+| Routes | `src/server/routes/` | 通过 plugin options 注入依赖 |
+| Prompts | `prompts/*.md` | 必须保留，属于稳定资产 |
+| Database | `src/database/` | SQLite、migrations、repos |
+| Frontend | `ui/src/` | SPA、流程页、AI 状态、执行面板 |
 
-## Boundaries
+## Route Groups
 
-- **不直连 AI provider**：所有 AI 调用通过 `ProxyAdapterClient.generateText()` → `POST /api/ai/generate`
-- **不直连 Playwright**：所有浏览器操作通过 `ProxyAdapterClient` Playwright 方法 → `proxy-adapter` debug API
-- **不依赖 `@ai-sdk/*`**：AI SDK 依赖已完全移除
-- **数据库独立**：自有 SQLite，不与 proxy-adapter 共享
+- `/api/projects`
+- `/api/projects/:id/config`
+- `/api/projects/:id/analysis`
+- `/api/projects/:id/exploration`
+- `/api/projects/:id/scripts`
+- `/api/projects/:id/execution`
+- `/api/projects/:id/state`
+- `/api/projects/:id/events`
+
+## Dependency Injection Rule
+
+路由依赖统一通过 **plugin options** 注入，不通过 Fastify decorators 注入业务服务。
+
+当前典型注入项：
+
+- `proxyClient`
+- `promptManager`
+- `tokenTracker`
+- `loginRecorder`
+
+如果新增服务，优先遵循相同模式，不要混入另一套注入方式。
+
+## Hard Boundaries
+
+- **不直连 AI provider**：所有 AI 调用必须经 `ProxyAdapterClient.generateText()`
+- **不直连 `playwright-server`**：所有浏览器操作必须经 `ProxyAdapterClient`
+- **不引入 `@ai-sdk/*`**：ai-e2e 已被重构为零 AI SDK 依赖
+- **不共享 proxy-adapter 数据库**：ai-e2e 维护自己的 SQLite
+- **不在 proxy-adapter 中引入 ai-e2e 特有概念**
 
 ## Conventions
 
-- 路由通过 plugin options 注入服务实例，**不用** Fastify decorators（encapsulation rule）
-- `.js` extension for local TS imports
-- `ProxyAdapterClient` 是唯一的外部基础设施访问点
-- 优雅降级：`PROXY_ADAPTER_URL` 未配置时，DB-only 路由正常工作，AI/Playwright 路由返回 503
+- 本地 TS import 保持 `.js` 后缀
+- `ProxyAdapterClient` 是唯一外部基础设施访问点
+- `PROXY_ADAPTER_URL` 为空时，DB-only 路由继续工作，AI / Playwright 路由返回 `503`
+- `ServiceError.unavailable()` 用于服务缺失 / 降级场景
+- UI 通过 `/ai-e2e/` 前缀挂载，404 处理要兼顾 SPA 与 JSON API
+
+## Workflow Truths
+
+- 项目状态机：`draft → configuring → analyzing → analyzed → exploring → explored → generating → ready → running → completed`
+- 当前进入 `generating` 前只检查“至少存在一个 URL binding”，**不保证每个功能模块都完成绑定**
+- 当前支持：
+  - 模块编辑
+  - URL 绑定建议与确认
+  - 脚本编辑与版本历史
+  - 单次运行失败诊断
+  - 可选自动修复
+- 当前不支持：
+  - 项目级诊断汇总报告
+  - 完整的 scenario 人工编辑工作面
 
 ## Anti-Patterns
 
-- 不引入 `@ai-sdk/*` 或任何 AI SDK 依赖
-- 不直连 `playwright-server`（必须经过 proxy-adapter）
-- 不修改 `ExecutorService`
-- 不删除 `prompts/` 目录
-- 不在 proxy-adapter 中引入 ai-e2e 特有概念
+- 不重新引入 `AIProvider` / `PlaywrightClient` 旧架构
+- 不在 ai-e2e 内新增直连外部模型或浏览器服务的代码
+- 不把历史迁移计划 `.sisyphus/plans/ai-e2e-redesign.md` 当成当前活文档
+- 不在 README / AGENTS 中写没有代码支撑的能力
+- 不把“单次 run 诊断”描述成“项目级报告系统”
+- 不把“模块可编辑”偷换成“scenario 可编辑”
 
-## Pre-existing Issues
+## Current Known Gaps
 
-- `server.test.ts` 有 3 个测试因 `setNotFoundHandler` 冲突失败（SPA catch-all 与 error-handler plugin 重复注册）
+1. **项目级诊断报告未实现**
+   - 当前只有单次 `runId` 级别诊断与 intervention history
+
+2. **URL 绑定校验粒度不足**
+   - 当前只能确保“存在至少一个绑定”
+
+3. **Scenario 编辑能力不完整**
+   - 业务 / 功能模块可编辑，脚本可编辑，但 scenario 缺少完整独立编辑面
+
+## Verification Reality
+
+- 不要再把 `setNotFoundHandler` 的旧 3 个失败测试当作当前已知问题
+- 当前文档应以**最新代码与本分支验证结果**为准，而不是历史计划中的旧测试数字
