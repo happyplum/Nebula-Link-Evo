@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type {
   TestScenarioRepository,
   TestScenario as RepoTestScenario,
-  UpdateTestScenarioData,
 } from '../../database/repositories/test-scenario-repository.js';
 import { TestScenarioService } from '../test-scenario-service.js';
 
@@ -33,14 +32,14 @@ function createMockRepo(store?: Map<string, RepoTestScenario>): TestScenarioRepo
     findByFunctionalModuleId: vi.fn((fmId: string) =>
       Array.from(db.values()).filter((s) => s.functional_module_id === fmId),
     ),
-    update: vi.fn((id: string, data: UpdateTestScenarioData) => {
+    update: vi.fn((id: string, data: Record<string, unknown>) => {
       const existing = db.get(id);
       if (!existing) return null;
       const updated: RepoTestScenario = {
         ...existing,
-        ...(data.name !== undefined ? { name: data.name } : {}),
-        ...(data.description !== undefined ? { description: data.description } : {}),
-        ...(data.test_data_json !== undefined ? { test_data_json: data.test_data_json } : {}),
+        ...(data.name !== undefined ? { name: data.name as string } : {}),
+        ...(data.description !== undefined ? { description: data.description as string | null } : {}),
+        ...(data.test_data_json !== undefined ? { test_data_json: data.test_data_json as string } : {}),
         source: 'human_modified',
       };
       db.set(id, updated);
@@ -135,8 +134,8 @@ describe('TestScenarioService', () => {
       );
 
       // Verify the serialized JSON
-      const updateCall = (repo.update as ReturnType<typeof vi.fn>).mock.calls[0][1] as UpdateTestScenarioData;
-      const parsed = JSON.parse(updateCall.test_data_json!);
+      const updateCall = (repo.update as ReturnType<typeof vi.fn>).mock.calls[0][1] as Record<string, unknown>;
+      const parsed = JSON.parse(updateCall.test_data_json! as string);
       expect(parsed.preconditions).toEqual(['User exists', 'Browser open']);
       expect(parsed.expected_results).toEqual(['Logged in', 'Dashboard visible']);
     });
