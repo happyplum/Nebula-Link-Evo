@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Button, Input, Modal } from '@/shared/components';
 import { AnalysisModule } from '../store/analysisApi';
+import { ScenarioPanel } from '../../scenario/components/ScenarioPanel.js';
 import styles from './ModuleDetail.module.css';
 
 export interface ModuleDetailProps {
@@ -71,6 +72,8 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({
     setIsEditModalOpen(true);
   };
 
+  const isFunctionalModule = !!module.parent_id;
+
   return (
     <div className={styles.container}>
       <div className={styles.header}>
@@ -90,7 +93,7 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({
             variant="danger" 
             size="sm" 
             onClick={() => {
-              if (window.confirm('确定要删除此模块吗？')) {
+              if (window.confirm('确定要删除该模块吗？')) {
                 onDelete(module.id);
               }
             }}
@@ -112,60 +115,66 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({
           </div>
           <div className={styles.infoRow}>
             <span className={styles.infoLabel}>来源</span>
-            <span className={styles.infoValue}>{module.source === 'ai' ? 'AI 生成' : '手动添加'}</span>
+            <span className={styles.infoValue}>{module.source === 'ai' ? 'AI 生成' : '手动创建'}</span>
           </div>
         </div>
 
-        <div className={styles.childrenSection}>
-          <div className={styles.childrenHeader}>
-            <div className={styles.childrenTitle}>子模块 (L2)</div>
-            <Button 
-              variant="secondary" 
-              size="sm" 
-              onClick={() => {
-                setAddForm({ name: '', description: '' });
-                setIsAddChildModalOpen(true);
-              }}
-            >
-              添加子模块
-            </Button>
-          </div>
+        {!isFunctionalModule && (
+          <div className={styles.childrenSection}>
+            <div className={styles.childrenHeader}>
+              <div className={styles.childrenTitle}>子模块 (L2)</div>
+              <Button 
+                variant="secondary" 
+                size="sm" 
+                onClick={() => {
+                  setAddForm({ name: '', description: '' });
+                  setIsAddChildModalOpen(true);
+                }}
+              >
+                添加子模块
+              </Button>
+            </div>
 
-          <div className={styles.childList}>
-            {module.children && module.children.length > 0 ? (
-              module.children.map(child => (
-                <div key={child.id} className={styles.childItem}>
-                  <div className={styles.childInfo}>
-                    <span className={styles.childName}>{child.name}</span>
-                    {child.description && (
-                      <span className={styles.childDesc}>{child.description}</span>
-                    )}
+            <div className={styles.childList}>
+              {module.children && module.children.length > 0 ? (
+                module.children.map(child => (
+                  <div key={child.id} className={styles.childItem}>
+                    <div className={styles.childInfo}>
+                      <span className={styles.childName}>{child.name}</span>
+                      {child.description && (
+                        <span className={styles.childDesc}>{child.description}</span>
+                      )}
+                    </div>
+                    <div className={styles.childActions}>
+                      <Button variant="ghost" size="sm" onClick={() => openEditChild(child)}>
+                        编辑
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => {
+                          if (window.confirm('确定要删除该子模块吗？')) {
+                            onDelete(child.id);
+                          }
+                        }}
+                      >
+                        删除
+                      </Button>
+                    </div>
                   </div>
-                  <div className={styles.childActions}>
-                    <Button variant="ghost" size="sm" onClick={() => openEditChild(child)}>
-                      编辑
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={() => {
-                        if (window.confirm('确定要删除此子模块吗？')) {
-                          onDelete(child.id);
-                        }
-                      }}
-                    >
-                      删除
-                    </Button>
-                  </div>
+                ))
+              ) : (
+                <div className={styles.emptyState} style={{ height: '100px' }}>
+                  暂无子模块
                 </div>
-              ))
-            ) : (
-              <div className={styles.emptyState} style={{ height: '100px' }}>
-                暂无子模块
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
+        )}
+
+        {isFunctionalModule && (
+          <ScenarioPanel functionalModuleId={module.id} />
+        )}
       </div>
 
       {/* Edit Modal */}
@@ -228,7 +237,7 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({
             取消
           </Button>
           <Button variant="primary" onClick={handleAddChildSubmit} disabled={!addForm.name.trim()}>
-            添加
+            保存
           </Button>
         </div>
       </Modal>
