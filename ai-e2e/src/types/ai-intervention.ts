@@ -41,6 +41,28 @@ export const FailureType = {
  */
 export type FailureType = (typeof FailureType)[keyof typeof FailureType];
 
+export interface ProjectFailureDistributionItem {
+  type: FailureType;
+  count: number;
+}
+
+export interface ProjectRecentFailureItem {
+  runId: string;
+  failureType: FailureType;
+  diagnosis: string;
+  timestamp: string;
+}
+
+export interface ProjectDiagnosisReport {
+  projectId: string;
+  totalRuns: number;
+  failedRuns: number;
+  diagnosedRuns: number;
+  undiagnosedRuns: number;
+  failureDistribution: ProjectFailureDistributionItem[];
+  recentFailures: ProjectRecentFailureItem[];
+}
+
 // ========== AI INTERVENTION LOG ENTITY ==========
 
 /**
