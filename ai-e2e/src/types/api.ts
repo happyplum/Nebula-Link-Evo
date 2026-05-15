@@ -260,6 +260,17 @@ export const ActionTakenSchema = Type.Union(
   })
 );
 
+export const FailureTypeSchema = Type.Union(
+  Object.values({
+    SELECTOR: Type.Literal('selector'),
+    TIMING: Type.Literal('timing'),
+    ASSERTION: Type.Literal('assertion'),
+    ENVIRONMENT: Type.Literal('environment'),
+    DATA: Type.Literal('data'),
+    UNKNOWN: Type.Literal('unknown'),
+  })
+);
+
 export const AIInterventionLogSchema = Type.Object({
   id: Type.String(),
   execution_run_id: Type.String(),
@@ -268,6 +279,7 @@ export const AIInterventionLogSchema = Type.Object({
   suggested_fix: Type.Optional(Type.String()),
   action_taken: ActionTakenSchema,
   human_feedback: Type.Optional(Type.String()),
+  failure_type: Type.Optional(FailureTypeSchema),
   created_at: Type.String(),
 });
 
