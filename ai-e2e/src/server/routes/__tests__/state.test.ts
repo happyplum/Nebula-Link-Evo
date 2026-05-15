@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import { DatabaseManager } from '../../../database/db.js';
+import { ServiceError } from '../../../services/service-error.js';
 import errorHandlerPlugin from '../../plugins/error-handler.js';
 import sseEmitterPlugin from '../../plugins/sse-emitter.js';
 import stateRoutes from '../state.js';
@@ -127,7 +128,40 @@ describe('State routes', () => {
       expect(stateMachine.transition).toHaveBeenCalledWith(projectId, 'running');
     });
 
-    it('returns 400 for invalid transition', async () => {
+    it('transition blocked by gate returns 400 with DELIVERABLES_NOT_MET', async () => {
+      const db = DatabaseManager.getInstance();
+      db.init(':memory:');
+      const projectId = seedProject(db, 'ready');
+
+      const stateMachine = makeMockStateMachine({
+        transition: vi.fn().mockImplementation(() => {
+          throw ServiceError.validation(
+            "Cannot transition project '" + projectId + "' from 'ready' to 'running'",
+            ['scripts'],
+          );
+        }),
+      });
+
+      const app = createApp();
+      app.register(stateRoutes, {
+        prefix: '/api/projects/:id/state',
+        stateMachine,
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/projects/${projectId}/state/transition`,
+        payload: { targetStatus: 'running' },
+      });
+
+      expect(response.statusCode).toBe(400);
+      const body = response.json();
+      expect(body.error.code).toBe('DELIVERABLES_NOT_MET');
+      expect(body.error.message).toContain('Cannot transition');
+      expect(body.error.details).toEqual(['scripts']);
+    });
+
+    it('unexpected error returns 500', async () => {
       const db = DatabaseManager.getInstance();
       db.init(':memory:');
       const projectId = seedProject(db, 'ready');
@@ -151,6 +185,9 @@ describe('State routes', () => {
       });
 
       expect(response.statusCode).toBe(500);
+      const body = response.json();
+      expect(body.error.code).toBe('INTERNAL_ERROR');
+      expect(body.error.message).toContain('Cannot transition');
     });
 
     it('returns 404 for non-existent project', async () => {

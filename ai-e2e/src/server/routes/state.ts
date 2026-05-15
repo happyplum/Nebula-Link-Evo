@@ -91,22 +91,43 @@ const routes: FastifyPluginAsyncTypebox<StateRouteOptions> = async (fastify, opt
       const { targetStatus } = request.body as { targetStatus: string };
       const stateMachine = getStateMachine();
 
-      const updated = stateMachine.transition(projectId, targetStatus as ProjectStatus);
+      try {
+        const updated = stateMachine.transition(projectId, targetStatus as ProjectStatus);
 
-      fastify.sseEmitter.emit({
-        type: 'project.status_changed',
-        data: {
-          projectId,
-          oldStatus: project.status as ProjectStatus,
-          newStatus: updated.status as ProjectStatus,
-        },
-      });
+        fastify.sseEmitter.emit({
+          type: 'project.status_changed',
+          data: {
+            projectId,
+            oldStatus: project.status as ProjectStatus,
+            newStatus: updated.status as ProjectStatus,
+          },
+        });
 
-      return reply.status(200).send({
-        id: updated.id,
-        status: updated.status,
-        name: updated.name,
-      });
+        return reply.status(200).send({
+          id: updated.id,
+          status: updated.status,
+          name: updated.name,
+        });
+      } catch (error) {
+        if (error instanceof ServiceError && error.statusCode === 400) {
+          return reply.code(400).send({
+            error: {
+              code: 'DELIVERABLES_NOT_MET',
+              message: error.message,
+              details: error.details,
+            },
+          });
+        }
+        if (error instanceof ServiceError) {
+          throw error;
+        }
+        return reply.code(500).send({
+          error: {
+            code: 'INTERNAL_ERROR',
+            message: (error as Error).message,
+          },
+        });
+      }
     },
   );
 
