@@ -57,14 +57,32 @@ export const fetchModules = async (projectId: string): Promise<AnalysisModule[]>
   const response = await fetch(`/api/projects/${projectId}/analysis/modules`);
   if (!response.ok) throw new Error('Failed to fetch modules');
   const data = await response.json();
-  return data.data || [];
+  
+  const businessModules = data.business_modules || [];
+  return businessModules.map((bm: any) => ({
+    id: bm.id,
+    name: bm.name,
+    description: bm.description || undefined,
+    source: bm.source === 'ai_generated' ? 'ai' : 'manual',
+    children: (bm.functional_modules || []).map((fm: any) => ({
+      id: fm.id,
+      name: fm.name,
+      description: fm.description || undefined,
+      parent_id: bm.id,
+      source: fm.source === 'ai_generated' ? 'ai' : 'manual',
+    })),
+  }));
 };
 
 export const createModule = async (projectId: string, data: CreateModuleRequest): Promise<AnalysisModule> => {
+  const payload = {
+    ...data,
+    level: data.parent_id ? 'functional' : 'business',
+  };
   const response = await fetch(`/api/projects/${projectId}/analysis/modules`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
+    body: JSON.stringify(payload),
   });
   if (!response.ok) throw new Error('Failed to create module');
   const resData = await response.json();
