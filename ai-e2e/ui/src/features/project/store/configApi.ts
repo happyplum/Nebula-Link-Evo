@@ -82,15 +82,19 @@ export const testLoginScript = async ({ projectId, scriptId }: { projectId: stri
   return data.data;
 };
 
-export const transitionProjectState = async ({ projectId, state }: { projectId: string; state: string }): Promise<unknown> => {
+export const transitionProjectState = async ({ projectId, targetStatus }: { projectId: string; targetStatus: string }): Promise<unknown> => {
   const response = await fetch(`${API_BASE}/${projectId}/state/transition`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ state }),
+    body: JSON.stringify({ targetStatus }),
   });
   if (!response.ok) {
+    const errorData = await response.json().catch(() => null);
+    if (errorData && errorData.error) {
+      throw errorData.error;
+    }
     throw new Error(`Failed to transition state for project ${projectId}`);
   }
   const data = await response.json();

@@ -43,7 +43,7 @@ export default function ScriptPanel() {
 
   const handleComplete = () => {
     if (projectId) {
-      transitionState({ state: 'ready' });
+      transitionState({ targetStatus: 'ready' });
     }
   };
 
