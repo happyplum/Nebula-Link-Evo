@@ -43,7 +43,9 @@ const routes: FastifyPluginAsyncTypebox<DiagnosisReportRouteOptions> = async (fa
       const { id: projectId } = request.params as { id: string };
       requireProject(projectId);
 
-      const format = (request.query as { format?: string }).format ?? 'json';
+      const query = request.query as { format?: string };
+      const hasFormatParam = query.format !== undefined;
+      const format = query.format ?? 'json';
 
       if (format !== 'json' && format !== 'html') {
         throw ServiceError.validation(
@@ -62,7 +64,7 @@ const routes: FastifyPluginAsyncTypebox<DiagnosisReportRouteOptions> = async (fa
       }
 
       // JSON format — downloadable if explicitly requested via query
-      if ((request.query as { format?: string }).format === 'json') {
+      if (hasFormatParam && format === 'json') {
         return reply
           .status(200)
           .header('content-type', 'application/json')
