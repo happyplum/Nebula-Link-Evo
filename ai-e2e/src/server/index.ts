@@ -95,7 +95,7 @@ export function createServer(options: Partial<ServerOptions> = {}) {
   });
   app.register(eventsRoutes, { prefix: '/api/projects/:id/events' });
   app.register(scenarioRoutes, { prefix: '/api/projects/:id', scenarioService: options.scenarioService });
-  app.register(diagnosisReportRoutes, { prefix: '/api/projects/:id', diagnosisService: options.diagnosisService });
+  app.register(diagnosisReportRoutes, { prefix: '/api/projects/:id/diagnosis', diagnosisService: options.diagnosisService });
 
   // Serve built frontend (ui/dist/) at /ai-e2e/ prefix
   const uiDistPath = path.join(import.meta.dirname, '..', '..', 'ui', 'dist');
