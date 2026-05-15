@@ -144,11 +144,11 @@ docs/               # Documentation
 - `ai-e2e` 当前定位是 **PRD 驱动的 E2E 自动化测试编排器**，不是新的浏览器底座；它负责把 **需求分析 → 页面探索 → URL 绑定 → 脚本生成 → 执行 → 单次失败诊断 → 可选自动修复** 串成闭环。
 - `ai-e2e` 必须继续作为 `proxy-adapter` 的纯消费者：**所有 AI 与浏览器能力都只能经由 `ProxyAdapterClient` 访问**，不得重新引入直连 provider / `playwright-server` 的实现。
 - 当前已实现主链路：L1/L2 模块分析、测试场景生成、URL 绑定建议与人工调整、脚本生成、脚本人工编辑与版本历史、脚本执行、run 级失败诊断、自动修复审批/拒绝、`/ai-e2e/` 包级 UI。
-- 当前已知缺口必须显式保留，不能被 README 或口头描述夸大为已完成：
-  1. **项目级诊断报告未实现**（当前只有 run 级诊断与 intervention history）
-  2. **每个功能模块必须绑定 URL 的强校验未实现**（当前只检查“至少存在一个 binding”）
-  3. **Scenario 编辑能力不完整**（模块可编辑、脚本可编辑，但测试场景缺少完整独立编辑工作面）
-- 原始需求对照、偏差判断与后续开发路线见：
+- 上述 3 个已知缺口现已全部实现：
+  1. **项目级诊断报告 ✅ 已实现** — 项目级失败聚合、根因分类分布、JSON/HTML 导出报告
+  2. **每个功能模块必须绑定 URL 的强校验 ✅ 已实现** — 状态机检查每个功能模块的绑定状态，前端显示未绑定模块提示
+  3. **Scenario 编辑能力 ✅ 已实现** — 完整的测试场景查看、编辑、保存 API 及 UI（ScenarioPanel + ScenarioEditor）
+- 需求对照、实施细节与历史路线见：
   - `ai-e2e/docs/requirements-baseline.md`
   - `ai-e2e/docs/gap-analysis.md`
   - `ai-e2e/docs/roadmap.md`

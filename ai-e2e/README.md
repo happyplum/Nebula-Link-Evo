@@ -39,24 +39,24 @@ PRD / 业务描述
 - **脚本生成**：按测试场景生成 Playwright TypeScript 脚本
 - **脚本编辑与版本管理**：人工修改脚本、保存版本、查看版本历史
 - **脚本执行**：执行单个脚本、批量执行、查看 run 历史与详情
-- **失败诊断**：对单次运行失败进行 AI 诊断
+- **失败诊断**：对单次运行失败进行 AI 诊断，支持项目级诊断汇总报告、根因分布统计、JSON/HTML 导出
 - **可选自动修复**：对选择器漂移、等待时序等明确问题做受限自动修复
 - **SSE 实时推送**：向前端推送分析 / 探索 / 生成 / 执行阶段的实时事件
 - **SPA UI**：通过 `/ai-e2e/` 提供 React 前端
 
-### 尚未实现 / 明确缺口
+### 已实现的增强功能
 
 1. **项目级诊断汇总报告**
-   - 当前只有单次 run 的诊断结果与干预历史
-   - 尚未支持项目范围的失败聚合、根因汇总、导出报告
+   - 已支持项目范围的失败聚合、根因汇总、JSON/HTML 导出
+   - 根因类型：selector|timing|assertion|environment|data|unknown
 
 2. **每个功能模块都必须绑定 URL 的强校验**
-   - 当前状态机只检查“至少存在一个 URL binding”
-   - 尚未强制每个功能模块都必须完成 URL 绑定才允许继续生成脚本
+   - 状态机现在强制每个功能模块都必须完成 URL 绑定才允许继续生成脚本
+   - `ai_proposed` 状态计为已绑定
 
-3. **测试场景（scenario）的人工作业面不完整**
-   - 当前模块可编辑、脚本可编辑
-   - 但测试场景本身没有明确、完整的独立人工编辑 API / UI 能力
+3. **测试场景（scenario）的人工作业面**
+   - 提供完整的独立人工编辑 API / UI 能力
+   - 支持测试场景的增删改查和数据映射
 
 ## 设计思路
 
@@ -99,11 +99,12 @@ ai-e2e
 |---|---|
 | `ProjectService` | 项目与基础配置管理 |
 | `PRDAnalyzerService` | PRD → 业务模块 / 功能模块 / 测试场景 |
+| `TestScenarioService` | 测试场景 CRUD + 数据映射（preconditions ↔ expected_results） |
 | `ExplorerService` | 页面探索与 URL 绑定建议 |
 | `ScriptGeneratorService` | 测试脚本生成、再生成、保存人工编辑版本 |
 | `LoginRecorderService` | 登录步骤录制与回放支撑 |
 | `ExecutorService` | 运行脚本并收集产物 |
-| `AIDiagnosisService` | 单次运行失败诊断、自动修复、人工审核升级 |
+| `AIDiagnosisService` | 单次运行失败诊断、自动修复、人工审核升级、项目级诊断聚合 |
 | `StateMachineService` | 项目状态流转与阶段门禁 |
 
 ### 4. 用状态机约束交付物边界
@@ -118,10 +119,8 @@ draft → configuring → analyzing → analyzed → exploring → explored → 
 
 - `configuring → analyzing`：要求已有 `target_base_url`
 - `analyzed → exploring`：要求已有业务模块
-- `explored → generating`：要求至少已有一个 URL binding
+- `explored → generating`：要求每个功能模块至少绑定一个 URL（`ai_proposed` 状态计为已绑定）
 - `ready → running`：要求已有脚本
-
-这意味着当前系统已经有“阶段推进约束”，但还没有细到“每个功能模块必须完整绑定 URL”。
 
 ## 与 proxy-adapter 的关系
 
@@ -144,16 +143,7 @@ ai-e2e 是 `proxy-adapter` 的下游消费者：
 - **单次运行级别诊断**：针对某个 `runId` 收集错误信息、日志、脚本上下文并生成诊断
 - **诊断历史**：查询该次运行的 AI 干预记录
 - **可选自动修复**：仅在问题足够明确、改动受控时尝试自动修复
-
-当前**不支持**：
-
-- 项目级失败聚合报告
-- 跨多次运行的根因分布统计
-- 项目维度的诊断导出
-
-所以更准确的说法是：
-
-> ai-e2e 已支持“单次失败诊断 + 可选自动修复”，但还没有“项目级诊断报告系统”。
+- **项目级诊断报告**：聚合项目所有失败、根因分布统计、JSON/HTML 导出
 
 ## 快速开始
 
@@ -223,12 +213,14 @@ pnpm type-check   # tsc --noEmit
 - `/api/projects/:id/config`
 - `/api/projects/:id/analysis`
 - `/api/projects/:id/exploration`
+- `/api/projects/:id/scenarios`
 - `/api/projects/:id/scripts`
 - `/api/projects/:id/execution`
+- `/api/projects/:id/diagnosis`
 - `/api/projects/:id/state`
 - `/api/projects/:id/events`
 
-这套 API 分别对应：项目管理、配置、需求分析、站点探索、脚本管理、执行诊断、状态流转、实时事件。
+这套 API 分别对应：项目管理、配置、需求分析、站点探索、测试场景、脚本管理、执行诊断、项目级诊断、状态流转、实时事件。
 
 ## 目录结构
 
@@ -248,7 +240,7 @@ ai-e2e/
 ├── ui/                         # React SPA
 │   └── src/
 │       ├── app/                # 路由、页面、应用壳
-│       ├── features/           # project / analysis / exploration / scripts / execution / ai-status
+│       ├── features/           # project / analysis / exploration / scripts / execution / ai-status / scenario / report
 │       ├── shared/             # 通用组件、hooks、API 基础设施
 │       └── types/              # 前端类型
 ├── data/                       # SQLite 数据文件
@@ -270,17 +262,11 @@ ai-e2e/
 
 ## 已知限制与技术债
 
-### 1. 诊断能力是 run 级，不是 project 级
+以下限制与技术债已在当前版本中解决：
 
-当前能解决“这一次为什么失败”，但不能回答“这个项目最近失败的主要根因分布是什么”。
-
-### 2. URL 绑定校验粒度不足
-
-进入脚本生成前只要求“存在绑定”，并不保证每个功能模块都已绑定 URL。
-
-### 3. scenario 人工编辑面不完整
-
-模块可以编辑，脚本可以编辑，但测试场景层面的显式人工编辑能力仍不完整。
+1. ~~诊断能力是 run 级，不是 project 级~~ — 已支持项目级诊断聚合与导出
+2. ~~URL 绑定校验粒度不足~~ — 已强制每个功能模块必须绑定 URL
+3. ~~scenario 人工编辑面不完整~~ — 已提供完整的独立编辑能力
 
 ## 一句话总结
 

@@ -87,8 +87,10 @@ ai-e2e (:3002)
 - `/api/projects/:id/config`
 - `/api/projects/:id/analysis`
 - `/api/projects/:id/exploration`
+- `/api/projects/:id/scenarios`
 - `/api/projects/:id/scripts`
 - `/api/projects/:id/execution`
+- `/api/projects/:id/diagnosis`
 - `/api/projects/:id/state`
 - `/api/projects/:id/events`
 
@@ -102,6 +104,9 @@ ai-e2e (:3002)
 - `promptManager`
 - `tokenTracker`
 - `loginRecorder`
+- `scenarioService`
+- `diagnosisService`
+- `stateMachine`
 
 如果新增服务，优先遵循相同模式，不要混入另一套注入方式。
 
@@ -124,16 +129,15 @@ ai-e2e (:3002)
 ## Workflow Truths
 
 - 项目状态机：`draft → configuring → analyzing → analyzed → exploring → explored → generating → ready → running → completed`
-- 当前进入 `generating` 前只检查“至少存在一个 URL binding”，**不保证每个功能模块都完成绑定**
+- 当前进入 `generating` 前检查每个功能模块至少绑定一个 URL，`ai_proposed` 状态计为已绑定
 - 当前支持：
   - 模块编辑
   - URL 绑定建议与确认
+  - 测试场景编辑（preconditions ↔ expected_results 数据映射）
   - 脚本编辑与版本历史
   - 单次运行失败诊断
   - 可选自动修复
-- 当前不支持：
-  - 项目级诊断汇总报告
-  - 完整的 scenario 人工编辑工作面
+  - 项目级诊断汇总报告（根因分布统计、JSON/HTML 导出）
 
 ## Anti-Patterns
 
@@ -146,14 +150,11 @@ ai-e2e (:3002)
 
 ## Current Known Gaps
 
-1. **项目级诊断报告未实现**
-   - 当前只有单次 `runId` 级别诊断与 intervention history
+所有已知缺口已在当前版本中解决：
 
-2. **URL 绑定校验粒度不足**
-   - 当前只能确保“存在至少一个绑定”
-
-3. **Scenario 编辑能力不完整**
-   - 业务 / 功能模块可编辑，脚本可编辑，但 scenario 缺少完整独立编辑面
+1. ~~项目级诊断报告未实现~~ — 已支持项目级诊断聚合、根因分布统计、JSON/HTML 导出
+2. ~~URL 绑定校验粒度不足~~ — 已强制每个功能模块必须绑定 URL（`ai_proposed` 计为已绑定）
+3. ~~Scenario 编辑能力不完整~~ — 已提供完整的独立编辑能力和数据映射
 
 ## Verification Reality
 
