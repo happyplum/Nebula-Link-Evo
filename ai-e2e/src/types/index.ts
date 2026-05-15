@@ -60,6 +60,7 @@ export type {
 } from './execution.js';
 export type {
   ActionTaken,
+  FailureType,
 } from './ai-intervention.js';
 export type {
   ProjectMode,
@@ -144,6 +145,7 @@ export {
 } from './execution.js';
 export {
   ActionTaken as ActionTakenValues,
+  FailureType as FailureTypeValues,
 } from './ai-intervention.js';
 
 // ========== TYPEBOX SCHEMAS ==========
@@ -164,6 +166,7 @@ export {
   ExecutionStatusSchema,
   ExecutionRunSchema,
   ActionTakenSchema,
+  FailureTypeSchema,
   AIInterventionLogSchema,
   ExplorationSessionSchema,
   LoginScriptSchema,

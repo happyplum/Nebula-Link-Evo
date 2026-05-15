@@ -86,6 +86,8 @@ export interface AIInterventionLog {
   action_taken: ActionTaken;
   /** Human feedback (optional) */
   human_feedback?: string;
+  /** Failure type (optional) */
+  failure_type?: FailureType;
   /** Creation timestamp (ISO string) */
   created_at: string;
 }
