@@ -13,8 +13,15 @@ import type { ProxyAdapterClient } from '../infrastructure/proxy-adapter-client.
 import type { PromptTemplateManager } from '../ai/prompt-manager.js';
 import type { ExecutionRunRepository, ExecutionRun } from '../database/repositories/execution-run-repository.js';
 import type { AIInterventionLogRepository, AIInterventionLog } from '../database/repositories/ai-intervention-log-repository.js';
+import type { BusinessModuleRepository } from '../database/repositories/business-module-repository.js';
+import type { FunctionalModuleRepository } from '../database/repositories/functional-module-repository.js';
+import type { TestScenarioRepository } from '../database/repositories/test-scenario-repository.js';
 import type { ScriptRepository, Script } from '../database/repositories/script-repository.js';
-import { FailureType, type FailureType as FailureTypeValue } from '../types/ai-intervention.js';
+import {
+  FailureType,
+  type FailureType as FailureTypeValue,
+  type ProjectDiagnosisReport,
+} from '../types/ai-intervention.js';
 
 /** Maximum number of auto-fix retries per execution */
 const MAX_AUTO_FIX_RETRIES = 3;
@@ -23,6 +30,17 @@ const MAX_AUTO_FIX_RETRIES = 3;
 const MAX_CHANGE_RATIO = 0.3;
 
 const VALID_FAILURE_TYPES = new Set<FailureTypeValue>(Object.values(FailureType));
+const FAILED_RUN_STATUSES = new Set(['fail', 'error']);
+
+type DiagnosisAggregationDependencies = {
+  businessModuleRepo?: Pick<BusinessModuleRepository, 'findByProjectId'>;
+  functionalModuleRepo?: Pick<FunctionalModuleRepository, 'findByProjectId'>;
+  scenarioRepo?: Pick<TestScenarioRepository, 'findByFunctionalModuleId'>;
+};
+
+type BatchInterventionLogRepository = AIInterventionLogRepository & {
+  findByRunIds?: (runIds: string[]) => AIInterventionLog[];
+};
 
 export interface DiagnosisResult {
   diagnosis: string;
@@ -43,6 +61,9 @@ export class AIDiagnosisService {
     private runRepo: ExecutionRunRepository,
     private interventionRepo: AIInterventionLogRepository,
     private scriptRepo: ScriptRepository,
+    private businessModuleRepo?: Pick<BusinessModuleRepository, 'findByProjectId'>,
+    private functionalModuleRepo?: Pick<FunctionalModuleRepository, 'findByProjectId'>,
+    private scenarioRepo?: Pick<TestScenarioRepository, 'findByFunctionalModuleId'>,
   ) {}
 
   /**
@@ -221,6 +242,62 @@ export class AIDiagnosisService {
     return this.interventionRepo.findByRunId(runId);
   }
 
+  getProjectDiagnosisReport(projectId: string): ProjectDiagnosisReport {
+    const report: ProjectDiagnosisReport = {
+      projectId,
+      totalRuns: 0,
+      failedRuns: 0,
+      diagnosedRuns: 0,
+      undiagnosedRuns: 0,
+      failureDistribution: [],
+      recentFailures: [],
+    };
+
+    const runs = this.collectProjectRuns(projectId);
+    report.totalRuns = runs.length;
+
+    if (runs.length === 0) {
+      return report;
+    }
+
+    const failedRuns = runs.filter((run) => FAILED_RUN_STATUSES.has(run.status));
+    report.failedRuns = failedRuns.length;
+
+    if (failedRuns.length === 0) {
+      return report;
+    }
+
+    const logsByRunId = this.getInterventionLogsByRunIds(failedRuns.map((run) => run.id));
+    const failureDistribution = new Map<FailureTypeValue, number>();
+
+    const diagnosedFailures = failedRuns.flatMap((run) => {
+      const latestDiagnosis = this.getLatestDiagnosisLog(logsByRunId.get(run.id) ?? []);
+      if (!latestDiagnosis?.diagnosis) {
+        return [];
+      }
+
+      const failureType = this.normalizeFailureType(latestDiagnosis.failure_type);
+      failureDistribution.set(failureType, (failureDistribution.get(failureType) ?? 0) + 1);
+
+      return [{
+        runId: run.id,
+        failureType,
+        diagnosis: latestDiagnosis.diagnosis,
+        timestamp: latestDiagnosis.created_at,
+      }];
+    });
+
+    report.diagnosedRuns = diagnosedFailures.length;
+    report.undiagnosedRuns = report.failedRuns - report.diagnosedRuns;
+    report.failureDistribution = [...failureDistribution.entries()]
+      .map(([type, count]) => ({ type, count }))
+      .sort((left, right) => right.count - left.count || left.type.localeCompare(right.type));
+    report.recentFailures = diagnosedFailures
+      .sort((left, right) => right.timestamp.localeCompare(left.timestamp));
+
+    return report;
+  }
+
   /**
    * Calculate the ratio of changed lines between two scripts.
    *
@@ -257,5 +334,77 @@ export class AIDiagnosisService {
     return typeof value === 'string' && VALID_FAILURE_TYPES.has(value as FailureTypeValue)
       ? value as FailureTypeValue
       : FailureType.UNKNOWN;
+  }
+
+  private collectProjectRuns(projectId: string): ExecutionRun[] {
+    const { businessModuleRepo, functionalModuleRepo, scenarioRepo } =
+      this.getDiagnosisAggregationDependencies();
+
+    const businessModuleIds = new Set(
+      businessModuleRepo.findByProjectId(projectId).map((businessModule) => businessModule.id),
+    );
+    const functionalModules = functionalModuleRepo
+      .findByProjectId(projectId)
+      .filter((functionalModule) => businessModuleIds.size === 0 || businessModuleIds.has(functionalModule.business_module_id));
+
+    const runs: ExecutionRun[] = [];
+
+    for (const functionalModule of functionalModules) {
+      const scenarios = scenarioRepo.findByFunctionalModuleId(functionalModule.id);
+      for (const scenario of scenarios) {
+        const scripts = this.scriptRepo.findByScenarioId(scenario.id);
+        for (const script of scripts) {
+          runs.push(...this.runRepo.findByScriptId(script.id));
+        }
+      }
+    }
+
+    return runs;
+  }
+
+  private getDiagnosisAggregationDependencies(): Required<DiagnosisAggregationDependencies> {
+    const dependencies: DiagnosisAggregationDependencies = {
+      businessModuleRepo: this.businessModuleRepo,
+      functionalModuleRepo: this.functionalModuleRepo,
+      scenarioRepo: this.scenarioRepo,
+    };
+
+    if (!dependencies.businessModuleRepo || !dependencies.functionalModuleRepo || !dependencies.scenarioRepo) {
+      throw new Error('Project diagnosis aggregation dependencies are not configured');
+    }
+
+    return dependencies as Required<DiagnosisAggregationDependencies>;
+  }
+
+  private getInterventionLogsByRunIds(runIds: string[]): Map<string, AIInterventionLog[]> {
+    if (runIds.length === 0) {
+      return new Map();
+    }
+
+    const repo = this.interventionRepo as BatchInterventionLogRepository;
+    const logs = repo.findByRunIds
+      ? repo.findByRunIds(runIds)
+      : runIds.flatMap((runId) => this.interventionRepo.findByRunId(runId));
+
+    const logsByRunId = new Map<string, AIInterventionLog[]>();
+    for (const log of logs) {
+      const runLogs = logsByRunId.get(log.execution_run_id);
+      if (runLogs) {
+        runLogs.push(log);
+      } else {
+        logsByRunId.set(log.execution_run_id, [log]);
+      }
+    }
+
+    return logsByRunId;
+  }
+
+  private getLatestDiagnosisLog(logs: AIInterventionLog[]): AIInterventionLog | null {
+    const diagnosisLogs = logs.filter((log) => Boolean(log.diagnosis));
+    if (diagnosisLogs.length === 0) {
+      return null;
+    }
+
+    return [...diagnosisLogs].sort((left, right) => right.created_at.localeCompare(left.created_at))[0] ?? null;
   }
 }
