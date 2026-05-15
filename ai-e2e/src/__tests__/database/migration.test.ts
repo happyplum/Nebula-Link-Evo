@@ -13,6 +13,7 @@ import { up as migrate009, down as down009 } from '../../database/migrations/009
 import { up as migrate010, down as down010 } from '../../database/migrations/010-ai-intervention-logs.js';
 import { up as migrate011, down as down011 } from '../../database/migrations/011-exploration-sessions.js';
 import { up as migrate012, down as down012 } from '../../database/migrations/012-login-scripts.js';
+import { up as migrate013 } from '../../database/migrations/013-add-failure-type-to-intervention-logs.js';
 
 const EXPECTED_TABLES = [
   'projects',
@@ -43,6 +44,7 @@ function runAllMigrations(db: Database.Database): void {
   migrate010(db);
   migrate011(db);
   migrate012(db);
+  migrate013(db);
 }
 
 function getTableNames(db: Database.Database): string[] {
@@ -187,5 +189,26 @@ describe('Database Migrations', () => {
     for (const table of EXPECTED_TABLES) {
       expect(tables).not.toContain(table);
     }
+  });
+
+  it('should add failure_type column to ai_intervention_logs table', () => {
+    runAllMigrations(db);
+
+    const columns = db.prepare("PRAGMA table_info(ai_intervention_logs)").all() as { name: string }[];
+    const columnNames = columns.map((c) => c.name);
+
+    expect(columnNames).toContain('failure_type');
+  });
+
+  it('migration 013 should be idempotent — running twice does not error', () => {
+    runAllMigrations(db);
+
+    // Run migration 013 again — should not throw
+    expect(() => migrate013(db)).not.toThrow();
+
+    const columns = db.prepare("PRAGMA table_info(ai_intervention_logs)").all() as { name: string }[];
+    const columnNames = columns.map((c) => c.name);
+
+    expect(columnNames).toContain('failure_type');
   });
 });

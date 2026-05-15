@@ -12,6 +12,7 @@ import { up as migrate009 } from './migrations/009-execution-runs.js';
 import { up as migrate010 } from './migrations/010-ai-intervention-logs.js';
 import { up as migrate011 } from './migrations/011-exploration-sessions.js';
 import { up as migrate012 } from './migrations/012-login-scripts.js';
+import { up as migrate013 } from './migrations/013-add-failure-type-to-intervention-logs.js';
 import { ProjectRepository } from './repositories/project-repository.js';
 import { PRDDocumentRepository } from './repositories/prd-document-repository.js';
 import { BusinessModuleRepository } from './repositories/business-module-repository.js';
@@ -93,6 +94,7 @@ class DatabaseManager {
     migrate010(this.db);
     migrate011(this.db);
     migrate012(this.db);
+    migrate013(this.db);
   }
 
   private initRepositories(): void {
