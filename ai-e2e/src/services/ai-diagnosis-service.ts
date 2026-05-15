@@ -14,6 +14,7 @@ import type { PromptTemplateManager } from '../ai/prompt-manager.js';
 import type { ExecutionRunRepository, ExecutionRun } from '../database/repositories/execution-run-repository.js';
 import type { AIInterventionLogRepository, AIInterventionLog } from '../database/repositories/ai-intervention-log-repository.js';
 import type { ScriptRepository, Script } from '../database/repositories/script-repository.js';
+import { FailureType, type FailureType as FailureTypeValue } from '../types/ai-intervention.js';
 
 /** Maximum number of auto-fix retries per execution */
 const MAX_AUTO_FIX_RETRIES = 3;
@@ -21,9 +22,11 @@ const MAX_AUTO_FIX_RETRIES = 3;
 /** Maximum fraction of lines that may change before requiring human review */
 const MAX_CHANGE_RATIO = 0.3;
 
+const VALID_FAILURE_TYPES = new Set<FailureTypeValue>(Object.values(FailureType));
+
 export interface DiagnosisResult {
   diagnosis: string;
-  failureType: string;
+  failureType: FailureTypeValue;
   confidence: number;
 }
 
@@ -79,26 +82,28 @@ export class AIDiagnosisService {
     // Call AI
     const result = await this.proxyClient.generateText(prompt);
 
-    // Store intervention log
+    // Parse structured diagnosis before persistence so validated metadata is stored.
     const diagnosis = result.text;
+    let failureType: FailureTypeValue = FailureType.UNKNOWN;
+    let confidence = 0;
+
+    try {
+      const parsed = JSON.parse(diagnosis) as { failure_type?: unknown; confidence?: unknown };
+      failureType = this.normalizeFailureType(parsed.failure_type);
+      confidence = typeof parsed.confidence === 'number' ? parsed.confidence : 0;
+    } catch {
+      // AI returned non-JSON diagnosis text — still usable
+    }
+
+    // Store intervention log
     this.interventionRepo.create({
       execution_run_id: runId,
       diagnosis,
+      failure_type: failureType,
       action_taken: 'diagnose_only',
       original_script_snapshot: script.content,
       diagnosis_tokens: result.tokenUsage.completionTokens,
     });
-
-    // Parse structured diagnosis
-    let failureType = 'unknown';
-    let confidence = 0;
-    try {
-      const parsed = JSON.parse(diagnosis);
-      failureType = parsed.failure_type ?? 'unknown';
-      confidence = parsed.confidence ?? 0;
-    } catch {
-      // AI returned non-JSON diagnosis text — still usable
-    }
 
     return { diagnosis, failureType, confidence };
   }
@@ -246,5 +251,11 @@ export class AIDiagnosisService {
     }
 
     return changedCount / maxLines;
+  }
+
+  private normalizeFailureType(value: unknown): FailureTypeValue {
+    return typeof value === 'string' && VALID_FAILURE_TYPES.has(value as FailureTypeValue)
+      ? value as FailureTypeValue
+      : FailureType.UNKNOWN;
   }
 }

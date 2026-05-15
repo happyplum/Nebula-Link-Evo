@@ -4,6 +4,7 @@ import { generateId } from '../db.js';
 export interface CreateAIInterventionLogParams {
   execution_run_id: string;
   diagnosis?: string;
+  failure_type?: string;
   action_taken?: string;
   original_script_snapshot?: string;
   modified_script_snapshot?: string;
@@ -15,6 +16,7 @@ export interface AIInterventionLog {
   id: string;
   execution_run_id: string;
   diagnosis: string | null;
+  failure_type: string | null;
   action_taken: string | null;
   original_script_snapshot: string | null;
   modified_script_snapshot: string | null;
@@ -31,7 +33,7 @@ export class AIInterventionLogRepository {
 
   constructor(private db: Database.Database) {
     this.stmtInsert = db.prepare(
-      'INSERT INTO ai_intervention_logs (id, execution_run_id, diagnosis, action_taken, original_script_snapshot, modified_script_snapshot, diagnosis_tokens, outcome) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+      'INSERT INTO ai_intervention_logs (id, execution_run_id, diagnosis, failure_type, action_taken, original_script_snapshot, modified_script_snapshot, diagnosis_tokens, outcome) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
     this.stmtFindById = db.prepare('SELECT * FROM ai_intervention_logs WHERE id = ?');
     this.stmtFindByRunId = db.prepare('SELECT * FROM ai_intervention_logs WHERE execution_run_id = ? ORDER BY created_at ASC');
@@ -41,7 +43,7 @@ export class AIInterventionLogRepository {
   create(params: CreateAIInterventionLogParams): AIInterventionLog {
     const id = generateId();
     this.stmtInsert.run(
-      id, params.execution_run_id, params.diagnosis ?? null, params.action_taken ?? null,
+      id, params.execution_run_id, params.diagnosis ?? null, params.failure_type ?? null, params.action_taken ?? null,
       params.original_script_snapshot ?? null, params.modified_script_snapshot ?? null,
       params.diagnosis_tokens ?? null, params.outcome ?? null
     );
@@ -65,6 +67,7 @@ export class AIInterventionLogRepository {
     return {
       id: row.id as string, execution_run_id: row.execution_run_id as string,
       diagnosis: row.diagnosis as string | null,
+      failure_type: row.failure_type as string | null,
       action_taken: row.action_taken as string | null,
       original_script_snapshot: row.original_script_snapshot as string | null,
       modified_script_snapshot: row.modified_script_snapshot as string | null,
