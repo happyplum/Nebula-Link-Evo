@@ -18,8 +18,8 @@ export const UnboundModuleIndicator: React.FC<UnboundModuleIndicatorProps> = ({ 
       </div>
       <ul className={styles.list}>
         {details.map((detail, index) => {
-          // Extract FM name if it matches 'FM "Name" has no URL binding'
-          const match = detail.match(/FM "([^"]+)"/);
+          // Extract module name from backend format: functional_modules_missing_url_binding:moduleId:moduleName
+          const match = detail.match(/^functional_modules_missing_url_binding:[^:]+:(.+)$/);
           const name = match ? match[1] : detail;
           return (
             <li key={index} className={styles.listItem}>
