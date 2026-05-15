@@ -51,6 +51,7 @@ function createMockInterventionRepo(): AIInterventionLogRepository {
         id: 'intervention-' + logs.length,
         execution_run_id: params.execution_run_id,
         diagnosis: params.diagnosis ?? null,
+        failure_type: params.failure_type ?? null,
         action_taken: params.action_taken ?? null,
         original_script_snapshot: params.original_script_snapshot ?? null,
         modified_script_snapshot: params.modified_script_snapshot ?? null,
@@ -224,6 +225,41 @@ describe('AIDiagnosisService', () => {
       });
       await expect(service.diagnoseFailure('run-pass')).rejects.toThrow(/not in a failed/i);
     });
+
+    it('diagnoseFailure stores failure_type in intervention log', async () => {
+      const result = await service.diagnoseFailure('run-1');
+
+      expect(interventionRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          execution_run_id: 'run-1',
+          action_taken: 'diagnose_only',
+          failure_type: 'selector',
+        }),
+      );
+      expect(result.failureType).toBe('selector');
+    });
+
+    it('unrecognized failure_type defaults to unknown', async () => {
+      proxyClient = createMockProxyClient({
+        text: JSON.stringify({
+          failure_type: 'network',
+          direct_cause: 'Unexpected upstream issue',
+          confidence: 0.42,
+        }),
+        tokenUsage: { promptTokens: 100, completionTokens: 50 },
+      });
+      service = new ADS(proxyClient, promptManager, runRepo, interventionRepo, scriptRepo);
+
+      const result = await service.diagnoseFailure('run-1');
+
+      expect(interventionRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          execution_run_id: 'run-1',
+          failure_type: 'unknown',
+        }),
+      );
+      expect(result.failureType).toBe('unknown');
+    });
   });
 
   // ===== attemptAutoFix =====
@@ -379,6 +415,7 @@ test("completely new test", async ({ page }) => {
           id: 'int-1',
           execution_run_id: 'run-1',
           diagnosis: 'Selector outdated',
+          failure_type: 'selector',
           action_taken: 'diagnose_only',
           original_script_snapshot: null,
           modified_script_snapshot: null,

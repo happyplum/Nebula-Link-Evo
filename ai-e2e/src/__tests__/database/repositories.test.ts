@@ -14,6 +14,7 @@ import { up as migrate009 } from '../../database/migrations/009-execution-runs.j
 import { up as migrate010 } from '../../database/migrations/010-ai-intervention-logs.js';
 import { up as migrate011 } from '../../database/migrations/011-exploration-sessions.js';
 import { up as migrate012 } from '../../database/migrations/012-login-scripts.js';
+import { up as migrate013 } from '../../database/migrations/013-add-failure-type-to-intervention-logs.js';
 import { ProjectRepository } from '../../database/repositories/project-repository.js';
 import { PRDDocumentRepository } from '../../database/repositories/prd-document-repository.js';
 import { BusinessModuleRepository } from '../../database/repositories/business-module-repository.js';
@@ -40,6 +41,7 @@ function runAllMigrations(db: Database.Database): void {
   migrate010(db);
   migrate011(db);
   migrate012(db);
+  migrate013(db);
 }
 
 function createFreshDb(): Database.Database {
