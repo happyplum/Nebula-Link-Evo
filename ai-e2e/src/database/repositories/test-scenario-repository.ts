@@ -14,7 +14,6 @@ export interface UpdateTestScenarioData {
   name?: string;
   description?: string;
   test_data_json?: string;
-  source?: string;
 }
 
 export interface TestScenario {
