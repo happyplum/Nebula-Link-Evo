@@ -9,6 +9,7 @@ import { DatabaseManager } from '../database/db.js';
 import { ProxyAdapterClient } from '../infrastructure/proxy-adapter-client.js';
 import { PromptTemplateManager, TokenBudgetTracker } from '../ai/index.js';
 import { LoginRecorderService } from '../services/login-recorder-service.js';
+import { StateMachineService } from '../services/state-machine-service.js';
 import errorHandlerPlugin from './plugins/error-handler.js';
 import sseEmitterPlugin from './plugins/sse-emitter.js';
 import executionRoutes from './routes/execution.js';
@@ -51,6 +52,7 @@ export interface ServerOptions {
   promptManager?: PromptTemplateManager;
   tokenTracker?: TokenBudgetTracker;
   loginRecorder?: LoginRecorderService;
+  stateMachine?: StateMachineService;
 }
 
 export function createServer(options: Partial<ServerOptions> = {}) {
@@ -74,7 +76,7 @@ export function createServer(options: Partial<ServerOptions> = {}) {
     tokenTracker: options.tokenTracker,
   });
   app.register(executionRoutes, { prefix: '/api/projects/:id/execution' });
-  app.register(stateRoutes, { prefix: '/api/projects/:id/state' });
+  app.register(stateRoutes, { prefix: '/api/projects/:id/state', stateMachine: options.stateMachine });
   app.register(explorationRoutes, {
     prefix: '/api/projects/:id/exploration',
     proxyClient: options.proxyClient,
@@ -161,8 +163,11 @@ export async function start() {
   // Create login recorder service (depends on DB and proxyClient)
   const loginRecorder = new LoginRecorderService(databaseManager, proxyClient);
 
+  // Create state machine service (depends on DB)
+  const stateMachine = new StateMachineService(databaseManager);
+
   // Create server with all dependencies
-  const app = createServer({ proxyClient, promptManager, tokenTracker, loginRecorder });
+  const app = createServer({ proxyClient, promptManager, tokenTracker, loginRecorder, stateMachine });
 
   try {
     registerGracefulShutdown(app, databaseManager);
