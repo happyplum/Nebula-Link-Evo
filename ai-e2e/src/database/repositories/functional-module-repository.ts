@@ -25,6 +25,7 @@ export class FunctionalModuleRepository {
   private stmtInsert: Database.Statement;
   private stmtFindById: Database.Statement;
   private stmtFindByBusinessModuleId: Database.Statement;
+  private stmtFindByProjectId: Database.Statement;
   private stmtDelete: Database.Statement;
 
   constructor(private db: Database.Database) {
@@ -33,6 +34,9 @@ export class FunctionalModuleRepository {
     );
     this.stmtFindById = db.prepare('SELECT * FROM functional_modules WHERE id = ?');
     this.stmtFindByBusinessModuleId = db.prepare('SELECT * FROM functional_modules WHERE business_module_id = ? ORDER BY sort_order ASC, created_at ASC');
+    this.stmtFindByProjectId = db.prepare(
+      'SELECT fm.* FROM functional_modules fm JOIN business_modules bm ON fm.business_module_id = bm.id WHERE bm.project_id = ? ORDER BY fm.sort_order ASC, fm.created_at ASC'
+    );
     this.stmtDelete = db.prepare('DELETE FROM functional_modules WHERE id = ?');
   }
 
@@ -52,6 +56,10 @@ export class FunctionalModuleRepository {
 
   findByBusinessModuleId(businessModuleId: string): FunctionalModule[] {
     return (this.stmtFindByBusinessModuleId.all(businessModuleId) as Record<string, unknown>[]).map(r => this.mapRow(r));
+  }
+
+  findByProjectId(projectId: string): FunctionalModule[] {
+    return (this.stmtFindByProjectId.all(projectId) as Record<string, unknown>[]).map(r => this.mapRow(r));
   }
 
   updateBoundUrl(id: string, urlId: string | null): FunctionalModule | null {

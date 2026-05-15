@@ -283,6 +283,37 @@ describe('FunctionalModuleRepository', () => {
     expect(found1!.sort_order).toBe(1);
     expect(found2!.sort_order).toBe(0);
   });
+
+  it('finds all FMs under a project via BM chain', () => {
+    // Create second business module
+    const bm2Id = generateId();
+    db.prepare("INSERT INTO business_modules (id, project_id, name) VALUES (?, ?, 'bm2')").run(bm2Id, projectId);
+
+    // Create 2 FMs under first BM
+    repo.create({ business_module_id: String(bmId), name: 'FM1', sort_order: 0 });
+    repo.create({ business_module_id: String(bmId), name: 'FM2', sort_order: 1 });
+
+    // Create 2 FMs under second BM
+    repo.create({ business_module_id: String(bm2Id), name: 'FM3', sort_order: 0 });
+    repo.create({ business_module_id: String(bm2Id), name: 'FM4', sort_order: 1 });
+
+    const fms = repo.findByProjectId(String(projectId));
+    expect(fms).toHaveLength(4);
+    const names = fms.map(fm => fm.name);
+    expect(names).toContain('FM1');
+    expect(names).toContain('FM2');
+    expect(names).toContain('FM3');
+    expect(names).toContain('FM4');
+  });
+
+  it('returns empty for project with no BMs', () => {
+    // Create another project with no BMs
+    const emptyProjectId = generateId();
+    db.prepare("INSERT INTO projects (id, name) VALUES (?, 'empty')").run(emptyProjectId);
+
+    const fms = repo.findByProjectId(String(emptyProjectId));
+    expect(fms).toHaveLength(0);
+  });
 });
 
 describe('URLRepository', () => {
@@ -348,6 +379,57 @@ describe('URLModuleBindingRepository', () => {
     repo.create({ url_id: String(urlId), functional_module_id: String(fmId) });
     const bindings = repo.findByProjectId(String(projectId));
     expect(bindings).toHaveLength(1);
+  });
+
+  it('should correctly identify bound vs unbound modules', () => {
+    // Create 2 more FMs using the same business module
+    const fm2Id = generateId();
+    const fm3Id = generateId();
+    const bmId = generateId();
+    db.prepare("INSERT INTO business_modules (id, project_id, name) VALUES (?, ?, 'bm2')").run(bmId, projectId);
+    db.prepare("INSERT INTO functional_modules (id, business_module_id, name) VALUES (?, ?, 'fm2')").run(fm2Id, bmId);
+    db.prepare("INSERT INTO functional_modules (id, business_module_id, name) VALUES (?, ?, 'fm3')").run(fm3Id, bmId);
+
+    // Create URLs
+    const url2Id = generateId();
+    const url3Id = generateId();
+    db.prepare("INSERT INTO urls (id, project_id, url) VALUES (?, ?, '/page2')").run(url2Id, projectId);
+    db.prepare("INSERT INTO urls (id, project_id, url) VALUES (?, ?, '/page3')").run(url3Id, projectId);
+
+    // Bind FM1 and FM2, leave FM3 unbound
+    repo.create({ url_id: String(urlId), functional_module_id: String(fmId), status: 'human_confirmed' });
+    repo.create({ url_id: String(url2Id), functional_module_id: String(fm2Id), status: 'ai_proposed' });
+
+    const status = repo.findBindingStatusByModuleIds([String(fmId), String(fm2Id), String(fm3Id)]);
+    expect(status.get(String(fmId))).toBe(true);
+    expect(status.get(String(fm2Id))).toBe(true);
+    expect(status.get(String(fm3Id))).toBe(false);
+  });
+
+  it('should treat module with only rejected binding as unbound', () => {
+    const fm2Id = generateId();
+    const bmId = generateId();
+    db.prepare("INSERT INTO business_modules (id, project_id, name) VALUES (?, ?, 'bm2')").run(bmId, projectId);
+    db.prepare("INSERT INTO functional_modules (id, business_module_id, name) VALUES (?, ?, 'fm2')").run(fm2Id, bmId);
+
+    // Create a rejected binding
+    repo.create({ url_id: String(urlId), functional_module_id: String(fm2Id), status: 'rejected' });
+
+    const status = repo.findBindingStatusByModuleIds([String(fm2Id)]);
+    expect(status.get(String(fm2Id))).toBe(false);
+  });
+
+  it('should treat module with ai_proposed binding as bound', () => {
+    const fm2Id = generateId();
+    const bmId = generateId();
+    db.prepare("INSERT INTO business_modules (id, project_id, name) VALUES (?, ?, 'bm2')").run(bmId, projectId);
+    db.prepare("INSERT INTO functional_modules (id, business_module_id, name) VALUES (?, ?, 'fm2')").run(fm2Id, bmId);
+
+    // Create an ai_proposed binding
+    repo.create({ url_id: String(urlId), functional_module_id: String(fm2Id), status: 'ai_proposed' });
+
+    const status = repo.findBindingStatusByModuleIds([String(fm2Id)]);
+    expect(status.get(String(fm2Id))).toBe(true);
   });
 });
 
