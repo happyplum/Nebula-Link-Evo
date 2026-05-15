@@ -9,6 +9,7 @@ import { ResultDashboard } from './ResultDashboard';
 import { RunDetail } from './RunDetail';
 import { DiagnosisPanel } from './DiagnosisPanel';
 import { ExecutionHistory } from './ExecutionHistory';
+import { ReportPanel } from '../../report/components/ReportPanel';
 import styles from './ExecutionPanel.module.css';
 
 export default function ExecutionPanel() {
@@ -121,6 +122,8 @@ export default function ExecutionPanel() {
             currentStep={currentStep}
             progress={progress}
           />
+
+          <ReportPanel projectId={projectId} />
 
           <ResultDashboard
             runs={runs}
