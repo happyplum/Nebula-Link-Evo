@@ -14,6 +14,8 @@ import {
 import type { ProjectMode, ModeRequirements } from '../types/state-machine.js';
 import type { DatabaseManager } from '../database/db.js';
 import type { Project } from '../database/repositories/project-repository.js';
+import type { UnboundModule } from '../types/gate.js';
+import { ServiceError } from './service-error.js';
 
 // ========== Rollback mapping ==========
 
@@ -78,12 +80,23 @@ export class StateMachineService {
    * Throws if the transition is invalid or deliverables are not met.
    */
   transition(projectId: string, targetStatus: ProjectStatus): Project {
-    if (!this.canTransition(projectId, targetStatus)) {
-      const project = this.requireProject(projectId);
+    const project = this.requireProject(projectId);
+    const currentStatus = project.status as ProjectStatus;
+
+    if (!isValidTransition(currentStatus, targetStatus)) {
       throw new Error(
         `Cannot transition project '${projectId}' from '${project.status}' to '${targetStatus}'`
       );
     }
+
+    const deliverableCheck = this.checkDeliverables(projectId, targetStatus);
+    if (!deliverableCheck.met) {
+      throw ServiceError.validation(
+        `Cannot transition project '${projectId}' from '${project.status}' to '${targetStatus}'`,
+        this.formatMissingDeliverables(deliverableCheck.missing)
+      );
+    }
+
     const updated = this.dbManager.getProjectRepo().updateStatus(projectId, targetStatus);
     if (!updated) throw new Error(`Project '${projectId}' not found after update`);
     return updated;
@@ -122,7 +135,7 @@ export class StateMachineService {
   checkDeliverables(
     projectId: string,
     targetStatus: ProjectStatus
-  ): { met: boolean; missing: string[] } {
+  ): { met: boolean; missing: Array<string | UnboundModule> } {
     const project = this.requireProject(projectId);
     const currentStatus = project.status as ProjectStatus;
     const key = `${currentStatus}→${targetStatus}`;
@@ -131,7 +144,7 @@ export class StateMachineService {
       return { met: true, missing: [] };
     }
 
-    const missing: string[] = [];
+    const missing: Array<string | UnboundModule> = [];
 
     switch (key) {
       case 'configuring→analyzing':
@@ -145,8 +158,19 @@ export class StateMachineService {
         break;
 
       case 'explored→generating':
-        if (this.dbManager.getURLModuleBindingRepo().findByProjectId(projectId).length === 0) {
-          missing.push('url_bindings');
+        const functionalModules = this.dbManager.getFunctionalModuleRepo().findByProjectId(projectId);
+        if (functionalModules.length === 0) {
+          break;
+        }
+
+        const bindingStatusByModuleId = this.dbManager
+          .getURLModuleBindingRepo()
+          .findBindingStatusByModuleIds(functionalModules.map(module => module.id));
+
+        for (const module of functionalModules) {
+          if (!bindingStatusByModuleId.get(module.id)) {
+            missing.push({ moduleId: module.id, moduleName: module.name });
+          }
         }
         break;
 
@@ -182,6 +206,16 @@ export class StateMachineService {
     const project = this.dbManager.getProjectRepo().findById(projectId);
     if (!project) throw new Error(`Project '${projectId}' not found`);
     return project;
+  }
+
+  private formatMissingDeliverables(missing: Array<string | UnboundModule>): string[] {
+    return missing.map(item => {
+      if (typeof item === 'string') {
+        return item;
+      }
+
+      return `functional_modules_missing_url_binding:${item.moduleId}:${item.moduleName}`;
+    });
   }
 
   /**

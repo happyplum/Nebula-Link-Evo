@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { DatabaseManager } from '../../database/db.js';
 import { StateMachineService } from '../state-machine-service.js';
+import { ServiceError } from '../service-error.js';
 import type { ProjectStatus } from '../../types/project.js';
 
 describe('StateMachineService', () => {
@@ -45,7 +46,8 @@ describe('StateMachineService', () => {
       if (dbManager.getURLModuleBindingRepo().findByProjectId(projectId).length === 0) {
         const url = dbManager.getURLRepo().create({ project_id: projectId, url: 'https://example.com/page' });
         const bm = dbManager.getBusinessModuleRepo().findByProjectId(projectId)[0];
-        const fm = dbManager.getFunctionalModuleRepo().create({ business_module_id: bm.id, name: 'L2 Module' });
+        const fm = dbManager.getFunctionalModuleRepo().findByBusinessModuleId(bm.id)[0]
+          ?? dbManager.getFunctionalModuleRepo().create({ business_module_id: bm.id, name: 'L2 Module' });
         dbManager.getURLModuleBindingRepo().create({ url_id: url.id, functional_module_id: fm.id });
       }
     }
@@ -137,7 +139,7 @@ describe('StateMachineService', () => {
 
     it('throws when deliverables are not met', () => {
       dbManager.getProjectRepo().updateStatus(projectId, 'configuring');
-      expect(() => service.transition(projectId, 'analyzing')).toThrow('Cannot transition');
+      expect(() => service.transition(projectId, 'analyzing')).toThrow(ServiceError);
     });
 
     it('allows full forward chain when deliverables are met', () => {
@@ -306,16 +308,103 @@ describe('StateMachineService', () => {
       // Reach explored without creating URL bindings
       advanceTo('analyzed');
       dbManager.getBusinessModuleRepo().create({ project_id: projectId, name: 'BM' });
+      const bm = dbManager.getBusinessModuleRepo().findByProjectId(projectId)[0];
+      dbManager.getFunctionalModuleRepo().create({ business_module_id: bm.id, name: 'Unbound FM' });
       dbManager.getProjectRepo().updateStatus(projectId, 'exploring');
       dbManager.getProjectRepo().updateStatus(projectId, 'explored');
       const result = service.checkDeliverables(projectId, 'generating');
       expect(result.met).toBe(false);
-      expect(result.missing).toContain('url_bindings');
+      expect(result.missing).toEqual([
+        expect.objectContaining({ moduleName: 'Unbound FM' }),
+      ]);
     });
 
     it('passes when url_bindings exist', () => {
       advanceTo('explored');
       expect(service.checkDeliverables(projectId, 'generating')).toEqual({ met: true, missing: [] });
+    });
+
+    it('fails generating transition when only one of two functional modules is bound', () => {
+      advanceTo('analyzed');
+      const bm = dbManager.getBusinessModuleRepo().create({ project_id: projectId, name: 'BM' });
+      const boundFm = dbManager.getFunctionalModuleRepo().create({ business_module_id: bm.id, name: 'Bound FM' });
+      const unboundFm = dbManager.getFunctionalModuleRepo().create({ business_module_id: bm.id, name: 'Unbound FM' });
+      const url = dbManager.getURLRepo().create({ project_id: projectId, url: 'https://example.com/page' });
+      dbManager.getURLModuleBindingRepo().create({ url_id: url.id, functional_module_id: boundFm.id });
+      dbManager.getProjectRepo().updateStatus(projectId, 'exploring');
+      dbManager.getProjectRepo().updateStatus(projectId, 'explored');
+
+      const result = service.checkDeliverables(projectId, 'generating');
+
+      expect(result).toEqual({
+        met: false,
+        missing: [{ moduleId: unboundFm.id, moduleName: 'Unbound FM' }],
+      });
+    });
+
+    it('allows generating transition when both functional modules are bound', () => {
+      advanceTo('analyzed');
+      const bm = dbManager.getBusinessModuleRepo().create({ project_id: projectId, name: 'BM' });
+      const fmOne = dbManager.getFunctionalModuleRepo().create({ business_module_id: bm.id, name: 'FM One' });
+      const fmTwo = dbManager.getFunctionalModuleRepo().create({ business_module_id: bm.id, name: 'FM Two' });
+      const url = dbManager.getURLRepo().create({ project_id: projectId, url: 'https://example.com/page' });
+      dbManager.getURLModuleBindingRepo().create({ url_id: url.id, functional_module_id: fmOne.id });
+      dbManager.getURLModuleBindingRepo().create({ url_id: url.id, functional_module_id: fmTwo.id });
+      dbManager.getProjectRepo().updateStatus(projectId, 'exploring');
+      dbManager.getProjectRepo().updateStatus(projectId, 'explored');
+
+      expect(service.checkDeliverables(projectId, 'generating')).toEqual({ met: true, missing: [] });
+    });
+
+    it('treats zero functional modules as vacuously ready for generating transition', () => {
+      advanceTo('analyzed');
+      dbManager.getBusinessModuleRepo().create({ project_id: projectId, name: 'BM' });
+      dbManager.getProjectRepo().updateStatus(projectId, 'exploring');
+      dbManager.getProjectRepo().updateStatus(projectId, 'explored');
+
+      expect(service.checkDeliverables(projectId, 'generating')).toEqual({ met: true, missing: [] });
+    });
+
+    it('treats a functional module with only rejected bindings as unbound', () => {
+      advanceTo('analyzed');
+      const bm = dbManager.getBusinessModuleRepo().create({ project_id: projectId, name: 'BM' });
+      const fm = dbManager.getFunctionalModuleRepo().create({ business_module_id: bm.id, name: 'Rejected FM' });
+      const url = dbManager.getURLRepo().create({ project_id: projectId, url: 'https://example.com/page' });
+      dbManager.getURLModuleBindingRepo().create({
+        url_id: url.id,
+        functional_module_id: fm.id,
+        status: 'rejected',
+      });
+      dbManager.getProjectRepo().updateStatus(projectId, 'exploring');
+      dbManager.getProjectRepo().updateStatus(projectId, 'explored');
+
+      expect(service.checkDeliverables(projectId, 'generating')).toEqual({
+        met: false,
+        missing: [{ moduleId: fm.id, moduleName: 'Rejected FM' }],
+      });
+    });
+
+    it('throws ServiceError.validation with details when generating gate fails', () => {
+      advanceTo('analyzed');
+      const bm = dbManager.getBusinessModuleRepo().create({ project_id: projectId, name: 'BM' });
+      dbManager.getFunctionalModuleRepo().create({ business_module_id: bm.id, name: 'Blocked FM' });
+      dbManager.getProjectRepo().updateStatus(projectId, 'exploring');
+      dbManager.getProjectRepo().updateStatus(projectId, 'explored');
+
+      try {
+        service.transition(projectId, 'generating');
+        throw new Error('Expected transition to throw');
+      } catch (error) {
+        expect(error).toBeInstanceOf(ServiceError);
+        expect(error).toMatchObject({
+          message: `Cannot transition project '${projectId}' from 'explored' to 'generating'`,
+          statusCode: 400,
+          code: 'VALIDATION_ERROR',
+        });
+        expect((error as ServiceError).details).toEqual([
+          expect.stringMatching(/^functional_modules_missing_url_binding:[^:]+:Blocked FM$/),
+        ]);
+      }
     });
 
     it('detects missing scripts for execution mode entry', () => {
