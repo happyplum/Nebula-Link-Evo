@@ -81,6 +81,19 @@ const routes: FastifyPluginAsyncTypebox<StateRouteOptions> = async (fastify, opt
             status: Type.String(),
             name: Type.String(),
           }),
+          400: Type.Object({
+            error: Type.Object({
+              code: Type.String(),
+              message: Type.String(),
+              details: Type.Array(Type.String()),
+            }),
+          }),
+          500: Type.Object({
+            error: Type.Object({
+              code: Type.String(),
+              message: Type.String(),
+            }),
+          }),
         },
       },
     },
