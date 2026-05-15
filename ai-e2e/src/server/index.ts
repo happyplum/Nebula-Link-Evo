@@ -10,6 +10,7 @@ import { ProxyAdapterClient } from '../infrastructure/proxy-adapter-client.js';
 import { PromptTemplateManager, TokenBudgetTracker } from '../ai/index.js';
 import { LoginRecorderService } from '../services/login-recorder-service.js';
 import { StateMachineService } from '../services/state-machine-service.js';
+import { TestScenarioService } from '../services/test-scenario-service.js';
 import errorHandlerPlugin from './plugins/error-handler.js';
 import sseEmitterPlugin from './plugins/sse-emitter.js';
 import executionRoutes from './routes/execution.js';
@@ -20,6 +21,7 @@ import projectRoutes from './routes/projects.js';
 import projectConfigRoutes from './routes/project-config.js';
 import projectAnalysisRoutes from './routes/project-analysis.js';
 import eventsRoutes from './routes/events.js';
+import scenarioRoutes from './routes/scenario.js';
 
 const envLocalPath = path.join(process.cwd(), '.env.local');
 const envRootPath = path.join(process.cwd(), '..', '.env');
@@ -53,6 +55,7 @@ export interface ServerOptions {
   tokenTracker?: TokenBudgetTracker;
   loginRecorder?: LoginRecorderService;
   stateMachine?: StateMachineService;
+  scenarioService?: TestScenarioService;
 }
 
 export function createServer(options: Partial<ServerOptions> = {}) {
@@ -88,6 +91,7 @@ export function createServer(options: Partial<ServerOptions> = {}) {
     promptManager: options.promptManager,
   });
   app.register(eventsRoutes, { prefix: '/api/projects/:id/events' });
+  app.register(scenarioRoutes, { prefix: '/api/projects/:id', scenarioService: options.scenarioService });
 
   // Serve built frontend (ui/dist/) at /ai-e2e/ prefix
   const uiDistPath = path.join(import.meta.dirname, '..', '..', 'ui', 'dist');
@@ -166,8 +170,18 @@ export async function start() {
   // Create state machine service (depends on DB)
   const stateMachine = new StateMachineService(databaseManager);
 
+  // Create test scenario service (depends on DB)
+  const testScenarioService = new TestScenarioService(databaseManager.getTestScenarioRepo());
+
   // Create server with all dependencies
-  const app = createServer({ proxyClient, promptManager, tokenTracker, loginRecorder, stateMachine });
+  const app = createServer({
+    proxyClient,
+    promptManager,
+    tokenTracker,
+    loginRecorder,
+    stateMachine,
+    scenarioService: testScenarioService,
+  });
 
   try {
     registerGracefulShutdown(app, databaseManager);
