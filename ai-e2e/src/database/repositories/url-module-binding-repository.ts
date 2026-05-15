@@ -58,6 +58,30 @@ export class URLModuleBindingRepository {
     return this.findById(id);
   }
 
+  findBindingStatusByModuleIds(moduleIds: string[]): Map<string, boolean> {
+    if (moduleIds.length === 0) {
+      return new Map();
+    }
+
+    const placeholders = moduleIds.map(() => '?').join(',');
+    const query = `
+      SELECT functional_module_id
+      FROM url_module_bindings
+      WHERE functional_module_id IN (${placeholders})
+        AND status != 'rejected'
+    `;
+
+    const rows = this.db.prepare(query).all(...moduleIds) as Record<string, unknown>[];
+    const boundModuleIds = new Set(rows.map(r => r.functional_module_id as string));
+
+    const result = new Map<string, boolean>();
+    for (const id of moduleIds) {
+      result.set(id, boundModuleIds.has(id));
+    }
+
+    return result;
+  }
+
   delete(id: string): boolean {
     return this.stmtDelete.run(id).changes > 0;
   }

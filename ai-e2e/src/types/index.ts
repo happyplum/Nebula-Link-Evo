@@ -78,6 +78,13 @@ export {
   getModeForStatus,
 } from './state-machine.js';
 
+// ========== GATE TYPES ==========
+export type {
+  UnboundModule,
+  TransitionErrorResponse,
+  DeliverableCheckResult,
+} from './gate.js';
+
 // ========== SSE EVENT TYPES ==========
 export type {
   SSEEvent,
