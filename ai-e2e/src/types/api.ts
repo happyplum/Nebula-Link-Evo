@@ -410,6 +410,19 @@ export const CreateTestScenarioRequestSchema = Type.Object({
   expected_results: Type.Optional(Type.Array(Type.String())),
 });
 
+export const UpdateTestScenarioRequestSchema = Type.Partial(
+  Type.Object({
+    name: Type.String(),
+    description: Type.String(),
+    test_data_json: Type.Optional(Type.String()),
+    source: Type.Union([
+      Type.Literal('ai_generated'),
+      Type.Literal('human_created'),
+      Type.Literal('human_modified'),
+    ]),
+  })
+);
+
 // Script APIs
 export const UpdateScriptRequestSchema = Type.Object({
   name: Type.Optional(Type.String()),

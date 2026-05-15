@@ -10,6 +10,13 @@ export interface CreateTestScenarioParams {
   source?: string;
 }
 
+export interface UpdateTestScenarioData {
+  name?: string;
+  description?: string;
+  test_data_json?: string;
+  source?: string;
+}
+
 export interface TestScenario {
   id: string;
   functional_module_id: string;
@@ -56,6 +63,41 @@ export class TestScenarioRepository {
 
   delete(id: string): boolean {
     return this.stmtDelete.run(id).changes > 0;
+  }
+
+  update(id: string, data: UpdateTestScenarioData): TestScenario | null {
+    const updates: string[] = [];
+    const values: unknown[] = [];
+
+    if (data.name !== undefined) {
+      updates.push('name = ?');
+      values.push(data.name);
+    }
+    if (data.description !== undefined) {
+      updates.push('description = ?');
+      values.push(data.description);
+    }
+    if (data.test_data_json !== undefined) {
+      updates.push('test_data_json = ?');
+      values.push(data.test_data_json);
+    }
+
+    if (updates.length === 0) {
+      return this.findById(id);
+    }
+
+    updates.push('source = ?');
+    values.push('human_modified');
+    values.push(id);
+
+    const sql = `UPDATE test_scenarios SET ${updates.join(', ')} WHERE id = ?`;
+    const result = this.db.prepare(sql).run(...values);
+
+    if (result.changes === 0) {
+      return null;
+    }
+
+    return this.findById(id);
   }
 
   private mapRow(row: Record<string, unknown>): TestScenario {
