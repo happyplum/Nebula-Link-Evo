@@ -22,6 +22,25 @@ export const ActionTaken = {
  */
 export type ActionTaken = (typeof ActionTaken)[keyof typeof ActionTaken];
 
+// ========== FAILURE TYPE ENUM ==========
+
+/**
+ * Failure type enum for AI interventions.
+ */
+export const FailureType = {
+  SELECTOR: 'selector',
+  TIMING: 'timing',
+  ASSERTION: 'assertion',
+  ENVIRONMENT: 'environment',
+  DATA: 'data',
+  UNKNOWN: 'unknown',
+} as const;
+
+/**
+ * Failure type derived from const object.
+ */
+export type FailureType = (typeof FailureType)[keyof typeof FailureType];
+
 // ========== AI INTERVENTION LOG ENTITY ==========
 
 /**
