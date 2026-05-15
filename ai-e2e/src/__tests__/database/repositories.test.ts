@@ -452,6 +452,42 @@ describe('TestScenarioRepository', () => {
     repo.create({ functional_module_id: String(fmId), name: 'Test register' });
     expect(repo.findByFunctionalModuleId(String(fmId))).toHaveLength(2);
   });
+
+  it('should update name only', () => {
+    const scenario = repo.create({ functional_module_id: String(fmId), name: 'Old Name' });
+    const updated = repo.update(scenario.id, { name: 'New Name' });
+    expect(updated).not.toBeNull();
+    expect(updated!.name).toBe('New Name');
+    expect(updated!.description).toBeNull();
+    expect(updated!.source).toBe('human_modified');
+    expect(updated!.functional_module_id).toBe(scenario.functional_module_id);
+  });
+
+  it('should update all fields', () => {
+    const scenario = repo.create({ functional_module_id: String(fmId), name: 'Old', description: 'Old desc', test_data_json: '{}', sort_order: 0 });
+    const updated = repo.update(scenario.id, {
+      name: 'Updated Name',
+      description: 'Updated Description',
+      test_data_json: '{"key": "value"}',
+    });
+    expect(updated).not.toBeNull();
+    expect(updated!.name).toBe('Updated Name');
+    expect(updated!.description).toBe('Updated Description');
+    expect(updated!.test_data_json).toBe('{"key": "value"}');
+    expect(updated!.source).toBe('human_modified');
+  });
+
+  it('should update with source change', () => {
+    const scenario = repo.create({ functional_module_id: String(fmId), name: 'Scenario' });
+    const updated = repo.update(scenario.id, { description: 'Updated' });
+    expect(updated).not.toBeNull();
+    expect(updated!.source).toBe('human_modified');
+  });
+
+  it('should return null when updating non-existent record', () => {
+    const result = repo.update('non-existent-id', { name: 'New Name' });
+    expect(result).toBeNull();
+  });
 });
 
 describe('ScriptRepository', () => {
