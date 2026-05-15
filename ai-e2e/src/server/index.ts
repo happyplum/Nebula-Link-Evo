@@ -11,6 +11,7 @@ import { PromptTemplateManager, TokenBudgetTracker } from '../ai/index.js';
 import { LoginRecorderService } from '../services/login-recorder-service.js';
 import { StateMachineService } from '../services/state-machine-service.js';
 import { TestScenarioService } from '../services/test-scenario-service.js';
+import { AIDiagnosisService } from '../services/ai-diagnosis-service.js';
 import errorHandlerPlugin from './plugins/error-handler.js';
 import sseEmitterPlugin from './plugins/sse-emitter.js';
 import executionRoutes from './routes/execution.js';
@@ -22,6 +23,7 @@ import projectConfigRoutes from './routes/project-config.js';
 import projectAnalysisRoutes from './routes/project-analysis.js';
 import eventsRoutes from './routes/events.js';
 import scenarioRoutes from './routes/scenario.js';
+import diagnosisReportRoutes from './routes/diagnosis-report.js';
 
 const envLocalPath = path.join(process.cwd(), '.env.local');
 const envRootPath = path.join(process.cwd(), '..', '.env');
@@ -56,6 +58,7 @@ export interface ServerOptions {
   loginRecorder?: LoginRecorderService;
   stateMachine?: StateMachineService;
   scenarioService?: TestScenarioService;
+  diagnosisService?: AIDiagnosisService;
 }
 
 export function createServer(options: Partial<ServerOptions> = {}) {
@@ -92,6 +95,7 @@ export function createServer(options: Partial<ServerOptions> = {}) {
   });
   app.register(eventsRoutes, { prefix: '/api/projects/:id/events' });
   app.register(scenarioRoutes, { prefix: '/api/projects/:id', scenarioService: options.scenarioService });
+  app.register(diagnosisReportRoutes, { prefix: '/api/projects/:id', diagnosisService: options.diagnosisService });
 
   // Serve built frontend (ui/dist/) at /ai-e2e/ prefix
   const uiDistPath = path.join(import.meta.dirname, '..', '..', 'ui', 'dist');
@@ -173,6 +177,18 @@ export async function start() {
   // Create test scenario service (depends on DB)
   const testScenarioService = new TestScenarioService(databaseManager.getTestScenarioRepo());
 
+  // Create AI diagnosis service (depends on DB, proxyClient, promptManager)
+  const aiDiagnosisService = new AIDiagnosisService(
+    proxyClient,
+    promptManager,
+    databaseManager.getExecutionRunRepo(),
+    databaseManager.getAIInterventionLogRepo(),
+    databaseManager.getScriptRepo(),
+    databaseManager.getBusinessModuleRepo(),
+    databaseManager.getFunctionalModuleRepo(),
+    databaseManager.getTestScenarioRepo(),
+  );
+
   // Create server with all dependencies
   const app = createServer({
     proxyClient,
@@ -181,6 +197,7 @@ export async function start() {
     loginRecorder,
     stateMachine,
     scenarioService: testScenarioService,
+    diagnosisService: aiDiagnosisService,
   });
 
   try {
