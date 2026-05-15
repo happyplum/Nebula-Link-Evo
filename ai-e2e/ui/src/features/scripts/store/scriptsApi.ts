@@ -34,7 +34,7 @@ export interface UpdateScriptRequest {
 }
 
 export interface TransitionStateRequest {
-  state: string;
+  targetStatus: string;
 }
 
 // --- API Functions ---
@@ -84,7 +84,13 @@ export const transitionState = async (projectId: string, data: TransitionStateRe
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
-  if (!response.ok) throw new Error('Failed to transition state');
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null);
+    if (errorData && errorData.error) {
+      throw errorData.error;
+    }
+    throw new Error('Failed to transition state');
+  }
 };
 
 // --- React Query Hooks ---

@@ -4,6 +4,7 @@ import { ExplorationControls } from './ExplorationControls';
 import { URLList } from './URLList';
 import { PagePreview } from './PagePreview';
 import { BindingEditor } from './BindingEditor';
+import { UnboundModuleIndicator } from './UnboundModuleIndicator';
 import { Button, Modal, Input, Card } from '@/shared/components';
 import { useSSE } from '@/shared/hooks/useSSE';
 import { useAIStatusStore } from '../../ai-status/store/aiStatusStore';
@@ -31,6 +32,7 @@ export const ExplorationPanel: React.FC = () => {
   const [selectedUrlId, setSelectedUrlId] = useState<string | undefined>();
   const [isAddUrlModalOpen, setIsAddUrlModalOpen] = useState(false);
   const [addUrlForm, setAddUrlForm] = useState({ url: '', title: '' });
+  const [unboundModuleDetails, setUnboundModuleDetails] = useState<string[]>([]);
 
   // API Hooks
   const { data: statusData, refetch: refetchStatus } = useExplorationStatus(projectId || '');
@@ -120,10 +122,13 @@ export const ExplorationPanel: React.FC = () => {
 
   const handleConfirmComplete = async () => {
     if (!projectId) return;
+    setUnboundModuleDetails([]);
     try {
-      await transitionState.mutateAsync({ state: 'generating' });
-    } catch {
-      // Error state managed by React Query
+      await transitionState.mutateAsync({ targetStatus: 'generating' });
+    } catch (error: any) {
+      if (error?.code === 'DELIVERABLES_NOT_MET' && Array.isArray(error.details)) {
+        setUnboundModuleDetails(error.details);
+      }
     }
   };
 
@@ -157,6 +162,12 @@ export const ExplorationPanel: React.FC = () => {
       </div>
 
       <div className={styles.bottomSection}>
+        {unboundModuleDetails.length > 0 && (
+          <UnboundModuleIndicator 
+            details={unboundModuleDetails} 
+            onDismiss={() => setUnboundModuleDetails([])} 
+          />
+        )}
         <BindingEditor
           bindings={bindings as ModuleBinding[]}
           onProposeBindings={() => proposeBindings.mutate()}

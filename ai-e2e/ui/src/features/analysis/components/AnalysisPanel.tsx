@@ -141,7 +141,7 @@ export const AnalysisPanel: React.FC = () => {
   const handleConfirmComplete = async () => {
     if (!projectId) return;
     try {
-      await transitionState.mutateAsync({ state: 'exploring' });
+      await transitionState.mutateAsync({ targetStatus: 'exploring' });
       // The parent component (ProjectPage) should handle the state change
       // typically by refetching the project or listening to SSE
     } catch {

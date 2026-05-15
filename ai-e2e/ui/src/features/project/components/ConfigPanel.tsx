@@ -56,7 +56,7 @@ export const ConfigPanel: React.FC = () => {
     handleSave();
     transitionMutation.mutate({ 
       projectId, 
-      state: 'analyzing' 
+      targetStatus: 'analyzing' 
     });
   };
 
