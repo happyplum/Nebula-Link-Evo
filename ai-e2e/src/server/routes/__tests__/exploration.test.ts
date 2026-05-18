@@ -89,6 +89,51 @@ afterEach(async () => {
 
 // ---------- Tests ----------
 
+describe('GET /status', () => {
+  it('returns exploration status with URL counts', async () => {
+    const app = await buildApp();
+
+    const db = DatabaseManager.getInstance();
+    db.getDatabase().prepare(
+      "INSERT OR IGNORE INTO projects (id, name, status, created_at, updated_at) VALUES (?, 'Test', 'exploring', datetime('now'), datetime('now'))"
+    ).run(PROJECT_ID);
+
+    // Seed 2 URLs for this project
+    db.getURLRepo().create({ project_id: PROJECT_ID, url: 'https://example.com/' });
+    db.getURLRepo().create({ project_id: PROJECT_ID, url: 'https://example.com/about' });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/projects/${PROJECT_ID}/exploration/status`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.status).toBe('idle');
+    expect(body.pages_visited).toBe(2);
+    expect(body.urls_found).toBe(2);
+  });
+
+  it('returns zero counts for project with no URLs', async () => {
+    const app = await buildApp();
+
+    const db = DatabaseManager.getInstance();
+    db.getDatabase().prepare(
+      "INSERT OR IGNORE INTO projects (id, name, status, created_at, updated_at) VALUES (?, 'Test', 'draft', datetime('now'), datetime('now'))"
+    ).run(PROJECT_ID);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/projects/${PROJECT_ID}/exploration/status`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.pages_visited).toBe(0);
+    expect(body.urls_found).toBe(0);
+  });
+});
+
 describe('POST /start', () => {
   it('starts exploration and returns session', async () => {
     const app = await buildApp();

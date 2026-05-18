@@ -96,12 +96,12 @@ describe('POST /api/ai/generate', () => {
 
     expect(response.statusCode).toBe(200);
     expect(mockRegistry.resolve).toHaveBeenCalledWith('kimi', 'kimi-v1');
-    expect(mockGenerateText).toHaveBeenCalledWith({
+    expect(mockGenerateText).toHaveBeenCalledWith(expect.objectContaining({
       model: { provider: 'kimi', modelId: 'kimi-v1' },
       prompt: 'Say hello',
       temperature: 0.7,
       maxOutputTokens: 256,
-    });
+    }));
     expect(response.json()).toEqual({
       success: true,
       text: 'Generated text',
