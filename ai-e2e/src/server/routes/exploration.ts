@@ -65,6 +65,15 @@ const AddURLRequestSchema = Type.Object({
   title: Type.Optional(Type.String()),
 });
 
+const UpdateURLRequestSchema = Type.Object({
+  page_snapshot_json: Type.String(),
+});
+
+const UrlIdParamSchema = Type.Object({
+  id: Type.String(),
+  urlId: Type.String(),
+});
+
 const CreateBindingRequestSchema = Type.Object({
   url_id: Type.String(),
   functional_module_id: Type.String(),
@@ -120,6 +129,26 @@ const explorationRoutes: FastifyPluginAsyncTypebox<ExplorationRouteOptions> = as
     const db = DatabaseManager.getInstance();
     return new ExplorerService(db, client, manager);
   }
+
+  // GET /status — get exploration status
+  fastify.get('/status', {
+    schema: {
+      description: 'Get current exploration status',
+      tags: ['Exploration'],
+      params: ProjectIdParamSchema,
+    },
+  }, async (request) => {
+    const { id: projectId } = request.params as ProjectIdParam;
+    const db = DatabaseManager.getInstance();
+    const urls = db.getURLRepo().findByProjectId(projectId);
+    const exploredCount = urls.filter((u: any) => u.status === 'explored').length;
+
+    return {
+      status: 'idle',
+      pages_visited: exploredCount,
+      urls_found: urls.length,
+    };
+  });
 
   // POST /start — trigger web exploration
   fastify.post('/start', {
@@ -193,6 +222,31 @@ const explorationRoutes: FastifyPluginAsyncTypebox<ExplorationRouteOptions> = as
       return service.confirmBinding(bindingId);
     }
     return service.rejectBinding(bindingId);
+  });
+
+  // PUT /urls/:urlId — update a URL's page snapshot
+  fastify.put('/urls/:urlId', {
+    schema: {
+      description: 'Update a URL record (e.g. page snapshot)',
+      tags: ['Exploration'],
+      params: UrlIdParamSchema,
+      body: UpdateURLRequestSchema,
+      response: {
+        200: URLRecordSchema,
+      },
+    },
+  }, async (request) => {
+    const { urlId } = request.params as Static<typeof UrlIdParamSchema>;
+    const { page_snapshot_json } = request.body as Static<typeof UpdateURLRequestSchema>;
+    const db = DatabaseManager.getInstance();
+
+    const existing = db.getURLRepo().findById(urlId);
+    if (!existing) {
+      throw ServiceError.notFound(`URL not found: ${urlId}`);
+    }
+
+    const updated = db.getURLRepo().updateSnapshot(urlId, page_snapshot_json);
+    return updated;
   });
 
   // POST /urls — manually add a URL

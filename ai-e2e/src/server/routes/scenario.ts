@@ -34,6 +34,77 @@ const routes: FastifyPluginAsyncTypebox<ScenarioRouteOptions> = async (fastify, 
     return project;
   }
 
+  // POST /modules/:moduleId/scenarios — create a test scenario
+  fastify.post(
+    '/modules/:moduleId/scenarios',
+    {
+      schema: {
+        description: 'Create a test scenario for a functional module',
+        tags: ['Scenarios'],
+        params: Type.Object({
+          id: Type.String({ description: 'Project ID' }),
+          moduleId: Type.String({ description: 'Functional module ID' }),
+        }),
+        body: Type.Object({
+          name: Type.String({ minLength: 1, description: 'Scenario name' }),
+          description: Type.Optional(Type.String({ description: 'Scenario description' })),
+          preconditions: Type.Optional(Type.Array(Type.String(), { description: 'Pre-conditions' })),
+          expected_results: Type.Optional(Type.Array(Type.String(), { description: 'Expected results' })),
+        }),
+        response: {
+          201: Type.Object({
+            id: Type.String(),
+            functional_module_id: Type.String(),
+            name: Type.String(),
+            description: Type.String(),
+            preconditions: Type.Optional(Type.Array(Type.String())),
+            expected_results: Type.Optional(Type.Array(Type.String())),
+            created_at: Type.String(),
+            updated_at: Type.String(),
+          }),
+        },
+      },
+    },
+    async (request, reply) => {
+      const { id: projectId, moduleId } = request.params as { id: string; moduleId: string };
+      requireProject(projectId);
+
+      const fm = DatabaseManager.getInstance().getFunctionalModuleRepo().findById(moduleId);
+      if (!fm) {
+        throw ServiceError.notFound(`Functional module '${moduleId}' not found`);
+      }
+
+      const body = request.body as {
+        name: string;
+        description?: string;
+        preconditions?: string[];
+        expected_results?: string[];
+      };
+
+      const testData = {
+        preconditions: body.preconditions ?? [],
+        expected_results: body.expected_results ?? [],
+      };
+
+      const db = DatabaseManager.getInstance();
+      const scenario = db.getTestScenarioRepo().create({
+        functional_module_id: moduleId,
+        name: body.name,
+        description: body.description,
+        test_data_json: JSON.stringify(testData),
+        source: 'human_created',
+      });
+
+      const service = getScenarioService();
+      const created = service.getScenario(scenario.id);
+      if (!created) {
+        throw ServiceError.internal('Failed to create scenario');
+      }
+
+      return reply.status(201).send(created);
+    }
+  );
+
   // GET /scenarios/:scenarioId — retrieve a single scenario
   fastify.get(
     '/scenarios/:scenarioId',

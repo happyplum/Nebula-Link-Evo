@@ -166,6 +166,16 @@ export class ExplorerService {
     }, config.timeoutMs);
 
     try {
+      // Pre-check browser availability before starting BFS
+      try {
+        await this.proxyClient.getPageInfo();
+      } catch (err) {
+        throw new Error(
+          `Browser not accessible — ensure proxy-adapter has an active Playwright session. ` +
+          (err instanceof Error ? err.message : String(err)),
+        );
+      }
+
       // Run BFS loop
       await this.runBFSLoop(projectId);
     } finally {

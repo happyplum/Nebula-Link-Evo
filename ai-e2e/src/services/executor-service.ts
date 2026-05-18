@@ -7,6 +7,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { writeFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import type { ScriptRepository } from '../database/repositories/script-repository.js';
 import type { ExecutionRunRepository, ExecutionRun } from '../database/repositories/execution-run-repository.js';
 
@@ -15,6 +16,12 @@ const DEFAULT_TIMEOUT_MS = 300_000;
 
 /** Artifacts base directory relative to ai-e2e root */
 const ARTIFACTS_DIR = join(process.cwd(), 'artifacts');
+
+/**
+ * Temp script directory — uses OS temp to avoid spaces in project path
+ * (e.g. "D:\Work\Nebula-Link Evo" breaks tsx ESM resolution).
+ */
+const SCRIPTS_TMP_DIR = join(tmpdir(), 'ai-e2e', 'scripts');
 
 export interface ExecutionResult {
   runId: string;
@@ -65,11 +72,11 @@ export class ExecutorService {
 
     const runId = run.id;
     const runDir = join(ARTIFACTS_DIR, runId);
-    const scriptPath = join(ARTIFACTS_DIR, 'scripts', `${runId}.ts`);
+    const scriptPath = join(SCRIPTS_TMP_DIR, `${runId}.ts`);
 
     // Ensure directories exist
     mkdirSync(runDir, { recursive: true });
-    mkdirSync(join(ARTIFACTS_DIR, 'scripts'), { recursive: true });
+    mkdirSync(SCRIPTS_TMP_DIR, { recursive: true });
 
     // Write script content to temp file
     writeFileSync(scriptPath, script.content, 'utf-8');
@@ -86,6 +93,7 @@ export class ExecutorService {
           PLAYWRIGHT_BROWSERS_PATH: process.env.PLAYWRIGHT_BROWSERS_PATH,
         },
         stdio: ['pipe', 'pipe', 'pipe'],
+        shell: true,
       });
 
       this.activeProcesses.set(runId, cp);

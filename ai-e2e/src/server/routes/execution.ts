@@ -9,6 +9,7 @@ import { Type } from '@sinclair/typebox';
 import fp from '../plugins/fastify-plugin.js';
 import { DatabaseManager } from '../../database/db.js';
 import { ServiceError } from '../../services/service-error.js';
+import { withRetry } from '../../utils/retry.js';
 import type { ExecutorService, ExecutionResult } from '../../services/executor-service.js';
 import type { AIDiagnosisService } from '../../services/ai-diagnosis-service.js';
 
@@ -116,13 +117,17 @@ const routes: FastifyPluginAsyncTypebox<ExecutionRouteOptions> = async (fastify,
         response: {
           200: Type.Object({
             total: Type.Number(),
+            succeeded: Type.Number(),
+            failed: Type.Number(),
             results: Type.Array(Type.Object({
-              runId: Type.String(),
-              status: Type.String(),
-              exitCode: Type.Union([Type.Number(), Type.Null()]),
-              signal: Type.Union([Type.String(), Type.Null()]),
-              stdout: Type.String(),
-              stderr: Type.String(),
+              script_id: Type.String(),
+              runId: Type.Optional(Type.String()),
+              status: Type.Optional(Type.String()),
+              exitCode: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
+              signal: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+              stdout: Type.Optional(Type.String()),
+              stderr: Type.Optional(Type.String()),
+              error: Type.Optional(Type.String()),
             })),
           }),
         },
@@ -136,15 +141,47 @@ const routes: FastifyPluginAsyncTypebox<ExecutionRouteOptions> = async (fastify,
       const scripts = collectProjectScripts(db, projectId);
 
       const executor = getExecutor();
-      const results: ExecutionResult[] = [];
+      const results: Array<{
+        script_id: string;
+        runId?: string;
+        status?: string;
+        exitCode?: number | null;
+        signal?: string | null;
+        stdout?: string;
+        stderr?: string;
+        error?: string;
+      }> = [];
 
       for (const script of scripts) {
-        const result = await executor.executeScript(script.id);
-        results.push(result);
+        try {
+          const result = await withRetry(
+            () => executor.executeScript(script.id),
+            { maxRetries: 1, baseDelayMs: 500 },
+          );
+          results.push({
+            script_id: script.id,
+            runId: result.runId,
+            status: result.status,
+            exitCode: result.exitCode,
+            signal: result.signal,
+            stdout: result.stdout,
+            stderr: result.stderr,
+          });
+        } catch (error) {
+          results.push({
+            script_id: script.id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
       }
+
+      const failedCount = results.filter(r => r.error).length;
+      const succeededCount = results.length - failedCount;
 
       return reply.status(200).send({
         total: results.length,
+        succeeded: succeededCount,
+        failed: failedCount,
         results,
       });
     },

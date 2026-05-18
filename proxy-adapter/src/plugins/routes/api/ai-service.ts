@@ -146,6 +146,7 @@ const aiServiceRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           prompt: request.body.prompt,
           temperature: request.body.temperature ?? config.settings.temperature,
           ...(request.body.maxTokens !== undefined ? { maxOutputTokens: request.body.maxTokens } : {}),
+          abortSignal: AbortSignal.timeout(config.settings.timeout),
         });
 
         return reply.send({

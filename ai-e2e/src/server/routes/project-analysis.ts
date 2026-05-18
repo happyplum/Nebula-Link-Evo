@@ -15,15 +15,18 @@ import {
 import { PRDAnalyzerService } from '../../services/prd-analyzer-service.js';
 import { DatabaseManager } from '../../database/db.js';
 import { ServiceError } from '../../services/service-error.js';
+import { withRetry } from '../../utils/retry.js';
 import type { ProxyAdapterClient } from '../../infrastructure/proxy-adapter-client.js';
 import type { PromptTemplateManager } from '../../ai/prompt-manager.js';
 import type { TokenBudgetTracker } from '../../ai/token-tracker.js';
 import type { SourceOrigin } from '../../types/business-module.js';
+import type { StateMachineService } from '../../services/state-machine-service.js';
 
 export interface AnalysisRouteOptions {
   proxyClient?: ProxyAdapterClient | null;
   promptManager?: PromptTemplateManager;
   tokenTracker?: TokenBudgetTracker;
+  stateMachine?: StateMachineService;
 }
 
 const ModuleIdParamSchema = Type.Object({
@@ -113,7 +116,7 @@ function requireProject(projectId: string): void {
 }
 
 const analysisRoutes: FastifyPluginAsyncTypebox<AnalysisRouteOptions> = async (fastify, options) => {
-  const { proxyClient = null, promptManager: promptManagerOpt, tokenTracker: tokenTrackerOpt } = options;
+  const { proxyClient = null, promptManager: promptManagerOpt, tokenTracker: tokenTrackerOpt, stateMachine } = options;
 
   function getAnalyzer(): PRDAnalyzerService {
     if (!proxyClient) {
@@ -197,6 +200,21 @@ const analysisRoutes: FastifyPluginAsyncTypebox<AnalysisRouteOptions> = async (f
 
       const modules = await getAnalyzer().analyzePRD(projectId, content, format);
 
+      // Auto-transition project state: analyzing → analyzed
+      if (stateMachine) {
+        try {
+          const project = DatabaseManager.getInstance().getProjectRepo().findById(projectId);
+          if (project?.status === 'configuring') {
+            stateMachine.transition(projectId, 'analyzing');
+          }
+          if (project?.status === 'analyzing' || DatabaseManager.getInstance().getProjectRepo().findById(projectId)?.status === 'analyzing') {
+            stateMachine.transition(projectId, 'analyzed');
+          }
+        } catch {
+          // State transition failure should not block analysis results
+        }
+      }
+
       fastify.sseEmitter.emit({
         type: 'prd.analysis_complete',
         data: {
@@ -248,7 +266,15 @@ const analysisRoutes: FastifyPluginAsyncTypebox<AnalysisRouteOptions> = async (f
       requireProject(projectId);
 
       const result = getAnalyzer().getAnalysisResult(projectId);
-      return result;
+      return {
+        business_modules: result.businessModules.map(({ functionalModules, ...bmRest }) => ({
+          ...bmRest,
+          functional_modules: functionalModules.map(({ testScenarios, ...fmRest }) => ({
+            ...fmRest,
+            test_scenarios: testScenarios,
+          })),
+        })),
+      };
     }
   );
 
@@ -392,6 +418,303 @@ const analysisRoutes: FastifyPluginAsyncTypebox<AnalysisRouteOptions> = async (f
       }
 
       throw ServiceError.notFound(`Module '${moduleId}' not found`);
+    }
+  );
+
+  // POST /modules/:moduleId/decompose — AI decompose L1→L2
+  fastify.post(
+    '/modules/:moduleId/decompose',
+    {
+      schema: {
+        description: 'Decompose a business module into functional modules via AI',
+        tags: ['Analysis'],
+        params: ModuleIdParamSchema,
+        response: {
+          200: Type.Object({
+            functional_modules: Type.Array(Type.Object({
+              id: Type.String(),
+              business_module_id: Type.String(),
+              name: Type.String(),
+              description: Type.Optional(Type.String()),
+              sort_order: Type.Number(),
+              source: Type.String(),
+              created_at: Type.String(),
+            })),
+          }),
+          404: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request) => {
+      const { id: projectId, moduleId } = request.params as { id: string; moduleId: string };
+      requireProject(projectId);
+
+      const analyzer = getAnalyzer();
+      const modules = await analyzer.decomposeBusinessModule(projectId, moduleId);
+
+      fastify.sseEmitter.emit({
+        type: 'prd.decomposition_complete',
+        data: { projectId, businessModuleId: moduleId, functionalModules: modules.map(m => m.id) },
+      });
+
+      return {
+        functional_modules: modules.map(m => ({
+          id: m.id,
+          business_module_id: m.business_module_id,
+          name: m.name,
+          description: m.description ?? undefined,
+          sort_order: m.sort_order,
+          source: m.source,
+          created_at: m.created_at,
+        })),
+      };
+    }
+  );
+
+  // POST /decompose-all — batch decompose all L1 modules
+  fastify.post(
+    '/decompose-all',
+    {
+      schema: {
+        description: 'Decompose all business modules into functional modules via AI',
+        tags: ['Analysis'],
+        params: IdParamSchema,
+        response: {
+          200: Type.Object({
+            total: Type.Number(),
+            succeeded: Type.Number(),
+            failed: Type.Number(),
+            results: Type.Array(Type.Object({
+              business_module_id: Type.String(),
+              business_module_name: Type.String(),
+              functional_modules: Type.Optional(Type.Array(Type.Object({
+                id: Type.String(),
+                name: Type.String(),
+                description: Type.Optional(Type.String()),
+              }))),
+              error: Type.Optional(Type.String()),
+            })),
+          }),
+          404: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request) => {
+      const { id: projectId } = request.params as { id: string };
+      requireProject(projectId);
+
+      const db = DatabaseManager.getInstance();
+      const businessModules = db.getBusinessModuleRepo().findByProjectId(projectId);
+      const analyzer = getAnalyzer();
+      const results: Array<{
+        business_module_id: string;
+        business_module_name: string;
+        functional_modules?: Array<{ id: string; name: string; description?: string }>;
+        error?: string;
+      }> = [];
+
+      for (const bm of businessModules) {
+        const existing = db.getFunctionalModuleRepo().findByBusinessModuleId(bm.id);
+        if (existing.length > 0) {
+          results.push({
+            business_module_id: bm.id,
+            business_module_name: bm.name,
+            functional_modules: existing.map(fm => ({
+              id: fm.id,
+              name: fm.name,
+              description: fm.description ?? undefined,
+            })),
+          });
+          continue;
+        }
+
+        try {
+          const modules = await withRetry(
+            () => analyzer.decomposeBusinessModule(projectId, bm.id),
+            { maxRetries: 2, baseDelayMs: 1000 },
+          );
+          results.push({
+            business_module_id: bm.id,
+            business_module_name: bm.name,
+            functional_modules: modules.map(m => ({
+              id: m.id,
+              name: m.name,
+              description: m.description ?? undefined,
+            })),
+          });
+        } catch (error) {
+          results.push({
+            business_module_id: bm.id,
+            business_module_name: bm.name,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      const failedCount = results.filter(r => r.error).length;
+      const succeededCount = results.length - failedCount;
+
+      fastify.sseEmitter.emit({
+        type: 'prd.decomposition_all_complete',
+        data: {
+          projectId,
+          totalBusinessModules: businessModules.length,
+          succeeded: succeededCount,
+          failed: failedCount,
+        },
+      });
+
+      return {
+        total: businessModules.length,
+        succeeded: succeededCount,
+        failed: failedCount,
+        results,
+      };
+    }
+  );
+
+  // POST /modules/:moduleId/generate-scenarios — AI generate test scenarios for an FM
+  fastify.post(
+    '/modules/:moduleId/generate-scenarios',
+    {
+      schema: {
+        description: 'Generate test scenarios for a functional module via AI',
+        tags: ['Analysis'],
+        params: ModuleIdParamSchema,
+        response: {
+          200: Type.Object({
+            scenarios: Type.Array(Type.Object({
+              id: Type.String(),
+              functional_module_id: Type.String(),
+              name: Type.String(),
+              description: Type.Optional(Type.String()),
+              sort_order: Type.Number(),
+              source: Type.String(),
+              created_at: Type.String(),
+            })),
+          }),
+          404: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request) => {
+      const { id: projectId, moduleId } = request.params as { id: string; moduleId: string };
+      requireProject(projectId);
+
+      const analyzer = getAnalyzer();
+      const scenarios = await analyzer.generateTestScenarios(projectId, moduleId);
+
+      return {
+        scenarios: scenarios.map(s => ({
+          id: s.id,
+          functional_module_id: s.functional_module_id,
+          name: s.name,
+          description: s.description ?? undefined,
+          sort_order: s.sort_order,
+          source: s.source,
+          created_at: s.created_at,
+        })),
+      };
+    }
+  );
+
+  // POST /generate-all-scenarios — batch generate scenarios for all FMs
+  fastify.post(
+    '/generate-all-scenarios',
+    {
+      schema: {
+        description: 'Generate test scenarios for all functional modules via AI',
+        tags: ['Analysis'],
+        params: IdParamSchema,
+        response: {
+          200: Type.Object({
+            total: Type.Number(),
+            succeeded: Type.Number(),
+            failed: Type.Number(),
+            results: Type.Array(Type.Object({
+              functional_module_id: Type.String(),
+              functional_module_name: Type.String(),
+              scenarios: Type.Optional(Type.Array(Type.Object({
+                id: Type.String(),
+                name: Type.String(),
+                description: Type.Optional(Type.String()),
+              }))),
+              error: Type.Optional(Type.String()),
+            })),
+          }),
+          404: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request) => {
+      const { id: projectId } = request.params as { id: string };
+      requireProject(projectId);
+
+      const db = DatabaseManager.getInstance();
+      const businessModules = db.getBusinessModuleRepo().findByProjectId(projectId);
+      const analyzer = getAnalyzer();
+      const results: Array<{
+        functional_module_id: string;
+        functional_module_name: string;
+        scenarios?: Array<{ id: string; name: string; description?: string }>;
+        error?: string;
+      }> = [];
+
+      for (const bm of businessModules) {
+        const funcModules = db.getFunctionalModuleRepo().findByBusinessModuleId(bm.id);
+        for (const fm of funcModules) {
+          const existing = db.getTestScenarioRepo().findByFunctionalModuleId(fm.id);
+          if (existing.length > 0) {
+            results.push({
+              functional_module_id: fm.id,
+              functional_module_name: fm.name,
+              scenarios: existing.map(s => ({
+                id: s.id,
+                name: s.name,
+                description: s.description ?? undefined,
+              })),
+            });
+            continue;
+          }
+
+          try {
+            const scenarios = await withRetry(
+              () => analyzer.generateTestScenarios(projectId, fm.id),
+              { maxRetries: 2, baseDelayMs: 1000 },
+            );
+            results.push({
+              functional_module_id: fm.id,
+              functional_module_name: fm.name,
+              scenarios: scenarios.map(s => ({
+                id: s.id,
+                name: s.name,
+                description: s.description ?? undefined,
+              })),
+            });
+          } catch (error) {
+            results.push({
+              functional_module_id: fm.id,
+              functional_module_name: fm.name,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }
+      }
+
+      const failedCount = results.filter(r => r.error).length;
+      const succeededCount = results.length - failedCount;
+
+      fastify.sseEmitter.emit({
+        type: 'prd.scenarios_all_complete',
+        data: { projectId, succeeded: succeededCount, failed: failedCount },
+      });
+
+      return {
+        total: results.length,
+        succeeded: succeededCount,
+        failed: failedCount,
+        results,
+      };
     }
   );
 

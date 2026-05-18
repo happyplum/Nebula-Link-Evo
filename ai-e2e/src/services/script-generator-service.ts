@@ -78,10 +78,11 @@ export class ScriptGeneratorService {
 
     for (let attempt = 1; attempt <= MAX_GENERATION_ATTEMPTS; attempt++) {
       const { text } = await this.proxyClient.generateText(currentPrompt, { temperature: 0.3 });
-      const validation = this.validateScriptSyntax(text);
+      const cleanedText = this.stripCodeFence(text);
+      const validation = this.validateScriptSyntax(cleanedText);
 
       if (validation.valid) {
-        return this.scriptRepo.createVersion(scenarioId, text, 'ai_generated');
+        return this.scriptRepo.createVersion(scenarioId, cleanedText, 'ai_generated');
       }
 
       lastErrors = validation.errors;
@@ -161,26 +162,31 @@ export class ScriptGeneratorService {
   /**
    * Validate Playwright script syntax using structural checks.
    *
+   * Supports two script styles:
+   * 1. @playwright/test framework: `import { test, expect } from '@playwright/test'` + `test()` blocks
+   * 2. Playwright library: `import { chromium } from 'playwright'` + `chromium.launch()` + IIFE/async main
+   *
    * Checks:
-   * - Import statement for playwright
-   * - test() block presence
-   * - Balanced braces
+   * - Import statement for playwright (either style)
+   * - Test structure presence (test() block OR async IIFE with browser operations)
+   * - Balanced braces and parentheses
    */
   validateScriptSyntax(content: string): SyntaxValidationResult {
     const errors: string[] = [];
 
-    // Check for Playwright import
-    const hasImport = /import\s*{[^}]*}\s*from\s*['"]@playwright\/test['"]/.test(content)
-      || /import\s*\w+\s*from\s*['"]playwright['"]/.test(content);
-    if (!hasImport) {
+    // Check for Playwright import (either style)
+    const hasPwTestImport = /import\s*{[^}]*}\s*from\s*['"]@playwright\/test['"]/.test(content);
+    const hasPwLibImport = /import\s*\{?\s*\w+.*\}?\s*from\s*['"]playwright['"]/.test(content);
+    if (!hasPwTestImport && !hasPwLibImport) {
       errors.push('Missing required import: must include `import { ... } from \'@playwright/test\'` or `import { chromium } from \'playwright\'`');
     }
 
-    // Check for test() block (exclude lines that are import statements)
+    // Check for test structure — either test() block OR chromium.launch() + browser operations
     const nonImportLines = content.split('\n').filter(line => !line.trimStart().startsWith('import ')).join('\n');
     const hasTestBlock = /(?:^|\s)test\s*[\('"]/.test(nonImportLines);
-    if (!hasTestBlock) {
-      errors.push('Missing test block: must contain at least one `test(...)` call');
+    const hasBrowserLaunch = /chromium\.launch|browser\.newPage|browser\.newContext/.test(nonImportLines);
+    if (!hasTestBlock && !hasBrowserLaunch) {
+      errors.push('Missing test structure: must contain `test()` blocks or `chromium.launch()` with browser operations');
     }
 
     // Check balanced braces
@@ -201,6 +207,19 @@ export class ScriptGeneratorService {
   }
 
   // ---------- private helpers ----------
+
+  /**
+   * Strip markdown code fences from AI response.
+   * Handles ```typescript ... ``` and ``` ... ``` patterns.
+   */
+  private stripCodeFence(text: string): string {
+    let cleaned = text.trim();
+    // Remove opening code fence (with optional language tag)
+    cleaned = cleaned.replace(/^```(?:typescript|ts|javascript|js)?\s*\n?/i, '');
+    // Remove closing code fence
+    cleaned = cleaned.replace(/\n?```\s*$/i, '');
+    return cleaned.trim();
+  }
 
   /**
    * Load scenario + associated URL page snapshot and test data.
