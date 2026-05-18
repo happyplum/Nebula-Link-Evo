@@ -9,7 +9,6 @@ import { Type } from '@sinclair/typebox';
 import fp from '../plugins/fastify-plugin.js';
 import { DatabaseManager } from '../../database/db.js';
 import { ServiceError } from '../../services/service-error.js';
-import { withRetry } from '../../utils/retry.js';
 import type { ExecutorService, ExecutionResult } from '../../services/executor-service.js';
 import type { AIDiagnosisService } from '../../services/ai-diagnosis-service.js';
 
@@ -153,29 +152,36 @@ const routes: FastifyPluginAsyncTypebox<ExecutionRouteOptions> = async (fastify,
       }> = [];
 
       for (const script of scripts) {
+        // executeScript() always resolves (never rejects) — it returns status
+        // from the child process exit code. Only retry on infrastructure errors
+        // (error/timeout), not on test assertion failures (fail).
+        let result: Awaited<ReturnType<typeof executor.executeScript>>;
         try {
-          const result = await withRetry(
-            () => executor.executeScript(script.id),
-            { maxRetries: 1, baseDelayMs: 500 },
-          );
-          results.push({
-            script_id: script.id,
-            runId: result.runId,
-            status: result.status,
-            exitCode: result.exitCode,
-            signal: result.signal,
-            stdout: result.stdout,
-            stderr: result.stderr,
-          });
+          result = await executor.executeScript(script.id);
+          // Retry once on infrastructure-level failures (timeout, spawn error)
+          if (result.status === 'error' || result.status === 'timeout') {
+            result = await executor.executeScript(script.id);
+          }
         } catch (error) {
+          // Only thrown if script not found in DB — not a retryable scenario
           results.push({
             script_id: script.id,
             error: error instanceof Error ? error.message : String(error),
           });
+          continue;
         }
+        results.push({
+          script_id: script.id,
+          runId: result.runId,
+          status: result.status,
+          exitCode: result.exitCode,
+          signal: result.signal,
+          stdout: result.stdout,
+          stderr: result.stderr,
+        });
       }
 
-      const failedCount = results.filter(r => r.error).length;
+      const failedCount = results.filter(r => r.error || (r.status && r.status !== 'pass')).length;
       const succeededCount = results.length - failedCount;
 
       return reply.status(200).send({
