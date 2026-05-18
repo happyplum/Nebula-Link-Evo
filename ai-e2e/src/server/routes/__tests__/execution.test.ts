@@ -191,8 +191,8 @@ describe('Execution routes', () => {
       const db = DatabaseManager.getInstance();
       db.init(':memory:');
       const projectId = seedProject(db, 'running');
-      const firstScriptId = seedScript(db);
-      const secondScriptId = seedScript(db);
+      seedScript(db);
+      seedScript(db);
 
       // First script: error on first run, still error on retry → reported as error
       // Second script: error on first run, pass on retry → reported as pass
@@ -251,6 +251,61 @@ describe('Execution routes', () => {
       // Second script: error→pass (retried once, succeeded)
       expect(body).toMatchObject({ total: 2, succeeded: 1, failed: 1 });
       expect(executeScript).toHaveBeenCalledTimes(4);
+    });
+
+    it('retries on timeout status but not on fail', async () => {
+      const db = DatabaseManager.getInstance();
+      db.init(':memory:');
+      const projectId = seedProject(db, 'running');
+      seedScript(db);
+      seedScript(db);
+
+      // First script: timeout → retry → pass
+      // Second script: fail → NO retry → reported as fail
+      const executeScript = vi.fn()
+        .mockResolvedValueOnce({
+          runId: 'run-timeout',
+          status: 'timeout' as const,
+          exitCode: null,
+          signal: 'SIGTERM',
+          stdout: '',
+          stderr: '',
+        })
+        .mockResolvedValueOnce({
+          runId: 'run-ok',
+          status: 'pass' as const,
+          exitCode: 0,
+          signal: null,
+          stdout: 'ok',
+          stderr: '',
+        })
+        .mockResolvedValueOnce({
+          runId: 'run-fail',
+          status: 'fail' as const,
+          exitCode: 1,
+          signal: null,
+          stdout: '',
+          stderr: 'assertion failed',
+        });
+      const executor = makeMockExecutor({ executeScript });
+
+      const app = createApp();
+      app.register(executionRoutes, {
+        prefix: '/api/projects/:id/execution',
+        executor,
+        diagnosis: makeMockDiagnosis(),
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/projects/${projectId}/execution/run-all`,
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body).toMatchObject({ total: 2, succeeded: 1, failed: 1 });
+      // timeout retried once (2 calls) + fail NOT retried (1 call) = 3 total
+      expect(executeScript).toHaveBeenCalledTimes(3);
     });
   });
 
