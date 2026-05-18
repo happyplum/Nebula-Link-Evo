@@ -141,11 +141,11 @@ const explorationRoutes: FastifyPluginAsyncTypebox<ExplorationRouteOptions> = as
     const { id: projectId } = request.params as ProjectIdParam;
     const db = DatabaseManager.getInstance();
     const urls = db.getURLRepo().findByProjectId(projectId);
-    const exploredCount = urls.filter((u: any) => u.status === 'explored').length;
-
+    // URLRecord 没有 status 字段；所有在 DB 中的 URL 都已被发现/探索，
+    // 所以 pages_visited 直接等于 urls_found。
     return {
       status: 'idle',
-      pages_visited: exploredCount,
+      pages_visited: urls.length,
       urls_found: urls.length,
     };
   });

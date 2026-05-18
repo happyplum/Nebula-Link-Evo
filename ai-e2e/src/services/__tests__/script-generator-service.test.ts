@@ -510,6 +510,91 @@ describe('ScriptGeneratorService', () => {
     });
   });
 
+  // ==================== testid 选择器回归测试 ====================
+
+  describe('testid selector regression', () => {
+    it('should pass snapshot with locator_bundle.testid to prompt when generating script', async () => {
+      // 构造包含 locator_bundle.testid 的页面快照
+      const snapshotWithTestid = JSON.stringify({
+        snapshot_id: 'snap-1',
+        elements_map: {
+          'el-1': {
+            tag: 'button',
+            text: 'Submit',
+            locator_bundle: {
+              testid: 'submit-button',
+              role: { name: 'button', attributes: { name: 'Submit' } },
+              css: 'button.btn-primary',
+              xpath: '//button[@class="btn-primary"]',
+            },
+          },
+        },
+      });
+      const scenario = createMockScenario();
+      const binding = createMockBinding();
+      const url = createMockURL({ page_snapshot_json: snapshotWithTestid });
+
+      mocks.scenarioRepo.findById = vi.fn().mockReturnValue(scenario);
+      mocks.urlBindingRepo.findByModuleId = vi.fn().mockReturnValue([binding]);
+      mocks.urlRepo.findById = vi.fn().mockReturnValue(url);
+      mocks.promptManager.render = vi.fn().mockResolvedValue('prompt with testid guidance');
+
+      // AI 返回使用 testid 的脚本（证明 prompt 引导正确）
+      const testidScript = `import { chromium } from 'playwright';
+import assert from 'node:assert';
+
+(async () => {
+  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage();
+  try {
+    await page.goto('https://example.com/login');
+    const btn = page.locator('[data-testid="submit-button"]');
+    await btn.click();
+    assert.ok(true, 'Button clicked');
+  } catch (error) {
+    process.exitCode = 1;
+  } finally {
+    await browser.close();
+  }
+})();`;
+
+      mocks.proxyClient.generateText = vi.fn().mockResolvedValue({
+        text: testidScript,
+        tokenUsage: { promptTokens: 100, completionTokens: 200 },
+      });
+      mocks.scriptRepo.createVersion = vi.fn().mockReturnValue(createMockScript({ content: testidScript }));
+
+      await mocks.service.generateScript('scenario-1');
+
+      // 验证快照（含 testid）被传入 prompt 模板
+      const renderCall = (mocks.promptManager.render as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(renderCall[0]).toBe('script-generation');
+      expect(renderCall[1].page_snapshot).toBe(snapshotWithTestid);
+
+      // 验证快照中确实包含 locator_bundle.testid 数据
+      const snapshotObj = JSON.parse(renderCall[1].page_snapshot);
+      expect(snapshotObj.elements_map['el-1'].locator_bundle.testid).toBe('submit-button');
+    });
+
+    it('should include testid selector priority in prompt template file', async () => {
+      // 验证 prompt 模板文件包含 testid 优先级指导
+      const fs = await import('fs');
+      const path = await import('path');
+      const promptPath = path.join(process.cwd(), 'prompts', 'script-generation.md');
+      const promptContent = fs.readFileSync(promptPath, 'utf-8');
+
+      // 验证选择器策略章节存在
+      expect(promptContent).toContain('locator_bundle');
+      expect(promptContent).toContain('data-testid');
+
+      // 验证 testid 是最高优先级（出现在 css/xpath 之前）
+      const testidIndex = promptContent.indexOf('data-testid');
+      const cssIndex = promptContent.indexOf('css / xpath');
+      expect(testidIndex).toBeGreaterThan(0);
+      expect(cssIndex).toBeGreaterThan(testidIndex);
+    });
+  });
+
   // ==================== getScriptHistory ====================
 
   describe('getScriptHistory', () => {
