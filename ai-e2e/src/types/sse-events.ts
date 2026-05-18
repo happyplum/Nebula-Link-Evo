@@ -66,6 +66,43 @@ export interface PRDAnalysisCompleteEvent extends BaseSSEEvent {
   };
 }
 
+/**
+ * PRD decomposition complete event.
+ */
+export interface PRDDecompositionCompleteEvent extends BaseSSEEvent {
+  type: 'prd.decomposition_complete';
+  data: {
+    projectId: string;
+    businessModuleId: string;
+    functionalModules: string[];
+  };
+}
+
+/**
+ * PRD all decompositions complete event.
+ */
+export interface PRDDecompositionAllCompleteEvent extends BaseSSEEvent {
+  type: 'prd.decomposition_all_complete';
+  data: {
+    projectId: string;
+    totalBusinessModules: number;
+    succeeded: number;
+    failed: number;
+  };
+}
+
+/**
+ * PRD all scenarios generation complete event.
+ */
+export interface PRDScenariosAllCompleteEvent extends BaseSSEEvent {
+  type: 'prd.scenarios_all_complete';
+  data: {
+    projectId: string;
+    succeeded: number;
+    failed: number;
+  };
+}
+
 // ========== EXPLORATION EVENTS ==========
 
 /**
@@ -242,6 +279,9 @@ export type SSEEvent =
   | ProjectStatusChangedEvent
   | PRDAnalysisProgressEvent
   | PRDAnalysisCompleteEvent
+  | PRDDecompositionCompleteEvent
+  | PRDDecompositionAllCompleteEvent
+  | PRDScenariosAllCompleteEvent
   | ExplorationProgressEvent
   | ExplorationURLFoundEvent
   | ExplorationBindingProposedEvent

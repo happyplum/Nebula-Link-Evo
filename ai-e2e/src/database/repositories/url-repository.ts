@@ -28,6 +28,7 @@ export class URLRepository {
   private stmtFindById: Database.Statement;
   private stmtFindByProjectId: Database.Statement;
   private stmtDelete: Database.Statement;
+  private stmtUpdateSnapshot: Database.Statement;
 
   constructor(private db: Database.Database) {
     this.stmtInsert = db.prepare(
@@ -36,6 +37,7 @@ export class URLRepository {
     this.stmtFindById = db.prepare('SELECT * FROM urls WHERE id = ?');
     this.stmtFindByProjectId = db.prepare('SELECT * FROM urls WHERE project_id = ? ORDER BY created_at ASC');
     this.stmtDelete = db.prepare('DELETE FROM urls WHERE id = ?');
+    this.stmtUpdateSnapshot = db.prepare('UPDATE urls SET page_snapshot_json = ? WHERE id = ?');
   }
 
   create(params: CreateURLParams): URLRecord {
@@ -65,6 +67,11 @@ export class URLRepository {
 
   delete(id: string): boolean {
     return this.stmtDelete.run(id).changes > 0;
+  }
+
+  updateSnapshot(id: string, snapshotJson: string): URLRecord | null {
+    this.stmtUpdateSnapshot.run(snapshotJson, id);
+    return this.findById(id);
   }
 
   private mapRow(row: Record<string, unknown>): URLRecord {

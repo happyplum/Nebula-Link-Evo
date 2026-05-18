@@ -166,7 +166,7 @@ describe('GET /api/projects/:id/analysis/modules', () => {
     const project = db.getProjectRepo().create({ name: 'Modules' });
 
     (mockAnalyzer.getAnalysisResult as ReturnType<typeof vi.fn>).mockReturnValue({
-      business_modules: [
+      businessModules: [
         {
           id: 'bm-1',
           project_id: project.id,
@@ -175,7 +175,7 @@ describe('GET /api/projects/:id/analysis/modules', () => {
           sort_order: 0,
           source: 'ai_generated',
           created_at: '2026-01-01',
-          functional_modules: [
+          functionalModules: [
             {
               id: 'fm-1',
               business_module_id: 'bm-1',
@@ -185,7 +185,7 @@ describe('GET /api/projects/:id/analysis/modules', () => {
               bound_url_id: null,
               source: 'ai_generated',
               created_at: '2026-01-01',
-              test_scenarios: [],
+              testScenarios: [],
             },
           ],
         },
@@ -366,6 +366,214 @@ describe('DELETE /api/projects/:id/analysis/modules/:moduleId', () => {
     });
 
     expect(res.statusCode).toBe(404);
+  });
+});
+
+describe('POST /api/projects/:id/analysis/decompose-all', () => {
+  it('returns partial results with retries for failed business modules', async () => {
+    const app = await buildApp();
+    const db = DatabaseManager.getInstance();
+    const project = db.getProjectRepo().create({ name: 'Batch Decompose' });
+    const firstBm = db.getBusinessModuleRepo().create({ project_id: project.id, name: 'Existing BM' });
+    const secondBm = db.getBusinessModuleRepo().create({ project_id: project.id, name: 'Retry BM' });
+    db.getFunctionalModuleRepo().create({ business_module_id: firstBm.id, name: 'Existing FM', description: 'seeded' });
+
+    const decomposeMock = mockAnalyzer.decomposeBusinessModule as ReturnType<typeof vi.fn>;
+    decomposeMock.mockReset();
+    decomposeMock
+      .mockRejectedValueOnce(new Error('temporary'))
+      .mockResolvedValueOnce([
+        {
+          id: 'fm-retry',
+          business_module_id: secondBm.id,
+          name: 'Recovered FM',
+          description: 'from retry',
+          sort_order: 0,
+          source: 'ai_generated',
+          created_at: '2026-01-01',
+        },
+      ]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/projects/${project.id}/analysis/decompose-all`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body).toMatchObject({ total: 2, succeeded: 2, failed: 0 });
+    expect(body.results).toEqual([
+      {
+        business_module_id: firstBm.id,
+        business_module_name: 'Existing BM',
+        functional_modules: [
+          { id: expect.any(String), name: 'Existing FM', description: 'seeded' },
+        ],
+      },
+      {
+        business_module_id: secondBm.id,
+        business_module_name: 'Retry BM',
+        functional_modules: [
+          { id: 'fm-retry', name: 'Recovered FM', description: 'from retry' },
+        ],
+      },
+    ]);
+    expect(decomposeMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('captures per-item errors without aborting the batch', async () => {
+    const app = await buildApp();
+    const db = DatabaseManager.getInstance();
+    const project = db.getProjectRepo().create({ name: 'Batch Decompose Fail' });
+    const firstBm = db.getBusinessModuleRepo().create({ project_id: project.id, name: 'Fail BM' });
+    const secondBm = db.getBusinessModuleRepo().create({ project_id: project.id, name: 'Pass BM' });
+
+    const decomposeMock = mockAnalyzer.decomposeBusinessModule as ReturnType<typeof vi.fn>;
+    decomposeMock.mockReset();
+    decomposeMock
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockResolvedValueOnce([
+        {
+          id: 'fm-pass',
+          business_module_id: secondBm.id,
+          name: 'Pass FM',
+          description: null,
+          sort_order: 0,
+          source: 'ai_generated',
+          created_at: '2026-01-01',
+        },
+      ]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/projects/${project.id}/analysis/decompose-all`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body).toMatchObject({ total: 2, succeeded: 1, failed: 1 });
+    expect(body.results).toEqual([
+      {
+        business_module_id: firstBm.id,
+        business_module_name: 'Fail BM',
+        error: 'boom',
+      },
+      {
+        business_module_id: secondBm.id,
+        business_module_name: 'Pass BM',
+        functional_modules: [
+          { id: 'fm-pass', name: 'Pass FM' },
+        ],
+      },
+    ]);
+    expect(decomposeMock).toHaveBeenCalledTimes(4);
+  });
+});
+
+describe('POST /api/projects/:id/analysis/generate-all-scenarios', () => {
+  it('returns partial results with retries for functional modules', async () => {
+    const app = await buildApp();
+    const db = DatabaseManager.getInstance();
+    const project = db.getProjectRepo().create({ name: 'Batch Scenario' });
+    const bm = db.getBusinessModuleRepo().create({ project_id: project.id, name: 'BM' });
+    const firstFm = db.getFunctionalModuleRepo().create({ business_module_id: bm.id, name: 'Existing FM' });
+    const secondFm = db.getFunctionalModuleRepo().create({ business_module_id: bm.id, name: 'Retry FM' });
+    db.getTestScenarioRepo().create({ functional_module_id: firstFm.id, name: 'Existing Scenario', description: 'seeded' });
+
+    const scenarioMock = mockAnalyzer.generateTestScenarios as ReturnType<typeof vi.fn>;
+    scenarioMock.mockReset();
+    scenarioMock
+      .mockRejectedValueOnce(new Error('temporary'))
+      .mockResolvedValueOnce([
+        {
+          id: 'ts-retry',
+          functional_module_id: secondFm.id,
+          name: 'Recovered Scenario',
+          description: 'from retry',
+          sort_order: 0,
+          source: 'ai_generated',
+          created_at: '2026-01-01',
+        },
+      ]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/projects/${project.id}/analysis/generate-all-scenarios`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body).toMatchObject({ total: 2, succeeded: 2, failed: 0 });
+    expect(body.results).toEqual([
+      {
+        functional_module_id: firstFm.id,
+        functional_module_name: 'Existing FM',
+        scenarios: [
+          { id: expect.any(String), name: 'Existing Scenario', description: 'seeded' },
+        ],
+      },
+      {
+        functional_module_id: secondFm.id,
+        functional_module_name: 'Retry FM',
+        scenarios: [
+          { id: 'ts-retry', name: 'Recovered Scenario', description: 'from retry' },
+        ],
+      },
+    ]);
+    expect(scenarioMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('captures scenario generation failures and continues the batch', async () => {
+    const app = await buildApp();
+    const db = DatabaseManager.getInstance();
+    const project = db.getProjectRepo().create({ name: 'Batch Scenario Fail' });
+    const bm = db.getBusinessModuleRepo().create({ project_id: project.id, name: 'BM' });
+    const firstFm = db.getFunctionalModuleRepo().create({ business_module_id: bm.id, name: 'Fail FM' });
+    const secondFm = db.getFunctionalModuleRepo().create({ business_module_id: bm.id, name: 'Pass FM' });
+
+    const scenarioMock = mockAnalyzer.generateTestScenarios as ReturnType<typeof vi.fn>;
+    scenarioMock.mockReset();
+    scenarioMock
+      .mockRejectedValueOnce(new Error('broken'))
+      .mockRejectedValueOnce(new Error('broken'))
+      .mockRejectedValueOnce(new Error('broken'))
+      .mockResolvedValueOnce([
+        {
+          id: 'ts-pass',
+          functional_module_id: secondFm.id,
+          name: 'Pass Scenario',
+          description: null,
+          sort_order: 0,
+          source: 'ai_generated',
+          created_at: '2026-01-01',
+        },
+      ]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/projects/${project.id}/analysis/generate-all-scenarios`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body).toMatchObject({ total: 2, succeeded: 1, failed: 1 });
+    expect(body.results).toEqual([
+      {
+        functional_module_id: firstFm.id,
+        functional_module_name: 'Fail FM',
+        error: 'broken',
+      },
+      {
+        functional_module_id: secondFm.id,
+        functional_module_name: 'Pass FM',
+        scenarios: [
+          { id: 'ts-pass', name: 'Pass Scenario' },
+        ],
+      },
+    ]);
+    expect(scenarioMock).toHaveBeenCalledTimes(4);
   });
 });
 

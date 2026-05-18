@@ -178,6 +178,66 @@ describe('Execution routes', () => {
       const body = response.json();
       expect(body.results).toHaveLength(2);
       expect(body.total).toBe(2);
+      expect(body.succeeded).toBe(2);
+      expect(body.failed).toBe(0);
+      expect(body.results[0]).toMatchObject({
+        script_id: expect.any(String),
+        runId: 'run-x',
+        status: 'pass',
+      });
+    });
+
+    it('returns partial results when a script keeps failing after retry', async () => {
+      const db = DatabaseManager.getInstance();
+      db.init(':memory:');
+      const projectId = seedProject(db, 'running');
+      const firstScriptId = seedScript(db);
+      const secondScriptId = seedScript(db);
+
+      const executeScript = vi.fn()
+        .mockRejectedValueOnce(new Error('flaky'))
+        .mockRejectedValueOnce(new Error('flaky'))
+        .mockResolvedValueOnce({
+          runId: 'run-ok',
+          status: 'pass' as const,
+          exitCode: 0,
+          signal: null,
+          stdout: 'ok',
+          stderr: '',
+        });
+      const executor = makeMockExecutor({ executeScript });
+
+      const app = createApp();
+      app.register(executionRoutes, {
+        prefix: '/api/projects/:id/execution',
+        executor,
+        diagnosis: makeMockDiagnosis(),
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/projects/${projectId}/execution/run-all`,
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body).toMatchObject({ total: 2, succeeded: 1, failed: 1 });
+      expect(body.results).toEqual([
+        {
+          script_id: firstScriptId,
+          error: 'flaky',
+        },
+        {
+          script_id: secondScriptId,
+          runId: 'run-ok',
+          status: 'pass',
+          exitCode: 0,
+          signal: null,
+          stdout: 'ok',
+          stderr: '',
+        },
+      ]);
+      expect(executeScript).toHaveBeenCalledTimes(3);
     });
   });
 

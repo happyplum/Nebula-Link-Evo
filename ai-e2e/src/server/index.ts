@@ -12,6 +12,7 @@ import { LoginRecorderService } from '../services/login-recorder-service.js';
 import { StateMachineService } from '../services/state-machine-service.js';
 import { TestScenarioService } from '../services/test-scenario-service.js';
 import { AIDiagnosisService } from '../services/ai-diagnosis-service.js';
+import { ExecutorService } from '../services/executor-service.js';
 import errorHandlerPlugin from './plugins/error-handler.js';
 import sseEmitterPlugin from './plugins/sse-emitter.js';
 import executionRoutes from './routes/execution.js';
@@ -59,6 +60,7 @@ export interface ServerOptions {
   stateMachine?: StateMachineService;
   scenarioService?: TestScenarioService;
   diagnosisService?: AIDiagnosisService;
+  executorService?: ExecutorService;
 }
 
 export function createServer(options: Partial<ServerOptions> = {}) {
@@ -80,8 +82,9 @@ export function createServer(options: Partial<ServerOptions> = {}) {
     proxyClient: options.proxyClient,
     promptManager: options.promptManager,
     tokenTracker: options.tokenTracker,
+    stateMachine: options.stateMachine,
   });
-  app.register(executionRoutes, { prefix: '/api/projects/:id/execution' });
+  app.register(executionRoutes, { prefix: '/api/projects/:id/execution', executor: options.executorService, diagnosis: options.diagnosisService });
   app.register(stateRoutes, { prefix: '/api/projects/:id/state', stateMachine: options.stateMachine });
   app.register(explorationRoutes, {
     prefix: '/api/projects/:id/exploration',
@@ -189,6 +192,12 @@ export async function start() {
     databaseManager.getTestScenarioRepo(),
   );
 
+  // Create executor service (depends on DB)
+  const executorService = new ExecutorService(
+    databaseManager.getScriptRepo(),
+    databaseManager.getExecutionRunRepo(),
+  );
+
   // Create server with all dependencies
   const app = createServer({
     proxyClient,
@@ -198,6 +207,7 @@ export async function start() {
     stateMachine,
     scenarioService: testScenarioService,
     diagnosisService: aiDiagnosisService,
+    executorService,
   });
 
   try {

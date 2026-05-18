@@ -266,6 +266,68 @@ const scriptsRoutes: FastifyPluginAsyncTypebox<ScriptsRouteOptions> = async (fas
     return service.saveEditedScript(scriptId, content);
   });
 
+  // POST /generate-all — batch generate scripts for all scenarios
+  fastify.post('/generate-all', {
+    schema: {
+      description: 'Generate Playwright test scripts for all scenarios that lack scripts',
+      tags: ['Scripts'],
+      params: ProjectIdParamSchema,
+      response: {
+        200: Type.Object({
+          generated: Type.Array(ScriptResponseSchema),
+          skipped: Type.Array(Type.Object({
+            scenario_id: Type.String(),
+            reason: Type.String(),
+          })),
+        }),
+      },
+    },
+  }, async (request) => {
+    const { id: projectId } = request.params as ProjectIdParam;
+    const service = getScriptGeneratorService();
+    const db = DatabaseManager.getInstance();
+
+    const bizModules = db.getBusinessModuleRepo().findByProjectId(projectId);
+    const generated: Array<Static<typeof ScriptResponseSchema>> = [];
+    const skipped: Array<{ scenario_id: string; reason: string }> = [];
+
+    for (const bm of bizModules) {
+      const funcModules = db.getFunctionalModuleRepo().findByBusinessModuleId(bm.id);
+      for (const fm of funcModules) {
+        const scenarios = db.getTestScenarioRepo().findByFunctionalModuleId(fm.id);
+        for (const scenario of scenarios) {
+          const existing = db.getScriptRepo().findByScenarioId(scenario.id);
+          if (existing.length > 0) {
+            skipped.push({ scenario_id: scenario.id, reason: 'Script already exists' });
+            continue;
+          }
+
+          try {
+            const script = await service.generateScript(scenario.id);
+            generated.push({
+              id: script.id,
+              test_scenario_id: script.test_scenario_id,
+              version: script.version,
+              content: script.content,
+              language: script.language,
+              generated_by: script.generated_by,
+              status: script.status,
+              created_at: script.created_at,
+              updated_at: script.updated_at,
+            });
+          } catch (e) {
+            skipped.push({
+              scenario_id: scenario.id,
+              reason: e instanceof Error ? e.message : 'Unknown error',
+            });
+          }
+        }
+      }
+    }
+
+    return { generated, skipped };
+  });
+
   // GET /:scriptId/versions — version history
   fastify.get('/:scriptId/versions', {
     schema: {
