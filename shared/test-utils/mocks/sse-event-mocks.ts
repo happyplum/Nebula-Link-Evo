@@ -22,6 +22,7 @@ export function mockSnapshotEvent(overrides?: Partial<SessionSnapshotEvent>): Se
     sessionId: 'test-session-id',
     messages: [],
     state: 'idle',
+    lastSeq: 0,
     ...overrides,
   };
 }
