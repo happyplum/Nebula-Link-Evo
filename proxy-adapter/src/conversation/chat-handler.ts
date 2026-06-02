@@ -181,7 +181,9 @@ class ChatHandler {
           const seq = this.sessionEventsDAO!.appendLiveEvent(sessionId, type, payload);
           hub.publish(sessionId, { ...eventData, seq });
         })
-        .catch(() => {});
+        .catch((err) => {
+          this.logger.warn({ err, sessionId, eventType: type }, 'Streaming event dropped — appendLiveEvent failed');
+        });
     } else {
       hub.publish(sessionId, eventData);
     }
