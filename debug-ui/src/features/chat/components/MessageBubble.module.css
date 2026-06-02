@@ -115,7 +115,21 @@
   white-space: pre-wrap;
 }
 
+.markdownContent {
+  white-space: normal;
+}
 
+.streamingCursor {
+  display: inline;
+  animation: blink 1s step-end infinite;
+  color: var(--text-muted);
+  font-weight: normal;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
 
 .screenshot {
   margin-top: 8px;
