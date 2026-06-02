@@ -110,6 +110,7 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevSessionIdRef = useRef<string | null>(null);
   const currentMessageIdRef = useRef<string | null>(null);
+  const receivedLiveEventsRef = useRef(false);
   const sessionIdRef = useRef(sessionId);
   sessionIdRef.current = sessionId;
 
@@ -172,6 +173,7 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
       cleanupConnection();
       highestSeqRef.current = -1;
       currentMessageIdRef.current = null;
+      receivedLiveEventsRef.current = false;
 
       const es = new EventSource(`/api/chat/sessions/${sid}/stream`);
       esRef.current = es;
@@ -226,6 +228,19 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
         if (isDuplicate(evt)) return;
         const store = getChatStore();
         if (!store) return;
+
+        // When live events have already been received, a late-arriving
+        // snapshot may carry stale state. Skip the overwrite only when
+        // the snapshot carries a lastSeq that is definitively behind the
+        // highest seq already processed.
+        if (
+          receivedLiveEventsRef.current &&
+          evt.lastSeq != null &&
+          evt.lastSeq < highestSeqRef.current
+        ) {
+          return;
+        }
+
         store.resetStreaming();
         if (evt.state === 'blocked') {
           store.setStreamingState('blocked');
@@ -249,6 +264,7 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
       es.addEventListener('message.created', (e: MessageEvent) => {
         const evt = JSON.parse(e.data) as MessageCreatedEvent;
         if (isDuplicate(evt)) return;
+        receivedLiveEventsRef.current = true;
         const store = getChatStore();
         if (!store) return;
 
@@ -275,6 +291,7 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
       es.addEventListener('assistant.started', (e: MessageEvent) => {
         const evt = JSON.parse(e.data) as AssistantStartedEvent;
         if (isDuplicate(evt)) return;
+        receivedLiveEventsRef.current = true;
         const store = getChatStore();
         if (!store) return;
         store.resetStreaming();
