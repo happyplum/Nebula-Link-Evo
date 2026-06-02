@@ -19,64 +19,73 @@ function formatJson(raw: string): string {
   }
 }
 
-export const ToolCallCard: React.FC<ToolCallCardProps> = ({ toolCall }) => {
-  const dialogRef = useRef<HTMLDialogElement>(null);
-  const displayName = extractDisplayName(toolCall.name);
+export const ToolCallCard: React.FC<ToolCallCardProps> = React.memo(
+  ({ toolCall }) => {
+    const dialogRef = useRef<HTMLDialogElement>(null);
+    const displayName = extractDisplayName(toolCall.name);
 
-  const openDialog = useCallback(() => {
-    dialogRef.current?.showModal();
-  }, []);
+    const openDialog = useCallback(() => {
+      dialogRef.current?.showModal();
+    }, []);
 
-  const closeDialog = useCallback(() => {
-    dialogRef.current?.close();
-  }, []);
+    const closeDialog = useCallback(() => {
+      dialogRef.current?.close();
+    }, []);
 
-  const handleBackdropClick = useCallback(
-    (e: React.MouseEvent<HTMLDialogElement>) => {
-      if (e.target === dialogRef.current) closeDialog();
-    },
-    [closeDialog],
-  );
+    const handleBackdropClick = useCallback(
+      (e: React.MouseEvent<HTMLDialogElement>) => {
+        if (e.target === dialogRef.current) closeDialog();
+      },
+      [closeDialog],
+    );
 
-  return (
-    <>
-      <button type="button" className={styles.card} onClick={openDialog}>
-        <span className={styles.chevron}>▸</span>
-        <code
-          className={`${styles.toolName} ${toolCall.status === 'running' ? styles.statusRunning : toolCall.status === 'error' ? styles.statusError : toolCall.status === 'pending' ? styles.statusPending : ''}`}
+    return (
+      <>
+        <button type="button" className={styles.card} onClick={openDialog}>
+          <span className={styles.chevron}>▸</span>
+          <code
+            className={`${styles.toolName} ${toolCall.status === 'running' ? styles.statusRunning : toolCall.status === 'error' ? styles.statusError : toolCall.status === 'pending' ? styles.statusPending : ''}`}
+          >
+            {displayName}
+          </code>
+        </button>
+
+        <dialog
+          ref={dialogRef}
+          className={styles.dialog}
+          onClick={handleBackdropClick}
         >
-          {displayName}
-        </code>
-      </button>
-
-      <dialog
-        ref={dialogRef}
-        className={styles.dialog}
-        onClick={handleBackdropClick}
-      >
-        <div className={styles.dialogContent}>
-          <div className={styles.dialogHeader}>
-            <code className={styles.dialogTitle}>{displayName}</code>
-            <button type="button" className={styles.closeBtn} onClick={closeDialog}>
-              ✕
-            </button>
+          <div className={styles.dialogContent}>
+            <div className={styles.dialogHeader}>
+              <code className={styles.dialogTitle}>{displayName}</code>
+              <button type="button" className={styles.closeBtn} onClick={closeDialog}>
+                ✕
+              </button>
+            </div>
+            <div className={styles.dialogBody}>
+              {toolCall.arguments && (
+                <div className={styles.section}>
+                  <div className={styles.label}>参数</div>
+                  <pre className={styles.code}>{formatJson(toolCall.arguments)}</pre>
+                </div>
+              )}
+              {toolCall.result !== undefined && (
+                <div className={styles.section}>
+                  <div className={styles.label}>结果</div>
+                  <pre className={styles.code}>{formatJson(toolCall.result)}</pre>
+                </div>
+              )}
+            </div>
           </div>
-          <div className={styles.dialogBody}>
-            {toolCall.arguments && (
-              <div className={styles.section}>
-                <div className={styles.label}>参数</div>
-                <pre className={styles.code}>{formatJson(toolCall.arguments)}</pre>
-              </div>
-            )}
-            {toolCall.result !== undefined && (
-              <div className={styles.section}>
-                <div className={styles.label}>结果</div>
-                <pre className={styles.code}>{formatJson(toolCall.result)}</pre>
-              </div>
-            )}
-          </div>
-        </div>
-      </dialog>
-    </>
-  );
-};
+        </dialog>
+      </>
+    );
+  },
+  (prevProps, nextProps) => {
+    return (
+      prevProps.toolCall.id === nextProps.toolCall.id &&
+      prevProps.toolCall.status === nextProps.toolCall.status &&
+      prevProps.toolCall.result === nextProps.toolCall.result
+    );
+  }
+);

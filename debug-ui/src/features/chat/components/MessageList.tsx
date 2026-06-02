@@ -44,6 +44,7 @@ export const MessageList: React.FC = () => {
   const isUserScrolling = useRef(false);
   const prevLengthRef = useRef(0);
   const prevToolCallsRef = useRef(0);
+  const prevStreamingLengthRef = useRef(0);
 
   // Determine visible messages (most recent N)
   const hasMore = messages.length > visibleCount;
@@ -51,17 +52,25 @@ export const MessageList: React.FC = () => {
     ? messages.slice(messages.length - visibleCount)
     : messages;
 
-  // Auto-scroll to bottom when new messages arrive or streaming tool calls update
+  // Auto-scroll to bottom when new messages arrive, streaming tool calls update, or streaming content changes
   useEffect(() => {
     const container = containerRef.current;
     if (!container || (messages.length === 0 && streamingToolCalls.length === 0)) return;
 
-    if (!isUserScrolling.current || messages.length > prevLengthRef.current || streamingToolCalls.length > prevToolCallsRef.current) {
+    const currentStreamingLength = (streamingContent?.length || 0) + (streamingThinking?.length || 0);
+    const shouldScroll =
+      !isUserScrolling.current ||
+      messages.length > prevLengthRef.current ||
+      streamingToolCalls.length > prevToolCallsRef.current ||
+      currentStreamingLength > prevStreamingLengthRef.current;
+
+    if (shouldScroll) {
       container.scrollTop = container.scrollHeight;
     }
     prevLengthRef.current = messages.length;
     prevToolCallsRef.current = streamingToolCalls.length;
-  }, [messages, streamingToolCalls]);
+    prevStreamingLengthRef.current = currentStreamingLength;
+  }, [messages, streamingToolCalls, streamingContent, streamingThinking]);
 
   const handleScroll = () => {
     const container = containerRef.current;
