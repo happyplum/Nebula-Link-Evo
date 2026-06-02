@@ -30,10 +30,12 @@
     "@nebula-link-evo/shared": "workspace:*",
     "@tanstack/react-query": "^5.96.0",
     "dayjs": "^1.11.20",
+    "livekit-client": "catalog:",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
+    "react-markdown": "^10.1.0",
     "react-router-dom": "^7.13.2",
-    "zustand": "^5.0.12",
-    "livekit-client": "catalog:"
+    "remark-gfm": "^4.0.1",
+    "zustand": "^5.0.12"
   }
 }
