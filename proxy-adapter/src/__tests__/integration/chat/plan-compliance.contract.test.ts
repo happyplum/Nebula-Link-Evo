@@ -278,7 +278,7 @@ describe('VF1 plan compliance contract', () => {
       manager,
       mockConfig,
       undefined,
-      { appendEvent } as unknown as SessionEventsDAO,
+      { appendEvent, appendLiveEvent: vi.fn().mockReturnValue(1), flush: vi.fn().mockResolvedValue(undefined) } as unknown as SessionEventsDAO,
       { publish } as unknown as SessionEventHub
     );
 
@@ -327,12 +327,19 @@ describe('VF1 plan compliance contract', () => {
       emittedTypes.push(type);
       return emittedTypes.length;
     });
+    const appendLiveEvent = vi.fn<
+      (sessionId: string, type: SessionEventType, payload: Record<string, unknown>) => number
+    >();
+    appendLiveEvent.mockImplementation((_sessionId, type, _payload) => {
+      emittedTypes.push(type);
+      return emittedTypes.length;
+    });
 
     const handler = new ChatHandler(
       manager,
       mockConfig,
       undefined,
-      { appendEvent } as unknown as SessionEventsDAO,
+      { appendEvent, appendLiveEvent, flush: vi.fn().mockResolvedValue(undefined) } as unknown as SessionEventsDAO,
       { publish: vi.fn() } as unknown as SessionEventHub
     );
 

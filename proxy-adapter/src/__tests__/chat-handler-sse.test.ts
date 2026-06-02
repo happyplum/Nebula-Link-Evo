@@ -107,12 +107,20 @@ describe('ChatHandler SSE integration', () => {
         callLog.push(`append:${type}`);
         return 1;
       });
+    const appendLiveEvent = vi
+      .fn()
+      .mockImplementation((_sessionId: string, type: string) => {
+        callLog.push(`appendLive:${type}`);
+        return 1;
+      });
     const publish = vi.fn().mockImplementation((_sessionId: string, event: { type: string }) => {
       callLog.push(`publish:${event.type}`);
     });
 
     const sessionEventsDAO = {
       appendEvent,
+      appendLiveEvent,
+      flush: vi.fn().mockResolvedValue(undefined),
     } as unknown as SessionEventsDAO;
 
     const sessionEventHub = {
@@ -158,7 +166,9 @@ describe('ChatHandler SSE integration', () => {
       message: 'Run with tools',
     });
 
-    const appendedTypes = appendEvent.mock.calls.map((call) => call[1] as string);
+    const appendedTypes = callLog
+      .filter((entry) => entry.startsWith('append'))
+      .map((entry) => entry.split(':')[1]);
     expect(appendedTypes).toContain('assistant.thinking');
     expect(appendedTypes).toContain('assistant.delta');
     expect(appendedTypes).toContain('assistant.tool_call');
@@ -171,7 +181,7 @@ describe('ChatHandler SSE integration', () => {
 
     for (const entry of callLog) {
       const [op, type] = entry.split(':');
-      if (op === 'append') {
+      if (op === 'append' || op === 'appendLive') {
         appendCount.set(type, (appendCount.get(type) ?? 0) + 1);
         continue;
       }
@@ -182,11 +192,21 @@ describe('ChatHandler SSE integration', () => {
   });
 
   it('emits events in expected execution order', async () => {
-    const appendEvent = vi.fn().mockResolvedValue(1);
+    const allTypes: string[] = [];
+    const appendEvent = vi.fn().mockImplementation(async (_s: string, type: string) => {
+      allTypes.push(type);
+      return 1;
+    });
+    const appendLiveEvent = vi.fn().mockImplementation((_s: string, type: string) => {
+      allTypes.push(type);
+      return 1;
+    });
     const publish = vi.fn();
 
     const sessionEventsDAO = {
       appendEvent,
+      appendLiveEvent,
+      flush: vi.fn().mockResolvedValue(undefined),
     } as unknown as SessionEventsDAO;
 
     const sessionEventHub = {
@@ -232,7 +252,7 @@ describe('ChatHandler SSE integration', () => {
       message: 'verify order',
     });
 
-    const types = appendEvent.mock.calls.map((call) => call[1] as string);
+    const types = allTypes;
 
     const startedIndex = types.indexOf('assistant.started');
     const thinkingIndex = types.indexOf('assistant.thinking');

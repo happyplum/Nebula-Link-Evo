@@ -8,6 +8,7 @@ import { SessionEventsDAO } from './session-events-dao.js';
 import { DatabaseManager } from './db.js';
 import { SessionEventHub } from '../services/session-event-hub.js';
 import { streamText, stepCountIs, tool } from 'ai';
+import { estimateTotalInputTokens } from '../services/provider/token-estimator.js';
 import type { ModelMessage } from 'ai';
 import type { LanguageModelV3 } from '@ai-sdk/provider';
 import { z } from 'zod';
@@ -20,6 +21,7 @@ import { InterventionEngine } from '../services/loop-guard/intervention.js';
 import { hashArgs, hashResult } from '../services/loop-guard/fingerprint.js';
 import type { LoopGuardVerdict } from '../services/loop-guard/types.js';
 import { createBrowserLifecycleTools } from '../clients/vercel-ai/browser-lifecycle-tools.js';
+import { createBrowserInteractionTools } from '../clients/vercel-ai/browser-interaction-tools.js';
 import { browserClient } from '../browser-client.js';
 
 interface ChatSendParams {
@@ -171,17 +173,13 @@ class ChatHandler {
       ...payload,
     } as SessionEvent;
 
-    // Fire-and-forget persistence; publish immediately for real-time streaming.
     const hub = this.sessionEventHub;
     if (this.sessionEventsDAO) {
       this.sessionEventQueue = this.sessionEventQueue
-        .then(async () => {
-          try {
-            const seq = await this.sessionEventsDAO!.appendEvent(sessionId, type, payload);
-            hub.publish(sessionId, { ...eventData, seq });
-          } catch {
-            // Persistence failure is non-fatal for streaming events
-          }
+        .then(() => {
+          // appendLiveEvent 是同步的 — 即时分配 seq，立即发布
+          const seq = this.sessionEventsDAO!.appendLiveEvent(sessionId, type, payload);
+          hub.publish(sessionId, { ...eventData, seq });
         })
         .catch(() => {});
     } else {
@@ -191,6 +189,7 @@ class ChatHandler {
 
   private async flushSessionEvents(): Promise<void> {
     await this.sessionEventQueue;
+    await this.sessionEventsDAO?.flush();
   }
 
   getSessionEventsDAO(): SessionEventsDAO | undefined {
@@ -221,52 +220,44 @@ class ChatHandler {
   }
 
   private getSystemPrompt(_session: ChatSessionData): string {
-    let basePrompt = `你是一个智能助手，可以通过MCP工具与浏览器交互。
+    let basePrompt = `你是一个智能助手，可以通过工具与浏览器交互。
 
-## 工作模式
-当用户询问页面相关问题时，你应该：
-1. 首先调用 browser-control.browser_snapshot 获取当前页面快照
-2. 分析页面信息后回答用户问题
-3. 如果需要执行操作，调用相应的MCP工具
+## 浏览器交互工作流
+所有浏览器操作必须遵循以下工作流：
+
+### 步骤 1：获取页面快照
+调用 browser_snapshot 获取当前页面状态。返回内容包括：
+- snapshot_id：快照唯一标识（后续操作需要此ID）
+- elements_map：页面交互元素映射（每个元素有 nebula_id、标签、位置、文本）
+- simplified_dom：简化的DOM树
+
+### 步骤 2：使用 nebula_id 操作元素
+从 elements_map 中找到目标元素的 nebula_id，然后使用以下工具操作：
 
 ## 可用操作
-- 获取页面信息：调用 browser-control.browser_snapshot
-- 点击元素：调用 browser-control.browser_click
-- 输入文本：调用 browser-control.browser_type
-- 导航页面：调用 browser-control.browser_navigate
-- 截图：调用 browser-control.browser_take_screenshot
+- browser_snapshot：获取页面快照（返回 snapshot_id + elements_map + simplified_dom）
+- browser_click：点击元素（需要 snapshot_id 和 nebula_id）
+- browser_type：在输入框中追加输入文本（需要 snapshot_id、nebula_id 和 text）
+- browser_fill_form：设置表单值（覆盖模式，需要 snapshot_id、nebula_id 和 value）
+- browser_select_option：选择下拉选项（需要 snapshot_id、nebula_id 和 value）
+- browser_hover：悬停在元素上（需要 snapshot_id 和 nebula_id）
+- browser_navigate：导航到指定URL（需要 url 参数）
+- browser_screenshot：截取当前页面截图
+- browser_scroll：滚动页面（需要 x 和 y 像素偏移）
+- browser_press_key：按下键盘按键（需要 key 参数，如 "Enter"、"Tab"）
+- browser_wait：等待指定时间（毫秒）
 
 ## 浏览器生命周期管理
-- 检查浏览器状态：调用 browser_status
-- 打开浏览器：调用 browser_open
-- 关闭浏览器：调用 browser_close
-- 查看标签页列表：调用 browser_list_tabs
-- 切换标签页：调用 browser_switch_tab（需要 id 参数）
+- browser_status：检查浏览器状态
+- browser_open：打开浏览器
+- browser_close：关闭浏览器
+- browser_list_tabs：查看标签页列表
+- browser_switch_tab：切换标签页（需要 id 参数）
 
-注意：关闭浏览器后，所有 MCP 浏览器操作工具将不可用，直到重新调用 browser_open。
-
-## 响应格式
-当需要调用工具时，使用以下JSON格式：
-\`\`\`json
-{
-  "type": "mcp_call",
-  "params": {
-    "server": "browser-control",
-    "tool": "browser_snapshot",
-    "args": {}
-  },
-  "reasoning": "获取当前页面信息"
-}
-\`\`\`
-
-任务完成时使用：
-\`\`\`json
-{
-  "type": "finish",
-  "params": { "result": "结果描述" },
-  "reasoning": "任务完成原因"
-}
-\`\`\``;
+注意：
+- 关闭浏览器后，所有操作工具将不可用，直到重新调用 browser_open
+- 每次操作页面后，建议重新调用 browser_snapshot 获取新的 snapshot_id
+- nebula_id 在同一快照内有效，页面变化后需要重新获取`;
 
     if (this.mcpClient && this.mcpClient.isEnabled()) {
       const tools = this.mcpClient.getAvailableTools();
@@ -411,27 +402,7 @@ class ChatHandler {
 
     const contextWindow = this.conversationManager.getContextWindow(sessionId);
     const messages = this.toModelMessages(contextWindow.messages);
-
-    if (screenshot) {
-      let lastUserIdx = -1;
-      for (let i = messages.length - 1; i >= 0; i--) {
-        if (messages[i].role === 'user') {
-          lastUserIdx = i;
-          break;
-        }
-      }
-      if (lastUserIdx !== -1) {
-        const existing = messages[lastUserIdx];
-        const textContent = typeof existing.content === 'string' ? existing.content : '';
-        messages[lastUserIdx] = {
-          role: 'user',
-          content: [
-            { type: 'image', image: screenshot },
-            { type: 'text', text: textContent },
-          ],
-        };
-      }
-    }
+    this.attachScreenshotToLastUser(messages, screenshot);
 
     const systemPrompt = nudgeOverride
       ? `${this.getSystemPrompt(session)}\n\n${nudgeOverride}`
@@ -439,14 +410,89 @@ class ChatHandler {
     const sessionController = ChatSessionController.getInstance();
     const decisionModel = await this.resolveDecisionModel(activeProvider, activeModel);
 
+    const sdkTools = this.createSDKTools() as Parameters<typeof streamText>[0]['tools'];
+
+    // --- Token budget: layer 1 = single-request check, layer 2 = compress-then-error ---
+    const contextWindowTokens = this.config.settings?.contextWindowTokens ?? 131072;
+    const maxOutputTokens = this.config.settings?.maxTokens ?? 1000;
+    const inputBudget = contextWindowTokens - maxOutputTokens;
+    const toolsAsRecord = sdkTools as Record<string, unknown>;
+
+    // ---- Layer 1: Minimum viable request (system + tools + current user message only) ----
+    // Even with ZERO history, this single request must fit.
+    const lastUserMsg = messages.length > 0 ? [messages[messages.length - 1]] : [];
+    const minViableTokens = estimateTotalInputTokens(systemPrompt, lastUserMsg, toolsAsRecord);
+
+    if (minViableTokens > inputBudget) {
+      const errorMessage =
+        `当前单次请求内容已超出模型上下文限制（约 ${Math.round(minViableTokens / 1000)}K tokens > ${Math.round(contextWindowTokens / 1024)}K）。` +
+        `请缩短输入内容或减小附件大小后重试。`;
+      this.logger.error(
+        { minViableTokens, inputBudget, contextWindowTokens, messageCount: messages.length },
+        'Single request exceeds context window — impossible to send',
+      );
+      await this.emitSessionEvent(sessionId, 'run.error', {
+        sessionId,
+        runId,
+        error: errorMessage,
+      });
+      await this.flushSessionEvents();
+      return;
+    }
+
+    // ---- Layer 2: Full request with history ----
+    let estimatedInputTokens = estimateTotalInputTokens(systemPrompt, messages, toolsAsRecord);
+    let budgetedMessages = messages;
+
+    if (estimatedInputTokens > inputBudget) {
+      this.logger.info(
+        { estimatedTokens: estimatedInputTokens, budget: inputBudget, messageCount: messages.length },
+        'Context window over budget — attempting compression',
+      );
+
+      // Force compression (summarize older messages)
+      const didCompress = await this.conversationManager.compactForTokenBudget(sessionId);
+      if (didCompress) {
+        const compressedContext = this.conversationManager.getContextWindow(sessionId);
+        budgetedMessages = this.toModelMessages(compressedContext.messages);
+        this.attachScreenshotToLastUser(budgetedMessages, screenshot);
+
+        estimatedInputTokens = estimateTotalInputTokens(systemPrompt, budgetedMessages, toolsAsRecord);
+        this.logger.info(
+          { estimatedTokens: estimatedInputTokens, budget: inputBudget, messageCount: budgetedMessages.length },
+          'After compression — re-estimated tokens',
+        );
+      }
+
+      // Still over budget after compression → error to frontend
+      if (estimatedInputTokens > inputBudget) {
+        const errorMessage =
+          `上下文内容过大（约 ${Math.round(estimatedInputTokens / 1000)}K tokens），` +
+          `超出模型上限（${Math.round(contextWindowTokens / 1024)}K tokens）。` +
+          `请缩短输入内容或减少当前对话历史后重试。`;
+        this.logger.error(
+          { estimatedTokens: estimatedInputTokens, budget: inputBudget, messageCount: budgetedMessages.length },
+          'Context overflow even after compression — reporting to frontend',
+        );
+        await this.emitSessionEvent(sessionId, 'run.error', {
+          sessionId,
+          runId,
+          error: errorMessage,
+        });
+        await this.flushSessionEvents();
+        return;
+      }
+    }
+
     const maxSteps = this.maxToolLoops;
     const streamOptions: Parameters<typeof streamText>[0] & { maxSteps: number } = {
       model: decisionModel,
       system: systemPrompt,
-      messages,
-      tools: this.createSDKTools() as Parameters<typeof streamText>[0]['tools'],
+      messages: budgetedMessages,
+      tools: sdkTools,
       abortSignal: signal,
       maxSteps,
+      maxOutputTokens,
       stopWhen: stepCountIs(maxSteps),
     };
 
@@ -730,6 +776,30 @@ class ChatHandler {
     return `run_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
   }
 
+  /**
+   * Attach a screenshot (base64) to the last user message in the array.
+   * Mutates the array in place and returns it.
+   */
+  private attachScreenshotToLastUser(messages: ModelMessage[], screenshot?: string): ModelMessage[] {
+    if (!screenshot) return messages;
+    let lastUserIdx = -1;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'user') { lastUserIdx = i; break; }
+    }
+    if (lastUserIdx !== -1) {
+      const existing = messages[lastUserIdx];
+      const textContent = typeof existing.content === 'string' ? existing.content : '';
+      messages[lastUserIdx] = {
+        role: 'user',
+        content: [
+          { type: 'image', image: screenshot },
+          { type: 'text', text: textContent },
+        ],
+      };
+    }
+    return messages;
+  }
+
   private toModelMessages(messages: Message[]): ModelMessage[] {
     const converted: ModelMessage[] = [];
 
@@ -762,13 +832,15 @@ class ChatHandler {
   private createSDKTools(): Record<string, unknown> {
     const tools: Record<string, unknown> = {};
 
-    // Browser lifecycle tools are always available regardless of MCP state
+    // Browser tools are always available — go directly to playwright-server
     const browserLifecycleTools = createBrowserLifecycleTools(browserClient);
+    const browserInteractionTools = createBrowserInteractionTools(browserClient);
 
     if (!this.mcpClient || !this.mcpClient.isEnabled()) {
-      return { ...browserLifecycleTools };
+      return { ...browserLifecycleTools, ...browserInteractionTools };
     }
 
+    // Non-browser MCP tools (file system, etc.) are still registered
     for (const mcpTool of this.mcpClient.getAvailableTools()) {
       const fullToolName = mcpTool.name;
       tools[fullToolName] = tool({
@@ -787,7 +859,7 @@ class ChatHandler {
       });
     }
 
-    return { ...browserLifecycleTools, ...tools };
+    return { ...browserLifecycleTools, ...browserInteractionTools, ...tools };
   }
 
   private buildInputSchema(schema: unknown): z.ZodTypeAny {

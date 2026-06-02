@@ -162,7 +162,7 @@ describe('single writer order contract', () => {
       manager,
       createResolvedConfig(),
       mcpClient,
-      { appendEvent } as unknown as SessionEventsDAO,
+      { appendEvent, flush: vi.fn().mockResolvedValue(undefined) } as unknown as SessionEventsDAO,
       { publish } as unknown as SessionEventHub
     );
 

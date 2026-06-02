@@ -87,10 +87,13 @@ describe('chat sdk loop success contract', () => {
   let chatHandler: ChatHandler;
   let sessionId: string;
 
+  const allEventTypes: SessionEventType[] = [];
   const appendEvent = vi.fn<(sessionId: string, type: SessionEventType, payload: Record<string, unknown>) => Promise<number>>();
+  const appendLiveEvent = vi.fn<(sessionId: string, type: SessionEventType, payload: Record<string, unknown>) => number>();
 
   beforeEach(() => {
     vi.clearAllMocks();
+    allEventTypes.length = 0;
     manager = new ConversationManager(':memory:');
     manager.initialize();
     mcpClient = new MCPSDKClient(createResolvedConfig());
@@ -117,9 +120,18 @@ describe('chat sdk loop success contract', () => {
       model: 'moonshot-v1-vision-preview',
     });
 
-    appendEvent.mockResolvedValue(1);
+    appendEvent.mockImplementation(async (_s, type, _p) => {
+      allEventTypes.push(type);
+      return 1;
+    });
+    appendLiveEvent.mockImplementation((_s, type, _p) => {
+      allEventTypes.push(type);
+      return 1;
+    });
     const sessionEventsDAO = {
       appendEvent,
+      appendLiveEvent,
+      flush: vi.fn().mockResolvedValue(undefined),
     } as unknown as SessionEventsDAO;
     const sessionEventHub = {
       publish: vi.fn(),
@@ -157,7 +169,7 @@ describe('chat sdk loop success contract', () => {
       message: 'hi',
     });
 
-    const eventTypes = appendEvent.mock.calls.map((call) => call[1]);
+    const eventTypes = allEventTypes;
     const startedIndex = eventTypes.indexOf('assistant.started');
     const deltaIndex = eventTypes.indexOf('assistant.delta');
     const completedIndex = eventTypes.lastIndexOf('assistant.completed');
@@ -216,7 +228,7 @@ describe('chat sdk loop success contract', () => {
       includeMeta: true,
     });
 
-    const eventTypes = appendEvent.mock.calls.map((call) => call[1]);
+    const eventTypes = allEventTypes;
     const toolCallIndex = eventTypes.indexOf('assistant.tool_call');
     const toolResultIndex = eventTypes.indexOf('assistant.tool_result');
     const completedIndex = eventTypes.lastIndexOf('assistant.completed');
@@ -225,8 +237,12 @@ describe('chat sdk loop success contract', () => {
     expect(toolResultIndex).toBeGreaterThan(toolCallIndex);
     expect(completedIndex).toBeGreaterThan(toolResultIndex);
 
-    const toolCallPayload = appendEvent.mock.calls.find((call) => call[1] === 'assistant.tool_call')?.[2] ?? {};
-    const toolResultPayload = appendEvent.mock.calls.find((call) => call[1] === 'assistant.tool_result')?.[2] ?? {};
+    const toolCallPayload = appendLiveEvent.mock.calls.find((call) => call[1] === 'assistant.tool_call')?.[2]
+      ?? appendEvent.mock.calls.find((call) => call[1] === 'assistant.tool_call')?.[2]
+      ?? {};
+    const toolResultPayload = appendLiveEvent.mock.calls.find((call) => call[1] === 'assistant.tool_result')?.[2]
+      ?? appendEvent.mock.calls.find((call) => call[1] === 'assistant.tool_result')?.[2]
+      ?? {};
 
     expect(toolCallPayload.toolCallId).toBe('call_1');
     expect(toolResultPayload.toolCallId).toBe('call_1');

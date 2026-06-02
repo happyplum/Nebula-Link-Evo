@@ -111,6 +111,7 @@ describe('chat loop guard completion contract', () => {
     appendEvent.mockResolvedValue(1);
     const sessionEventsDAO = {
       appendEvent,
+      flush: vi.fn().mockResolvedValue(undefined),
     } as unknown as SessionEventsDAO;
     const sessionEventHub = {
       publish: vi.fn(),
