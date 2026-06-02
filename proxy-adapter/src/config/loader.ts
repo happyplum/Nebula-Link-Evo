@@ -126,6 +126,7 @@ export function createDefaultConfig(): Config {
       temperature: 0.2,
       maxTokens: 1000,
       maxSteps: 1,
+      contextWindowTokens: 131072,
     },
   };
 }

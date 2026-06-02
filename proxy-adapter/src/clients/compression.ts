@@ -43,13 +43,16 @@ export function createCompressionClient(
         {
           role: 'system',
           content:
-            'You compress chat history for future turns. Preserve user goals, key decisions, tool results, blockers, and any facts needed to continue the session. Keep it concise and factual.',
+            '你负责压缩对话历史，供后续对话使用。' +
+            '请保留以下关键信息：用户目标、关键决策、工具调用名称及结果摘要、遇到的阻碍、以及继续会话所需的事实。' +
+            '工具调用结果已被精简（显示为 [工具调用结果 xxx]），请根据工具名称和提示推断其作用。' +
+            '保持简洁、基于事实，用中文输出。',
         },
         {
           role: 'user',
           content: [
-            'Summarize the following conversation history for future context.',
-            'Return plain text only.',
+            '请对以下完整对话历史进行摘要压缩，保留关键上下文供后续对话使用。',
+            '仅输出摘要文本，不要输出其他内容。',
             '',
             formatMessagesForSummary(messages),
           ].join('\n'),

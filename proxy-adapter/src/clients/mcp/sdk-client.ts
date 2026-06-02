@@ -17,6 +17,13 @@ export interface MCPTool {
   name: string;
   description: string;
   inputSchema: object;
+  annotations?: {
+    title?: string;
+    readOnlyHint?: boolean;
+    destructiveHint?: boolean;
+    idempotentHint?: boolean;
+    openWorldHint?: boolean;
+  };
 }
 
 /** Text content block returned by MCP tool calls. */
@@ -120,6 +127,7 @@ export class MCPSDKClient {
           name: tool.name,
           description: tool.description || '',
           inputSchema: tool.inputSchema || {},
+          annotations: tool.annotations ?? undefined,
         }));
       }
       return [];

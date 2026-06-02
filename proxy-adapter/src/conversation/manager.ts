@@ -370,6 +370,24 @@ class ConversationManager {
     }
   }
 
+  /**
+   * Force compression regardless of message-count thresholds.
+   * Called when token budget estimation shows the context window would overflow.
+   * Returns true if compression actually ran, false if no AI client or nothing to compress.
+   */
+  async compactForTokenBudget(sessionId: string): Promise<boolean> {
+    if (!this.aiClient) {
+      return false;
+    }
+    try {
+      await this.compressor.compress(sessionId, this.aiClient);
+      return true;
+    } catch (error) {
+      this.logger.error({ err: error, sessionId }, 'Forced compression for token budget failed');
+      return false;
+    }
+  }
+
   private resolveContextWindow(sessionId: string): ContextWindow {
     const compressedContext = this.compressor.getCompressedContext(sessionId);
     if (compressedContext.summary !== null) {

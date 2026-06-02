@@ -90,6 +90,9 @@ export interface RawSettingsConfig {
   temperature: number | string;
   maxTokens: number | string;
   maxSteps: number | string;
+  /** Maximum context window in tokens for the decision model. Used to truncate
+   *  conversation history before it overflows the model's input limit. */
+  contextWindowTokens?: number | string;
   loopGuard?: import('../services/loop-guard/types.js').RawLoopGuardConfig;
 }
 
@@ -99,6 +102,8 @@ export interface SettingsConfig {
   temperature: number;
   maxTokens: number;
   maxSteps: number;
+  /** Maximum context window in tokens for the decision model. */
+  contextWindowTokens: number;
   loopGuard?: import('../services/loop-guard/types.js').LoopGuardConfig;
 }
 
