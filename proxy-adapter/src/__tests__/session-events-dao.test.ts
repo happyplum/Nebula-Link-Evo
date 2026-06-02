@@ -486,4 +486,127 @@ describe('SessionEventsDAO', () => {
       expect(() => dao.dispose()).not.toThrow();
     });
   });
+
+  describe('appendLiveEvent', () => {
+    it('should return seq immediately without waiting for batch flush', () => {
+      const seq = dao.appendLiveEvent(sessionId, 'assistant.delta', {
+        sessionId,
+        messageId: 'msg-1',
+        text: 'hello',
+      });
+
+      expect(seq).toBe(1);
+    });
+
+    it('should allocate monotonically increasing seq', () => {
+      const seq1 = dao.appendLiveEvent(sessionId, 'assistant.delta', {
+        sessionId,
+        messageId: 'msg-1',
+        text: 'a',
+      });
+      const seq2 = dao.appendLiveEvent(sessionId, 'assistant.delta', {
+        sessionId,
+        messageId: 'msg-1',
+        text: 'b',
+      });
+      const seq3 = dao.appendLiveEvent(sessionId, 'assistant.thinking', {
+        sessionId,
+        messageId: 'msg-1',
+        text: 'thinking',
+      });
+
+      expect(seq1).toBe(1);
+      expect(seq2).toBe(2);
+      expect(seq3).toBe(3);
+    });
+
+    it('should persist live event payload to database on flush', async () => {
+      dao.appendLiveEvent(sessionId, 'assistant.delta', {
+        sessionId,
+        messageId: 'msg-1',
+        text: 'hello',
+      });
+
+      // Not yet in DB
+      let events = await dao.getEventsAfter(sessionId, 0);
+      expect(events).toHaveLength(0);
+
+      // After flush, should be queryable
+      await dao.flush();
+      events = await dao.getEventsAfter(sessionId, 0);
+      expect(events).toHaveLength(1);
+      expect(events[0].seq).toBe(1);
+      expect(events[0].type).toBe('assistant.delta');
+    });
+
+    it('should initialize seq counter from DB on fresh DAO instance', async () => {
+      dao.appendLiveEvent(sessionId, 'assistant.delta', {
+        sessionId,
+        messageId: 'msg-1',
+        text: 'a',
+      });
+      dao.appendLiveEvent(sessionId, 'assistant.delta', {
+        sessionId,
+        messageId: 'msg-2',
+        text: 'b',
+      });
+      await dao.flush();
+
+      // Create new DAO pointing to same DB
+      const dao2 = new SessionEventsDAO(db);
+      const seq = dao2.appendLiveEvent(sessionId, 'assistant.delta', {
+        sessionId,
+        messageId: 'msg-3',
+        text: 'c',
+      });
+
+      expect(seq).toBe(3);
+      dao2.dispose();
+    });
+
+    it('should maintain independent seq counters per session', () => {
+      const session2 = 'test-session-live-2';
+      dbManager.createSession({ id: session2, title: 'S2', provider: 'test', model: 'test' });
+
+      const seq1 = dao.appendLiveEvent(sessionId, 'assistant.delta', {
+        sessionId,
+        messageId: 'msg-1',
+        text: 'hello',
+      });
+      const seq2 = dao.appendLiveEvent(session2, 'assistant.delta', {
+        sessionId: session2,
+        messageId: 'msg-2',
+        text: 'world',
+      });
+
+      expect(seq1).toBe(1);
+      expect(seq2).toBe(1);
+    });
+
+    it('should coexist with appendEvent (durable) in same buffer', async () => {
+      const liveSeq = dao.appendLiveEvent(sessionId, 'assistant.delta', {
+        sessionId,
+        messageId: 'msg-1',
+        text: 'live',
+      });
+      const durableSeqPromise = dao.appendEvent(sessionId, 'message.created', {
+        sessionId,
+        messageId: 'msg-1',
+        content: 'durable',
+      });
+
+      await dao.flush();
+      const durableSeq = await durableSeqPromise;
+
+      expect(liveSeq).toBe(1);
+      expect(durableSeq).toBe(2);
+
+      const events = await dao.getEventsAfter(sessionId, 0);
+      expect(events).toHaveLength(2);
+      expect(events[0].seq).toBe(1);
+      expect(events[0].type).toBe('assistant.delta');
+      expect(events[1].seq).toBe(2);
+      expect(events[1].type).toBe('message.created');
+    });
+  });
 });
