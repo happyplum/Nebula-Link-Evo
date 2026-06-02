@@ -196,12 +196,13 @@ describe('useChatStream', () => {
       emitEvent('session.snapshot', {
         type: 'session.snapshot',
         sessionId: 's1',
-        seq: 1,
+        seq: 0,
         messages: [
           { id: 'm1', role: 'user', content: 'hello', created_at: '2026-01-01' },
           { id: 'm2', role: 'assistant', content: 'hi', created_at: '2026-01-01' },
         ],
         state: 'idle',
+        lastSeq: 0,
       });
       const msgs = useChatStore.getState().messagesBySession['s1'];
       expect(msgs).toHaveLength(2);
@@ -225,6 +226,7 @@ describe('useChatStream', () => {
         type: 'session.snapshot',
         sessionId: 's1',
         seq: 0,
+        lastSeq: 0,
         messages: [
           { id: 'm-gap', role: 'assistant', content: 'from snapshot', created_at: '2026-01-01' },
         ],
@@ -534,7 +536,8 @@ describe('useChatStream', () => {
       emitEvent('session.snapshot', {
         type: 'session.snapshot',
         sessionId: 's1',
-        seq: 1,
+        seq: 0,
+        lastSeq: 0,
         messages: [
           {
             id: 'm1',
@@ -565,7 +568,8 @@ describe('useChatStream', () => {
       emitEvent('session.snapshot', {
         type: 'session.snapshot',
         sessionId: 's1',
-        seq: 1,
+        seq: 0,
+        lastSeq: 0,
         messages: [
           {
             id: 'm1',
@@ -685,7 +689,8 @@ describe('useChatStream', () => {
       emitEvent('session.snapshot', {
         type: 'session.snapshot',
         sessionId: 's1',
-        seq: 1,
+        seq: 0,
+        lastSeq: 0,
         messages: [
           { id: 'm1', role: 'user', content: 'hello', created_at: '2026-01-01' },
         ],
@@ -713,7 +718,8 @@ describe('useChatStream', () => {
       emitEvent('session.snapshot', {
         type: 'session.snapshot',
         sessionId: 's1',
-        seq: 1,
+        seq: 0,
+        lastSeq: 0,
         messages: [],
         state: 'idle',
       });

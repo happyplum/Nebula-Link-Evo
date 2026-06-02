@@ -104,6 +104,8 @@ export const MessageList: React.FC = () => {
       ref={containerRef}
       onScroll={handleScroll}
       data-testid={testIds.messageList}
+      aria-live="polite"
+      aria-relevant="additions"
     >
       {hasMore && (
         <div className={styles.loadMore}>
