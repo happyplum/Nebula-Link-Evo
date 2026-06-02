@@ -66,7 +66,6 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.5rem;
 }
 
 .toolName {
@@ -81,12 +80,31 @@
   color: var(--text-muted);
 }
 
-.toolDescription {
-  margin: 0;
-  font-size: 0.875rem;
-  color: var(--text-secondary);
-  line-height: 1.4;
+/* ---- Description section ---- */
+
+.descriptionSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
+
+.descriptionContent {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+/* ---- Tool details ---- */
 
 .toolDetails {
   padding: 1rem;
@@ -106,21 +124,54 @@
   letter-spacing: 0.05em;
 }
 
+/* ---- Schema property tree ---- */
+
 .schemaList {
   list-style: none;
   padding: 0;
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.35rem;
+}
+
+.indent {
+  margin-left: 16px;
 }
 
 .schemaItem {
   font-size: 0.875rem;
   display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.propHeader {
+  display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
   align-items: baseline;
+  gap: 0.4rem;
+}
+
+.propToggle {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  line-height: 1;
+  width: 14px;
+  flex-shrink: 0;
+}
+
+.propBullet {
+  display: inline-block;
+  width: 14px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  flex-shrink: 0;
 }
 
 .propName {
@@ -142,8 +193,45 @@
   border-radius: 4px;
 }
 
-.propDesc {
+.propEnum {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-family: monospace;
+  background: var(--bg-elevated);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 300px;
+}
+
+.propDefault {
+  font-size: 0.75rem;
   color: var(--text-muted);
+  font-family: monospace;
+}
+
+.propDesc {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  padding-left: 18px; /* align with text after toggle/bullet */
+}
+
+.propUnion {
+  margin-top: 0.25rem;
+  padding-left: 18px;
+}
+
+.propUnionLabel {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.propUnionVariant {
+  padding-left: 8px;
 }
 
 .noSchema {
@@ -152,6 +240,46 @@
   color: var(--text-muted);
   font-style: italic;
 }
+
+/* ---- Raw schema toggle ---- */
+
+.rawSchemaSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.rawSchemaToggle {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-align: left;
+  padding: 0;
+}
+
+.rawSchemaToggle:hover {
+  color: var(--text-secondary);
+}
+
+.rawSchemaContent {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-sm);
+  font-family: monospace;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 350px;
+  overflow-y: auto;
+}
+
+/* ---- Execute section ---- */
 
 .executeSection {
   display: flex;
