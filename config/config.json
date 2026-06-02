@@ -24,20 +24,8 @@
     "screenshotQuality": 80
   },
   "mcp": {
-    "enabled": true,
-    "servers": {
-      "browser-control": {
-        "enabled": true,
-        "command": "npx",
-        "args": [
-          "-y",
-          "@playwright/mcp@latest",
-          "--cdp-endpoint",
-          "http://localhost:9222"
-        ],
-        "env": {}
-      }
-    }
+    "enabled": false,
+    "servers": {}
   },
   "settings": {
     "timeout": "{TIMEOUT:30000}",
