@@ -7,6 +7,7 @@ interface BufferedEvent {
   eventType: SessionEventType;
   payload: string;
   ttlSeconds?: number;
+  seq?: number;
   resolve: (seq: number) => void;
   reject: (error: Error) => void;
 }
@@ -51,6 +52,7 @@ export class SessionEventsDAO {
   private isFlushing = false;
   private disposed = false;
   private shutdownHandlersRegistered = false;
+  private sessionSeqCounters = new Map<string, number>();
   private metrics: SessionEventsDAOMetrics = {
     batchSize: 0,
     flushTime: 0,
@@ -106,7 +108,6 @@ export class SessionEventsDAO {
     this.flushSync();
 
     const now = new Date();
-    const seq = this.getNextSeq(sessionId);
     const createdAt = now.toISOString();
     const payloadStr = JSON.stringify(payload);
     const ttlExpiresAt = ttlSeconds
@@ -115,6 +116,7 @@ export class SessionEventsDAO {
 
     this.db.exec('BEGIN IMMEDIATE');
     try {
+      const seq = this.allocateSeq(sessionId);
       const stmt = this.db.prepare(
         `INSERT INTO session_events (session_id, seq, event_type, payload, created_at, ttl_expires_at)
          VALUES (?, ?, ?, ?, ?, ?)`
@@ -130,8 +132,45 @@ export class SessionEventsDAO {
       return seq;
     } catch (error) {
       this.db.exec('ROLLBACK');
+      // Roll back the in-memory counter since the seq was never persisted
+      const counter = this.sessionSeqCounters.get(sessionId);
+      if (counter !== undefined) {
+        this.sessionSeqCounters.set(sessionId, counter - 1);
+      }
       throw error instanceof Error ? error : new Error(String(error));
     }
+  }
+
+  /**
+   * Append a live event with immediate seq allocation via in-memory counter.
+   * The event is buffered for batch write; seq is returned synchronously.
+   */
+  appendLiveEvent(
+    sessionId: string,
+    eventType: SessionEventType,
+    payload: Record<string, unknown>,
+    ttlSeconds?: number
+  ): number {
+    const seq = this.allocateSeq(sessionId);
+    const payloadStr = JSON.stringify(payload);
+
+    this.buffer.push({
+      sessionId,
+      eventType,
+      payload: payloadStr,
+      ttlSeconds,
+      seq,
+      resolve: () => {},
+      reject: () => {},
+    });
+
+    if (this.buffer.length >= FLUSH_THRESHOLD) {
+      this.flushBuffer();
+    } else {
+      this.scheduleFlush();
+    }
+
+    return seq;
   }
 
   /**
@@ -425,12 +464,12 @@ export class SessionEventsDAO {
       for (const event of events) {
         let ttlExpiresAt: string | null = null;
         if (event.ttlSeconds) {
-          ttlExpiresAt = ttlCache.get(event.sessionId) ?? 
+          ttlExpiresAt = ttlCache.get(event.sessionId) ??
             new Date(now.getTime() + event.ttlSeconds * 1000).toISOString();
           ttlCache.set(event.sessionId, ttlExpiresAt);
         }
 
-        const seq = this.getNextSeq(event.sessionId);
+        const seq = event.seq ?? this.allocateSeq(event.sessionId);
         const createdAt = now.toISOString();
 
         const stmt = this.db.prepare(
@@ -461,6 +500,7 @@ export class SessionEventsDAO {
       this.metrics.totalEventsWritten += events.length;
       this.metrics.totalFlushes += 1;
     } catch (error) {
+      console.warn('Batch flush failed', error);
       this.db.exec('ROLLBACK');
       for (const event of events) {
         event.reject(error instanceof Error ? error : new Error(String(error)));
@@ -468,12 +508,19 @@ export class SessionEventsDAO {
     }
   }
 
-  private getNextSeq(sessionId: string): number {
-    const stmt = this.db.prepare(
-      `SELECT COALESCE(MAX(seq), 0) as max_seq FROM session_events WHERE session_id = ?`
-    );
-    const row = stmt.get(sessionId) as { max_seq: number };
-    return row.max_seq + 1;
+  private allocateSeq(sessionId: string): number {
+    let counter = this.sessionSeqCounters.get(sessionId);
+    if (counter === undefined) {
+      const stmt = this.db.prepare(
+        `SELECT COALESCE(MAX(seq), 0) as max_seq FROM session_events WHERE session_id = ?`
+      );
+      const row = stmt.get(sessionId) as { max_seq: number };
+      counter = row.max_seq + 1;
+      this.sessionSeqCounters.set(sessionId, counter);
+    }
+    const seq = counter;
+    this.sessionSeqCounters.set(sessionId, counter + 1);
+    return seq;
   }
 
   private rowToEvent(row: SessionEventRow): SessionEvent {
