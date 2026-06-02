@@ -65,7 +65,7 @@ describe('SessionCompressor', () => {
   });
 
   describe('compress', () => {
-    it('should compress old messages successfully', async () => {
+    it('should compress old messages — keeps summary + last user message', async () => {
       mockAiClient.generateSummary.mockResolvedValue('Summary of conversation');
 
       const session = manager.createSession({
@@ -89,30 +89,30 @@ describe('SessionCompressor', () => {
       expect(summaryMessage?.role).toBe('system');
       expect(summaryMessage?.content).toBe('Summary of conversation');
 
+      // Non-summary: only the last user message survives
       const nonSummaryMessages = messages.filter((m) => m.metadata?.type !== 'summary');
-      expect(nonSummaryMessages).toHaveLength(5);
+      expect(nonSummaryMessages).toHaveLength(1);
+      expect(nonSummaryMessages[0].content).toBe('User message 24');
     });
 
-    it('should not compress when message count is insufficient', async () => {
+    it('should not compress when only 1 message exists', async () => {
       const session = manager.createSession({
         title: 'Test Session',
         provider: 'test',
         model: 'test-model',
       });
 
-      for (let i = 0; i < 3; i++) {
-        manager.addMessage(session.id, { role: 'user', content: `Message ${i}` });
-      }
+      manager.addMessage(session.id, { role: 'user', content: 'Only message' });
 
       await compressor.compress(session.id, mockAiClient as any);
 
       expect(mockAiClient.generateSummary).not.toHaveBeenCalled();
 
       const messages = manager.getMessages(session.id);
-      expect(messages).toHaveLength(3);
+      expect(messages).toHaveLength(1);
     });
 
-    it('should keep messages marked as important', async () => {
+    it('should strip tool results before passing to AI', async () => {
       mockAiClient.generateSummary.mockResolvedValue('Summary');
 
       const session = manager.createSession({
@@ -121,45 +121,21 @@ describe('SessionCompressor', () => {
         model: 'test-model',
       });
 
+      manager.addMessage(session.id, { role: 'user', content: 'Do something' });
       manager.addMessage(session.id, {
-        role: 'user',
-        content: 'Important message',
-        metadata: { important: true },
+        role: 'tool',
+        content: '<dom>' + 'x'.repeat(5000) + '</dom>',
+        metadata: { tool_name: 'browser_snapshot' },
       });
-
-      for (let i = 0; i < 24; i++) {
-        manager.addMessage(session.id, { role: 'user', content: `Message ${i}` });
-      }
+      manager.addMessage(session.id, { role: 'assistant', content: 'Done' });
+      manager.addMessage(session.id, { role: 'user', content: 'Next step' });
 
       await compressor.compress(session.id, mockAiClient as any);
 
-      const messages = manager.getMessages(session.id);
-      const importantMessage = messages.find((m) => m.content === 'Important message');
-      expect(importantMessage).toBeDefined();
-    });
-
-    it('should keep recent N messages', async () => {
-      mockAiClient.generateSummary.mockResolvedValue('Summary');
-
-      const session = manager.createSession({
-        title: 'Test Session',
-        provider: 'test',
-        model: 'test-model',
-      });
-
-      for (let i = 0; i < 25; i++) {
-        manager.addMessage(session.id, { role: 'user', content: `Message ${i}` });
-      }
-
-      await compressor.compress(session.id, mockAiClient as any);
-
-      const messages = manager.getMessages(session.id);
-      const nonSummaryMessages = messages.filter((m) => m.metadata?.type !== 'summary');
-      expect(nonSummaryMessages).toHaveLength(5);
-
-      for (let i = 20; i < 25; i++) {
-        expect(nonSummaryMessages.some((m) => m.content === `Message ${i}`)).toBe(true);
-      }
+      const passedMessages = mockAiClient.generateSummary.mock.calls[0][0];
+      const toolMsg = passedMessages.find((m: any) => m.role === 'tool');
+      expect(toolMsg.content).toContain('[工具调用结果 browser_snapshot]');
+      expect(toolMsg.content.length).toBeLessThan(300);
     });
 
     it('should throw error when session not found', async () => {
@@ -226,16 +202,14 @@ describe('SessionCompressor', () => {
       expect(updatedSession?.summary).toBe(summaryText);
     });
 
-    it('should not update summary when compression is skipped', async () => {
+    it('should not update summary when compression is skipped (≤1 message)', async () => {
       const session = manager.createSession({
         title: 'No Compress',
         provider: 'test',
         model: 'test-model',
       });
 
-      for (let i = 0; i < 3; i++) {
-        manager.addMessage(session.id, { role: 'user', content: `Message ${i}` });
-      }
+      manager.addMessage(session.id, { role: 'user', content: 'Only one message' });
 
       await compressor.compress(session.id, mockAiClient as any);
 
@@ -307,27 +281,6 @@ describe('SessionCompressor', () => {
 
       const result = customCompressor.shouldCompress(session.id);
       expect(result).toBe(true);
-    });
-
-    it('should use custom keep recent count', async () => {
-      mockAiClient.generateSummary.mockResolvedValue('Summary');
-
-      const customCompressor = new SessionCompressor(db, { keepRecentCount: 3 });
-      const session = manager.createSession({
-        title: 'Test Session',
-        provider: 'test',
-        model: 'test-model',
-      });
-
-      for (let i = 0; i < 25; i++) {
-        manager.addMessage(session.id, { role: 'user', content: `Message ${i}` });
-      }
-
-      await customCompressor.compress(session.id, mockAiClient as any);
-
-      const messages = manager.getMessages(session.id);
-      const nonSummaryMessages = messages.filter((m) => m.metadata?.type !== 'summary');
-      expect(nonSummaryMessages).toHaveLength(3);
     });
   });
 });

@@ -952,6 +952,16 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
                     name: { type: 'string' },
                     description: { type: 'string' },
                     inputSchema: { type: 'object' },
+                    annotations: {
+                      type: 'object',
+                      properties: {
+                        title: { type: 'string' },
+                        readOnlyHint: { type: 'boolean' },
+                        destructiveHint: { type: 'boolean' },
+                        idempotentHint: { type: 'boolean' },
+                        openWorldHint: { type: 'boolean' },
+                      },
+                    },
                   },
                 },
               },

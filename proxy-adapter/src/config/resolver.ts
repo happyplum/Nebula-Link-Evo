@@ -77,6 +77,7 @@ export function resolveConfig(
     temperature: resolveSetting(config.settings.temperature, env, defaults, 0.2),
     maxTokens: resolveSetting(config.settings.maxTokens, env, defaults, 1000),
     maxSteps: resolveSetting(config.settings.maxSteps, env, defaults, 1),
+    contextWindowTokens: resolveSetting(config.settings.contextWindowTokens ?? 131072, env, defaults, 131072),
     loopGuard: config.settings.loopGuard
       ? resolveLoopGuard(config.settings.loopGuard)
       : undefined,
