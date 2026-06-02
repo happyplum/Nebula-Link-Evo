@@ -55,7 +55,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(
                 ) : (
                   <MarkdownRenderer content={message.content || ''} />
                 )}
-                {message.isStreaming && <span className={styles.streamingCursor}>▌</span>}
+                {message.isStreaming && <span className={styles.streamingCursor} aria-hidden="true">▌</span>}
               </div>
             )}
 
