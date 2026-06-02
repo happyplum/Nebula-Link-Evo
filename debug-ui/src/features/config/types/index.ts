@@ -40,17 +40,36 @@ export interface McpStatusResponse {
   servers: McpServerStatus[];
 }
 
+/** Recursive JSON Schema property – captures everything the MCP SDK can return. */
 export interface McpToolInputProperty {
   type?: string;
   description?: string;
+  enum?: string[];
+  default?: unknown;
+  items?: McpToolInputProperty;
+  properties?: Record<string, McpToolInputProperty>;
+  required?: string[];
+  anyOf?: McpToolInputProperty[];
+  oneOf?: McpToolInputProperty[];
+  allOf?: McpToolInputProperty[];
+  [key: string]: unknown; // catch-all for $ref, additionalProperties, etc.
 }
 
 export interface McpTool {
   name: string;
   description: string;
+  annotations?: {
+    title?: string;
+    readOnlyHint?: boolean;
+    destructiveHint?: boolean;
+    idempotentHint?: boolean;
+    openWorldHint?: boolean;
+  };
   inputSchema?: {
+    type?: string;
     properties?: Record<string, McpToolInputProperty>;
     required?: string[];
+    [key: string]: unknown;
   };
 }
 
