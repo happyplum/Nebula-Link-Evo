@@ -94,6 +94,8 @@ export interface SessionSnapshotEvent {
   agentState?: SessionAgentState;
   /** In-progress tool calls (only present when session is running) */
   activeToolCalls?: ToolCall[];
+  /** Last persisted seq for replay→subscribe boundary */
+  lastSeq?: number;
 }
 
 /**

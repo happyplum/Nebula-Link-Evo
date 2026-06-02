@@ -65,6 +65,7 @@ async function buildSnapshotEvent(
     type: 'session.snapshot',
     seq: 0,
     sessionId,
+    lastSeq: sessionEventsDAO?.getLastSeq(sessionId) ?? undefined,
     messages: messages
       .filter((m) => m.role !== 'tool')
       .map((m) => {

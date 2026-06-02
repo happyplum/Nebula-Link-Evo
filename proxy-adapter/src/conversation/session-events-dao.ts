@@ -211,6 +211,18 @@ export class SessionEventsDAO {
   }
 
   /**
+   * Get the last persisted sequence number for a session.
+   * Returns null if no events exist for the session.
+   */
+  getLastSeq(sessionId: string): number | null {
+    const stmt = this.db.prepare(
+      `SELECT MAX(seq) as max_seq FROM session_events WHERE session_id = ?`
+    );
+    const row = stmt.get(sessionId) as { max_seq: number | null };
+    return row.max_seq;
+  }
+
+  /**
    * Get session snapshot by replaying events.
    * Reconstructs messages and current state from event stream.
    */
