@@ -91,36 +91,17 @@ describe('provider', () => {
   describe('getDecisionModel', () => {
     it('resolves decision model via resolveSessionModels', async () => {
       const decisionModel = createMockModel('decision-model');
-      const visionModel = createMockModel('vision-model');
-      mockResolveSessionModels.mockResolvedValue({ decision: decisionModel, vision: visionModel });
+      mockResolveSessionModels.mockResolvedValue({ decision: decisionModel });
 
       const { getDecisionModel } = await import('../provider.js');
       const registry = createMockRegistry();
-      const session = { provider: 'glm', model: 'glm-4', vision_provider: null, vision_model: null };
-      const defaults = { decision: 'glm/glm-4.7-flash', vision: 'glm/glm-4v-flash' };
+      const session = { provider: 'glm', model: 'glm-4' };
+      const defaults = { decision: 'glm/glm-4.7-flash' };
 
       const result = await getDecisionModel(session, registry, defaults);
 
       expect(mockResolveSessionModels).toHaveBeenCalledWith(session, registry, defaults);
       expect(result).toBe(decisionModel);
-    });
-  });
-
-  describe('getVisionModel', () => {
-    it('resolves vision model via resolveSessionModels', async () => {
-      const decisionModel = createMockModel('decision-model');
-      const visionModel = createMockModel('vision-model');
-      mockResolveSessionModels.mockResolvedValue({ decision: decisionModel, vision: visionModel });
-
-      const { getVisionModel } = await import('../provider.js');
-      const registry = createMockRegistry();
-      const session = { provider: null, model: null, vision_provider: 'openai', vision_model: 'gpt-4o' };
-      const defaults = { decision: 'glm/glm-4.7-flash', vision: 'glm/glm-4v-flash' };
-
-      const result = await getVisionModel(session, registry, defaults);
-
-      expect(mockResolveSessionModels).toHaveBeenCalledWith(session, registry, defaults);
-      expect(result).toBe(visionModel);
     });
   });
 

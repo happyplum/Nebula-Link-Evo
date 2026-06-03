@@ -62,7 +62,7 @@ describe('provider schema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('should parse full config with all fields including visionTool', () => {
+  it('should parse full config with provider defaults', () => {
     const input: ProviderSchemaV2Input = {
       providers: {
         'test-provider': {
@@ -77,11 +77,6 @@ describe('provider schema', () => {
         decision: 'provider/model',
         vision: 'provider/model',
       },
-      visionTool: {
-        maxCallsPerStep: 10,
-        timeoutMs: 60000,
-        screenshotQuality: 90,
-      },
     };
 
     const result = ProviderSchemaV2.safeParse(input);
@@ -93,12 +88,9 @@ describe('provider schema', () => {
     expect(result.data?.providers['test-provider']?.allowDynamicInstall).toBe(true);
     expect(result.data?.defaults?.decision).toBe('provider/model');
     expect(result.data?.defaults?.vision).toBe('provider/model');
-    expect(result.data?.visionTool?.maxCallsPerStep).toBe(10);
-    expect(result.data?.visionTool?.timeoutMs).toBe(60000);
-    expect(result.data?.visionTool?.screenshotQuality).toBe(90);
   });
 
-  it('should parse config without visionTool', () => {
+  it('should parse config without legacy vision tool settings', () => {
     const input: ProviderSchemaV2Input = {
       providers: {
         'test-provider': {
@@ -114,28 +106,6 @@ describe('provider schema', () => {
 
     const result = ProviderSchemaV2.safeParse(input);
     expect(result.success).toBe(true);
-    expect(result.data?.visionTool).toBeUndefined();
-  });
-
-  it('should parse config with partial visionTool (defaults applied)', () => {
-    const input: ProviderSchemaV2Input = {
-      providers: {
-        'test-provider': {},
-      },
-      defaults: {
-        decision: 'provider/model',
-        vision: 'provider/model',
-      },
-      visionTool: {
-        maxCallsPerStep: 15,
-      },
-    };
-
-    const result = ProviderSchemaV2.safeParse(input);
-    expect(result.success).toBe(true);
-    expect(result.data?.visionTool?.maxCallsPerStep).toBe(15);
-    expect(result.data?.visionTool?.timeoutMs).toBe(30000);
-    expect(result.data?.visionTool?.screenshotQuality).toBe(80);
   });
 
   it('should accept any string for defaults (format validation is separate)', () => {
@@ -187,7 +157,7 @@ describe('provider schema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('should reject invalid visionTool - non-number fields', () => {
+  it('should ignore unknown legacy visionTool fields', () => {
     const input: ProviderSchemaV2Input = {
       providers: {
         'test-provider': {},
@@ -198,10 +168,10 @@ describe('provider schema', () => {
       },
       visionTool: {
         maxCallsPerStep: 'not a number' as unknown as number,
-      },
+      } as unknown as never,
     };
 
     const result = ProviderSchemaV2.safeParse(input);
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
   });
 });

@@ -6,20 +6,6 @@ export interface MCPTool {
   inputSchema: object;
 }
 
-export interface VisionClient {
-  provider: string;
-  model: string;
-  capabilities: string[];
-
-  detect(
-    screenshot: string,
-    viewport: { width: number; height: number },
-    options?: { instruction?: string }
-  ): Promise<UIElement[]>;
-
-  getCapabilities(): string[];
-}
-
 export interface DecisionClient {
   provider: string;
   model: string;
@@ -51,7 +37,7 @@ export interface DecisionContext {
   mcpTools?: MCPTool[];
 }
 
-export type ClientType = 'vision' | 'decision' | 'mcp';
+export type ClientType = 'decision' | 'mcp';
 
 export interface ClientInfo {
   type: ClientType;

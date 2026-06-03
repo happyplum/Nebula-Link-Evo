@@ -419,7 +419,7 @@ describe('ChatHandler', () => {
       expect(prompt).toContain('browser_close');
       expect(prompt).toContain('browser_list_tabs');
       expect(prompt).toContain('browser_switch_tab');
-      expect(prompt).toContain('browser-control.browser_snapshot');
+      expect(prompt).toContain('browser_snapshot');
     });
   });
 

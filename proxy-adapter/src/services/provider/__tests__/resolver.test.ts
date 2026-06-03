@@ -54,55 +54,45 @@ describe('resolveSessionModels', () => {
     registry = mockRegistry();
   });
 
-  it('should resolve both decision and vision from session fields', async () => {
+  it('should resolve decision from session fields', async () => {
     const decisionModel = mockModel({ modelId: 'gpt-4o' });
-    const visionModel = mockModel({ modelId: 'glm-4v' });
-    vi.mocked(registry.resolve)
-      .mockResolvedValueOnce(decisionModel)
-      .mockResolvedValueOnce(visionModel);
+    vi.mocked(registry.resolve).mockResolvedValueOnce(decisionModel);
 
     const result = await resolveSessionModels(
-      { provider: 'openai', model: 'gpt-4o', vision_provider: 'glm', vision_model: 'glm-4v' },
+      { provider: 'openai', model: 'gpt-4o' },
       registry,
-      { decision: 'openai/gpt-3.5', vision: 'glm/glm-4v-flash' },
+      { decision: 'openai/gpt-3.5' },
     );
 
     expect(result.decision).toBe(decisionModel);
-    expect(result.vision).toBe(visionModel);
     expect(registry.resolve).toHaveBeenCalledWith('openai', 'gpt-4o');
-    expect(registry.resolve).toHaveBeenCalledWith('glm', 'glm-4v');
   });
 
-  it('should fall back vision to config defaults when vision columns are null', async () => {
-    const decisionModel = mockModel({ modelId: 'gpt-4o' });
-    const defaultVision = mockModel({ modelId: 'glm-4v-flash' });
-    vi.mocked(registry.resolve)
-      .mockResolvedValueOnce(decisionModel)
-      .mockResolvedValueOnce(defaultVision);
+  it('should fall back decision to config defaults when session fields are null', async () => {
+    const defaultDecision = mockModel({ modelId: 'glm-4.7-flash' });
+    vi.mocked(registry.resolve).mockResolvedValueOnce(defaultDecision);
 
     const result = await resolveSessionModels(
-      { provider: 'openai', model: 'gpt-4o', vision_provider: null, vision_model: null },
+      { provider: null, model: null },
       registry,
-      { decision: 'openai/gpt-3.5', vision: 'glm/glm-4v-flash' },
-    );
-
-    expect(registry.resolve).toHaveBeenCalledWith('openai', 'gpt-4o');
-    expect(registry.resolve).toHaveBeenCalledWith('glm', 'glm-4v-flash');
-    expect(result.decision).toBe(decisionModel);
-    expect(result.vision).toBe(defaultVision);
-  });
-
-  it('should fall back both to defaults when all session fields are null', async () => {
-    const model = mockModel({ modelId: 'default' });
-    vi.mocked(registry.resolve).mockResolvedValue(model);
-
-    await resolveSessionModels(
-      { provider: null, model: null, vision_provider: null, vision_model: null },
-      registry,
-      { decision: 'glm/glm-4.7-flash', vision: 'glm/glm-4v-flash' },
+      { decision: 'glm/glm-4.7-flash' },
     );
 
     expect(registry.resolve).toHaveBeenCalledWith('glm', 'glm-4.7-flash');
-    expect(registry.resolve).toHaveBeenCalledWith('glm', 'glm-4v-flash');
+    expect(result.decision).toBe(defaultDecision);
+  });
+
+  it('should prefer session decision over config defaults', async () => {
+    const decisionModel = mockModel({ modelId: 'gpt-4o' });
+    vi.mocked(registry.resolve).mockResolvedValueOnce(decisionModel);
+
+    const result = await resolveSessionModels(
+      { provider: 'openai', model: 'gpt-4o' },
+      registry,
+      { decision: 'openai/gpt-3.5' },
+    );
+
+    expect(registry.resolve).toHaveBeenCalledWith('openai', 'gpt-4o');
+    expect(result.decision).toBe(decisionModel);
   });
 });

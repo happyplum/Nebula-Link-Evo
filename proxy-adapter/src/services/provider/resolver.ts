@@ -2,24 +2,20 @@ import type { LanguageModelV3 } from '@ai-sdk/provider';
 import { parseProviderModel } from './errors.js';
 import type { ProviderRegistry } from './registry.js';
 
-/** Resolved AI models for a session's decision and vision capabilities. */
+/** Resolved AI models for a session's decision capabilities. */
 export interface ResolvedModels {
   decision: LanguageModelV3;
-  vision: LanguageModelV3;
 }
 
 /** Session fields used for model resolution. */
 interface SessionModelFields {
   provider: string | null;
   model: string | null;
-  vision_provider: string | null;
-  vision_model: string | null;
 }
 
 /** Config-level defaults for model selectors (e.g., "glm/glm-4.7-flash"). */
 interface ConfigDefaults {
   decision: string;
-  vision: string;
 }
 
 /**
@@ -34,10 +30,7 @@ export async function resolveModel(
   return registry.resolve(provider, model);
 }
 
-/**
- * Resolves both decision and vision models for a session.
- * Falls back to config defaults when session fields are null.
- */
+/** Resolves the decision model for a session, falling back to config defaults. */
 export async function resolveSessionModels(
   session: SessionModelFields,
   registry: ProviderRegistry,
@@ -48,15 +41,7 @@ export async function resolveSessionModels(
       ? `${session.provider}/${session.model}`
       : defaults.decision;
 
-  const visionStr =
-    session.vision_provider && session.vision_model
-      ? `${session.vision_provider}/${session.vision_model}`
-      : defaults.vision;
+  const decision = await resolveModel(decisionStr, registry);
 
-  const [decision, vision] = await Promise.all([
-    resolveModel(decisionStr, registry),
-    resolveModel(visionStr, registry),
-  ]);
-
-  return { decision, vision };
+  return { decision };
 }

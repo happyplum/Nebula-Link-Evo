@@ -55,14 +55,6 @@ export interface ModelResolution {
 }
 
 /**
- * Result from vision tool analysis.
- */
-export interface VisionToolResult {
-  /** AI-generated description of detected elements or actions */
-  description: string;
-}
-
-/**
  * Model configuration with decision and vision model selectors.
  */
 export interface ModelConfig {
