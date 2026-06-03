@@ -32,7 +32,7 @@ describe('config/loader', () => {
       version: '2.0',
       providers: { glm: { enabled: true, apiKey: '{GLM_API_KEY}' } },
       defaults: {
-        mode: 'separation',
+        mode: 'unified',
         decision: 'glm/glm-4.7-flash',
         vision: 'glm/glm-4.6v-flash',
       },
@@ -52,9 +52,8 @@ describe('config/loader', () => {
       config: {
         ...mockConfig,
         defaults: {
-          mode: 'separation',
+          mode: 'unified',
           decision: { provider: 'glm', model: 'glm-4.7-flash' },
-          vision: { provider: 'glm', model: 'glm-4.6v-flash' },
         },
         settings: {
           timeout: 30000,
@@ -82,7 +81,6 @@ describe('config/loader', () => {
     expect(config.providers.glm?.npmPackage).toBeUndefined();
     expect(config.defaults.decision).toBe('glm/glm-4.7-flash');
     expect(config.defaults.vision).toBe('glm/glm-4.6v-flash');
-    expect(config.visionTool?.maxCallsPerStep).toBe(5);
   });
 
   it('saveConfig writes prettified JSON', () => {

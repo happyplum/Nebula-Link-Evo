@@ -111,14 +111,9 @@ export function createDefaultConfig(): Config {
       servers: {},
     },
     defaults: {
-      mode: 'separation',
+      mode: 'unified',
       decision: 'glm/glm-4.7-flash',
       vision: 'glm/glm-4.6v-flash',
-    },
-    visionTool: {
-      maxCallsPerStep: 5,
-      timeoutMs: 30000,
-      screenshotQuality: 80,
     },
     settings: {
       timeout: 30000,
