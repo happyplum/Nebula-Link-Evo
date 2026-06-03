@@ -8,7 +8,7 @@ const configRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     {
       schema: {
         description:
-          'Get current configuration including mode, vision/decision providers, and enabled providers',
+          'Get current configuration including mode, decision provider, and enabled providers',
         tags: ['Config'],
         response: {
           200: ConfigResponseSchema,
@@ -23,7 +23,6 @@ const configRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       }
       return {
         mode: config.defaults?.mode ?? 'unknown',
-        vision: config.defaults?.vision ?? 'unknown',
         decision: config.defaults?.decision ?? 'unknown',
         providers: Object.keys(config.providers || {}).filter(k => config.providers[k].enabled),
       };
