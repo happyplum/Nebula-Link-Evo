@@ -7,6 +7,10 @@ import type {
   AssistantThinkingEvent,
   AssistantToolCallEvent,
   AssistantToolResultEvent,
+  JobCancelledEvent,
+  JobCompletedEvent,
+  JobQueuedEvent,
+  JobStartedEvent,
   MessageCreatedEvent,
   RunErrorEvent,
   SessionEvent,
@@ -258,6 +262,11 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
           }
           store.setStreamingState('streaming');
         }
+
+        // Restore queued jobs from snapshot
+        if (evt.pendingJobs && evt.pendingJobs.length > 0) {
+          store.setPendingJobsFromSnapshot(sid, evt.pendingJobs);
+        }
       });
 
       // message.created
@@ -367,6 +376,42 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
         store.setStreamingState('error');
         setError(evt.error);
         currentMessageIdRef.current = null;
+      });
+
+      // job.queued
+      es.addEventListener('job.queued', (e: MessageEvent) => {
+        const evt = JSON.parse(e.data) as JobQueuedEvent;
+        if (isDuplicate(evt)) return;
+        const store = getChatStore();
+        if (!store) return;
+        store.addPendingJob(evt.sessionId, evt.job);
+      });
+
+      // job.started
+      es.addEventListener('job.started', (e: MessageEvent) => {
+        const evt = JSON.parse(e.data) as JobStartedEvent;
+        if (isDuplicate(evt)) return;
+        const store = getChatStore();
+        if (!store) return;
+        store.updateJobStarted(evt.sessionId, evt.jobId);
+      });
+
+      // job.cancelled
+      es.addEventListener('job.cancelled', (e: MessageEvent) => {
+        const evt = JSON.parse(e.data) as JobCancelledEvent;
+        if (isDuplicate(evt)) return;
+        const store = getChatStore();
+        if (!store) return;
+        store.removePendingJob(evt.sessionId, evt.jobId);
+      });
+
+      // job.completed
+      es.addEventListener('job.completed', (e: MessageEvent) => {
+        const evt = JSON.parse(e.data) as JobCompletedEvent;
+        if (isDuplicate(evt)) return;
+        const store = getChatStore();
+        if (!store) return;
+        store.removePendingJob(evt.sessionId, evt.jobId);
       });
     },
     [cleanupConnection, immediateFlush, scheduleFlush]

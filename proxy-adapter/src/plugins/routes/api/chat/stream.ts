@@ -12,6 +12,7 @@ import { DatabaseManager } from '../../../../conversation/db.js';
 import { SessionEventHub } from '../../../../services/session-event-hub.js';
 import type { SessionEvent, SessionSnapshotEvent, SessionState } from '@nebula-link-evo/shared';
 import { eventToSSEFormat } from '@nebula-link-evo/shared';
+import type { ConversationJobQueue } from '../../../../services/conversation-job-queue.js';
 import { getRuntimeSessionState } from './runtime-state.js';
 
 function writeSSEEvent(
@@ -43,11 +44,13 @@ async function buildSnapshotEvent(
   conversationManager: ConversationManager,
   sessionId: string,
   sessionEventsDAO: SessionEventsDAO | null,
-  baseStatus?: SessionStatus
+  baseStatus?: SessionStatus,
+  jobQueue?: ConversationJobQueue
 ): Promise<SessionSnapshotEvent> {
   const messages = conversationManager.getMessages(sessionId);
   const runtimeState = await getRuntimeSessionState(conversationManager, sessionId, baseStatus);
   const activeToolCalls = conversationManager.getActiveToolCalls(sessionId);
+  const pendingJobs = jobQueue?.getPendingJobs(sessionId) ?? [];
 
   const assistantIds = messages.filter((m) => m.role === 'assistant').map((m) => m.id);
   const thinkingMap =
@@ -107,6 +110,7 @@ async function buildSnapshotEvent(
     jobId: runtimeState.jobId,
     agentState: runtimeState.agentState,
     ...(activeToolCalls.length > 0 ? { activeToolCalls } : {}),
+    ...(pendingJobs.length > 0 ? { pendingJobs } : {}),
   };
 }
 
@@ -115,6 +119,7 @@ const streamRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     fastify as typeof fastify & { conversationManager: ConversationManager }
   ).conversationManager;
   const chatHandler = (fastify as typeof fastify & { chatHandler?: ChatHandler }).chatHandler;
+  const jobQueue = (fastify as typeof fastify & { jobQueue?: ConversationJobQueue }).jobQueue;
 
   // GET /:id/stream - SSE streaming endpoint with full snapshot bootstrap
   fastify.get<{ Params: { id: string } }>(
@@ -174,7 +179,8 @@ const streamRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           conversationManager,
           sessionId,
           sessionEventsDAO,
-          session.status
+          session.status,
+          jobQueue
         );
         writeSSEEvent(reply, snapshotEvent, '0');
 
