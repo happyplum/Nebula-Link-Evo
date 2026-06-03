@@ -12,6 +12,7 @@ import {
 import { ResolvedConfig, MCPServerConfig } from '../../config/schema.js';
 import { createWorkerLogger } from '../../services/logger.js';
 import type { Logger } from 'pino';
+import { ProviderError } from '../../services/provider/errors.js';
 
 export interface MCPTool {
   name: string;
@@ -93,7 +94,7 @@ export class MCPSDKClient {
       const transport = new StdioClientTransport({
         command: config.command,
         args: config.args || [],
-        env: { ...getDefaultEnvironment(), ...config.env },
+        env: this.buildServerEnv(name, config),
         stderr: 'inherit',
       });
 
@@ -117,6 +118,49 @@ export class MCPSDKClient {
       this.logger.error({ err: error, name }, 'Failed to start MCP server');
       return false;
     }
+  }
+
+  private buildServerEnv(name: string, config: MCPServerConfig): Record<string, string> {
+    const env = { ...getDefaultEnvironment(), ...config.env };
+
+    if (name !== 'vision-server') {
+      return env;
+    }
+
+    const rawDefaults = this.config as ResolvedConfig & { defaults: ResolvedConfig['defaults'] & { vision?: { provider: string; model: string } } };
+    const defaultVision = rawDefaults.defaults.vision;
+    if (!defaultVision?.provider || !defaultVision?.model) {
+      this.logger.warn({ name }, 'Skipping vision-server env injection: defaults.vision is not configured');
+      return env;
+    }
+
+    const provider = this.config.providers[defaultVision.provider];
+    if (!provider) {
+      this.logger.warn(
+        { name, provider: defaultVision.provider },
+        'Skipping vision-server env injection: provider not found',
+      );
+      return env;
+    }
+
+    if (!provider.enabled) {
+      this.logger.warn(
+        { name, provider: defaultVision.provider },
+        'Skipping vision-server env injection: provider disabled',
+      );
+      return env;
+    }
+
+    try {
+      env.VISION_PROVIDER_BASE_URL = provider.baseUrl ?? '';
+      env.VISION_PROVIDER_API_KEY = provider.apiKey;
+      env.VISION_MODEL_ID = defaultVision.model;
+    } catch (error) {
+      const details = error instanceof ProviderError ? error.details : (error as Error).message;
+      this.logger.warn({ name, details }, 'Skipping vision-server env injection due to provider config error');
+    }
+
+    return env;
   }
 
   private async fetchToolsList(client: Client): Promise<MCPTool[]> {

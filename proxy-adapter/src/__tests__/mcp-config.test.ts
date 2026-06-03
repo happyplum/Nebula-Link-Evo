@@ -22,4 +22,11 @@ describe('MCP Config', () => {
   it('should have PLAYWRIGHT_SERVER_URL env var', () => {
     expect(config.mcp.servers['browser-control'].env.PLAYWRIGHT_SERVER_URL).toBe('http://localhost:3001');
   });
+
+  it('should keep vision-server provider env out of checked-in config', () => {
+    expect(config.mcp.servers['vision-server'].env.PLAYWRIGHT_SERVER_URL).toBe('http://localhost:3001');
+    expect(config.mcp.servers['vision-server'].env.VISION_PROVIDER_BASE_URL).toBeUndefined();
+    expect(config.mcp.servers['vision-server'].env.VISION_PROVIDER_API_KEY).toBeUndefined();
+    expect(config.mcp.servers['vision-server'].env.VISION_MODEL_ID).toBeUndefined();
+  });
 });
