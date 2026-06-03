@@ -23,13 +23,13 @@ export default fp(
           description: `# Nebula-Link Evo - Proxy Adapter API
 
 ## Overview
-Web automation and AI integration service that orchestrates browser automation tasks using Playwright and Kimi K2.5 vision API.
+Web automation and AI integration service that orchestrates browser automation tasks using a decision model plus MCP servers.
 
 ## Features
 - **Web Automation**: Execute complex multi-step browser tasks with natural language instructions
-- **AI-Powered**: Leverages Kimi's vision model for intelligent task understanding
-- **Multi-Provider Support**: Integrated with NVIDIA, Kimi vision providers
-- **Fallback System**: Automatically switches between vision providers on failure
+- **Decision Model Orchestration**: Uses a unified decision model for planning and tool selection
+- **MCP Extensibility**: Delegates browser-control and vision analysis to MCP servers
+- **Browser Screenshot Support**: Retains screenshot/snapshot browser tools without embedding vision provider logic
 - **Debug Dashboard**: Real-time task execution monitoring
 
 ## Architecture
@@ -37,8 +37,9 @@ Web automation and AI integration service that orchestrates browser automation t
 [User Request]
     │
     ▼
-[Proxy Adapter :3000] ──→ [Kimi K2.5 API]
+ [Proxy Adapter :3000] ──→ [Decision Model Provider]
     │
+    ├──→ [vision-server MCP]
     └──→ [Playwright Server :3001] ──→ Chromium
 \`\`\`
 
@@ -88,14 +89,9 @@ Successful task execution returns:
 \`\`\`
 
 ## Configuration
-- **KIMI_API_KEY**: Kimi API authentication key
-- **KIMI_BASE_URL**: API base URL (default: https://api.moonshot.cn/v1)
-- **KIMI_MODEL**: Vision model name (default: moonshot-v1-vision-preview)
+- **Decision provider config**: resolved from config/config.json
+- **vision-server MCP env**: injected at runtime from defaults.vision + matching provider config
 - **ENABLE_SWAGGER**: Enable Swagger UI (default: true in dev, false in production)
-
-## Supported Vision Providers
-- NVIDIA (default)
-- Kimi (via moonshot-v1-vision-preview)
 
 ## Error Handling
 All endpoints return consistent error format:
@@ -106,11 +102,10 @@ All endpoints return consistent error format:
 }
 \`\`\`
 
-## Environment Variables
+## Runtime Notes
 \`\`\`env
-KIMI_API_KEY=your_kimi_api_key_here
-KIMI_BASE_URL=https://api.moonshot.cn/v1
-KIMI_MODEL=moonshot-v1-vision-preview
+GLM_API_KEY=your_provider_key_here
+NVIDIA_API_KEY=your_provider_key_here
 ENABLE_SWAGGER=true
 NODE_ENV=development
 \`\`\`
