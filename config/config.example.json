@@ -44,12 +44,29 @@
     "enabled": true,
     "servers": {
       "browser-control": {
+        "enabled": false,
+        "command": "npx",
+        "args": [
+          "-y",
+          "@playwright/mcp@latest",
+          "--cdp-endpoint",
+          "ws://localhost:3001/cdp"
+        ],
+        "env": {}
+      },
+      "vision-server": {
         "enabled": true,
         "command": "node",
-        "args": ["../browser-control-mcp-server/dist/index.js"],
+        "args": ["../vision-mcp-server/dist/index.js"],
         "env": {
-          "PLAYWRIGHT_SERVER_URL": "http://localhost:3001"
+          "PLAYWRIGHT_SERVER_URL": "http://localhost:3001",
+          "VISION_PROVIDER_BASE_URL": "https://open.bigmodel.cn/api/paas/v4",
+          "VISION_PROVIDER_API_KEY": "{GLM_API_KEY}",
+          "VISION_MODEL_ID": "glm-4.5v"
         }
+      }
+    }
+  }
       }
     }
   },
