@@ -388,6 +388,48 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     }
   );
 
+  // DELETE /:sessionId/jobs/:jobId - Cancel a queued job
+  fastify.delete<{ Params: { sessionId: string; jobId: string } }>(
+    '/:sessionId/jobs/:jobId',
+    {
+      schema: {
+        description: 'Cancel a queued job',
+        tags: ['Chat'],
+        params: Type.Object({
+          sessionId: Type.String(),
+          jobId: Type.String(),
+        }),
+        response: {
+          200: Type.Object({ success: Type.Boolean(), jobId: Type.String() }),
+          404: ErrorResponseSchema,
+          409: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const { sessionId, jobId } = request.params;
+      const job = jobQueue.getStatus(jobId);
+
+      if (!job || job.sessionId !== sessionId) {
+        reply.status(404);
+        return { error: `Job ${jobId} not found for session ${sessionId}` };
+      }
+
+      if (job.status === 'running') {
+        reply.status(409);
+        return { error: `Job ${jobId} is already running and cannot be cancelled` };
+      }
+
+      if (job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') {
+        reply.status(404);
+        return { error: `Job ${jobId} is no longer queued` };
+      }
+
+      jobQueue.cancel(jobId);
+      return { success: true, jobId };
+    }
+  );
+
   // GET /:id/messages - Get message history
   fastify.get<{
     Params: { id: string };
