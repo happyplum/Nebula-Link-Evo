@@ -72,8 +72,6 @@ class ConversationManager {
       title: params.title,
       provider: params.provider,
       model: params.model,
-      vision_provider: params.vision_provider,
-      vision_model: params.vision_model,
     });
 
     if (params.systemPrompt) {
@@ -208,8 +206,6 @@ class ConversationManager {
       title: `${originalSession.title} (Fork)`,
       provider: originalSession.provider,
       model: originalSession.model,
-      vision_provider: originalSession.vision_provider ?? undefined,
-      vision_model: originalSession.vision_model ?? undefined,
     });
 
     let messagesToCopy = this.db.getMessagesBySession(sessionId);

@@ -283,10 +283,10 @@ class DatabaseManager {
     const now = new Date().toISOString();
 
     const stmt = this.db.prepare(
-      `INSERT INTO sessions (id, title, created_at, updated_at, summary, message_count, provider, model, vision_provider, vision_model)
-       VALUES (?, ?, ?, ?, NULL, 0, ?, ?, ?, ?)`
+      `INSERT INTO sessions (id, title, created_at, updated_at, summary, message_count, provider, model)
+       VALUES (?, ?, ?, ?, NULL, 0, ?, ?)`
     );
-    stmt.run(id, params.title, now, now, params.provider, params.model, params.vision_provider ?? null, params.vision_model ?? null);
+    stmt.run(id, params.title, now, now, params.provider, params.model);
 
     return this.getSession(id) as Session;
   }
@@ -296,6 +296,7 @@ class DatabaseManager {
       throw new Error('Database not initialized');
     }
 
+    // Legacy vision_* columns are still selected for backward-compatible reads.
     const stmt = this.db.prepare('SELECT * FROM sessions WHERE id = ?');
     const row = stmt.get(id) as SessionRow | undefined;
 
@@ -342,15 +343,6 @@ class DatabaseManager {
       updates.push('model = ?');
       values.push(params.model);
     }
-    if (params.vision_provider !== undefined) {
-      updates.push('vision_provider = ?');
-      values.push(params.vision_provider);
-    }
-    if (params.vision_model !== undefined) {
-      updates.push('vision_model = ?');
-      values.push(params.vision_model);
-    }
-
     if (updates.length === 0) {
       return this.getSession(id);
     }
