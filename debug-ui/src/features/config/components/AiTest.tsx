@@ -74,7 +74,6 @@ export function AiTest() {
 
       {result && (
         <div className={styles.results}>
-          <ModelResult label="Vision" result={result.vision} />
           <ModelResult label="Decision" result={result.decision} />
           {result.totalResponseTime != null && (
             <div className={styles.totalTime}>

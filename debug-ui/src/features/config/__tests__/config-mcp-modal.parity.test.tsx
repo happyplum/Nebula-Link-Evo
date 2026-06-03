@@ -11,7 +11,7 @@ const mockUseMcpCall = vi.fn();
 
 // Mock all config API hooks to prevent actual network calls
 vi.mock('@/features/config/api/config.queries.js', () => ({
-  useConfig: vi.fn(() => ({ data: { mode: 'dev', vision: { provider: 'openai', model: 'gpt-4o' }, decision: { provider: 'openai', model: 'gpt-4o' } }, isLoading: false, error: null })),
+  useConfig: vi.fn(() => ({ data: { mode: 'dev', decision: { provider: 'openai', model: 'gpt-4o' } }, isLoading: false, error: null })),
   useHealth: vi.fn(() => ({ data: { status: 'ok', services: { playwright: 'ok' }, mcp: { enabled: true, servers: [] } }, isLoading: false, error: null })),
   useMcpStatus: () => mockUseMcpStatus(),
   useMcpTools: () => mockUseMcpTools(),
@@ -322,8 +322,15 @@ describe('P4-27-V: MCP Status List and Tools Modal - Parity', () => {
 
       const modal = screen.getByTestId(testIds.mcpToolsModal);
       expect(within(modal).getByText('tool-a')).toBeInTheDocument();
+      
+      // Click to expand tool-a to see description
+      fireEvent.click(within(modal).getByText('tool-a'));
       expect(within(modal).getByText('Tool A description')).toBeInTheDocument();
+      
       expect(within(modal).getByText('tool-b')).toBeInTheDocument();
+      
+      // Click to expand tool-b to see description
+      fireEvent.click(within(modal).getByText('tool-b'));
       expect(within(modal).getByText('Tool B description')).toBeInTheDocument();
 
       // Tool from server-2 should not appear

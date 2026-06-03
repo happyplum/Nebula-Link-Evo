@@ -19,7 +19,7 @@ import type {
   VerifyKeysResponse,
 } from '../types/index.js';
 
-/** Application config (mode, vision/decision providers) */
+/** Application config (mode, decision provider) */
 export function useConfig() {
   return useQuery({
     queryKey: queryKeys.config,
