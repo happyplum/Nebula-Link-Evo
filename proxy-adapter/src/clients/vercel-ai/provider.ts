@@ -49,14 +49,11 @@ export async function getModel(
 interface SessionModelFields {
   provider: string | null;
   model: string | null;
-  vision_provider: string | null;
-  vision_model: string | null;
 }
 
 /** Config-level defaults for model selectors (e.g., "glm/glm-4.7-flash"). */
 interface ConfigDefaults {
   decision: string;
-  vision: string;
 }
 
 /**
@@ -69,18 +66,6 @@ export async function getDecisionModel(
 ): Promise<LanguageModelV3> {
   const { decision } = await resolveSessionModels(session, registry, defaults);
   return decision;
-}
-
-/**
- * Resolve the vision model for a session using the provider registry.
- */
-export async function getVisionModel(
-  session: SessionModelFields,
-  registry: ProviderRegistry,
-  defaults: ConfigDefaults,
-): Promise<LanguageModelV3> {
-  const { vision } = await resolveSessionModels(session, registry, defaults);
-  return vision;
 }
 
 /**

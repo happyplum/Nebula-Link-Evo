@@ -9,7 +9,6 @@
  * - Model resolution for decision and vision models
  * - Alias adapter factories
  * - Dynamic provider package installation and loading
- * - Vision tool for screenshot analysis
  * - Preflight checks for provider availability
  */
 
@@ -18,7 +17,6 @@ export type {
   ProviderConfig,
   ProviderEntry,
   ModelResolution,
-  VisionToolResult,
   ModelConfig,
 } from './types.js';
 
@@ -55,13 +53,6 @@ export {
   loadProviderPackage,
   clearModuleCache,
 } from './loader.js';
-
-// Vision tool
-export type {
-  VisionToolOptions,
-  ScreenshotResult,
-} from './vision-tool.js';
-export { createVisionTool } from './vision-tool.js';
 
 // Preflight
 export { runPreflight } from './preflight.js';

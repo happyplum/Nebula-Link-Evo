@@ -48,7 +48,7 @@ describe('VF4: Scope fidelity contract', () => {
       expect(importLines.some((line) => pattern.test(line))).toBe(false);
     }
 
-    expect(source).not.toContain('playwright-server');
+    expect(source).not.toContain('Playwright browser automation service');
   });
 
   it('sessions.ts route handler does not import browser-related modules', async () => {

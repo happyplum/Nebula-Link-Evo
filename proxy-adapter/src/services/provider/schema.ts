@@ -15,11 +15,6 @@ export const ProviderSchemaV2 = z.object({
     decision: z.string(),
     vision: z.string(),
   }),
-  visionTool: z.object({
-    maxCallsPerStep: z.number().default(5),
-    timeoutMs: z.number().default(30000),
-    screenshotQuality: z.number().default(80),
-  }).optional(),
 })
 
 export type ProviderSchemaV2Input = z.input<typeof ProviderSchemaV2>;
