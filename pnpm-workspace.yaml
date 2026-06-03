@@ -1,4 +1,5 @@
 packages:
+  - browser-control-mcp-server
   - debug-ui
   - shared
   - proxy-adapter

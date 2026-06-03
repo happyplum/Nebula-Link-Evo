@@ -44,15 +44,12 @@
     "enabled": true,
     "servers": {
       "browser-control": {
-        "enabled": false,
-        "command": "npx",
-        "args": [
-          "-y",
-          "@playwright/mcp@latest",
-          "--cdp-endpoint",
-          "ws://localhost:3001/cdp"
-        ],
-        "env": {}
+        "enabled": true,
+        "command": "node",
+        "args": ["../browser-control-mcp-server/dist/index.js"],
+        "env": {
+          "PLAYWRIGHT_SERVER_URL": "http://localhost:3001"
+        }
       }
     }
   },
