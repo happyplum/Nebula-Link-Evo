@@ -4,6 +4,7 @@ import { ServiceUnavailableError } from '../errors/http-errors.js';
 import { DatabaseManager } from '../conversation/db.js';
 import type { AgentState } from '../conversation/types.js';
 import { StreamPersistWorker } from './stream-persist-worker.js';
+import type { SessionEventHub } from './session-event-hub.js';
 import { ProviderError } from './provider/errors.js';
 import { createWorkerLogger } from './logger.js';
 import type { PendingJobInfo } from '@nebula-link-evo/shared';
@@ -88,6 +89,8 @@ export interface JobContext {
 export interface JobPayload {
   sessionId: string;
   execute: (context: JobContext) => Promise<void>;
+  messageId?: string;
+  contentPreview?: string;
 }
 
 export class ConversationJobQueue {
@@ -98,9 +101,11 @@ export class ConversationJobQueue {
   private maxToolLoops = 10;
   private maxQueueSize = 1000;
   private persistWorker: StreamPersistWorker;
+  private eventHub?: SessionEventHub;
 
-  constructor(persistWorker: StreamPersistWorker) {
+  constructor(persistWorker: StreamPersistWorker, eventHub?: SessionEventHub) {
     this.persistWorker = persistWorker;
+    this.eventHub = eventHub;
   }
 
   private getSessionStateDAO() {
@@ -230,6 +235,16 @@ export class ConversationJobQueue {
     this.jobs.set(id, job);
     this.sessionLastActive.set(job.sessionId, Date.now());
 
+    // Emit job.queued event
+    if (this.eventHub) {
+      this.eventHub.emitJobQueued(payload.sessionId, {
+        jobId: id,
+        messageId: payload.messageId ?? '',
+        contentPreview: payload.contentPreview ?? '',
+        createdAt: job.createdAt.getTime(),
+      });
+    }
+
     // Start execution in background on next tick
     Promise.resolve().then(() => this.executeJob(job)).catch((err) => logger.error({ err }, 'Job execution failed'));
 
@@ -252,10 +267,20 @@ export class ConversationJobQueue {
       job.startedAt = new Date();
       this.sessionLastActive.set(job.sessionId, Date.now());
 
+      // Emit job.started event
+      if (this.eventHub) {
+        this.eventHub.emitJobStarted(job.sessionId, job.id);
+      }
+
       await job.execute({ maxToolLoops: this.maxToolLoops });
 
       job.status = 'completed';
       job.completedAt = new Date();
+
+      // Emit job.completed event
+      if (this.eventHub) {
+        this.eventHub.emitJobCompleted(job.sessionId, job.id);
+      }
     }).catch((error) => {
       job.status = 'failed';
       job.completedAt = new Date();
@@ -290,8 +315,8 @@ export class ConversationJobQueue {
         pendingJobs.push({
           jobId: job.id,
           sessionId: job.sessionId,
-          messageId: '', // Not available in Job interface, to be filled later
-          contentPreview: '', // Not available in Job interface, to be filled later
+          messageId: job.messageId ?? '',
+          contentPreview: job.contentPreview ?? '',
           createdAt: job.createdAt.toISOString(),
           status: job.status,
         });
@@ -334,6 +359,11 @@ export class ConversationJobQueue {
     if (job && (job.status === 'queued' || job.status === 'running')) {
       job.status = 'cancelled';
       job.completedAt = new Date();
+
+      // Emit job.cancelled event
+      if (this.eventHub) {
+        this.eventHub.emitJobCancelled(job.sessionId, jobId);
+      }
       
       // Clean up lock if no other jobs are queued for this session
       this.cleanupSessionLock(job.sessionId);

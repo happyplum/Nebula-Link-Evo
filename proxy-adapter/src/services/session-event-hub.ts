@@ -89,4 +89,43 @@ export class SessionEventHub {
     const sessionSubscribers = this.subscribers.get(sessionId);
     return sessionSubscribers?.size ?? 0;
   }
+
+  /**
+   * Emit job.queued event for a session
+   */
+  emitJobQueued(sessionId: string, job: { jobId: string; messageId: string; contentPreview: string; createdAt: number }): void {
+    this.publish(sessionId, {
+      type: 'job.queued',
+      sessionId,
+      job: {
+        jobId: job.jobId,
+        sessionId,
+        messageId: job.messageId,
+        contentPreview: job.contentPreview,
+        createdAt: new Date(job.createdAt).toISOString(),
+        status: 'queued',
+      },
+    });
+  }
+
+  /**
+   * Emit job.started event for a session
+   */
+  emitJobStarted(sessionId: string, jobId: string): void {
+    this.publish(sessionId, { type: 'job.started', sessionId, jobId });
+  }
+
+  /**
+   * Emit job.cancelled event for a session
+   */
+  emitJobCancelled(sessionId: string, jobId: string): void {
+    this.publish(sessionId, { type: 'job.cancelled', sessionId, jobId });
+  }
+
+  /**
+   * Emit job.completed event for a session
+   */
+  emitJobCompleted(sessionId: string, jobId: string): void {
+    this.publish(sessionId, { type: 'job.completed', sessionId, jobId });
+  }
 }

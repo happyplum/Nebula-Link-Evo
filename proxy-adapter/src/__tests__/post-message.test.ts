@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import Fastify from 'fastify';
 import { ConversationManager } from '../conversation/manager.js';
 import { ChatHandler } from '../conversation/chat-handler.js';
-import { SessionLock } from '../services/session-lock.js';
 import { DatabaseManager } from '../conversation/db.js';
 import { ConversationJobQueue } from '../services/conversation-job-queue.js';
 import { StreamPersistWorker } from '../services/stream-persist-worker.js';
@@ -42,7 +41,6 @@ describe('POST /sessions/:id/messages', () => {
   let manager: ConversationManager;
   let mockDecisionClient: DecisionClient;
   let chatHandler: ChatHandler;
-  let sessionLock: SessionLock;
 
   beforeEach(() => {
     app = Fastify();
@@ -59,9 +57,6 @@ describe('POST /sessions/:id/messages', () => {
     chatHandler = new ChatHandler(manager, mockConfig);
     (chatHandler as any).resolveDecisionModel = () => mockDecisionClient;
 
-    sessionLock = SessionLock.getInstance();
-    sessionLock.clear();
-
     // Create job queue instance and decorate app
     const persistWorker = new StreamPersistWorker();
     const jobQueue = new ConversationJobQueue(persistWorker);
@@ -77,7 +72,6 @@ describe('POST /sessions/:id/messages', () => {
 
   afterEach(async () => {
     await manager.close();
-    sessionLock.clear();
     app.close();
   });
 
@@ -169,7 +163,7 @@ describe('POST /sessions/:id/messages', () => {
     });
   });
 
-  describe('Concurrent message rejected', () => {
+  describe('Concurrent message queued', () => {
     let sessionId: string;
 
     beforeEach(() => {
@@ -181,8 +175,7 @@ describe('POST /sessions/:id/messages', () => {
       sessionId = session.id;
     });
 
-    it('should return 409 Conflict for concurrent message', async () => {
-      // First request - should succeed
+    it('should return 202 for both concurrent messages (queued)', async () => {
       const response1 = app.inject({
         method: 'POST',
         url: `/sessions/${sessionId}/messages`,
@@ -191,7 +184,6 @@ describe('POST /sessions/:id/messages', () => {
         },
       });
 
-      // Immediately send second request without waiting
       const response2 = app.inject({
         method: 'POST',
         url: `/sessions/${sessionId}/messages`,
@@ -202,43 +194,9 @@ describe('POST /sessions/:id/messages', () => {
 
       const [result1, result2] = await Promise.all([response1, response2]);
 
-      // One should succeed, one should fail with 409
-      const statusCodes = [result1.statusCode, result2.statusCode].sort();
-      expect(statusCodes).toContain(202);
-      expect(statusCodes).toContain(409);
-    });
-
-    it('should return 409 with error message when locked', async () => {
-      // Manually acquire lock
-      sessionLock.acquire(sessionId, 'test-run-id');
-
-      const response = await app.inject({
-        method: 'POST',
-        url: `/sessions/${sessionId}/messages`,
-        payload: {
-          content: 'Test message',
-        },
-      });
-
-      expect(response.statusCode).toBe(409);
-      const body = JSON.parse(response.payload);
-      expect(body.error).toContain('currently being processed');
-    });
-
-    it('should allow new message after lock released', async () => {
-      // Acquire and release lock
-      sessionLock.acquire(sessionId, 'test-run-id');
-      sessionLock.release(sessionId, 'test-run-id');
-
-      const response = await app.inject({
-        method: 'POST',
-        url: `/sessions/${sessionId}/messages`,
-        payload: {
-          content: 'New message after release',
-        },
-      });
-
-      expect(response.statusCode).toBe(202);
+      // Both should be accepted and queued (202)
+      expect(result1.statusCode).toBe(202);
+      expect(result2.statusCode).toBe(202);
     });
   });
 
@@ -294,9 +252,8 @@ describe('POST /sessions/:id/messages', () => {
       expect(body.error).toContain('not found');
     });
 
-    it('should release lock on error', async () => {
-      // Try to send message to non-existent session
-      await app.inject({
+    it('should return 500 for failed message on non-existent session', async () => {
+      const response = await app.inject({
         method: 'POST',
         url: '/sessions/non-existent-session/messages',
         payload: {
@@ -304,8 +261,7 @@ describe('POST /sessions/:id/messages', () => {
         },
       });
 
-      // Lock should not be held
-      expect(sessionLock.isLocked('non-existent-session')).toBe(false);
+      expect(response.statusCode).toBe(404);
     });
   });
 });

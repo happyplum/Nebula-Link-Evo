@@ -29,7 +29,7 @@ describe('SessionEventHub', () => {
       const callback = vi.fn();
       hub.subscribe('session-1', callback);
 
-      const event: SessionEvent = { type: 'test', data: 'hello' };
+      const event: SessionEvent = { type: 'message.created', sessionId: 'session-1', messageId: 'msg-1', content: 'hello' };
       hub.publish('session-1', event);
 
       expect(callback).toHaveBeenCalledTimes(1);
@@ -45,7 +45,7 @@ describe('SessionEventHub', () => {
       hub.subscribe('session-1', callback2);
       hub.subscribe('session-1', callback3);
 
-      const event: SessionEvent = { type: 'test', data: 'hello' };
+      const event: SessionEvent = { type: 'message.created', sessionId: 'session-1', messageId: 'msg-1', content: 'hello' };
       hub.publish('session-1', event);
 
       expect(callback1).toHaveBeenCalledWith(event);
@@ -76,7 +76,7 @@ describe('SessionEventHub', () => {
 
       unsubscribe();
 
-      const event: SessionEvent = { type: 'test', data: 'hello' };
+      const event: SessionEvent = { type: 'message.created', sessionId: 'session-1', messageId: 'msg-1', content: 'hello' };
       hub.publish('session-1', event);
 
       expect(callback).not.toHaveBeenCalled();
@@ -121,7 +121,7 @@ describe('SessionEventHub', () => {
   describe('publish', () => {
     it('does nothing for non-existent session', () => {
       // Should not throw
-      const event: SessionEvent = { type: 'test', data: 'hello' };
+      const event: SessionEvent = { type: 'message.created', sessionId: 'non-existent', messageId: 'msg-1', content: 'hello' };
       expect(() => hub.publish('non-existent', event)).not.toThrow();
     });
 
@@ -132,7 +132,7 @@ describe('SessionEventHub', () => {
       hub.subscribe('session-1', callback1);
       hub.subscribe('session-1', callback2);
 
-      const event: SessionEvent = { type: 'token', data: 'world' };
+      const event: SessionEvent = { type: 'assistant.delta', sessionId: 'session-1', messageId: 'msg-1', text: 'world' };
       hub.publish('session-1', event);
 
       expect(callback1).toHaveBeenCalledWith(event);
@@ -148,7 +148,7 @@ describe('SessionEventHub', () => {
       hub.subscribe('session-1', errorCallback);
       hub.subscribe('session-1', normalCallback);
 
-      const event: SessionEvent = { type: 'test', data: 'hello' };
+      const event: SessionEvent = { type: 'message.created', sessionId: 'session-1', messageId: 'msg-1', content: 'hello' };
 
       // Should not throw and should continue to other subscribers
       expect(() => hub.publish('session-1', event)).not.toThrow();
@@ -162,10 +162,10 @@ describe('SessionEventHub', () => {
       hub.subscribe('session-1', callback);
 
       const events: SessionEvent[] = [
-        { type: 'start', data: {} },
-        { type: 'token', data: 'Hello' },
-        { type: 'token', data: ' World' },
-        { type: 'end', data: {} },
+        { type: 'assistant.started', sessionId: 'session-1', messageId: 'msg-1' },
+        { type: 'assistant.delta', sessionId: 'session-1', messageId: 'msg-1', text: 'Hello' },
+        { type: 'assistant.delta', sessionId: 'session-1', messageId: 'msg-1', text: ' World' },
+        { type: 'assistant.completed', sessionId: 'session-1', messageId: 'msg-1' },
       ];
 
       for (const event of events) {
@@ -215,7 +215,7 @@ describe('SessionEventHub', () => {
       hub.subscribe('session-1', errorCallback);
       hub.subscribe('session-1', successCallback);
 
-      const event: SessionEvent = { type: 'test', data: 'hello' };
+      const event: SessionEvent = { type: 'message.created', sessionId: 'session-1', messageId: 'msg-1', content: 'hello' };
 
       // Should not throw
       expect(() => hub.publish('session-1', event)).not.toThrow();
@@ -246,8 +246,8 @@ describe('SessionEventHub', () => {
       hub.subscribe('session-1', callback1);
       hub.subscribe('session-2', callback2);
 
-      const event1: SessionEvent = { type: 'test', data: 'session-1-data' };
-      const event2: SessionEvent = { type: 'test', data: 'session-2-data' };
+      const event1: SessionEvent = { type: 'message.created', sessionId: 'session-1', messageId: 'msg-1', content: 'session-1-data' };
+      const event2: SessionEvent = { type: 'message.created', sessionId: 'session-2', messageId: 'msg-2', content: 'session-2-data' };
 
       hub.publish('session-1', event1);
       hub.publish('session-2', event2);
@@ -268,6 +268,83 @@ describe('SessionEventHub', () => {
 
       expect(hub.getSubscriberCount('session-1')).toBe(2);
       expect(hub.getSubscriberCount('session-2')).toBe(3);
+    });
+  });
+
+  describe('emit methods', () => {
+    it('emitJobQueued publishes job.queued event with correct shape', () => {
+      const callback = vi.fn();
+      hub.subscribe('session-1', callback);
+
+      const now = Date.now();
+      hub.emitJobQueued('session-1', {
+        jobId: 'job-1',
+        messageId: 'msg-1',
+        contentPreview: 'Hello world',
+        createdAt: now,
+      });
+
+      expect(callback).toHaveBeenCalledTimes(1);
+      const event = callback.mock.calls[0][0];
+      expect(event.type).toBe('job.queued');
+      expect(event.sessionId).toBe('session-1');
+      expect(event.job).toEqual({
+        jobId: 'job-1',
+        sessionId: 'session-1',
+        messageId: 'msg-1',
+        contentPreview: 'Hello world',
+        createdAt: new Date(now).toISOString(),
+        status: 'queued',
+      });
+    });
+
+    it('emitJobStarted publishes job.started event with correct shape', () => {
+      const callback = vi.fn();
+      hub.subscribe('session-1', callback);
+
+      hub.emitJobStarted('session-1', 'job-1');
+
+      expect(callback).toHaveBeenCalledTimes(1);
+      const event = callback.mock.calls[0][0];
+      expect(event.type).toBe('job.started');
+      expect(event.sessionId).toBe('session-1');
+      expect(event.jobId).toBe('job-1');
+    });
+
+    it('emitJobCancelled publishes job.cancelled event with correct shape', () => {
+      const callback = vi.fn();
+      hub.subscribe('session-1', callback);
+
+      hub.emitJobCancelled('session-1', 'job-1');
+
+      expect(callback).toHaveBeenCalledTimes(1);
+      const event = callback.mock.calls[0][0];
+      expect(event.type).toBe('job.cancelled');
+      expect(event.sessionId).toBe('session-1');
+      expect(event.jobId).toBe('job-1');
+    });
+
+    it('emitJobCompleted publishes job.completed event with correct shape', () => {
+      const callback = vi.fn();
+      hub.subscribe('session-1', callback);
+
+      hub.emitJobCompleted('session-1', 'job-1');
+
+      expect(callback).toHaveBeenCalledTimes(1);
+      const event = callback.mock.calls[0][0];
+      expect(event.type).toBe('job.completed');
+      expect(event.sessionId).toBe('session-1');
+      expect(event.jobId).toBe('job-1');
+    });
+
+    it('emit methods do nothing when no subscribers exist', () => {
+      // Should not throw for any emit method without subscribers
+      expect(() => {
+        hub.emitJobQueued('no-subs', { jobId: 'j1', messageId: 'm1', contentPreview: 'c', createdAt: Date.now() });
+        hub.emitJobStarted('no-subs', 'j1');
+        hub.emitJobCancelled('no-subs', 'j1');
+        hub.emitJobCompleted('no-subs', 'j1');
+      }).not.toThrow();
     });
   });
 });
