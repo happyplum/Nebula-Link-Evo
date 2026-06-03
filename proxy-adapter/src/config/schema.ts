@@ -62,7 +62,7 @@ export interface MCPServerConfig {
 
 export interface DefaultsConfig {
   mode: 'unified';
-  vision: string;
+  vision?: string;
   decision: string;
 }
 
@@ -74,6 +74,7 @@ export interface ModelSelector {
 export interface ResolvedDefaultsConfig {
   mode: 'unified';
   decision: ModelSelector;
+  vision?: ModelSelector;
 }
 
 export interface RawSettingsConfig {

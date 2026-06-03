@@ -74,7 +74,7 @@ export class MCPSDKClient {
 
     if (this.config.mcp?.servers) {
       for (const [name, serverConfigEntry] of Object.entries(this.config.mcp.servers)) {
-        const serverConfig = serverConfigEntry as MCPServerConfig;
+        const serverConfig = serverConfigEntry;
         if (serverConfig.enabled) {
           await this.startServer(name, serverConfig);
         }
@@ -123,12 +123,15 @@ export class MCPSDKClient {
   private buildServerEnv(name: string, config: MCPServerConfig): Record<string, string> {
     const env = { ...getDefaultEnvironment(), ...config.env };
 
+    // Vision-server-specific: inject VISION_* env from defaults.vision provider config.
+    // This coupling exists because the vision MCP server needs to know which AI provider
+    // to call at runtime. If vision-server is refactored or other servers need similar
+    // injection, consider adding a generic `providerEnvPrefix` field to MCPServerConfig.
     if (name !== 'vision-server') {
       return env;
     }
 
-    const rawDefaults = this.config as ResolvedConfig & { defaults: ResolvedConfig['defaults'] & { vision?: { provider: string; model: string } } };
-    const defaultVision = rawDefaults.defaults.vision;
+    const defaultVision = this.config.defaults.vision;
     if (!defaultVision?.provider || !defaultVision?.model) {
       this.logger.warn({ name }, 'Skipping vision-server env injection: defaults.vision is not configured');
       return env;

@@ -65,6 +65,10 @@ export function validateConfig(config: ResolvedConfig): ValidationResult {
         warnings.push(`MCP server ${name}: no args specified`);
       }
     }
+
+    if (config.mcp.servers['vision-server']?.enabled && !config.defaults.vision) {
+      warnings.push('vision-server is enabled but defaults.vision is not configured — VISION_* env vars will not be injected');
+    }
   }
 
   return {
