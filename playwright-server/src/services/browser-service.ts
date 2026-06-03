@@ -8,10 +8,9 @@ import { BrowserLifecycle, type StateChangeReason } from './browser-lifecycle.js
 
 import { PageActions, MarkerActionResult } from './page-actions.js';
 import { DOMExtractor } from './dom-extractor.js';
-import { CacheStats } from './snapshot-cache.js';
 import { createWorkerLogger, type Logger } from './logger.js';
 
-export type { MarkerActionResult, CacheStats, StateChangeReason };
+export type { MarkerActionResult, StateChangeReason };
 
 export class BrowserService {
   private static instance: BrowserService | null = null;
@@ -203,13 +202,6 @@ export class BrowserService {
     return this.lifecycle.getPage();
   }
 
-  getCacheStats(): CacheStats {
-    return this.domExtractor.getCacheStats();
-  }
-
-  clearCache(): void {
-    this.domExtractor.clearCache();
-  }
 
   async executeScript(script: string, _args: unknown[] = []): Promise<unknown> {
     return this.pageActions.executeScript(script);

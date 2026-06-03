@@ -12,12 +12,10 @@ import {
 } from '../types.js';
 import { generateLocatorBundle } from '../locator-generator.js';
 import { injectMarkers } from '../marker-injector.js';
-import { SnapshotCache, CacheStats } from './snapshot-cache.js';
 import { createWorkerLogger, type Logger } from './logger.js';
 
 export class DOMExtractor {
   private page: Page | null = null;
-  private snapshotCache: SnapshotCache = new SnapshotCache();
   private logger: Logger;
 
   constructor(logger?: Logger) {
@@ -33,13 +31,6 @@ export class DOMExtractor {
     return this.page;
   }
 
-  getCacheStats(): CacheStats {
-    return this.snapshotCache.getStats();
-  }
-
-  clearCache(): void {
-    this.snapshotCache.clear();
-  }
 
   private async takeAnnotatedScreenshot(): Promise<Buffer> {
     const page = this.requirePage();
@@ -55,16 +46,6 @@ export class DOMExtractor {
     const page = this.requirePage();
 
     try {
-      const currentUrl = page.url();
-      const cachedSnapshot = this.snapshotCache.get(currentUrl);
-
-      if (cachedSnapshot) {
-        return {
-          ...cachedSnapshot,
-          snapshot_id: crypto.randomUUID(),
-        };
-      }
-
       const snapshot_id = crypto.randomUUID();
 
       // Inject markers and get element information
@@ -138,8 +119,6 @@ export class DOMExtractor {
         elements_map,
         simplified_dom,
       };
-
-      this.snapshotCache.set(currentUrl, snapshotResponse);
 
       return snapshotResponse;
     } catch (error) {
