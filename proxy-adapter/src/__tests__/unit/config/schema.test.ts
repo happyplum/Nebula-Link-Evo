@@ -40,7 +40,7 @@ describe('config/schema types', () => {
 
   it('accepts string defaults in raw config', () => {
     const defaults: DefaultsConfig = {
-      mode: 'separation',
+      mode: 'unified',
       decision: 'glm/glm-4.7-flash',
       vision: 'glm/glm-4.6v-flash',
     };
@@ -63,9 +63,8 @@ describe('config/schema types', () => {
       },
       mcp: { enabled: false, servers: {} },
       defaults: {
-        mode: 'separation',
+        mode: 'unified',
         decision: { provider: 'glm', model: 'glm-4.7-flash' },
-        vision: { provider: 'glm', model: 'glm-4.6v-flash' },
       },
       settings: {
         timeout: 30000,
@@ -91,7 +90,7 @@ describe('config/schema types', () => {
       providers: { glm: { enabled: true, apiKey: '{GLM_API_KEY}' } },
       mcp: { enabled: false, servers: {} },
       defaults: {
-        mode: 'separation',
+        mode: 'unified',
         decision: 'glm/glm-4.7-flash',
         vision: 'glm/glm-4.6v-flash',
       },
