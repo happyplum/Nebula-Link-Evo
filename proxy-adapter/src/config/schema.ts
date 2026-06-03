@@ -24,7 +24,6 @@ export interface Config {
   providers: Record<string, FlatProvider>;
   mcp: MCPConfig;
   defaults: DefaultsConfig;
-  visionTool?: VisionToolConfig;
   settings: RawSettingsConfig;
 }
 
@@ -62,7 +61,7 @@ export interface MCPServerConfig {
 }
 
 export interface DefaultsConfig {
-  mode: 'separation' | 'unified';
+  mode: 'unified';
   vision: string;
   decision: string;
 }
@@ -73,15 +72,8 @@ export interface ModelSelector {
 }
 
 export interface ResolvedDefaultsConfig {
-  mode: 'separation' | 'unified';
-  vision: ModelSelector;
+  mode: 'unified';
   decision: ModelSelector;
-}
-
-export interface VisionToolConfig {
-  maxCallsPerStep: number;
-  timeoutMs: number;
-  screenshotQuality: number;
 }
 
 export interface RawSettingsConfig {

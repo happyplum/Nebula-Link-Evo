@@ -40,45 +40,16 @@ export function validateConfig(config: ResolvedConfig): ValidationResult {
   if (!config.defaults) {
     errors.push('Missing defaults configuration');
   } else {
-    const mode = config.defaults.mode;
+    if (!config.defaults.decision?.provider) {
+      errors.push('Unified mode requires decision.provider');
+    }
+    if (!config.defaults.decision?.model) {
+      errors.push('Unified mode requires decision.model');
+    }
 
-    if (mode === 'separation') {
-      if (!config.defaults.vision?.provider) {
-        errors.push('Separation mode requires vision.provider');
-      }
-      if (!config.defaults.vision?.model) {
-        errors.push('Separation mode requires vision.model');
-      }
-      if (!config.defaults.decision?.provider) {
-        errors.push('Separation mode requires decision.provider');
-      }
-      if (!config.defaults.decision?.model) {
-        errors.push('Separation mode requires decision.model');
-      }
-
-      const visionProvider = config.providers[config.defaults.vision.provider];
-      if (visionProvider && !visionProvider.enabled) {
-        warnings.push(`Default vision provider ${config.defaults.vision.provider} is disabled`);
-      }
-
-      const decisionProvider = config.providers[config.defaults.decision.provider];
-      if (decisionProvider && !decisionProvider.enabled) {
-        warnings.push(`Default decision provider ${config.defaults.decision.provider} is disabled`);
-      }
-    } else if (mode === 'unified') {
-      if (!config.defaults.decision?.provider) {
-        errors.push('Unified mode requires decision.provider');
-      }
-      if (!config.defaults.decision?.model) {
-        errors.push('Unified mode requires decision.model');
-      }
-
-      const decisionProvider = config.providers[config.defaults.decision.provider];
-      if (decisionProvider && !decisionProvider.enabled) {
-        warnings.push(`Default decision provider ${config.defaults.decision.provider} is disabled`);
-      }
-    } else {
-      errors.push(`Unknown mode: ${mode}`);
+    const decisionProvider = config.providers[config.defaults.decision.provider];
+    if (decisionProvider && !decisionProvider.enabled) {
+      warnings.push(`Default decision provider ${config.defaults.decision.provider} is disabled`);
     }
   }
 
