@@ -204,7 +204,6 @@ export class AppService {
     }
 
     const visionServerStart = Date.now();
-    const requiredVisionTools = ['analyze', 'find_element', 'screenshot', 'get_element_info'];
     let visionServerResult: {
       status: string;
       tools: string[];
@@ -224,13 +223,12 @@ export class AppService {
       } else {
         const tools = await mcpClient.listTools('vision-server');
         const toolNames = tools.map((tool) => tool.name);
-        const missing = requiredVisionTools.filter((tool) => !toolNames.includes(tool));
 
         visionServerResult = {
-          status: missing.length === 0 ? 'connected' : 'degraded',
+          status: toolNames.length > 0 ? 'connected' : 'disconnected',
           tools: toolNames,
           responseTime: Date.now() - visionServerStart,
-          error: missing.length === 0 ? null : `Missing tools: ${missing.join(', ')}`,
+          error: toolNames.length > 0 ? null : 'No tools discovered from vision-server',
         };
       }
     } catch (err) {

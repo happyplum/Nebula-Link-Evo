@@ -88,6 +88,9 @@ export function resolveConfig(
     defaults: {
       mode: config.defaults.mode,
       decision: parseProviderModelString(config.defaults.decision, 'decision', result),
+      ...(config.defaults.vision
+        ? { vision: parseProviderModelString(config.defaults.vision, 'vision', result) }
+        : {}),
     },
     settings: resolvedSettings,
     providers: resolvedProviders,
@@ -189,7 +192,7 @@ export function getDefaultDecisionModel(
   return config.defaults.decision;
 }
 
-export function isUnifiedMode(config: ResolvedConfig): boolean {
+export function isUnifiedMode(_config: ResolvedConfig): boolean {
   return true;
 }
 

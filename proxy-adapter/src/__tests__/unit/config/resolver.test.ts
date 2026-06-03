@@ -143,4 +143,30 @@ describe('config/resolver with flat provider config', () => {
     expect(result.success).toBe(true);
     expect(resolved.providers.glm.models).toEqual({});
   });
+
+  it('preserves defaults.vision in resolved config', () => {
+    const { config: resolved, result } = resolveConfig(baseConfig, {
+      env: { GLM_API_KEY: 'glm-secret' },
+    });
+
+    expect(result.success).toBe(true);
+    expect(resolved.defaults.vision).toEqual({ provider: 'glm', model: 'glm-4.6v-flash' });
+  });
+
+  it('handles missing defaults.vision gracefully', () => {
+    const configNoVision: Config = {
+      ...baseConfig,
+      defaults: {
+        mode: 'unified',
+        decision: 'glm/glm-4.7-flash',
+      },
+    };
+
+    const { config: resolved, result } = resolveConfig(configNoVision, {
+      env: { GLM_API_KEY: 'glm-secret' },
+    });
+
+    expect(result.success).toBe(true);
+    expect(resolved.defaults.vision).toBeUndefined();
+  });
 });
