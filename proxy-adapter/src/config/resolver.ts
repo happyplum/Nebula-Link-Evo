@@ -88,7 +88,6 @@ export function resolveConfig(
     defaults: {
       mode: config.defaults.mode,
       decision: parseProviderModelString(config.defaults.decision, 'decision', result),
-      vision: parseProviderModelString(config.defaults.vision, 'vision', result),
     },
     settings: resolvedSettings,
     providers: resolvedProviders,
@@ -184,15 +183,6 @@ export function getProviderModel(
   return { provider, model: provider.models[modelName] || model };
 }
 
-export function getDefaultVisionModel(
-  config: ResolvedConfig
-): { provider: string; model: string } | null {
-  if (config.defaults.mode === 'unified') {
-    return null;
-  }
-  return config.defaults.vision;
-}
-
 export function getDefaultDecisionModel(
   config: ResolvedConfig
 ): { provider: string; model: string } | null {
@@ -200,7 +190,7 @@ export function getDefaultDecisionModel(
 }
 
 export function isUnifiedMode(config: ResolvedConfig): boolean {
-  return config.defaults.mode === 'unified';
+  return true;
 }
 
 function parseProviderModelString(
