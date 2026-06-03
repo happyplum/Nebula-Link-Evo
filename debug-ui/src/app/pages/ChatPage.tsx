@@ -1,5 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { SessionSelector, MessageList, Composer } from '@/features/chat/components/index.js';
+import {
+  SessionSelector,
+  MessageList,
+  Composer,
+  QueueFloatingPanel,
+} from '@/features/chat/components/index.js';
 import {
   API_CHAT_SESSIONS,
   apiChatSession,
@@ -343,6 +348,7 @@ export default function ChatPage() {
           </div>
         )}
         <MessageList />
+        <QueueFloatingPanel sessionId={activeSessionId!} />
       </div>
 
       {/* Footer / Composer */}

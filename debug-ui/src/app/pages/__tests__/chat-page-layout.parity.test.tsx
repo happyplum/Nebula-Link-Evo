@@ -49,6 +49,7 @@ vi.mock('@/features/chat/components/index.js', () => ({
       </button>
     </div>
   ),
+  QueueFloatingPanel: () => null,
 }));
 
 // Helper to mock store state
@@ -67,6 +68,7 @@ const mockStore = {
   setMessages: vi.fn(),
   setIsLoadingSessions: vi.fn(),
   setIsLoadingMessages: vi.fn(),
+  pendingJobs: {},
 };
 
 describe('ChatPage Layout Parity', () => {
