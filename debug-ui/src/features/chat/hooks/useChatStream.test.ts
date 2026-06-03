@@ -812,4 +812,102 @@ describe('useChatStream', () => {
       expect(mockEsInstance).toBeTruthy();
     });
   });
+
+  describe('queue event handlers', () => {
+    const sampleJob = {
+      jobId: 'job-1',
+      sessionId: 's1',
+      messageId: 'm1',
+      contentPreview: 'click the button',
+      createdAt: '2026-01-01T00:00:00Z',
+      status: 'queued' as const,
+    };
+
+    it('job.queued calls addPendingJob on store', () => {
+      renderStreamHook('s1');
+      openConnection();
+      emitEvent('job.queued', {
+        type: 'job.queued',
+        sessionId: 's1',
+        seq: 10,
+        job: sampleJob,
+      });
+      const jobs = useChatStore.getState().pendingJobs['s1'];
+      expect(jobs).toHaveLength(1);
+      expect(jobs[0].jobId).toBe('job-1');
+    });
+
+    it('job.started calls updateJobStarted on store', () => {
+      // Seed a pending job first
+      useChatStore.getState().addPendingJob('s1', sampleJob);
+      renderStreamHook('s1');
+      openConnection();
+      emitEvent('job.started', {
+        type: 'job.started',
+        sessionId: 's1',
+        seq: 11,
+        jobId: 'job-1',
+      });
+      const jobs = useChatStore.getState().pendingJobs['s1'];
+      expect(jobs).toHaveLength(1);
+      expect(jobs[0].status).toBe('running');
+    });
+
+    it('job.cancelled calls removePendingJob on store', () => {
+      useChatStore.getState().addPendingJob('s1', sampleJob);
+      renderStreamHook('s1');
+      openConnection();
+      emitEvent('job.cancelled', {
+        type: 'job.cancelled',
+        sessionId: 's1',
+        seq: 12,
+        jobId: 'job-1',
+      });
+      expect(useChatStore.getState().pendingJobs['s1']).toBeUndefined();
+    });
+
+    it('job.completed calls removePendingJob on store', () => {
+      useChatStore.getState().addPendingJob('s1', sampleJob);
+      renderStreamHook('s1');
+      openConnection();
+      emitEvent('job.completed', {
+        type: 'job.completed',
+        sessionId: 's1',
+        seq: 13,
+        jobId: 'job-1',
+      });
+      expect(useChatStore.getState().pendingJobs['s1']).toBeUndefined();
+    });
+
+    it('session.snapshot with pendingJobs calls setPendingJobsFromSnapshot', () => {
+      renderStreamHook('s1');
+      openConnection();
+      emitEvent('session.snapshot', {
+        type: 'session.snapshot',
+        sessionId: 's1',
+        seq: 0,
+        lastSeq: 0,
+        messages: [],
+        state: 'idle',
+        pendingJobs: [sampleJob],
+      });
+      const jobs = useChatStore.getState().pendingJobs['s1'];
+      expect(jobs).toHaveLength(1);
+      expect(jobs[0].jobId).toBe('job-1');
+    });
+
+    it('session.snapshot without pendingJobs does not call setPendingJobsFromSnapshot', () => {
+      renderStreamHook('s1');
+      openConnection();
+      emitEvent('session.snapshot', {
+        type: 'session.snapshot',
+        sessionId: 's1',
+        seq: 0,
+        lastSeq: 0,
+        messages: [],
+        state: 'idle',
+      });
+      expect(useChatStore.getState().pendingJobs['s1']).toBeUndefined();
+    });
+  });
 });
