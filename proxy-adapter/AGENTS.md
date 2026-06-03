@@ -24,7 +24,7 @@ pnpm test:debug   # Debug page smoke check
 | Action execution | `src/services/action-executor.ts`   | Browser action dispatch                               |
 | Chat routes      | `src/plugins/routes/api/chat/`      | Session, stream, control (sole execution path)        |
 | Conversations    | `src/conversation/`                 | SQLite persistence, compression                       |
-| AI clients       | `src/clients/`                      | Provider factories (decision, vision, Vercel AI, MCP) |
+| AI clients       | `src/clients/`                      | Provider factories (decision, Vercel AI, MCP) |
 | Config           | `src/config/`                       | Schema, loader, resolver, validator                   |
 | Tests            | `src/__tests__/`                    | Unit, integration, e2e                                |
 
