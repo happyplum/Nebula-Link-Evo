@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   SessionSelector,
   MessageList,
@@ -117,6 +117,19 @@ export default function ChatPage() {
   const setSessions = useChatStore((s) => s.setSessions);
   const setIsLoadingSessions = useChatStore((s) => s.setIsLoadingSessions);
   const [isPausing, setIsPausing] = useState(false);
+  const queuePanelRef = useRef<HTMLDivElement>(null);
+  const [queuePanelHeight, setQueuePanelHeight] = useState(0);
+
+  useEffect(() => {
+    if (!queuePanelRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setQueuePanelHeight(entry.contentRect.height);
+      }
+    });
+    observer.observe(queuePanelRef.current);
+    return () => observer.disconnect();
+  }, []);
   const { data: configData } = useConfig();
   const { data: sessionsData, isFetching: isFetchingSessions } = useSessions();
   const sseEnabled =
@@ -341,14 +354,16 @@ export default function ChatPage() {
       {isPausing && <div className={styles.pausingFeedback}>⏳ 正在暂停...</div>}
 
       {/* Message Region */}
-      <div className={styles.messageRegion}>
+      <div className={styles.messageRegion} style={queuePanelHeight > 0 ? { paddingBottom: queuePanelHeight + 16 } : undefined}>
         {streamingState === 'blocked' && (
           <div className={styles.blockedBanner}>
             ⚠️ 任务被阻塞 (Blocked). 请人工确认或解决问题后点击 [继续]
           </div>
         )}
         <MessageList />
-        <QueueFloatingPanel sessionId={activeSessionId!} />
+        <div ref={queuePanelRef}>
+          <QueueFloatingPanel sessionId={activeSessionId!} />
+        </div>
       </div>
 
       {/* Footer / Composer */}
