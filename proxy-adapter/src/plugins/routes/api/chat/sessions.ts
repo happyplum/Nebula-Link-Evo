@@ -29,8 +29,6 @@ const SessionResponseSchema = Type.Object({
   message_count: Type.Number(),
   provider: Type.String(),
   model: Type.String(),
-  vision_provider: Type.Union([Type.String(), Type.Null()]),
-  vision_model: Type.Union([Type.String(), Type.Null()]),
   status: Type.Optional(SessionStatusSchema),
   jobId: Type.Optional(Type.String()),
   agentState: Type.Optional(AgentStateSchema),
@@ -72,12 +70,6 @@ const AsyncMessageResponseSchema = Type.Object({
 
 const UpdateModelsBodySchema = Type.Object({
   decision: Type.Optional(
-    Type.Object({
-      provider: Type.Optional(Type.String({ minLength: 1 })),
-      model: Type.Optional(Type.String({ minLength: 1 })),
-    })
-  ),
-  vision: Type.Optional(
     Type.Object({
       provider: Type.Optional(Type.String({ minLength: 1 })),
       model: Type.Optional(Type.String({ minLength: 1 })),
@@ -297,11 +289,19 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
     async (request, reply) => {
       const { id: sessionId } = request.params;
-      const { decision, vision } = request.body || {};
+      const body = request.body || {};
+      const { decision } = body;
 
-      if (!decision && !vision) {
+      if ('vision' in body) {
         reply.status(400);
-        return { error: 'At least one of decision or vision must be provided' };
+        return {
+          error: 'vision model override has been removed; use vision-server MCP config instead',
+        };
+      }
+
+      if (!decision) {
+        reply.status(400);
+        return { error: 'At least one of decision must be provided' };
       }
 
       try {
@@ -324,13 +324,6 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           return { error: `Unknown decision provider: '${decisionProvider}'` };
         }
 
-        // Validate vision provider
-        const visionProvider = vision?.provider;
-        if (visionProvider && !registry.listProviders().includes(visionProvider)) {
-          reply.status(400);
-          return { error: `Unknown vision provider: '${visionProvider}'` };
-        }
-
         // Check decision provider availability
         if (decisionProvider && !registry.isAvailable(decisionProvider)) {
           const errorDetail = registry.getAvailabilityError(decisionProvider);
@@ -340,20 +333,9 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           };
         }
 
-        // Check vision provider availability
-        if (visionProvider && !registry.isAvailable(visionProvider)) {
-          const errorDetail = registry.getAvailabilityError(visionProvider);
-          reply.status(503);
-          return {
-            error: `Vision provider '${visionProvider}' is currently unavailable${errorDetail ? `: ${errorDetail}` : ''}`,
-          };
-        }
-
         const updateParams: import('../../../../conversation/types.js').UpdateSessionParams = {};
         if (decision?.provider) updateParams.provider = decision.provider;
         if (decision?.model) updateParams.model = decision.model;
-        if (vision?.provider !== undefined) updateParams.vision_provider = vision.provider;
-        if (vision?.model !== undefined) updateParams.vision_model = vision.model;
 
         const updated = conversationManager.updateSession(sessionId, updateParams);
         if (!updated) {
