@@ -45,14 +45,11 @@
     "servers": {
       "browser-control": {
         "enabled": false,
-        "command": "npx",
-        "args": [
-          "-y",
-          "@playwright/mcp@latest",
-          "--cdp-endpoint",
-          "ws://localhost:3001/cdp"
-        ],
-        "env": {}
+        "command": "node",
+        "args": ["../browser-control-mcp-server/dist/index.js"],
+        "env": {
+          "PLAYWRIGHT_SERVER_URL": "http://localhost:3001"
+        }
       },
       "vision-server": {
         "enabled": true,
@@ -64,9 +61,6 @@
           "VISION_PROVIDER_API_KEY": "{GLM_API_KEY}",
           "VISION_MODEL_ID": "glm-4.5v"
         }
-      }
-    }
-  }
       }
     }
   },
