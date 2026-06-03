@@ -7,7 +7,6 @@
 
 export interface ConfigResponse {
   mode?: string;
-  vision?: { provider: string; model: string };
   decision?: { provider: string; model: string };
   providers?: string[];
   error?: string;
@@ -115,7 +114,14 @@ export interface AiTestResult {
 }
 
 export interface TestAiResponse {
-  vision?: AiTestResult;
   decision?: AiTestResult;
+  mcp?: {
+    visionServer?: {
+      status: string;
+      tools?: string[];
+      responseTime?: number;
+      error?: string;
+    };
+  };
   totalResponseTime?: number;
 }

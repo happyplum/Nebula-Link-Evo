@@ -37,7 +37,6 @@ function mockFetchResponse(data: unknown, status = 200) {
 
 const configData = {
   mode: 'hybrid',
-  vision: { provider: 'openai', model: 'gpt-4o' },
   decision: { provider: 'openai', model: 'gpt-4o' },
   providers: ['openai', 'anthropic'],
 };
@@ -94,7 +93,6 @@ describe('config.queries', () => {
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
       expect(result.current.data).toEqual(configData);
-      expect(result.current.data?.vision?.provider).toBe('openai');
       expect(result.current.data?.providers).toEqual(['openai', 'anthropic']);
     });
 

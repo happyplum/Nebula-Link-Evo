@@ -101,10 +101,12 @@ describe('McpToolsModal', () => {
     
     // Tool name should be displayed without server prefix
     expect(screen.getByText('my-tool')).toBeInTheDocument();
-    expect(screen.getByText('A test tool')).toBeInTheDocument();
 
     // Click to expand
     fireEvent.click(screen.getByText('my-tool'));
+
+    // Description should be visible after expanding
+    expect(screen.getByText('A test tool')).toBeInTheDocument();
 
     // Schema should be visible
     expect(screen.getByText('输入参数')).toBeInTheDocument();

@@ -46,7 +46,6 @@ describe('ConfigPanel', () => {
     vi.mocked(useConfig).mockReturnValue({
       data: {
         mode: 'development',
-        vision: { provider: 'openai', model: 'gpt-4-vision' },
         decision: { provider: 'anthropic', model: 'claude-3-opus' },
       },
       isLoading: false,
@@ -57,9 +56,7 @@ describe('ConfigPanel', () => {
     
     expect(screen.getByText('系统配置')).toBeInTheDocument();
     expect(screen.getByText('development')).toBeInTheDocument();
-    expect(screen.getByText('视觉模型')).toBeInTheDocument();
     expect(screen.getByText('决策模型')).toBeInTheDocument();
-    expect(screen.getByText('gpt-4-vision')).toBeInTheDocument();
     expect(screen.getByText('claude-3-opus')).toBeInTheDocument();
   });
 
@@ -73,6 +70,6 @@ describe('ConfigPanel', () => {
     render(<ConfigPanel />);
     
     expect(screen.getByText('未知')).toBeInTheDocument();
-    expect(screen.getAllByText('未配置')).toHaveLength(4);
+    expect(screen.getAllByText('未配置')).toHaveLength(2);
   });
 });

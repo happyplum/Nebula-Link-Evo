@@ -42,20 +42,6 @@ export function ConfigPanel() {
       </div>
 
       <div className={styles.group}>
-        <h3 className={styles.groupTitle}>视觉模型</h3>
-        <div className={styles.groupBody}>
-          <div className={styles.item}>
-            <span className={styles.label}>提供商</span>
-            <span className={styles.value}>{config.vision?.provider || '未配置'}</span>
-          </div>
-          <div className={styles.item}>
-            <span className={styles.label}>模型</span>
-            <span className={styles.value}>{config.vision?.model || '未配置'}</span>
-          </div>
-        </div>
-      </div>
-
-      <div className={styles.group}>
         <h3 className={styles.groupTitle}>决策模型</h3>
         <div className={styles.groupBody}>
           <div className={styles.item}>

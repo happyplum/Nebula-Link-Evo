@@ -6,7 +6,7 @@
  *
  * Shared state elements:
  * - showThinking: CoT visibility toggle
- * - selectedModel: Model selector (decision/vision)
+ * - selectedModel: Model selector (decision)
  * - screenshotData: Screenshot attachment data
  * - visibleMessageCounts: Pagination state per session
  * - expandVisibleMessages: Increase visible count

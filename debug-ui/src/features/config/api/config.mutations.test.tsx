@@ -94,7 +94,6 @@ describe('config.mutations', () => {
   describe('useTestAi', () => {
     it('posts to test-ai endpoint with no body', async () => {
       const response = {
-        vision: { status: 'ok', provider: 'openai', model: 'gpt-4o', responseTime: 450, intro: 'Hello' },
         decision: { status: 'ok', provider: 'anthropic', model: 'claude-3', responseTime: 320 },
         totalResponseTime: 770,
       };
@@ -106,15 +105,15 @@ describe('config.mutations', () => {
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
       expect(mockPost).toHaveBeenCalledWith('/debug/api/test-ai');
-      expect(result.current.data?.vision?.status).toBe('ok');
-      expect(result.current.data?.vision?.provider).toBe('openai');
+      expect(result.current.data?.decision?.status).toBe('ok');
+      expect(result.current.data?.decision?.provider).toBe('anthropic');
       expect(result.current.data?.decision?.responseTime).toBe(320);
       expect(result.current.data?.totalResponseTime).toBe(770);
     });
 
     it('handles partial test results', async () => {
       const response = {
-        vision: { status: 'error', error: 'API key not set' },
+        decision: { status: 'error', error: 'API key not set' },
         totalResponseTime: 100,
       };
       mockPost.mockResolvedValue(response);
@@ -124,9 +123,8 @@ describe('config.mutations', () => {
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-      expect(result.current.data?.vision?.status).toBe('error');
-      expect(result.current.data?.vision?.error).toBe('API key not set');
-      expect(result.current.data?.decision).toBeUndefined();
+      expect(result.current.data?.decision?.status).toBe('error');
+      expect(result.current.data?.decision?.error).toBe('API key not set');
     });
 
     it('handles API rejection', async () => {
