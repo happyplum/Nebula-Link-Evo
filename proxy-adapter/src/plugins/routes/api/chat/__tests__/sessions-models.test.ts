@@ -28,7 +28,6 @@ const { mockConfig, mockGetConfig, mockRegistry } = vi.hoisted(() => {
     mcp: { enabled: false, servers: {} },
     defaults: {
       mode: 'separation',
-      vision: { provider: 'kimi', model: 'moonshot-v1-vision-preview' },
       decision: { provider: 'kimi', model: 'moonshot-v1-vision-preview' },
     },
     settings: {
@@ -89,13 +88,11 @@ describe('PATCH /api/chat/sessions/:id/models', () => {
   });
 
   /** Helper to create a session and return its id */
-  function createSession(overrides?: { provider?: string; model?: string; vision_provider?: string; vision_model?: string }) {
+  function createSession(overrides?: { provider?: string; model?: string }) {
     return manager.createSession({
       title: 'Test',
       provider: overrides?.provider ?? 'kimi',
       model: overrides?.model ?? 'moonshot-v1-vision-preview',
-      vision_provider: overrides?.vision_provider,
-      vision_model: overrides?.vision_model,
     });
   }
 
@@ -112,50 +109,9 @@ describe('PATCH /api/chat/sessions/:id/models', () => {
     const body = res.json();
     expect(body.session.provider).toBe('openai');
     expect(body.session.model).toBe('gpt-4o');
-    // vision unchanged
-    expect(body.session.vision_provider).toBeNull();
-    expect(body.session.vision_model).toBeNull();
   });
 
-  it('updates vision model', async () => {
-    const session = createSession();
-
-    const res = await app.inject({
-      method: 'PATCH',
-      url: `/api/chat/sessions/${session.id}/models`,
-      payload: { vision: { provider: 'openai', model: 'gpt-4o-vision' } },
-    });
-
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    // decision unchanged
-    expect(body.session.provider).toBe('kimi');
-    expect(body.session.model).toBe('moonshot-v1-vision-preview');
-    expect(body.session.vision_provider).toBe('openai');
-    expect(body.session.vision_model).toBe('gpt-4o-vision');
-  });
-
-  it('updates both decision and vision models', async () => {
-    const session = createSession();
-
-    const res = await app.inject({
-      method: 'PATCH',
-      url: `/api/chat/sessions/${session.id}/models`,
-      payload: {
-        decision: { provider: 'openai', model: 'gpt-4o' },
-        vision: { provider: 'openai', model: 'gpt-4o-vision' },
-      },
-    });
-
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.session.provider).toBe('openai');
-    expect(body.session.model).toBe('gpt-4o');
-    expect(body.session.vision_provider).toBe('openai');
-    expect(body.session.vision_model).toBe('gpt-4o-vision');
-  });
-
-  it('returns 400 when neither decision nor vision provided', async () => {
+  it('returns 400 when no decision override provided', async () => {
     const session = createSession();
 
     const res = await app.inject({
@@ -165,7 +121,7 @@ describe('PATCH /api/chat/sessions/:id/models', () => {
     });
 
     expect(res.statusCode).toBe(400);
-    expect(res.json().error).toContain('At least one');
+    expect(res.json().error).toContain('decision');
   });
 
   it('returns 400 for unknown decision provider', async () => {
@@ -181,7 +137,7 @@ describe('PATCH /api/chat/sessions/:id/models', () => {
     expect(res.json().error).toContain('Unknown decision provider');
   });
 
-  it('returns 400 for unknown vision provider', async () => {
+  it('returns 400 when legacy vision override is sent', async () => {
     const session = createSession();
 
     const res = await app.inject({
@@ -191,7 +147,7 @@ describe('PATCH /api/chat/sessions/:id/models', () => {
     });
 
     expect(res.statusCode).toBe(400);
-    expect(res.json().error).toContain('Unknown vision provider');
+    expect(res.json().error).toBe('vision model override has been removed; use vision-server MCP config instead');
   });
 
   it('returns 404 for non-existent session', async () => {
@@ -242,19 +198,4 @@ describe('PATCH /api/chat/sessions/:id/models', () => {
     expect(res.json().error).toContain('openai');
   });
 
-  it('returns 503 when vision provider exists but is unavailable', async () => {
-    mockRegistry.isAvailable.mockImplementation((key: string) => key !== 'openai');
-    mockRegistry.getAvailabilityError.mockImplementation((key: string) =>
-      key === 'openai' ? 'Module load failed' : undefined
-    );
-
-    const session = createSession();
-    const res = await app.inject({
-      method: 'PATCH',
-      url: `/api/chat/sessions/${session.id}/models`,
-      payload: { vision: { provider: 'openai', model: 'gpt-4o-vision' } },
-    });
-    expect(res.statusCode).toBe(503);
-    expect(res.json().error).toContain('unavailable');
-  });
 });
