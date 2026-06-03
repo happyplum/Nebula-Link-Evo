@@ -602,7 +602,7 @@ describe('/action/execute-by-marker endpoint', () => {
       const body = JSON.parse(response.payload);
       expect(body).toHaveProperty('success');
       // Strategy can be 'none' when marker injection fails, or actual strategy when it works
-      expect(body.strategy_used).toMatch(/^(role|testid|aria|text|css|xpath|unknown|none)$/);
+      expect(body.strategy_used).toMatch(/^(nebula-id|role|testid|aria|text|css|xpath|unknown|none)$/);
       expect(body.attempts).toBeGreaterThanOrEqual(0);
       expect(body.latency_ms).toBeGreaterThanOrEqual(0);
     });
