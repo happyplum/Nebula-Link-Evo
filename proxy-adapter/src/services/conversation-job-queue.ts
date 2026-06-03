@@ -6,6 +6,7 @@ import type { AgentState } from '../conversation/types.js';
 import { StreamPersistWorker } from './stream-persist-worker.js';
 import { ProviderError } from './provider/errors.js';
 import { createWorkerLogger } from './logger.js';
+import type { PendingJobInfo } from '@nebula-link-evo/shared';
 
 const logger = createWorkerLogger('ConversationJobQueue');
 
@@ -267,7 +268,7 @@ export class ConversationJobQueue {
   getStatus(jobId: string): Job | undefined {
     const job = this.jobs.get(jobId);
     if (!job) return undefined;
-    
+
     // Return a copy without the execute function
     const jobData: Job = {
       id: job.id,
@@ -279,6 +280,53 @@ export class ConversationJobQueue {
       error: job.error,
     };
     return jobData;
+  }
+
+  getPendingJobs(sessionId: string): PendingJobInfo[] {
+    const pendingJobs: PendingJobInfo[] = [];
+
+    for (const job of this.jobs.values()) {
+      if (job.sessionId === sessionId && (job.status === 'queued' || job.status === 'running')) {
+        pendingJobs.push({
+          jobId: job.id,
+          sessionId: job.sessionId,
+          messageId: '', // Not available in Job interface, to be filled later
+          contentPreview: '', // Not available in Job interface, to be filled later
+          createdAt: job.createdAt.toISOString(),
+          status: job.status,
+        });
+      }
+    }
+
+    return pendingJobs;
+  }
+
+  cancelJob(jobId: string): boolean {
+    const job = this.jobs.get(jobId);
+    if (!job) {
+      return false;
+    }
+
+    if (job.status === 'cancelled' || job.status === 'completed' || job.status === 'failed') {
+      return false;
+    }
+
+    if (job.status === 'running') {
+      // Currently cannot cancel running jobs
+      // This will be handled in T9
+      return false;
+    }
+
+    if (job.status === 'queued') {
+      job.status = 'cancelled';
+      job.completedAt = new Date();
+
+      // Clean up lock if no other jobs are queued for this session
+      this.cleanupSessionLock(job.sessionId);
+      return true;
+    }
+
+    return false;
   }
 
   cancel(jobId: string): void {

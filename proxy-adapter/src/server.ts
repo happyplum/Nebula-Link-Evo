@@ -14,6 +14,8 @@ import { debugEventHub } from './services/debug-event-hub.js';
 import { debugStreamBridge } from './services/debug-stream-bridge.js';
 import { initializeWithBackup } from './utils/db-backup.js';
 import { normalizeLogLevel } from './services/logger.js';
+import { ConversationJobQueue } from './services/conversation-job-queue.js';
+import { StreamPersistWorker } from './services/stream-persist-worker.js';
 import healthRoutes from './plugins/routes/health.js';
 import configRoutes from './plugins/routes/config.js';
 import livekitTokenRoutes from './plugins/routes/api/livekit-token.js';
@@ -116,6 +118,11 @@ async function start() {
     // Decorate Fastify with conversation management
     await app.decorate('conversationManager', conversationManager);
     await app.decorate('chatHandler', chatHandler);
+
+    // Initialize and decorate job queue
+    const persistWorker = new StreamPersistWorker();
+    const jobQueue = new ConversationJobQueue(persistWorker);
+    await app.decorate('jobQueue', jobQueue);
 
     await app.register(healthRoutes, { prefix: '/api/health' });
     await app.register(configRoutes, { prefix: '/api/config' });

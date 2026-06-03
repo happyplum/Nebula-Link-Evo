@@ -3,6 +3,8 @@ import Fastify from 'fastify';
 import { ConversationManager } from '../../../conversation/manager.js';
 import { ChatHandler } from '../../../conversation/chat-handler.js';
 import { SessionLock } from '../../../services/session-lock.js';
+import { ConversationJobQueue } from '../../../services/conversation-job-queue.js';
+import { StreamPersistWorker } from '../../../services/stream-persist-worker.js';
 import type { ResolvedConfig } from '../../../config/schema.js';
 import apiChatRoutes from '../../../plugins/routes/api/chat/index.js';
 import errorHandler from '../../../plugins/03-error-handler.plugin.js';
@@ -50,10 +52,15 @@ describe('screenshot validation contract', () => {
     sessionLock = SessionLock.getInstance();
     sessionLock.clear();
 
+    // Create job queue instance and decorate app
+    const persistWorker = new StreamPersistWorker();
+    const jobQueue = new ConversationJobQueue(persistWorker);
+
     app.register(swaggerPlugin);
     app.register(errorHandler);
     app.decorate('conversationManager', manager);
     app.decorate('chatHandler', chatHandler);
+    app.decorate('jobQueue', jobQueue);
 
     app.register(apiChatRoutes);
   });
@@ -115,7 +122,7 @@ describe('screenshot validation contract', () => {
       model: 'moonshot-v1-vision-preview',
     });
 
-    // 1KB base64 string â€?well under 10MB
+    // 1KB base64 string ï¿½?well under 10MB
     const smallBase64 = 'a'.repeat(1024);
 
     const response = await app.inject({

@@ -9,6 +9,8 @@ import { ChatHandler } from '../conversation/chat-handler.js';
 import { DatabaseManager } from '../conversation/db.js';
 import { SessionEventHub } from '../services/session-event-hub.js';
 import { SessionLock } from '../services/session-lock.js';
+import { ConversationJobQueue } from '../services/conversation-job-queue.js';
+import { StreamPersistWorker } from '../services/stream-persist-worker.js';
 import type { LanguageModelV3 } from '@ai-sdk/provider';
 import type { ResolvedConfig } from '../config/schema.js';
 import apiChatRoutes from '../plugins/routes/api/chat/index.js';
@@ -269,11 +271,16 @@ describe('SSE Reconnection Event Recovery', () => {
     vi.spyOn(chatHandler as unknown as { resolveDecisionModel: () => Promise<LanguageModelV3> }, 'resolveDecisionModel')
       .mockResolvedValue(mockModel);
 
+    // Create job queue instance
+    const persistWorker = new StreamPersistWorker();
+    const jobQueue = new ConversationJobQueue(persistWorker);
+
     app = Fastify({ logger: false }).withTypeProvider<TypeBoxTypeProvider>();
     app.register(swaggerPlugin);
     app.register(errorHandler);
     app.decorate('conversationManager', manager);
     app.decorate('chatHandler', chatHandler);
+    app.decorate('jobQueue', jobQueue);
     app.register(apiChatRoutes, { prefix: '/api/chat' });
     await app.ready();
     await app.listen({ port: 0, host: '127.0.0.1' });
@@ -512,17 +519,22 @@ describe('SSE Reconnection Event Recovery', () => {
     vi.spyOn(
       buggyChatHandler as unknown as { resolveDecisionModel: () => Promise<LanguageModelV3> },
       'resolveDecisionModel'
-    ).mockImplementation(async () => mockModel);
+     ).mockImplementation(async () => mockModel);
 
-    // Register a new route with buggy handler
-    const buggyApp = Fastify({ logger: false }).withTypeProvider<TypeBoxTypeProvider>();
-    buggyApp.register(swaggerPlugin);
-    buggyApp.register(errorHandler);
-    buggyApp.decorate('conversationManager', manager);
-    buggyApp.decorate('chatHandler', buggyChatHandler);
-    buggyApp.register(apiChatRoutes, { prefix: '/api/chat' });
-    await buggyApp.ready();
-    await buggyApp.listen({ port: 0, host: '127.0.0.1' });
+    // Create job queue instance for buggy app
+    const buggyPersistWorker = new StreamPersistWorker();
+     const buggyJobQueue = new ConversationJobQueue(buggyPersistWorker);
+
+     // Register a new route with buggy handler
+     const buggyApp = Fastify({ logger: false }).withTypeProvider<TypeBoxTypeProvider>();
+     buggyApp.register(swaggerPlugin);
+     buggyApp.register(errorHandler);
+     buggyApp.decorate('conversationManager', manager);
+     buggyApp.decorate('chatHandler', buggyChatHandler);
+     buggyApp.decorate('jobQueue', buggyJobQueue);
+     buggyApp.register(apiChatRoutes, { prefix: '/api/chat' });
+     await buggyApp.ready();
+     await buggyApp.listen({ port: 0, host: '127.0.0.1' });
 
     const buggyServer = buggyApp.server;
     const buggyAddress = buggyServer.address();

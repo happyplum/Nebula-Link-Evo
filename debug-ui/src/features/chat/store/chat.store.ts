@@ -10,6 +10,7 @@ function getInitialShowThinking(): boolean {
 }
 
 import type { ChatMessage, ChatSession, StreamingState, ToolCall } from '@/features/chat/types/index.js';
+import type { PendingJobInfo } from '@nebula-link-evo/shared';
 
 const EMPTY_MESSAGES: ChatMessage[] = [];
 const DEFAULT_PAGE_SIZE = 50;
@@ -34,6 +35,8 @@ interface ChatState {
   connectivityResult: { ok: boolean; latencyMs: number; message: string } | null;
   // Pagination
   visibleMessageCounts: Record<string, number>;
+  // Pending jobs (keyed by session ID)
+  pendingJobs: Record<string, PendingJobInfo[]>;
 
   // Session actions
   setSessions: (sessions: ChatSession[]) => void;
@@ -75,6 +78,13 @@ interface ChatState {
   expandVisibleMessages: (sessionId: string) => void;
   resetVisibleMessages: (sessionId: string) => void;
 
+  // Pending jobs actions
+  addPendingJob: (sessionId: string, job: PendingJobInfo) => void;
+  updateJobStarted: (sessionId: string, jobId: string) => void;
+  removePendingJob: (sessionId: string, jobId: string) => void;
+  setPendingJobsFromSnapshot: (sessionId: string, jobs: PendingJobInfo[]) => void;
+  clearPendingJobs: (sessionId: string) => void;
+
   // Reset
   reset: () => void;
 }
@@ -93,6 +103,7 @@ const initialState = {
   screenshotData: null as string | null,
   connectivityResult: null as { ok: boolean; latencyMs: number; message: string } | null,
   visibleMessageCounts: {} as Record<string, number>,
+  pendingJobs: {} as Record<string, PendingJobInfo[]>,
 };
 
 export const useChatStore = create<ChatState>()((set) => ({
@@ -307,6 +318,68 @@ export const useChatStore = create<ChatState>()((set) => ({
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { [sessionId]: _removed, ...rest } = s.visibleMessageCounts;
       return { visibleMessageCounts: rest };
+    }),
+
+  // Pending jobs actions
+  addPendingJob: (sessionId, job) =>
+    set((s) => {
+      const existing = s.pendingJobs[sessionId] ?? [];
+      // Idempotent: skip if jobId already exists
+      if (existing.some((j) => j.jobId === job.jobId)) return s;
+      return {
+        pendingJobs: {
+          ...s.pendingJobs,
+          [sessionId]: [...existing, job],
+        },
+      };
+    }),
+
+  updateJobStarted: (sessionId, jobId) =>
+    set((s) => {
+      const existing = s.pendingJobs[sessionId];
+      if (!existing) return s;
+      // Find job by jobId and update status to running
+      const updated = existing.map((job) => (job.jobId === jobId ? { ...job, status: 'running' as const } : job));
+      // If no job found, return unchanged state
+      if (updated.length === existing.length && !existing.some((j) => j.jobId === jobId)) return s;
+      return {
+        pendingJobs: {
+          ...s.pendingJobs,
+          [sessionId]: updated,
+        },
+      };
+    }),
+
+  removePendingJob: (sessionId, jobId) =>
+    set((s) => {
+      const existing = s.pendingJobs[sessionId];
+      if (!existing) return s;
+      const filtered = existing.filter((job) => job.jobId !== jobId);
+      // If no jobs left, delete the entry
+      if (filtered.length === 0) {
+        const { [sessionId]: _removed, ...rest } = s.pendingJobs;
+        return { pendingJobs: rest };
+      }
+      return {
+        pendingJobs: {
+          ...s.pendingJobs,
+          [sessionId]: filtered,
+        },
+      };
+    }),
+
+  setPendingJobsFromSnapshot: (sessionId, jobs) =>
+    set((s) => ({
+      pendingJobs: {
+        ...s.pendingJobs,
+        [sessionId]: jobs,
+      },
+    })),
+
+  clearPendingJobs: (sessionId) =>
+    set((s) => {
+      const { [sessionId]: _removed, ...rest } = s.pendingJobs;
+      return { pendingJobs: rest };
     }),
 
   // Reset

@@ -8,7 +8,6 @@ import { randomUUID } from 'node:crypto';
 import type { ChatHandler } from '../../../../conversation/chat-handler.js';
 import type { ConversationManager } from '../../../../conversation/manager.js';
 import { ConversationJobQueue } from '../../../../services/conversation-job-queue.js';
-import { StreamPersistWorker } from '../../../../services/stream-persist-worker.js';
 import { SessionLock } from '../../../../services/session-lock.js';
 import { SessionEventHub } from '../../../../services/session-event-hub.js';
 import { DatabaseManager } from '../../../../conversation/db.js';
@@ -86,8 +85,7 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     fastify as typeof fastify & { conversationManager: ConversationManager }
   ).conversationManager;
   const chatHandler = (fastify as typeof fastify & { chatHandler: ChatHandler }).chatHandler;
-  const persistWorker = new StreamPersistWorker();
-  const jobQueue = new ConversationJobQueue(persistWorker);
+  const jobQueue = (fastify as typeof fastify & { jobQueue: ConversationJobQueue }).jobQueue;
 
   // POST / - Create a new session
   fastify.post<{ Body: Static<typeof CreateSessionBodySchema> }>(
