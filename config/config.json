@@ -39,10 +39,7 @@
         "command": "node",
         "args": ["../vision-mcp-server/dist/index.js"],
         "env": {
-          "PLAYWRIGHT_SERVER_URL": "http://localhost:3001",
-          "VISION_PROVIDER_BASE_URL": "https://integrate.api.nvidia.com/v1",
-          "VISION_PROVIDER_API_KEY": "{NVIDIA_API_KEY}",
-          "VISION_MODEL_ID": "qwen/qwen3.5-122b-a10b"
+          "PLAYWRIGHT_SERVER_URL": "http://localhost:3001"
         }
       }
     }
