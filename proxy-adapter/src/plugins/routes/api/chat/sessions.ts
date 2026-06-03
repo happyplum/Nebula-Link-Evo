@@ -425,7 +425,7 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         return { error: `Job ${jobId} is no longer queued` };
       }
 
-      jobQueue.cancel(jobId);
+      jobQueue.cancelJob(jobId);
       return { success: true, jobId };
     }
   );
