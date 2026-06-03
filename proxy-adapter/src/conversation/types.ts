@@ -15,7 +15,9 @@ export interface Session {
   message_count: number;
   provider: string;
   model: string;
+  /** @deprecated Legacy session field retained for database backward compatibility only. */
   vision_provider: string | null;
+  /** @deprecated Legacy session field retained for database backward compatibility only. */
   vision_model: string | null;
   status?: SessionStatus;
 }
@@ -35,8 +37,6 @@ export interface CreateSessionParams {
   title: string;
   provider: string;
   model: string;
-  vision_provider?: string;
-  vision_model?: string;
 }
 
 export interface CreateMessageParams {
@@ -53,8 +53,6 @@ export interface UpdateSessionParams {
   summary?: string | null;
   provider?: string;
   model?: string;
-  vision_provider?: string | null;
-  vision_model?: string | null;
 }
 
 export interface Interaction {
