@@ -48,19 +48,24 @@ export class PageActions {
     return 'unknown_error';
   }
 
-  private determineStrategy(locators: string[], resolved: ResolvedTarget): string {
-    const strategyIndex = resolved.locators.findIndex((locator) => {
-      try {
-        this.page!.locator(locator).elementHandle({ timeout: 0 });
-        return true;
-      } catch {
-        return false;
-      }
-    });
+  private async determineStrategy(locators: string[], resolved: ResolvedTarget): Promise<string> {
+    const strategyIndex = await this.findFirstMatchingStrategy(resolved.locators);
 
     return strategyIndex >= 0
       ? ['nebula-id', 'role', 'testid', 'aria', 'text', 'css', 'xpath'][strategyIndex]
       : 'unknown';
+  }
+
+  private async findFirstMatchingStrategy(locators: string[]): Promise<number> {
+    for (let i = 0; i < locators.length; i++) {
+      try {
+        await this.page!.locator(locators[i]).elementHandle({ timeout: 0 });
+        return i;
+      } catch {
+        continue;
+      }
+    }
+    return -1;
   }
 
   private buildMarkerActionSuccessResult(
@@ -122,7 +127,7 @@ export class PageActions {
         nebula_id: nebulaId.toString(),
       });
 
-      const strategy = this.determineStrategy(resolved.locators, resolved);
+      const strategy = await this.determineStrategy(resolved.locators, resolved);
       const attempts = resolved.locators.length;
 
       await resolutionService.executeWithFallback(resolved);
@@ -193,7 +198,7 @@ export class PageActions {
         nebula_id: nebulaId.toString(),
       });
 
-      const strategy = this.determineStrategy(resolved.locators, resolved);
+      const strategy = await this.determineStrategy(resolved.locators, resolved);
       const attempts = resolved.locators.length;
 
       await this.type(resolved.locators[0], text, options);
@@ -240,7 +245,7 @@ export class PageActions {
         nebula_id: nebulaId.toString(),
       });
 
-      const strategy = this.determineStrategy(resolved.locators, resolved);
+      const strategy = await this.determineStrategy(resolved.locators, resolved);
       const attempts = resolved.locators.length;
 
       await this.focus(resolved.locators[0]);
@@ -282,7 +287,7 @@ export class PageActions {
         nebula_id: nebulaId.toString(),
       });
 
-      const strategy = this.determineStrategy(resolved.locators, resolved);
+      const strategy = await this.determineStrategy(resolved.locators, resolved);
       const attempts = resolved.locators.length;
 
       await this.blur(resolved.locators[0]);
@@ -319,7 +324,7 @@ export class PageActions {
         nebula_id: nebulaId.toString(),
       });
 
-      const strategy = this.determineStrategy(resolved.locators, resolved);
+      const strategy = await this.determineStrategy(resolved.locators, resolved);
       const attempts = resolved.locators.length;
 
       await this.hover(resolved.locators[0]);
@@ -374,7 +379,7 @@ export class PageActions {
         nebula_id: nebulaId.toString(),
       });
 
-      const strategy = this.determineStrategy(resolved.locators, resolved);
+      const strategy = await this.determineStrategy(resolved.locators, resolved);
       const attempts = resolved.locators.length;
 
       await this.setValue(resolved.locators[0], value);
@@ -424,7 +429,7 @@ export class PageActions {
         nebula_id: nebulaId.toString(),
       });
 
-      const strategy = this.determineStrategy(resolved.locators, resolved);
+      const strategy = await this.determineStrategy(resolved.locators, resolved);
       const attempts = resolved.locators.length;
 
       await this.dispatchEvent(resolved.locators[0], eventType);
