@@ -44,6 +44,18 @@ export type SessionState =
   | 'completed';
 
 /**
+ * Represents a job waiting in the queue for a session.
+ */
+export interface PendingJobInfo {
+  jobId: string;
+  sessionId: string;
+  messageId: string;
+  contentPreview: string;
+  createdAt: string;
+  status: 'queued' | 'running';
+}
+
+/**
  * Runtime agent recovery state exposed on snapshots.
  */
 export interface SessionAgentState {
@@ -96,6 +108,8 @@ export interface SessionSnapshotEvent {
   activeToolCalls?: ToolCall[];
   /** Last persisted seq for replay→subscribe boundary */
   lastSeq?: number;
+  /** Pending jobs waiting in the queue */
+  pendingJobs?: PendingJobInfo[];
 }
 
 /**
@@ -234,6 +248,34 @@ export interface RunErrorEvent {
   error: string;
 }
 
+export interface JobQueuedEvent {
+  type: 'job.queued';
+  seq?: number;
+  sessionId: string;
+  job: PendingJobInfo;
+}
+
+export interface JobStartedEvent {
+  type: 'job.started';
+  seq?: number;
+  sessionId: string;
+  jobId: string;
+}
+
+export interface JobCancelledEvent {
+  type: 'job.cancelled';
+  seq?: number;
+  sessionId: string;
+  jobId: string;
+}
+
+export interface JobCompletedEvent {
+  type: 'job.completed';
+  seq?: number;
+  sessionId: string;
+  jobId: string;
+}
+
 // ========== EVENT UNION ==========
 
 /**
@@ -249,7 +291,11 @@ export type SessionEvent =
   | AssistantThinkingEvent
   | AssistantToolCallEvent
   | AssistantToolResultEvent
-  | RunErrorEvent;
+  | RunErrorEvent
+  | JobQueuedEvent
+  | JobStartedEvent
+  | JobCancelledEvent
+  | JobCompletedEvent;
 
 // ========== EVENT TYPE LITERALS ==========
 

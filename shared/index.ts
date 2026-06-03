@@ -27,6 +27,11 @@ export type {
   AssistantToolCallEvent,
   AssistantToolResultEvent,
   RunErrorEvent,
+  JobQueuedEvent,
+  JobStartedEvent,
+  JobCancelledEvent,
+  JobCompletedEvent,
+  PendingJobInfo,
   ToolCall,
 } from './types/sse-events.js';
 export {
