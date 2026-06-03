@@ -14,14 +14,9 @@
     }
   },
   "defaults": {
-    "mode": "separation",
+    "mode": "unified",
     "decision": "nvidia/nvidia/nemotron-3-super-120b-a12b",
     "vision": "nvidia/qwen/qwen3.5-122b-a10b"
-  },
-  "visionTool": {
-    "maxCallsPerStep": 5,
-    "timeoutMs": 30000,
-    "screenshotQuality": 80
   },
   "mcp": {
     "enabled": true,
