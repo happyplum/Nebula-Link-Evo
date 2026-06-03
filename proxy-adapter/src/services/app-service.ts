@@ -126,14 +126,6 @@ export class AppService {
   }
 
   async testAIConnectivity(): Promise<{
-    vision: {
-      status: string;
-      provider?: string;
-      model?: string;
-      responseTime: number;
-      error?: string | null;
-      intro?: string;
-    };
     decision: {
       status: string;
       provider?: string;
@@ -150,55 +142,8 @@ export class AppService {
     const defaults = this.config?.defaults;
     if (!defaults || !this.registry) {
       return {
-        vision: { status: 'not_configured', responseTime: 0, error: 'No config or registry' },
         decision: { status: 'not_configured', responseTime: 0, error: 'No config or registry' },
         totalResponseTime: Date.now() - startTime,
-      };
-    }
-
-    let visionResult: {
-      status: string;
-      provider?: string;
-      model?: string;
-      responseTime: number;
-      error?: string | null;
-      intro?: string;
-    };
-    const visionStart = Date.now();
-    const visionProvider = defaults.vision.provider;
-    const visionModel = defaults.vision.model;
-    try {
-      if (!this.registry.isAvailable(visionProvider)) {
-        this.logger.info('Vision: not configured');
-        visionResult = {
-          status: 'not_configured',
-          responseTime: Date.now() - visionStart,
-          error: 'No vision provider available',
-        };
-      } else {
-        this.logger.info({ provider: visionProvider, model: visionModel }, 'Testing Vision');
-        await this.registry.resolve(visionProvider, visionModel);
-        const intro = await this.getModelIntro(visionProvider, visionModel);
-        visionResult = {
-          status: 'connected',
-          provider: visionProvider,
-          model: visionModel,
-          responseTime: Date.now() - visionStart,
-          error: null,
-          intro,
-        };
-        this.logger.info({ responseTime: visionResult.responseTime }, 'Vision: OK');
-        this.logger.info({ introLength: intro?.length ?? 0 }, 'Vision AI Response');
-        this.logger.debug({ intro }, 'Vision AI Response (full)');
-      }
-    } catch (err) {
-      const errMsg = (err as Error).message;
-      const truncatedError = errMsg.length > 200 ? errMsg.substring(0, 200) + '...' : errMsg;
-        this.logger.warn({ error: truncatedError }, 'Vision: FAILED');
-      visionResult = {
-        status: 'disconnected',
-        responseTime: Date.now() - visionStart,
-        error: truncatedError,
       };
     }
 
@@ -249,7 +194,6 @@ export class AppService {
 
     this.logger.info({ elapsedMs: Date.now() - startTime }, 'AI connectivity test completed');
     return {
-      vision: visionResult,
       decision: decisionResult,
       totalResponseTime: Date.now() - startTime,
     };

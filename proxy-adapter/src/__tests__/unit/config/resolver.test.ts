@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   getDefaultDecisionModel,
-  getDefaultVisionModel,
   getProviderModel,
   isUnifiedMode,
   resolveConfig,
@@ -30,7 +29,7 @@ describe('config/resolver with flat provider config', () => {
       },
       mcp: { enabled: false, servers: {} },
       defaults: {
-        mode: 'separation',
+        mode: 'unified',
         decision: 'glm/glm-4.7-flash',
         vision: 'glm/glm-4.6v-flash',
       },
@@ -68,7 +67,6 @@ describe('config/resolver with flat provider config', () => {
 
     expect(result.success).toBe(true);
     expect(resolved.defaults.decision).toEqual({ provider: 'glm', model: 'glm-4.7-flash' });
-    expect(resolved.defaults.vision).toEqual({ provider: 'glm', model: 'glm-4.6v-flash' });
   });
 
   it('reports error for invalid defaults format', () => {
@@ -93,8 +91,7 @@ describe('config/resolver with flat provider config', () => {
     });
 
     expect(getDefaultDecisionModel(resolved)).toEqual({ provider: 'glm', model: 'glm-4.7-flash' });
-    expect(getDefaultVisionModel(resolved)).toEqual({ provider: 'glm', model: 'glm-4.6v-flash' });
-    expect(isUnifiedMode(resolved)).toBe(false);
+    expect(isUnifiedMode(resolved)).toBe(true);
   });
 
   it('returns provider for getProviderModel', () => {

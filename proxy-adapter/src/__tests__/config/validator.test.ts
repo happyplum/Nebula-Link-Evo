@@ -8,7 +8,7 @@ import type { ResolvedConfig, ModelConfig } from '../../config/schema.js';
 
 describe('validateConfig', () => {
   describe('valid configuration', () => {
-    it('should pass with valid separation mode config', () => {
+    it('should pass with unified mode config and legacy vision default present', () => {
       const config: ResolvedConfig = {
         version: '1.0.0',
         providers: {
@@ -28,8 +28,7 @@ describe('validateConfig', () => {
           servers: {},
         },
         defaults: {
-          mode: 'separation',
-          vision: { provider: 'vision-provider', model: 'vision-model' },
+          mode: 'unified',
           decision: { provider: 'decision-provider', model: 'decision-model' },
         },
         settings: {
@@ -63,7 +62,6 @@ describe('validateConfig', () => {
         },
         defaults: {
           mode: 'unified',
-          vision: { provider: 'unified-provider', model: 'unified-model' },
           decision: { provider: 'unified-provider', model: 'unified-model' },
         },
         settings: {
@@ -95,8 +93,7 @@ describe('validateConfig', () => {
         },
         mcp: { enabled: false, servers: {} },
         defaults: {
-          mode: 'separation',
-          vision: { provider: 'test-provider', model: 'test-model' },
+          mode: 'unified',
           decision: { provider: 'test-provider', model: 'test-model' },
         },
         settings: {
@@ -125,8 +122,7 @@ describe('validateConfig', () => {
         },
         mcp: { enabled: false, servers: {} },
         defaults: {
-          mode: 'separation',
-          vision: { provider: 'test-provider', model: 'test-model' },
+          mode: 'unified',
           decision: { provider: 'test-provider', model: 'test-model' },
         },
         settings: {
@@ -155,8 +151,7 @@ describe('validateConfig', () => {
         },
         mcp: { enabled: false, servers: {} },
         defaults: {
-          mode: 'separation',
-          vision: { provider: 'test-provider', model: 'test-model' },
+          mode: 'unified',
           decision: { provider: 'test-provider', model: 'test-model' },
         },
         settings: {
@@ -184,8 +179,7 @@ describe('validateConfig', () => {
         },
         mcp: { enabled: false, servers: {} },
         defaults: {
-          mode: 'separation',
-          vision: { provider: 'test', model: 'test' },
+          mode: 'unified',
           decision: { provider: 'test', model: 'test' },
         },
         settings: {
@@ -213,8 +207,7 @@ describe('validateConfig', () => {
         },
         mcp: { enabled: false, servers: {} },
         defaults: {
-          mode: 'separation',
-          vision: { provider: 'test-provider', model: 'test-model' },
+          mode: 'unified',
           decision: { provider: 'test-provider', model: 'test-model' },
         },
         settings: {
@@ -242,8 +235,7 @@ describe('validateConfig', () => {
         },
         mcp: { enabled: false, servers: {} },
         defaults: {
-          mode: 'separation',
-          vision: { provider: 'test-provider', model: 'test-model' },
+          mode: 'unified',
           decision: { provider: 'test-provider', model: 'test-model' },
         },
         settings: {
@@ -260,163 +252,7 @@ describe('validateConfig', () => {
     });
   });
 
-  describe('separation mode validation', () => {
-    it('should error when separation mode missing vision.provider', () => {
-      const config: ResolvedConfig = {
-        version: '1.0.0',
-        providers: {
-          'vision-provider': {
-            enabled: true,
-            apiKey: 'test-key',
-            baseUrl: 'https://api.vision.com',
-          },
-        },
-        mcp: { enabled: false, servers: {} },
-        defaults: {
-          mode: 'separation',
-          vision: { provider: '', model: 'vision-model' },
-          decision: { provider: 'vision-provider', model: 'vision-model' },
-        },
-        settings: {
-          timeout: 30000,
-          maxRetries: 3,
-          temperature: 0.7,
-          maxTokens: 2000,
-          maxSteps: 10,
-        },
-};
-
-      const result = validateConfig(config);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Separation mode requires vision.provider');
-    });
-
-    it('should error when separation mode missing vision.model', () => {
-      const config: ResolvedConfig = {
-        version: '1.0.0',
-        providers: {
-          'vision-provider': {
-            enabled: true,
-            apiKey: 'test-key',
-            baseUrl: 'https://api.vision.com',
-          },
-        },
-        mcp: { enabled: false, servers: {} },
-        defaults: {
-          mode: 'separation',
-          vision: { provider: 'vision-provider', model: '' },
-          decision: { provider: 'vision-provider', model: 'vision-model' },
-        },
-        settings: {
-          timeout: 30000,
-          maxRetries: 3,
-          temperature: 0.7,
-          maxTokens: 2000,
-          maxSteps: 10,
-        },
-};
-
-      const result = validateConfig(config);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Separation mode requires vision.model');
-    });
-
-    it('should error when separation mode missing decision.provider', () => {
-      const config: ResolvedConfig = {
-        version: '1.0.0',
-        providers: {
-          'decision-provider': {
-            enabled: true,
-            apiKey: 'test-key',
-            baseUrl: 'https://api.decision.com',
-          },
-        },
-        mcp: { enabled: false, servers: {} },
-        defaults: {
-          mode: 'separation',
-          vision: { provider: 'decision-provider', model: 'decision-model' },
-          decision: { provider: '', model: 'decision-model' },
-        },
-        settings: {
-          timeout: 30000,
-          maxRetries: 3,
-          temperature: 0.7,
-          maxTokens: 2000,
-          maxSteps: 10,
-        },
-};
-
-      const result = validateConfig(config);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Separation mode requires decision.provider');
-    });
-
-    it('should error when separation mode missing decision.model', () => {
-      const config: ResolvedConfig = {
-        version: '1.0.0',
-        providers: {
-          'decision-provider': {
-            enabled: true,
-            apiKey: 'test-key',
-            baseUrl: 'https://api.decision.com',
-          },
-        },
-        mcp: { enabled: false, servers: {} },
-        defaults: {
-          mode: 'separation',
-          vision: { provider: 'decision-provider', model: 'decision-model' },
-          decision: { provider: 'decision-provider', model: '' },
-        },
-        settings: {
-          timeout: 30000,
-          maxRetries: 3,
-          temperature: 0.7,
-          maxTokens: 2000,
-          maxSteps: 10,
-        },
-};
-
-      const result = validateConfig(config);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Separation mode requires decision.model');
-    });
-
-    it('should warn when default vision provider is disabled', () => {
-      const config: ResolvedConfig = {
-        version: '1.0.0',
-        providers: {
-          'vision-provider': {
-            enabled: false,
-            apiKey: 'test-key',
-            baseUrl: 'https://api.vision.com',
-          },
-          'decision-provider': {
-            enabled: true,
-            apiKey: 'test-key',
-            baseUrl: 'https://api.decision.com',
-          },
-        },
-        mcp: { enabled: false, servers: {} },
-        defaults: {
-          mode: 'separation',
-          vision: { provider: 'vision-provider', model: 'vision-model' },
-          decision: { provider: 'decision-provider', model: 'decision-model' },
-        },
-        settings: {
-          timeout: 30000,
-          maxRetries: 3,
-          temperature: 0.7,
-          maxTokens: 2000,
-          maxSteps: 10,
-        },
-};
-
-      const result = validateConfig(config);
-      expect(result.warnings).toContain(
-        'Default vision provider vision-provider is disabled'
-      );
-    });
-
+  describe('unified mode validation', () => {
     it('should warn when default decision provider is disabled', () => {
       const config: ResolvedConfig = {
         version: '1.0.0',
@@ -434,8 +270,7 @@ describe('validateConfig', () => {
         },
         mcp: { enabled: false, servers: {} },
         defaults: {
-          mode: 'separation',
-          vision: { provider: 'vision-provider', model: 'vision-model' },
+          mode: 'unified',
           decision: { provider: 'decision-provider', model: 'decision-model' },
         },
         settings: {
@@ -454,7 +289,7 @@ describe('validateConfig', () => {
     });
   });
 
-  describe('unified mode validation', () => {
+  describe('unified mode required decision fields', () => {
     it('should error when unified mode missing decision.provider', () => {
       const config: ResolvedConfig = {
         version: '1.0.0',
@@ -468,7 +303,6 @@ describe('validateConfig', () => {
         mcp: { enabled: false, servers: {} },
         defaults: {
           mode: 'unified',
-          vision: { provider: 'unified-provider', model: 'unified-model' },
           decision: { provider: '', model: 'unified-model' },
         },
         settings: {
@@ -498,7 +332,6 @@ describe('validateConfig', () => {
         mcp: { enabled: false, servers: {} },
         defaults: {
           mode: 'unified',
-          vision: { provider: 'unified-provider', model: 'unified-model' },
           decision: { provider: 'unified-provider', model: '' },
         },
         settings: {
@@ -528,7 +361,6 @@ describe('validateConfig', () => {
         mcp: { enabled: false, servers: {} },
         defaults: {
           mode: 'unified',
-          vision: { provider: 'unified-provider', model: 'vision-only-model' },
           decision: { provider: 'unified-provider', model: 'vision-only-model' },
         },
         settings: {
@@ -542,32 +374,6 @@ describe('validateConfig', () => {
 
       const result = validateConfig(config);
       expect(result.valid).toBe(true);
-    });
-  });
-
-  describe('unknown mode validation', () => {
-    it('should error for unknown mode', () => {
-      const config: ResolvedConfig = {
-        version: '1.0.0',
-        providers: {},
-        mcp: { enabled: false, servers: {} },
-        defaults: {
-          mode: 'unknown' as any,
-          vision: { provider: 'test', model: 'test' },
-          decision: { provider: 'test', model: 'test' },
-        },
-        settings: {
-          timeout: 30000,
-          maxRetries: 3,
-          temperature: 0.7,
-          maxTokens: 2000,
-          maxSteps: 10,
-        },
-};
-
-      const result = validateConfig(config);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Unknown mode: unknown');
     });
   });
 
