@@ -121,7 +121,7 @@ async function start() {
 
     // Initialize and decorate job queue
     const persistWorker = new StreamPersistWorker();
-    const jobQueue = new ConversationJobQueue(persistWorker);
+    const jobQueue = new ConversationJobQueue(persistWorker, SessionEventHub.getInstance());
     await app.decorate('jobQueue', jobQueue);
 
     await app.register(healthRoutes, { prefix: '/api/health' });

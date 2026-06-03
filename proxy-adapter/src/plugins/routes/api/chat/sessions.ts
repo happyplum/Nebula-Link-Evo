@@ -8,7 +8,6 @@ import { randomUUID } from 'node:crypto';
 import type { ChatHandler } from '../../../../conversation/chat-handler.js';
 import type { ConversationManager } from '../../../../conversation/manager.js';
 import { ConversationJobQueue } from '../../../../services/conversation-job-queue.js';
-import { SessionLock } from '../../../../services/session-lock.js';
 import { SessionEventHub } from '../../../../services/session-event-hub.js';
 import { DatabaseManager } from '../../../../conversation/db.js';
 import { ServiceUnavailableError } from '../../../../errors/http-errors.js';
@@ -480,14 +479,12 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           202: AsyncMessageResponseSchema,
           400: ErrorResponseSchema,
           404: ErrorResponseSchema,
-          409: ErrorResponseSchema,
         },
       },
     },
     async (request, reply) => {
       const { id: sessionId } = request.params;
       const { content, screenshot } = request.body;
-      const sessionLock = SessionLock.getInstance();
       const db = DatabaseManager.getInstance();
       const sessionEventsDAO = db.getSessionEventsDAO();
       const sessionEventHub =
@@ -524,12 +521,6 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           return { error: `Session ${sessionId} not found` };
         }
 
-        const acquired = sessionLock.acquire(sessionId, runId);
-        if (!acquired) {
-          reply.status(409);
-          return { error: `Session ${sessionId} is currently being processed` };
-        }
-
         let messageId: string;
         let jobId: string;
 
@@ -559,21 +550,18 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
 
           jobId = await jobQueue.enqueue({
             sessionId,
+            messageId,
+            contentPreview: content.trim().substring(0, 100),
             execute: async (_context) => {
-              try {
-                await chatHandler.handleChatSend('http', {
-                  sessionId,
-                  message: content.trim(),
-                  skipAddMessage: true,
-                  screenshot,
-                });
-              } finally {
-                sessionLock.release(sessionId, runId);
-              }
+              await chatHandler.handleChatSend('http', {
+                sessionId,
+                message: content.trim(),
+                skipAddMessage: true,
+                screenshot,
+              });
             },
           });
         } catch (innerError) {
-          sessionLock.release(sessionId, runId);
           const errorMessage =
             innerError instanceof Error ? innerError.message : String(innerError);
           const errorPayload = {
