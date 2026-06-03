@@ -9,6 +9,8 @@ import { ChatHandler } from '../conversation/chat-handler.js';
 import { DatabaseManager } from '../conversation/db.js';
 import { SessionEventHub } from '../services/session-event-hub.js';
 import { SessionLock } from '../services/session-lock.js';
+import { ConversationJobQueue } from '../services/conversation-job-queue.js';
+import { StreamPersistWorker } from '../services/stream-persist-worker.js';
 import type { LanguageModelV3 } from '@ai-sdk/provider';
 import type { ResolvedConfig } from '../config/schema.js';
 import apiChatRoutes from '../plugins/routes/api/chat/index.js';
@@ -254,11 +256,16 @@ describe('SSE integration flow', () => {
     vi.spyOn(chatHandler as unknown as { resolveDecisionModel: () => Promise<LanguageModelV3> }, 'resolveDecisionModel')
       .mockImplementation(async () => mockModel);
 
+    // Create job queue instance
+    const persistWorker = new StreamPersistWorker();
+    const jobQueue = new ConversationJobQueue(persistWorker);
+
     app = Fastify({ logger: false }).withTypeProvider<TypeBoxTypeProvider>();
     app.register(swaggerPlugin);
     app.register(errorHandler);
     app.decorate('conversationManager', manager);
     app.decorate('chatHandler', chatHandler);
+    app.decorate('jobQueue', jobQueue);
     app.register(apiChatRoutes, { prefix: '/api/chat' });
     await app.ready();
     await app.listen({ port: 0, host: '127.0.0.1' });

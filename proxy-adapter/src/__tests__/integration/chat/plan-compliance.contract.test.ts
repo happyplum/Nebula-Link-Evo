@@ -151,10 +151,15 @@ describe('VF1 plan compliance contract', () => {
     const handler = new ChatHandler(manager, mockConfig);
     const handleChatSendSpy = vi.spyOn(handler, 'handleChatSend').mockResolvedValue(undefined);
 
+    // Create job queue instance and decorate app
+    const persistWorker = new StreamPersistWorker();
+    const jobQueue = new ConversationJobQueue(persistWorker);
+
     await app.register(swaggerPlugin);
     await app.register(errorHandler);
     app.decorate('conversationManager', manager);
     app.decorate('chatHandler', handler);
+    app.decorate('jobQueue', jobQueue);
     await app.register(apiChatRoutes, { prefix: '/api/chat' });
 
     const session = manager.createSession({

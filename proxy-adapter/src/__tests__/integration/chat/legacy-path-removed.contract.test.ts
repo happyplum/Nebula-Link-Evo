@@ -13,6 +13,8 @@ import swaggerPlugin from '../../../plugins/02-swagger.plugin.js';
 import errorHandler from '../../../plugins/03-error-handler.plugin.js';
 import { ConversationManager } from '../../../conversation/manager.js';
 import { ChatHandler } from '../../../conversation/chat-handler.js';
+import { ConversationJobQueue } from '../../../services/conversation-job-queue.js';
+import { StreamPersistWorker } from '../../../services/stream-persist-worker.js';
 import type { DecisionClient } from '../../../clients/types.js';
 import type { ResolvedConfig } from '../../../config/schema.js';
 
@@ -90,10 +92,15 @@ describe('T9: Legacy execution path removal contract', () => {
       'executeAIResponse'
     ).mockResolvedValue(undefined);
 
+    // Create job queue instance and decorate app
+    const persistWorker = new StreamPersistWorker();
+    const jobQueue = new ConversationJobQueue(persistWorker);
+
     await app.register(swaggerPlugin);
     await app.register(errorHandler);
     app.decorate('conversationManager', manager);
     app.decorate('chatHandler', chatHandler);
+    app.decorate('jobQueue', jobQueue);
     await app.register(apiChatRoutes, { prefix: '/api/chat' });
   });
 
