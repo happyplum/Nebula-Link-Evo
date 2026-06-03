@@ -134,6 +134,14 @@ export class AppService {
       error?: string | null;
       intro?: string;
     };
+    mcp: {
+      visionServer: {
+        status: string;
+        tools: string[];
+        responseTime: number;
+        error?: string | null;
+      };
+    };
     totalResponseTime: number;
   }> {
     const startTime = Date.now();
@@ -143,6 +151,9 @@ export class AppService {
     if (!defaults || !this.registry) {
       return {
         decision: { status: 'not_configured', responseTime: 0, error: 'No config or registry' },
+        mcp: {
+          visionServer: { status: 'not_configured', tools: [], responseTime: 0, error: 'No config or registry' },
+        },
         totalResponseTime: Date.now() - startTime,
       };
     }
@@ -192,9 +203,52 @@ export class AppService {
       };
     }
 
+    const visionServerStart = Date.now();
+    const requiredVisionTools = ['analyze', 'find_element', 'screenshot', 'get_element_info'];
+    let visionServerResult: {
+      status: string;
+      tools: string[];
+      responseTime: number;
+      error?: string | null;
+    };
+
+    try {
+      const mcpClient = this.mcpClient;
+      if (!mcpClient || !mcpClient.isServerRunning('vision-server')) {
+        visionServerResult = {
+          status: 'disconnected',
+          tools: [],
+          responseTime: Date.now() - visionServerStart,
+          error: 'vision-server is not running',
+        };
+      } else {
+        const tools = await mcpClient.listTools('vision-server');
+        const toolNames = tools.map((tool) => tool.name);
+        const missing = requiredVisionTools.filter((tool) => !toolNames.includes(tool));
+
+        visionServerResult = {
+          status: missing.length === 0 ? 'connected' : 'degraded',
+          tools: toolNames,
+          responseTime: Date.now() - visionServerStart,
+          error: missing.length === 0 ? null : `Missing tools: ${missing.join(', ')}`,
+        };
+      }
+    } catch (err) {
+      const errMsg = (err as Error).message;
+      visionServerResult = {
+        status: 'disconnected',
+        tools: [],
+        responseTime: Date.now() - visionServerStart,
+        error: errMsg.length > 200 ? errMsg.substring(0, 200) + '...' : errMsg,
+      };
+    }
+
     this.logger.info({ elapsedMs: Date.now() - startTime }, 'AI connectivity test completed');
     return {
       decision: decisionResult,
+      mcp: {
+        visionServer: visionServerResult,
+      },
       totalResponseTime: Date.now() - startTime,
     };
   }

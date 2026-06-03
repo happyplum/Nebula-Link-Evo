@@ -80,7 +80,7 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           200: {
             type: 'object',
             properties: {
-              vision: {
+              decision: {
                 type: 'object',
                 properties: {
                   status: { type: 'string' },
@@ -91,15 +91,18 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
                   intro: { type: 'string' },
                 },
               },
-              decision: {
+              mcp: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string' },
-                  provider: { type: 'string' },
-                  model: { type: 'string' },
-                  responseTime: { type: 'number' },
-                  error: { type: 'string' },
-                  intro: { type: 'string' },
+                  visionServer: {
+                    type: 'object',
+                    properties: {
+                      status: { type: 'string' },
+                      tools: { type: 'array', items: { type: 'string' } },
+                      responseTime: { type: 'number' },
+                      error: { type: 'string' },
+                    },
+                  },
                 },
               },
               totalResponseTime: { type: 'number' },

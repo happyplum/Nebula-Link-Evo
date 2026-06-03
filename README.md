@@ -2,7 +2,7 @@
 
 AI 驱动的浏览器自动化系统 — 手眼协调、自主执行、实时观测
 
-Nebula-Link Evo 是一个基于 AI 的浏览器自动化平台，通过视觉感知和智能决策实现网页交互自动化。系统采用模块化架构，集成了多模态 AI 模型，能够理解页面内容、规划操作步骤并执行复杂任务，同时提供实时监控和调试能力。
+Nebula-Link Evo 是一个基于 AI 的浏览器自动化平台，通过浏览器快照能力、MCP 视觉服务和智能决策实现网页交互自动化。系统采用模块化架构，能够理解页面内容、规划操作步骤并执行复杂任务，同时提供实时监控和调试能力。
 
 ## Architecture
 
@@ -18,11 +18,11 @@ Browser ←→ Debug UI (:5173 dev / standalone build)
 
 ### 手眼协调
 
-**感知层**：通过带标注的截图和简化 DOM v2.0（含 data-nebula-id 属性）实现视觉理解。系统支持 12 种操作类型：click、type、scroll、navigate、wait、screenshot、focus、blur、hover、value、dispatch、mcp_call。
+**感知层**：通过带标注的截图和简化 DOM v2.0（含 data-nebula-id 属性）实现页面感知。Proxy Adapter 保留浏览器截图/快照能力，视觉分析已迁移到独立 `vision-server` MCP。系统支持 12 种操作类型：click、type、scroll、navigate、wait、screenshot、focus、blur、hover、value、dispatch、mcp_call。
 
 **目标定位**：采用 7 级目标链，依次尝试 nebula-id → role → testid → aria → text → css → xpath 选择器，确保精准定位页面元素。
 
-**视觉标记**：Vision Marker System 将 AI 返回的操作坐标与 DOM 元素关联，提供 Vision 和 Unified 两种工作模式，满足不同精度需求。
+**视觉标记**：Vision Marker System 将操作坐标与 DOM 元素关联；当前产品运行模式统一为 `unified`，不再由 Proxy Adapter 直连视觉模型。
 
 ### Agent Chat 会话
 
