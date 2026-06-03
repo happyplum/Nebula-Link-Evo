@@ -24,8 +24,17 @@
     "screenshotQuality": 80
   },
   "mcp": {
-    "enabled": false,
-    "servers": {}
+    "enabled": true,
+    "servers": {
+      "browser-control": {
+        "enabled": true,
+        "command": "node",
+        "args": ["../browser-control-mcp-server/dist/index.js"],
+        "env": {
+          "PLAYWRIGHT_SERVER_URL": "http://localhost:3001"
+        }
+      }
+    }
   },
   "settings": {
     "timeout": "{TIMEOUT:30000}",
