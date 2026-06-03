@@ -26,6 +26,14 @@
   "mcp": {
     "enabled": true,
     "servers": {
+      "browser-control": {
+        "enabled": true,
+        "command": "node",
+        "args": ["../browser-control-mcp-server/dist/index.js"],
+        "env": {
+          "PLAYWRIGHT_SERVER_URL": "http://localhost:3001"
+        }
+      },
       "vision-server": {
         "enabled": true,
         "command": "node",
@@ -36,9 +44,6 @@
           "VISION_PROVIDER_API_KEY": "{NVIDIA_API_KEY}",
           "VISION_MODEL_ID": "qwen/qwen3.5-122b-a10b"
         }
-      }
-    }
-  }
       }
     }
   },
