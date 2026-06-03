@@ -31,14 +31,9 @@
     }
   },
   "defaults": {
-    "mode": "separation",
+    "mode": "unified",
     "decision": "kimi/moonshot-v1-vision-k2.5",
     "vision": "glm/glm-4.5v"
-  },
-  "visionTool": {
-    "maxCallsPerStep": 5,
-    "timeoutMs": 30000,
-    "screenshotQuality": 80
   },
   "mcp": {
     "enabled": true,
@@ -56,10 +51,7 @@
         "command": "node",
         "args": ["../vision-mcp-server/dist/index.js"],
         "env": {
-          "PLAYWRIGHT_SERVER_URL": "http://localhost:3001",
-          "VISION_PROVIDER_BASE_URL": "https://open.bigmodel.cn/api/paas/v4",
-          "VISION_PROVIDER_API_KEY": "{GLM_API_KEY}",
-          "VISION_MODEL_ID": "glm-4.5v"
+          "PLAYWRIGHT_SERVER_URL": "http://localhost:3001"
         }
       }
     }
