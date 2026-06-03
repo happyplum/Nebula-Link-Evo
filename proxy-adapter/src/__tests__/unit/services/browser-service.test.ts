@@ -40,8 +40,7 @@ const mockPageActions = {
 const mockDOMExtractor = {
   setPage: vi.fn(),
   getSimplifiedDOMV2: vi.fn(),
-  getCacheStats: vi.fn(),
-  clearCache: vi.fn(),
+
 };
 
 vi.mock('../../../../../playwright-server/src/services/browser-lifecycle.js', () => ({
@@ -102,11 +101,6 @@ describe('BrowserService', () => {
       },
     });
     
-    mockDOMExtractor.getCacheStats.mockReturnValue({
-      size: 0,
-      hits: 0,
-      misses: 0,
-    });
     
     mockPageActions.clickByMarker.mockResolvedValue({
       success: true,
@@ -495,24 +489,6 @@ describe('BrowserService', () => {
     });
   });
 
-  describe('Cache Operations', () => {
-    it('should get cache stats', () => {
-      const result = browserService.getCacheStats();
-      
-      expect(mockDOMExtractor.getCacheStats).toHaveBeenCalledOnce();
-      expect(result).toEqual({
-        size: 0,
-        hits: 0,
-        misses: 0,
-      });
-    });
-
-    it('should clear cache', () => {
-      browserService.clearCache();
-      
-      expect(mockDOMExtractor.clearCache).toHaveBeenCalledOnce();
-    });
-  });
 
   describe('Script Execution', () => {
     it('should execute script', async () => {

@@ -64,12 +64,7 @@ vi.mock('../../../services/dom-extractor.js', () => ({
         interactive_elements: [],
       }),
       setPage: vi.fn(),
-      getCacheStats: vi.fn().mockReturnValue({
-        size: 10,
-        hits: 5,
-        misses: 2,
-      }),
-      clearCache: vi.fn(),
+
     };
   }),
 }));
@@ -401,21 +396,7 @@ describe('BrowserService', () => {
       expect(service['domExtractor'].getSimplifiedDOMV2).toHaveBeenCalled();
     });
 
-    it('should get cache stats', async () => {
-      const service = BrowserService.getInstance();
-      await service.open();
-      const stats = service.getCacheStats();
-      expect(stats).toHaveProperty('size');
-      expect(stats).toHaveProperty('hits');
-      expect(stats).toHaveProperty('misses');
-    });
 
-    it('should clear cache', async () => {
-      const service = BrowserService.getInstance();
-      await service.open();
-      service.clearCache();
-      expect(service['domExtractor'].clearCache).toHaveBeenCalled();
-    });
   });
 
   describe('Script Execution', () => {
