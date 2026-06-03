@@ -37,6 +37,7 @@ vi.mock('@/features/chat/store/chat.store.js', () => ({
       setMessages: vi.fn(),
       setIsLoadingSessions: vi.fn(),
       setIsLoadingMessages: vi.fn(),
+      pendingJobs: {},
     })
   ),
   selectShowThinking: (s: any) => s.showThinking,
@@ -48,6 +49,7 @@ vi.mock('@/features/chat/components/index.js', () => ({
   SessionSelector: () => <div data-testid={testIds.sessionSelector}>SessionSelector</div>,
   MessageList: () => <div data-testid={testIds.messageList}>MessageList</div>,
   Composer: () => <div data-testid={testIds.composerInput}>Composer</div>,
+  QueueFloatingPanel: () => null,
 }));
 
 describe('ChatPage', () => {
@@ -74,6 +76,7 @@ describe('ChatPage', () => {
         setMessages: vi.fn(),
         setIsLoadingSessions: vi.fn(),
         setIsLoadingMessages: vi.fn(),
+        pendingJobs: {},
       })
     );
 

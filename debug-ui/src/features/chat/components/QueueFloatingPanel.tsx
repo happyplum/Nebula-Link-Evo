@@ -1,14 +1,29 @@
-import React from 'react';
-import type { PendingJobInfo } from '@nebula-link-evo/shared';
+import React, { useCallback } from 'react';
+import { useChatStore } from '../store/chat.store.js';
+import { apiChatSessionJob } from '../../../shared/api/endpoints.js';
 import styles from './QueueFloatingPanel.module.css';
 
 export interface QueueFloatingPanelProps {
-  pendingJobs: PendingJobInfo[];
-  onCancel: (jobId: string) => void;
+  sessionId: string;
 }
 
 export const QueueFloatingPanel: React.FC<QueueFloatingPanelProps> = React.memo(
-  ({ pendingJobs, onCancel }) => {
+  ({ sessionId }) => {
+    const pendingJobs = useChatStore((s) => s.pendingJobs[sessionId]);
+
+    const handleCancel = useCallback(
+      async (jobId: string) => {
+        try {
+          await fetch(apiChatSessionJob(sessionId, jobId), {
+            method: 'DELETE',
+          });
+        } catch (error) {
+          console.error('Failed to cancel job:', error);
+        }
+      },
+      [sessionId]
+    );
+
     if (!pendingJobs || pendingJobs.length === 0) {
       return null;
     }
@@ -16,7 +31,6 @@ export const QueueFloatingPanel: React.FC<QueueFloatingPanelProps> = React.memo(
     return (
       <div className={styles.panel} data-testid="queue-floating-panel">
         {pendingJobs.map((job) => {
-          // Truncate content preview to ~50 chars
           const preview =
             job.contentPreview.length > 50
               ? `${job.contentPreview.substring(0, 50)}...`
@@ -42,7 +56,7 @@ export const QueueFloatingPanel: React.FC<QueueFloatingPanelProps> = React.memo(
               {job.status === 'queued' && (
                 <button
                   className={styles.cancelButton}
-                  onClick={() => onCancel(job.jobId)}
+                  onClick={() => handleCancel(job.jobId)}
                   data-job-id={job.jobId}
                   aria-label="Cancel job"
                 >
@@ -56,23 +70,6 @@ export const QueueFloatingPanel: React.FC<QueueFloatingPanelProps> = React.memo(
     );
   },
   (prevProps, nextProps) => {
-    // Custom comparison to avoid unnecessary re-renders
-    if (prevProps.pendingJobs.length !== nextProps.pendingJobs.length) {
-      return false;
-    }
-    
-    for (let i = 0; i < prevProps.pendingJobs.length; i++) {
-      const prev = prevProps.pendingJobs[i];
-      const next = nextProps.pendingJobs[i];
-      if (
-        prev.jobId !== next.jobId ||
-        prev.status !== next.status ||
-        prev.contentPreview !== next.contentPreview
-      ) {
-        return false;
-      }
-    }
-    
-    return true;
+    return prevProps.sessionId === nextProps.sessionId;
   }
 );

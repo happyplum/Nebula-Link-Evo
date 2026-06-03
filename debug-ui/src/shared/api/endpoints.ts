@@ -47,4 +47,5 @@ export const apiChatSessionInterrupt = (id: string) =>
 export const apiChatSessionCancel = (id: string) => `/api/chat/sessions/${id}/cancel` as const;
 export const apiChatSessionPause = (id: string) => `/api/chat/sessions/${id}/pause` as const;
 export const apiChatSessionResume = (id: string) => `/api/chat/sessions/${id}/resume` as const;
+export const apiChatSessionJob = (sessionId: string, jobId: string) => `/api/chat/sessions/${sessionId}/jobs/${jobId}` as const;
 export const API_CHAT_CONNECTIVITY_TEST = '/api/chat/connectivity-test' as const;
