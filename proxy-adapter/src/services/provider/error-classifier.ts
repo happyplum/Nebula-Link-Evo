@@ -22,6 +22,21 @@ const RATE_LIMIT_PATTERNS = [
 ] as const;
 
 /**
+ * Parse a header value that is already in milliseconds.
+ * Used for `retry-after-ms` / `Retry-After-Ms` headers.
+ * Returns undefined if parsing fails (conservative fallback).
+ */
+export function parseDirectMs(
+  value: string | undefined,
+): number | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  const ms = Number(trimmed);
+  return Number.isFinite(ms) && ms >= 0 ? Math.ceil(ms) : undefined;
+}
+
+/**
  * Parse Retry-After header value to milliseconds.
  * Supports both seconds (number) and HTTP-date formats.
  * Returns undefined if parsing fails (conservative fallback).
@@ -32,6 +47,7 @@ export function parseRetryAfterMs(
   if (!value) return undefined;
 
   const trimmed = value.trim();
+  if (!trimmed) return undefined;
 
   // Try numeric seconds
   const seconds = Number(trimmed);
@@ -60,10 +76,11 @@ export function parseRetryAfterMs(
 function checkAPICallErrorForRateLimit(error: APICallError, options?: { provider?: string; logger?: { debug: (...args: unknown[]) => void } }): RateLimitClassification {
   // Primary: HTTP 429 status code
   if (error.statusCode === 429) {
-    const retryAfterMs = parseRetryAfterMs(
+    const retryAfterMs = parseDirectMs(
       error.responseHeaders?.['retry-after-ms'] ??
-        error.responseHeaders?.['Retry-After-Ms'] ??
-        error.responseHeaders?.['retry-after'] ??
+        error.responseHeaders?.['Retry-After-Ms'],
+    ) ?? parseRetryAfterMs(
+      error.responseHeaders?.['retry-after'] ??
         error.responseHeaders?.['Retry-After'],
     );
 
@@ -82,10 +99,11 @@ function checkAPICallErrorForRateLimit(error: APICallError, options?: { provider
   // Fallback: message pattern matching (lower confidence)
   const message = error.message ?? '';
   if (RATE_LIMIT_PATTERNS.some((p) => p.test(message))) {
-    const retryAfterMs = parseRetryAfterMs(
+    const retryAfterMs = parseDirectMs(
       error.responseHeaders?.['retry-after-ms'] ??
-        error.responseHeaders?.['Retry-After-Ms'] ??
-        error.responseHeaders?.['retry-after'] ??
+        error.responseHeaders?.['Retry-After-Ms'],
+    ) ?? parseRetryAfterMs(
+      error.responseHeaders?.['retry-after'] ??
         error.responseHeaders?.['Retry-After'],
     );
 
