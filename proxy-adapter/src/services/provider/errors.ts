@@ -1,4 +1,9 @@
 /**
+ * Union type of all provider error codes.
+ */
+export type ProviderErrorCode = typeof PROVIDER_ERRORS[keyof typeof PROVIDER_ERRORS];
+
+/**
  * Represents an error specific to AI provider operations.
  *
  * Error taxonomy (three distinct failure categories):
@@ -22,12 +27,12 @@
  */
 
 export class ProviderError extends Error {
-  code: string;
+  code: ProviderErrorCode;
   provider: string;
   details?: unknown;
 
-  constructor(code: string, provider: string, details?: unknown) {
-    super('Provider Error');
+  constructor(code: ProviderErrorCode, provider: string, details?: unknown, message?: string) {
+    super(message ?? 'Provider Error');
     this.code = code;
     this.provider = provider;
     this.details = details;
