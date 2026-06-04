@@ -155,6 +155,7 @@ export interface AgentState {
   waitingFor?: 'user_message' | 'api_retry' | 'external_confirmation';
   retryCount?: number;
   lastError?: string;
+  retryAfterMs?: number;
 }
 
 export interface SessionState {

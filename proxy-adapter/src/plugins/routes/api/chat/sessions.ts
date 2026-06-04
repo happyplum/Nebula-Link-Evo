@@ -626,7 +626,7 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         request.log.error({ error: errorMessage, sessionId }, 'Failed to send message');
 
         if (error instanceof ServiceUnavailableError) {
-          reply.status(429);
+          reply.status(error.statusCode);
           return { error: errorMessage };
         }
 

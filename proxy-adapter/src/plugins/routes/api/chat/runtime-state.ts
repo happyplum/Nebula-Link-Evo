@@ -43,6 +43,7 @@ export const AgentStateSchema = Type.Object({
   ),
   retryCount: Type.Optional(Type.Number()),
   lastError: Type.Optional(Type.String()),
+  retryAfterMs: Type.Optional(Type.Number({ minimum: 0 })),
 });
 
 export interface RuntimeSessionState {
