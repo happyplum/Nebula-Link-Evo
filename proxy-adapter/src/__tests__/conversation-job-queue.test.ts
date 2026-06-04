@@ -325,7 +325,7 @@ describe('ConversationJobQueue', () => {
     const state = await manager.getSessionState(session.id);
     const agentState = state?.agentState as Record<string, unknown> | undefined;
     expect(agentState?.lastError).toContain('kimi');
-    expect(agentState?.lastError).toContain('initialization failed');
+    expect(agentState?.lastError).toContain('Provider Error');
     expect(state?.agentState?.schema_version).toBe(1);
     await manager.close();
   });
@@ -394,7 +394,7 @@ describe('ConversationJobQueue', () => {
     expect(agentState?.blockReason).not.toBe('job_error');
     expect(agentState?.retryCount).toBeUndefined();
     expect(agentState?.lastError).toContain('openai-compatible');
-    expect(agentState?.lastError).toContain('initialization failed');
+    expect(agentState?.lastError).toContain('Provider Error');
     await manager.close();
   });
 });

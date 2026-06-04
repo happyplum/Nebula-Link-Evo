@@ -107,7 +107,7 @@ describe('ProxyAdapterClient', () => {
       { prompt: 'Hello', temperature: 0.3, maxTokens: 128 },
       expect.any(Object)
     );
-    expectHeaders(mockAxiosInstance.post.mock.calls[0]?.[2], 'proj-1', 120000);
+    expectHeaders(mockAxiosInstance.post.mock.calls[0]?.[2], 'proj-1', 300000);
   });
 
   it('navigate calls debug endpoint and returns requested url', async () => {
