@@ -2,10 +2,33 @@ import { useMcpStatus } from '../api/config.queries.js';
 import { StatusIndicator } from '@/shared/ui/StatusIndicator.js';
 import { LoadingSpinner } from '@/shared/ui/LoadingSpinner.js';
 import { testIds } from '@/shared/testing/testids.js';
+import type { McpServerState } from '../types/index.js';
 import styles from './McpStatusList.module.css';
 
 export interface McpStatusListProps {
   onSelectServer?: (serverName: string) => void;
+}
+
+/** Map MCP server state to StatusIndicator props. */
+function getServerDisplay(state: McpServerState): {
+  status: 'online' | 'offline' | 'loading' | 'error';
+  label: string;
+} {
+  switch (state) {
+    case 'running':
+      return { status: 'online', label: '运行中' };
+    case 'starting':
+      return { status: 'loading', label: '启动中' };
+    case 'reconnecting':
+      return { status: 'loading', label: '重连中' };
+    case 'failed':
+      return { status: 'error', label: '失败' };
+    case 'shutting_down':
+      return { status: 'loading', label: '关闭中' };
+    case 'stopped':
+    default:
+      return { status: 'offline', label: '已停止' };
+  }
 }
 
 export function McpStatusList({ onSelectServer }: McpStatusListProps) {
@@ -58,37 +81,41 @@ export function McpStatusList({ onSelectServer }: McpStatusListProps) {
         <p className={styles.empty}>无已启用的 MCP 服务器。</p>
       ) : (
         <ul className={styles.list}>
-          {mcpStatus.servers.map((server) => (
-            <li
-              key={server.name}
-              className={styles.listItem}
-              data-testid={testIds.mcpServerItem}
-            >
-              <div className={styles.serverInfo}>
-                <StatusIndicator
-                  status={server.running ? 'online' : 'error'}
-                  size="sm"
-                />
-                <div className={styles.serverMeta}>
-                  <span className={styles.serverName}>{server.name}</span>
-                  <span className={styles.serverStatus}>
-                    {server.running ? '运行中' : '已停止'} · {server.toolsCount} 工具
-                  </span>
+          {mcpStatus.servers.map((server) => {
+            const display = getServerDisplay(server.state);
+            return (
+              <li
+                key={server.name}
+                className={styles.listItem}
+                data-testid={testIds.mcpServerItem}
+              >
+                <div className={styles.serverInfo}>
+                  <StatusIndicator
+                    status={display.status}
+                    label={display.label}
+                    size="sm"
+                  />
+                  <div className={styles.serverMeta}>
+                    <span className={styles.serverName}>{server.name}</span>
+                    <span className={styles.serverStatus}>
+                      {display.label} · {server.toolsCount} 工具
+                    </span>
+                  </div>
                 </div>
-              </div>
-              
-              {server.running && server.toolsCount > 0 && onSelectServer && (
-                <button
-                  type="button"
-                  className={styles.viewButton}
-                  data-testid={testIds.mcpServerViewBtn}
-                  onClick={() => onSelectServer(server.name)}
-                >
-                  查看工具
-                </button>
-              )}
-            </li>
-          ))}
+                
+                {server.state === 'running' && server.toolsCount > 0 && onSelectServer && (
+                  <button
+                    type="button"
+                    className={styles.viewButton}
+                    data-testid={testIds.mcpServerViewBtn}
+                    onClick={() => onSelectServer(server.name)}
+                  >
+                    查看工具
+                  </button>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

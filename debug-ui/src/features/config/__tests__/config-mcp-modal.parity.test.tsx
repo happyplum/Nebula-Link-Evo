@@ -136,8 +136,8 @@ describe('P4-27-V: MCP Status List and Tools Modal - Parity', () => {
       mockUseMcpStatus.mockReturnValue(mockQueryResult({
         enabled: true,
         servers: [
-          { name: 'server-1', running: true, toolsCount: 3 },
-          { name: 'server-2', running: false, toolsCount: 0 },
+          { name: 'server-1', running: true, state: 'running' as const, toolsCount: 3 },
+          { name: 'server-2', running: false, state: 'stopped' as const, toolsCount: 0 },
         ],
       }));
 
@@ -160,9 +160,9 @@ describe('P4-27-V: MCP Status List and Tools Modal - Parity', () => {
       mockUseMcpStatus.mockReturnValue(mockQueryResult({
         enabled: true,
         servers: [
-          { name: 'running-server', running: true, toolsCount: 5 },
-          { name: 'stopped-server', running: false, toolsCount: 0 },
-          { name: 'no-tools-server', running: true, toolsCount: 0 },
+          { name: 'running-server', running: true, state: 'running' as const, toolsCount: 5 },
+          { name: 'stopped-server', running: false, state: 'stopped' as const, toolsCount: 0 },
+          { name: 'no-tools-server', running: true, state: 'running' as const, toolsCount: 0 },
         ],
       }));
 
@@ -187,7 +187,7 @@ describe('P4-27-V: MCP Status List and Tools Modal - Parity', () => {
       mockUseMcpStatus.mockReturnValue(mockQueryResult({
         enabled: true,
         servers: [
-          { name: 'test-server', running: true, toolsCount: 2 },
+          { name: 'test-server', running: true, state: 'running' as const, toolsCount: 2 },
         ],
       }));
 
@@ -206,7 +206,7 @@ describe('P4-27-V: MCP Status List and Tools Modal - Parity', () => {
       mockUseMcpStatus.mockReturnValue(mockQueryResult({
         enabled: true,
         servers: [
-          { name: 'server-no-callback', running: true, toolsCount: 5 },
+          { name: 'server-no-callback', running: true, state: 'running' as const, toolsCount: 5 },
         ],
       }));
 
@@ -527,7 +527,7 @@ describe('P4-27-V: MCP Status List and Tools Modal - Parity', () => {
       mockUseMcpStatus.mockReturnValue(mockQueryResult({
         enabled: true,
         servers: [
-          { name: 'test-server', running: true, toolsCount: 2 },
+          { name: 'test-server', running: true, state: 'running' as const, toolsCount: 2 },
         ],
       }));
 
