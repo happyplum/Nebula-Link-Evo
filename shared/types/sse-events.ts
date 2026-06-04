@@ -76,6 +76,7 @@ export interface SessionAgentState {
   waitingFor?: 'user_message' | 'api_retry' | 'external_confirmation';
   retryCount?: number;
   lastError?: string;
+  retryAfterMs?: number;
 }
 
 // ========== EVENT INTERFACES ==========
@@ -246,6 +247,10 @@ export interface RunErrorEvent {
   runId?: string;
   /** Error message */
   error: string;
+  /** Structured error code for programmatic handling */
+  code?: 'RATE_LIMITED' | 'API_ERROR' | 'TIMEOUT' | 'VALIDATION_ERROR';
+  /** Retry delay in milliseconds (when applicable, e.g., rate limits) */
+  retryAfterMs?: number;
 }
 
 export interface JobQueuedEvent {

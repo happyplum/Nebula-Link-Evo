@@ -373,8 +373,18 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
         if (!store) return;
         store.flushStreamingToMessage(sid);
         store.resetStreaming();
-        store.setStreamingState('error');
-        setError(evt.error);
+
+        if (evt.code === 'RATE_LIMITED') {
+          store.setStreamingState('blocked');
+          const retryInfo = evt.retryAfterMs
+            ? ` (约${Math.ceil(evt.retryAfterMs / 1000)}秒后可重试)`
+            : '';
+          setError(`请求频率超限${retryInfo}: ${evt.error}`);
+        } else {
+          store.setStreamingState('error');
+          setError(evt.error);
+        }
+
         currentMessageIdRef.current = null;
       });
 
