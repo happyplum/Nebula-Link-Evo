@@ -12,16 +12,38 @@ type StreamResult = {
   fullStream: AsyncIterable<{ type: string; [key: string]: unknown }>;
 };
 
-const { streamTextMock, toolMock, stepCountIsMock, getModelMock } = vi.hoisted(() => {
+const {
+  streamTextMock,
+  toolMock,
+  stepCountIsMock,
+  getModelMock,
+  MockAPICallError,
+  MockRetryError,
+} = vi.hoisted(() => {
   const streamText = vi.fn<(...args: unknown[]) => Promise<StreamResult>>();
   const tool = vi.fn((definition: unknown) => definition);
   const stepCountIs = vi.fn().mockReturnValue(() => false);
   const getModel = vi.fn().mockReturnValue({ provider: 'test-provider', modelId: 'test-model' });
+
+  class _MockAPICallError extends Error {
+    static isInstance(error: unknown): error is _MockAPICallError {
+      return error instanceof _MockAPICallError;
+    }
+  }
+
+  class _MockRetryError extends Error {
+    static isInstance(error: unknown): error is _MockRetryError {
+      return error instanceof _MockRetryError;
+    }
+  }
+
   return {
     streamTextMock: streamText,
     toolMock: tool,
     stepCountIsMock: stepCountIs,
     getModelMock: getModel,
+    MockAPICallError: _MockAPICallError,
+    MockRetryError: _MockRetryError,
   };
 });
 
@@ -29,6 +51,8 @@ vi.mock('ai', () => ({
   streamText: streamTextMock,
   tool: toolMock,
   stepCountIs: stepCountIsMock,
+  APICallError: MockAPICallError,
+  RetryError: MockRetryError,
 }));
 
 vi.mock('../../../clients/vercel-ai/provider.js', () => ({
