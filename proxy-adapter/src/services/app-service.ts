@@ -60,6 +60,17 @@ export class AppService {
     try {
       await this.mcpClient.initialize();
       this.actionExecutor.setMCPClient(this.mcpClient);
+
+      // Verify critical MCP servers are operational
+      if (this.mcpClient.isEnabled()) {
+        const tools = this.mcpClient.getAvailableTools();
+        const browserTools = tools.filter((t) => t.name.startsWith('browser-control.'));
+        if (browserTools.length === 0) {
+          this.logger.warn('MCP enabled but no browser-control tools found — browser operations will be unavailable');
+        } else {
+          this.logger.info({ browserToolCount: browserTools.length }, 'MCP browser-control server ready');
+        }
+      }
     } catch (error) {
       this.logger.warn({ err: error }, 'MCP initialization failed, continuing without MCP');
     }

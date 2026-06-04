@@ -28,7 +28,7 @@ Browser ←→ Debug UI (:5173 dev / standalone build)
 
 **会话状态机**：idle → running ↔ paused，interrupt → interrupted，cancel → cancelled，completed。每个会话通过互斥锁保证同一时间只有一个活跃执行，支持暂停、恢复、中断等操作。
 
-**工具与扩展**：MCP（Model Context Protocol，从 stdio 服务器自动发现）提供丰富的扩展能力。
+**工具与扩展**：MCP（Model Context Protocol，从 stdio 服务器自动发现）提供丰富的扩展能力。Chat 工具完全通过 MCP 协议动态注册，AI 模型直接使用 MCP 注册的 description 和 inputSchema。MCP 客户端具备崩溃恢复机制：状态机管理 server 生命周期，事件驱动检测断链，指数退避自动重连（最多 5 次），`toolsChanged` 事件通知工具变更。
 
 **上下文管理**：消息数超过 20 时自动压缩上下文，Chat SSE 每次建连都会先发送完整 `session.snapshot` 再继续 live stream，后台任务队列支持 3 次重试和 10 分钟空闲清理。
 

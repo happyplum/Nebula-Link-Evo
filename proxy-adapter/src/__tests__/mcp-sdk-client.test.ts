@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { MCPSDKClient } from '../clients/mcp/sdk-client.js';
+import { MCPSDKClient, MCPServerUnavailableError } from '../clients/mcp/sdk-client.js';
 import type { ResolvedConfig } from '../config/schema.js';
 import type { MCPTool } from '../clients/types.js';
 
@@ -74,60 +74,60 @@ describe('MCPSDKClient', () => {
   });
 
   describe('callTool', () => {
-    it('should throw error when server is not running', async () => {
+    it('should throw MCPServerUnavailableError when server does not exist', async () => {
       await client.initialize();
 
       await expect(client.callTool('non-existent-server', 'any_tool', {})).rejects.toThrow(
-        'MCP server non-existent-server is not running'
+        MCPServerUnavailableError
       );
     });
 
-    it('should throw error when trying to call tool on failed server', async () => {
+    it('should throw error when server is in failed state', async () => {
       await client.initialize();
 
       await expect(client.callTool('browser-control', 'any_tool', {})).rejects.toThrow(
-        /is not running|Tool call failed/
+        /不可用|not running|Tool call failed/
       );
     });
   });
 
   describe('listResources', () => {
-    it('should throw error when server is not running', async () => {
+    it('should throw MCPServerUnavailableError when server does not exist', async () => {
       await client.initialize();
 
       await expect(client.listResources('non-existent-server')).rejects.toThrow(
-        'MCP server non-existent-server is not running'
+        MCPServerUnavailableError
       );
     });
   });
 
   describe('readResource', () => {
-    it('should throw error when server is not running', async () => {
+    it('should throw MCPServerUnavailableError when server does not exist', async () => {
       await client.initialize();
 
       await expect(client.readResource('non-existent-server', 'file:///test.txt')).rejects.toThrow(
-        'MCP server non-existent-server is not running'
+        MCPServerUnavailableError
       );
     });
   });
 
   describe('listPrompts', () => {
-    it('should throw error when server is not running', async () => {
+    it('should throw MCPServerUnavailableError when server does not exist', async () => {
       await client.initialize();
 
       await expect(client.listPrompts('non-existent-server')).rejects.toThrow(
-        'MCP server non-existent-server is not running'
+        MCPServerUnavailableError
       );
     });
   });
 
   describe('getPrompt', () => {
-    it('should throw error when server is not running', async () => {
+    it('should throw MCPServerUnavailableError when server does not exist', async () => {
       await client.initialize();
 
       await expect(
         client.getPrompt('non-existent-server', 'test_prompt', { arg1: 'value1' })
-      ).rejects.toThrow('MCP server non-existent-server is not running');
+      ).rejects.toThrow(MCPServerUnavailableError);
     });
   });
 
@@ -166,6 +166,7 @@ describe('MCPSDKClient', () => {
       expect(Array.isArray(servers)).toBe(true);
       servers.forEach((server) => {
         expect(server).toHaveProperty('name');
+        expect(server).toHaveProperty('state');
         expect(server).toHaveProperty('running');
         expect(server).toHaveProperty('toolsCount');
       });
@@ -191,10 +192,9 @@ describe('MCPSDKClient', () => {
       await client.initialize();
       await client.shutdown();
 
+      // After shutdown, servers map is cleared
       const servers = client.getServerList();
-      servers.forEach((server) => {
-        expect(server.running).toBe(false);
-      });
+      expect(servers).toEqual([]);
     });
   });
 

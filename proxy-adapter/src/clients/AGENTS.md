@@ -16,7 +16,6 @@ clients/
 │       └── fetch.ts        # Server discovery and lifecycle
 └── vercel-ai/              # Vercel AI SDK provider
     ├── provider.ts         # Provider factory and normalization
-    ├── core-tools.ts       # Built-in tool definitions
     ├── skills-tool.ts      # Skill-based tool integration
     ├── streaming.ts        # Stream processing helpers
     └── __tests__/          # Provider unit tests
@@ -27,7 +26,6 @@ clients/
 | Area             | Path                       | Notes                                                            |
 | ---------------- | -------------------------- | ---------------------------------------------------------------- |
 | Provider factory | `vercel-ai/provider.ts`    | `normalizeNpmPackage()`, `parseProviderModel()`, GLM JWT adapter |
-| Tool definitions | `vercel-ai/core-tools.ts`  | Built-in tools exposed to AI models                              |
 | Skill tools      | `vercel-ai/skills-tool.ts` | Dynamic skill registration for AI                                |
 | MCP client       | `mcp/sdk-client.ts`        | stdio server management, tool discovery                          |
 | MCP servers      | `mcp/servers/fetch.ts`     | Auto-discovery from config                                       |
