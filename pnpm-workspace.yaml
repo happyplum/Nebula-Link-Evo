@@ -1,11 +1,12 @@
 packages:
-  - browser-control-mcp-server
+  - mcps/browser-control-mcp-server
   - debug-ui
   - shared
   - proxy-adapter
   - playwright-server
   - ai-e2e
   - ai-e2e/ui
+  - mcps/vision-mcp-server
 
 onlyBuiltDependencies:
   - better-sqlite3

@@ -24,7 +24,7 @@
       "browser-control": {
         "enabled": true,
         "command": "node",
-        "args": ["../browser-control-mcp-server/dist/index.js"],
+        "args": ["../mcps/browser-control-mcp-server/dist/index.js"],
         "env": {
           "PLAYWRIGHT_SERVER_URL": "http://localhost:3001"
         }
@@ -32,7 +32,7 @@
       "vision-server": {
         "enabled": true,
         "command": "node",
-        "args": ["../vision-mcp-server/dist/index.js"],
+        "args": ["../mcps/vision-mcp-server/dist/index.js"],
         "env": {
           "PLAYWRIGHT_SERVER_URL": "http://localhost:3001"
         }
@@ -40,10 +40,10 @@
     }
   },
   "settings": {
-    "timeout": "{TIMEOUT:30000}",
+    "timeout": "{TIMEOUT:180000}",
     "maxRetries": "{MAX_RETRIES:3}",
     "temperature": 0.2,
-    "maxTokens": 1000,
+    "maxTokens": 4096,
     "maxSteps": 3
   }
 }

@@ -215,37 +215,6 @@ importers:
         specifier: 'catalog:'
         version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@20.19.35)(jsdom@28.1.0)(terser@5.46.0)(tsx@4.22.4)(yaml@2.8.2)
 
-  browser-control-mcp-server:
-    dependencies:
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.26.0
-        version: 1.27.1(zod@4.3.6)
-      axios:
-        specifier: 'catalog:'
-        version: 1.13.5
-      dotenv:
-        specifier: 'catalog:'
-        version: 16.6.1
-      zod:
-        specifier: 'catalog:'
-        version: 4.3.6
-    devDependencies:
-      '@types/node':
-        specifier: 'catalog:'
-        version: 20.19.35
-      '@vitest/coverage-v8':
-        specifier: 'catalog:'
-        version: 4.0.18(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@20.19.35)(jsdom@28.1.0)(terser@5.46.0)(tsx@4.22.4)(yaml@2.8.2))
-      tsx:
-        specifier: 'catalog:'
-        version: 4.22.4
-      typescript:
-        specifier: 'catalog:'
-        version: 5.9.3
-      vitest:
-        specifier: 'catalog:'
-        version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@20.19.35)(jsdom@28.1.0)(terser@5.46.0)(tsx@4.22.4)(yaml@2.8.2)
-
   debug-ui:
     dependencies:
       '@nebula-link-evo/shared':
@@ -309,6 +278,77 @@ importers:
       vite:
         specifier: 'catalog:'
         version: 5.4.21(@types/node@20.19.35)(terser@5.46.0)
+      vitest:
+        specifier: 'catalog:'
+        version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@20.19.35)(jsdom@28.1.0)(terser@5.46.0)(tsx@4.22.4)(yaml@2.8.2)
+
+  mcps/browser-control-mcp-server:
+    dependencies:
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.26.0
+        version: 1.27.1(zod@4.3.6)
+      axios:
+        specifier: 'catalog:'
+        version: 1.13.5
+      dotenv:
+        specifier: 'catalog:'
+        version: 16.6.1
+      zod:
+        specifier: 'catalog:'
+        version: 4.3.6
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 20.19.35
+      '@vitest/coverage-v8':
+        specifier: 'catalog:'
+        version: 4.0.18(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@20.19.35)(jsdom@28.1.0)(terser@5.46.0)(tsx@4.22.4)(yaml@2.8.2))
+      tsx:
+        specifier: 'catalog:'
+        version: 4.22.4
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@20.19.35)(jsdom@28.1.0)(terser@5.46.0)(tsx@4.22.4)(yaml@2.8.2)
+
+  mcps/vision-mcp-server:
+    dependencies:
+      '@ai-sdk/openai-compatible':
+        specifier: ^2.0.31
+        version: 2.0.31(zod@4.3.6)
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.26.0
+        version: 1.27.1(zod@4.3.6)
+      '@nebula-link-evo/shared':
+        specifier: workspace:*
+        version: link:../../shared
+      ai:
+        specifier: ^6.0.105
+        version: 6.0.105(zod@4.3.6)
+      axios:
+        specifier: 'catalog:'
+        version: 1.13.5
+      dotenv:
+        specifier: 'catalog:'
+        version: 16.6.1
+      zod:
+        specifier: 'catalog:'
+        version: 4.3.6
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 20.19.35
+      '@vitest/coverage-v8':
+        specifier: 'catalog:'
+        version: 4.0.18(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@20.19.35)(jsdom@28.1.0)(terser@5.46.0)(tsx@4.22.4)(yaml@2.8.2))
+      tsx:
+        specifier: 'catalog:'
+        version: 4.22.4
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
       vitest:
         specifier: 'catalog:'
         version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@20.19.35)(jsdom@28.1.0)(terser@5.46.0)(tsx@4.22.4)(yaml@2.8.2)
