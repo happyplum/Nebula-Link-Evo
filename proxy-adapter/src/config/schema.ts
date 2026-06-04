@@ -46,9 +46,24 @@ export interface ModelConfig {
   maxTokens?: number;
 }
 
+export interface MCPReconnectConfig {
+  /** Enable automatic reconnection on crash. Default: true */
+  enabled?: boolean;
+  /** Maximum reconnect attempts per server. Default: 5 */
+  maxAttempts?: number;
+  /** Base delay in ms for exponential backoff. Default: 1000 */
+  baseDelayMs?: number;
+  /** Maximum delay cap in ms. Default: 30000 */
+  maxDelayMs?: number;
+  /** Random jitter in ms added to each delay. Default: 500 */
+  jitterMs?: number;
+}
+
 export interface MCPConfig {
   enabled: boolean;
   servers: Record<string, MCPServerConfig>;
+  /** Optional reconnect policy override. Uses defaults when omitted. */
+  reconnect?: MCPReconnectConfig;
 }
 
 export interface MCPServerConfig {

@@ -1,5 +1,5 @@
 import { ConversationManager } from './manager.js';
-import { MCPSDKClient } from '../clients/mcp/sdk-client.js';
+import { MCPSDKClient, MCPServerUnavailableError } from '../clients/mcp/sdk-client.js';
 import type { ResolvedConfig } from '../config/schema.js';
 import { ChatSessionController } from '../services/chat-session-controller.js';
 import type { AgentState, Session, Message, SessionStatus } from './types.js';
@@ -36,12 +36,6 @@ interface ChatMessageData {
   sessionId: string;
   message: string;
   screenshot?: string;
-}
-
-interface ToolInputSchema {
-  type: string;
-  properties?: Record<string, unknown>;
-  required?: string[];
 }
 
 interface MCPObjectSchema {
@@ -221,27 +215,15 @@ class ChatHandler {
   }
 
   private getSystemPrompt(_session: ChatSessionData): string {
-    let basePrompt = `你是一个智能助手，可以通过工具与浏览器交互。
+    const hasTools =
+      this.mcpClient &&
+      this.mcpClient.isEnabled() &&
+      this.mcpClient.getAvailableTools().length > 0;
 
-浏览器操作通过MCP工具完成，工具列表会在下方自动列出。请根据工具描述中的说明使用它们。`;
-
-    if (this.mcpClient && this.mcpClient.isEnabled()) {
-      const tools = this.mcpClient.getAvailableTools();
-      if (tools.length > 0) {
-        const toolsDescription = tools
-          .map((tool) => {
-            const schema = tool.inputSchema as ToolInputSchema;
-            const props = schema?.properties || {};
-            const params =
-              Object.keys(props).length > 0 ? `参数: ${Object.keys(props).join(', ')}` : '无参数';
-            return `- ${tool.name}: ${tool.description} (${params})`;
-          })
-          .join('\n');
-        basePrompt += `\n\n## 可用工具 (${tools.length}个)\n${toolsDescription}`;
-      }
+    if (hasTools) {
+      return '你是一个智能助手，可以通过工具与浏览器交互。请根据工具描述中的说明使用它们。';
     }
-
-    return basePrompt;
+    return '你是一个智能助手。当前没有可用的浏览器工具，请仅以文字形式回答用户问题。';
   }
 
   async handleChatSend(clientId: string, params: ChatSendParams): Promise<void> {
@@ -837,7 +819,19 @@ class ChatHandler {
           const args = this.normalizeToRecord(rawArgs);
           const [serverName, actualToolName] = this.parseToolName(fullToolName);
           this.assertToolIsSafe(actualToolName);
-          return await this.mcpClient.callTool(serverName, actualToolName, args);
+
+          try {
+            return await this.mcpClient.callTool(serverName, actualToolName, args);
+          } catch (error) {
+            if (error instanceof MCPServerUnavailableError) {
+              this.logger.warn(
+                { serverName, toolName: actualToolName, state: error.serverState },
+                'MCP server unavailable during tool call',
+              );
+              return error.message;
+            }
+            throw error;
+          }
         },
       });
     }

@@ -14,7 +14,7 @@ Vitest unit/integration coverage plus Playwright e2e tests for backend and Debug
 | E2E                | `e2e/`, `e2e/debug-ui/`          | Browser-driven Debug UI and workflow coverage          |
 | Conversation       | `conversation/`                  | Persistence and config behavior                        |
 | Config             | `config/`                        | Config loading/validation                              |
-| AI/provider        | `vercel-ai/core-tools.test.ts`  | Core tool integration                                  |
+| AI/provider        | `vercel-ai/`                    | Provider integration tests                              |
 | Helpers/fixtures   | `helpers/`, `fixtures/`          | Shared test setup                                      |
 
 ## Commands

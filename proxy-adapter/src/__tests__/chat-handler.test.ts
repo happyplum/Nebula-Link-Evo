@@ -19,15 +19,6 @@ function createDeferredPromise<T>(): {
   return { promise, resolve };
 }
 
-vi.mock('../clients/vercel-ai/browser-lifecycle-tools.js', () => ({
-  createBrowserLifecycleTools: vi.fn().mockReturnValue({
-    browser_status: { description: '检查浏览器当前状态', inputSchema: {}, execute: vi.fn() },
-    browser_open: { description: '打开浏览器', inputSchema: {}, execute: vi.fn() },
-    browser_close: { description: '关闭浏览器', inputSchema: {}, execute: vi.fn() },
-    browser_list_tabs: { description: '获取所有标签页', inputSchema: {}, execute: vi.fn() },
-    browser_switch_tab: { description: '切换标签页', inputSchema: {}, execute: vi.fn() },
-  }),
-}));
 
 const mockConfig: ResolvedConfig = {
   version: '1.0',
@@ -357,28 +348,24 @@ describe('ChatHandler', () => {
   });
 
 
-  describe('createSDKTools with browser lifecycle tools', () => {
-    const lifecycleToolKeys = [
-      'browser_status',
-      'browser_open',
-      'browser_close',
-      'browser_list_tabs',
-      'browser_switch_tab',
-    ];
-
-    it('should include browser lifecycle tools when MCP is disabled', () => {
+  describe('createSDKTools', () => {
+    it('should return empty tools when MCP is disabled', () => {
       vi.spyOn(mcpClient, 'isEnabled').mockReturnValue(false);
 
       const tools = (chatHandler as any).createSDKTools();
 
-      for (const key of lifecycleToolKeys) {
-        expect(tools).toHaveProperty(key);
-      }
+      // Browser tools are no longer hardcoded — all tools come from MCP
+      expect(Object.keys(tools)).toHaveLength(0);
     });
 
-    it('should include browser lifecycle tools alongside MCP tools when MCP is enabled', () => {
+    it('should register MCP tools when MCP is enabled', () => {
       vi.spyOn(mcpClient, 'isEnabled').mockReturnValue(true);
       vi.spyOn(mcpClient, 'getAvailableTools').mockReturnValue([
+        {
+          name: 'browser-control.browser_open',
+          description: 'Open browser',
+          inputSchema: { type: 'object' },
+        },
         {
           name: 'server.tool_a',
           description: 'Tool A',
@@ -388,38 +375,39 @@ describe('ChatHandler', () => {
 
       const tools = (chatHandler as any).createSDKTools();
 
-      for (const key of lifecycleToolKeys) {
-        expect(tools).toHaveProperty(key);
-      }
+      // All tools come from MCP discovery
+      expect(tools).toHaveProperty('browser-control.browser_open');
       expect(tools).toHaveProperty('server.tool_a');
     });
 
-    it('should include browser lifecycle tools when mcpClient is null', () => {
-      // Create a new ChatHandler with no MCP client
+    it('should return empty tools when mcpClient is null', () => {
       const handlerWithNullMcp = new ChatHandler(
         conversationManager,
         mockConfig,
-        undefined as any, // null mcpClient
+        undefined as any,
       );
 
       const tools = (handlerWithNullMcp as any).createSDKTools();
 
-      for (const key of lifecycleToolKeys) {
-        expect(tools).toHaveProperty(key);
-      }
+      expect(Object.keys(tools)).toHaveLength(0);
     });
 
-    it('should include lifecycle management section in system prompt', () => {
+    it('should return no-tools prompt when MCP has no tools', () => {
       const session = {};
       const prompt = (chatHandler as any).getSystemPrompt(session);
 
-      expect(prompt).toContain('## 浏览器生命周期管理');
-      expect(prompt).toContain('browser_status');
-      expect(prompt).toContain('browser_open');
-      expect(prompt).toContain('browser_close');
-      expect(prompt).toContain('browser_list_tabs');
-      expect(prompt).toContain('browser_switch_tab');
-      expect(prompt).toContain('browser_snapshot');
+      expect(prompt).toContain('没有可用');
+      expect(prompt).not.toContain('通过工具与浏览器交互');
+    });
+
+    it('should return tools prompt when MCP tools are available', () => {
+      vi.spyOn(mcpClient, 'getAvailableTools').mockReturnValue([
+        { name: 'browser-control.browser_open', description: 'Open browser', inputSchema: {} },
+      ]);
+      const session = {};
+      const prompt = (chatHandler as any).getSystemPrompt(session);
+
+      expect(prompt).toContain('通过工具与浏览器交互');
     });
   });
 
