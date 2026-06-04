@@ -23,11 +23,11 @@
 
 ## 要求
 
-1. **使用 Playwright 库**（`import { chromium } from 'playwright'`），通过 `chromium.launch()` 启动浏览器。**禁止**使用 `@playwright/test` 框架的 `test()` / `expect()` API，因为脚本通过 `npx tsx` 直接执行，不是通过 `npx playwright test` 运行。
+1. **使用 Playwright 库**（`import { chromium } from 'playwright'`），通过 `chromium.launch()` 启动浏览器。**绝对禁止**使用 `@playwright/test` 框架的 `test()`、`describe()`、`expect()`、`beforeEach()` 等 API。脚本通过 `npx tsx` 直接执行，**不是**通过 `npx playwright test` 运行。任何包含 `test(` 或 `test.describe(` 或 `expect(` 的代码都是**致命错误**。断言必须使用 Node.js `assert` 模块。
 2. 脚本必须是完整可运行的 TypeScript 代码，包含 IIFE 主入口或顶层 await。
 3. **选择器优先级**：严格遵循下方"选择器策略"章节中的优先级。禁止在 testid 可用时降级使用 css 或 xpath。
 4. **断言方式**：`playwright` 包**不导出** `expect`，`@playwright/test` 的 `expect()` 也**不可用**（脚本通过 `npx tsx` 执行，不是 `npx playwright test`）。**只能**使用 Node.js 原生 `assert` 模块（`import assert from 'node:assert'`）进行断言。常见断言模式：`assert.ok(condition, message)`、`assert.strictEqual(actual, expected)`、`assert.match(string, regex)`。也可以使用 `if (!condition) throw new Error(message)` 模式。
-5. 包含适当的等待（`page.waitForSelector`、`page.waitForTimeout`、`page.waitForLoadState` 等）。
+5. 包含适当的等待（`page.waitForSelector`、`page.waitForTimeout`）。**禁止使用 `page.waitForLoadState()`**，因为单页应用（SPA）的 WebSocket 连接会导致 `networkidle` 永远不触发。使用 `page.waitForSelector()` 或 `page.waitForFunction()` 代替。导航时必须使用 `{ waitUntil: 'load' }` 而非 `{ waitUntil: 'networkidle' }`。
 6. 每个操作步骤添加中文注释说明意图。
 7. 处理常见的异步加载场景。
 8. 测试数据通过参数化方式使用。
@@ -36,21 +36,33 @@
 
 ## 选择器策略
 
-页面快照中的每个元素包含 `locator_bundle`，提供多种定位策略。**必须按以下优先级选择定位器**：
+页面快照是一个 JSON 对象，其中**每个 key 就是 `data-testid` 的值**，value 包含该元素的属性（tag、text、visible、bbox 等）。
 
-1. **data-testid（最高优先级）**：当 `locator_bundle.testid` 存在且非空时，**必须**使用 `page.locator('[data-testid="VALUE"]')` 格式。例如：
-   - 快照中有 `"testid": "send-button"` → 使用 `page.locator('[data-testid="send-button"]')`
-   - **禁止**在 testid 可用时降级使用 css、xpath 或其他选择器
+### 快照格式示例
 
-2. **role**：当 testid 不存在但 `locator_bundle.role` 存在时，使用 `page.getByRole(role.name, { ...role.attributes })`
+```json
+{
+  "send-button": { "tag": "button", "text": "发送", "visible": true, "bbox": {...} },
+  "session-selector": { "tag": "select", "text": "Session 1", "visible": true, "bbox": {...} },
+  "message-list": { "tag": "div", "text": "", "visible": true, "bbox": {...} }
+}
+```
 
-3. **text**：当以上均不可用时，使用 `page.getByText(...)`
+### 定位规则（严格按优先级）
 
-4. **aria**：当 `locator_bundle.aria` 存在时，使用 `page.getByLabelText(...)` 或相关 aria 方法
+1. **data-testid（最高优先级，必须使用）**：快照中每个元素的 key 就是 `data-testid` 值。**必须**使用 `page.locator('[data-testid="KEY"]')` 格式定位元素。
+   - 快照 key 为 `"send-button"` → 使用 `page.locator('[data-testid="send-button"]')`
+   - 快照 key 为 `"session-selector"` → 使用 `page.locator('[data-testid="session-selector"]')`
+   - **禁止**在快照中存在对应 key 时使用 css、xpath、text 或其他选择器
 
-5. **css / xpath（最后手段）**：仅当所有高级定位器都不可用时才使用，且优先 css over xpath
+2. **text（快照中不存在对应 testid 时）**：使用 `page.getByText('...')` 或 `page.locator('text=...')`
 
-**关键规则**：绝对禁止在 `locator_bundle.testid` 有值的情况下使用 css、xpath 或其他低优先级选择器。
+3. **css / xpath（最后手段）**：仅当快照中完全没有相关元素时才使用
+
+**关键规则**：
+- 快照中的每个 key 都是一个真实存在的 `data-testid`，必须直接使用
+- 绝对禁止编造快照中不存在的 testid
+- 绝对禁止在快照有对应 key 时使用低优先级选择器
 
 ## 输出格式
 

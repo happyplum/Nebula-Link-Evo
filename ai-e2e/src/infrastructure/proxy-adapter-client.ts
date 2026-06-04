@@ -38,7 +38,7 @@ interface DebugSuccessEnvelope {
 }
 
 const DEFAULT_PROXY_ADAPTER_URL = 'http://localhost:3000';
-const DEFAULT_AI_TIMEOUT_MS = 120_000;
+const DEFAULT_AI_TIMEOUT_MS = 300_000;
 const DEFAULT_PLAYWRIGHT_TIMEOUT_MS = 10_000;
 
 export class ProxyAdapterClient {
