@@ -20,10 +20,8 @@ import { LoopGuardService } from '../services/loop-guard/loop-guard-service.js';
 import { InterventionEngine } from '../services/loop-guard/intervention.js';
 import { hashArgs, hashResult } from '../services/loop-guard/fingerprint.js';
 import type { LoopGuardVerdict } from '../services/loop-guard/types.js';
-import { createBrowserLifecycleTools } from '../clients/vercel-ai/browser-lifecycle-tools.js';
-import { createBrowserInteractionTools } from '../clients/vercel-ai/browser-interaction-tools.js';
+
 import { classifyRateLimitError } from '../services/provider/error-classifier.js';
-import { browserClient } from '../browser-client.js';
 
 interface ChatSendParams {
   sessionId: string;
@@ -225,42 +223,7 @@ class ChatHandler {
   private getSystemPrompt(_session: ChatSessionData): string {
     let basePrompt = `你是一个智能助手，可以通过工具与浏览器交互。
 
-## 浏览器交互工作流
-所有浏览器操作必须遵循以下工作流：
-
-### 步骤 1：获取页面快照
-调用 browser_snapshot 获取当前页面状态。返回内容包括：
-- snapshot_id：快照唯一标识（后续操作需要此ID）
-- elements_map：页面交互元素映射（每个元素有 nebula_id、标签、位置、文本）
-- simplified_dom：简化的DOM树
-
-### 步骤 2：使用 nebula_id 操作元素
-从 elements_map 中找到目标元素的 nebula_id，然后使用以下工具操作：
-
-## 可用操作
-- browser_snapshot：获取页面快照（返回 snapshot_id + elements_map + simplified_dom）
-- browser_click：点击元素（需要 snapshot_id 和 nebula_id）
-- browser_type：在输入框中追加输入文本（需要 snapshot_id、nebula_id 和 text）
-- browser_fill_form：设置表单值（覆盖模式，需要 snapshot_id、nebula_id 和 value）
-- browser_select_option：选择下拉选项（需要 snapshot_id、nebula_id 和 value）
-- browser_hover：悬停在元素上（需要 snapshot_id 和 nebula_id）
-- browser_navigate：导航到指定URL（需要 url 参数）
-- browser_screenshot：截取当前页面截图
-- browser_scroll：滚动页面（需要 x 和 y 像素偏移）
-- browser_press_key：按下键盘按键（需要 key 参数，如 "Enter"、"Tab"）
-- browser_wait：等待指定时间（毫秒）
-
-## 浏览器生命周期管理
-- browser_status：检查浏览器状态
-- browser_open：打开浏览器
-- browser_close：关闭浏览器
-- browser_list_tabs：查看标签页列表
-- browser_switch_tab：切换标签页（需要 id 参数）
-
-注意：
-- 关闭浏览器后，所有操作工具将不可用，直到重新调用 browser_open
-- 每次操作页面后，建议重新调用 browser_snapshot 获取新的 snapshot_id
-- nebula_id 在同一快照内有效，页面变化后需要重新获取`;
+浏览器操作通过MCP工具完成，工具列表会在下方自动列出。请根据工具描述中的说明使用它们。`;
 
     if (this.mcpClient && this.mcpClient.isEnabled()) {
       const tools = this.mcpClient.getAvailableTools();
@@ -274,7 +237,7 @@ class ChatHandler {
             return `- ${tool.name}: ${tool.description} (${params})`;
           })
           .join('\n');
-        basePrompt += `\n\n## 可用的MCP工具 (${tools.length}个)\n${toolsDescription}`;
+        basePrompt += `\n\n## 可用工具 (${tools.length}个)\n${toolsDescription}`;
       }
     }
 
@@ -484,8 +447,8 @@ class ChatHandler {
         error: errorMessage,
         code: 'API_ERROR',
       });
-        await this.flushSessionEvents();
-        return;
+      await this.flushSessionEvents();
+      return;
       }
     }
 
@@ -855,15 +818,12 @@ class ChatHandler {
   private createSDKTools(): Record<string, unknown> {
     const tools: Record<string, unknown> = {};
 
-    // Browser tools are always available — go directly to playwright-server
-    const browserLifecycleTools = createBrowserLifecycleTools(browserClient);
-    const browserInteractionTools = createBrowserInteractionTools(browserClient);
-
     if (!this.mcpClient || !this.mcpClient.isEnabled()) {
-      return { ...browserLifecycleTools, ...browserInteractionTools };
+      this.logger.warn('MCP is not available — no tools registered, AI can only respond with text');
+      return tools;
     }
 
-    // Non-browser MCP tools (file system, etc.) are still registered
+    // All tools (including browser tools) are provided by MCP servers
     for (const mcpTool of this.mcpClient.getAvailableTools()) {
       const fullToolName = mcpTool.name;
       tools[fullToolName] = tool({
@@ -882,7 +842,11 @@ class ChatHandler {
       });
     }
 
-    return { ...browserLifecycleTools, ...browserInteractionTools, ...tools };
+    if (Object.keys(tools).length === 0) {
+      this.logger.warn('MCP is enabled but no tools discovered — check MCP server status');
+    }
+
+    return tools;
   }
 
   private buildInputSchema(schema: unknown): z.ZodTypeAny {
