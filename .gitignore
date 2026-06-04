@@ -87,3 +87,7 @@ test-results/
 proxy-adapter/test-conversations-persistence.sqlite-shm
 docs/superpowers/plans
 .opencode
+
+# ai-e2e runtime artifacts
+ai-e2e/exports/
+ai-e2e/screenshot-*.png
