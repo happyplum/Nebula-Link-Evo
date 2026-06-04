@@ -10,9 +10,12 @@ AI-assisted browser automation platform. `proxy-adapter` is the core backend (AI
 shared/             Shared types and utilities (no src/ dir — source at package root)
 proxy-adapter/      Core backend — Fastify, AI providers, browser control (:3000)
 playwright-server/  Playwright automation service (:3001)
-debug-ui/           Primary web UI — React SPA, Vite (:5173)
+debug-ui/           Primary web UI — React SPA, Vite (:5173 dev)
 ai-e2e/             AI E2E test orchestration (:3002)
   ui/               Nested workspace — React SPA served at /ai-e2e/ (:5174 dev)
+mcps/               MCP servers (stdio transport)
+  vision-mcp-server/          Vision analysis MCP server
+  browser-control-mcp-server/ Browser control MCP server
 config/             Shared config templates (not a package)
 tools/              Utility scripts (not a package)
 ```
@@ -66,5 +69,7 @@ pnpm format         # prettier --write on same 3 packages
 - `shared/AGENTS.md`
 - `ai-e2e/AGENTS.md`
 - `ai-e2e/ui/AGENTS.md`
+- `mcps/vision-mcp-server/AGENTS.md`
+- `mcps/browser-control-mcp-server/AGENTS.md`
 - `config/AGENTS.md`
 - `tools/AGENTS.md`

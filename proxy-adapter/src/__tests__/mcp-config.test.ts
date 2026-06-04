@@ -16,7 +16,7 @@ describe('MCP Config', () => {
 
   it('should have browser-control server with correct command', () => {
     expect(config.mcp.servers['browser-control'].command).toBe('node');
-    expect(config.mcp.servers['browser-control'].args).toContain('../browser-control-mcp-server/dist/index.js');
+    expect(config.mcp.servers['browser-control'].args).toContain('../mcps/browser-control-mcp-server/dist/index.js');
   });
 
   it('should have PLAYWRIGHT_SERVER_URL env var', () => {
