@@ -5,7 +5,7 @@ import { DatabaseManager } from '../conversation/db.js';
 import type { AgentState } from '../conversation/types.js';
 import { StreamPersistWorker } from './stream-persist-worker.js';
 import type { SessionEventHub } from './session-event-hub.js';
-import { ProviderError } from './provider/errors.js';
+import { ProviderError, PROVIDER_ERRORS } from './provider/errors.js';
 import { createWorkerLogger } from './logger.js';
 import type { PendingJobInfo } from '@nebula-link-evo/shared';
 
@@ -170,7 +170,24 @@ export class ConversationJobQueue {
             });
             return;
           } catch (error) {
-            // Provider init failures are non-retryable — block immediately
+            // Rate-limit errors — block with rate_limit reason (no retry)
+            if (error instanceof ProviderError && error.code === PROVIDER_ERRORS.RATE_LIMITED) {
+              const retryAfterMs = (error.details as { retryAfterMs?: number } | undefined)?.retryAfterMs;
+              await this.syncSessionState(payload.sessionId, {
+                status: 'blocked',
+                jobId: id,
+                agentState: {
+                  schema_version: 1,
+                  blockReason: 'rate_limit',
+                  waitingFor: 'api_retry',
+                  lastError: toErrorMessage(error),
+                  ...(retryAfterMs != null ? { retryAfterMs } : {}),
+                },
+              });
+              return;
+            }
+
+            // Other provider errors are non-retryable — block immediately
             if (error instanceof ProviderError) {
               await this.syncSessionState(payload.sessionId, {
                 status: 'blocked',
@@ -178,7 +195,7 @@ export class ConversationJobQueue {
                 agentState: {
                   schema_version: 1,
                   blockReason: 'api_error',
-                  lastError: `Provider '${error.provider}' initialization failed: ${toErrorMessage(error)}`,
+                  lastError: `Provider '${error.provider}' error: ${toErrorMessage(error)}`,
                 },
               });
               return;

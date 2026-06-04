@@ -22,6 +22,7 @@ import { hashArgs, hashResult } from '../services/loop-guard/fingerprint.js';
 import type { LoopGuardVerdict } from '../services/loop-guard/types.js';
 import { createBrowserLifecycleTools } from '../clients/vercel-ai/browser-lifecycle-tools.js';
 import { createBrowserInteractionTools } from '../clients/vercel-ai/browser-interaction-tools.js';
+import { classifyRateLimitError } from '../services/provider/error-classifier.js';
 import { browserClient } from '../browser-client.js';
 
 interface ChatSendParams {
@@ -437,6 +438,7 @@ class ChatHandler {
         sessionId,
         runId,
         error: errorMessage,
+        code: 'VALIDATION_ERROR',
       });
       await this.flushSessionEvents();
       return;
@@ -476,11 +478,12 @@ class ChatHandler {
           { estimatedTokens: estimatedInputTokens, budget: inputBudget, messageCount: budgetedMessages.length },
           'Context overflow even after compression — reporting to frontend',
         );
-        await this.emitSessionEvent(sessionId, 'run.error', {
-          sessionId,
-          runId,
-          error: errorMessage,
-        });
+      await this.emitSessionEvent(sessionId, 'run.error', {
+        sessionId,
+        runId,
+        error: errorMessage,
+        code: 'API_ERROR',
+      });
         await this.flushSessionEvents();
         return;
       }
@@ -746,10 +749,28 @@ class ChatHandler {
       this.logger.error({ sessionId, provider: session.provider, model: session.model, iteration, error: errorMessage, stack: errorStack }, 'Failed to stream AI response');
       await this.flushSessionEvents();
       this.conversationManager.clearActiveToolCalls(sessionId);
+
+      // Classify rate-limit errors before emitting SSE
+      const classification = classifyRateLimitError(error, { provider: session.provider, logger: this.logger });
+
+      if (classification.isRateLimited) {
+        await this.emitSessionEvent(sessionId, 'run.error', {
+          sessionId,
+          runId,
+          error: errorMessage,
+          code: 'RATE_LIMITED',
+          retryAfterMs: classification.retryAfterMs,
+        });
+
+        // Re-throw classified ProviderError so job queue can set rate_limit blockReason
+        throw classification.providerError;
+      }
+
       await this.emitSessionEvent(sessionId, 'run.error', {
         sessionId,
         runId,
         error: errorMessage,
+        code: 'API_ERROR',
       });
     }
   }
