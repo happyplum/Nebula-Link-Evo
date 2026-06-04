@@ -346,6 +346,14 @@ export class ConversationJobQueue {
       job.status = 'cancelled';
       job.completedAt = new Date();
 
+      if (this.eventHub) {
+        this.eventHub.publish(job.sessionId, {
+          type: 'job.cancelled',
+          sessionId: job.sessionId,
+          jobId,
+        });
+      }
+
       // Clean up lock if no other jobs are queued for this session
       this.cleanupSessionLock(job.sessionId);
       return true;
