@@ -14,9 +14,18 @@ export interface ConfigResponse {
 
 // --- Health ---
 
+export type McpServerState =
+  | 'stopped'
+  | 'starting'
+  | 'running'
+  | 'reconnecting'
+  | 'failed'
+  | 'shutting_down';
+
 export interface McpServerStatus {
   name: string;
   running: boolean;
+  state: McpServerState;
   toolsCount: number;
 }
 

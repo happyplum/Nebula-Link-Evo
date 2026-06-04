@@ -72,13 +72,13 @@ describe('McpStatusList', () => {
     expect(screen.getByText('无已启用的 MCP 服务器。')).toBeInTheDocument();
   });
 
-  it('renders servers list and handles view tools click', () => {
+  it('renders servers with state machine states and handles view tools click', () => {
     vi.mocked(useMcpStatus).mockReturnValue({
       data: {
         enabled: true,
         servers: [
-          { name: 'server-1', running: true, toolsCount: 5 },
-          { name: 'server-2', running: false, toolsCount: 0 },
+          { name: 'browser-control', running: true, state: 'running' as const, toolsCount: 15 },
+          { name: 'vision-server', running: false, state: 'stopped' as const, toolsCount: 0 },
         ],
       },
       isLoading: false,
@@ -87,16 +87,66 @@ describe('McpStatusList', () => {
 
     const onSelectServer = vi.fn();
     render(<McpStatusList onSelectServer={onSelectServer} />);
-    
-    expect(screen.getByText('server-1')).toBeInTheDocument();
-    expect(screen.getByText('运行中 · 5 工具')).toBeInTheDocument();
-    
-    expect(screen.getByText('server-2')).toBeInTheDocument();
+
+    expect(screen.getByText('browser-control')).toBeInTheDocument();
+    expect(screen.getByText('运行中 · 15 工具')).toBeInTheDocument();
+
+    expect(screen.getByText('vision-server')).toBeInTheDocument();
     expect(screen.getByText('已停止 · 0 工具')).toBeInTheDocument();
 
     const viewButton = screen.getByText('查看工具');
     fireEvent.click(viewButton);
-    
-    expect(onSelectServer).toHaveBeenCalledWith('server-1');
+
+    expect(onSelectServer).toHaveBeenCalledWith('browser-control');
+  });
+
+  it('renders reconnecting state with loading indicator', () => {
+    vi.mocked(useMcpStatus).mockReturnValue({
+      data: {
+        enabled: true,
+        servers: [
+          { name: 'browser-control', running: false, state: 'reconnecting' as const, toolsCount: 0 },
+        ],
+      },
+      isLoading: false,
+      error: null,
+    } as any);
+
+    render(<McpStatusList />);
+    expect(screen.getByText('重连中 · 0 工具')).toBeInTheDocument();
+    // No view button when not running
+    expect(screen.queryByText('查看工具')).not.toBeInTheDocument();
+  });
+
+  it('renders failed state with error indicator', () => {
+    vi.mocked(useMcpStatus).mockReturnValue({
+      data: {
+        enabled: true,
+        servers: [
+          { name: 'browser-control', running: false, state: 'failed' as const, toolsCount: 0 },
+        ],
+      },
+      isLoading: false,
+      error: null,
+    } as any);
+
+    render(<McpStatusList />);
+    expect(screen.getByText('失败 · 0 工具')).toBeInTheDocument();
+  });
+
+  it('renders starting state with loading indicator', () => {
+    vi.mocked(useMcpStatus).mockReturnValue({
+      data: {
+        enabled: true,
+        servers: [
+          { name: 'browser-control', running: false, state: 'starting' as const, toolsCount: 0 },
+        ],
+      },
+      isLoading: false,
+      error: null,
+    } as any);
+
+    render(<McpStatusList />);
+    expect(screen.getByText('启动中 · 0 工具')).toBeInTheDocument();
   });
 });
