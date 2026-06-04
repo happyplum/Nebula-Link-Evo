@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { APICallError, RetryError } from 'ai';
-import { parseRetryAfterMs, classifyRateLimitError } from '../../../services/provider/error-classifier.js';
+import { parseRetryAfterMs, parseDirectMs, classifyRateLimitError } from '../../../services/provider/error-classifier.js';
 import { ProviderError, PROVIDER_ERRORS } from '../../../services/provider/errors.js';
 
 // ---------------------------------------------------------------------------
@@ -50,9 +50,8 @@ describe('parseRetryAfterMs', () => {
     expect(parseRetryAfterMs('')).toBeUndefined();
   });
 
-  it('treats whitespace-only string as 0 (trims to empty, Number("") = 0)', () => {
-    // Source logic: trim() → "   " becomes "", Number("") = 0, 0 >= 0 → returns 0
-    expect(parseRetryAfterMs('   ')).toBe(0);
+  it('returns undefined for whitespace-only string', () => {
+    expect(parseRetryAfterMs('   ')).toBeUndefined();
   });
 
   it('returns undefined for undefined input', () => {
@@ -92,6 +91,44 @@ describe('parseRetryAfterMs', () => {
 });
 
 // ===========================================================================
+// parseDirectMs
+// ===========================================================================
+
+describe('parseDirectMs', () => {
+  it('parses milliseconds "5000" → 5000', () => {
+    expect(parseDirectMs('5000')).toBe(5000);
+  });
+
+  it('parses zero "0" → 0', () => {
+    expect(parseDirectMs('0')).toBe(0);
+  });
+
+  it('returns undefined for empty string', () => {
+    expect(parseDirectMs('')).toBeUndefined();
+  });
+
+  it('returns undefined for whitespace-only string', () => {
+    expect(parseDirectMs('   ')).toBeUndefined();
+  });
+
+  it('returns undefined for undefined input', () => {
+    expect(parseDirectMs(undefined)).toBeUndefined();
+  });
+
+  it('returns undefined for negative number "-100"', () => {
+    expect(parseDirectMs('-100')).toBeUndefined();
+  });
+
+  it('returns undefined for non-numeric string', () => {
+    expect(parseDirectMs('not-a-number')).toBeUndefined();
+  });
+
+  it('parses decimal milliseconds "1500.7" → 1501 (ceil)', () => {
+    expect(parseDirectMs('1500.7')).toBe(1501);
+  });
+});
+
+// ===========================================================================
 // classifyRateLimitError
 // ===========================================================================
 
@@ -100,8 +137,7 @@ describe('classifyRateLimitError', () => {
   // APICallError with statusCode 429
   // -------------------------------------------------------------------------
   describe('APICallError with 429', () => {
-    it('returns isRateLimited=true with retryAfterMs from retry-after-ms header (treated as seconds)', () => {
-      // Source treats all numeric header values as seconds (×1000), even retry-after-ms
+    it('returns isRateLimited=true with retryAfterMs from retry-after-ms header (direct ms)', () => {
       const error = makeAPICallError({
         message: 'Too many requests',
         statusCode: 429,
@@ -110,7 +146,7 @@ describe('classifyRateLimitError', () => {
       });
       const result = classifyRateLimitError(error);
       expect(result.isRateLimited).toBe(true);
-      expect(result.retryAfterMs).toBe(5_000_000); // 5000 × 1000
+      expect(result.retryAfterMs).toBe(5000);
     });
 
     it('returns isRateLimited=true with retryAfterMs from retry-after header (seconds)', () => {
