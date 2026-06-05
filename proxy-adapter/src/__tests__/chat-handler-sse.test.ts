@@ -5,6 +5,9 @@ import type { ResolvedConfig } from '../config/schema.js';
 import { MCPSDKClient } from '../clients/mcp/sdk-client.js';
 import { SessionEventsDAO } from '../conversation/session-events-dao.js';
 import { SessionEventHub } from '../services/session-event-hub.js';
+import type { BrowserClient } from '../browser-client.js';
+import type { DOMSnapshotResponse } from '@nebula-link-evo/shared';
+import { toSDKResult } from '../browser-tools/result-adapter.js';
 
 type StreamResult = {
   fullStream: AsyncIterable<{ type: string; [key: string]: unknown }>;
@@ -73,6 +76,7 @@ const mockConfig: ResolvedConfig = {
 describe('ChatHandler SSE integration', () => {
   let conversationManager: ConversationManager;
   let mcpClient: MCPSDKClient;
+  let mockBrowserClient: BrowserClient;
   let sessionId: string;
 
   beforeEach(() => {
@@ -89,14 +93,15 @@ describe('ChatHandler SSE integration', () => {
     mcpClient = new MCPSDKClient(mockConfig);
     vi.spyOn(mcpClient, 'initialize').mockResolvedValue(undefined);
     vi.spyOn(mcpClient, 'isEnabled').mockReturnValue(true);
-    vi.spyOn(mcpClient, 'getAvailableTools').mockReturnValue([
-      {
-        name: 'browser-control.browser_snapshot',
-        description: 'Get browser snapshot',
-        inputSchema: { type: 'object', properties: {} },
-      },
-    ]);
-    vi.spyOn(mcpClient, 'callTool').mockResolvedValue({ ok: true, source: 'mcp' });
+    vi.spyOn(mcpClient, 'getAvailableTools').mockReturnValue([]);
+
+    // Mock browserClient - browser-control 工具现在走本地路径
+    mockBrowserClient = {
+      getSimplifiedDOM: vi.fn().mockResolvedValue({
+        snapshot_id: 'test-snapshot-123',
+        elements: [],
+      } as DOMSnapshotResponse),
+    } as unknown as BrowserClient;
   });
 
   it('emits required SSE event types with write-first behavior', async () => {
@@ -142,7 +147,7 @@ describe('ChatHandler SSE integration', () => {
           toolCallId: 'call_1',
           toolName: 'browser-control.browser_snapshot',
           input: {},
-          output: { ok: true, source: 'mcp' },
+          output: '{"snapshot_id":"test-snapshot-123","elements":[]}',
         },
         {
           type: 'finish',
@@ -158,7 +163,8 @@ describe('ChatHandler SSE integration', () => {
       mockConfig,
       mcpClient,
       sessionEventsDAO,
-      sessionEventHub
+      sessionEventHub,
+      mockBrowserClient
     );
 
     await chatHandler.handleChatSend('test-client', {
@@ -228,7 +234,7 @@ describe('ChatHandler SSE integration', () => {
           toolCallId: 'call_2',
           toolName: 'browser-control.browser_snapshot',
           input: {},
-          output: { ok: true, source: 'mcp' },
+          output: '{"snapshot_id":"test-snapshot-123","elements":[]}',
         },
         {
           type: 'finish',
@@ -244,7 +250,8 @@ describe('ChatHandler SSE integration', () => {
       mockConfig,
       mcpClient,
       sessionEventsDAO,
-      sessionEventHub
+      sessionEventHub,
+      mockBrowserClient
     );
 
     await chatHandler.handleChatSend('test-client', {
@@ -268,4 +275,34 @@ describe('ChatHandler SSE integration', () => {
     expect(toolResultIndex).toBeGreaterThan(toolCallIndex);
     expect(completedIndex).toBeGreaterThan(toolResultIndex);
   });
+
+  it('format alignment: toSDKResult converts browserClient result to MCP-compatible format', () => {
+    // MCP 路径格式：CallToolResult with content[0].text
+    const mcpFormatResult = {
+      content: [
+        {
+          type: 'text' as const,
+          text: JSON.stringify({ snapshot_id: 'test-123', elements: [] }),
+        },
+      ],
+      _meta: 'mcp',
+    };
+
+    // BrowserClient 本地路径返回：原始对象
+    const browserClientResult = {
+      snapshot_id: 'test-123',
+      elements: [],
+    } as DOMSnapshotResponse;
+
+    // toSDKResult 将本地结果转为 MCP 兼容的字符串格式
+    const converted = toSDKResult(browserClientResult);
+
+    // 验证：toSDKResult 输出与 MCP content[0].text 一致
+    expect(converted).toBe(mcpFormatResult.content[0].text);
+    expect(converted).toBe(JSON.stringify(browserClientResult));
+  });
+
+  // 注意：browser-control 工具调用路径的验证在更低层次的测试中进行
+  // （如 chat-handler.test.ts 和集成测试），因为 SSE 集成测试使用 streamTextMock
+  // 完全模拟了执行流程，无法直接观察实际的工具调用
 });

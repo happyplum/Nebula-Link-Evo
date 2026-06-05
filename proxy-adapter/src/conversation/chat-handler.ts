@@ -20,6 +20,9 @@ import { LoopGuardService } from '../services/loop-guard/loop-guard-service.js';
 import { InterventionEngine } from '../services/loop-guard/intervention.js';
 import { hashArgs, hashResult } from '../services/loop-guard/fingerprint.js';
 import type { LoopGuardVerdict } from '../services/loop-guard/types.js';
+import { browserClient } from '../browser-client.js';
+import type { BrowserClient } from '../browser-client.js';
+import { createBrowserTools } from '../browser-tools/index.js';
 
 import { classifyRateLimitError } from '../services/provider/error-classifier.js';
 
@@ -53,6 +56,7 @@ class ChatHandler {
   private sessionEventsDAO?: SessionEventsDAO;
   private sessionEventHub: SessionEventHub;
   private providerRegistry: ProviderRegistry;
+  private browserClient: BrowserClient;
   private maxToolLoops = 10;
   private toolLoopCount = 0;
   private loopGuardMap: Map<string, LoopGuardService> = new Map();
@@ -65,13 +69,15 @@ class ChatHandler {
     config: ResolvedConfig,
     mcpClient?: MCPSDKClient,
     sessionEventsDAO?: SessionEventsDAO,
-    sessionEventHub?: SessionEventHub
+    sessionEventHub?: SessionEventHub,
+    browserClientInstance?: BrowserClient,
   ) {
     this.conversationManager = conversationManager;
     this.config = config;
     this.mcpClient = mcpClient || null;
     this.sessionEventsDAO = sessionEventsDAO || this.resolveSessionEventsDAO();
     this.sessionEventHub = sessionEventHub || SessionEventHub.getInstance();
+    this.browserClient = browserClientInstance || browserClient;
     this.providerRegistry = this.createProviderRegistry(config);
     const configuredMaxSteps =
       this.config.settings?.maxSteps ??
@@ -215,7 +221,9 @@ class ChatHandler {
   }
 
   private getSystemPrompt(_session: ChatSessionData): string {
+    const localBrowserTools = createBrowserTools(this.browserClient || browserClient);
     const hasTools =
+      Object.keys(localBrowserTools).length > 0 ||
       this.mcpClient &&
       this.mcpClient.isEnabled() &&
       this.mcpClient.getAvailableTools().length > 0;
@@ -799,15 +807,27 @@ class ChatHandler {
 
   private createSDKTools(): Record<string, unknown> {
     const tools: Record<string, unknown> = {};
+    const localBrowserTools = createBrowserTools(this.browserClient || browserClient);
+
+    for (const [name, sdkTool] of Object.entries(localBrowserTools)) {
+      tools[name] = tool({
+        description: sdkTool.description,
+        inputSchema: this.buildInputSchema(sdkTool.parameters),
+        execute: sdkTool.execute,
+      });
+    }
 
     if (!this.mcpClient || !this.mcpClient.isEnabled()) {
-      this.logger.warn('MCP is not available — no tools registered, AI can only respond with text');
+      this.logger.warn('MCP is not available — only local browser tools registered');
       return tools;
     }
 
-    // All tools (including browser tools) are provided by MCP servers
     for (const mcpTool of this.mcpClient.getAvailableTools()) {
       const fullToolName = mcpTool.name;
+      if (fullToolName.startsWith('browser-control.')) {
+        continue;
+      }
+
       tools[fullToolName] = tool({
         description: mcpTool.description || fullToolName,
         inputSchema: this.buildInputSchema(mcpTool.inputSchema),
