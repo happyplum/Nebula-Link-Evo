@@ -9,6 +9,7 @@ import { BrowserLifecycle, type StateChangeReason } from './browser-lifecycle.js
 import { PageActions, MarkerActionResult } from './page-actions.js';
 import { DOMExtractor } from './dom-extractor.js';
 import { createWorkerLogger, type Logger } from './logger.js';
+import { acquireLock, browserMutex } from './browser-lock.js';
 
 export type { MarkerActionResult, StateChangeReason };
 
@@ -50,13 +51,23 @@ export class BrowserService {
   }
 
   async getTabs(): Promise<Array<{ id: string; url: string; title: string; isActive: boolean }>> {
-    return this.lifecycle.getTabs();
+    const release = await acquireLock('BrowserService.getTabs');
+    try {
+      return await this.lifecycle.getTabs();
+    } finally {
+      release();
+    }
   }
 
   async switchTab(id: string): Promise<void> {
-    const page = await this.lifecycle.switchTab(id);
-    this.pageActions.setPage(page);
-    this.domExtractor.setPage(page);
+    const release = await acquireLock('BrowserService.switchTab');
+    try {
+      const page = await this.lifecycle.switchTab(id);
+      this.pageActions.setPage(page);
+      this.domExtractor.setPage(page);
+    } finally {
+      release();
+    }
   }
 
   async open(
@@ -64,33 +75,58 @@ export class BrowserService {
     viewport = { width: 1920, height: 1080 },
     cdpPort?: number
   ): Promise<void> {
-    await this.lifecycle.open({ headless, viewport, cdpPort });
-    const page = this.lifecycle.getPage();
-    this.pageActions.setPage(page);
-    this.domExtractor.setPage(page);
+    const release = await acquireLock('BrowserService.open');
+    try {
+      await this.lifecycle.open({ headless, viewport, cdpPort });
+      const page = this.lifecycle.getPage();
+      this.pageActions.setPage(page);
+      this.domExtractor.setPage(page);
+    } finally {
+      release();
+    }
   }
 
   async close(): Promise<void> {
-    await this.lifecycle.close();
-    this.pageActions.setPage(null);
-    this.domExtractor.setPage(null);
+    const release = await acquireLock('BrowserService.close');
+    try {
+      await this.lifecycle.close();
+      this.pageActions.setPage(null);
+      this.domExtractor.setPage(null);
+    } finally {
+      release();
+    }
   }
 
   async navigate(
     url: string,
     waitUntil: 'load' | 'domcontentloaded' | 'networkidle' = 'networkidle'
   ): Promise<void> {
-    return this.lifecycle.navigate(url, waitUntil);
+    const release = await acquireLock('BrowserService.navigate');
+    try {
+      return await this.lifecycle.navigate(url, waitUntil);
+    } finally {
+      release();
+    }
   }
 
   async screenshot(
     fullPage: boolean = false
   ): Promise<{ screenshot: string; viewport: { width: number; height: number } }> {
-    return this.lifecycle.screenshot(fullPage);
+    const release = await acquireLock('BrowserService.screenshot');
+    try {
+      return await this.lifecycle.screenshot(fullPage);
+    } finally {
+      release();
+    }
   }
 
   async click(x: number, y: number): Promise<void> {
-    return this.pageActions.click(x, y);
+    const release = await acquireLock('BrowserService.click');
+    try {
+      return await this.pageActions.click(x, y);
+    } finally {
+      release();
+    }
   }
 
   async clickBySelector(
@@ -102,11 +138,21 @@ export class BrowserService {
       force?: boolean;
     }
   ): Promise<void> {
-    return this.pageActions.clickBySelector(selector, options);
+    const release = await acquireLock('BrowserService.clickBySelector');
+    try {
+      return await this.pageActions.clickBySelector(selector, options);
+    } finally {
+      release();
+    }
   }
 
   async clickByMarker(snapshotId: string, nebulaId: number): Promise<MarkerActionResult> {
-    return this.pageActions.clickByMarker(snapshotId, nebulaId);
+    const release = await acquireLock('BrowserService.clickByMarker');
+    try {
+      return await this.pageActions.clickByMarker(snapshotId, nebulaId);
+    } finally {
+      release();
+    }
   }
 
   async type(
@@ -118,7 +164,12 @@ export class BrowserService {
       force?: boolean;
     }
   ): Promise<void> {
-    return this.pageActions.type(selector, text, options);
+    const release = await acquireLock('BrowserService.type');
+    try {
+      return await this.pageActions.type(selector, text, options);
+    } finally {
+      release();
+    }
   }
 
   async typeByMarker(
@@ -131,43 +182,93 @@ export class BrowserService {
       force?: boolean;
     }
   ): Promise<MarkerActionResult> {
-    return this.pageActions.typeByMarker(snapshotId, nebulaId, text, options);
+    const release = await acquireLock('BrowserService.typeByMarker');
+    try {
+      return await this.pageActions.typeByMarker(snapshotId, nebulaId, text, options);
+    } finally {
+      release();
+    }
   }
 
   async scroll(x: number = 0, y: number = 0): Promise<void> {
-    return this.pageActions.scroll(x, y);
+    const release = await acquireLock('BrowserService.scroll');
+    try {
+      return await this.pageActions.scroll(x, y);
+    } finally {
+      release();
+    }
   }
 
   async focus(selector: string): Promise<void> {
-    return this.pageActions.focus(selector);
+    const release = await acquireLock('BrowserService.focus');
+    try {
+      return await this.pageActions.focus(selector);
+    } finally {
+      release();
+    }
   }
 
   async blur(selector: string): Promise<void> {
-    return this.pageActions.blur(selector);
+    const release = await acquireLock('BrowserService.blur');
+    try {
+      return await this.pageActions.blur(selector);
+    } finally {
+      release();
+    }
   }
 
   async hover(selector: string): Promise<void> {
-    return this.pageActions.hover(selector);
+    const release = await acquireLock('BrowserService.hover');
+    try {
+      return await this.pageActions.hover(selector);
+    } finally {
+      release();
+    }
   }
 
   async setValue(selector: string, value: string): Promise<void> {
-    return this.pageActions.setValue(selector, value);
+    const release = await acquireLock('BrowserService.setValue');
+    try {
+      return await this.pageActions.setValue(selector, value);
+    } finally {
+      release();
+    }
   }
 
   async dispatchEvent(selector: string, eventType: string): Promise<void> {
-    return this.pageActions.dispatchEvent(selector, eventType);
+    const release = await acquireLock('BrowserService.dispatchEvent');
+    try {
+      return await this.pageActions.dispatchEvent(selector, eventType);
+    } finally {
+      release();
+    }
   }
 
   async focusByMarker(snapshotId: string, nebulaId: number): Promise<MarkerActionResult> {
-    return this.pageActions.focusByMarker(snapshotId, nebulaId);
+    const release = await acquireLock('BrowserService.focusByMarker');
+    try {
+      return await this.pageActions.focusByMarker(snapshotId, nebulaId);
+    } finally {
+      release();
+    }
   }
 
   async blurByMarker(snapshotId: string, nebulaId: number): Promise<MarkerActionResult> {
-    return this.pageActions.blurByMarker(snapshotId, nebulaId);
+    const release = await acquireLock('BrowserService.blurByMarker');
+    try {
+      return await this.pageActions.blurByMarker(snapshotId, nebulaId);
+    } finally {
+      release();
+    }
   }
 
   async hoverByMarker(snapshotId: string, nebulaId: number): Promise<MarkerActionResult> {
-    return this.pageActions.hoverByMarker(snapshotId, nebulaId);
+    const release = await acquireLock('BrowserService.hoverByMarker');
+    try {
+      return await this.pageActions.hoverByMarker(snapshotId, nebulaId);
+    } finally {
+      release();
+    }
   }
 
   async setValueByMarker(
@@ -175,7 +276,12 @@ export class BrowserService {
     nebulaId: number,
     value: string
   ): Promise<MarkerActionResult> {
-    return this.pageActions.setValueByMarker(snapshotId, nebulaId, value);
+    const release = await acquireLock('BrowserService.setValueByMarker');
+    try {
+      return await this.pageActions.setValueByMarker(snapshotId, nebulaId, value);
+    } finally {
+      release();
+    }
   }
 
   async dispatchEventByMarker(
@@ -183,19 +289,39 @@ export class BrowserService {
     nebulaId: number,
     eventType: string
   ): Promise<MarkerActionResult> {
-    return this.pageActions.dispatchEventByMarker(snapshotId, nebulaId, eventType);
+    const release = await acquireLock('BrowserService.dispatchEventByMarker');
+    try {
+      return await this.pageActions.dispatchEventByMarker(snapshotId, nebulaId, eventType);
+    } finally {
+      release();
+    }
   }
 
   async getSimplifiedDOMV2(): Promise<SimplifiedDOMResponse> {
-    return this.domExtractor.getSimplifiedDOMV2();
+    const release = await acquireLock('BrowserService.getSimplifiedDOMV2');
+    try {
+      return await this.domExtractor.getSimplifiedDOMV2();
+    } finally {
+      release();
+    }
   }
 
   async getCdpEndpoint(): Promise<string | null> {
-    return this.lifecycle.getCdpEndpoint();
+    const release = await acquireLock('BrowserService.getCdpEndpoint');
+    try {
+      return await this.lifecycle.getCdpEndpoint();
+    } finally {
+      release();
+    }
   }
 
   async getTitle(): Promise<string | undefined> {
-    return this.lifecycle.getTitle();
+    const release = await acquireLock('BrowserService.getTitle');
+    try {
+      return await this.lifecycle.getTitle();
+    } finally {
+      release();
+    }
   }
 
   getPage(): Page | null {
@@ -204,7 +330,12 @@ export class BrowserService {
 
 
   async executeScript(script: string, _args: unknown[] = []): Promise<unknown> {
-    return this.pageActions.executeScript(script);
+    const release = await acquireLock('BrowserService.executeScript');
+    try {
+      return await this.pageActions.executeScript(script);
+    } finally {
+      release();
+    }
   }
 
   async getElementAt(
@@ -226,7 +357,12 @@ export class BrowserService {
     isVisible: boolean;
     isInteractable: boolean;
   } | null> {
-    return this.pageActions.getElementAt(x, y);
+    const release = await acquireLock('BrowserService.getElementAt');
+    try {
+      return await this.pageActions.getElementAt(x, y);
+    } finally {
+      release();
+    }
   }
 
   static resetInstance(): void {
@@ -240,25 +376,34 @@ export class BrowserService {
 
   /** Build a unified debug status snapshot */
   async getDebugStatus(reason?: DebugStatusReason): Promise<DebugPlaywrightState> {
-    const isOpen = this.isOpen();
-    let title: string | null = null;
+    const release = await acquireLock('BrowserService.getDebugStatus');
+    try {
+      const isOpen = this.isOpen();
+      let title: string | null = null;
 
-    if (isOpen) {
-      try {
-        title = (await this.getTitle()) ?? null;
-      } catch {
-        // Browser/page teardown may race status snapshots.
+      if (isOpen) {
+        try {
+          title = (await this.lifecycle.getTitle()) ?? null;
+        } catch {
+          // Browser/page teardown may race status snapshots.
+        }
       }
-    }
 
-    return {
-      isOpen,
-      url: this.getCurrentUrl() ?? null,
-      title,
-      status: isOpen ? 'ready' : 'unknown',
-      viewport: this.getViewport() ?? undefined,
-      reason,
-    };
+      if (browserMutex.isLocked()) {
+        this.logger.debug('Browser mutex is held while building debug status');
+      }
+
+      return {
+        isOpen,
+        url: this.getCurrentUrl() ?? null,
+        title,
+        status: isOpen ? 'ready' : 'unknown',
+        viewport: this.getViewport() ?? undefined,
+        reason,
+      };
+    } finally {
+      release();
+    }
   }
 }
 
