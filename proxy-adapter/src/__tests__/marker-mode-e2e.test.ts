@@ -20,6 +20,10 @@ vi.mock('axios', () => ({
   default: {
     post: vi.fn().mockResolvedValue({ data: { success: true } }),
     get: vi.fn().mockResolvedValue({ data: { success: true } }),
+    isAxiosError: vi.fn((error: unknown) => {
+      return error instanceof Error && 'isAxiosError' in error;
+    }),
+    defaults: { headers: { common: {} } },
   },
 }));
 
