@@ -22,7 +22,7 @@
     "enabled": true,
     "servers": {
       "browser-control": {
-        "enabled": true,
+        "enabled": false,
         "deprecated": true,
         "command": "node",
         "args": ["../mcps/browser-control-mcp-server/dist/index.js"],
