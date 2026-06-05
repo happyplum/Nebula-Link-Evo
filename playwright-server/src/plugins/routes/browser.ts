@@ -1,6 +1,7 @@
 import { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import type { DebugStatusReason } from '@nebula-link-evo/shared/types/debug-events.js';
 import { BrowserService } from '../../services/browser-service.js';
+import { BrowserMutexError, getCurrentOwner } from '../../services/browser-lock.js';
 import {
   BrowserOpenRequestSchema,
   BrowserNavigateRequestSchema,
@@ -43,16 +44,21 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
         response: {
           200: SuccessResponseSchema,
           500: ErrorResponseSchema,
+          409: ErrorResponseSchema,
         },
       },
     },
     async (request, reply) => {
+      const owner = (request.headers['x-browser-owner'] as string) || undefined;
       try {
         const { headless = false, viewport, cdpPort } = (request.body ?? {}) as BrowserOpenRequest;
-        await browserService.open(headless, viewport, cdpPort);
+        await browserService.open(headless, viewport, cdpPort, owner);
         await publishDebugStatus(browserService, 'open');
         return { success: true, message: 'Browser opened successfully' };
       } catch (error) {
+        if (error instanceof BrowserMutexError) {
+          return reply.code(409).send({ error: error.message, currentOwner: getCurrentOwner() });
+        }
         reply.status(500);
         return { success: false, error: (error as Error).message };
       }
@@ -70,13 +76,15 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
         response: {
           200: BrowserStatusResponseSchema,
           500: ErrorResponseSchema,
+          409: ErrorResponseSchema,
         },
       },
     },
     async (request, reply) => {
+      const owner = (request.headers['x-browser-owner'] as string) || undefined;
       try {
         const { url, waitUntil = 'networkidle' } = request.body as BrowserNavigateRequest;
-        await browserService.navigate(url, waitUntil as 'load' | 'domcontentloaded' | 'networkidle');
+        await browserService.navigate(url, waitUntil as 'load' | 'domcontentloaded' | 'networkidle', owner);
         await publishDebugStatus(browserService, 'navigate');
         return {
           isOpen: browserService.isOpen(),
@@ -84,6 +92,9 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
           title: await browserService.getTitle(),
         };
       } catch (error) {
+        if (error instanceof BrowserMutexError) {
+          return reply.code(409).send({ error: error.message, currentOwner: getCurrentOwner() });
+        }
         reply.status(500);
         return { success: false, error: (error as Error).message };
       }
@@ -100,15 +111,20 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
         response: {
           200: ScreenshotResponseSchema,
           500: ErrorResponseSchema,
+          409: ErrorResponseSchema,
         },
       },
     },
     async (request, reply) => {
+      const owner = (request.headers['x-browser-owner'] as string) || undefined;
       try {
         const { fullPage = false }: { fullPage?: boolean } = request.body ?? {};
-        const result = await browserService.screenshot(fullPage);
+        const result = await browserService.screenshot(fullPage, owner);
         return { success: true, ...result };
       } catch (error) {
+        if (error instanceof BrowserMutexError) {
+          return reply.code(409).send({ error: error.message, currentOwner: getCurrentOwner() });
+        }
         reply.status(500);
         return { success: false, error: (error as Error).message };
       }
@@ -125,15 +141,20 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
         response: {
           200: SuccessResponseSchema,
           500: ErrorResponseSchema,
+          409: ErrorResponseSchema,
         },
       },
     },
     async (request, reply) => {
+      const owner = (request.headers['x-browser-owner'] as string) || undefined;
       try {
-        await browserService.close();
+        await browserService.close(owner);
         await publishDebugStatus(browserService, 'close');
         return { success: true, message: 'Browser closed successfully' };
       } catch (error) {
+        if (error instanceof BrowserMutexError) {
+          return reply.code(409).send({ error: error.message, currentOwner: getCurrentOwner() });
+        }
         reply.status(500);
         return { success: false, error: (error as Error).message };
       }
@@ -172,14 +193,19 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
         response: {
           200: BrowserTabsResponseSchema,
           500: ErrorResponseSchema,
+          409: ErrorResponseSchema,
         },
       },
     },
     async (request, reply) => {
+      const owner = (request.headers['x-browser-owner'] as string) || undefined;
       try {
-        const tabs = await browserService.getTabs();
+        const tabs = await browserService.getTabs(owner);
         return { tabs };
       } catch (error) {
+        if (error instanceof BrowserMutexError) {
+          return reply.code(409).send({ error: error.message, currentOwner: getCurrentOwner() });
+        }
         reply.status(500);
         return { success: false, error: (error as Error).message };
       }
@@ -197,15 +223,20 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
         response: {
           200: SuccessResponseSchema,
           500: ErrorResponseSchema,
+          409: ErrorResponseSchema,
         },
       },
     },
     async (request, reply) => {
+      const owner = (request.headers['x-browser-owner'] as string) || undefined;
       try {
-        await browserService.switchTab((request.body as BrowserSwitchTabRequest).id);
+        await browserService.switchTab((request.body as BrowserSwitchTabRequest).id, owner);
         await publishDebugStatus(browserService, 'switch_tab');
         return { success: true, message: 'Switched tab successfully' };
       } catch (error) {
+        if (error instanceof BrowserMutexError) {
+          return reply.code(409).send({ error: error.message, currentOwner: getCurrentOwner() });
+        }
         reply.status(500);
         return { success: false, error: (error as Error).message };
       }

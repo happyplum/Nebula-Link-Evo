@@ -79,7 +79,7 @@ describe('Browser Routes', () => {
       success: true,
       message: 'Browser opened successfully',
     });
-    expect(mockBrowserService.open).toHaveBeenCalledWith(true, { width: 1024, height: 768 }, undefined);
+    expect(mockBrowserService.open).toHaveBeenCalledWith(true, { width: 1024, height: 768 }, undefined, undefined);
     expect(mockBrowserService.getDebugStatus).toHaveBeenCalledWith('open');
     expect(publishSpy).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -109,7 +109,7 @@ describe('Browser Routes', () => {
       currentUrl: 'https://example.com',
       title: 'Example Domain',
     });
-    expect(mockBrowserService.navigate).toHaveBeenCalledWith('https://example.com', 'networkidle');
+    expect(mockBrowserService.navigate).toHaveBeenCalledWith('https://example.com', 'networkidle', undefined);
     expect(mockBrowserService.getDebugStatus).toHaveBeenCalledWith('navigate');
     expect(publishSpy).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -134,7 +134,7 @@ describe('Browser Routes', () => {
       screenshot: 'base64',
       viewport: { width: 800, height: 600 },
     });
-    expect(mockBrowserService.screenshot).toHaveBeenCalledWith(true);
+    expect(mockBrowserService.screenshot).toHaveBeenCalledWith(true, undefined);
   });
 
   it('should return 500 on screenshot error', async () => {
@@ -195,7 +195,7 @@ describe('Browser Routes', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(mockBrowserService.switchTab).toHaveBeenCalledWith('tab-1');
+    expect(mockBrowserService.switchTab).toHaveBeenCalledWith('tab-1', undefined);
     expect(mockBrowserService.getDebugStatus).toHaveBeenCalledWith('switch_tab');
     expect(publishSpy).toHaveBeenCalledWith(
       expect.objectContaining({

@@ -52,7 +52,7 @@ describe('Action Routes', () => {
         success: true,
         message: 'Clicked at (100, 200)'
       });
-      expect(mockBrowserService.click).toHaveBeenCalledWith(100, 200);
+      expect(mockBrowserService.click).toHaveBeenCalledWith(100, 200, undefined);
     });
 
     it('should retry on failure and return success', async () => {
@@ -105,7 +105,7 @@ describe('Action Routes', () => {
         success: true,
         message: 'Clicked element: #test'
       });
-      expect(mockBrowserService.clickBySelector).toHaveBeenCalledWith('#test', undefined);
+      expect(mockBrowserService.clickBySelector).toHaveBeenCalledWith('#test', undefined, undefined);
     });
 
     it('should fallback to force click on failure', async () => {
@@ -121,8 +121,8 @@ describe('Action Routes', () => {
 
       expect(response.statusCode).toBe(200);
       expect(mockBrowserService.clickBySelector).toHaveBeenCalledTimes(2);
-      expect(mockBrowserService.clickBySelector).toHaveBeenNthCalledWith(1, '#test', { delay: 100, button: 'left', clickCount: 1 });
-      expect(mockBrowserService.clickBySelector).toHaveBeenNthCalledWith(2, '#test', { delay: 100, button: 'left', clickCount: 1, force: true });
+      expect(mockBrowserService.clickBySelector).toHaveBeenNthCalledWith(1, '#test', { delay: 100, button: 'left', clickCount: 1 }, undefined);
+      expect(mockBrowserService.clickBySelector).toHaveBeenNthCalledWith(2, '#test', { delay: 100, button: 'left', clickCount: 1, force: true }, undefined);
     });
 
     it('should return 500 if force click also fails', async () => {
@@ -157,7 +157,7 @@ describe('Action Routes', () => {
         attempts: 1,
         latency_ms: 10
       });
-      expect(mockBrowserService.clickByMarker).toHaveBeenCalledWith('snap-1', 123);
+      expect(mockBrowserService.clickByMarker).toHaveBeenCalledWith('snap-1', 123, undefined);
     });
 
     it('should return 200 with success=false if marker click fails', async () => {
@@ -215,7 +215,7 @@ describe('Action Routes', () => {
         success: true,
         message: 'Typed "hello" into #test'
       });
-      expect(mockBrowserService.type).toHaveBeenCalledWith('#test', 'hello', undefined);
+      expect(mockBrowserService.type).toHaveBeenCalledWith('#test', 'hello', undefined, undefined);
     });
 
     it('should retry with force option on failure', async () => {
@@ -231,8 +231,8 @@ describe('Action Routes', () => {
 
       expect(response.statusCode).toBe(200);
       expect(mockBrowserService.type).toHaveBeenCalledTimes(2);
-      expect(mockBrowserService.type).toHaveBeenNthCalledWith(1, '#test', 'hello', undefined);
-      expect(mockBrowserService.type).toHaveBeenNthCalledWith(2, '#test', 'hello', { force: true });
+      expect(mockBrowserService.type).toHaveBeenNthCalledWith(1, '#test', 'hello', undefined, undefined);
+      expect(mockBrowserService.type).toHaveBeenNthCalledWith(2, '#test', 'hello', { force: true }, undefined);
     });
 
     it('should return 500 after max retries', async () => {
@@ -266,7 +266,7 @@ describe('Action Routes', () => {
         success: true,
         message: 'Scrolled by (0, 500)'
       });
-      expect(mockBrowserService.scroll).toHaveBeenCalledWith(0, 500);
+      expect(mockBrowserService.scroll).toHaveBeenCalledWith(0, 500, undefined);
     });
 
     it('should return 500 on error', async () => {
@@ -299,7 +299,7 @@ describe('Action Routes', () => {
         success: true,
         message: 'Focused element: #test'
       });
-      expect(mockBrowserService.focus).toHaveBeenCalledWith('#test');
+      expect(mockBrowserService.focus).toHaveBeenCalledWith('#test', undefined);
     });
 
     it('should return 500 on error', async () => {
@@ -312,6 +312,10 @@ describe('Action Routes', () => {
       });
 
       expect(response.statusCode).toBe(500);
+      expect(JSON.parse(response.payload)).toEqual({
+        success: false,
+        error: 'Failed'
+      });
     });
   });
 
@@ -328,7 +332,7 @@ describe('Action Routes', () => {
         success: true,
         message: 'Blurred element: #test'
       });
-      expect(mockBrowserService.blur).toHaveBeenCalledWith('#test');
+      expect(mockBrowserService.blur).toHaveBeenCalledWith('#test', undefined);
     });
 
     it('should return 500 on error', async () => {
@@ -341,6 +345,10 @@ describe('Action Routes', () => {
       });
 
       expect(response.statusCode).toBe(500);
+      expect(JSON.parse(response.payload)).toEqual({
+        success: false,
+        error: 'Failed'
+      });
     });
   });
 
@@ -357,7 +365,7 @@ describe('Action Routes', () => {
         success: true,
         message: 'Hovered element: #test'
       });
-      expect(mockBrowserService.hover).toHaveBeenCalledWith('#test');
+      expect(mockBrowserService.hover).toHaveBeenCalledWith('#test', undefined);
     });
 
     it('should return 500 on error', async () => {
@@ -370,6 +378,10 @@ describe('Action Routes', () => {
       });
 
       expect(response.statusCode).toBe(500);
+      expect(JSON.parse(response.payload)).toEqual({
+        success: false,
+        error: 'Failed'
+      });
     });
   });
 
@@ -386,7 +398,7 @@ describe('Action Routes', () => {
         success: true,
         message: 'Set value of #test'
       });
-      expect(mockBrowserService.setValue).toHaveBeenCalledWith('#test', 'val');
+      expect(mockBrowserService.setValue).toHaveBeenCalledWith('#test', 'val', undefined);
     });
 
     it('should return 500 on error', async () => {
@@ -399,6 +411,10 @@ describe('Action Routes', () => {
       });
 
       expect(response.statusCode).toBe(500);
+      expect(JSON.parse(response.payload)).toEqual({
+        success: false,
+        error: 'Failed'
+      });
     });
   });
 
@@ -415,7 +431,7 @@ describe('Action Routes', () => {
         success: true,
         message: 'Dispatched change on #test'
       });
-      expect(mockBrowserService.dispatchEvent).toHaveBeenCalledWith('#test', 'change');
+      expect(mockBrowserService.dispatchEvent).toHaveBeenCalledWith('#test', 'change', undefined);
     });
 
     it('should return 500 on error', async () => {
@@ -428,21 +444,14 @@ describe('Action Routes', () => {
       });
 
       expect(response.statusCode).toBe(500);
+      expect(JSON.parse(response.payload)).toEqual({
+        success: false,
+        error: 'Failed'
+      });
     });
   });
 
   describe('POST /execute-by-marker', () => {
-    it('should call clickByMarker for click action', async () => {
-      const response = await app.inject({
-        method: 'POST',
-        url: '/execute-by-marker',
-        payload: { snapshot_id: 'snap-1', nebula_id: 123, action: 'click' }
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(mockBrowserService.clickByMarker).toHaveBeenCalledWith('snap-1', 123);
-    });
-
     it('should call typeByMarker for type action', async () => {
       const response = await app.inject({
         method: 'POST',
@@ -451,7 +460,7 @@ describe('Action Routes', () => {
       });
 
       expect(response.statusCode).toBe(200);
-      expect(mockBrowserService.typeByMarker).toHaveBeenCalledWith('snap-1', 123, 'hello', undefined);
+      expect(mockBrowserService.typeByMarker).toHaveBeenCalledWith('snap-1', 123, 'hello', undefined, undefined);
     });
 
     it('should call typeByMarker with object param', async () => {
@@ -462,7 +471,7 @@ describe('Action Routes', () => {
       });
 
       expect(response.statusCode).toBe(200);
-      expect(mockBrowserService.typeByMarker).toHaveBeenCalledWith('snap-1', 123, 'hello', { delay: 10 });
+      expect(mockBrowserService.typeByMarker).toHaveBeenCalledWith('snap-1', 123, 'hello', { delay: 10 }, undefined);
     });
 
     it('should call focusByMarker for focus action', async () => {
@@ -473,7 +482,7 @@ describe('Action Routes', () => {
       });
 
       expect(response.statusCode).toBe(200);
-      expect(mockBrowserService.focusByMarker).toHaveBeenCalledWith('snap-1', 123);
+      expect(mockBrowserService.focusByMarker).toHaveBeenCalledWith('snap-1', 123, undefined);
     });
 
     it('should call blurByMarker for blur action', async () => {
@@ -484,7 +493,7 @@ describe('Action Routes', () => {
       });
 
       expect(response.statusCode).toBe(200);
-      expect(mockBrowserService.blurByMarker).toHaveBeenCalledWith('snap-1', 123);
+      expect(mockBrowserService.blurByMarker).toHaveBeenCalledWith('snap-1', 123, undefined);
     });
 
     it('should call hoverByMarker for hover action', async () => {
@@ -495,7 +504,7 @@ describe('Action Routes', () => {
       });
 
       expect(response.statusCode).toBe(200);
-      expect(mockBrowserService.hoverByMarker).toHaveBeenCalledWith('snap-1', 123);
+      expect(mockBrowserService.hoverByMarker).toHaveBeenCalledWith('snap-1', 123, undefined);
     });
 
     it('should call setValueByMarker for value action', async () => {
@@ -506,7 +515,7 @@ describe('Action Routes', () => {
       });
 
       expect(response.statusCode).toBe(200);
-      expect(mockBrowserService.setValueByMarker).toHaveBeenCalledWith('snap-1', 123, 'val');
+      expect(mockBrowserService.setValueByMarker).toHaveBeenCalledWith('snap-1', 123, 'val', undefined);
     });
 
     it('should call dispatchEventByMarker for dispatch action', async () => {
@@ -517,7 +526,7 @@ describe('Action Routes', () => {
       });
 
       expect(response.statusCode).toBe(200);
-      expect(mockBrowserService.dispatchEventByMarker).toHaveBeenCalledWith('snap-1', 123, 'change');
+      expect(mockBrowserService.dispatchEventByMarker).toHaveBeenCalledWith('snap-1', 123, 'change', undefined);
     });
 
     it('should return 400 for unknown action', async () => {

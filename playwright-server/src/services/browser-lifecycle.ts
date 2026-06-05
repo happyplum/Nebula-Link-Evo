@@ -31,6 +31,7 @@ export interface BrowserState {
   lastHeadless: boolean | null;
   lastViewport: { width: number; height: number } | null;
   lastCdpPort: number | null;
+  currentOwner: string | null;
 }
 
 export interface OpenBrowserOptions {
@@ -55,6 +56,7 @@ export class BrowserLifecycle {
     lastHeadless: null,
     lastViewport: null,
     lastCdpPort: null,
+    currentOwner: null,
   };
   private pageIds = new WeakMap<Page, string>();
   private switchVersion = 0;
@@ -71,6 +73,7 @@ export class BrowserLifecycle {
     this.state.context = null;
     this.state.page = null;
     this.state.cdpPort = 0;
+    this.state.currentOwner = null;
     this.onStateChange?.('browser_disconnected');
   };
 
@@ -341,6 +344,7 @@ export class BrowserLifecycle {
       this.state.lastHeadless = null;
       this.state.lastViewport = null;
       this.state.lastCdpPort = null;
+      this.state.currentOwner = null;
     }
   }
 
