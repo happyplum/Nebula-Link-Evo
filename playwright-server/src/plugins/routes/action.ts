@@ -1,5 +1,6 @@
 import { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import { BrowserService } from '../../services/browser-service.js';
+import { BrowserMutexError, getCurrentOwner } from '../../services/browser-lock.js';
 import type { MarkerActionResult } from '../../services/page-actions.js';
 import type { DebugMarkerEvent, DebugOverlayEvent } from '@nebula-link-evo/shared/types/debug-events';
 import {
@@ -83,17 +84,19 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
         response: {
           200: SuccessResponseSchema,
           500: ErrorResponseSchema,
+          409: ErrorResponseSchema,
         },
       },
     },
     async (request, reply) => {
+      const owner = (request.headers['x-browser-owner'] as string) || undefined;
       try {
         const { x, y } = request.body as ClickRequest;
 
         let lastError: Error | null = null;
         for (let attempt = 1; attempt <= 3; attempt++) {
           try {
-            await BrowserService.getInstance().click(x, y);
+            await BrowserService.getInstance().click(x, y, owner);
             return {
               success: true,
               message: `Clicked at (${x}, ${y})`,
@@ -109,6 +112,9 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
 
         throw lastError;
       } catch (error) {
+        if (error instanceof BrowserMutexError) {
+          return reply.code(409).send({ error: error.message, currentOwner: getCurrentOwner() });
+        }
         reply.status(500);
         return { success: false, error: (error as Error).message };
       }
@@ -126,10 +132,12 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
         response: {
           200: SuccessResponseSchema,
           500: ErrorResponseSchema,
+          409: ErrorResponseSchema,
         },
       },
     },
     async (request, reply) => {
+      const owner = (request.headers['x-browser-owner'] as string) || undefined;
       try {
         const { selector, options } = request.body as ClickBySelectorRequest;
 
@@ -139,7 +147,7 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
             clickCount?: number;
             delay?: number;
             force?: boolean;
-          });
+          }, owner);
         } catch {
           request.log.info({ selector }, 'Normal click failed, retrying with force');
           await BrowserService.getInstance().clickBySelector(selector, { ...options, force: true } as {
@@ -147,11 +155,14 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
             clickCount?: number;
             delay?: number;
             force?: boolean;
-          });
+          }, owner);
         }
 
         return { success: true, message: `Clicked element: ${selector}` };
       } catch (error) {
+        if (error instanceof BrowserMutexError) {
+          return reply.code(409).send({ error: error.message, currentOwner: getCurrentOwner() });
+        }
         reply.status(500);
         return { success: false, error: (error as Error).message };
       }
@@ -184,14 +195,16 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
             },
           },
           500: ErrorResponseSchema,
+          409: ErrorResponseSchema,
         },
       },
     },
     async (request, reply) => {
+      const owner = (request.headers['x-browser-owner'] as string) || undefined;
       try {
         const { snapshot_id, nebula_id } = request.body as ClickByMarkerRequest;
 
-        const result = await BrowserService.getInstance().clickByMarker(snapshot_id, nebula_id);
+        const result = await BrowserService.getInstance().clickByMarker(snapshot_id, nebula_id, owner);
 
         if (result.success) {
           await publishMarkerDebugEvents('click', result);
@@ -216,6 +229,9 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
           };
         }
       } catch (error) {
+        if (error instanceof BrowserMutexError) {
+          return reply.code(409).send({ error: error.message, currentOwner: getCurrentOwner() });
+        }
         reply.status(500);
         return { success: false, error: (error as Error).message };
       }
@@ -233,10 +249,12 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
         response: {
           200: SuccessResponseSchema,
           500: ErrorResponseSchema,
+          409: ErrorResponseSchema,
         },
       },
     },
     async (request, reply) => {
+      const owner = (request.headers['x-browser-owner'] as string) || undefined;
       try {
         const { selector, text, options } = request.body as TypeRequest;
         let currentOptions: { delay?: number; clear?: boolean; force?: boolean } | undefined = options;
@@ -244,7 +262,7 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
         let lastError: Error | null = null;
         for (let attempt = 1; attempt <= 3; attempt++) {
           try {
-            await BrowserService.getInstance().type(selector, text, currentOptions);
+            await BrowserService.getInstance().type(selector, text, currentOptions, owner);
             return {
               success: true,
               message: `Typed "${text}" into ${selector}`,
@@ -265,6 +283,9 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
 
         throw lastError;
       } catch (error) {
+        if (error instanceof BrowserMutexError) {
+          return reply.code(409).send({ error: error.message, currentOwner: getCurrentOwner() });
+        }
         reply.status(500);
         return { success: false, error: (error as Error).message };
       }
@@ -282,15 +303,20 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
         response: {
           200: SuccessResponseSchema,
           500: ErrorResponseSchema,
+          409: ErrorResponseSchema,
         },
       },
     },
     async (request, reply) => {
+      const owner = (request.headers['x-browser-owner'] as string) || undefined;
       try {
         const { x = 0, y = 0 } = request.body as ScrollRequest;
-        await BrowserService.getInstance().scroll(x, y);
+        await BrowserService.getInstance().scroll(x, y, owner);
         return { success: true, message: `Scrolled by (${x}, ${y})` };
       } catch (error) {
+        if (error instanceof BrowserMutexError) {
+          return reply.code(409).send({ error: error.message, currentOwner: getCurrentOwner() });
+        }
         reply.status(500);
         return { success: false, error: (error as Error).message };
       }
@@ -308,15 +334,19 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
           properties: { selector: { type: 'string' } },
           required: ['selector'],
         },
-        response: { 200: SuccessResponseSchema, 500: ErrorResponseSchema },
+        response: { 200: SuccessResponseSchema, 500: ErrorResponseSchema, 409: ErrorResponseSchema },
       },
     },
     async (request, reply) => {
+      const owner = (request.headers['x-browser-owner'] as string) || undefined;
       try {
         const { selector } = request.body as { selector: string };
-        await BrowserService.getInstance().focus(selector);
+        await BrowserService.getInstance().focus(selector, owner);
         return { success: true, message: `Focused element: ${selector}` };
       } catch (error) {
+        if (error instanceof BrowserMutexError) {
+          return reply.code(409).send({ error: error.message, currentOwner: getCurrentOwner() });
+        }
         reply.status(500);
         return { success: false, error: (error as Error).message };
       }
@@ -334,15 +364,19 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
           properties: { selector: { type: 'string' } },
           required: ['selector'],
         },
-        response: { 200: SuccessResponseSchema, 500: ErrorResponseSchema },
+        response: { 200: SuccessResponseSchema, 500: ErrorResponseSchema, 409: ErrorResponseSchema },
       },
     },
     async (request, reply) => {
+      const owner = (request.headers['x-browser-owner'] as string) || undefined;
       try {
         const { selector } = request.body as { selector: string };
-        await BrowserService.getInstance().blur(selector);
+        await BrowserService.getInstance().blur(selector, owner);
         return { success: true, message: `Blurred element: ${selector}` };
       } catch (error) {
+        if (error instanceof BrowserMutexError) {
+          return reply.code(409).send({ error: error.message, currentOwner: getCurrentOwner() });
+        }
         reply.status(500);
         return { success: false, error: (error as Error).message };
       }
@@ -360,15 +394,19 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
           properties: { selector: { type: 'string' } },
           required: ['selector'],
         },
-        response: { 200: SuccessResponseSchema, 500: ErrorResponseSchema },
+        response: { 200: SuccessResponseSchema, 500: ErrorResponseSchema, 409: ErrorResponseSchema },
       },
     },
     async (request, reply) => {
+      const owner = (request.headers['x-browser-owner'] as string) || undefined;
       try {
         const { selector } = request.body as { selector: string };
-        await BrowserService.getInstance().hover(selector);
+        await BrowserService.getInstance().hover(selector, owner);
         return { success: true, message: `Hovered element: ${selector}` };
       } catch (error) {
+        if (error instanceof BrowserMutexError) {
+          return reply.code(409).send({ error: error.message, currentOwner: getCurrentOwner() });
+        }
         reply.status(500);
         return { success: false, error: (error as Error).message };
       }
@@ -386,15 +424,19 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
           properties: { selector: { type: 'string' }, value: { type: 'string' } },
           required: ['selector', 'value'],
         },
-        response: { 200: SuccessResponseSchema, 500: ErrorResponseSchema },
+        response: { 200: SuccessResponseSchema, 500: ErrorResponseSchema, 409: ErrorResponseSchema },
       },
     },
     async (request, reply) => {
+      const owner = (request.headers['x-browser-owner'] as string) || undefined;
       try {
         const { selector, value } = request.body as { selector: string; value: string };
-        await BrowserService.getInstance().setValue(selector, value);
+        await BrowserService.getInstance().setValue(selector, value, owner);
         return { success: true, message: `Set value of ${selector}` };
       } catch (error) {
+        if (error instanceof BrowserMutexError) {
+          return reply.code(409).send({ error: error.message, currentOwner: getCurrentOwner() });
+        }
         reply.status(500);
         return { success: false, error: (error as Error).message };
       }
@@ -412,15 +454,19 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
           properties: { selector: { type: 'string' }, eventType: { type: 'string' } },
           required: ['selector', 'eventType'],
         },
-        response: { 200: SuccessResponseSchema, 500: ErrorResponseSchema },
+        response: { 200: SuccessResponseSchema, 500: ErrorResponseSchema, 409: ErrorResponseSchema },
       },
     },
     async (request, reply) => {
+      const owner = (request.headers['x-browser-owner'] as string) || undefined;
       try {
         const { selector, eventType } = request.body as { selector: string; eventType: string };
-        await BrowserService.getInstance().dispatchEvent(selector, eventType);
+        await BrowserService.getInstance().dispatchEvent(selector, eventType, owner);
         return { success: true, message: `Dispatched ${eventType} on ${selector}` };
       } catch (error) {
+        if (error instanceof BrowserMutexError) {
+          return reply.code(409).send({ error: error.message, currentOwner: getCurrentOwner() });
+        }
         reply.status(500);
         return { success: false, error: (error as Error).message };
       }
@@ -453,47 +499,52 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
             },
           },
           500: ErrorResponseSchema,
+          409: ErrorResponseSchema,
         },
       },
     },
     async (request, reply) => {
+      const owner = (request.headers['x-browser-owner'] as string) || undefined;
       try {
         const { snapshot_id, nebula_id, action, param } = request.body as ExecuteByMarkerRequest;
 
         let result: MarkerActionResult;
         switch (action) {
           case 'click':
-            result = await BrowserService.getInstance().clickByMarker(snapshot_id, nebula_id);
+            result = await BrowserService.getInstance().clickByMarker(snapshot_id, nebula_id, owner);
             break;
           case 'type':
             result = await BrowserService.getInstance().typeByMarker(
               snapshot_id,
               nebula_id,
               typeof param === 'string' ? param : (param as Record<string, string>)?.text,
-              typeof param === 'object' ? (param as Record<string, unknown>)?.options as { delay?: number; clear?: boolean; force?: boolean } : undefined
+              typeof param === 'object' ? (param as Record<string, unknown>)?.options as { delay?: number; clear?: boolean; force?: boolean } : undefined,
+              owner
             );
             break;
           case 'focus':
-            result = await BrowserService.getInstance().focusByMarker(snapshot_id, nebula_id);
+            result = await BrowserService.getInstance().focusByMarker(snapshot_id, nebula_id, owner);
             break;
           case 'blur':
-            result = await BrowserService.getInstance().blurByMarker(snapshot_id, nebula_id);
+            result = await BrowserService.getInstance().blurByMarker(snapshot_id, nebula_id, owner);
             break;
           case 'hover':
-            result = await BrowserService.getInstance().hoverByMarker(snapshot_id, nebula_id);
+            result = await BrowserService.getInstance().hoverByMarker(snapshot_id, nebula_id, owner);
             break;
           case 'value':
             result = await BrowserService.getInstance().setValueByMarker(
               snapshot_id,
               nebula_id,
-              typeof param === 'string' ? param : (param as Record<string, string>)?.value
+              typeof param === 'string' ? param : (param as Record<string, string>)?.value,
+              owner
             );
             break;
           case 'dispatch':
             result = await BrowserService.getInstance().dispatchEventByMarker(
               snapshot_id,
               nebula_id,
-              typeof param === 'string' ? param : (param as Record<string, string>)?.eventType
+              typeof param === 'string' ? param : (param as Record<string, string>)?.eventType,
+              owner
             );
             break;
           default:
@@ -523,6 +574,9 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
           };
         }
       } catch (error) {
+        if (error instanceof BrowserMutexError) {
+          return reply.code(409).send({ error: error.message, currentOwner: getCurrentOwner() });
+        }
         reply.status(500);
         return { success: false, error: (error as Error).message };
       }

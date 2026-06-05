@@ -1,5 +1,6 @@
 import { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import { BrowserService } from '../../services/browser-service.js';
+import { BrowserMutexError, getCurrentOwner } from '../../services/browser-lock.js';
 import { SimplifiedDOMResponseSchema } from '../../schemas/dom.js';
 import { SuccessResponseSchema, ErrorResponseSchema } from '../../schemas/common.js';
 import { Type } from '@sinclair/typebox';
@@ -61,6 +62,7 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
           400: ErrorResponseSchema,
           503: ErrorResponseSchema,
           500: ErrorResponseSchema,
+          409: ErrorResponseSchema,
         },
       },
       serializerCompiler: () => JSON.stringify,
@@ -82,6 +84,9 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
         request.log.info({ snapshot_id: dom.snapshot_id }, 'DOM snapshot generated');
         return dom;
       } catch (error) {
+        if (error instanceof BrowserMutexError) {
+          return reply.code(409).send({ error: error.message, currentOwner: getCurrentOwner() });
+        }
         request.log.error({ err: error }, 'DOM simplified request failed');
         reply.status(500);
         return { success: false, error: error instanceof Error ? error.message : 'Unknown error', code: 'INTERNAL_ERROR' };
@@ -100,6 +105,7 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
         response: {
           200: SuccessResponseSchema,
           500: ErrorResponseSchema,
+          409: ErrorResponseSchema,
         },
       },
     },
@@ -126,6 +132,9 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
         const result = await BrowserService.getInstance().executeScript(script, args);
         return { success: true, result };
       } catch (error) {
+        if (error instanceof BrowserMutexError) {
+          return reply.code(409).send({ error: error.message, currentOwner: getCurrentOwner() });
+        }
         reply.status(500);
         return { success: false, error: (error as Error).message };
       }
@@ -144,6 +153,7 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
           200: ElementAtResponseSchema,
           404: ErrorResponseSchema,
           500: ErrorResponseSchema,
+          409: ErrorResponseSchema,
         },
       },
     },
@@ -159,6 +169,9 @@ const routes: FastifyPluginAsyncTypebox = async (fastify) => {
 
         return { success: true, element: elementInfo };
       } catch (error) {
+        if (error instanceof BrowserMutexError) {
+          return reply.code(409).send({ error: error.message, currentOwner: getCurrentOwner() });
+        }
         reply.status(500);
         return { success: false, error: (error as Error).message };
       }

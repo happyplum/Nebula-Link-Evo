@@ -3,11 +3,17 @@ import { createWorkerLogger } from './logger.js';
 
 const logger = createWorkerLogger('BrowserLock');
 
+let currentOwner: string | null = null;
+
 export class BrowserMutexError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'BrowserMutexError';
   }
+}
+
+export function getCurrentOwner(): string | null {
+  return currentOwner;
 }
 
 export const browserMutex = new Mutex();
@@ -31,7 +37,7 @@ export async function acquireLock(
   const timeoutPromise = new Promise<never>((_, reject) => {
     timeout = setTimeout(() => {
       timedOut = true;
-      reject(new BrowserMutexError(`${owner} timed out acquiring browser mutex after ${timeoutMs}ms`));
+      reject(new BrowserMutexError(`${owner} timed out acquiring browser mutex after ${timeoutMs}ms${currentOwner ? ` (locked by: ${currentOwner})` : ''}`));
     }, timeoutMs);
   });
 
@@ -40,9 +46,11 @@ export async function acquireLock(
     clearTimeout(timeout);
   }
 
+  currentOwner = owner;
   logger.debug({ owner }, 'Browser mutex acquired');
   return () => {
     logger.debug({ owner }, 'Browser mutex released');
+    currentOwner = null;
     release();
   };
 }
