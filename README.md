@@ -194,3 +194,4 @@ docs/               # Documentation
 ### Known Behaviors
 
 - Screencast debug counter only activates on new stream connections via `?debug=true`; relay/parser/canvas counters respond to mid-stream toggle immediately (requires page refresh to see screencast counter changes).
+- `playwright-server` serializes `BrowserService` asynchronous public operations through a process-local global mutex; synchronous state accessors remain unlocked and the lock is acquired/released within each service method call.
