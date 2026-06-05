@@ -13,6 +13,7 @@ import { ProviderRegistry } from './provider/registry.js';
 import type { ProviderConfig } from './provider/types.js';
 import type { Logger } from 'pino';
 import { createWorkerLogger } from './logger.js';
+import { browserClient } from '../browser-client.js';
 
 export class AppService {
   private config: ResolvedConfig | null = null;
@@ -60,19 +61,21 @@ export class AppService {
     try {
       await this.mcpClient.initialize();
       this.actionExecutor.setMCPClient(this.mcpClient);
-
-      // Verify critical MCP servers are operational
-      if (this.mcpClient.isEnabled()) {
-        const tools = this.mcpClient.getAvailableTools();
-        const browserTools = tools.filter((t) => t.name.startsWith('browser-control.'));
-        if (browserTools.length === 0) {
-          this.logger.warn('MCP enabled but no browser-control tools found — browser operations will be unavailable');
-        } else {
-          this.logger.info({ browserToolCount: browserTools.length }, 'MCP browser-control server ready');
-        }
-      }
     } catch (error) {
       this.logger.warn({ err: error }, 'MCP initialization failed, continuing without MCP');
+    }
+
+    // Verify browser tools availability (local module, not MCP-dependent)
+    try {
+      // browserClient is a singleton, always available as long as the module exists
+      const status = await browserClient.getStatus();
+      if (status.isOpen) {
+        this.logger.info('Browser client ready — browser operations available');
+      } else {
+        this.logger.info('Browser client initialized — browser operations available (call browser_open to start)');
+      }
+    } catch (error) {
+      this.logger.warn({ err: error }, 'Browser client health check failed, but browser tools are defined locally');
     }
   }
 
