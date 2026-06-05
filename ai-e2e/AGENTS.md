@@ -150,11 +150,63 @@ ai-e2e (:3002)
 
 ## Current Known Gaps
 
-所有已知缺口已在当前版本中解决：
+### 已解决（历史）
 
-1. ~~项目级诊断报告未实现~~ — 已支持项目级诊断聚合、根因分布统计、JSON/HTML 导出
-2. ~~URL 绑定校验粒度不足~~ — 已强制每个功能模块必须绑定 URL（`ai_proposed` 计为已绑定）
-3. ~~Scenario 编辑能力不完整~~ — 已提供完整的独立编辑能力和数据映射
+1. ~~项目级诊断报告未实现~~ — 已支持
+2. ~~URL 绑定校验粒度不足~~ — 已强制每个功能模块绑定 URL
+3. ~~Scenario 编辑能力不完整~~ — 已提供完整编辑能力
+
+### 当前缺口（2026-06-05 验收后识别）
+
+4. **SPA 探索器无效** — BFS 对 HashRouter/History API SPA 发现 0 个 URL
+5. **page_snapshot_json 缺失** — 手动 URL 无快照，脚本质量崩溃（4.6% 通过率）
+6. **AI 模板约束执行不足** — AI 偶尔生成 test()/expect()/waitForLoadState/前缀
+
+详见 `docs/requirements-baseline.md` Gap D/E/F/G。
+
+## Runtime Gotchas（运行时真相）
+
+### 脚本质量数据链路
+
+脚本通过率取决于完整的数据链路，**不是**只看脚本生成模板本身：
+
+```text
+探索阶段 getSnapshot() → urls.page_snapshot_json
+  → ScriptGeneratorService.loadScenarioContext()
+    → {{page_snapshot}} 模板变量
+      → AI 选择器选择 → 脚本通过率
+```
+
+- 手动添加的 URL 不经过探索，`page_snapshot_json` 为 NULL
+- NULL 快照 → AI 编造选择器 → 通过率从 60%+ 降到 4.6%
+- 变通：手动注入 DOM 快照到 `urls.page_snapshot_json`
+
+### 脚本执行约束
+
+- `ExecutorService` 通过 `npx tsx` 子进程执行，**不支持 Playwright Test API**
+- 生成的脚本必须使用 Playwright **Library API**（`import { chromium } from 'playwright'`）
+- 禁止使用 `test()`, `describe()`, `expect()` — executor 不识别这些函数
+- 禁止使用 `waitForLoadState('networkidle')` — SPA 不触发此事件
+- AI 偶尔在脚本内容开头加 `typescript` 语言标记，导致 ReferenceError
+
+### 并发执行限制
+
+- `POST /execution/run/:scriptId` **不支持并发调用**
+- 并发执行会导致子进程被 SIGTERM，全部返回 timeout
+- 批量执行必须串行（顺序调用或使用 `run-all`）
+- `run-all` 内部是逐个执行，不并发
+
+### AI 超时配置
+
+- `config/config.json` `settings.timeout` 默认 30s — 对复杂 prompt 太短，建议 180s
+- `proxy-adapter-client.ts` `DEFAULT_AI_TIMEOUT_MS` 默认 120s — 建议 300s
+- 已在代码中临时调整为推荐值
+
+### PowerShell JSON 序列化陷阱
+
+- PowerShell `ConvertTo-Json` 会破坏多行字符串中的换行符
+- 上传 PRD 时应使用 `curl --data-binary @file.json` 而非 PowerShell 哈希表
+- AI 返回的中文可能因 GBK 编码在 stderr 中显示乱码，但不影响执行逻辑
 
 ## Verification Reality
 

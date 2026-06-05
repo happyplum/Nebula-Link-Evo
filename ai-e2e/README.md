@@ -262,11 +262,92 @@ ai-e2e/
 
 ## 已知限制与技术债
 
-以下限制与技术债已在当前版本中解决：
+### 已解决的历史限制
 
 1. ~~诊断能力是 run 级，不是 project 级~~ — 已支持项目级诊断聚合与导出
 2. ~~URL 绑定校验粒度不足~~ — 已强制每个功能模块必须绑定 URL
 3. ~~scenario 人工编辑面不完整~~ — 已提供完整的独立编辑能力
+
+### 当前已知限制（2026-06-05 验收后识别）
+
+#### SPA 探索器无效
+
+BFS 爬取策略对 HashRouter / History API SPA 发现 0 个 URL。对 SPA 应用，所有 URL 必须手动添加。
+
+**影响**：探索阶段的自动化价值在 SPA 场景下无法体现。
+
+#### 脚本质量依赖 page_snapshot_json
+
+脚本生成模板依赖 `{{page_snapshot}}` 提供选择器信息。手动添加的 URL 不经过探索流程，`page_snapshot_json` 为 NULL，导致 AI 编造选择器。
+
+**数据链路**：`探索 → getSnapshot() → urls.page_snapshot_json → {{page_snapshot}} → AI 选择器 → 脚本通过率`
+
+**变通方案**：手动注入 DOM 快照到 URL 记录的 `page_snapshot_json` 字段。
+
+#### AI 脚本生成模板约束不总能被遵守
+
+AI 偶尔生成不兼容的代码：`test()`/`expect()`（Playwright Test API，executor 不支持）、`waitForLoadState('networkidle')`（SPA 不触发）、`typescript` 语言标记前缀。
+
+**变通方案**：批量生成后用脚本自动检测和替换。
+
+#### AI 超时默认值不匹配实际负载
+
+`config/config.json` 中 `settings.timeout` 默认 30s，对复杂 prompt（PRD 分析、模块分解）不够。`proxy-adapter-client.ts` 中 `DEFAULT_AI_TIMEOUT_MS` 默认 120s 也可能不够。
+
+**已临时修复**：分别调整到 180s 和 300s。
+
+#### 并发执行不支持
+
+`ExecutorService` 不支持并发执行。并发调用 `POST /execution/run/:scriptId` 会导致进程被 SIGTERM，全部超时。批量执行必须串行。
+
+## 配置调优指南（生产经验）
+
+基于首次完整 E2E 验收（280 脚本对 debug-ui）的实际经验。
+
+### AI 超时配置
+
+```text
+config/config.json:
+  settings.timeout: 180000（推荐，默认 30000 太短）
+
+proxy-adapter-client.ts:
+  DEFAULT_AI_TIMEOUT_MS: 300000（推荐，默认 120000 不够）
+```
+
+### 批量操作策略
+
+| 操作 | 建议策略 | 原因 |
+|---|---|---|
+| 模块分解 (decompose-all) | 逐个调用 | 20 并发 + 40 RPM 限速 |
+| 场景生成 (generate-all-scenarios) | 逐个调用 | 同上 |
+| 脚本生成 (generate-all) | 20 并发 + 40 RPM 限速 | AI 调用密度高 |
+| 脚本执行 (run-all) | 顺序执行 | 并发导致假超时 |
+| PRD 上传 | curl --data-binary | PowerShell ConvertTo-Json 会破坏多行字符串 |
+
+### 超时预算
+
+| 阶段 | 单次 AI 调用 | 建议超时 |
+|---|---|---|
+| PRD 分析 | 30-120s | 180s |
+| 模块分解 | 30-90s | 180s |
+| 场景生成 | 30-90s | 180s |
+| 脚本生成 | 30-120s | 300s |
+| 脚本执行 | 10-60s | 120s |
+
+## 首次 E2E 验收数据（2026-06-05）
+
+| 指标 | 数值 |
+|---|---|
+| 目标应用 | debug-ui（HashRouter SPA，2 个路由） |
+| 业务模块 | 6 |
+| 功能模块 | 28 |
+| 测试场景 | 287 |
+| 生成脚本 | 280 |
+| 执行结果 | 13 pass (4.6%), 268 fail (95.4%) |
+| 通过脚本特征 | 仅做页面加载 + viewport/title 检查 |
+| 主要失败类型 | typescript 前缀(75), 选择器超时(54), 断言不匹配(33) |
+
+**关键发现**：完整链路已打通（PRD → 分析 → 探索 → 脚本 → 执行 → 诊断），但脚本质量严重依赖 DOM 快照数据完整性和 AI 模板约束执行力。
 
 ## 一句话总结
 
