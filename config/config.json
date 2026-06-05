@@ -23,6 +23,7 @@
     "servers": {
       "browser-control": {
         "enabled": true,
+        "deprecated": true,
         "command": "node",
         "args": ["../mcps/browser-control-mcp-server/dist/index.js"],
         "env": {

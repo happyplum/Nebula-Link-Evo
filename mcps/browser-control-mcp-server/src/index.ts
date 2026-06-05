@@ -3,6 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { createServer } from './server.js';
 
 async function main(): Promise<void> {
+  console.error('[DEPRECATED] browser-control-mcp-server is deprecated — browser tools are now served directly by proxy-adapter via the browser-tools module');
   const server = createServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
