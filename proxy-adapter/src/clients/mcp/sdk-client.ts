@@ -263,7 +263,9 @@ export class MCPSDKClient extends EventEmitter {
       'MCP server ready',
     );
 
-    this.emitToolsChanged(name);
+    if (tools.length > 0) {
+      this.emitToolsChanged(name);
+    }
   }
 
   // =========================================================================

@@ -8,7 +8,7 @@ describe('MCPSDKClient', () => {
     mcp: {
       enabled: true,
       servers: {
-        'browser-control': {
+        'test-server': {
           enabled: true,
           command: 'echo',
           args: ['test'],
@@ -85,7 +85,7 @@ describe('MCPSDKClient', () => {
     it('should throw error when server is in failed state', async () => {
       await client.initialize();
 
-      await expect(client.callTool('browser-control', 'any_tool', {})).rejects.toThrow(
+      await expect(client.callTool('test-server', 'any_tool', {})).rejects.toThrow(
         /不可用|not running|Tool call failed/
       );
     });
@@ -176,7 +176,7 @@ describe('MCPSDKClient', () => {
   describe('isServerRunning', () => {
     it('should check if specific server is running', async () => {
       await client.initialize();
-      const running = client.isServerRunning('browser-control');
+      const running = client.isServerRunning('test-server');
       expect(typeof running).toBe('boolean');
     });
 

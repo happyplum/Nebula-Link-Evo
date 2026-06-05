@@ -139,13 +139,13 @@ describe('ChatHandler SSE integration', () => {
         {
           type: 'tool-call',
           toolCallId: 'call_1',
-          toolName: 'browser-control.browser_snapshot',
+          toolName: 'browser-control.dom_snapshot',
           input: {},
         },
         {
           type: 'tool-result',
           toolCallId: 'call_1',
-          toolName: 'browser-control.browser_snapshot',
+          toolName: 'browser-control.dom_snapshot',
           input: {},
           output: '{"snapshot_id":"test-snapshot-123","elements":[]}',
         },
@@ -226,13 +226,13 @@ describe('ChatHandler SSE integration', () => {
         {
           type: 'tool-call',
           toolCallId: 'call_2',
-          toolName: 'browser-control.browser_snapshot',
+          toolName: 'browser-control.dom_snapshot',
           input: {},
         },
         {
           type: 'tool-result',
           toolCallId: 'call_2',
-          toolName: 'browser-control.browser_snapshot',
+          toolName: 'browser-control.dom_snapshot',
           input: {},
           output: '{"snapshot_id":"test-snapshot-123","elements":[]}',
         },

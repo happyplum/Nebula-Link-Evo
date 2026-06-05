@@ -12,12 +12,12 @@
     "declaration": false,
     "baseUrl": ".",
     "paths": {
-      "@nebula-link-evo/shared": ["../shared/index.ts"],
-      "@nebula-link-evo/shared/*": ["../shared/*"]
+      "@nebula-link-evo/shared": ["../../shared/index.ts"],
+      "@nebula-link-evo/shared/*": ["../../shared/*"]
     }
   },
   "references": [
-    { "path": "../shared" }
+    { "path": "../../shared" }
   ],
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "src/**/*.test.ts", "src/__tests__/**/*"]
