@@ -108,6 +108,29 @@ async function mockClientAlwaysRejects() {
   (ClientCtor as any).mockImplementation(function (this: object) {
     this.connect = vi.fn().mockRejectedValue(new Error('Connection refused'));
     this.listTools = vi.fn().mockResolvedValue({ tools: [] });
+    this.callTool = vi.fn().mockResolvedValue({
+      content: [{ type: 'text', text: 'ok' }],
+    });
+    this.close = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(this, 'onclose', {
+      get() { return lifecycleCallbacks.clientOnClose; },
+      set(v: (() => void) | null) { lifecycleCallbacks.clientOnClose = v; },
+      configurable: true,
+    });
+    currentMockClient = this;
+  });
+}
+
+/** Restore the default Client mock implementation after contamination by specialized mocks. */
+async function restoreDefaultClientMock() {
+  const { Client: ClientCtor } = await import('@modelcontextprotocol/sdk/client/index.js');
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (ClientCtor as any).mockImplementation(function (this: object) {
+    this.connect = vi.fn().mockResolvedValue(undefined);
+    this.listTools = vi.fn().mockResolvedValue({ tools: mockTools });
+    this.callTool = vi.fn().mockResolvedValue({
+      content: [{ type: 'text', text: 'ok' }],
+    });
     this.close = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(this, 'onclose', {
       get() { return lifecycleCallbacks.clientOnClose; },
@@ -142,10 +165,11 @@ async function mockClientReturnsEmptyTools() {
 describe('MCP crash recovery', () => {
   let client: MCPSDKClient;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     lifecycleCallbacks.transportOnClose = null;
     lifecycleCallbacks.transportOnError = null;
     lifecycleCallbacks.clientOnClose = null;
+    await restoreDefaultClientMock();
     vi.useFakeTimers();
   });
 
@@ -185,8 +209,8 @@ describe('MCP crash recovery', () => {
     // Simulate transport crash
     lifecycleCallbacks.transportOnClose!();
 
-    expect(toolsChangedSpy).toHaveBeenCalledTimes(1);
-    expect(toolsChangedSpy).toHaveBeenCalledWith({ serverName: 'test-server' });
+    expect(toolsChangedSpy).toHaveBeenCalledTimes(2);
+    expect(toolsChangedSpy).toHaveBeenLastCalledWith({ serverName: 'test-server' });
     expect(client.getAvailableTools()).toEqual([]);
     expect(client.isServerRunning('test-server')).toBe(false);
     expect(client.getServerState('test-server')).toBe('reconnecting');
@@ -207,7 +231,7 @@ describe('MCP crash recovery', () => {
     // Crash
     lifecycleCallbacks.transportOnClose!();
     expect(client.getServerState('test-server')).toBe('reconnecting');
-    expect(toolsChangedSpy).toHaveBeenCalledTimes(1);
+    expect(toolsChangedSpy).toHaveBeenCalledTimes(2);
 
     // Advance past the reconnect delay
     await vi.advanceTimersByTimeAsync(2000);
@@ -217,7 +241,7 @@ describe('MCP crash recovery', () => {
     expect(tools.length).toBe(1);
     expect(tools[0].name).toBe('test-server.test_tool');
     // toolsChanged fired again after reconnect restored tools
-    expect(toolsChangedSpy).toHaveBeenCalledTimes(2);
+    expect(toolsChangedSpy).toHaveBeenCalledTimes(3);
   });
 
   // -------------------------------------------------------------------------
@@ -310,7 +334,7 @@ describe('MCP crash recovery', () => {
     lifecycleCallbacks.transportOnClose!();
     lifecycleCallbacks.transportOnError!(new Error('Transport error'));
 
-    expect(toolsChangedSpy).toHaveBeenCalledTimes(1);
+    expect(toolsChangedSpy).toHaveBeenCalledTimes(2);
     expect(client.getServerState('test-server')).toBe('reconnecting');
   });
 
@@ -328,7 +352,7 @@ describe('MCP crash recovery', () => {
     const error = new Error('Subprocess exited unexpectedly');
     lifecycleCallbacks.transportOnError!(error);
 
-    expect(toolsChangedSpy).toHaveBeenCalledTimes(1);
+    expect(toolsChangedSpy).toHaveBeenCalledTimes(2);
     expect(client.getServerState('test-server')).toBe('reconnecting');
     expect(client.getAvailableTools()).toEqual([]);
   });

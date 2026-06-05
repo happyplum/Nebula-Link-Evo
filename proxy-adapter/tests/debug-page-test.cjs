@@ -405,30 +405,22 @@ async function runTests() {
       }
     }
 
-    // ========== 阶段5: MCP 工具调用测试 ==========
-    logSection('阶段5: MCP 工具调用测试');
+    // ========== 阶段5: MCP 工具调用测试 (vision-server) ==========
+    // 注: browser-control.* 工具已从 MCP server 迁移为 proxy-adapter 本地模块，
+    //     MCP 层仅保留 vision-server (视觉分析)。
+    logSection('阶段5: MCP 工具调用测试 (vision-server)');
 
-    logStep(1, '调用 browser_snapshot 工具');
+    logStep(1, '调用 vision-server screenshot 工具');
     try {
-      const result = await proxy.callMCP('browser-control', 'browser_snapshot', {});
+      const result = await proxy.callMCP('vision-server', 'screenshot', { type: 'raw' });
       const hasContent = result.result?.content?.length > 0 || result.success === true;
-      recordTest('browser_snapshot 调用', hasContent);
+      recordTest('vision-server screenshot 调用', hasContent);
       if (result.result?.content) {
-        const text = result.result.content[0]?.text || '';
-        logInfo(`快照包含 Page URL: ${text.includes('Page URL')}`);
-        logInfo(`快照包含 Page Title: ${text.includes('Page Title')}`);
+        const hasImage = result.result.content.some((c) => c.type === 'image');
+        logInfo(`截图包含图像数据: ${hasImage}`);
       }
     } catch (e) {
-      recordTest('browser_snapshot 调用', false, e.message);
-    }
-
-    logStep(2, '调用 browser_navigate 工具');
-    try {
-      const result = await proxy.callMCP('browser-control', 'browser_navigate', { url: 'https://example.com' });
-      await sleep(2000);
-      recordTest('browser_navigate 调用', result.success === true);
-    } catch (e) {
-      recordTest('browser_navigate 调用', false, e.message);
+      recordTest('vision-server screenshot 调用', false, e.message);
     }
 
     // ========== 阶段6: 清理 ==========

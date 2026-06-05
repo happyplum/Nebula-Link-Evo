@@ -38,14 +38,6 @@
   "mcp": {
     "enabled": true,
     "servers": {
-      "browser-control": {
-        "enabled": false,
-        "command": "node",
-        "args": ["../mcps/browser-control-mcp-server/dist/index.js"],
-        "env": {
-          "PLAYWRIGHT_SERVER_URL": "http://localhost:3001"
-        }
-      },
       "vision-server": {
         "enabled": true,
         "command": "node",

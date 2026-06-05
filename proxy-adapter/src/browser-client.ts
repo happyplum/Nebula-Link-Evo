@@ -357,7 +357,7 @@ export class BrowserClient {
         url: dom.snapshot_id, // Use snapshot_id as URL identifier
         title: `Snapshot ${dom.snapshot_id}`,
         elements: domElements || [],
-        viewport: { width: 1920, height: 1080 }, // Default viewport since new format doesn't have it
+        viewport: dom.simplified_dom?.viewport ?? { width: 1920, height: 1080 },
         screenshot: dom.annotated_screenshot_base64 || screenshotData?.screenshot || undefined,
       };
     } catch (error) {

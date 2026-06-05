@@ -77,8 +77,8 @@ describe('McpStatusList', () => {
       data: {
         enabled: true,
         servers: [
-          { name: 'browser-control', running: true, state: 'running' as const, toolsCount: 15 },
-          { name: 'vision-server', running: false, state: 'stopped' as const, toolsCount: 0 },
+          { name: 'test-server-a', running: true, state: 'running' as const, toolsCount: 15 },
+          { name: 'test-server-b', running: false, state: 'stopped' as const, toolsCount: 0 },
         ],
       },
       isLoading: false,
@@ -88,16 +88,16 @@ describe('McpStatusList', () => {
     const onSelectServer = vi.fn();
     render(<McpStatusList onSelectServer={onSelectServer} />);
 
-    expect(screen.getByText('browser-control')).toBeInTheDocument();
+    expect(screen.getByText('test-server-a')).toBeInTheDocument();
     expect(screen.getByText('运行中 · 15 工具')).toBeInTheDocument();
 
-    expect(screen.getByText('vision-server')).toBeInTheDocument();
+    expect(screen.getByText('test-server-b')).toBeInTheDocument();
     expect(screen.getByText('已停止 · 0 工具')).toBeInTheDocument();
 
     const viewButton = screen.getByText('查看工具');
     fireEvent.click(viewButton);
 
-    expect(onSelectServer).toHaveBeenCalledWith('browser-control');
+    expect(onSelectServer).toHaveBeenCalledWith('test-server-a');
   });
 
   it('renders reconnecting state with loading indicator', () => {
@@ -105,7 +105,7 @@ describe('McpStatusList', () => {
       data: {
         enabled: true,
         servers: [
-          { name: 'browser-control', running: false, state: 'reconnecting' as const, toolsCount: 0 },
+          { name: 'test-server-a', running: false, state: 'reconnecting' as const, toolsCount: 0 },
         ],
       },
       isLoading: false,
@@ -123,7 +123,7 @@ describe('McpStatusList', () => {
       data: {
         enabled: true,
         servers: [
-          { name: 'browser-control', running: false, state: 'failed' as const, toolsCount: 0 },
+          { name: 'test-server-a', running: false, state: 'failed' as const, toolsCount: 0 },
         ],
       },
       isLoading: false,
@@ -139,7 +139,7 @@ describe('McpStatusList', () => {
       data: {
         enabled: true,
         servers: [
-          { name: 'browser-control', running: false, state: 'starting' as const, toolsCount: 0 },
+          { name: 'test-server-a', running: false, state: 'starting' as const, toolsCount: 0 },
         ],
       },
       isLoading: false,

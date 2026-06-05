@@ -283,15 +283,16 @@ describe('BrowserClient', () => {
   });
 
   describe('getPageState', () => {
-    it('should return page state', async () => {
-      vi.mocked(axios.get).mockResolvedValueOnce({ 
-        data: { 
-          snapshot_id: 'snap-1', 
+    it('should return page state with real viewport from DOM snapshot', async () => {
+      vi.mocked(axios.get).mockResolvedValueOnce({
+        data: {
+          snapshot_id: 'snap-1',
+          simplified_dom: { viewport: { width: 1440, height: 900 } },
           elements_map: {
             '1': { tag: 'div', text: 'hello', bbox: { x: 0, y: 0, width: 10, height: 10 } }
           },
           annotated_screenshot_base64: 'base64'
-        } 
+        }
       });
       vi.mocked(axios.post).mockResolvedValueOnce({ data: { screenshot: 'base64' } });
 
@@ -299,6 +300,30 @@ describe('BrowserClient', () => {
       expect(result).toEqual({
         url: 'snap-1',
         title: 'Snapshot snap-1',
+        elements: [
+          { tag: 'div', text: 'hello', bbox: { x: 0, y: 0, width: 10, height: 10 }, isVisible: true, isInteractable: true }
+        ],
+        viewport: { width: 1440, height: 900 },
+        screenshot: 'base64'
+      });
+    });
+
+    it('should fallback to default viewport when viewport data is unavailable', async () => {
+      vi.mocked(axios.get).mockResolvedValueOnce({
+        data: {
+          snapshot_id: 'snap-2',
+          elements_map: {
+            '1': { tag: 'div', text: 'hello', bbox: { x: 0, y: 0, width: 10, height: 10 } }
+          },
+          annotated_screenshot_base64: 'base64'
+        }
+      });
+      vi.mocked(axios.post).mockResolvedValueOnce({ data: { screenshot: 'base64' } });
+
+      const result = await client.getPageState();
+      expect(result).toEqual({
+        url: 'snap-2',
+        title: 'Snapshot snap-2',
         elements: [
           { tag: 'div', text: 'hello', bbox: { x: 0, y: 0, width: 10, height: 10 }, isVisible: true, isInteractable: true }
         ],
