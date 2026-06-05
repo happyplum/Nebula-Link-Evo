@@ -112,7 +112,8 @@ async function start() {
       config,
       appService.getMCPSDKClient() || undefined,
       sessionEventsDAO,
-      sessionEventHub
+      sessionEventHub,
+      browserClient,
     );
 
     // Decorate Fastify with conversation management

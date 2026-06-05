@@ -6,6 +6,7 @@ import type { DecisionClient } from '../clients/types.js';
 import type { ResolvedConfig } from '../config/schema.js';
 import { MCPSDKClient } from '../clients/mcp/sdk-client.js';
 import { ChatSessionController } from '../services/chat-session-controller.js';
+import type { BrowserClient } from '../browser-client.js';
 
 function createDeferredPromise<T>(): {
   promise: Promise<T>;
@@ -50,6 +51,7 @@ describe('ChatHandler', () => {
   let conversationManager: ConversationManager;
   let mockDecisionClient: DecisionClient;
   let mcpClient: MCPSDKClient;
+  let mockBrowserClient: BrowserClient;
 
   const mockClientId = 'test-client-123';
   let mockSessionId: string;
@@ -74,6 +76,10 @@ describe('ChatHandler', () => {
     vi.spyOn(mcpClient, 'getAvailableTools').mockReturnValue([]);
     vi.spyOn(mcpClient, 'callTool').mockResolvedValue({ result: 'success' });
 
+    mockBrowserClient = {
+      navigate: vi.fn().mockResolvedValue(undefined),
+    } as unknown as BrowserClient;
+
     mockDecisionClient = {
       provider: 'kimi',
       model: 'moonshot-v1-vision-preview',
@@ -92,7 +98,14 @@ describe('ChatHandler', () => {
       }),
     } as unknown as DecisionClient;
 
-    chatHandler = new ChatHandler(conversationManager, mockConfig, mcpClient);
+    chatHandler = new ChatHandler(
+      conversationManager,
+      mockConfig,
+      mcpClient,
+      undefined,
+      undefined,
+      mockBrowserClient,
+    );
     // Override resolveDecisionModel to return mock
     (chatHandler as any).resolveDecisionModel = () => mockDecisionClient;
   });
@@ -349,13 +362,62 @@ describe('ChatHandler', () => {
 
 
   describe('createSDKTools', () => {
-    it('should return empty tools when MCP is disabled', () => {
+    it('should keep browser-control tools local when MCP advertises matching tools', async () => {
+      vi.spyOn(mcpClient, 'isEnabled').mockReturnValue(true);
+      vi.spyOn(mcpClient, 'getAvailableTools').mockReturnValue([
+        {
+          name: 'browser-control.browser_navigate',
+          description: 'Navigate through MCP',
+          inputSchema: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] },
+        },
+      ]);
+
+      const tools = (chatHandler as any).createSDKTools();
+      const navigateTool = tools['browser-control.browser_navigate'] as {
+        execute: (args: unknown) => Promise<unknown>;
+      };
+
+      await navigateTool.execute({ url: 'https://example.com' });
+
+      expect(mockBrowserClient.navigate).toHaveBeenCalledWith('https://example.com');
+      expect(mcpClient.callTool).not.toHaveBeenCalled();
+    });
+
+    it('should expose local browser-control tools when MCP is disabled', () => {
       vi.spyOn(mcpClient, 'isEnabled').mockReturnValue(false);
 
       const tools = (chatHandler as any).createSDKTools();
 
-      // Browser tools are no longer hardcoded — all tools come from MCP
-      expect(Object.keys(tools)).toHaveLength(0);
+      expect(tools).toHaveProperty('browser-control.browser_navigate');
+    });
+
+    it('should keep non-browser MCP tools on the MCP call path', async () => {
+      vi.spyOn(mcpClient, 'isEnabled').mockReturnValue(true);
+      vi.spyOn(mcpClient, 'getAvailableTools').mockReturnValue([
+        {
+          name: 'vision-server.analyze',
+          description: 'Analyze screenshot',
+          inputSchema: { type: 'object', properties: { image: { type: 'string' } }, required: ['image'] },
+        },
+      ]);
+
+      const tools = (chatHandler as any).createSDKTools();
+      const visionTool = tools['vision-server.analyze'] as {
+        execute: (args: unknown) => Promise<unknown>;
+      };
+
+      await visionTool.execute({ image: 'base64' });
+
+      expect(mcpClient.callTool).toHaveBeenCalledWith('vision-server', 'analyze', { image: 'base64' });
+    });
+
+    it('should keep local browser tools when MCP is disabled', () => {
+      vi.spyOn(mcpClient, 'isEnabled').mockReturnValue(false);
+
+      const tools = (chatHandler as any).createSDKTools();
+
+      expect(tools).toHaveProperty('browser-control.browser_open');
+      expect(tools).toHaveProperty('browser-control.browser_navigate');
     });
 
     it('should register MCP tools when MCP is enabled', () => {
@@ -375,12 +437,12 @@ describe('ChatHandler', () => {
 
       const tools = (chatHandler as any).createSDKTools();
 
-      // All tools come from MCP discovery
+      // Browser tools come from local browser-tools; non-browser tools still come from MCP discovery.
       expect(tools).toHaveProperty('browser-control.browser_open');
       expect(tools).toHaveProperty('server.tool_a');
     });
 
-    it('should return empty tools when mcpClient is null', () => {
+    it('should keep local browser tools when mcpClient is null', () => {
       const handlerWithNullMcp = new ChatHandler(
         conversationManager,
         mockConfig,
@@ -389,15 +451,15 @@ describe('ChatHandler', () => {
 
       const tools = (handlerWithNullMcp as any).createSDKTools();
 
-      expect(Object.keys(tools)).toHaveLength(0);
+      expect(tools).toHaveProperty('browser-control.browser_open');
+      expect(tools).toHaveProperty('browser-control.browser_navigate');
     });
 
-    it('should return no-tools prompt when MCP has no tools', () => {
+    it('should return tools prompt when only local browser tools are available', () => {
       const session = {};
       const prompt = (chatHandler as any).getSystemPrompt(session);
 
-      expect(prompt).toContain('没有可用');
-      expect(prompt).not.toContain('通过工具与浏览器交互');
+      expect(prompt).toContain('通过工具与浏览器交互');
     });
 
     it('should return tools prompt when MCP tools are available', () => {

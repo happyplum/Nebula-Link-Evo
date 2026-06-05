@@ -6,6 +6,7 @@ import { ConversationManager } from '../../../conversation/manager.js';
 import { MCPSDKClient } from '../../../clients/mcp/sdk-client.js';
 import { SessionEventsDAO } from '../../../conversation/session-events-dao.js';
 import { SessionEventHub } from '../../../services/session-event-hub.js';
+import type { BrowserClient } from '../../../browser-client.js';
 
 type StreamResult = {
   fullStream: AsyncIterable<{ type: string; [key: string]: unknown }>;
@@ -85,6 +86,7 @@ describe('chat sdk loop success contract', () => {
   let manager: ConversationManager;
   let mcpClient: MCPSDKClient;
   let chatHandler: ChatHandler;
+  let browserClient: BrowserClient;
   let sessionId: string;
 
   const allEventTypes: SessionEventType[] = [];
@@ -100,7 +102,7 @@ describe('chat sdk loop success contract', () => {
     vi.spyOn(mcpClient, 'isEnabled').mockReturnValue(true);
     vi.spyOn(mcpClient, 'getAvailableTools').mockReturnValue([
       {
-        name: 'browser-control.browser_snapshot',
+        name: 'browser-control.dom_snapshot',
         description: 'Get browser snapshot',
         inputSchema: {
           type: 'object',
@@ -111,6 +113,12 @@ describe('chat sdk loop success contract', () => {
       },
     ]);
     vi.spyOn(mcpClient, 'callTool').mockResolvedValue({ snapshot: { url: 'https://example.com' } });
+    browserClient = {
+      getSimplifiedDOM: vi.fn().mockResolvedValue({
+        snapshot_id: 'snapshot-1',
+        elements_map: {},
+      }),
+    } as unknown as BrowserClient;
 
     sessionId = `sdk-loop-success-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     manager.createSession({
@@ -142,7 +150,8 @@ describe('chat sdk loop success contract', () => {
       createResolvedConfig(),
       mcpClient,
       sessionEventsDAO,
-      sessionEventHub
+      sessionEventHub,
+      browserClient,
     );
   });
 
@@ -188,7 +197,7 @@ describe('chat sdk loop success contract', () => {
       const streamOptions = args[0] as {
         tools?: Record<string, { execute?: (input: unknown) => Promise<unknown> }>;
       };
-      const snapshotTool = streamOptions.tools?.['browser-control.browser_snapshot'];
+      const snapshotTool = streamOptions.tools?.['browser-control.dom_snapshot'];
       if (!snapshotTool?.execute) {
         throw new Error('tool wrapper not created');
       }
@@ -199,13 +208,13 @@ describe('chat sdk loop success contract', () => {
         {
           type: 'tool-call',
           toolCallId: 'call_1',
-          toolName: 'browser-control.browser_snapshot',
+          toolName: 'browser-control.dom_snapshot',
           input: { includeMeta: true },
         },
         {
           type: 'tool-result',
           toolCallId: 'call_1',
-          toolName: 'browser-control.browser_snapshot',
+          toolName: 'browser-control.dom_snapshot',
           input: { includeMeta: true },
           output: toolOutput,
         },
@@ -224,9 +233,8 @@ describe('chat sdk loop success contract', () => {
       message: '使用工具后继续回答',
     });
 
-    expect(mcpClient.callTool).toHaveBeenCalledWith('browser-control', 'browser_snapshot', {
-      includeMeta: true,
-    });
+    expect(browserClient.getSimplifiedDOM).toHaveBeenCalled();
+    expect(mcpClient.callTool).not.toHaveBeenCalled();
 
     const eventTypes = allEventTypes;
     const toolCallIndex = eventTypes.indexOf('assistant.tool_call');
