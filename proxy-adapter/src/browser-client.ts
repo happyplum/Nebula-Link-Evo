@@ -1,5 +1,9 @@
 import axios from 'axios';
 import { ScreenshotData } from './types.js';
+
+// 为所有 BrowserClient 请求自动附加 x-browser-owner header
+// 可选链确保测试 mock 环境下 axios.defaults 不可用时不会崩溃
+axios.defaults?.headers?.common && (axios.defaults.headers.common['x-browser-owner'] = 'chat');
 import type { DOMSnapshotResponse, ElementInfo, ElementLocator } from '@nebula-link-evo/shared';
 import { getServiceEndpointsCached } from './config/services.js';
 import { createWorkerLogger } from './services/logger.js';
