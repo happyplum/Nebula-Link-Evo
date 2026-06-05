@@ -2,6 +2,7 @@
   "name": "browser-control-mcp-server",
   "version": "1.0.0",
   "private": true,
+  "deprecated": true,
   "engines": {
     "node": ">=22.5.0"
   },
