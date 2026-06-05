@@ -57,8 +57,8 @@ async function executeTool(
       return bc.navigate(p.url);
     }
     case 'browser-control.browser_screenshot': {
-      adaptScreenshotParams(args);
-      return bc.screenshot();
+      const params = adaptScreenshotParams(args);
+      return bc.screenshot(params.fullPage);
     }
     case 'browser-control.browser_status': {
       return bc.getStatus();
