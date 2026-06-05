@@ -24,6 +24,7 @@
     "@livekit/rtc-node": "catalog:",
     "@nebula-link-evo/shared": "workspace:*",
     "@sinclair/typebox": "catalog:",
+    "async-mutex": "^0.5.0",
     "axios": "catalog:",
     "dotenv": "catalog:",
     "fastify": "catalog:",
