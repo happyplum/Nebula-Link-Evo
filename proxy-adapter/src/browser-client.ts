@@ -37,9 +37,9 @@ export class BrowserClient {
     await axios.post(`${PLAYWRIGHT_URL}/browser/navigate`, { url }, { timeout: BROWSER_TIMEOUT_MS });
   }
 
-  async screenshot(): Promise<ScreenshotData> {
+  async screenshot(fullPage: boolean = false): Promise<ScreenshotData> {
     const response = await axios.post(`${PLAYWRIGHT_URL}/browser/screenshot`, {
-      fullPage: false,
+      fullPage,
       type: 'png',
     }, { timeout: BROWSER_TIMEOUT_MS });
     return response.data;

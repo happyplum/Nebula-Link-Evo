@@ -14,7 +14,9 @@ interface CallToolResult {
  * 参照 MCP 的 textResult(JSON.stringify(result)) 模式
  */
 export function toSDKResult(data: unknown): string {
-  // 如果 data 已经是 CallToolResult 格式（来自 MCP），提取 text
+  if (data === undefined || data === null) {
+    return '';
+  }
   const mcpResult = data as Partial<CallToolResult>;
   if (
     mcpResult.content?.[0]?.type === 'text' &&
@@ -23,12 +25,10 @@ export function toSDKResult(data: unknown): string {
     return mcpResult.content[0].text;
   }
 
-  // 如果是字符串，直接返回
   if (typeof data === 'string') {
     return data;
   }
 
-  // 否则 JSON.stringify
   return JSON.stringify(data);
 }
 
