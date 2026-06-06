@@ -1,5 +1,5 @@
 import { ConversationManager } from './manager.js';
-import { MCPSDKClient, MCPServerUnavailableError } from '../clients/mcp/sdk-client.js';
+import { MCPSDKClient } from '../clients/mcp/sdk-client.js';
 import type { ResolvedConfig } from '../config/schema.js';
 import { ChatSessionController } from '../services/chat-session-controller.js';
 import type { AgentState, Session, Message, SessionStatus } from './types.js';
@@ -7,11 +7,10 @@ import type { SessionEvent, SessionEventType } from '@nebula-link-evo/shared/typ
 import { SessionEventsDAO } from './session-events-dao.js';
 import { DatabaseManager } from './db.js';
 import { SessionEventHub } from '../services/session-event-hub.js';
-import { streamText, stepCountIs, tool } from 'ai';
+import { dynamicTool, streamText, stepCountIs } from 'ai';
 import { estimateTotalInputTokens } from '../services/provider/token-estimator.js';
 import type { ModelMessage } from 'ai';
 import type { LanguageModelV3 } from '@ai-sdk/provider';
-import { z } from 'zod';
 import { getModel } from '../clients/vercel-ai/provider.js';
 import { ProviderRegistry } from '../services/provider/registry.js';
 import type { ProviderConfig } from '../services/provider/types.js';
@@ -22,7 +21,8 @@ import { hashArgs, hashResult } from '../services/loop-guard/fingerprint.js';
 import type { LoopGuardVerdict } from '../services/loop-guard/types.js';
 import { browserClient } from '../browser-client.js';
 import type { BrowserClient } from '../browser-client.js';
-import { createBrowserTools } from '../browser-tools/index.js';
+import { gatewayToolsToVercelToolMap } from '../tools/adapters/vercel-ai.js';
+import type { ToolRegistry } from '../tools/registry.js';
 
 import { classifyRateLimitError } from '../services/provider/error-classifier.js';
 
@@ -41,12 +41,6 @@ interface ChatMessageData {
   screenshot?: string;
 }
 
-interface MCPObjectSchema {
-  type?: string;
-  properties?: Record<string, unknown>;
-  required?: string[];
-}
-
 type TerminalReason = 'stop' | 'max_steps_reached' | 'tool_error' | 'abort' | 'pause' | 'loop_detected' | 'loop_warned';
 
 class ChatHandler {
@@ -57,6 +51,7 @@ class ChatHandler {
   private sessionEventHub: SessionEventHub;
   private providerRegistry: ProviderRegistry;
   private browserClient: BrowserClient;
+  private toolRegistry: ToolRegistry | null = null;
   private maxToolLoops = 10;
   private toolLoopCount = 0;
   private loopGuardMap: Map<string, LoopGuardService> = new Map();
@@ -71,6 +66,7 @@ class ChatHandler {
     sessionEventsDAO?: SessionEventsDAO,
     sessionEventHub?: SessionEventHub,
     browserClientInstance?: BrowserClient,
+    toolRegistry?: ToolRegistry,
   ) {
     this.conversationManager = conversationManager;
     this.config = config;
@@ -78,6 +74,7 @@ class ChatHandler {
     this.sessionEventsDAO = sessionEventsDAO || this.resolveSessionEventsDAO();
     this.sessionEventHub = sessionEventHub || SessionEventHub.getInstance();
     this.browserClient = browserClientInstance || browserClient;
+    this.toolRegistry = toolRegistry || null;
     this.providerRegistry = this.createProviderRegistry(config);
     const configuredMaxSteps =
       this.config.settings?.maxSteps ??
@@ -221,12 +218,9 @@ class ChatHandler {
   }
 
   private getSystemPrompt(_session: ChatSessionData): string {
-    const localBrowserTools = createBrowserTools(this.browserClient || browserClient);
-    const hasTools =
-      Object.keys(localBrowserTools).length > 0 ||
-      this.mcpClient &&
-      this.mcpClient.isEnabled() &&
-      this.mcpClient.getAvailableTools().length > 0;
+    const hasTools = this.toolRegistry
+      ? this.toolRegistry.getAvailableTools({ consumer: 'chat' }).length > 0
+      : false;
 
     if (hasTools) {
       return '你是一个智能助手，可以通过工具与浏览器交互。请根据工具描述中的说明使用它们。';
@@ -805,117 +799,14 @@ class ChatHandler {
     return converted;
   }
 
-  private createSDKTools(): Record<string, unknown> {
-    const tools: Record<string, unknown> = {};
-    const localBrowserTools = createBrowserTools(this.browserClient || browserClient);
-
-    for (const [name, sdkTool] of Object.entries(localBrowserTools)) {
-      tools[name] = tool({
-        description: sdkTool.description,
-        inputSchema: this.buildInputSchema(sdkTool.parameters),
-        execute: sdkTool.execute,
-      });
+  private createSDKTools(): Record<string, ReturnType<typeof dynamicTool>> {
+    if (!this.toolRegistry) {
+      this.logger.warn('ToolRegistry not available, creating empty tool map');
+      return {};
     }
 
-    if (!this.mcpClient || !this.mcpClient.isEnabled()) {
-      this.logger.warn('MCP is not available — only local browser tools registered');
-      return tools;
-    }
-
-    for (const mcpTool of this.mcpClient.getAvailableTools()) {
-      const fullToolName = mcpTool.name;
-      if (fullToolName.startsWith('browser-control.')) {
-        continue;
-      }
-
-      tools[fullToolName] = tool({
-        description: mcpTool.description || fullToolName,
-        inputSchema: this.buildInputSchema(mcpTool.inputSchema),
-        execute: async (rawArgs: unknown) => {
-          if (!this.mcpClient || !this.mcpClient.isEnabled()) {
-            throw new Error('MCP is not enabled or not available');
-          }
-
-          const args = this.normalizeToRecord(rawArgs);
-          const [serverName, actualToolName] = this.parseToolName(fullToolName);
-          this.assertToolIsSafe(actualToolName);
-
-          try {
-            return await this.mcpClient.callTool(serverName, actualToolName, args);
-          } catch (error) {
-            if (error instanceof MCPServerUnavailableError) {
-              this.logger.warn(
-                { serverName, toolName: actualToolName, state: error.serverState },
-                'MCP server unavailable during tool call',
-              );
-              return error.message;
-            }
-            throw error;
-          }
-        },
-      });
-    }
-
-    if (Object.keys(tools).length === 0) {
-      this.logger.warn('MCP is enabled but no tools discovered — check MCP server status');
-    }
-
-    return tools;
-  }
-
-  private buildInputSchema(schema: unknown): z.ZodTypeAny {
-    const jsonSchema = schema as MCPObjectSchema;
-    if (jsonSchema?.type !== 'object' || !jsonSchema.properties) {
-      return z.object({}).passthrough();
-    }
-
-    const required = new Set(jsonSchema.required || []);
-    const shape: Record<string, z.ZodTypeAny> = {};
-
-    for (const [key, property] of Object.entries(jsonSchema.properties)) {
-      const propertySchema = this.buildPropertySchema(property);
-      shape[key] = required.has(key) ? propertySchema : propertySchema.optional();
-    }
-
-    return z.object(shape).passthrough();
-  }
-
-  private buildPropertySchema(property: unknown): z.ZodTypeAny {
-    if (!property || typeof property !== 'object') {
-      return z.unknown();
-    }
-
-    const definition = property as {
-      type?: string;
-      enum?: unknown[];
-      items?: unknown;
-    };
-
-    if (
-      Array.isArray(definition.enum) &&
-      definition.enum.every((value) => typeof value === 'string')
-    ) {
-      const enumValues = definition.enum as string[];
-      return z.string().refine((value) => enumValues.includes(value), {
-        message: `Expected one of: ${enumValues.join(', ')}`,
-      });
-    }
-
-    switch (definition.type) {
-      case 'string':
-        return z.string();
-      case 'number':
-      case 'integer':
-        return z.number();
-      case 'boolean':
-        return z.boolean();
-      case 'array':
-        return z.array(this.buildPropertySchema(definition.items));
-      case 'object':
-        return z.record(z.string(), z.unknown());
-      default:
-        return z.unknown();
-    }
+    const tools = this.toolRegistry.getAvailableTools({ consumer: 'chat' });
+    return gatewayToolsToVercelToolMap(tools);
   }
 
   private normalizeToRecord(value: unknown): Record<string, unknown> {
@@ -924,26 +815,6 @@ class ChatHandler {
     }
 
     return {};
-  }
-
-  private parseToolName(fullToolName: string): [serverName: string, toolName: string] {
-    const [serverName, ...nameParts] = fullToolName.split('.');
-    if (!serverName || nameParts.length === 0) {
-      throw new Error(`Invalid tool name format: ${fullToolName}`);
-    }
-
-    return [serverName, nameParts.join('.')];
-  }
-
-  private assertToolIsSafe(toolName: string): void {
-    const dangerousToolPatterns = ['delete', 'remove', 'destroy', 'drop', 'truncate'];
-    const isDangerous = dangerousToolPatterns.some((pattern) =>
-      toolName.toLowerCase().includes(pattern)
-    );
-
-    if (isDangerous) {
-      throw new Error(`Dangerous tool "${toolName}" requires confirmation and is not allowed`);
-    }
   }
 
   private isAbortLikeError(error: unknown): boolean {
