@@ -91,3 +91,4 @@ docs/superpowers/plans
 # ai-e2e runtime artifacts
 ai-e2e/exports/
 ai-e2e/screenshot-*.png
+.omo

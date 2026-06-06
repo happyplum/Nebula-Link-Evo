@@ -23,6 +23,11 @@ import aiServiceRoutes from './plugins/routes/api/ai-service.js';
 import debugRoutes from './plugins/routes/debug/index.js';
 import apiChatRoutes from './plugins/routes/api/chat/index.js';
 import { runPreflight } from './services/provider/preflight.js';
+import { ToolRegistry } from './tools/registry.js';
+import { BrowserToolsProvider } from './tools/providers/browser-tools-provider.js';
+import { VisionAgentProvider } from './tools/providers/vision-agent-provider.js';
+import { MCPClientProvider } from './tools/providers/mcp-client-provider.js';
+import mcpServerPlugin from './mcp-server/index.js';
 
 const envLocal = path.join(process.cwd(), '.env');
 const envRoot = path.join(process.cwd(), '..', '.env');
@@ -46,6 +51,7 @@ const PORT = parseInt(process.env.PROXY_PORT || '3000');
 
 let conversationManager: ConversationManager;
 let chatHandler: ChatHandler;
+let toolRegistry: ToolRegistry;
 
 async function start() {
   try {
@@ -107,13 +113,31 @@ async function start() {
     const sessionEventsDAO = dbManager.getSessionEventsDAO();
     const sessionEventHub = SessionEventHub.getInstance();
 
+    // Initialize ToolRegistry and register providers
+    toolRegistry = new ToolRegistry();
+
+    const browserToolsProvider = new BrowserToolsProvider(browserClient);
+    toolRegistry.registerProvider(browserToolsProvider);
+
+    const visionAgentProvider = new VisionAgentProvider(browserClient);
+    toolRegistry.registerProvider(visionAgentProvider);
+
+    const mcpClient = appService.getMCPSDKClient();
+    if (mcpClient) {
+      const mcpClientProvider = new MCPClientProvider(mcpClient);
+      toolRegistry.registerProvider(mcpClientProvider);
+    }
+
+    await toolRegistry.initializeAll();
+
     chatHandler = new ChatHandler(
       conversationManager,
       config,
-      appService.getMCPSDKClient() || undefined,
+      mcpClient || undefined,
       sessionEventsDAO,
       sessionEventHub,
       browserClient,
+      toolRegistry,
     );
 
     // Decorate Fastify with conversation management
@@ -139,6 +163,9 @@ async function start() {
     await app.register(debugRoutes, { prefix: '/debug' });
     app.log.info({ prefix: '/debug' }, 'Debug routes registered');
     app.log.info({ subscribers: debugEventHub.getSubscriberCount() }, 'Debug event hub ready');
+
+    // Register MCP Server plugin
+    await app.register(mcpServerPlugin, { toolRegistry });
 
     const mcpStatus = appService.getMCPStatus();
     app.log.info({ configPath: appService.getConfigPath() }, 'Configuration loaded');
@@ -198,6 +225,9 @@ async function start() {
 
 process.on('SIGINT', async () => {
   app.log.info('Shutting down gracefully...');
+  if (toolRegistry) {
+    await toolRegistry.shutdownAll();
+  }
   if (conversationManager) {
     await conversationManager.close();
   }
@@ -209,6 +239,9 @@ process.on('SIGINT', async () => {
 
 process.on('SIGTERM', async () => {
   app.log.info('Shutting down gracefully...');
+  if (toolRegistry) {
+    await toolRegistry.shutdownAll();
+  }
   if (conversationManager) {
     await conversationManager.close();
   }

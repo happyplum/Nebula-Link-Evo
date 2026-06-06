@@ -18,17 +18,17 @@ Browser ←→ Debug UI (:5173 dev / standalone build)
 
 ### 手眼协调
 
-**感知层**：通过带标注的截图和简化 DOM v2.0（含 data-nebula-id 属性）实现页面感知。Proxy Adapter 保留浏览器截图/快照能力，视觉分析已迁移到独立 `vision-server` MCP。系统支持 12 种操作类型：click、type、scroll、navigate、wait、screenshot、focus、blur、hover、value、dispatch、mcp_call。
+**感知层**：通过带标注的截图和简化 DOM v2.0（含 data-nebula-id 属性）实现页面感知。Proxy Adapter 内置 `vision-agent` ToolProvider，通过 `browserClient` 复用浏览器截图/快照能力，并以 `vision-agent.*` 工具对 Chat 与 MCP Server 暴露视觉分析。系统支持 12 种操作类型：click、type、scroll、navigate、wait、screenshot、focus、blur、hover、value、dispatch、mcp_call。
 
 **目标定位**：采用 7 级目标链，依次尝试 nebula-id → role → testid → aria → text → css → xpath 选择器，确保精准定位页面元素。
 
-**视觉标记**：Vision Marker System 将操作坐标与 DOM 元素关联；当前产品运行模式统一为 `unified`，不再由 Proxy Adapter 直连视觉模型。
+**视觉标记**：Vision Marker System 将操作坐标与 DOM 元素关联；`vision-agent` 负责基于标注截图和 DOM 快照调用视觉模型完成元素匹配，配置缺失或初始化失败时降级为不可用工具而不阻断 Proxy Adapter 启动。
 
 ### Agent Chat 会话
 
 **会话状态机**：idle → running ↔ paused，interrupt → interrupted，cancel → cancelled，completed。每个会话通过互斥锁保证同一时间只有一个活跃执行，支持暂停、恢复、中断等操作。
 
-**工具与扩展**：MCP（Model Context Protocol，从 stdio 服务器自动发现）提供丰富的扩展能力。Chat 中 `browser-control.*` 浏览器工具由 Proxy Adapter 本地 `browser-tools` 模块注册并通过 `browserClient` 调用 `playwright-server`；其他 MCP 工具（如 `vision-server`）继续通过 MCP 协议动态注册与调用。MCP 客户端具备崩溃恢复机制：状态机管理 server 生命周期，事件驱动检测断链，指数退避自动重连（最多 5 次），`toolsChanged` 事件通知工具变更。
+**工具与扩展**：MCP（Model Context Protocol，从 stdio 服务器自动发现）提供丰富的扩展能力。Chat 中 `browser-control.*` 浏览器工具由 Proxy Adapter 本地 `browser-tools` 模块注册并通过 `browserClient` 调用 `playwright-server`；视觉工具由内置 `vision-agent` 注册为 `vision-agent.analyze`、`vision-agent.find_element`、`vision-agent.get_element_info`、`vision-agent.screenshot`，同时暴露给 Chat 与 MCP Server。其他外部 MCP 工具继续通过 MCP 协议动态注册与调用。MCP 客户端具备崩溃恢复机制：状态机管理 server 生命周期，事件驱动检测断链，指数退避自动重连（最多 5 次），`toolsChanged` 事件通知工具变更。
 
 **上下文管理**：消息数超过 20 时自动压缩上下文，Chat SSE 每次建连都会先发送完整 `session.snapshot` 再继续 live stream，后台任务队列支持 3 次重试和 10 分钟空闲清理。
 
@@ -184,6 +184,44 @@ docs/               # Documentation
 - API boundary separates unknown providers (400) from unavailable providers (503 with error detail).
 
 **Error taxonomy**: CONFIG_INVALID (config-time validation) → INSTALL_FAILED (import resolution) → INIT_FAILED (factory invocation).
+
+### Roadmap
+
+#### Phase 2：AI Chat 服务拆分（pending）
+
+**目标**：将 `proxy-adapter` 中的 AI Chat 功能拆分为独立服务，使 `proxy-adapter` 退化为纯粹的浏览器自动化 MCP 网关。
+
+**拆分后架构**：
+
+```
+proxy-adapter (纯浏览器 MCP 网关)
+  ├── MCP Server — 对外暴露 browser-control.* + vision-agent.*
+  ├── BrowserClient 单例 → playwright-server :3001
+  └── debug-ui 浏览器操作相关 REST 端点
+
+ai-chat-service (AI 对话服务)
+  ├── MCP Client → 连 proxy-adapter MCP Server（获取浏览器/视觉工具）
+  ├── MCP Client → 连其他 MCP Server
+  ├── AI provider 编排（多模型、流式）
+  ├── conversation/session 管理
+  ├── Chat SSE → debug-ui
+  └── 独立端口
+```
+
+**前置条件**（Phase 1 必须先完成）：
+- proxy-adapter 已具备 MCP Server 能力（StreamableHTTPServerTransport）
+- ToolRegistry + ToolProvider 故障隔离机制就位
+- vision-agent 已迁移为 proxy-adapter 内部模块
+- 统一工具注册层同时服务 Vercel AI SDK 和 MCP Server
+
+**迁移范围**：
+- conversation/session/chat 管理层
+- AI provider 编排与 preflight
+- chat-handler 工具合并逻辑
+- Chat SSE 流式端点
+- debug-ui 中 AI 面板相关路由
+
+**收益**：proxy-adapter 职责单一（浏览器 MCP 网关），任何 AI 客户端（Claude Desktop、Cursor、aichat）均可通过 MCP 协议消费浏览器能力；chat 服务独立演进、独立部署。
 
 ### Tech Debt
 
