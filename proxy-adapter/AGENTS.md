@@ -2,7 +2,7 @@
 
 ## Overview
 
-Fastify backend on port `3000`. AI orchestration, chat/session APIs, debug APIs.
+Fastify backend on port `3000`. AI orchestration, MCP Server (StreamableHTTP), chat/session APIs, debug APIs.
 
 ## Commands
 
@@ -22,9 +22,12 @@ pnpm test:debug   # Debug page smoke check
 | Server entry     | `src/server.ts`                     | Env load, plugins, route registration                 |
 | Task facade      | `src/services/task-service.ts`      | Config, MCP, provider registry, singleton facade      |
 | Action execution | `src/services/action-executor.ts`   | Browser action dispatch                               |
+| Tool registry    | `src/tools/`                        | ToolRegistry + 3 Providers + Vercel AI / MCP adapters |
+| MCP Server       | `src/mcp-server/`                   | StreamableHTTP plugin + transport                     |
+| Vision agent     | `src/mcps/vision-agent/`            | Internal vision analysis module (config, tools, cache)|
 | Chat routes      | `src/plugins/routes/api/chat/`      | Session, stream, control (sole execution path)        |
 | Conversations    | `src/conversation/`                 | SQLite persistence, compression                       |
-| AI clients       | `src/clients/`                      | Provider factories (decision, Vercel AI, MCP) |
+| AI clients       | `src/clients/`                      | Provider factories (decision, Vercel AI, MCP)         |
 | Config           | `src/config/`                       | Schema, loader, resolver, validator                   |
 | Tests            | `src/__tests__/`                    | Unit, integration, e2e                                |
 

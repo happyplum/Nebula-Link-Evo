@@ -10,7 +10,7 @@ Nebula-Link Evo 是一个基于 AI 的浏览器自动化平台，通过浏览器
 Browser ←→ Debug UI (:5173 dev / standalone build)
                    ↕ HTTP/SSE
               Proxy Adapter (:3000) → AI Providers (GLM, OpenAI, Anthropic, Kimi, NVIDIA)
-                   ↕ HTTP                  ↕ HTTP (AI + Playwright)
+                   ↕ HTTP                  ↕ HTTP (AI + Playwright)      ↕ MCP (StreamableHTTP)
            Playwright Server (:3001) → Chromium      AI E2E (:3002) — 自动化测试编排
 ```
 
@@ -57,7 +57,7 @@ Browser ←→ Debug UI (:5173 dev / standalone build)
 
 | Package | Port | Role |
 |---------|------|------|
-| `proxy-adapter` | :3000 | AI 编排、Playwright 浏览器控制、会话管理 |
+| `proxy-adapter` | :3000 | AI 编排、MCP Gateway（StreamableHTTP）、Playwright 浏览器控制、会话管理 |
 | `playwright-server` | :3001 | Playwright Chromium 实例 |
 | `debug-ui` | :5173 | 实时调试监控面板 |
 | `ai-e2e` | :3002 | AI 驱动的 E2E 自动化测试编排（通过 HTTP 消费 proxy-adapter 的 AI 和 Playwright 服务） |

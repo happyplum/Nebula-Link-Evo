@@ -2,7 +2,7 @@
 
 ## Overview
 
-AI-assisted browser automation platform. `proxy-adapter` is the core backend (AI provider orchestration + browser control via `playwright-server`). `debug-ui` provides the primary web UI. `ai-e2e` is an AI-driven E2E test orchestration subsystem with its own React SPA at `/ai-e2e/`.
+AI-assisted browser automation platform. `proxy-adapter` is the core backend (AI provider orchestration + browser control via `playwright-server` + MCP Server via StreamableHTTP). `debug-ui` provides the primary web UI. `ai-e2e` is an AI-driven E2E test orchestration subsystem with its own React SPA at `/ai-e2e/`.
 
 ## Structure
 
