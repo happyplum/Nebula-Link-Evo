@@ -134,6 +134,42 @@ const configRoutes: FastifyPluginAsyncTypebox<ConfigRouteOptions> = async (fasti
     }
   );
 
+  // GET /login-script — list login scripts for project
+  fastify.get(
+    '/login-script',
+    {
+      schema: {
+        description: 'Get login scripts for project',
+        tags: ['Config'],
+        params: IdParamSchema,
+        response: {
+          200: Type.Array(LoginScriptSchema),
+          404: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request) => {
+      const { id: projectId } = request.params as { id: string };
+
+      const db = DatabaseManager.getInstance();
+      const project = db.getProjectRepo().findById(projectId);
+      if (!project) {
+        throw ServiceError.notFound(`Project '${projectId}' not found`);
+      }
+
+      const scripts = db.getLoginScriptRepo().findByProjectId(projectId);
+      return scripts.map((s) => ({
+        id: s.id,
+        name: s.name,
+        description: undefined as string | undefined,
+        steps: JSON.parse(s.steps_json) as unknown[],
+        is_reusable: true,
+        created_at: s.created_at,
+        updated_at: s.created_at,
+      }));
+    }
+  );
+
   // POST /login-script — save login script
   fastify.post(
     '/login-script',

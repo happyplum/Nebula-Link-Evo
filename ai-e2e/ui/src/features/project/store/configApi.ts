@@ -107,7 +107,30 @@ export const transitionProjectState = async ({ projectId, targetStatus }: { proj
   return data.data || data;
 };
 
+export interface LoginScriptResponse {
+  id: string;
+  name: string;
+  steps: LoginStep[];
+  created_at: string;
+  updated_at: string;
+}
+
+export const fetchLoginScripts = async (projectId: string): Promise<LoginScriptResponse[]> => {
+  const response = await fetch(`${API_BASE}/${projectId}/config/login-script`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch login scripts for project ${projectId}`);
+  }
+  const data = await response.json();
+  return data.data || data;
+};
+
 // --- React Query Hooks ---
+
+export const loginScriptKeys = {
+  all: ['login-scripts'] as const,
+  lists: () => [...loginScriptKeys.all, 'list'] as const,
+  list: (projectId: string) => [...loginScriptKeys.lists(), projectId] as const,
+};
 
 export const configKeys = {
   all: ['project-config'] as const,
@@ -142,6 +165,14 @@ export const useCreateLoginScript = () => {
 export const useTestLoginScript = () => {
   return useMutation({
     mutationFn: testLoginScript,
+  });
+};
+
+export const useLoginScripts = (projectId: string | undefined) => {
+  return useQuery({
+    queryKey: loginScriptKeys.list(projectId ?? ''),
+    queryFn: () => fetchLoginScripts(projectId!),
+    enabled: !!projectId,
   });
 };
 

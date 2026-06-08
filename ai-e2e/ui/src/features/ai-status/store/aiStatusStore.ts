@@ -18,7 +18,7 @@ export interface AIStatusState {
   updateFromSnapshot: (snapshot: Partial<AIStatusState>) => void;
 }
 
-export const useAIStatusStore = create<AIStatusState>((set) => ({
+export const createAIStatusStore = () => create<AIStatusState>((set) => ({
   status: 'idle',
   currentTask: null,
   progress: 0,
@@ -36,4 +36,4 @@ export const useAIStatusStore = create<AIStatusState>((set) => ({
     ...state,
     ...snapshot
   })),
-}));
+}))();

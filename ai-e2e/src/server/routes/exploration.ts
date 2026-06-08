@@ -320,6 +320,36 @@ const explorationRoutes: FastifyPluginAsyncTypebox<ExplorationRouteOptions> = as
     return updated;
   });
 
+  // POST /urls/:urlId/refresh-snapshot — navigate to URL and capture fresh snapshot
+  fastify.post('/urls/:urlId/refresh-snapshot', {
+    schema: {
+      description: 'Navigate to a URL and capture a fresh page snapshot via proxy adapter',
+      tags: ['Exploration'],
+      params: UrlIdParamSchema,
+      response: {
+        200: URLRecordSchema,
+      },
+    },
+  }, async (request, reply) => {
+    const { urlId } = request.params as Static<typeof UrlIdParamSchema>;
+    const db = DatabaseManager.getInstance();
+
+    const existing = db.getURLRepo().findById(urlId);
+    if (!existing) {
+      throw ServiceError.notFound(`URL not found: ${urlId}`);
+    }
+
+    const client = requireProxyClient();
+
+    // Navigate to the URL and capture a fresh snapshot
+    await client.navigate(existing.url);
+    const snapshot = await client.getSnapshot();
+
+    const snapshotJson = JSON.stringify(snapshot.elements);
+    const updated = db.getURLRepo().updateSnapshot(urlId, snapshotJson);
+    return reply.send(updated);
+  });
+
   // POST /urls — manually add a URL
   fastify.post('/urls', {
     schema: {

@@ -3,7 +3,9 @@ import { useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button, Card } from '@/shared/components';
 import { useSSE } from '@/hooks/use-sse.js';
-import { useAIStatusStore } from '../../ai-status/store/aiStatusStore';
+import { createAIStatusStore } from '../../ai-status/store/aiStatusStore';
+
+const usePanelAIStatus = createAIStatusStore();
 import { useScripts, useGenerateScripts, useTransitionState, scriptsKeys, Script } from '../store/scriptsApi';
 import { ScriptList } from './ScriptList';
 import { ScriptEditor } from './ScriptEditor';
@@ -21,12 +23,12 @@ export default function ScriptPanel() {
   const { mutate: transitionState, isPending: isTransitioning } = useTransitionState(projectId!);
   const queryClient = useQueryClient();
   
-  const aiStatus = useAIStatusStore((state) => state.status);
-  const aiProgress = useAIStatusStore((state) => state.progress);
-  const aiMessage = useAIStatusStore((state) => state.message);
+  const aiStatus = usePanelAIStatus((state) => state.status);
+  const aiProgress = usePanelAIStatus((state) => state.progress);
+  const aiMessage = usePanelAIStatus((state) => state.message);
 
-  const setAIStatus = useAIStatusStore((state) => state.setStatus);
-  const setAIProgress = useAIStatusStore((state) => state.setProgress);
+  const setAIStatus = usePanelAIStatus((state) => state.setStatus);
+  const setAIProgress = usePanelAIStatus((state) => state.setProgress);
 
   const invalidateScripts = () => {
     if (projectId) {

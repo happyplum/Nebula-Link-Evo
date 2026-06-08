@@ -5,7 +5,9 @@ import { ModuleTree } from './ModuleTree.js';
 import { ModuleDetail } from './ModuleDetail.js';
 import { Button, Modal, Input, Card } from '@/shared/components';
 import { useSSE } from '@/hooks/use-sse.js';
-import { useAIStatusStore } from '../../ai-status/store/aiStatusStore.js';
+import { createAIStatusStore } from '../../ai-status/store/aiStatusStore.js';
+
+const usePanelAIStatus = createAIStatusStore();
 import {
   useModules,
   useDocuments,
@@ -38,7 +40,7 @@ export const AnalysisPanel: React.FC = () => {
   const decomposeAll = useDecomposeAll(projectId || '');
 
   // AI Status Store
-  const { status, setStatus, setProgress, setMessage } = useAIStatusStore();
+  const { status, setStatus, setProgress, setMessage } = usePanelAIStatus();
   const isAnalyzing = status === 'running';
 
   // SSE Integration
