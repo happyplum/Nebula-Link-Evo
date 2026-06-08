@@ -34,10 +34,10 @@ export function Layout() {
               to="/"
               className={({ isActive }) =>
                 cn(
-                  'rounded-sm px-3 py-1.5 text-[13px] text-text-secondary no-underline transition-colors',
+                  'rounded-sm py-1.5 pr-3 text-[13px] text-text-secondary no-underline transition-colors',
                   isActive
-                    ? 'bg-surface-elevated text-text-primary'
-                    : 'hover:bg-surface-elevated hover:text-text-primary'
+                    ? 'border-l-2 border-l-status-info bg-surface-elevated pl-2.5 font-semibold text-text-primary'
+                    : 'px-3 hover:bg-surface-elevated hover:text-text-primary'
                 )
               }
             >
@@ -53,10 +53,10 @@ export function Layout() {
                     to={`/project/${project.id}`}
                     className={({ isActive }) =>
                       cn(
-                        'truncate rounded-sm px-3 py-1.5 text-[13px] no-underline transition-colors',
+                        'truncate rounded-sm py-1.5 pr-3 text-[13px] no-underline transition-colors',
                         isActive
-                          ? 'bg-surface-elevated border-l-2 border-l-status-info text-text-primary'
-                          : 'text-text-secondary hover:bg-surface-elevated hover:text-text-primary'
+                          ? 'border-l-2 border-l-status-info bg-surface-elevated pl-2.5 font-semibold text-text-primary'
+                          : 'px-3 text-text-secondary hover:bg-surface-elevated hover:text-text-primary'
                       )
                     }
                     title={project.name}

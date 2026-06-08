@@ -23,13 +23,13 @@ const statusLabelMap: Record<string, string> = {
 };
 
 const statusStyleMap: Record<string, string> = {
-  active: 'bg-status-success/20 text-status-success',
-  running: 'bg-status-success/20 text-status-success',
-  completed: 'bg-status-success/20 text-status-success',
-  error: 'bg-status-error/20 text-status-error',
-  analyzing: 'bg-status-info/20 text-status-info',
-  exploring: 'bg-status-info/20 text-status-info',
-  generating: 'bg-status-info/20 text-status-info',
+  active: 'bg-status-success/25 text-status-success',
+  running: 'bg-status-success/25 text-status-success',
+  completed: 'bg-status-success/25 text-status-success',
+  error: 'bg-status-error/25 text-status-error',
+  analyzing: 'bg-status-info/25 text-status-info',
+  exploring: 'bg-status-info/25 text-status-info',
+  generating: 'bg-status-info/25 text-status-info',
   default: 'bg-surface-elevated text-text-secondary',
 };
 
@@ -66,7 +66,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ project }) => {
   };
 
   return (
-    <Card className="cursor-pointer border-border-default bg-surface-content p-4 transition-colors hover:border-border-hover" onClick={handleClick}>
+    <Card className="cursor-pointer border-border-default bg-surface-elevated p-5 transition-colors hover:border-border-hover" onClick={handleClick}>
       <div className="flex items-start justify-between">
         <h3 className="text-base font-medium" title={project.name}>{project.name}</h3>
         <span className={cn('rounded-full px-2 py-0.5 text-xs', getStatusStyle(project.status))}>
@@ -78,10 +78,10 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ project }) => {
         {project.description || '暂无描述'}
       </div>
       
-      <div className="mt-3 flex items-center justify-end border-t border-border-default pt-3">
-        <span className="text-text-secondary">创建于 {formatDate(project.created_at)}</span>
+      <div className="mt-3 flex items-center justify-between border-t border-border-default pt-3">
+        <span className="text-xs text-text-muted">创建于 {formatDate(project.created_at)}</span>
         <button 
-          className="ml-auto rounded-md border border-border-default bg-surface-elevated px-2.5 py-1 text-xs text-text-secondary transition-colors hover:border-border-hover hover:text-text-primary"
+          className="ml-2 rounded-md border border-border-default bg-surface-content px-2.5 py-1 text-xs text-text-muted transition-colors hover:border-status-error/40 hover:text-status-error"
           onClick={handleDelete}
           title="删除项目"
         >
