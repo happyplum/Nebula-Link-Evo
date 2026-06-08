@@ -53,11 +53,15 @@ export const ConfigPanel: React.FC = () => {
   };
 
   const handleStartAnalysis = async () => {
-    await handleSave();
-    transitionMutation.mutate({ 
-      projectId, 
-      targetStatus: 'analyzing' 
-    });
+    try {
+      await handleSave();
+      transitionMutation.mutate({ 
+        projectId, 
+        targetStatus: 'analyzing' 
+      });
+    } catch {
+      // save 失败时全局 toast 已经由 queryClient defaultOptions 处理
+    }
   };
 
   const addSeedUrl = () => {

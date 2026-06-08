@@ -3,30 +3,31 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
 // Type-safe event map — covers ALL events used across all features
+// Aligned with backend sse-events.ts payload shapes
 export interface SSEEventMap {
   // Analysis
-  'prd.analysis_progress': { phase?: string; progress?: number; message?: string };
-  'prd.analysis_complete': { moduleCount?: number };
-  'prd.decomposition_complete': { moduleId: string };
-  'prd.decomposition_all_complete': { totalModules: number };
-  'prd.scenarios_all_complete': { totalScenarios: number };
+  'prd.analysis_progress': { phase: string; progress: number; message?: string };
+  'prd.analysis_complete': { projectId?: string; modules?: unknown[] };
+  'prd.decomposition_complete': { projectId?: string; businessModuleId?: string; functionalModules?: string[] };
+  'prd.decomposition_all_complete': { projectId?: string; totalBusinessModules?: number; succeeded?: number; failed?: number };
+  'prd.scenarios_all_complete': { projectId?: string; succeeded?: number; failed?: number };
   // Exploration
-  'exploration.progress': { pagesVisited: number; urlsFound: number; currentUrl?: string };
-  'exploration.url_found': { url: string; id: string };
-  'exploration.binding_proposed': { bindingId: string; moduleId: string; urlId: string };
-  'exploration.complete': { urlsCount: number };
+  'exploration.progress': { sessionId?: string; pagesVisited: number; urlsFound: number };
+  'exploration.url_found': { url: unknown };
+  'exploration.binding_proposed': { binding: unknown };
+  'exploration.complete': { sessionId?: string; totalUrls?: number; totalBindings?: number };
   // Execution
-  'execution.started': { scriptId: string; runId?: string };
-  'execution.progress': { step: string; progress?: number; runId?: string };
+  'execution.started': { runId?: string; scriptId: string };
+  'execution.progress': { runId?: string; step: string; progress?: number };
   'execution.completed': { run?: { id: string; [key: string]: unknown }; scriptId?: string };
-  'execution.failed': { error: string; runId?: string };
-  'ai.diagnosis': { runId: string; diagnosis: string; severity: string };
-  'ai.fix_applied': { fixId: string; status: string };
+  'execution.failed': { runId?: string; error: string };
+  'ai.diagnosis': { runId: string; diagnosis: string };
+  'ai.fix_applied': { runId?: string; scriptId?: string; diffStats?: { linesChanged: number; totalLines: number } };
   // Scripts
-  'script.generation_progress': { moduleId: string; progress?: number };
-  'script.generated': { scriptId: string; moduleId: string };
+  'script.generation_progress': { scenarioId?: string; progress?: number };
+  'script.generated': { script?: unknown };
   // Project
-  'project.status_changed': { status: string; [key: string]: unknown };
+  'project.status_changed': { projectId?: string; oldStatus?: string; newStatus?: string };
 }
 
 export type SSEHandlers = {

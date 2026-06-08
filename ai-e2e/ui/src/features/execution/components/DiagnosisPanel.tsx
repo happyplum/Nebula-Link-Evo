@@ -42,7 +42,7 @@ export const DiagnosisPanel: React.FC<DiagnosisPanelProps> = ({
           <h3 className="text-sm font-medium mb-2">诊断记录</h3>
           {diagnosis.logs.map((log, index) => (
             <div key={log.id} className="bg-surface-content rounded-md p-3 text-sm mb-2">
-              <div style={{ fontSize: '0.85em', color: '#888', marginBottom: '4px' }}>
+              <div className="text-xs text-text-muted mb-1">
                 #{index + 1} — {log.action_taken || '未知操作'} ({new Date(log.created_at).toLocaleString()})
               </div>
               {log.diagnosis && <div>{log.diagnosis}</div>}
