@@ -205,10 +205,12 @@ const routes: FastifyPluginAsyncTypebox<ExecutionRouteOptions> = async (fastify,
             runs: Type.Array(Type.Object({
               id: Type.String(),
               script_id: Type.String(),
+              script_name: Type.String(),
               script_version: Type.Number(),
               status: Type.String(),
               started_at: Type.String(),
               completed_at: Type.Union([Type.String(), Type.Null()]),
+              duration_ms: Type.Union([Type.Number(), Type.Null()]),
               error_message: Type.Union([Type.String(), Type.Null()]),
               created_at: Type.String(),
             })),
@@ -224,7 +226,24 @@ const routes: FastifyPluginAsyncTypebox<ExecutionRouteOptions> = async (fastify,
       const scripts = collectProjectScripts(db, projectId);
       const allRuns = scripts.flatMap(s => db.getExecutionRunRepo().findByScriptId(s.id));
 
-      return reply.status(200).send({ runs: allRuns });
+      // Enrich runs with script_name (via scenario) and duration_ms
+      const enrichedRuns = allRuns.map(run => {
+        const script = db.getScriptRepo().findById(run.script_id);
+        let scriptName = run.script_id;
+        if (script) {
+          const scenario = db.getTestScenarioRepo().findById(script.test_scenario_id);
+          if (scenario) {
+            scriptName = scenario.name;
+          }
+        }
+        let durationMs: number | null = null;
+        if (run.started_at && run.completed_at) {
+          durationMs = new Date(run.completed_at).getTime() - new Date(run.started_at).getTime();
+        }
+        return { ...run, script_name: scriptName, duration_ms: durationMs };
+      });
+
+      return reply.status(200).send({ runs: enrichedRuns });
     },
   );
 

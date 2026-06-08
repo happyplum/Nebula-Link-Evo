@@ -54,10 +54,21 @@ const URLRecordSchema = Type.Object({
 const BindingSchema = Type.Object({
   id: Type.String(),
   url_id: Type.String(),
-  functional_module_id: Type.String(),
+  module_id: Type.String(),
+  confidence: Type.Optional(Type.Number()),
   status: Type.String(),
-  confidence_score: Type.Optional(Type.Number()),
   created_at: Type.String(),
+  url: Type.Optional(Type.Object({
+    id: Type.String(),
+    url: Type.String(),
+    title: Type.Optional(Type.String()),
+    status: Type.String(),
+    created_at: Type.String(),
+  })),
+  module: Type.Optional(Type.Object({
+    id: Type.String(),
+    name: Type.String(),
+  })),
 });
 
 const AddURLRequestSchema = Type.Object({
@@ -170,6 +181,17 @@ const explorationRoutes: FastifyPluginAsyncTypebox<ExplorationRouteOptions> = as
     return reply.send(session);
   });
 
+  // POST /stop — not supported (exploration runs synchronously)
+  fastify.post('/stop', {
+    schema: {
+      description: 'Stop exploration (not supported — exploration runs synchronously)',
+      tags: ['Exploration'],
+      params: ProjectIdParamSchema,
+    },
+  }, async (_request, reply) => {
+    return reply.status(501).send({ error: 'Stop exploration is not supported. Exploration runs synchronously and cannot be cancelled mid-flight.' });
+  });
+
   // GET /urls — get discovered URLs
   fastify.get('/urls', {
     schema: {
@@ -199,7 +221,29 @@ const explorationRoutes: FastifyPluginAsyncTypebox<ExplorationRouteOptions> = as
   }, async (request) => {
     const { id: projectId } = request.params as ProjectIdParam;
     const db = DatabaseManager.getInstance();
-    return db.getURLModuleBindingRepo().findByProjectId(projectId);
+    const bindings = db.getURLModuleBindingRepo().findByProjectId(projectId);
+
+    // Enrich with url and module data, map field names for frontend
+    return bindings.map(b => {
+      const url = db.getURLRepo().findById(b.url_id);
+      const fm = db.getFunctionalModuleRepo().findById(b.functional_module_id);
+
+      // Map status: ai_proposed → proposed, human_confirmed → confirmed, rejected → rejected
+      let mappedStatus = b.status;
+      if (b.status === 'ai_proposed') mappedStatus = 'proposed';
+      else if (b.status === 'human_confirmed') mappedStatus = 'confirmed';
+
+      return {
+        id: b.id,
+        url_id: b.url_id,
+        module_id: b.functional_module_id,
+        confidence: b.confidence_score,
+        status: mappedStatus,
+        created_at: b.created_at,
+        url: url ? { id: url.id, url: url.url, title: url.title ?? undefined, status: 'explored' as const, created_at: url.created_at } : undefined,
+        module: fm ? { id: fm.id, name: fm.name } : undefined,
+      };
+    });
   });
 
   // PUT /bindings/:bindingId — confirm or reject a binding

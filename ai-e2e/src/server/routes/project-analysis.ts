@@ -132,6 +132,29 @@ const analysisRoutes: FastifyPluginAsyncTypebox<AnalysisRouteOptions> = async (f
     return new PRDAnalyzerService(proxyClient, promptManagerOpt, tokenTrackerOpt, db);
   }
 
+  // GET /documents — list PRD documents for a project
+  fastify.get(
+    '/documents',
+    {
+      schema: {
+        description: 'List all PRD documents for a project',
+        tags: ['Analysis'],
+        params: IdParamSchema,
+        response: {
+          200: Type.Array(PRDDocumentResponseSchema),
+          404: ErrorResponseSchema,
+        },
+      },
+    },
+    async (request) => {
+      const { id: projectId } = request.params as { id: string };
+      requireProject(projectId);
+      const db = DatabaseManager.getInstance();
+      const docs = db.getPRDDocumentRepo().findByProjectId(projectId);
+      return docs.map(({ parsed_content_json, ai_model_used, token_count, ...doc }) => doc);
+    }
+  );
+
   // POST /upload — upload PRD content
   fastify.post(
     '/upload',

@@ -17,8 +17,8 @@ export const ResultDashboard: React.FC<ResultDashboardProps> = ({
   onRunScript,
 }) => {
   const total = runs.length;
-  const passed = runs.filter(r => r.status === 'passed').length;
-  const failed = runs.filter(r => r.status === 'failed').length;
+  const passed = runs.filter(r => r.status === 'pass' || r.status === 'passed').length;
+  const failed = runs.filter(r => r.status === 'fail' || r.status === 'failed' || r.status === 'error').length;
   const pending = runs.filter(r => r.status === 'pending' || r.status === 'running').length;
 
   const columns: Column<ExecutionRun>[] = [
@@ -34,8 +34,12 @@ export const ResultDashboard: React.FC<ResultDashboardProps> = ({
         const statusMap: Record<string, string> = {
           pending: '等待中',
           running: '执行中',
+          pass: '通过',
           passed: '通过',
+          fail: '失败',
           failed: '失败',
+          error: '错误',
+          timeout: '超时',
           fix_applied: '已修复',
           fix_rejected: '已拒绝修复',
         };

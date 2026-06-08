@@ -1,9 +1,11 @@
-import { Outlet, NavLink } from 'react-router-dom';
-import { useProjects } from '../features/project/store/projectApi';
+import { Outlet, NavLink, useParams } from 'react-router-dom';
+import { useProjects, useProject } from '../features/project/store/projectApi';
 import styles from './layout.module.css';
 
 export function Layout() {
   const { data: projects } = useProjects();
+  const { projectId } = useParams<{ projectId: string }>();
+  const { data: currentProject } = useProject(projectId || '');
   
   // Get up to 5 most recent projects
   const recentProjects = projects 
@@ -66,7 +68,7 @@ export function Layout() {
 
       <footer className={styles.statusBar}>
         <div className={styles.statusLeft}>
-          <span>当前项目: 未选择</span>
+          <span>当前项目: {currentProject?.name || '未选择'}</span>
           <div className={styles.statusBadge}>
             <div className={styles.statusDot}></div>
             <span>就绪</span>

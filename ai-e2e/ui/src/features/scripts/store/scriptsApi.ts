@@ -40,24 +40,35 @@ export interface TransitionStateRequest {
 // --- API Functions ---
 
 export const generateScripts = async (projectId: string): Promise<void> => {
-  const response = await fetch(`/api/projects/${projectId}/scripts/generate`, {
+  const response = await fetch(`/api/projects/${projectId}/scripts/generate-all`, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
   });
   if (!response.ok) throw new Error('Failed to start script generation');
+};
+
+export const generateSingleScript = async (projectId: string, scenarioId: string): Promise<void> => {
+  const response = await fetch(`/api/projects/${projectId}/scripts/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ scenario_id: scenarioId }),
+  });
+  if (!response.ok) throw new Error('Failed to generate script');
 };
 
 export const fetchScripts = async (projectId: string): Promise<Script[]> => {
   const response = await fetch(`/api/projects/${projectId}/scripts`);
   if (!response.ok) throw new Error('Failed to fetch scripts');
   const data = await response.json();
-  return data.data || [];
+  return Array.isArray(data) ? data : (data.scripts || data.data || []);
 };
 
 export const fetchScript = async (projectId: string, scriptId: string): Promise<Script> => {
   const response = await fetch(`/api/projects/${projectId}/scripts/${scriptId}`);
   if (!response.ok) throw new Error('Failed to fetch script');
   const data = await response.json();
-  return data.data;
+  return data.data || data;
 };
 
 export const updateScript = async (projectId: string, scriptId: string, data: UpdateScriptRequest): Promise<Script> => {
@@ -68,14 +79,14 @@ export const updateScript = async (projectId: string, scriptId: string, data: Up
   });
   if (!response.ok) throw new Error('Failed to update script');
   const resData = await response.json();
-  return resData.data;
+  return resData.data || resData;
 };
 
 export const fetchScriptVersions = async (projectId: string, scriptId: string): Promise<ScriptVersion[]> => {
   const response = await fetch(`/api/projects/${projectId}/scripts/${scriptId}/versions`);
   if (!response.ok) throw new Error('Failed to fetch script versions');
   const data = await response.json();
-  return data.data || [];
+  return Array.isArray(data) ? data : (data.data || []);
 };
 
 export const transitionState = async (projectId: string, data: TransitionStateRequest): Promise<void> => {
@@ -130,6 +141,16 @@ export const useGenerateScripts = (projectId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => generateScripts(projectId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: scriptsKeys.list(projectId) });
+    },
+  });
+};
+
+export const useGenerateSingleScript = (projectId: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (scenarioId: string) => generateSingleScript(projectId, scenarioId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: scriptsKeys.list(projectId) });
     },

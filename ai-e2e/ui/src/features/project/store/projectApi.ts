@@ -11,7 +11,7 @@ export const fetchProjects = async (): Promise<Project[]> => {
     throw new Error('Failed to fetch projects');
   }
   const data = await response.json();
-  return data.data || [];
+  return data.projects || [];
 };
 
 // Fetch single project
@@ -21,7 +21,7 @@ export const fetchProject = async (id: string): Promise<Project> => {
     throw new Error(`Failed to fetch project ${id}`);
   }
   const data = await response.json();
-  return data.data;
+  return data.data || data;
 };
 
 // Create project
@@ -37,7 +37,7 @@ export const createProject = async (projectData: Partial<Project>): Promise<Proj
     throw new Error('Failed to create project');
   }
   const data = await response.json();
-  return data.data;
+  return data.data || data;
 };
 
 // Update project
@@ -53,7 +53,7 @@ export const updateProject = async ({ id, ...projectData }: Partial<Project> & {
     throw new Error(`Failed to update project ${id}`);
   }
   const data = await response.json();
-  return data.data;
+  return data.data || data;
 };
 
 // Delete project
