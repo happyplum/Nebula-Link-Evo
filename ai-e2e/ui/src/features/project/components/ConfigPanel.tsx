@@ -209,7 +209,7 @@ export const ConfigPanel: React.FC = () => {
         </Button>
       </div>
 
-      <div className="flex gap-2 justify-end">
+      <div className="flex gap-2 justify-end border-t border-border-default pt-4">
         <Button 
           variant="secondary" 
           onClick={handleSave}
