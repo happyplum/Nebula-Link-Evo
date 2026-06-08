@@ -6,7 +6,7 @@ import { PagePreview } from './PagePreview';
 import { BindingEditor } from './BindingEditor';
 import { UnboundModuleIndicator } from './UnboundModuleIndicator';
 import { Button, Modal, Input, Card } from '@/shared/components';
-import { useSSE } from '@/shared/hooks/useSSE';
+import { useSSE } from '@/hooks/use-sse.js';
 import { useAIStatusStore } from '../../ai-status/store/aiStatusStore';
 import {
   useExplorationStatus,
@@ -52,29 +52,31 @@ export const ExplorationPanel: React.FC = () => {
 
   // SSE Integration
   useSSE({
-    url: `/api/projects/${projectId}/events`,
-    events: ['exploration.progress', 'exploration.url_found', 'exploration.binding_proposed', 'exploration.complete'],
-    enabled: !!projectId,
-      onUpdate: (event, data) => {
-      if (event === 'exploration.progress') {
+    projectId: projectId || '',
+    handlers: {
+      'exploration.progress': (data) => {
         // Progress based on pages visited relative to URLs found
         const progress = data.urlsFound > 0 ? (data.pagesVisited / data.urlsFound) * 100 : 0;
         setProgress(Math.min(progress, 100));
         setMessage(`正在探索: 已访问 ${data.pagesVisited} 页`);
         refetchStatus();
-      } else if (event === 'exploration.url_found') {
+      },
+      'exploration.url_found': () => {
         refetchUrls();
-      } else if (event === 'exploration.binding_proposed') {
+      },
+      'exploration.binding_proposed': () => {
         // Invalidate bindings query to refetch
         queryClient.invalidateQueries({ queryKey: explorationKeys.bindings(projectId || '') });
-      } else if (event === 'exploration.complete') {
+      },
+      'exploration.complete': () => {
         setStatus('completed');
         setProgress(100);
         setMessage('探索完成');
         refetchStatus();
         refetchUrls();
-      }
+      },
     },
+    enabled: !!projectId,
   });
 
   const selectedUrl = useMemo(() => {

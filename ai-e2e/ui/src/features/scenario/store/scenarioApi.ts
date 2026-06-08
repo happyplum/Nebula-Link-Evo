@@ -26,6 +26,20 @@ export const fetchModuleScenarios = async (projectId: string, moduleId: string):
   return data.scenarios || [];
 };
 
+export const generateAllScenarios = async (projectId: string): Promise<void> => {
+  const response = await fetch(`/api/projects/${projectId}/scenarios/generate-all`, {
+    method: 'POST',
+  });
+  if (!response.ok) throw new Error('Failed to generate all scenarios');
+};
+
+export const generateModuleScenarios = async (projectId: string, moduleId: string): Promise<void> => {
+  const response = await fetch(`/api/projects/${projectId}/scenarios/modules/${moduleId}`, {
+    method: 'POST',
+  });
+  if (!response.ok) throw new Error('Failed to generate module scenarios');
+};
+
 // --- React Query Hooks ---
 
 export const scenarioKeys = {
@@ -58,6 +72,26 @@ export const useUpdateScenario = (projectId: string) => {
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: scenarioKeys.detail(projectId, variables.scenarioId) });
       queryClient.invalidateQueries({ queryKey: scenarioKeys.module(projectId, data.functional_module_id) });
+    },
+  });
+};
+
+export const useGenerateAllScenarios = (projectId: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => generateAllScenarios(projectId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: scenarioKeys.all(projectId) });
+    },
+  });
+};
+
+export const useGenerateModuleScenarios = (projectId: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (moduleId: string) => generateModuleScenarios(projectId, moduleId),
+    onSuccess: (_data, moduleId) => {
+      queryClient.invalidateQueries({ queryKey: scenarioKeys.module(projectId, moduleId) });
     },
   });
 };

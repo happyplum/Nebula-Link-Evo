@@ -4,7 +4,7 @@ import { PRDUpload } from './PRDUpload.js';
 import { ModuleTree } from './ModuleTree.js';
 import { ModuleDetail } from './ModuleDetail.js';
 import { Button, Modal, Input, Card } from '@/shared/components';
-import { useSSE } from '@/shared/hooks/useSSE.js';
+import { useSSE } from '@/hooks/use-sse.js';
 import { useAIStatusStore } from '../../ai-status/store/aiStatusStore.js';
 import {
   useModules,
@@ -15,6 +15,7 @@ import {
   useUpdateModule,
   useDeleteModule,
   useTransitionState,
+  useDecomposeAll,
   AnalysisModule
 } from '../store/analysisApi';
 
@@ -34,6 +35,7 @@ export const AnalysisPanel: React.FC = () => {
   const updateModule = useUpdateModule(projectId || '');
   const deleteModule = useDeleteModule(projectId || '');
   const transitionState = useTransitionState(projectId || '');
+  const decomposeAll = useDecomposeAll(projectId || '');
 
   // AI Status Store
   const { status, setStatus, setProgress, setMessage } = useAIStatusStore();
@@ -41,20 +43,20 @@ export const AnalysisPanel: React.FC = () => {
 
   // SSE Integration
   useSSE({
-    url: `/api/projects/${projectId}/events`,
-    events: ['prd.analysis_progress', 'prd.analysis_complete'],
-    enabled: isAnalyzing && !!projectId,
-    onUpdate: (event, data) => {
-      if (event === 'prd.analysis_progress') {
+    projectId: projectId || '',
+    handlers: {
+      'prd.analysis_progress': (data) => {
         setProgress(data.progress || 0);
         setMessage(`${data.phase} - ${data.progress}%` || '分析中...');
-      } else if (event === 'prd.analysis_complete') {
+      },
+      'prd.analysis_complete': () => {
         setStatus('completed');
         setProgress(100);
         setMessage('分析完成');
         refetchModules();
-      }
+      },
     },
+    enabled: isAnalyzing && !!projectId,
   });
 
   // Find selected module
@@ -191,7 +193,15 @@ export const AnalysisPanel: React.FC = () => {
       </div>
 
       <div className="flex gap-2 justify-end">
-        <Button 
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => decomposeAll.mutate()}
+          disabled={modules.length === 0 || decomposeAll.isPending}
+        >
+          {decomposeAll.isPending ? '分解中...' : '一键分解'}
+        </Button>
+        <Button
           variant="primary" 
           onClick={handleConfirmComplete}
           disabled={modules.length === 0 || isAnalyzing}

@@ -1,5 +1,7 @@
 import React from 'react';
+import { useParams } from 'react-router-dom';
 import { DiscoveredURL } from '../store/explorationApi';
+import { useRefreshUrlSnapshot } from '../store/explorationApi';
 import { Button } from '@/shared/components';
 import { cn } from '@/lib/utils';
 
@@ -28,6 +30,8 @@ export const URLList: React.FC<URLListProps> = ({
   onSelectUrl,
   onAddManualUrl,
 }) => {
+  const { projectId } = useParams<{ projectId: string }>();
+  const refreshSnapshot = useRefreshUrlSnapshot(projectId!);
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between p-3">
@@ -59,6 +63,20 @@ export const URLList: React.FC<URLListProps> = ({
               <div className={cn('ml-auto text-xs', statusClassMap[url.status] ?? 'text-text-muted')}>
                 {statusTextMap[url.status] ?? '待探索'}
               </div>
+              {(url.status === 'explored' || url.status === 'failed') && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    refreshSnapshot.mutate(url.id);
+                  }}
+                  disabled={refreshSnapshot.isPending}
+                  title="刷新快照"
+                >
+                  ↻
+                </Button>
+              )}
             </div>
           ))
         )}
