@@ -168,9 +168,12 @@ export const AnalysisPanel: React.FC = () => {
         {documents.length > 0 && (
           <Card className="flex-1">
             <h4>已上传的 PRD 文档（{documents.length} 份）</h4>
-            <details>
-              <summary>查看最新 PRD 内容（{documents[0].created_at}）</summary>
-              <pre className="flex-1 whitespace-pre-wrap text-sm">{documents[0].raw_content}</pre>
+            <details className="group">
+              <summary className="cursor-pointer text-sm text-text-secondary hover:text-text-primary list-none flex items-center gap-1">
+                <span className="transition-transform group-open:rotate-90 text-xs">▶</span>
+                查看最新 PRD 内容（{documents[0].created_at}）
+              </summary>
+              <pre className="mt-2 flex-1 whitespace-pre-wrap text-sm">{documents[0].raw_content}</pre>
             </details>
           </Card>
         )}

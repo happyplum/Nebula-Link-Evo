@@ -83,7 +83,8 @@ const eventsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     // Subscribe to future events — filter by projectId
     const unsubscribe = fastify.sseEmitter.onClient((event: SSEEvent) => {
       const eventData = event.data as Record<string, unknown> | undefined;
-      if (eventData && eventData.projectId === projectId) {
+      // Pass through events that match this project or don't specify a project
+      if (!eventData || !('projectId' in eventData) || eventData.projectId === projectId) {
         reply.raw.write(formatSSEEvent(event));
       }
     });

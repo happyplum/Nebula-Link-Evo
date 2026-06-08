@@ -12,19 +12,7 @@ interface URLListProps {
   onAddManualUrl: () => void;
 }
 
-// URLs fetched from GET /urls are already explored
-const URL_STATUS = 'explored' as const;
-const statusClassMap: Record<string, string> = {
-  explored: 'text-status-success',
-  failed: 'text-status-error',
-  pending: 'text-text-muted',
-};
 
-const statusTextMap: Record<string, string> = {
-  explored: '已探索',
-  failed: '失败',
-  pending: '待探索',
-};
 
 export const URLList: React.FC<URLListProps> = ({
   urls,
@@ -62,8 +50,8 @@ export const URLList: React.FC<URLListProps> = ({
               <div className="text-xs text-text-muted truncate" title={url.url}>
                 {url.url}
               </div>
-              <div className={cn('ml-auto text-xs', statusClassMap[URL_STATUS])}>
-                {statusTextMap[URL_STATUS]}
+              <div className="ml-auto text-xs text-text-muted">
+                已发现
               </div>
               <Button
                 variant="ghost"

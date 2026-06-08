@@ -3,7 +3,6 @@ import { scriptsKeys } from '@/features/scripts/store/scriptsApi.js';
 
 export interface ExecutionRun {
   id: string;
-  project_id: string;
   script_id: string;
   script_name: string;
   status: 'pending' | 'running' | 'pass' | 'fail' | 'error' | 'timeout' | 'passed' | 'failed' | 'fix_applied' | 'fix_rejected';
@@ -11,10 +10,13 @@ export interface ExecutionRun {
   completed_at: string;
   duration_ms: number | null;
   error_message: string | null;
-  screenshot_base64: string | null;
-  steps_json: string;
-  ai_fix_applied: boolean;
-  ai_fix_confidence: number | null;
+  // Optional — may not be returned by backend
+  project_id?: string;
+  screenshot_base64?: string | null;
+  steps_json?: string;
+  ai_fix_applied?: boolean;
+  ai_fix_confidence?: number | null;
+  run_number?: number;
 }
 
 export interface AIDiagnosis {
@@ -32,6 +34,8 @@ export interface AIDiagnosis {
 export const runScript = async (projectId: string, scriptId: string): Promise<void> => {
   const response = await fetch(`/api/projects/${projectId}/execution/run/${scriptId}`, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
   });
   if (!response.ok) throw new Error('Failed to run script');
 };
@@ -39,6 +43,8 @@ export const runScript = async (projectId: string, scriptId: string): Promise<vo
 export const runAllScripts = async (projectId: string): Promise<void> => {
   const response = await fetch(`/api/projects/${projectId}/execution/run-all`, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
   });
   if (!response.ok) throw new Error('Failed to run all scripts');
 };

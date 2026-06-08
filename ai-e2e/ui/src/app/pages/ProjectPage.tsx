@@ -29,7 +29,7 @@ export function ProjectPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabValue)} className="flex h-full flex-col">
+      <Tabs key={projectId} value={activeTab} onValueChange={(v) => setActiveTab(v as TabValue)} className="flex h-full flex-col">
         {/* Tab Bar */}
         <div className="border-b border-border-default bg-surface-content px-6 pt-4">
           <h1 className="mb-3 text-lg font-semibold text-text-primary">
@@ -51,25 +51,25 @@ export function ProjectPage() {
         {/* Tab content */}
         <div className="flex-1 overflow-y-auto p-6">
           <TabsContent value="config" className="mt-0">
-            <ConfigPanel />
+            {activeTab === 'config' && <ConfigPanel />}
           </TabsContent>
           <TabsContent value="analysis" className="mt-0">
-            <AnalysisPanel />
+            {activeTab === 'analysis' && <AnalysisPanel />}
           </TabsContent>
           <TabsContent value="scenario" className="mt-0">
-            <ScenarioPanel />
+            {activeTab === 'scenario' && <ScenarioPanel />}
           </TabsContent>
           <TabsContent value="exploration" className="mt-0">
-            <ExplorationPanel />
+            {activeTab === 'exploration' && <ExplorationPanel />}
           </TabsContent>
           <TabsContent value="scripts" className="mt-0">
-            <ScriptPanel />
+            {activeTab === 'scripts' && <ScriptPanel />}
           </TabsContent>
           <TabsContent value="execution" className="mt-0">
-            <ExecutionPanel />
+            {activeTab === 'execution' && <ExecutionPanel />}
           </TabsContent>
           <TabsContent value="report" className="mt-0">
-            {projectId && <ReportPanel projectId={projectId} />}
+            {activeTab === 'report' && projectId && <ReportPanel projectId={projectId} />}
           </TabsContent>
         </div>
       </Tabs>

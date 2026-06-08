@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { TestScenario, UpdateScenarioRequest } from '../../../types/scenario.js';
+import { analysisKeys } from '../../analysis/store/analysisApi.js';
 
 // --- API Functions ---
 
@@ -40,9 +41,8 @@ export const useUpdateScenario = (projectId: string) => {
   return useMutation({
     mutationFn: ({ scenarioId, data }: { scenarioId: string; data: UpdateScenarioRequest }) => 
       updateScenario(projectId, scenarioId, data),
-    onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: scenarioKeys.detail(projectId, variables.scenarioId) });
-      queryClient.invalidateQueries({ queryKey: scenarioKeys.module(projectId, data.functional_module_id) });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: analysisKeys.modules(projectId) });
     },
   });
 };
@@ -52,7 +52,7 @@ export const useGenerateAllScenarios = (projectId: string) => {
   return useMutation({
     mutationFn: () => generateAllScenarios(projectId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: scenarioKeys.all(projectId) });
+      queryClient.invalidateQueries({ queryKey: analysisKeys.modules(projectId) });
     },
   });
 };
@@ -61,8 +61,8 @@ export const useGenerateModuleScenarios = (projectId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (moduleId: string) => generateModuleScenarios(projectId, moduleId),
-    onSuccess: (_data, moduleId) => {
-      queryClient.invalidateQueries({ queryKey: scenarioKeys.module(projectId, moduleId) });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: analysisKeys.modules(projectId) });
     },
   });
 };

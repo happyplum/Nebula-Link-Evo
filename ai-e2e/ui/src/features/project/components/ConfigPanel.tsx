@@ -39,6 +39,7 @@ export const ConfigPanel: React.FC = () => {
     seed_urls: [''],
   });
   const [urlErrors, setUrlErrors] = useState<Record<number, string>>({});
+  const [baseUrlError, setBaseUrlError] = useState<string | null>(null);
 
   useEffect(() => {
     if (config) {
@@ -69,6 +70,13 @@ export const ConfigPanel: React.FC = () => {
   };
 
   const handleStartAnalysis = async () => {
+    if (localConfig.base_url.trim() && !/^https?:\/\/.+/.test(localConfig.base_url.trim())) {
+      setBaseUrlError('目标 URL 必须为 http:// 或 https:// 格式');
+      return;
+    }
+    if (Object.keys(urlErrors).length > 0) {
+      return;
+    }
     try {
       await handleSave();
       transitionMutation.mutate({ 
@@ -177,7 +185,18 @@ export const ConfigPanel: React.FC = () => {
           <Input
             label="目标基础 URL"
             value={localConfig.base_url}
-            onChange={(e) => setLocalConfig({...localConfig, base_url: e.target.value})}
+            onChange={(e) => {
+              setLocalConfig({...localConfig, base_url: e.target.value});
+              if (baseUrlError) setBaseUrlError(null);
+            }}
+            onBlur={() => {
+              if (localConfig.base_url.trim() && !/^https?:\/\/.+/.test(localConfig.base_url.trim())) {
+                setBaseUrlError('目标 URL 必须为 http:// 或 https:// 格式');
+              } else {
+                setBaseUrlError(null);
+              }
+            }}
+            error={baseUrlError || undefined}
             placeholder="https://example.com"
             fullWidth
           />
@@ -304,7 +323,7 @@ export const ConfigPanel: React.FC = () => {
             </Button>
 
             {testResult && (
-              <div className={`text-xs px-2 py-1 rounded ${testResult.ok ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'}`}>
+              <div className={`text-xs px-2 py-1 rounded ${testResult.ok ? 'text-status-success' : 'text-status-error'}`}>
                 {testResult.message}
               </div>
             )}
