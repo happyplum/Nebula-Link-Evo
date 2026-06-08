@@ -10,7 +10,7 @@
   --color-surface-base: #000000;
   --color-surface-panel: #0a0a0a;
   --color-surface-content: #111111;
-  --color-surface-elevated: #1a1a1a;
+  --color-surface-elevated: #1e1e1e;
 
   /* Text 3 层递减 */
   --color-text-primary: #ededed;
@@ -18,8 +18,8 @@
   --color-text-muted: #525252;
 
   /* Border 2 层 */
-  --color-border-default: #262626;
-  --color-border-hover: #404040;
+  --color-border-default: #3a3a3a;
+  --color-border-hover: #525252;
 
   /* Status 语义色 */
   --color-status-success: #22c55e;
@@ -27,37 +27,36 @@
   --color-status-warning: #f59e0b;
   --color-status-info: #3b82f6;
 
+  /* shadcn/ui color tokens (Tailwind 4 resolves bg-primary → var(--color-primary)) */
+  --color-background: #000000;
+  --color-foreground: #ededed;
+  --color-card: #1e1e1e;
+  --color-card-foreground: #ededed;
+  --color-popover: #1e1e1e;
+  --color-popover-foreground: #ededed;
+  --color-primary: #3b82f6;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #1e1e1e;
+  --color-secondary-foreground: #ededed;
+  --color-muted: #141414;
+  --color-muted-foreground: #a3a3a3;
+  --color-accent: #1e1e1e;
+  --color-accent-foreground: #ededed;
+  --color-destructive: #ef4444;
+  --color-destructive-foreground: #ffffff;
+  --color-border: #3a3a3a;
+  --color-input: #3a3a3a;
+  --color-ring: #525252;
+
   /* 字体系统 */
   --font-sans: system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
-
-  /* 字号 */
-  --text-xs: 11px;
-  --text-sm: 12px;
-  --text-base: 13px;
-  --text-lg: 14px;
-  --text-xl: 16px;
-  --text-2xl: 18px;
-  --text-3xl: 24px;
 
   /* 圆角 */
   --radius-none: 0;
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 8px;
-
-  /* 间距 */
-  --spacing-0: 0px;
-  --spacing-1: 4px;
-  --spacing-2: 8px;
-  --spacing-3: 12px;
-  --spacing-4: 16px;
-  --spacing-5: 20px;
-  --spacing-6: 24px;
-  --spacing-8: 32px;
-  --spacing-10: 40px;
-  --spacing-12: 48px;
-  --spacing-16: 64px;
 
   /* 阴影（仅 Overlay/Modal） */
   --shadow-overlay: 0 4px 24px rgba(0, 0, 0, 0.5);
@@ -111,10 +110,14 @@
 
 /* ===== Global Resets ===== */
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+@layer base {
+  *,
+  *::before,
+  *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
 }
 
 body {
@@ -123,7 +126,7 @@ body {
   color: var(--color-text-primary);
   overflow: hidden;
   height: 100vh;
-  font-size: var(--text-base);
+  font-size: 13px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

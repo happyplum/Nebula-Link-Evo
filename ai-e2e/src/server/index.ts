@@ -108,9 +108,11 @@ export function createServer(options: Partial<ServerOptions> = {}) {
     wildcard: false,
   });
 
-  // SPA catch-all: serve index.html for any unmatched /ai-e2e/* route
+  // SPA catch-all: serve index.html for unmatched /ai-e2e/* navigation requests only.
+  // Asset requests (.js, .css, .map, .ico, etc.) that reach here are truly missing → 404.
+  const ASSET_EXT = /\.(js|css|map|ico|png|jpg|svg|woff2?|ttf|eot)(\?|$)/i;
   app.setNotFoundHandler((request, reply) => {
-    if (request.url.startsWith('/ai-e2e/')) {
+    if (request.url.startsWith('/ai-e2e/') && !ASSET_EXT.test(request.url)) {
       return reply.sendFile('index.html');
     }
     reply.code(404).send({ error: 'Not Found' });
