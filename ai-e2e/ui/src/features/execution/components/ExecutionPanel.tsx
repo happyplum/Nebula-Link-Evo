@@ -4,7 +4,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useRuns, useRunDetail, useRunScript, executionKeys, ExecutionRun } from '../store/executionApi';
 import { scriptsKeys } from '@/features/scripts/store/scriptsApi.js';
 import { useSSE } from '@/hooks/use-sse.js';
-import { useAIStatusStore } from '../../ai-status/store/aiStatusStore';
+import { createAIStatusStore } from '../../ai-status/store/aiStatusStore';
+
+const usePanelAIStatus = createAIStatusStore();
 import { reportKeys } from '../../report/store/reportApi.js';
 import { ExecutionControls } from './ExecutionControls';
 import { ResultDashboard } from './ResultDashboard';
@@ -26,8 +28,8 @@ export default function ExecutionPanel() {
   const [currentStep, setCurrentStep] = useState<string>();
   const [progress, setProgress] = useState(0);
 
-  const setAIStatus = useAIStatusStore(state => state.setStatus);
-  const setAIMessage = useAIStatusStore(state => state.setMessage);
+  const setAIStatus = usePanelAIStatus(state => state.setStatus);
+  const setAIMessage = usePanelAIStatus(state => state.setMessage);
 
   // SSE Connection
   useSSE({

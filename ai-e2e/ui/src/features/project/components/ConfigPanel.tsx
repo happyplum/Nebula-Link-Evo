@@ -7,6 +7,7 @@ import {
   useTransitionProjectState,
   useCreateLoginScript,
   useTestLoginScript,
+  useLoginScripts,
   ProjectConfig,
   LoginStep
 } from '../store/configApi';
@@ -124,8 +125,17 @@ export const ConfigPanel: React.FC = () => {
   const [savedScriptId, setSavedScriptId] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
 
+  const { data: loginScripts } = useLoginScripts(projectId);
   const createScriptMutation = useCreateLoginScript();
   const testScriptMutation = useTestLoginScript();
+
+  // Load existing login scripts when data arrives and local state is empty
+  useEffect(() => {
+    if (loginScripts && loginScripts.length > 0 && loginSteps.length === 0) {
+      setLoginSteps(loginScripts[0].steps);
+      setSavedScriptId(loginScripts[0].id);
+    }
+  }, [loginScripts]);
 
   const updateLoginStep = useCallback((index: number, patch: Partial<LoginStep>) => {
     setLoginSteps(prev => {

@@ -139,10 +139,8 @@ export const transitionState = async (projectId: string, data: TransitionStateRe
 };
 
 export const refreshUrlSnapshot = async (projectId: string, urlId: string): Promise<void> => {
-  const response = await fetch(`/api/projects/${projectId}/exploration/urls/${urlId}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({}),
+  const response = await fetch(`/api/projects/${projectId}/exploration/urls/${urlId}/refresh-snapshot`, {
+    method: 'POST',
   });
   if (!response.ok) throw new Error('Failed to refresh URL snapshot');
 };
