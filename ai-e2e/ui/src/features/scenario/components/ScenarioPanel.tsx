@@ -8,7 +8,11 @@ import { ScenarioEditor } from './ScenarioEditor.js';
 import { UpdateScenarioRequest } from '../../../types/scenario.js';
 import { useSSE } from '@/hooks/use-sse.js';
 
-export const ScenarioPanel: React.FC = () => {
+interface ScenarioPanelProps {
+  functionalModuleId?: string;
+}
+
+export const ScenarioPanel: React.FC<ScenarioPanelProps> = ({ functionalModuleId }) => {
   const { projectId } = useParams<{ projectId: string }>();
   const queryClient = useQueryClient();
   const { data: modules, isLoading, error } = useModules(projectId!);
@@ -45,9 +49,17 @@ export const ScenarioPanel: React.FC = () => {
     return result;
   }, [modules]);
 
+  // When functionalModuleId is provided, filter to only that module
+  const displayModules = useMemo(() => {
+    if (functionalModuleId) {
+      return functionalModules.filter(fm => fm.id === functionalModuleId);
+    }
+    return functionalModules;
+  }, [functionalModules, functionalModuleId]);
+
   const totalScenarios = useMemo(
-    () => functionalModules.reduce((sum, fm) => sum + (fm.test_scenarios?.length || 0), 0),
-    [functionalModules]
+    () => displayModules.reduce((sum, fm) => sum + (fm.test_scenarios?.length || 0), 0),
+    [displayModules]
   );
 
   if (isLoading) {
@@ -76,7 +88,7 @@ export const ScenarioPanel: React.FC = () => {
         <div>
           <h3 className="text-base font-medium">测试场景</h3>
           <p className="text-xs text-text-muted mt-1">
-            共 {functionalModules.length} 个功能模块，{totalScenarios} 个测试场景
+            共 {displayModules.length} 个功能模块，{totalScenarios} 个测试场景
           </p>
         </div>
         <Button
@@ -89,9 +101,9 @@ export const ScenarioPanel: React.FC = () => {
         </Button>
       </div>
 
-      {functionalModules.length > 0 ? (
+      {displayModules.length > 0 ? (
         <div className="space-y-6">
-          {functionalModules.map((fm) => (
+          {displayModules.map((fm) => (
             <div key={fm.id}>
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">

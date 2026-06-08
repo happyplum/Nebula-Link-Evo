@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { projectKeys } from './projectApi.js';
 
 export interface ProjectConfig {
   base_url: string;
@@ -58,7 +59,7 @@ export const updateProjectConfig = async ({ projectId, config }: { projectId: st
 };
 
 export const createLoginScript = async ({ projectId, script }: { projectId: string; script: LoginScript }): Promise<LoginScript> => {
-  const response = await fetch(`${API_BASE}/${projectId}/login-script`, {
+  const response = await fetch(`${API_BASE}/${projectId}/config/login-script`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -73,7 +74,7 @@ export const createLoginScript = async ({ projectId, script }: { projectId: stri
 };
 
 export const testLoginScript = async ({ projectId, scriptId }: { projectId: string; scriptId: string }): Promise<unknown> => {
-  const response = await fetch(`${API_BASE}/${projectId}/login-script/test`, {
+  const response = await fetch(`${API_BASE}/${projectId}/config/login-script/test`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -145,7 +146,12 @@ export const useTestLoginScript = () => {
 };
 
 export const useTransitionProjectState = () => {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: transitionProjectState,
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: projectKeys.detail(variables.projectId) });
+      queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
+    },
   });
 };

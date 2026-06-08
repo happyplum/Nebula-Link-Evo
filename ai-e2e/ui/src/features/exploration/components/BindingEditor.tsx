@@ -113,7 +113,7 @@ export const BindingEditor: React.FC<BindingEditorProps> = ({
         <div className="flex gap-2">
           <Button 
             variant="secondary" 
-            onClick={onProposeBindings}
+            onClick={() => onProposeBindings({ url_id: '', functional_module_id: '' })}
             isLoading={isProposing}
           >
             AI 智能绑定

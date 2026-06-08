@@ -148,7 +148,7 @@ export const ExplorationPanel: React.FC = () => {
       <div className="flex gap-4">
         <ExplorationControls
           isExploring={isExploring}
-          progress={statusData?.pages_visited ? (statusData.pages_visited / 100) * 100 : 0} // Assuming max 100 for now
+          progress={statusData?.pages_visited ? Math.min(statusData.pages_visited, 100) : 0}
           message={statusData?.current_url || null}
           pagesVisited={statusData?.pages_visited || 0}
           urlsFound={statusData?.urls_found || urls.length}
@@ -192,7 +192,8 @@ export const ExplorationPanel: React.FC = () => {
         <Button 
           variant="primary" 
           onClick={handleConfirmComplete}
-          disabled={isExploring || urls.length === 0}
+          disabled={isExploring || urls.length === 0 || transitionState.isPending}
+          isLoading={transitionState.isPending}
         >
           确认完成，进入生成阶段
         </Button>

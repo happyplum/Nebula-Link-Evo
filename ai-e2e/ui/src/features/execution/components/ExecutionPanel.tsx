@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRuns, useRunDetail, useRunScript, executionKeys, ExecutionRun } from '../store/executionApi';
+import { scriptsKeys } from '@/features/scripts/store/scriptsApi.js';
 import { useSSE } from '@/hooks/use-sse.js';
 import { useAIStatusStore } from '../../ai-status/store/aiStatusStore';
 import { reportKeys } from '../../report/store/reportApi.js';
@@ -79,6 +80,8 @@ export default function ExecutionPanel() {
       },
       'ai.fix_applied': () => {
         queryClient.invalidateQueries({ queryKey: reportKeys.detail(projectId!) });
+        queryClient.invalidateQueries({ queryKey: scriptsKeys.list(projectId!) });
+        queryClient.invalidateQueries({ queryKey: executionKeys.runs(projectId!) });
       },
     },
     enabled: !!projectId,

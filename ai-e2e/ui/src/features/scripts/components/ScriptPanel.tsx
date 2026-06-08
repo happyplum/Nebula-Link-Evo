@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button, Card } from '@/shared/components';
 import { useSSE } from '@/hooks/use-sse.js';
 import { useAIStatusStore } from '../../ai-status/store/aiStatusStore';
-import { useScripts, useGenerateScripts, useTransitionState, Script } from '../store/scriptsApi';
+import { useScripts, useGenerateScripts, useTransitionState, scriptsKeys, Script } from '../store/scriptsApi';
 import { ScriptList } from './ScriptList';
 import { ScriptEditor } from './ScriptEditor';
 import { TestDataEditor } from './TestDataEditor';
@@ -15,9 +16,10 @@ export default function ScriptPanel() {
   const [selectedScriptId, setSelectedScriptId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'editor' | 'testData' | 'history'>('editor');
   
-  const { data: scripts = [], refetch: refetchScripts } = useScripts(projectId!);
+  const { data: scripts = [] } = useScripts(projectId!);
   const { mutate: generateScripts, isPending: isGenerating } = useGenerateScripts(projectId!);
   const { mutate: transitionState, isPending: isTransitioning } = useTransitionState(projectId!);
+  const queryClient = useQueryClient();
   
   const aiStatus = useAIStatusStore((state) => state.status);
   const aiProgress = useAIStatusStore((state) => state.progress);
@@ -26,6 +28,12 @@ export default function ScriptPanel() {
   const setAIStatus = useAIStatusStore((state) => state.setStatus);
   const setAIProgress = useAIStatusStore((state) => state.setProgress);
 
+  const invalidateScripts = () => {
+    if (projectId) {
+      queryClient.invalidateQueries({ queryKey: scriptsKeys.list(projectId) });
+    }
+  };
+
   // Listen to SSE events for script generation
   useSSE({
     projectId: projectId || '',
@@ -33,12 +41,12 @@ export default function ScriptPanel() {
       'script.generation_progress': (data) => {
         setAIStatus('running');
         if (data.progress != null) setAIProgress(data.progress);
-        refetchScripts();
+        invalidateScripts();
       },
       'script.generated': () => {
         setAIStatus('completed');
         setAIProgress(100);
-        refetchScripts();
+        invalidateScripts();
       },
     },
     enabled: !!projectId,
@@ -78,6 +86,7 @@ export default function ScriptPanel() {
             variant="primary" 
             onClick={handleComplete}
             isLoading={isTransitioning}
+            disabled={scripts.length === 0 || isTransitioning}
           >
             确认完成
           </Button>

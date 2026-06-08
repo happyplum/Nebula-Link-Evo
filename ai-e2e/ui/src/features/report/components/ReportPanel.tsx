@@ -59,7 +59,7 @@ export const ReportPanel: React.FC<ReportPanelProps> = ({ projectId }) => {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-4 gap-4">
         <div className="bg-surface-content border border-border-default rounded-md p-4 text-center">
           <div className="text-xs text-text-muted">总执行数</div>
           <div className="text-2xl font-bold">{report.totalRuns}</div>
