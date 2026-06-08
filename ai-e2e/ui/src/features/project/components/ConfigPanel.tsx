@@ -1,13 +1,28 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button, Input } from '@/shared/components';
 import { 
   useProjectConfig, 
   useUpdateProjectConfig, 
   useTransitionProjectState,
-  ProjectConfig
+  useCreateLoginScript,
+  useTestLoginScript,
+  ProjectConfig,
+  LoginStep
 } from '../store/configApi';
 import { useProject } from '../store/projectApi';
+
+const STEP_TYPES: LoginStep['type'][] = ['navigate', 'fill', 'click', 'wait'];
+
+const STEP_TYPE_LABELS: Record<LoginStep['type'], string> = {
+  navigate: '导航',
+  fill: '填写',
+  click: '点击',
+  wait: '等待',
+  screenshot: '截图',
+};
+
+const DEFAULT_STEP: LoginStep = { type: 'navigate', description: '' };
 
 export const ConfigPanel: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>();
@@ -89,6 +104,60 @@ export const ConfigPanel: React.FC = () => {
     });
   };
 
+  const [loginSteps, setLoginSteps] = useState<LoginStep[]>([]);
+  const [savedScriptId, setSavedScriptId] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  const createScriptMutation = useCreateLoginScript();
+  const testScriptMutation = useTestLoginScript();
+
+  const updateLoginStep = useCallback((index: number, patch: Partial<LoginStep>) => {
+    setLoginSteps(prev => {
+      const next = [...prev];
+      next[index] = { ...next[index], ...patch };
+      return next;
+    });
+  }, []);
+
+  const addLoginStep = () => {
+    setLoginSteps(prev => [...prev, { ...DEFAULT_STEP }]);
+  };
+
+  const removeLoginStep = (index: number) => {
+    setLoginSteps(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSaveScript = async () => {
+    if (!projectId) return;
+    setTestResult(null);
+    try {
+      const saved = await createScriptMutation.mutateAsync({
+        projectId,
+        script: {
+          name: 'login-script',
+          description: '登录脚本',
+          steps: loginSteps,
+          is_reusable: true,
+        },
+      });
+      setSavedScriptId(saved.id ?? null);
+      setTestResult({ ok: true, message: '脚本已保存' });
+    } catch {
+      setTestResult({ ok: false, message: '保存失败' });
+    }
+  };
+
+  const handleTestScript = async () => {
+    if (!projectId || !savedScriptId) return;
+    setTestResult(null);
+    try {
+      await testScriptMutation.mutateAsync({ projectId, scriptId: savedScriptId });
+      setTestResult({ ok: true, message: '测试通过' });
+    } catch {
+      setTestResult({ ok: false, message: '测试失败' });
+    }
+  };
+
   const isConfiguring = project?.status === 'configuring' || project?.status === 'draft';
 
   return (
@@ -144,36 +213,114 @@ export const ConfigPanel: React.FC = () => {
         </div>
 
         {localConfig.auth_type === 'login-script' && (
-          <div className="space-y-2 rounded-md bg-surface-content p-3">
+          <div className="space-y-3 rounded-md bg-surface-content p-3">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">登录脚本录制</span>
-              <Button variant="secondary" size="sm">开始录制</Button>
+              <span className="text-sm font-medium text-text-primary">登录脚本编辑</span>
             </div>
             <div className="text-xs text-text-muted">
-              点击"开始录制"将在浏览器中打开目标页面，您可以手动执行登录操作，系统将自动记录步骤。
+              手动添加登录步骤，保存后可测试回放。
             </div>
-            
-            {/* Placeholder for recorded steps */}
-            <div className="space-y-1">
-              <div className="flex gap-2 text-sm">
-                <span className="text-text-muted">navigate</span>
-                <span className="text-text-secondary">打开登录页面</span>
-              </div>
-              <div className="flex gap-2 text-sm">
-                <span className="text-text-muted">fill</span>
-                <span className="text-text-secondary">输入用户名</span>
-              </div>
-              <div className="flex gap-2 text-sm">
-                <span className="text-text-muted">fill</span>
-                <span className="text-text-secondary">输入密码</span>
-              </div>
-              <div className="flex gap-2 text-sm">
-                <span className="text-text-muted">click</span>
-                <span className="text-text-secondary">点击登录按钮</span>
-              </div>
+
+            {loginSteps.length === 0 && (
+              <div className="py-2 text-xs text-text-muted text-center">暂无步骤，点击下方按钮添加</div>
+            )}
+
+            <div className="space-y-2">
+              {loginSteps.map((step, index) => (
+                <div key={index} className="flex flex-col gap-1.5 rounded-md bg-surface-elevated p-2">
+                  <div className="flex items-center gap-2">
+                    <select
+                      className="h-7 rounded-md border border-border-default bg-transparent px-2 text-xs text-text-primary outline-none"
+                      value={step.type}
+                      onChange={e => updateLoginStep(index, { type: e.target.value as LoginStep['type'] })}
+                    >
+                      {STEP_TYPES.map(t => (
+                        <option key={t} value={t}>{STEP_TYPE_LABELS[t]}</option>
+                      ))}
+                    </select>
+                    <input
+                      className="flex-1 h-7 rounded-md border border-border-default bg-transparent px-2 text-xs text-text-primary outline-none placeholder:text-text-muted"
+                      value={step.description}
+                      onChange={e => updateLoginStep(index, { description: e.target.value })}
+                      placeholder="步骤描述"
+                    />
+                    <button
+                      className="text-text-muted hover:text-text-primary transition-colors text-sm"
+                      onClick={() => removeLoginStep(index)}
+                      title="移除此步骤"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {(step.type === 'navigate') && (
+                      <input
+                        className="flex-1 min-w-[120px] h-7 rounded-md border border-border-default bg-transparent px-2 text-xs text-text-primary outline-none placeholder:text-text-muted"
+                        value={step.url ?? ''}
+                        onChange={e => updateLoginStep(index, { url: e.target.value })}
+                        placeholder="URL"
+                      />
+                    )}
+                    {(step.type === 'fill' || step.type === 'click') && (
+                      <input
+                        className="flex-1 min-w-[100px] h-7 rounded-md border border-border-default bg-transparent px-2 text-xs text-text-primary outline-none placeholder:text-text-muted"
+                        value={step.selector ?? ''}
+                        onChange={e => updateLoginStep(index, { selector: e.target.value })}
+                        placeholder="选择器"
+                      />
+                    )}
+                    {step.type === 'fill' && (
+                      <input
+                        className="flex-1 min-w-[100px] h-7 rounded-md border border-border-default bg-transparent px-2 text-xs text-text-primary outline-none placeholder:text-text-muted"
+                        value={step.value ?? ''}
+                        onChange={e => updateLoginStep(index, { value: e.target.value })}
+                        placeholder="填写值"
+                      />
+                    )}
+                    {step.type === 'wait' && (
+                      <input
+                        type="number"
+                        className="w-20 h-7 rounded-md border border-border-default bg-transparent px-2 text-xs text-text-primary outline-none placeholder:text-text-muted"
+                        value={step.duration ?? ''}
+                        onChange={e => updateLoginStep(index, { duration: Number(e.target.value) || undefined })}
+                        placeholder="毫秒"
+                      />
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
-            
-            <Button variant="ghost" size="sm">测试登录脚本</Button>
+
+            <Button variant="ghost" size="sm" onClick={addLoginStep}>
+              + 添加步骤
+            </Button>
+
+            {testResult && (
+              <div className={`text-xs px-2 py-1 rounded ${testResult.ok ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'}`}>
+                {testResult.message}
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleSaveScript}
+                isLoading={createScriptMutation.isPending}
+                disabled={loginSteps.length === 0}
+              >
+                保存脚本
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleTestScript}
+                isLoading={testScriptMutation.isPending}
+                disabled={!savedScriptId}
+              >
+                测试脚本
+              </Button>
+            </div>
           </div>
         )}
       </div>

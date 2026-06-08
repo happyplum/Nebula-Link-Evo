@@ -205,15 +205,18 @@ const explorationRoutes: FastifyPluginAsyncTypebox<ExplorationRouteOptions> = as
     return reply.send(session);
   });
 
-  // POST /stop — not supported (exploration runs synchronously)
+  // POST /stop — abort active exploration
   fastify.post('/stop', {
     schema: {
-      description: 'Stop exploration (not supported — exploration runs synchronously)',
+      description: 'Stop the active exploration for a project',
       tags: ['Exploration'],
       params: ProjectIdParamSchema,
     },
-  }, async (_request, reply) => {
-    return reply.status(501).send({ error: 'Stop exploration is not supported. Exploration runs synchronously and cannot be cancelled mid-flight.' });
+  }, async (request, reply) => {
+    const { id: projectId } = request.params as ProjectIdParam;
+    const service = getExplorerService();
+    service.stopExploration(projectId);
+    return reply.send({ stopped: true });
   });
 
   // GET /urls — get discovered URLs
