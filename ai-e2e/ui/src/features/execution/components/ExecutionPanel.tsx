@@ -4,12 +4,12 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useRuns, useRunDetail, useRunScript, executionKeys, ExecutionRun } from '../store/executionApi';
 import { useSSE } from '@/hooks/use-sse.js';
 import { useAIStatusStore } from '../../ai-status/store/aiStatusStore';
+import { reportKeys } from '../../report/store/reportApi.js';
 import { ExecutionControls } from './ExecutionControls';
 import { ResultDashboard } from './ResultDashboard';
 import { RunDetail } from './RunDetail';
 import { DiagnosisPanel } from './DiagnosisPanel';
 import { ExecutionHistory } from './ExecutionHistory';
-import { ReportPanel } from '../../report/components/ReportPanel';
 
 export default function ExecutionPanel() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -55,6 +55,7 @@ export default function ExecutionPanel() {
         setAIStatus('completed');
         setAIMessage('执行完成');
         queryClient.invalidateQueries({ queryKey: executionKeys.runs(projectId!) });
+        queryClient.invalidateQueries({ queryKey: reportKeys.detail(projectId!) });
         // execution.completed has { run: ExecutionRun }, so access run.id
         if (selectedRunId === data.run?.id) {
           queryClient.invalidateQueries({ queryKey: executionKeys.runDetail(projectId!, data.run.id) });
@@ -68,12 +69,16 @@ export default function ExecutionPanel() {
         setAIStatus('error');
         setAIMessage(`执行失败: ${data.error}`);
         queryClient.invalidateQueries({ queryKey: executionKeys.runs(projectId!) });
+        queryClient.invalidateQueries({ queryKey: reportKeys.detail(projectId!) });
         if (selectedRunId === data.runId) {
           queryClient.invalidateQueries({ queryKey: executionKeys.runDetail(projectId!, data.runId) });
         }
       },
       'ai.diagnosis': (data) => {
         queryClient.invalidateQueries({ queryKey: executionKeys.diagnosis(projectId!, data.runId) });
+      },
+      'ai.fix_applied': () => {
+        queryClient.invalidateQueries({ queryKey: reportKeys.detail(projectId!) });
       },
     },
     enabled: !!projectId,
@@ -123,8 +128,6 @@ export default function ExecutionPanel() {
             currentStep={currentStep}
             progress={progress}
           />
-
-          <ReportPanel projectId={projectId} />
 
           <ResultDashboard
             runs={runs}

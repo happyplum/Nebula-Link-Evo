@@ -12,6 +12,8 @@ interface URLListProps {
   onAddManualUrl: () => void;
 }
 
+// URLs fetched from GET /urls are already explored
+const URL_STATUS = 'explored' as const;
 const statusClassMap: Record<string, string> = {
   explored: 'text-status-success',
   failed: 'text-status-error',
@@ -40,7 +42,7 @@ export const URLList: React.FC<URLListProps> = ({
           + 手动添加
         </Button>
       </div>
-      
+
       <div className="flex-1 overflow-auto space-y-1">
         {urls.length === 0 ? (
           <div className="flex items-center justify-center py-8 text-text-muted text-sm">暂无发现的 URL</div>
@@ -60,23 +62,21 @@ export const URLList: React.FC<URLListProps> = ({
               <div className="text-xs text-text-muted truncate" title={url.url}>
                 {url.url}
               </div>
-              <div className={cn('ml-auto text-xs', statusClassMap[url.status] ?? 'text-text-muted')}>
-                {statusTextMap[url.status] ?? '待探索'}
+              <div className={cn('ml-auto text-xs', statusClassMap[URL_STATUS])}>
+                {statusTextMap[URL_STATUS]}
               </div>
-              {(url.status === 'explored' || url.status === 'failed') && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    refreshSnapshot.mutate(url.id);
-                  }}
-                  disabled={refreshSnapshot.isPending}
-                  title="刷新快照"
-                >
-                  ↻
-                </Button>
-              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  refreshSnapshot.mutate(url.id);
+                }}
+                disabled={refreshSnapshot.isPending}
+                title="刷新快照"
+              >
+                ↻
+              </Button>
             </div>
           ))
         )}

@@ -1,19 +1,35 @@
 import React, { useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { Card, Button } from '@/shared/components';
-import { useModules, type FunctionalModule, type TestScenario } from '../../analysis/store/analysisApi.js';
+import { useModules, analysisKeys, type FunctionalModule, type TestScenario } from '../../analysis/store/analysisApi.js';
 import { useUpdateScenario, useGenerateAllScenarios, useGenerateModuleScenarios } from '../store/scenarioApi.js';
 import { ScenarioEditor } from './ScenarioEditor.js';
 import { UpdateScenarioRequest } from '../../../types/scenario.js';
+import { useSSE } from '@/hooks/use-sse.js';
 
 export const ScenarioPanel: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>();
+  const queryClient = useQueryClient();
   const { data: modules, isLoading, error } = useModules(projectId!);
   const updateScenarioMutation = useUpdateScenario(projectId!);
   const generateAllScenarios = useGenerateAllScenarios(projectId!);
   const generateModuleScenarios = useGenerateModuleScenarios(projectId!);
 
   const [editingScenario, setEditingScenario] = useState<TestScenario | null>(null);
+
+  // Listen for scenario generation completion to refresh module data
+  useSSE({
+    projectId: projectId || '',
+    handlers: {
+      'prd.scenarios_all_complete': () => {
+        if (projectId) {
+          queryClient.invalidateQueries({ queryKey: analysisKeys.modules(projectId) });
+        }
+      },
+    },
+    enabled: !!projectId,
+  });
 
   // Flatten all functional modules with their scenarios from the module tree
   const functionalModules = useMemo(() => {

@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 
 interface BindingEditorProps {
   bindings: ModuleBinding[];
-  onProposeBindings: () => void;
+  onProposeBindings: (data: { url_id: string; functional_module_id: string }) => void;
   onConfirmBinding: (bindingId: string) => void;
   onRejectBinding: (bindingId: string) => void;
   isProposing: boolean;

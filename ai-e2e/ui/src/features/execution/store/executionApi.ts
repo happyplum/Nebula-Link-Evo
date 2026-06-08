@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { scriptsKeys } from '@/features/scripts/store/scriptsApi.js';
 
 export interface ExecutionRun {
   id: string;
@@ -137,6 +138,7 @@ export const useApproveFix = (projectId: string) => {
     onSuccess: (_, runId) => {
       queryClient.invalidateQueries({ queryKey: executionKeys.runs(projectId) });
       queryClient.invalidateQueries({ queryKey: executionKeys.runDetail(projectId, runId) });
+      queryClient.invalidateQueries({ queryKey: scriptsKeys.list(projectId) });
     },
   });
 };

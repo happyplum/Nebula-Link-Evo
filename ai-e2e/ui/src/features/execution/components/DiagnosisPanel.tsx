@@ -11,7 +11,7 @@ export const DiagnosisPanel: React.FC<DiagnosisPanelProps> = ({
   projectId,
   run,
 }) => {
-  const { data: diagnosis, isLoading } = useDiagnosis(projectId, run.id);
+  const { data: diagnosis, isLoading, error } = useDiagnosis(projectId, run.id);
   const { mutate: approveFix, isPending: isApproving } = useApproveFix(projectId);
   const { mutate: rejectFix, isPending: isRejecting } = useRejectFix(projectId);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -20,6 +20,14 @@ export const DiagnosisPanel: React.FC<DiagnosisPanelProps> = ({
     return (
       <Card title="AI 诊断">
         <div className="flex items-center justify-center py-8 text-text-muted text-sm">正在生成诊断报告...</div>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card title="AI 诊断">
+        <div className="flex items-center justify-center py-8 text-status-error text-sm">加载诊断信息失败</div>
       </Card>
     );
   }

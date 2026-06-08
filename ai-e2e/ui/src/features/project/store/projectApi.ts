@@ -40,22 +40,6 @@ export const createProject = async (projectData: Partial<Project>): Promise<Proj
   return data.data || data;
 };
 
-// Update project
-export const updateProject = async ({ id, ...projectData }: Partial<Project> & { id: string }): Promise<Project> => {
-  const response = await fetch(`${API_BASE}/${id}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(projectData),
-  });
-  if (!response.ok) {
-    throw new Error(`Failed to update project ${id}`);
-  }
-  const data = await response.json();
-  return data.data || data;
-};
-
 // Delete project
 export const deleteProject = async (id: string): Promise<void> => {
   const response = await fetch(`${API_BASE}/${id}`, {
@@ -96,17 +80,6 @@ export const useCreateProject = () => {
   return useMutation({
     mutationFn: createProject,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
-    },
-  });
-};
-
-export const useUpdateProject = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: updateProject,
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: projectKeys.detail(data.id) });
       queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
     },
   });

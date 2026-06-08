@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { projectKeys } from '@/features/project/store/projectApi.js';
 
 export interface Script {
   id: string;
@@ -29,8 +30,7 @@ export interface ScriptVersion {
 }
 
 export interface UpdateScriptRequest {
-  content?: string;
-  test_data_json?: string;
+  content: string;
 }
 
 export interface TransitionStateRequest {
@@ -46,15 +46,6 @@ export const generateScripts = async (projectId: string): Promise<void> => {
     body: JSON.stringify({}),
   });
   if (!response.ok) throw new Error('Failed to start script generation');
-};
-
-export const generateSingleScript = async (projectId: string, scenarioId: string): Promise<void> => {
-  const response = await fetch(`/api/projects/${projectId}/scripts/generate`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ scenario_id: scenarioId }),
-  });
-  if (!response.ok) throw new Error('Failed to generate script');
 };
 
 export const fetchScripts = async (projectId: string): Promise<Script[]> => {
@@ -79,13 +70,6 @@ export const fetchScripts = async (projectId: string): Promise<Script[]> => {
     });
   }
   return data.scripts || data.data || [];
-};
-
-export const fetchScript = async (projectId: string, scriptId: string): Promise<Script> => {
-  const response = await fetch(`/api/projects/${projectId}/scripts/${scriptId}`);
-  if (!response.ok) throw new Error('Failed to fetch script');
-  const data = await response.json();
-  return data.data || data;
 };
 
 export const updateScript = async (projectId: string, scriptId: string, data: UpdateScriptRequest): Promise<Script> => {
@@ -138,14 +122,6 @@ export const useScripts = (projectId: string) => {
   });
 };
 
-export const useScript = (projectId: string, scriptId: string | null) => {
-  return useQuery({
-    queryKey: scriptsKeys.detail(projectId, scriptId!),
-    queryFn: () => fetchScript(projectId, scriptId!),
-    enabled: !!projectId && !!scriptId,
-  });
-};
-
 export const useScriptVersions = (projectId: string, scriptId: string | null) => {
   return useQuery({
     queryKey: scriptsKeys.versions(projectId, scriptId!),
@@ -158,16 +134,6 @@ export const useGenerateScripts = (projectId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => generateScripts(projectId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: scriptsKeys.list(projectId) });
-    },
-  });
-};
-
-export const useGenerateSingleScript = (projectId: string) => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (scenarioId: string) => generateSingleScript(projectId, scenarioId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: scriptsKeys.list(projectId) });
     },
@@ -187,7 +153,12 @@ export const useUpdateScript = (projectId: string) => {
 };
 
 export const useTransitionState = (projectId: string) => {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: TransitionStateRequest) => transitionState(projectId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) });
+      queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
+    },
   });
 };
