@@ -64,21 +64,21 @@ export const fetchExplorationStatus = async (projectId: string): Promise<Explora
   const response = await fetch(`/api/projects/${projectId}/exploration/status`);
   if (!response.ok) throw new Error('Failed to fetch exploration status');
   const data = await response.json();
-  return data.data;
+  return data.data || data;
 };
 
 export const fetchUrls = async (projectId: string): Promise<DiscoveredURL[]> => {
   const response = await fetch(`/api/projects/${projectId}/exploration/urls`);
   if (!response.ok) throw new Error('Failed to fetch URLs');
   const data = await response.json();
-  return data.data || [];
+  return Array.isArray(data) ? data : (data.urls || data.data || []);
 };
 
 export const fetchBindings = async (projectId: string): Promise<ModuleBinding[]> => {
   const response = await fetch(`/api/projects/${projectId}/exploration/bindings`);
   if (!response.ok) throw new Error('Failed to fetch bindings');
   const data = await response.json();
-  return data.data || [];
+  return Array.isArray(data) ? data : (data.bindings || data.data || []);
 };
 
 export const addUrl = async (projectId: string, data: AddUrlRequest): Promise<DiscoveredURL> => {
@@ -89,7 +89,7 @@ export const addUrl = async (projectId: string, data: AddUrlRequest): Promise<Di
   });
   if (!response.ok) throw new Error('Failed to add URL');
   const resData = await response.json();
-  return resData.data;
+  return resData.data || resData;
 };
 
 export const proposeBindings = async (projectId: string): Promise<void> => {
@@ -100,15 +100,19 @@ export const proposeBindings = async (projectId: string): Promise<void> => {
 };
 
 export const confirmBinding = async (projectId: string, bindingId: string): Promise<void> => {
-  const response = await fetch(`/api/projects/${projectId}/exploration/bind/${bindingId}/confirm`, {
-    method: 'POST',
+  const response = await fetch(`/api/projects/${projectId}/exploration/bindings/${bindingId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'confirm' }),
   });
   if (!response.ok) throw new Error('Failed to confirm binding');
 };
 
 export const rejectBinding = async (projectId: string, bindingId: string): Promise<void> => {
-  const response = await fetch(`/api/projects/${projectId}/exploration/bind/${bindingId}/reject`, {
-    method: 'POST',
+  const response = await fetch(`/api/projects/${projectId}/exploration/bindings/${bindingId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'reject' }),
   });
   if (!response.ok) throw new Error('Failed to reject binding');
 };

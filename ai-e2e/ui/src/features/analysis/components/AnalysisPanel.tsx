@@ -8,6 +8,7 @@ import { useSSE } from '@/shared/hooks/useSSE';
 import { useAIStatusStore } from '../../ai-status/store/aiStatusStore';
 import {
   useModules,
+  useDocuments,
   useUploadPRD,
   useAnalyzePRD,
   useCreateModule,
@@ -27,6 +28,7 @@ export const AnalysisPanel: React.FC = () => {
 
   // API Hooks
   const { data: modules = [], refetch: refetchModules } = useModules(projectId || '');
+  const { data: documents = [] } = useDocuments(projectId || '');
   const uploadPRD = useUploadPRD(projectId || '');
   const analyzePRD = useAnalyzePRD(projectId || '');
   const createModule = useCreateModule(projectId || '');
@@ -152,6 +154,15 @@ export const AnalysisPanel: React.FC = () => {
   return (
     <div className={styles.container}>
       <div className={styles.topSection}>
+        {documents.length > 0 && (
+          <Card className={styles.documentsCard}>
+            <h4>已上传的 PRD 文档（{documents.length} 份）</h4>
+            <details>
+              <summary>查看最新 PRD 内容（{documents[0].created_at}）</summary>
+              <pre className={styles.prdPreview}>{documents[0].raw_content}</pre>
+            </details>
+          </Card>
+        )}
         <PRDUpload
           content={prdContent}
           onChange={setPrdContent}

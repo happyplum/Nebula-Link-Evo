@@ -35,6 +35,21 @@ export interface TransitionStateRequest {
 
 // --- API Functions ---
 
+export interface PRDDocument {
+  id: string;
+  project_id: string;
+  raw_content: string;
+  format: string;
+  created_at: string;
+}
+
+export const fetchDocuments = async (projectId: string): Promise<PRDDocument[]> => {
+  const response = await fetch(`/api/projects/${projectId}/analysis/documents`);
+  if (!response.ok) throw new Error('Failed to fetch PRD documents');
+  const data = await response.json();
+  return Array.isArray(data) ? data : (data.documents || []);
+};
+
 export const uploadPRD = async (projectId: string, data: UploadPRDRequest): Promise<void> => {
   const response = await fetch(`/api/projects/${projectId}/analysis/upload`, {
     method: 'POST',
@@ -86,7 +101,7 @@ export const createModule = async (projectId: string, data: CreateModuleRequest)
   });
   if (!response.ok) throw new Error('Failed to create module');
   const resData = await response.json();
-  return resData.data;
+  return resData.data || resData;
 };
 
 export const updateModule = async (projectId: string, moduleId: string, data: UpdateModuleRequest): Promise<AnalysisModule> => {
@@ -97,7 +112,7 @@ export const updateModule = async (projectId: string, moduleId: string, data: Up
   });
   if (!response.ok) throw new Error('Failed to update module');
   const resData = await response.json();
-  return resData.data;
+  return resData.data || resData;
 };
 
 export const deleteModule = async (projectId: string, moduleId: string): Promise<void> => {
@@ -136,6 +151,15 @@ export const transitionState = async (projectId: string, data: TransitionStateRe
 export const analysisKeys = {
   all: (projectId: string) => ['analysis', projectId] as const,
   modules: (projectId: string) => [...analysisKeys.all(projectId), 'modules'] as const,
+  documents: (projectId: string) => [...analysisKeys.all(projectId), 'documents'] as const,
+};
+
+export const useDocuments = (projectId: string) => {
+  return useQuery({
+    queryKey: analysisKeys.documents(projectId),
+    queryFn: () => fetchDocuments(projectId),
+    enabled: !!projectId,
+  });
 };
 
 export const useModules = (projectId: string) => {

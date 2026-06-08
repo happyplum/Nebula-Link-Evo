@@ -34,7 +34,7 @@ export const fetchProjectConfig = async (projectId: string): Promise<ProjectConf
     throw new Error(`Failed to fetch config for project ${projectId}`);
   }
   const data = await response.json();
-  return data.data;
+  return data.data || data;
 };
 
 export const updateProjectConfig = async ({ projectId, config }: { projectId: string; config: ProjectConfig }): Promise<ProjectConfig> => {
@@ -49,7 +49,7 @@ export const updateProjectConfig = async ({ projectId, config }: { projectId: st
     throw new Error(`Failed to update config for project ${projectId}`);
   }
   const data = await response.json();
-  return data.data;
+  return data.data || data;
 };
 
 export const createLoginScript = async ({ projectId, script }: { projectId: string; script: LoginScript }): Promise<LoginScript> => {
@@ -64,7 +64,7 @@ export const createLoginScript = async ({ projectId, script }: { projectId: stri
     throw new Error(`Failed to create login script for project ${projectId}`);
   }
   const data = await response.json();
-  return data.data;
+  return data.data || data;
 };
 
 export const testLoginScript = async ({ projectId, scriptId }: { projectId: string; scriptId: string }): Promise<unknown> => {
@@ -79,7 +79,7 @@ export const testLoginScript = async ({ projectId, scriptId }: { projectId: stri
     throw new Error(`Failed to test login script for project ${projectId}`);
   }
   const data = await response.json();
-  return data.data;
+  return data.data || data;
 };
 
 export const transitionProjectState = async ({ projectId, targetStatus }: { projectId: string; targetStatus: string }): Promise<unknown> => {
@@ -98,7 +98,7 @@ export const transitionProjectState = async ({ projectId, targetStatus }: { proj
     throw new Error(`Failed to transition state for project ${projectId}`);
   }
   const data = await response.json();
-  return data.data;
+  return data.data || data;
 };
 
 // --- React Query Hooks ---

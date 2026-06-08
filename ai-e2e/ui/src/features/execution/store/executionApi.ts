@@ -5,7 +5,7 @@ export interface ExecutionRun {
   project_id: string;
   script_id: string;
   script_name: string;
-  status: 'pending' | 'running' | 'passed' | 'failed' | 'fix_applied' | 'fix_rejected';
+  status: 'pending' | 'running' | 'pass' | 'fail' | 'error' | 'timeout' | 'passed' | 'failed' | 'fix_applied' | 'fix_rejected';
   started_at: string;
   completed_at: string;
   duration_ms: number | null;
@@ -17,13 +17,13 @@ export interface ExecutionRun {
 }
 
 export interface AIDiagnosis {
-  id: string;
-  run_id: string;
-  error_analysis: string;
-  suggested_fix: string;
-  fix_diff: string;
-  confidence: number;
-  reasoning: string;
+  runId: string;
+  logs: Array<{
+    id: string;
+    diagnosis: string | null;
+    action_taken: string | null;
+    created_at: string;
+  }>;
 }
 
 // --- API Functions ---
@@ -46,14 +46,14 @@ export const fetchRuns = async (projectId: string): Promise<ExecutionRun[]> => {
   const response = await fetch(`/api/projects/${projectId}/execution/runs`);
   if (!response.ok) throw new Error('Failed to fetch runs');
   const data = await response.json();
-  return data.data || [];
+  return data.runs || data.data || [];
 };
 
 export const fetchRunDetail = async (projectId: string, runId: string): Promise<ExecutionRun> => {
   const response = await fetch(`/api/projects/${projectId}/execution/runs/${runId}`);
   if (!response.ok) throw new Error('Failed to fetch run detail');
   const data = await response.json();
-  return data.data;
+  return data.data || data;
 };
 
 export const approveFix = async (projectId: string, runId: string): Promise<void> => {
@@ -74,7 +74,7 @@ export const fetchDiagnosis = async (projectId: string, runId: string): Promise<
   const response = await fetch(`/api/projects/${projectId}/execution/diagnosis/${runId}`);
   if (!response.ok) throw new Error('Failed to fetch diagnosis');
   const data = await response.json();
-  return data.data;
+  return data.data || data;
 };
 
 // --- React Query Hooks ---

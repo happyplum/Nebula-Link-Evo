@@ -25,7 +25,7 @@ export const DiagnosisPanel: React.FC<DiagnosisPanelProps> = ({
     );
   }
 
-  if (!diagnosis) {
+  if (!diagnosis || !diagnosis.logs || diagnosis.logs.length === 0) {
     return (
       <Card title="AI 诊断">
         <div className={styles.emptyState}>暂无诊断信息</div>
@@ -33,64 +33,29 @@ export const DiagnosisPanel: React.FC<DiagnosisPanelProps> = ({
     );
   }
 
-  const isLowConfidence = diagnosis.confidence < 30;
   const isActionable = run.status === 'failed';
-
-  const handleApprove = () => {
-    if (isLowConfidence) {
-      setShowConfirmModal(true);
-    } else {
-      approveFix(run.id);
-    }
-  };
-
-  const handleConfirmApprove = () => {
-    setShowConfirmModal(false);
-    approveFix(run.id);
-  };
-
-  const handleReject = () => {
-    rejectFix(run.id);
-  };
+  const latestLog = diagnosis.logs[diagnosis.logs.length - 1];
 
   return (
     <Card title="AI 诊断报告">
       <div className={styles.container}>
         <div className={styles.section}>
-          <h3 className={styles.sectionTitle}>错误分析</h3>
-          <div className={styles.analysisBox}>{diagnosis.error_analysis}</div>
+          <h3 className={styles.sectionTitle}>诊断记录</h3>
+          {diagnosis.logs.map((log, index) => (
+            <div key={log.id} className={styles.analysisBox} style={{ marginBottom: '8px' }}>
+              <div style={{ fontSize: '0.85em', color: '#888', marginBottom: '4px' }}>
+                #{index + 1} — {log.action_taken || '未知操作'} ({new Date(log.created_at).toLocaleString()})
+              </div>
+              {log.diagnosis && <div>{log.diagnosis}</div>}
+            </div>
+          ))}
         </div>
 
-        <div className={styles.section}>
-          <h3 className={styles.sectionTitle}>修复建议</h3>
-          <div className={styles.analysisBox}>{diagnosis.suggested_fix}</div>
-        </div>
-
-        <div className={styles.section}>
-          <h3 className={styles.sectionTitle}>推理过程</h3>
-          <div className={styles.analysisBox}>{diagnosis.reasoning}</div>
-        </div>
-
-        <div className={styles.section}>
-          <h3 className={styles.sectionTitle}>代码变更 (Diff)</h3>
-          <CodeEditor
-            value={diagnosis.fix_diff}
-            readOnly
-            language="diff"
-            rows={10}
-          />
-        </div>
-
-        <div className={`${styles.confidenceBox} ${isLowConfidence ? styles.low : styles.high}`}>
-          置信度: {diagnosis.confidence}%
-          {isLowConfidence && ' (置信度较低，请仔细确认)'}
-        </div>
-
-        {isActionable && (
+        {isActionable && latestLog?.action_taken === 'pending_human_review' && (
           <div className={styles.actions}>
             <Button 
               variant="primary" 
-              onClick={handleApprove}
+              onClick={() => approveFix(run.id)}
               isLoading={isApproving}
               disabled={isRejecting}
             >
@@ -98,7 +63,7 @@ export const DiagnosisPanel: React.FC<DiagnosisPanelProps> = ({
             </Button>
             <Button 
               variant="secondary" 
-              onClick={handleReject}
+              onClick={() => rejectFix(run.id)}
               isLoading={isRejecting}
               disabled={isApproving}
             >
@@ -107,24 +72,6 @@ export const DiagnosisPanel: React.FC<DiagnosisPanelProps> = ({
           </div>
         )}
       </div>
-
-      <Modal
-        isOpen={showConfirmModal}
-        onClose={() => setShowConfirmModal(false)}
-        title="低置信度警告"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setShowConfirmModal(false)}>取消</Button>
-            <Button variant="danger" onClick={handleConfirmApprove}>确认采纳</Button>
-          </>
-        }
-      >
-        <div className={styles.warningText}>
-          当前 AI 修复建议的置信度低于 30% ({diagnosis.confidence}%)。
-          采纳此修复可能会导致意外行为，请确认您已仔细检查了代码变更。
-        </div>
-        <p>是否确认采纳此修复？</p>
-      </Modal>
     </Card>
   );
 };
