@@ -80,9 +80,12 @@ const eventsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     const snapshot = buildSnapshotEvent(projectId);
     reply.raw.write(formatSSEEvent(snapshot));
 
-    // Subscribe to future events
+    // Subscribe to future events — filter by projectId
     const unsubscribe = fastify.sseEmitter.onClient((event: SSEEvent) => {
-      reply.raw.write(formatSSEEvent(event));
+      const eventData = event.data as Record<string, unknown> | undefined;
+      if (eventData && eventData.projectId === projectId) {
+        reply.raw.write(formatSSEEvent(event));
+      }
     });
 
     // Heartbeat to keep connection alive

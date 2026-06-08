@@ -1,11 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 export interface ProjectConfig {
-  target_base_url: string;
-  auth_config: {
-    type: 'none' | 'login-script';
-    login_script_id?: string;
-  };
+  base_url: string;
+  auth_type: 'none' | 'login-script';
+  auth_config: Record<string, string>;
   seed_urls: string[];
 }
 
@@ -33,8 +31,15 @@ export const fetchProjectConfig = async (projectId: string): Promise<ProjectConf
   if (!response.ok) {
     throw new Error(`Failed to fetch config for project ${projectId}`);
   }
-  const data = await response.json();
-  return data.data || data;
+  const raw = await response.json();
+  const data = raw.data || raw;
+  // Map backend response to frontend interface
+  return {
+    base_url: data.base_url ?? '',
+    auth_type: data.auth_type ?? 'none',
+    auth_config: data.auth_config ?? {},
+    seed_urls: data.seed_urls ?? [],
+  };
 };
 
 export const updateProjectConfig = async ({ projectId, config }: { projectId: string; config: ProjectConfig }): Promise<ProjectConfig> => {

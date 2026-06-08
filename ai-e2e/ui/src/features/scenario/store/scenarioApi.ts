@@ -27,14 +27,14 @@ export const fetchModuleScenarios = async (projectId: string, moduleId: string):
 };
 
 export const generateAllScenarios = async (projectId: string): Promise<void> => {
-  const response = await fetch(`/api/projects/${projectId}/scenarios/generate-all`, {
+  const response = await fetch(`/api/projects/${projectId}/analysis/generate-all-scenarios`, {
     method: 'POST',
   });
   if (!response.ok) throw new Error('Failed to generate all scenarios');
 };
 
 export const generateModuleScenarios = async (projectId: string, moduleId: string): Promise<void> => {
-  const response = await fetch(`/api/projects/${projectId}/scenarios/modules/${moduleId}`, {
+  const response = await fetch(`/api/projects/${projectId}/analysis/modules/${moduleId}/generate-scenarios`, {
     method: 'POST',
   });
   if (!response.ok) throw new Error('Failed to generate module scenarios');
