@@ -8,7 +8,7 @@ export interface SSEEventMap {
   'prd.analysis_progress': { phase?: string; progress?: number; message?: string };
   'prd.analysis_complete': { moduleCount?: number };
   'prd.decomposition_complete': { moduleId: string };
-  'prd.all_complete': { totalModules: number };
+  'prd.decomposition_all_complete': { totalModules: number };
   'prd.scenarios_all_complete': { totalScenarios: number };
   // Exploration
   'exploration.progress': { pagesVisited: number; urlsFound: number; currentUrl?: string };

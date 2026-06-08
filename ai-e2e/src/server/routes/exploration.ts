@@ -178,6 +178,30 @@ const explorationRoutes: FastifyPluginAsyncTypebox<ExplorationRouteOptions> = as
 
     const service = getExplorerService();
     const session = await service.startExploration(projectId, options);
+
+    // Emit SSE events after exploration completes
+    const db = DatabaseManager.getInstance();
+    const urls = db.getURLRepo().findByProjectId(projectId);
+    const bindings = db.getURLModuleBindingRepo().findByProjectId(projectId);
+
+    fastify.sseEmitter.emit({
+      type: 'exploration.progress',
+      data: {
+        sessionId: session.id,
+        pagesVisited: urls.length,
+        urlsFound: urls.length,
+      },
+    });
+
+    fastify.sseEmitter.emit({
+      type: 'exploration.complete',
+      data: {
+        sessionId: session.id,
+        totalUrls: urls.length,
+        totalBindings: bindings.length,
+      },
+    });
+
     return reply.send(session);
   });
 

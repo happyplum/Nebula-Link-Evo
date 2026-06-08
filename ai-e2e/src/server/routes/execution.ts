@@ -81,6 +81,11 @@ const routes: FastifyPluginAsyncTypebox<ExecutionRouteOptions> = async (fastify,
         data: { runId: result.runId, scriptId },
       });
 
+      fastify.sseEmitter.emit({
+        type: 'execution.progress',
+        data: { runId: result.runId, step: 'executing' },
+      });
+
       if (result.status === 'pass') {
         fastify.sseEmitter.emit({
           type: 'execution.completed',
@@ -429,6 +434,15 @@ const routes: FastifyPluginAsyncTypebox<ExecutionRouteOptions> = async (fastify,
       }
 
       const logs = db.getAIInterventionLogRepo().findByRunId(runId);
+
+      // Emit ai.diagnosis for the latest diagnosis found
+      const diagnosisLog = logs.find(l => l.diagnosis);
+      if (diagnosisLog?.diagnosis) {
+        fastify.sseEmitter.emit({
+          type: 'ai.diagnosis',
+          data: { runId, diagnosis: diagnosisLog.diagnosis },
+        });
+      }
 
       return reply.status(200).send({
         runId,
