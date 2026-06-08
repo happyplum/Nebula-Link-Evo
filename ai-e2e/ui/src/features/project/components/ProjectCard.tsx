@@ -81,7 +81,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ project }) => {
       <div className="mt-3 flex items-center justify-end border-t border-border-default pt-3">
         <span className="text-text-secondary">创建于 {formatDate(project.created_at)}</span>
         <button 
-          className="ml-auto text-text-muted transition-colors hover:text-text-primary"
+          className="ml-auto rounded-md border border-border-default bg-surface-elevated px-2.5 py-1 text-xs text-text-secondary transition-colors hover:border-border-hover hover:text-text-primary"
           onClick={handleDelete}
           title="删除项目"
         >
