@@ -8,6 +8,7 @@ interface ResultDashboardProps {
   isLoading: boolean;
   onViewDetail: (run: ExecutionRun) => void;
   onRunScript: (scriptId: string) => void;
+  runningScriptId: string | null;
 }
 
 const statusBadgeMap: Record<string, string> = {
@@ -41,6 +42,7 @@ export const ResultDashboard: React.FC<ResultDashboardProps> = ({
   isLoading,
   onViewDetail,
   onRunScript,
+  runningScriptId,
 }) => {
   const total = runs.length;
   const passed = runs.filter(r => r.status === 'pass' || r.status === 'passed').length;
@@ -82,6 +84,7 @@ export const ResultDashboard: React.FC<ResultDashboardProps> = ({
             variant="ghost" 
             size="sm" 
             className="mr-2"
+            isLoading={runningScriptId === record.script_id}
             onClick={(e) => {
               e.stopPropagation();
               onRunScript(record.script_id);

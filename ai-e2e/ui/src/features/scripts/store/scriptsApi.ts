@@ -61,7 +61,24 @@ export const fetchScripts = async (projectId: string): Promise<Script[]> => {
   const response = await fetch(`/api/projects/${projectId}/scripts`);
   if (!response.ok) throw new Error('Failed to fetch scripts');
   const data = await response.json();
-  return Array.isArray(data) ? data : (data.scripts || data.data || []);
+
+  if (Array.isArray(data)) {
+    // Backend returns grouped structure: [{ functional_module, scripts }]
+    // Flatten into individual Script objects with enriched names
+    return data.flatMap((group: any) => {
+      const fmName = group.functional_module?.name || '未分类功能模块';
+      const fmId = group.functional_module?.id || '';
+      return (group.scripts || []).map((script: any) => ({
+        ...script,
+        scenario_id: script.test_scenario_id,
+        functional_module_id: script.functional_module_id || fmId,
+        functional_module_name: script.functional_module_name || fmName,
+        business_module_name: script.business_module_name || '未分类业务模块',
+        scenario_name: script.scenario_name || '未命名场景',
+      }));
+    });
+  }
+  return data.scripts || data.data || [];
 };
 
 export const fetchScript = async (projectId: string, scriptId: string): Promise<Script> => {

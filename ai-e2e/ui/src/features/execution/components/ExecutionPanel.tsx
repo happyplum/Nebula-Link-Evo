@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { useRuns, useRunScript, executionKeys, ExecutionRun } from '../store/executionApi';
+import { useRuns, useRunDetail, useRunScript, executionKeys, ExecutionRun } from '../store/executionApi';
 import { useSSE } from '@/hooks/use-sse.js';
 import { useAIStatusStore } from '../../ai-status/store/aiStatusStore';
 import { ExecutionControls } from './ExecutionControls';
@@ -20,6 +20,7 @@ export default function ExecutionPanel() {
   
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
+  const [runningScriptId, setRunningScriptId] = useState<string | null>(null);
   const [currentScript, setCurrentScript] = useState<string>();
   const [currentStep, setCurrentStep] = useState<string>();
   const [progress, setProgress] = useState(0);
@@ -94,10 +95,14 @@ export default function ExecutionPanel() {
   };
 
   const handleRunScript = (scriptId: string) => {
-    runScript(scriptId);
+    setRunningScriptId(scriptId);
+    runScript(scriptId, {
+      onSettled: () => setRunningScriptId(null),
+    });
   };
 
-  const selectedRun = runs.find(r => r.id === selectedRunId);
+  const { data: runDetail } = useRunDetail(projectId || '', selectedRunId || '');
+  const selectedRun = runDetail || runs.find(r => r.id === selectedRunId) || null;
 
   if (!projectId) {
     return <div>Project ID is required</div>;
@@ -126,6 +131,7 @@ export default function ExecutionPanel() {
             isLoading={isRunsLoading}
             onViewDetail={handleViewDetail}
             onRunScript={handleRunScript}
+            runningScriptId={runningScriptId}
           />
 
           {selectedRun && (

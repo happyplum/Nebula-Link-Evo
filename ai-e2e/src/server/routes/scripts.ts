@@ -41,6 +41,10 @@ const GenerateScriptRequestSchema = Type.Object({
 const ScriptResponseSchema = Type.Object({
   id: Type.String(),
   test_scenario_id: Type.String(),
+  scenario_name: Type.Optional(Type.String()),
+  business_module_name: Type.Optional(Type.String()),
+  functional_module_id: Type.Optional(Type.String()),
+  functional_module_name: Type.Optional(Type.String()),
   version: Type.Number(),
   content: Type.String(),
   language: Type.String(),
@@ -189,6 +193,10 @@ const scriptsRoutes: FastifyPluginAsyncTypebox<ScriptsRouteOptions> = async (fas
             scriptsForModule.push({
               id: script.id,
               test_scenario_id: script.test_scenario_id,
+              scenario_name: scenario.name,
+              business_module_name: bm.name,
+              functional_module_id: fm.id,
+              functional_module_name: fm.name,
               version: script.version,
               content: script.content,
               language: script.language,
