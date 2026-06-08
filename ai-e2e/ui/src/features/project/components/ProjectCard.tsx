@@ -1,15 +1,15 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '@/shared/components';
+import { cn } from '@/lib/utils';
 import { Project } from '@/types/project';
 import { useDeleteProject } from '../store/projectApi';
-import styles from './ProjectCard.module.css';
 
 interface ProjectCardProps {
   project: Project;
 }
 
-const statusMap: Record<string, string> = {
+const statusLabelMap: Record<string, string> = {
   draft: '草稿',
   configuring: '配置中',
   analyzing: '分析中',
@@ -20,6 +20,21 @@ const statusMap: Record<string, string> = {
   ready: '就绪',
   running: '运行中',
   completed: '已完成',
+};
+
+const statusStyleMap: Record<string, string> = {
+  active: 'bg-status-success/20 text-status-success',
+  running: 'bg-status-success/20 text-status-success',
+  completed: 'bg-status-success/20 text-status-success',
+  error: 'bg-status-error/20 text-status-error',
+  analyzing: 'bg-status-info/20 text-status-info',
+  exploring: 'bg-status-info/20 text-status-info',
+  generating: 'bg-status-info/20 text-status-info',
+  default: 'bg-surface-elevated text-text-secondary',
+};
+
+const getStatusStyle = (status: string): string => {
+  return statusStyleMap[status] || statusStyleMap.default;
 };
 
 export const ProjectCard: React.FC<ProjectCardProps> = ({ project }) => {
@@ -51,22 +66,22 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ project }) => {
   };
 
   return (
-    <Card className={styles.card} onClick={handleClick}>
-      <div className={styles.header}>
-        <h3 className={styles.title} title={project.name}>{project.name}</h3>
-        <span className={`${styles.statusBadge} ${styles[`status-${project.status}`]}`}>
-          {statusMap[project.status] || project.status}
+    <Card className="cursor-pointer border-border-default bg-surface-content p-4 transition-colors hover:border-border-hover" onClick={handleClick}>
+      <div className="flex items-start justify-between">
+        <h3 className="text-base font-medium" title={project.name}>{project.name}</h3>
+        <span className={cn('rounded-full px-2 py-0.5 text-xs', getStatusStyle(project.status))}>
+          {statusLabelMap[project.status] || project.status}
         </span>
       </div>
       
-      <div className={styles.description}>
+      <div className="mt-1 text-sm text-text-secondary">
         {project.description || '暂无描述'}
       </div>
       
-      <div className={styles.footer}>
-        <span>创建于 {formatDate(project.created_at)}</span>
+      <div className="mt-3 flex items-center justify-end border-t border-border-default pt-3">
+        <span className="text-text-secondary">创建于 {formatDate(project.created_at)}</span>
         <button 
-          className={styles.deleteBtn} 
+          className="ml-auto text-text-muted transition-colors hover:text-text-primary"
           onClick={handleDelete}
           title="删除项目"
         >

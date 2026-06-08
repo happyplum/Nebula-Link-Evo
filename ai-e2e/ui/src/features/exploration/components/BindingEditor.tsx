@@ -1,7 +1,7 @@
 import React from 'react';
 import { ModuleBinding } from '../store/explorationApi';
 import { Table, Column, Button } from '@/shared/components';
-import styles from './BindingEditor.module.css';
+import { cn } from '@/lib/utils';
 
 interface BindingEditorProps {
   bindings: ModuleBinding[];
@@ -11,6 +11,30 @@ interface BindingEditorProps {
   isProposing: boolean;
 }
 
+const confidenceClassMap: Record<string, string> = {
+  high: 'text-status-success',
+  medium: 'text-status-warning',
+  low: 'text-status-error',
+};
+
+const statusClassMap: Record<string, string> = {
+  proposed: 'text-text-muted',
+  confirmed: 'text-status-success',
+  rejected: 'text-status-error',
+};
+
+const statusTextMap: Record<string, string> = {
+  proposed: '待确认',
+  confirmed: '已确认',
+  rejected: '已拒绝',
+};
+
+function getConfidenceKey(confidence: number): string {
+  if (confidence >= 0.8) return 'high';
+  if (confidence >= 0.5) return 'medium';
+  return 'low';
+}
+
 export const BindingEditor: React.FC<BindingEditorProps> = ({
   bindings,
   onProposeBindings,
@@ -18,21 +42,6 @@ export const BindingEditor: React.FC<BindingEditorProps> = ({
   onRejectBinding,
   isProposing,
 }) => {
-  const getConfidenceClass = (confidence: number) => {
-    if (confidence >= 0.8) return styles.confidenceHigh;
-    if (confidence >= 0.5) return styles.confidenceMedium;
-    return styles.confidenceLow;
-  };
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'proposed': return <span className={styles.statusProposed}>待确认</span>;
-      case 'confirmed': return <span className={styles.statusConfirmed}>已确认</span>;
-      case 'rejected': return <span className={styles.statusRejected}>已拒绝</span>;
-      default: return status;
-    }
-  };
-
   const columns: Column<ModuleBinding>[] = [
     {
       key: 'url',
@@ -52,7 +61,7 @@ export const BindingEditor: React.FC<BindingEditorProps> = ({
       key: 'confidence',
       title: '置信度',
       render: (_, record) => (
-        <span className={getConfidenceClass(record.confidence)}>
+        <span className={confidenceClassMap[getConfidenceKey(record.confidence)]}>
           {Math.round(record.confidence * 100)}%
         </span>
       ),
@@ -61,14 +70,18 @@ export const BindingEditor: React.FC<BindingEditorProps> = ({
     {
       key: 'status',
       title: '状态',
-      render: (_, record) => getStatusText(record.status),
+      render: (_, record) => (
+        <span className={statusClassMap[record.status] ?? ''}>
+          {statusTextMap[record.status] ?? record.status}
+        </span>
+      ),
       width: '100px',
     },
     {
       key: 'actions',
       title: '操作',
       render: (_, record) => (
-        <div className={styles.actionButtons}>
+        <div className="flex gap-1">
           {record.status === 'proposed' && (
             <>
               <Button 
@@ -94,10 +107,10 @@ export const BindingEditor: React.FC<BindingEditorProps> = ({
   ];
 
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <div className={styles.title}>URL 模块绑定</div>
-        <div className={styles.actions}>
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-between p-3">
+        <div className="text-sm font-medium">URL 模块绑定</div>
+        <div className="flex gap-2">
           <Button 
             variant="secondary" 
             onClick={onProposeBindings}
@@ -108,7 +121,7 @@ export const BindingEditor: React.FC<BindingEditorProps> = ({
         </div>
       </div>
       
-      <div className={styles.tableContainer}>
+      <div className="flex-1 overflow-auto">
         <Table
           columns={columns}
           data={bindings}

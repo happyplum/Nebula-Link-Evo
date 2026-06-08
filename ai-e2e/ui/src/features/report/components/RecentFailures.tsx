@@ -1,7 +1,8 @@
 import React from 'react';
-import { ProjectRecentFailureItem } from '@/types/report';
-import { Card, Table, Column } from '@/shared/components';
-import styles from './ReportPanel.module.css';
+import { ProjectRecentFailureItem } from '@/types/report.js';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card.js';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table.js';
+import { cn } from '@/lib/utils.js';
 
 interface RecentFailuresProps {
   failures: ProjectRecentFailureItem[];
@@ -16,46 +17,56 @@ const typeLabels: Record<string, string> = {
   unknown: '未知错误',
 };
 
-export const RecentFailures: React.FC<RecentFailuresProps> = ({ failures }) => {
-  const columns: Column<ProjectRecentFailureItem>[] = [
-    {
-      key: 'timestamp',
-      title: '时间',
-      dataIndex: 'timestamp',
-      width: '180px',
-      render: (value) => new Date(value).toLocaleString(),
-    },
-    {
-      key: 'failureType',
-      title: '失败类型',
-      dataIndex: 'failureType',
-      width: '120px',
-      render: (value) => (
-        <span className={`${styles.typeBadge} ${styles[`type-${value}`] || styles['type-unknown']}`}>
-          {typeLabels[value] || value}
-        </span>
-      ),
-    },
-    {
-      key: 'diagnosis',
-      title: 'AI 诊断',
-      dataIndex: 'diagnosis',
-      render: (value) => (
-        <div className={styles.diagnosisText} title={value}>
-          {value}
-        </div>
-      ),
-    },
-  ];
+const typeBadgeVariants: Record<string, string> = {
+  api: 'bg-status-info/20 text-status-info',
+  navigation: 'bg-status-warning/20 text-status-warning',
+  assertion: 'bg-status-error/20 text-status-error',
+  unknown: 'bg-surface-elevated text-text-muted',
+};
 
+export const RecentFailures: React.FC<RecentFailuresProps> = ({ failures }) => {
   return (
-    <Card title="最近失败记录" noPadding>
-      <Table
-        columns={columns}
-        data={failures}
-        rowKey="runId"
-        emptyText="暂无失败记录"
-      />
+    <Card>
+      <CardHeader>
+        <CardTitle>最近失败记录</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {failures.length === 0 ? (
+          <div className="py-8 text-center text-text-muted">暂无失败记录</div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-[180px]">时间</TableHead>
+                <TableHead className="w-[120px]">失败类型</TableHead>
+                <TableHead>AI 诊断</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {failures.map((item) => (
+                <TableRow key={item.runId}>
+                  <TableCell>{new Date(item.timestamp).toLocaleString()}</TableCell>
+                  <TableCell>
+                    <span
+                      className={cn(
+                        'text-xs px-2 py-0.5 rounded-full',
+                        typeBadgeVariants[item.failureType] ?? typeBadgeVariants['unknown']
+                      )}
+                    >
+                      {typeLabels[item.failureType] ?? item.failureType}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <div className="text-sm text-text-secondary" title={item.diagnosis}>
+                      {item.diagnosis}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
     </Card>
   );
 };

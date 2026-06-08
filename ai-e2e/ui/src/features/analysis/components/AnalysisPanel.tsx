@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { PRDUpload } from './PRDUpload';
-import { ModuleTree } from './ModuleTree';
-import { ModuleDetail } from './ModuleDetail';
+import { PRDUpload } from './PRDUpload.js';
+import { ModuleTree } from './ModuleTree.js';
+import { ModuleDetail } from './ModuleDetail.js';
 import { Button, Modal, Input, Card } from '@/shared/components';
-import { useSSE } from '@/shared/hooks/useSSE';
-import { useAIStatusStore } from '../../ai-status/store/aiStatusStore';
+import { useSSE } from '@/shared/hooks/useSSE.js';
+import { useAIStatusStore } from '../../ai-status/store/aiStatusStore.js';
 import {
   useModules,
   useDocuments,
@@ -17,7 +17,6 @@ import {
   useTransitionState,
   AnalysisModule
 } from '../store/analysisApi';
-import styles from './AnalysisPanel.module.css';
 
 export const AnalysisPanel: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>();
@@ -152,14 +151,14 @@ export const AnalysisPanel: React.FC = () => {
   };
 
   return (
-    <div className={styles.container}>
-      <div className={styles.topSection}>
+    <div className="flex flex-col h-full">
+      <div className="flex gap-4">
         {documents.length > 0 && (
-          <Card className={styles.documentsCard}>
+          <Card className="flex-1">
             <h4>已上传的 PRD 文档（{documents.length} 份）</h4>
             <details>
               <summary>查看最新 PRD 内容（{documents[0].created_at}）</summary>
-              <pre className={styles.prdPreview}>{documents[0].raw_content}</pre>
+              <pre className="flex-1 whitespace-pre-wrap text-sm">{documents[0].raw_content}</pre>
             </details>
           </Card>
         )}
@@ -171,8 +170,8 @@ export const AnalysisPanel: React.FC = () => {
         />
       </div>
 
-      <div className={styles.mainSection}>
-        <Card className={styles.leftPane} noPadding>
+      <div className="flex-1 flex gap-4">
+        <Card className="flex-1" noPadding>
           <ModuleTree
             modules={modules}
             selectedModuleId={selectedModuleId}
@@ -181,7 +180,7 @@ export const AnalysisPanel: React.FC = () => {
           />
         </Card>
 
-        <Card className={styles.rightPane} noPadding>
+        <Card className="flex-1" noPadding>
           <ModuleDetail
             module={selectedModule}
             onUpdate={handleUpdateModule}
@@ -191,7 +190,7 @@ export const AnalysisPanel: React.FC = () => {
         </Card>
       </div>
 
-      <div className={styles.footer}>
+      <div className="flex gap-2 justify-end">
         <Button 
           variant="primary" 
           onClick={handleConfirmComplete}
@@ -207,7 +206,7 @@ export const AnalysisPanel: React.FC = () => {
         onClose={() => setIsAddL1ModalOpen(false)}
         title="添加 L1 模块"
       >
-        <div className={styles.modalForm}>
+        <div className="space-y-4">
           <Input
             label="模块名称"
             value={addL1Form.name}
@@ -222,7 +221,7 @@ export const AnalysisPanel: React.FC = () => {
             fullWidth
           />
         </div>
-        <div className={styles.modalFooter}>
+        <div className="flex gap-2 justify-end">
           <Button variant="ghost" onClick={() => setIsAddL1ModalOpen(false)}>
             取消
           </Button>

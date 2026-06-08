@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
+import { cn } from '@/lib/utils';
 import { Script, useScriptVersions } from '../store/scriptsApi';
 import { CodeEditor } from '@/shared/components';
-import styles from './VersionHistory.module.css';
 
 interface VersionHistoryProps {
   projectId: string;
@@ -33,52 +33,55 @@ export const VersionHistory: React.FC<VersionHistoryProps> = ({ projectId, scrip
   };
 
   if (isLoading) {
-    return <div className={styles.loading}>加载版本历史中...</div>;
+    return <div className="flex items-center justify-center py-8 text-text-muted">加载版本历史中...</div>;
   }
 
   if (versions.length === 0) {
-    return <div className={styles.empty}>暂无版本历史</div>;
+    return <div className="flex h-full items-center justify-center text-text-muted">暂无版本历史</div>;
   }
 
   return (
-    <div className={styles.container}>
-      <div className={styles.sidebar}>
-        <h4 className={styles.sidebarTitle}>版本记录</h4>
-        <div className={styles.versionList}>
+    <div className="flex h-full">
+      <div className="flex w-64 flex-col border-r border-border-default">
+        <h4 className="border-b border-border-default px-4 py-3 text-sm font-medium">版本记录</h4>
+        <div className="flex-1 overflow-auto">
           {versions.map(version => (
             <div 
               key={version.id}
-              className={`${styles.versionItem} ${selectedVersion?.id === version.id ? styles.selected : ''}`}
+              className={cn(
+                'cursor-pointer border-b border-border-default px-4 py-3 hover:bg-surface-elevated',
+                selectedVersion?.id === version.id && 'bg-accent'
+              )}
               onClick={() => setSelectedVersionId(version.id)}
             >
-              <div className={styles.versionHeader}>
-                <span className={styles.versionNumber}>v{version.version}</span>
-                <span className={styles.versionDate}>{formatDate(version.created_at)}</span>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">v{version.version}</span>
+                <span className="text-xs text-text-muted">{formatDate(version.created_at)}</span>
               </div>
-              <div className={styles.versionMeta}>
-                <span className={styles.generatedBy}>{getGeneratedByText(version.generated_by)}</span>
+              <div className="mt-1 text-xs text-text-muted">
+                <span>{getGeneratedByText(version.generated_by)}</span>
               </div>
             </div>
           ))}
         </div>
       </div>
       
-      <div className={styles.main}>
+      <div className="flex flex-1 flex-col">
         {selectedVersion ? (
-          <div className={styles.editorContainer}>
-            <div className={styles.editorHeader}>
+          <div className="flex flex-1 flex-col overflow-hidden">
+            <div className="flex items-center justify-between border-b border-border-default px-4 py-2">
               <span>查看版本 v{selectedVersion.version}</span>
-              <span className={styles.readOnlyBadge}>只读</span>
+              <span className="rounded bg-surface-elevated px-2 py-0.5 text-xs text-text-muted">只读</span>
             </div>
             <CodeEditor
               value={selectedVersion.content}
               readOnly
               language="typescript"
-              className={styles.editor}
+              className="flex-1"
             />
           </div>
         ) : (
-          <div className={styles.emptySelection}>请选择一个版本查看</div>
+          <div className="flex h-full items-center justify-center text-text-muted">请选择一个版本查看</div>
         )}
       </div>
     </div>

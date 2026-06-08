@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Button, Input, Modal } from '@/shared/components';
 import { AnalysisModule } from '../store/analysisApi';
 import { ScenarioPanel } from '../../scenario/components/ScenarioPanel.js';
-import styles from './ModuleDetail.module.css';
 
 export interface ModuleDetailProps {
   module: AnalysisModule | null;
@@ -35,8 +34,8 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({
 
   if (!module) {
     return (
-      <div className={styles.container}>
-        <div className={styles.emptyState}>
+      <div className="flex flex-col h-full">
+        <div className="flex items-center justify-center py-12 text-text-muted">
           请在左侧选择一个模块查看详情
         </div>
       </div>
@@ -75,10 +74,10 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({
   const isFunctionalModule = !!module.parent_id;
 
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <div className={styles.title}>模块详情</div>
-        <div className={styles.actions}>
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-between p-4 border-b border-border-default">
+        <div className="text-base font-medium">模块详情</div>
+        <div className="flex gap-2">
           <Button 
             variant="secondary" 
             size="sm" 
@@ -103,26 +102,26 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({
         </div>
       </div>
 
-      <div className={styles.content}>
-        <div className={styles.infoSection}>
-          <div className={styles.infoRow}>
-            <span className={styles.infoLabel}>模块名称</span>
-            <span className={styles.infoValue}>{module.name}</span>
+      <div className="flex-1 overflow-auto p-4">
+        <div className="space-y-3">
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-text-muted">模块名称</span>
+            <span className="text-sm text-text-primary">{module.name}</span>
           </div>
-          <div className={styles.infoRow}>
-            <span className={styles.infoLabel}>描述</span>
-            <span className={styles.infoValue}>{module.description || '暂无描述'}</span>
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-text-muted">描述</span>
+            <span className="text-sm text-text-primary">{module.description || '暂无描述'}</span>
           </div>
-          <div className={styles.infoRow}>
-            <span className={styles.infoLabel}>来源</span>
-            <span className={styles.infoValue}>{module.source === 'ai' ? 'AI 生成' : '手动创建'}</span>
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-text-muted">来源</span>
+            <span className="text-sm text-text-primary">{module.source === 'ai' ? 'AI 生成' : '手动创建'}</span>
           </div>
         </div>
 
         {!isFunctionalModule && (
-          <div className={styles.childrenSection}>
-            <div className={styles.childrenHeader}>
-              <div className={styles.childrenTitle}>子模块 (L2)</div>
+          <div className="mt-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-sm font-medium">子模块 (L2)</div>
               <Button 
                 variant="secondary" 
                 size="sm" 
@@ -135,17 +134,17 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({
               </Button>
             </div>
 
-            <div className={styles.childList}>
+            <div className="space-y-2">
               {module.children && module.children.length > 0 ? (
                 module.children.map(child => (
-                  <div key={child.id} className={styles.childItem}>
-                    <div className={styles.childInfo}>
-                      <span className={styles.childName}>{child.name}</span>
+                  <div key={child.id} className="flex items-center justify-between p-2 bg-surface-content rounded-md">
+                    <div className="flex-1">
+                      <span className="text-sm font-medium">{child.name}</span>
                       {child.description && (
-                        <span className={styles.childDesc}>{child.description}</span>
+                        <span className="text-xs text-text-muted ml-2">{child.description}</span>
                       )}
                     </div>
-                    <div className={styles.childActions}>
+                    <div className="flex gap-1">
                       <Button variant="ghost" size="sm" onClick={() => openEditChild(child)}>
                         编辑
                       </Button>
@@ -164,7 +163,7 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({
                   </div>
                 ))
               ) : (
-                <div className={styles.emptyState} style={{ height: '100px' }}>
+                <div className="flex items-center justify-center py-8 text-text-muted" style={{ height: '100px' }}>
                   暂无子模块
                 </div>
               )}
@@ -186,7 +185,7 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({
         }}
         title={editingChildId ? "编辑子模块" : "编辑模块"}
       >
-        <div className={styles.modalForm}>
+        <div className="space-y-4">
           <Input
             label="模块名称"
             value={editForm.name}
@@ -201,7 +200,7 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({
             fullWidth
           />
         </div>
-        <div className={styles.modalFooter}>
+        <div className="flex gap-2 justify-end">
           <Button variant="ghost" onClick={() => setIsEditModalOpen(false)}>
             取消
           </Button>
@@ -217,7 +216,7 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({
         onClose={() => setIsAddChildModalOpen(false)}
         title="添加子模块"
       >
-        <div className={styles.modalForm}>
+        <div className="space-y-4">
           <Input
             label="模块名称"
             value={addForm.name}
@@ -232,7 +231,7 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({
             fullWidth
           />
         </div>
-        <div className={styles.modalFooter}>
+        <div className="flex gap-2 justify-end">
           <Button variant="ghost" onClick={() => setIsAddChildModalOpen(false)}>
             取消
           </Button>

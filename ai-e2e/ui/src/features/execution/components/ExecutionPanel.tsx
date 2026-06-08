@@ -10,7 +10,6 @@ import { RunDetail } from './RunDetail';
 import { DiagnosisPanel } from './DiagnosisPanel';
 import { ExecutionHistory } from './ExecutionHistory';
 import { ReportPanel } from '../../report/components/ReportPanel';
-import styles from './ExecutionPanel.module.css';
 
 export default function ExecutionPanel() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -108,13 +107,13 @@ export default function ExecutionPanel() {
   }
 
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <h1 className={styles.title}>执行与诊断</h1>
+    <div className="flex flex-col h-full">
+      <div className="flex items-center p-4 border-b border-border-default">
+        <h1 className="text-base font-medium">执行与诊断</h1>
       </div>
 
-      <div className={styles.content}>
-        <div className={styles.mainColumn}>
+      <div className="flex-1 flex gap-4 overflow-hidden p-4">
+        <div className="flex-1 flex flex-col gap-4 overflow-auto">
           <ExecutionControls
             projectId={projectId}
             isRunning={isRunning}
@@ -137,7 +136,7 @@ export default function ExecutionPanel() {
           )}
         </div>
 
-        <div className={styles.sideColumn}>
+        <div className="w-80 flex flex-col gap-4">
           {selectedRun && (
             <DiagnosisPanel
               projectId={projectId}

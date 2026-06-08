@@ -23,7 +23,6 @@ import {
   explorationKeys
 } from '../store/explorationApi';
 import { useQueryClient } from '@tanstack/react-query';
-import styles from './ExplorationPanel.module.css';
 
 export const ExplorationPanel: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>();
@@ -133,8 +132,8 @@ export const ExplorationPanel: React.FC = () => {
   };
 
   return (
-    <div className={styles.container}>
-      <div className={styles.topSection}>
+    <div className="flex flex-col h-full">
+      <div className="flex gap-4">
         <ExplorationControls
           isExploring={isExploring}
           progress={statusData?.pages_visited ? (statusData.pages_visited / 100) * 100 : 0} // Assuming max 100 for now
@@ -146,8 +145,8 @@ export const ExplorationPanel: React.FC = () => {
         />
       </div>
 
-      <div className={styles.mainSection}>
-        <Card className={styles.leftPane} noPadding>
+      <div className="flex-1 flex gap-4 overflow-hidden">
+        <Card className="w-1/2 flex flex-col" noPadding>
           <URLList
             urls={urls}
             selectedUrlId={selectedUrlId}
@@ -156,12 +155,12 @@ export const ExplorationPanel: React.FC = () => {
           />
         </Card>
 
-        <Card className={styles.rightPane} noPadding>
+        <Card className="w-1/2 flex flex-col" noPadding>
           <PagePreview url={selectedUrl} />
         </Card>
       </div>
 
-      <div className={styles.bottomSection}>
+      <div>
         {unboundModuleDetails.length > 0 && (
           <UnboundModuleIndicator 
             details={unboundModuleDetails} 
@@ -177,7 +176,7 @@ export const ExplorationPanel: React.FC = () => {
         />
       </div>
 
-      <div className={styles.footer}>
+      <div className="flex gap-2 justify-end">
         <Button 
           variant="primary" 
           onClick={handleConfirmComplete}
@@ -193,7 +192,7 @@ export const ExplorationPanel: React.FC = () => {
         onClose={() => setIsAddUrlModalOpen(false)}
         title="手动添加 URL"
       >
-        <div className={styles.modalForm}>
+        <div className="space-y-4">
           <Input
             label="URL 地址"
             value={addUrlForm.url}
@@ -210,7 +209,7 @@ export const ExplorationPanel: React.FC = () => {
             fullWidth
           />
         </div>
-        <div className={styles.modalFooter}>
+        <div className="flex gap-2 justify-end">
           <Button variant="ghost" onClick={() => setIsAddUrlModalOpen(false)}>
             取消
           </Button>

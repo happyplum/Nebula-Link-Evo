@@ -8,7 +8,6 @@ import {
   ProjectConfig
 } from '../store/configApi';
 import { useProject } from '../store/projectApi';
-import styles from './ConfigPanel.module.css';
 
 export const ConfigPanel: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>();
@@ -36,7 +35,7 @@ export const ConfigPanel: React.FC = () => {
   }, [config]);
 
   if (isLoading) {
-    return <div className={styles.loading}>加载配置中...</div>;
+    return <div className="flex items-center justify-center py-8">加载配置中...</div>;
   }
 
   const handleSave = () => {
@@ -88,11 +87,11 @@ export const ConfigPanel: React.FC = () => {
   const isConfiguring = project?.status === 'configuring' || project?.status === 'draft';
 
   return (
-    <div className={styles.container}>
-      <div className={styles.section}>
-        <h2 className={styles.sectionTitle}>目标配置</h2>
+    <div className="flex flex-col gap-4">
+      <div className="space-y-3">
+        <h2 className="text-sm font-medium text-text-secondary">目标配置</h2>
         
-        <div className={styles.formGroup}>
+        <div className="space-y-2">
           <Input
             label="目标基础 URL"
             value={localConfig.target_base_url}
@@ -100,16 +99,16 @@ export const ConfigPanel: React.FC = () => {
             placeholder="https://example.com"
             fullWidth
           />
-          <div className={styles.helpText}>测试目标应用的基础地址</div>
+          <div className="text-xs text-text-muted">测试目标应用的基础地址</div>
         </div>
       </div>
 
-      <div className={styles.section}>
-        <h2 className={styles.sectionTitle}>认证配置</h2>
+      <div className="space-y-3">
+        <h2 className="text-sm font-medium text-text-secondary">认证配置</h2>
         
-        <div className={styles.formGroup}>
-          <div className={styles.radioGroup}>
-            <label className={styles.radioLabel}>
+        <div className="space-y-2">
+          <div className="flex gap-3">
+            <label className="text-sm">
               <input
                 type="radio"
                 name="authType"
@@ -122,7 +121,7 @@ export const ConfigPanel: React.FC = () => {
               />
               无需登录
             </label>
-            <label className={styles.radioLabel}>
+            <label className="text-sm">
               <input
                 type="radio"
                 name="authType"
@@ -139,32 +138,32 @@ export const ConfigPanel: React.FC = () => {
         </div>
 
         {localConfig.auth_config.type === 'login-script' && (
-          <div className={styles.loginScriptArea}>
-            <div className={styles.scriptHeader}>
-              <span className={styles.scriptTitle}>登录脚本录制</span>
+          <div className="space-y-2 rounded-md bg-surface-content p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">登录脚本录制</span>
               <Button variant="secondary" size="sm">开始录制</Button>
             </div>
-            <div className={styles.helpText}>
+            <div className="text-xs text-text-muted">
               点击"开始录制"将在浏览器中打开目标页面，您可以手动执行登录操作，系统将自动记录步骤。
             </div>
             
             {/* Placeholder for recorded steps */}
-            <div className={styles.scriptSteps}>
-              <div className={styles.scriptStep}>
-                <span className={styles.stepType}>navigate</span>
-                <span className={styles.stepDesc}>打开登录页面</span>
+            <div className="space-y-1">
+              <div className="flex gap-2 text-sm">
+                <span className="text-text-muted">navigate</span>
+                <span className="text-text-secondary">打开登录页面</span>
               </div>
-              <div className={styles.scriptStep}>
-                <span className={styles.stepType}>fill</span>
-                <span className={styles.stepDesc}>输入用户名</span>
+              <div className="flex gap-2 text-sm">
+                <span className="text-text-muted">fill</span>
+                <span className="text-text-secondary">输入用户名</span>
               </div>
-              <div className={styles.scriptStep}>
-                <span className={styles.stepType}>fill</span>
-                <span className={styles.stepDesc}>输入密码</span>
+              <div className="flex gap-2 text-sm">
+                <span className="text-text-muted">fill</span>
+                <span className="text-text-secondary">输入密码</span>
               </div>
-              <div className={styles.scriptStep}>
-                <span className={styles.stepType}>click</span>
-                <span className={styles.stepDesc}>点击登录按钮</span>
+              <div className="flex gap-2 text-sm">
+                <span className="text-text-muted">click</span>
+                <span className="text-text-secondary">点击登录按钮</span>
               </div>
             </div>
             
@@ -173,16 +172,16 @@ export const ConfigPanel: React.FC = () => {
         )}
       </div>
 
-      <div className={styles.section}>
-        <h2 className={styles.sectionTitle}>种子页面 (可选)</h2>
-        <div className={styles.helpText} style={{ marginBottom: '8px' }}>
+      <div className="space-y-3">
+        <h2 className="text-sm font-medium text-text-secondary">种子页面 (可选)</h2>
+        <div className="text-xs text-text-muted" style={{ marginBottom: '8px' }}>
           提供一些起始页面URL，帮助AI更好地探索应用。如果不提供，AI将从基础URL开始探索。
         </div>
         
-        <div className={styles.seedUrlList}>
+        <div className="space-y-2">
           {localConfig.seed_urls.map((url, index) => (
-            <div key={index} className={styles.seedUrlItem}>
-              <div className={styles.seedUrlInput}>
+            <div key={index} className="flex items-center gap-2">
+              <div className="flex-1">
                 <Input
                   value={url}
                   onChange={(e) => updateSeedUrl(index, e.target.value)}
@@ -191,7 +190,7 @@ export const ConfigPanel: React.FC = () => {
                 />
               </div>
               <button 
-                className={styles.removeBtn} 
+                className="text-text-muted hover:text-text-primary transition-colors"
                 onClick={() => removeSeedUrl(index)}
                 title="移除"
               >
@@ -205,13 +204,12 @@ export const ConfigPanel: React.FC = () => {
           variant="ghost" 
           size="sm" 
           onClick={addSeedUrl}
-          className={styles.addBtn}
         >
           + 添加种子页面
         </Button>
       </div>
 
-      <div className={styles.actions}>
+      <div className="flex gap-2 justify-end">
         <Button 
           variant="secondary" 
           onClick={handleSave}

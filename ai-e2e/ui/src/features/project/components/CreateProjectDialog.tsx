@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Modal, Input, Button } from '@/shared/components';
 import { useCreateProject } from '../store/projectApi';
-import styles from './CreateProjectDialog.module.css';
 
 interface CreateProjectDialogProps {
   isOpen: boolean;
@@ -30,7 +29,7 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({ isOpen
   };
 
   const footer = (
-    <div className={styles.footer}>
+    <div className="flex justify-end gap-2">
       <Button variant="ghost" onClick={onClose}>取消</Button>
       <Button 
         variant="primary" 
@@ -50,7 +49,7 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({ isOpen
       title="新建项目"
       footer={footer}
     >
-      <form className={styles.form} onSubmit={handleSubmit}>
+      <form className="space-y-4" onSubmit={handleSubmit}>
         <Input
           label="项目名称"
           value={name}

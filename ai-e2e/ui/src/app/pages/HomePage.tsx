@@ -1,8 +1,8 @@
-import { ProjectList } from '../../features/project/components/ProjectList';
+import { ProjectList } from '../../features/project/components/ProjectList.js';
 
 export function HomePage() {
   return (
-    <div style={{ padding: '24px' }}>
+    <div className="p-6">
       <ProjectList />
     </div>
   );
