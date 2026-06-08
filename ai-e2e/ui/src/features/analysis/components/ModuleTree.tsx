@@ -1,7 +1,12 @@
 import React, { useMemo } from 'react';
 import { Tree, TreeNodeData, Button } from '@/shared/components';
 import { AnalysisModule } from '../store/analysisApi';
-import styles from './ModuleTree.module.css';
+import { cn } from '@/lib/utils';
+
+const sourceTagClasses: Record<string, string> = {
+  ai: 'text-xs px-1.5 py-0.5 rounded bg-status-info/20 text-status-info',
+  manual: 'text-xs px-1.5 py-0.5 rounded bg-surface-elevated text-text-muted',
+};
 
 export interface ModuleTreeProps {
   modules: AnalysisModule[];
@@ -21,10 +26,12 @@ export const ModuleTree: React.FC<ModuleTreeProps> = ({
       return mods.map((mod) => ({
         key: mod.id,
         title: (
-          <div className={styles.nodeTitle}>
+          <div className="text-sm font-medium">
             <span>{mod.name}</span>
             {mod.source && (
-              <span className={`${styles.sourceTag} ${mod.source === 'ai' ? styles.sourceTagAi : ''}`}>
+              <span className={cn(
+                sourceTagClasses[mod.source] ?? sourceTagClasses.manual,
+              )}>
                 {mod.source === 'ai' ? 'AI' : '手动'}
               </span>
             )}
@@ -44,14 +51,14 @@ export const ModuleTree: React.FC<ModuleTreeProps> = ({
   };
 
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <div className={styles.title}>模块树</div>
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-between p-3">
+        <div className="text-sm font-medium">模块树</div>
         <Button variant="secondary" size="sm" onClick={onAddL1Module}>
           添加 L1 模块
         </Button>
       </div>
-      <div className={styles.treeContainer}>
+      <div className="flex-1 overflow-auto">
         {treeData.length > 0 ? (
           <Tree
             data={treeData}
@@ -59,7 +66,7 @@ export const ModuleTree: React.FC<ModuleTreeProps> = ({
             onSelect={handleSelect}
           />
         ) : (
-          <div className={styles.emptyState}>
+          <div className="flex items-center justify-center py-8 text-text-muted text-sm">
             暂无模块，请先分析 PRD 或手动添加
           </div>
         )}

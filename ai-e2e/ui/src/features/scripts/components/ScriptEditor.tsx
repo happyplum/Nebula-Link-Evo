@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { CodeEditor, Button } from '@/shared/components';
+import { cn } from '@/lib/utils';
 import { Script, useUpdateScript } from '../store/scriptsApi';
-import styles from './ScriptEditor.module.css';
 
 interface ScriptEditorProps {
   projectId: string;
@@ -65,15 +65,15 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({ projectId, script })
   }, []);
 
   return (
-    <div className={styles.container}>
-      <div className={styles.toolbar}>
-        <div className={styles.status}>
+    <div className="flex h-full flex-col">
+      <div className="flex items-center justify-between border-b border-border-default px-4 py-2">
+        <div className="text-xs">
           {isPending ? (
-            <span className={styles.saving}>保存中...</span>
+            <span className="text-status-warning">保存中...</span>
           ) : isDirty ? (
-            <span className={styles.unsaved}>未保存更改</span>
+            <span className="text-text-muted">未保存更改</span>
           ) : (
-            <span className={styles.saved}>已保存</span>
+            <span className="text-status-success">已保存</span>
           )}
         </div>
         <Button 
@@ -86,12 +86,12 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({ projectId, script })
         </Button>
       </div>
       
-      <div className={styles.editorContainer}>
+      <div className="flex-1 overflow-hidden">
         <CodeEditor
           value={content}
           onChange={handleContentChange}
           language="typescript"
-          className={styles.editor}
+          className="h-full"
         />
       </div>
     </div>

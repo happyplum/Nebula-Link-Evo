@@ -8,7 +8,7 @@ import { ScriptList } from './ScriptList';
 import { ScriptEditor } from './ScriptEditor';
 import { TestDataEditor } from './TestDataEditor';
 import { VersionHistory } from './VersionHistory';
-import styles from './ScriptPanel.module.css';
+import { cn } from '@/lib/utils';
 
 export default function ScriptPanel() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -50,13 +50,13 @@ export default function ScriptPanel() {
   const selectedScript = scripts.find(s => s.id === selectedScriptId) || null;
 
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <div className={styles.titleArea}>
+    <div className="flex h-full flex-col">
+      <div className="flex items-center justify-between border-b border-border-default p-4">
+        <div>
           <h2>脚本生成与编辑</h2>
-          <p className={styles.subtitle}>生成并编辑 Playwright 测试脚本</p>
+          <p className="text-sm text-text-muted">生成并编辑 Playwright 测试脚本</p>
         </div>
-        <div className={styles.actions}>
+        <div className="flex gap-2">
           <Button 
             variant="secondary" 
             onClick={handleGenerate}
@@ -76,23 +76,23 @@ export default function ScriptPanel() {
       </div>
 
       {aiStatus === 'running' && (
-        <Card className={styles.progressCard}>
-          <div className={styles.progressHeader}>
+        <Card className="mb-4 border border-border-default bg-surface-content p-4">
+          <div className="mb-2 flex items-center justify-between">
             <span>AI 正在生成脚本...</span>
             <span>{aiProgress}%</span>
           </div>
-          <div className={styles.progressBar}>
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-elevated">
             <div 
-              className={styles.progressFill} 
+              className="h-full rounded-full bg-status-info" 
               style={{ width: `${aiProgress}%` }} 
             />
           </div>
-          {aiMessage && <div className={styles.progressMessage}>{aiMessage}</div>}
+          {aiMessage && <div className="mt-2 text-sm text-text-secondary">{aiMessage}</div>}
         </Card>
       )}
 
-      <div className={styles.content}>
-        <div className={styles.sidebar}>
+      <div className="flex flex-1 overflow-hidden">
+        <div className="w-64 overflow-auto border-r border-border-default">
           <ScriptList 
             scripts={scripts} 
             selectedId={selectedScriptId} 
@@ -100,31 +100,40 @@ export default function ScriptPanel() {
           />
         </div>
         
-        <div className={styles.main}>
+        <div className="flex flex-1 flex-col">
           {selectedScript ? (
-            <Card className={styles.editorCard} noPadding>
-              <div className={styles.tabs}>
+            <Card className="flex flex-1 flex-col" noPadding>
+              <div className="flex border-b border-border-default">
                 <button 
-                  className={`${styles.tab} ${activeTab === 'editor' ? styles.activeTab : ''}`}
+                  className={cn(
+                    'cursor-pointer px-4 py-2 text-sm',
+                    activeTab === 'editor' && 'border-b-2 border-status-info text-text-primary'
+                  )}
                   onClick={() => setActiveTab('editor')}
                 >
                   代码编辑
                 </button>
                 <button 
-                  className={`${styles.tab} ${activeTab === 'testData' ? styles.activeTab : ''}`}
+                  className={cn(
+                    'cursor-pointer px-4 py-2 text-sm',
+                    activeTab === 'testData' && 'border-b-2 border-status-info text-text-primary'
+                  )}
                   onClick={() => setActiveTab('testData')}
                 >
                   测试数据
                 </button>
                 <button 
-                  className={`${styles.tab} ${activeTab === 'history' ? styles.activeTab : ''}`}
+                  className={cn(
+                    'cursor-pointer px-4 py-2 text-sm',
+                    activeTab === 'history' && 'border-b-2 border-status-info text-text-primary'
+                  )}
                   onClick={() => setActiveTab('history')}
                 >
                   版本历史
                 </button>
               </div>
               
-              <div className={styles.tabContent}>
+              <div className="flex-1 overflow-auto">
                 {activeTab === 'editor' && (
                   <ScriptEditor projectId={projectId!} script={selectedScript} />
                 )}
@@ -137,7 +146,7 @@ export default function ScriptPanel() {
               </div>
             </Card>
           ) : (
-            <div className={styles.emptyState}>
+            <div className="flex h-full items-center justify-center text-text-muted">
               <p>请在左侧选择一个脚本进行编辑</p>
             </div>
           )}

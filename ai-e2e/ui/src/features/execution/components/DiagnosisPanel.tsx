@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { Card, Button, Modal, CodeEditor } from '@/shared/components';
+import { Card, Button, CodeEditor } from '@/shared/components';
 import { ExecutionRun, useApproveFix, useRejectFix, useDiagnosis } from '../store/executionApi';
-import styles from './DiagnosisPanel.module.css';
 
 interface DiagnosisPanelProps {
   projectId: string;
@@ -20,7 +19,7 @@ export const DiagnosisPanel: React.FC<DiagnosisPanelProps> = ({
   if (isLoading) {
     return (
       <Card title="AI 诊断">
-        <div className={styles.emptyState}>正在生成诊断报告...</div>
+        <div className="flex items-center justify-center py-8 text-text-muted text-sm">正在生成诊断报告...</div>
       </Card>
     );
   }
@@ -28,7 +27,7 @@ export const DiagnosisPanel: React.FC<DiagnosisPanelProps> = ({
   if (!diagnosis || !diagnosis.logs || diagnosis.logs.length === 0) {
     return (
       <Card title="AI 诊断">
-        <div className={styles.emptyState}>暂无诊断信息</div>
+        <div className="flex items-center justify-center py-8 text-text-muted text-sm">暂无诊断信息</div>
       </Card>
     );
   }
@@ -38,11 +37,11 @@ export const DiagnosisPanel: React.FC<DiagnosisPanelProps> = ({
 
   return (
     <Card title="AI 诊断报告">
-      <div className={styles.container}>
-        <div className={styles.section}>
-          <h3 className={styles.sectionTitle}>诊断记录</h3>
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-sm font-medium mb-2">诊断记录</h3>
           {diagnosis.logs.map((log, index) => (
-            <div key={log.id} className={styles.analysisBox} style={{ marginBottom: '8px' }}>
+            <div key={log.id} className="bg-surface-content rounded-md p-3 text-sm mb-2">
               <div style={{ fontSize: '0.85em', color: '#888', marginBottom: '4px' }}>
                 #{index + 1} — {log.action_taken || '未知操作'} ({new Date(log.created_at).toLocaleString()})
               </div>
@@ -52,7 +51,7 @@ export const DiagnosisPanel: React.FC<DiagnosisPanelProps> = ({
         </div>
 
         {isActionable && latestLog?.action_taken === 'pending_human_review' && (
-          <div className={styles.actions}>
+          <div className="flex gap-2">
             <Button 
               variant="primary" 
               onClick={() => approveFix(run.id)}

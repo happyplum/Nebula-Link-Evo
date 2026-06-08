@@ -1,80 +1,100 @@
 import { Outlet, NavLink, useParams } from 'react-router-dom';
-import { useProjects, useProject } from '../features/project/store/projectApi';
-import styles from './layout.module.css';
+import { cn } from '@/lib/utils';
+import { useProjects, useProject } from '../features/project/store/projectApi.js';
 
 export function Layout() {
   const { data: projects } = useProjects();
   const { projectId } = useParams<{ projectId: string }>();
   const { data: currentProject } = useProject(projectId || '');
-  
+
   // Get up to 5 most recent projects
-  const recentProjects = projects 
-    ? [...projects].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()).slice(0, 5)
+  const recentProjects = projects
+    ? [...projects]
+        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+        .slice(0, 5)
     : [];
 
   return (
-    <div className={styles.layout}>
-      <div className={styles.mainArea}>
-        <aside className={styles.sidebar}>
-          <div className={styles.sidebarHeader}>
-            <span className={styles.logoIcon}>AI</span>
-            <span className={styles.sidebarTitle}>AI E2E 测试工具</span>
+    <div className="flex h-screen w-screen flex-col overflow-hidden">
+      {/* Main Area: Sidebar + Content */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Sidebar */}
+        <aside className="flex w-[240px] shrink-0 flex-col border-r border-border-default bg-surface-panel">
+          {/* Header */}
+          <div className="flex items-center gap-2 border-b border-border-default px-4 py-3">
+            <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-sm bg-status-info text-xs font-bold text-white">
+              AI
+            </span>
+            <span className="text-sm font-semibold text-text-primary">AI E2E 测试工具</span>
           </div>
-          
-          <nav className={styles.sidebarNav}>
+
+          {/* Navigation */}
+          <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-2 py-3">
             <NavLink
               to="/"
               className={({ isActive }) =>
-                `${styles.navLink} ${isActive ? styles.navLinkActive : ''}`
+                cn(
+                  'rounded-sm px-3 py-1.5 text-[13px] text-text-secondary no-underline transition-colors',
+                  isActive
+                    ? 'bg-surface-elevated text-text-primary'
+                    : 'hover:bg-surface-elevated hover:text-text-primary'
+                )
               }
             >
               首页
             </NavLink>
-            
+
             {recentProjects.length > 0 && (
               <>
-                <div style={{ marginTop: '16px', padding: '0 12px', fontSize: '12px', color: 'var(--color-text-muted)' }}>
-                  最近项目
-                </div>
-                {recentProjects.map(project => (
-                  <NavLink 
+                <div className="mt-3 px-3 text-xs text-text-muted">最近项目</div>
+                {recentProjects.map((project) => (
+                  <NavLink
                     key={project.id}
-                    to={`/project/${project.id}`} 
-                    className={({ isActive }) => 
-                      `${styles.navLink} ${isActive ? styles.navLinkActive : ''}`
+                    to={`/project/${project.id}`}
+                    className={({ isActive }) =>
+                      cn(
+                        'truncate rounded-sm px-3 py-1.5 text-[13px] no-underline transition-colors',
+                        isActive
+                          ? 'bg-surface-elevated border-l-2 border-l-status-info text-text-primary'
+                          : 'text-text-secondary hover:bg-surface-elevated hover:text-text-primary'
+                      )
                     }
                     title={project.name}
                   >
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {project.name}
-                    </span>
+                    {project.name}
                   </NavLink>
                 ))}
               </>
             )}
           </nav>
 
-          <div className={styles.sidebarFooter}>
-            <a href="#/settings" className={styles.navLink}>
+          {/* Footer */}
+          <div className="border-t border-border-default px-3 py-2">
+            <a
+              href="#/settings"
+              className="rounded-sm px-2 py-1.5 text-[13px] text-text-secondary no-underline hover:bg-surface-elevated hover:text-text-primary"
+            >
               设置
             </a>
           </div>
         </aside>
 
-        <main className={styles.content}>
+        {/* Main Content */}
+        <main className="flex flex-1 flex-col overflow-y-auto bg-surface-content">
           <Outlet />
         </main>
       </div>
 
-      <footer className={styles.statusBar}>
-        <div className={styles.statusLeft}>
+      {/* Status Bar */}
+      <footer className="flex h-[28px] shrink-0 items-center justify-between border-t border-border-default bg-surface-panel px-4 text-xs text-text-muted">
+        <div className="flex items-center gap-2">
           <span>当前项目: {currentProject?.name || '未选择'}</span>
-          <div className={styles.statusBadge}>
-            <div className={styles.statusDot}></div>
+          <div className="flex items-center gap-1">
+            <div className="h-2 w-2 rounded-full bg-status-success" />
             <span>就绪</span>
           </div>
         </div>
-        <div className={styles.statusRight}>
+        <div className="flex items-center gap-2">
           <span>AI Provider: Connected</span>
         </div>
       </footer>

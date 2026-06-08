@@ -1,7 +1,6 @@
 import React from 'react';
-import { ProjectFailureDistributionItem } from '@/types/report';
-import { Card } from '@/shared/components';
-import styles from './ReportPanel.module.css';
+import { ProjectFailureDistributionItem } from '@/types/report.js';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card.js';
 
 interface FailureDistributionProps {
   distribution: ProjectFailureDistributionItem[];
@@ -19,8 +18,13 @@ const typeLabels: Record<string, string> = {
 export const FailureDistribution: React.FC<FailureDistributionProps> = ({ distribution }) => {
   if (!distribution || distribution.length === 0) {
     return (
-      <Card title="失败类型分布">
-        <div className={styles.emptyState}>暂无失败数据</div>
+      <Card>
+        <CardHeader>
+          <CardTitle>失败类型分布</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-center py-8 text-text-muted">暂无失败数据</div>
+        </CardContent>
       </Card>
     );
   }
@@ -28,26 +32,31 @@ export const FailureDistribution: React.FC<FailureDistributionProps> = ({ distri
   const total = distribution.reduce((sum, item) => sum + item.count, 0);
 
   return (
-    <Card title="失败类型分布">
-      <div className={styles.distributionList}>
-        {distribution.map((item) => {
-          const percentage = total > 0 ? Math.round((item.count / total) * 100) : 0;
-          return (
-            <div key={item.type} className={styles.distributionItem}>
-              <div className={styles.distributionHeader}>
-                <span className={styles.distributionLabel}>{typeLabels[item.type] || item.type}</span>
-                <span className={styles.distributionCount}>{item.count} 次 ({percentage}%)</span>
+    <Card>
+      <CardHeader>
+        <CardTitle>失败类型分布</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-3">
+          {distribution.map((item) => {
+            const percentage = total > 0 ? Math.round((item.count / total) * 100) : 0;
+            return (
+              <div key={item.type}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm">{typeLabels[item.type] ?? item.type}</span>
+                  <span className="text-sm text-text-muted">{item.count} 次 ({percentage}%)</span>
+                </div>
+                <div className="w-full h-1.5 bg-surface-elevated rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-status-error rounded-full"
+                    style={{ width: `${percentage}%` }}
+                  />
+                </div>
               </div>
-              <div className={styles.progressBarContainer}>
-                <div 
-                  className={styles.progressBar} 
-                  style={{ width: `${percentage}%` }}
-                />
-              </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      </CardContent>
     </Card>
   );
 };

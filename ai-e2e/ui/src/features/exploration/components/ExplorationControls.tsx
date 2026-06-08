@@ -1,6 +1,5 @@
 import React from 'react';
 import { Button } from '@/shared/components';
-import styles from './ExplorationControls.module.css';
 
 interface ExplorationControlsProps {
   isExploring: boolean;
@@ -22,10 +21,10 @@ export const ExplorationControls: React.FC<ExplorationControlsProps> = ({
   onStop,
 }) => {
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <div className={styles.title}>Web 探索</div>
-        <div className={styles.actions}>
+    <div className="p-4 space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="text-sm font-medium">Web 探索</div>
+        <div className="flex gap-2">
           {!isExploring ? (
             <Button variant="primary" onClick={onStart}>
               开始探索
@@ -39,28 +38,28 @@ export const ExplorationControls: React.FC<ExplorationControlsProps> = ({
       </div>
 
       {isExploring && (
-        <div className={styles.progressContainer}>
-          <div className={styles.progressHeader}>
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-xs">
             <span>{message || '探索中...'}</span>
             <span>{Math.round(progress)}%</span>
           </div>
-          <div className={styles.progressBar}>
+          <div className="w-full h-1.5 bg-surface-elevated rounded-full overflow-hidden">
             <div 
-              className={styles.progressFill} 
+              className="h-full bg-status-info rounded-full" 
               style={{ width: `${progress}%` }} 
             />
           </div>
         </div>
       )}
 
-      <div className={styles.stats}>
-        <div className={styles.statItem}>
+      <div className="flex gap-4 text-xs text-text-muted">
+        <div>
           <span>已访问页面:</span>
-          <span className={styles.statValue}>{pagesVisited}</span>
+          <span className="font-medium text-text-primary">{pagesVisited}</span>
         </div>
-        <div className={styles.statItem}>
+        <div>
           <span>发现 URL:</span>
-          <span className={styles.statValue}>{urlsFound}</span>
+          <span className="font-medium text-text-primary">{urlsFound}</span>
         </div>
       </div>
     </div>

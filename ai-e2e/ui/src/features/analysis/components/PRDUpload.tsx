@@ -1,6 +1,5 @@
 import React, { useState, useRef } from 'react';
 import { Button, Card } from '@/shared/components';
-import styles from './PRDUpload.module.css';
 
 export interface PRDUploadProps {
   content: string;
@@ -38,10 +37,10 @@ export const PRDUpload: React.FC<PRDUploadProps> = ({
   };
 
   return (
-    <Card className={styles.container}>
-      <div className={styles.header}>
-        <div className={styles.title}>PRD 内容</div>
-        <div className={styles.actions}>
+    <Card className="flex flex-col gap-4 flex-1">
+      <div className="flex items-center justify-between">
+        <div className="text-base font-medium">PRD 内容</div>
+        <div className="flex gap-2">
           <Button 
             variant="ghost" 
             size="sm" 
@@ -49,7 +48,7 @@ export const PRDUpload: React.FC<PRDUploadProps> = ({
           >
             {isPreview ? '编辑' : '预览'}
           </Button>
-          <div className={styles.uploadButton}>
+          <div className="relative">
             <Button variant="secondary" size="sm">
               上传文件
             </Button>
@@ -57,7 +56,7 @@ export const PRDUpload: React.FC<PRDUploadProps> = ({
               ref={fileInputRef}
               type="file"
               accept=".txt,.md"
-              className={styles.fileInput}
+              className="absolute inset-0 opacity-0 cursor-pointer"
               onChange={handleFileChange}
               title="上传 .txt 或 .md 文件"
             />
@@ -65,14 +64,14 @@ export const PRDUpload: React.FC<PRDUploadProps> = ({
         </div>
       </div>
 
-      <div className={styles.textareaContainer}>
+      <div>
         {isPreview ? (
-          <div className={styles.previewContainer}>
+          <div className="w-full min-h-[120px] bg-surface-content border border-border-default rounded-md p-3 whitespace-pre-wrap text-sm text-text-primary">
             {content || '暂无内容'}
           </div>
         ) : (
           <textarea
-            className={styles.textarea}
+            className="w-full min-h-[120px] bg-surface-content border border-border-default rounded-md p-3 text-sm text-text-primary resize-y"
             value={content}
             onChange={(e) => onChange(e.target.value)}
             placeholder="在此粘贴 PRD 内容，或点击上方按钮上传文件..."
@@ -81,8 +80,8 @@ export const PRDUpload: React.FC<PRDUploadProps> = ({
         )}
       </div>
 
-      <div className={styles.footer}>
-        <div className={styles.charCount}>
+      <div className="flex gap-2 justify-end">
+        <div className="text-xs text-text-muted text-right">
           {content.length} 字符
         </div>
         <Button 

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button, Input, Modal } from '@/shared/components';
 import { TestScenario, UpdateScenarioRequest } from '../../../types/scenario.js';
-import styles from './ScenarioPanel.module.css';
 
 export interface ScenarioEditorProps {
   isOpen: boolean;
@@ -71,7 +70,7 @@ export const ScenarioEditor: React.FC<ScenarioEditorProps> = ({
       onClose={onClose}
       title="编辑测试场景"
     >
-      <div className={styles.modalForm}>
+      <div className="space-y-4">
         <Input
           label="场景名称"
           value={name}
@@ -86,15 +85,15 @@ export const ScenarioEditor: React.FC<ScenarioEditorProps> = ({
           fullWidth
         />
         
-        <div className={styles.arrayField}>
-          <div className={styles.arrayHeader}>
-            <span className={styles.arrayLabel}>前置条件</span>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium">前置条件</span>
             <Button variant="ghost" size="sm" onClick={() => handleArrayAdd(setPreconditions)}>
               + 添加
             </Button>
           </div>
           {preconditions.map((p, i) => (
-            <div key={i} className={styles.arrayItem}>
+            <div key={i} className="flex gap-2 items-center">
               <Input
                 value={p}
                 onChange={(e) => handleArrayChange(setPreconditions, i, e.target.value)}
@@ -107,15 +106,15 @@ export const ScenarioEditor: React.FC<ScenarioEditorProps> = ({
           ))}
         </div>
 
-        <div className={styles.arrayField}>
-          <div className={styles.arrayHeader}>
-            <span className={styles.arrayLabel}>预期结果</span>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium">预期结果</span>
             <Button variant="ghost" size="sm" onClick={() => handleArrayAdd(setExpectedResults)}>
               + 添加
             </Button>
           </div>
           {expectedResults.map((r, i) => (
-            <div key={i} className={styles.arrayItem}>
+            <div key={i} className="flex gap-2 items-center">
               <Input
                 value={r}
                 onChange={(e) => handleArrayChange(setExpectedResults, i, e.target.value)}
@@ -128,7 +127,7 @@ export const ScenarioEditor: React.FC<ScenarioEditorProps> = ({
           ))}
         </div>
       </div>
-      <div className={styles.modalFooter}>
+      <div className="flex gap-2 justify-end">
         <Button variant="ghost" onClick={onClose} disabled={isSaving}>
           取消
         </Button>
