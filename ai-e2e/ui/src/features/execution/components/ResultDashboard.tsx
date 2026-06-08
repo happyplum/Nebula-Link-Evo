@@ -85,6 +85,7 @@ export const ResultDashboard: React.FC<ResultDashboardProps> = ({
             size="sm" 
             className="mr-2"
             isLoading={runningScriptId === record.script_id}
+            disabled={!!runningScriptId && runningScriptId !== record.script_id}
             onClick={(e) => {
               e.stopPropagation();
               onRunScript(record.script_id);

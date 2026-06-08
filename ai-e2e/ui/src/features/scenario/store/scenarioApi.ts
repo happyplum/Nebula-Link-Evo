@@ -3,12 +3,6 @@ import { TestScenario, UpdateScenarioRequest } from '../../../types/scenario.js'
 
 // --- API Functions ---
 
-export const fetchScenario = async (projectId: string, scenarioId: string): Promise<TestScenario> => {
-  const response = await fetch(`/api/projects/${projectId}/scenarios/${scenarioId}`);
-  if (!response.ok) throw new Error('Failed to fetch scenario');
-  return response.json();
-};
-
 export const updateScenario = async (projectId: string, scenarioId: string, data: UpdateScenarioRequest): Promise<TestScenario> => {
   const response = await fetch(`/api/projects/${projectId}/scenarios/${scenarioId}`, {
     method: 'PUT',
@@ -17,13 +11,6 @@ export const updateScenario = async (projectId: string, scenarioId: string, data
   });
   if (!response.ok) throw new Error('Failed to update scenario');
   return response.json();
-};
-
-export const fetchModuleScenarios = async (projectId: string, moduleId: string): Promise<TestScenario[]> => {
-  const response = await fetch(`/api/projects/${projectId}/modules/${moduleId}/scenarios`);
-  if (!response.ok) throw new Error('Failed to fetch module scenarios');
-  const data = await response.json();
-  return data.scenarios || [];
 };
 
 export const generateAllScenarios = async (projectId: string): Promise<void> => {
@@ -46,22 +33,6 @@ export const scenarioKeys = {
   all: (projectId: string) => ['scenarios', projectId] as const,
   module: (projectId: string, moduleId: string) => [...scenarioKeys.all(projectId), 'module', moduleId] as const,
   detail: (projectId: string, scenarioId: string) => [...scenarioKeys.all(projectId), 'detail', scenarioId] as const,
-};
-
-export const useScenario = (projectId: string, scenarioId: string) => {
-  return useQuery({
-    queryKey: scenarioKeys.detail(projectId, scenarioId),
-    queryFn: () => fetchScenario(projectId, scenarioId),
-    enabled: !!projectId && !!scenarioId,
-  });
-};
-
-export const useModuleScenarios = (projectId: string, moduleId: string) => {
-  return useQuery({
-    queryKey: scenarioKeys.module(projectId, moduleId),
-    queryFn: () => fetchModuleScenarios(projectId, moduleId),
-    enabled: !!projectId && !!moduleId,
-  });
 };
 
 export const useUpdateScenario = (projectId: string) => {

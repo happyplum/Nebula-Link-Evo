@@ -23,14 +23,7 @@ export const PagePreview: React.FC<PagePreviewProps> = ({ url }) => {
         <div className="text-xs text-text-muted truncate">{url.url}</div>
       </div>
       <div className="flex-1 overflow-auto bg-surface-base border border-border-default rounded-md">
-        {url.screenshot_path ? (
-          <img 
-            src={`/api/files/${url.screenshot_path}`} 
-            alt={`Screenshot of ${url.url}`}
-          />
-        ) : (
-          <div className="flex items-center justify-center h-full text-text-muted text-sm">暂无截图</div>
-        )}
+        <div className="flex items-center justify-center h-full text-text-muted text-sm">暂无截图</div>
       </div>
     </div>
   );

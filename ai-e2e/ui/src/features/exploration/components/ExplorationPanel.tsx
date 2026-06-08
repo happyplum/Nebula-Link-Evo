@@ -34,9 +34,9 @@ export const ExplorationPanel: React.FC = () => {
   const [unboundModuleDetails, setUnboundModuleDetails] = useState<string[]>([]);
 
   // API Hooks
-  const { data: statusData, refetch: refetchStatus } = useExplorationStatus(projectId || '');
-  const { data: urls = [], refetch: refetchUrls } = useUrls(projectId || '');
-  const { data: bindings = [] } = useBindings(projectId || '');
+  const { data: statusData, refetch: refetchStatus, isLoading: isStatusLoading, error: statusError } = useExplorationStatus(projectId || '');
+  const { data: urls = [], isLoading: isUrlsLoading, error: urlsError, refetch: refetchUrls } = useUrls(projectId || '');
+  const { data: bindings = [], isLoading: isBindingsLoading, error: bindingsError } = useBindings(projectId || '');
 
   const startExploration = useStartExploration(projectId || '');
   const stopExploration = useStopExploration(projectId || '');
@@ -78,6 +78,16 @@ export const ExplorationPanel: React.FC = () => {
     },
     enabled: !!projectId,
   });
+
+  const isDataLoading = isStatusLoading || isUrlsLoading || isBindingsLoading;
+  const dataError = statusError || urlsError || bindingsError;
+
+  if (isDataLoading) {
+    return <div className="flex items-center justify-center p-8"><span className="text-text-muted">加载中...</span></div>;
+  }
+  if (dataError) {
+    return <div className="p-4 text-status-error">加载失败</div>;
+  }
 
   const selectedUrl = useMemo(() => {
     return urls.find(u => u.id === selectedUrlId) || null;
@@ -171,7 +181,7 @@ export const ExplorationPanel: React.FC = () => {
         )}
         <BindingEditor
           bindings={bindings as ModuleBinding[]}
-          onProposeBindings={() => proposeBindings.mutate()}
+          onProposeBindings={(data) => proposeBindings.mutate(data)}
           onConfirmBinding={(id) => confirmBinding.mutate(id)}
           onRejectBinding={(id) => rejectBinding.mutate(id)}
           isProposing={proposeBindings.isPending}

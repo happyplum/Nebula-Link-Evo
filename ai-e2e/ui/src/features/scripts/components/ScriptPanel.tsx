@@ -23,14 +23,21 @@ export default function ScriptPanel() {
   const aiProgress = useAIStatusStore((state) => state.progress);
   const aiMessage = useAIStatusStore((state) => state.message);
 
+  const setAIStatus = useAIStatusStore((state) => state.setStatus);
+  const setAIProgress = useAIStatusStore((state) => state.setProgress);
+
   // Listen to SSE events for script generation
   useSSE({
     projectId: projectId || '',
     handlers: {
-      'script.generation_progress': () => {
+      'script.generation_progress': (data) => {
+        setAIStatus('running');
+        if (data.progress != null) setAIProgress(data.progress);
         refetchScripts();
       },
       'script.generated': () => {
+        setAIStatus('completed');
+        setAIProgress(100);
         refetchScripts();
       },
     },

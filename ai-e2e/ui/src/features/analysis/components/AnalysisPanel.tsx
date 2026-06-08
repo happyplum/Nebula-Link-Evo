@@ -27,8 +27,8 @@ export const AnalysisPanel: React.FC = () => {
   const [addL1Form, setAddL1Form] = useState({ name: '', description: '' });
 
   // API Hooks
-  const { data: modules = [], refetch: refetchModules } = useModules(projectId || '');
-  const { data: documents = [] } = useDocuments(projectId || '');
+  const { data: modules = [], isLoading: isModulesLoading, error: modulesError, refetch: refetchModules } = useModules(projectId || '');
+  const { data: documents = [], isLoading: isDocumentsLoading, error: documentsError } = useDocuments(projectId || '');
   const uploadPRD = useUploadPRD(projectId || '');
   const analyzePRD = useAnalyzePRD(projectId || '');
   const createModule = useCreateModule(projectId || '');
@@ -77,6 +77,16 @@ export const AnalysisPanel: React.FC = () => {
     
     return null;
   }, [modules, selectedModuleId]);
+
+  const isDataLoading = isModulesLoading || isDocumentsLoading;
+  const dataError = modulesError || documentsError;
+
+  if (isDataLoading) {
+    return <div className="flex items-center justify-center p-8"><span className="text-text-muted">加载中...</span></div>;
+  }
+  if (dataError) {
+    return <div className="p-4 text-status-error">加载失败</div>;
+  }
 
   const handleAnalyze = async () => {
     if (!projectId || !prdContent.trim()) return;

@@ -8,6 +8,7 @@ import { ScenarioPanel } from '../../features/scenario/components/ScenarioPanel.
 import ScriptPanel from '../../features/scripts/components/ScriptPanel.js';
 import ExecutionPanel from '../../features/execution/components/ExecutionPanel.js';
 import { ReportPanel } from '../../features/report/components/ReportPanel.js';
+import { useProject } from '../../features/project/store/projectApi.js';
 
 const TABS = [
   { value: 'config', label: '配置' },
@@ -23,6 +24,7 @@ type TabValue = (typeof TABS)[number]['value'];
 
 export function ProjectPage() {
   const { projectId } = useParams<{ projectId: string }>();
+  const { data: project } = useProject(projectId || '');
   const [activeTab, setActiveTab] = useState<TabValue>('config');
 
   return (
@@ -31,7 +33,7 @@ export function ProjectPage() {
         {/* Tab Bar */}
         <div className="border-b border-border-default bg-surface-content px-6 pt-4">
           <h1 className="mb-3 text-lg font-semibold text-text-primary">
-            项目: {projectId}
+            项目: {project?.name || projectId}
           </h1>
           <TabsList className="h-9 w-full justify-start rounded-none border-b-0 bg-transparent p-0">
             {TABS.map((tab) => (

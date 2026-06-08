@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Modal, Input, Button } from '@/shared/components';
 import { useCreateProject } from '../store/projectApi';
 
@@ -11,6 +12,7 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({ isOpen
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const createMutation = useCreateProject();
+  const navigate = useNavigate();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,10 +21,13 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({ isOpen
     createMutation.mutate(
       { name, description },
       {
-        onSuccess: () => {
+        onSuccess: (data) => {
           setName('');
           setDescription('');
           onClose();
+          if (data?.id) {
+            navigate(`/project/${data.id}`);
+          }
         },
       }
     );

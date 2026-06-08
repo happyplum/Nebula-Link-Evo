@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { projectKeys } from '@/features/project/store/projectApi.js';
 
 export interface TestScenario {
   id: string;
@@ -39,10 +40,6 @@ export interface CreateModuleRequest {
 export interface UpdateModuleRequest {
   name: string;
   description?: string;
-}
-
-export interface ReorderModulesRequest {
-  module_ids: string[];
 }
 
 export interface TransitionStateRequest {
@@ -106,7 +103,7 @@ export const fetchModules = async (projectId: string): Promise<AnalysisModule[]>
   }));
 };
 
-export const createModule = async (projectId: string, data: CreateModuleRequest): Promise<AnalysisModule> => {
+export const createModule = async (projectId: string, data: CreateModuleRequest): Promise<{ id: string }> => {
   const payload = {
     ...data,
     level: data.parent_id ? 'functional' : 'business',
@@ -121,7 +118,7 @@ export const createModule = async (projectId: string, data: CreateModuleRequest)
   return resData.data || resData;
 };
 
-export const updateModule = async (projectId: string, moduleId: string, data: UpdateModuleRequest): Promise<AnalysisModule> => {
+export const updateModule = async (projectId: string, moduleId: string, data: UpdateModuleRequest): Promise<{ success: boolean }> => {
   const response = await fetch(`/api/projects/${projectId}/analysis/modules/${moduleId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -137,15 +134,6 @@ export const deleteModule = async (projectId: string, moduleId: string): Promise
     method: 'DELETE',
   });
   if (!response.ok) throw new Error('Failed to delete module');
-};
-
-export const reorderModules = async (projectId: string, data: ReorderModulesRequest): Promise<void> => {
-  const response = await fetch(`/api/projects/${projectId}/analysis/modules/reorder`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
-  if (!response.ok) throw new Error('Failed to reorder modules');
 };
 
 export const decomposeAll = async (projectId: string): Promise<void> => {
@@ -195,14 +183,22 @@ export const useModules = (projectId: string) => {
 };
 
 export const useUploadPRD = (projectId: string) => {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: UploadPRDRequest) => uploadPRD(projectId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: analysisKeys.documents(projectId) });
+    },
   });
 };
 
 export const useAnalyzePRD = (projectId: string) => {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ content, format }: { content: string; format?: string }) => analyzePRD(projectId, content, format),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: analysisKeys.modules(projectId) });
+    },
   });
 };
 
@@ -236,16 +232,6 @@ export const useDeleteModule = (projectId: string) => {
   });
 };
 
-export const useReorderModules = (projectId: string) => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (data: ReorderModulesRequest) => reorderModules(projectId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: analysisKeys.modules(projectId) });
-    },
-  });
-};
-
 export const useDecomposeAll = (projectId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
@@ -257,7 +243,12 @@ export const useDecomposeAll = (projectId: string) => {
 };
 
 export const useTransitionState = (projectId: string) => {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: TransitionStateRequest) => transitionState(projectId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) });
+      queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
+    },
   });
 };

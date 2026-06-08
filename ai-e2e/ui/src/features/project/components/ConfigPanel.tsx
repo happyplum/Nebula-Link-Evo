@@ -12,7 +12,7 @@ import {
 } from '../store/configApi';
 import { useProject } from '../store/projectApi';
 
-const STEP_TYPES: LoginStep['type'][] = ['navigate', 'fill', 'click', 'wait'];
+const STEP_TYPES: LoginStep['type'][] = ['navigate', 'fill', 'click', 'wait', 'screenshot'];
 
 const STEP_TYPE_LABELS: Record<LoginStep['type'], string> = {
   navigate: '导航',
@@ -38,6 +38,7 @@ export const ConfigPanel: React.FC = () => {
     auth_config: {},
     seed_urls: [''],
   });
+  const [urlErrors, setUrlErrors] = useState<Record<number, string>>({});
 
   useEffect(() => {
     if (config) {
@@ -89,6 +90,13 @@ export const ConfigPanel: React.FC = () => {
   const updateSeedUrl = (index: number, value: string) => {
     const newUrls = [...localConfig.seed_urls];
     newUrls[index] = value;
+    const newErrors = { ...urlErrors };
+    if (value.trim() && !/^(\/|https?:\/\/)/.test(value.trim())) {
+      newErrors[index] = 'URL 必须以 / 开头或为 http(s):// 格式';
+    } else {
+      delete newErrors[index];
+    }
+    setUrlErrors(newErrors);
     setLocalConfig({
       ...localConfig,
       seed_urls: newUrls
@@ -333,22 +341,27 @@ export const ConfigPanel: React.FC = () => {
         
         <div className="space-y-2">
           {localConfig.seed_urls.map((url, index) => (
-            <div key={index} className="flex items-center gap-2">
-              <div className="flex-1">
-                <Input
-                  value={url}
-                  onChange={(e) => updateSeedUrl(index, e.target.value)}
-                  placeholder="/dashboard 或 https://example.com/dashboard"
-                  fullWidth
-                />
+            <div key={index} className="flex flex-col gap-1">
+              <div className="flex items-center gap-2">
+                <div className="flex-1">
+                  <Input
+                    value={url}
+                    onChange={(e) => updateSeedUrl(index, e.target.value)}
+                    placeholder="/dashboard 或 https://example.com/dashboard"
+                    fullWidth
+                  />
+                </div>
+                <button 
+                  className="text-text-muted hover:text-text-primary transition-colors"
+                  onClick={() => removeSeedUrl(index)}
+                  title="移除"
+                >
+                  ✕
+                </button>
               </div>
-              <button 
-                className="text-text-muted hover:text-text-primary transition-colors"
-                onClick={() => removeSeedUrl(index)}
-                title="移除"
-              >
-                ✕
-              </button>
+              {urlErrors[index] && (
+                <span className="text-xs text-status-error">{urlErrors[index]}</span>
+              )}
             </div>
           ))}
         </div>

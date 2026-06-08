@@ -1,11 +1,28 @@
 import { Outlet, NavLink, useParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
-import { useProjects, useProject } from '../features/project/store/projectApi.js';
+import { useProjects, useProject, projectKeys } from '../features/project/store/projectApi.js';
+import { useSSE } from '@/hooks/use-sse.js';
 
 export function Layout() {
   const { data: projects } = useProjects();
   const { projectId } = useParams<{ projectId: string }>();
   const { data: currentProject } = useProject(projectId || '');
+  const queryClient = useQueryClient();
+
+  // Listen for project status changes to refresh project data
+  useSSE({
+    projectId: projectId || '',
+    handlers: {
+      'project.status_changed': () => {
+        if (projectId) {
+          queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) });
+        }
+        queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
+      },
+    },
+    enabled: !!projectId,
+  });
 
   // Get up to 5 most recent projects
   const recentProjects = projects
@@ -70,12 +87,6 @@ export function Layout() {
 
           {/* Footer */}
           <div className="border-t border-border-default px-3 py-2">
-            <a
-              href="#/settings"
-              className="rounded-sm px-2 py-1.5 text-[13px] text-text-secondary no-underline hover:bg-surface-elevated hover:text-text-primary"
-            >
-              设置
-            </a>
           </div>
         </aside>
 
@@ -86,16 +97,13 @@ export function Layout() {
       </div>
 
       {/* Status Bar */}
-      <footer className="flex h-[28px] shrink-0 items-center justify-between border-t border-border-default bg-surface-panel px-4 text-xs text-text-muted">
+      <footer className="flex h-[28px] shrink-0 items-center border-t border-border-default bg-surface-panel px-4 text-xs text-text-muted">
         <div className="flex items-center gap-2">
           <span>当前项目: {currentProject?.name || '未选择'}</span>
           <div className="flex items-center gap-1">
             <div className="h-2 w-2 rounded-full bg-status-success" />
-            <span>就绪</span>
+            <span>{currentProject?.status || '未选择项目'}</span>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <span>AI Provider: Connected</span>
         </div>
       </footer>
     </div>

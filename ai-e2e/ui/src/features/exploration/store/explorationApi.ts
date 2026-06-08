@@ -1,11 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { projectKeys } from '@/features/project/store/projectApi.js';
 
 export interface DiscoveredURL {
   id: string;
   url: string;
   title?: string;
-  status: 'pending' | 'explored' | 'failed';
-  screenshot_path?: string;
   created_at: string;
 }
 
@@ -92,9 +91,16 @@ export const addUrl = async (projectId: string, data: AddUrlRequest): Promise<Di
   return resData.data || resData;
 };
 
-export const proposeBindings = async (projectId: string): Promise<void> => {
+export interface ProposeBindingRequest {
+  url_id: string;
+  functional_module_id: string;
+}
+
+export const proposeBindings = async (projectId: string, data: ProposeBindingRequest): Promise<void> => {
   const response = await fetch(`/api/projects/${projectId}/exploration/bind`, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
   });
   if (!response.ok) throw new Error('Failed to propose bindings');
 };
@@ -207,7 +213,7 @@ export const useAddUrl = (projectId: string) => {
 export const useProposeBindings = (projectId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => proposeBindings(projectId),
+    mutationFn: (data: ProposeBindingRequest) => proposeBindings(projectId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: explorationKeys.bindings(projectId) });
     },
@@ -235,8 +241,13 @@ export const useRejectBinding = (projectId: string) => {
 };
 
 export const useTransitionState = (projectId: string) => {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: TransitionStateRequest) => transitionState(projectId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) });
+      queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
+    },
   });
 };
 
