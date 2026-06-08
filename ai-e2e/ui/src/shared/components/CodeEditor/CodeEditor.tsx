@@ -33,7 +33,7 @@ export const CodeEditor = forwardRef<HTMLTextAreaElement, CodeEditorProps>(
             ref={ref}
             id={editorId}
             className={cn(
-              'min-h-[200px] w-full rounded-md border bg-surface-1 px-3 py-2 font-mono text-sm leading-relaxed text-text-primary shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50',
+              'min-h-[200px] w-full rounded-md border bg-surface-content px-3 py-2 font-mono text-sm leading-relaxed text-text-primary shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50',
               error
                 ? 'border-destructive focus-visible:ring-destructive'
                 : 'border-input focus-visible:ring-ring'

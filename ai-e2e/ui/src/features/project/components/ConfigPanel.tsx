@@ -18,8 +18,9 @@ export const ConfigPanel: React.FC = () => {
   const transitionMutation = useTransitionProjectState();
 
   const [localConfig, setLocalConfig] = useState<ProjectConfig>({
-    target_base_url: '',
-    auth_config: { type: 'none' },
+    base_url: '',
+    auth_type: 'none',
+    auth_config: {},
     seed_urls: [''],
   });
 
@@ -27,8 +28,9 @@ export const ConfigPanel: React.FC = () => {
     if (config) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setLocalConfig({
-        target_base_url: config.target_base_url || '',
-        auth_config: config.auth_config || { type: 'none' },
+        base_url: config.base_url || '',
+        auth_type: config.auth_type || 'none',
+        auth_config: config.auth_config || {},
         seed_urls: config.seed_urls && config.seed_urls.length > 0 ? config.seed_urls : [''],
       });
     }
@@ -38,21 +40,20 @@ export const ConfigPanel: React.FC = () => {
     return <div className="flex items-center justify-center py-8">加载配置中...</div>;
   }
 
-  const handleSave = () => {
-    // Filter out empty seed URLs
+  const handleSave = async () => {
     const cleanedConfig = {
       ...localConfig,
       seed_urls: localConfig.seed_urls.filter(url => url.trim() !== '')
     };
     
-    updateMutation.mutate({ 
+    await updateMutation.mutateAsync({ 
       projectId, 
       config: cleanedConfig 
     });
   };
 
-  const handleStartAnalysis = () => {
-    handleSave();
+  const handleStartAnalysis = async () => {
+    await handleSave();
     transitionMutation.mutate({ 
       projectId, 
       targetStatus: 'analyzing' 
@@ -94,8 +95,8 @@ export const ConfigPanel: React.FC = () => {
         <div className="space-y-2">
           <Input
             label="目标基础 URL"
-            value={localConfig.target_base_url}
-            onChange={(e) => setLocalConfig({...localConfig, target_base_url: e.target.value})}
+            value={localConfig.base_url}
+            onChange={(e) => setLocalConfig({...localConfig, base_url: e.target.value})}
             placeholder="https://example.com"
             fullWidth
           />
@@ -113,10 +114,11 @@ export const ConfigPanel: React.FC = () => {
                 type="radio"
                 name="authType"
                 value="none"
-                checked={localConfig.auth_config.type === 'none'}
+                checked={localConfig.auth_type === 'none'}
                 onChange={() => setLocalConfig({
                   ...localConfig, 
-                  auth_config: { type: 'none' }
+                  auth_type: 'none',
+                  auth_config: {},
                 })}
               />
               无需登录
@@ -126,10 +128,10 @@ export const ConfigPanel: React.FC = () => {
                 type="radio"
                 name="authType"
                 value="login-script"
-                checked={localConfig.auth_config.type === 'login-script'}
+                checked={localConfig.auth_type === 'login-script'}
                 onChange={() => setLocalConfig({
                   ...localConfig, 
-                  auth_config: { type: 'login-script' }
+                  auth_type: 'login-script',
                 })}
               />
               使用登录脚本
@@ -137,7 +139,7 @@ export const ConfigPanel: React.FC = () => {
           </div>
         </div>
 
-        {localConfig.auth_config.type === 'login-script' && (
+        {localConfig.auth_type === 'login-script' && (
           <div className="space-y-2 rounded-md bg-surface-content p-3">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">登录脚本录制</span>
@@ -223,7 +225,7 @@ export const ConfigPanel: React.FC = () => {
             variant="primary" 
             onClick={handleStartAnalysis}
             isLoading={transitionMutation.isPending}
-            disabled={!localConfig.target_base_url}
+            disabled={!localConfig.base_url}
           >
             开始分析
           </Button>

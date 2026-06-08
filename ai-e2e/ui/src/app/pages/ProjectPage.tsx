@@ -67,7 +67,7 @@ export function ProjectPage() {
             <ExecutionPanel />
           </TabsContent>
           <TabsContent value="report" className="mt-0">
-            <ReportPanel />
+            {projectId && <ReportPanel projectId={projectId} />}
           </TabsContent>
         </div>
       </Tabs>
