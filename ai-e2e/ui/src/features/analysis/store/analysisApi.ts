@@ -1,12 +1,28 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
+export interface TestScenario {
+  id: string;
+  functional_module_id: string;
+  name: string;
+  description: string;
+  preconditions?: string[];
+  expected_results?: string[];
+  source?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FunctionalModule extends AnalysisModule {
+  test_scenarios?: TestScenario[];
+}
+
 export interface AnalysisModule {
   id: string;
   name: string;
   description?: string;
   parent_id?: string;
   source?: 'ai' | 'manual';
-  children?: AnalysisModule[];
+  children?: FunctionalModule[];
 }
 
 export interface UploadPRDRequest {
@@ -85,6 +101,7 @@ export const fetchModules = async (projectId: string): Promise<AnalysisModule[]>
       description: fm.description || undefined,
       parent_id: bm.id,
       source: fm.source === 'ai_generated' ? 'ai' : 'manual',
+      test_scenarios: fm.test_scenarios || [],
     })),
   }));
 };

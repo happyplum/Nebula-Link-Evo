@@ -82,23 +82,23 @@ export const BindingEditor: React.FC<BindingEditorProps> = ({
       title: '操作',
       render: (_, record) => (
         <div className="flex gap-1">
-          {record.status === 'proposed' && (
-            <>
-              <Button 
-                variant="primary" 
-                size="sm" 
-                onClick={() => onConfirmBinding(record.id)}
-              >
-                确认
-              </Button>
-              <Button 
-                variant="danger" 
-                size="sm" 
-                onClick={() => onRejectBinding(record.id)}
-              >
-                拒绝
-              </Button>
-            </>
+          {(record.status === 'proposed' || record.status === 'rejected') && (
+            <Button 
+              variant="primary" 
+              size="sm" 
+              onClick={() => onConfirmBinding(record.id)}
+            >
+              确认
+            </Button>
+          )}
+          {(record.status === 'proposed' || record.status === 'confirmed') && (
+            <Button 
+              variant="danger" 
+              size="sm" 
+              onClick={() => onRejectBinding(record.id)}
+            >
+              拒绝
+            </Button>
           )}
         </div>
       ),

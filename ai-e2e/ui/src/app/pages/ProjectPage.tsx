@@ -55,7 +55,7 @@ export function ProjectPage() {
             <AnalysisPanel />
           </TabsContent>
           <TabsContent value="scenario" className="mt-0">
-            <ScenarioPanel functionalModuleId="" />
+            <ScenarioPanel />
           </TabsContent>
           <TabsContent value="exploration" className="mt-0">
             <ExplorationPanel />
