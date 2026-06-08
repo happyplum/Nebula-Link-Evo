@@ -131,6 +131,13 @@ export const reorderModules = async (projectId: string, data: ReorderModulesRequ
   if (!response.ok) throw new Error('Failed to reorder modules');
 };
 
+export const decomposeAll = async (projectId: string): Promise<void> => {
+  const response = await fetch(`/api/projects/${projectId}/analysis/decompose-all`, {
+    method: 'POST',
+  });
+  if (!response.ok) throw new Error('Failed to decompose all modules');
+};
+
 export const transitionState = async (projectId: string, data: TransitionStateRequest): Promise<void> => {
   const response = await fetch(`/api/projects/${projectId}/state/transition`, {
     method: 'POST',
@@ -216,6 +223,16 @@ export const useReorderModules = (projectId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: ReorderModulesRequest) => reorderModules(projectId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: analysisKeys.modules(projectId) });
+    },
+  });
+};
+
+export const useDecomposeAll = (projectId: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => decomposeAll(projectId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: analysisKeys.modules(projectId) });
     },

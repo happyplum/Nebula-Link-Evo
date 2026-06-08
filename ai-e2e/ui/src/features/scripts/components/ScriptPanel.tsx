@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button, Card } from '@/shared/components';
-import { useSSE } from '@/shared/hooks/useSSE';
+import { useSSE } from '@/hooks/use-sse.js';
 import { useAIStatusStore } from '../../ai-status/store/aiStatusStore';
 import { useScripts, useGenerateScripts, useTransitionState, Script } from '../store/scriptsApi';
 import { ScriptList } from './ScriptList';
@@ -25,14 +25,16 @@ export default function ScriptPanel() {
 
   // Listen to SSE events for script generation
   useSSE({
-    url: `/api/projects/${projectId}/events`,
-    events: ['script.generation_progress', 'script.generated'],
-    enabled: !!projectId,
-    onUpdate: (event, data) => {
-      if (event === 'script.generation_progress' || event === 'script.generated') {
+    projectId: projectId || '',
+    handlers: {
+      'script.generation_progress': () => {
         refetchScripts();
-      }
-    }
+      },
+      'script.generated': () => {
+        refetchScripts();
+      },
+    },
+    enabled: !!projectId,
   });
 
   const handleGenerate = () => {

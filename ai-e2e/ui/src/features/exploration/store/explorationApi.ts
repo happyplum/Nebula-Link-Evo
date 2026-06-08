@@ -132,6 +132,15 @@ export const transitionState = async (projectId: string, data: TransitionStateRe
   }
 };
 
+export const refreshUrlSnapshot = async (projectId: string, urlId: string): Promise<void> => {
+  const response = await fetch(`/api/projects/${projectId}/exploration/urls/${urlId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  });
+  if (!response.ok) throw new Error('Failed to refresh URL snapshot');
+};
+
 // --- React Query Hooks ---
 
 export const explorationKeys = {
@@ -228,5 +237,15 @@ export const useRejectBinding = (projectId: string) => {
 export const useTransitionState = (projectId: string) => {
   return useMutation({
     mutationFn: (data: TransitionStateRequest) => transitionState(projectId, data),
+  });
+};
+
+export const useRefreshUrlSnapshot = (projectId: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (urlId: string) => refreshUrlSnapshot(projectId, urlId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: explorationKeys.urls(projectId) });
+    },
   });
 };

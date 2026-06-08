@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Card, Button } from '@/shared/components';
-import { useModuleScenarios, useUpdateScenario } from '../store/scenarioApi.js';
+import { useModuleScenarios, useUpdateScenario, useGenerateAllScenarios, useGenerateModuleScenarios } from '../store/scenarioApi.js';
 import { ScenarioEditor } from './ScenarioEditor.js';
 import { TestScenario, UpdateScenarioRequest } from '../../../types/scenario.js';
 
@@ -13,6 +13,8 @@ export const ScenarioPanel: React.FC<ScenarioPanelProps> = ({ functionalModuleId
   const { projectId } = useParams<{ projectId: string }>();
   const { data: scenarios, isLoading, error } = useModuleScenarios(projectId!, functionalModuleId);
   const updateScenarioMutation = useUpdateScenario(projectId!);
+  const generateAllScenarios = useGenerateAllScenarios(projectId!);
+  const generateModuleScenarios = useGenerateModuleScenarios(projectId!);
 
   const [editingScenario, setEditingScenario] = useState<TestScenario | null>(null);
 
@@ -40,6 +42,14 @@ export const ScenarioPanel: React.FC<ScenarioPanelProps> = ({ functionalModuleId
     <div className="flex flex-col gap-4 p-4">
       <div className="flex items-center justify-between">
         <h3 className="text-base font-medium">测试场景</h3>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => generateAllScenarios.mutate()}
+          disabled={generateAllScenarios.isPending}
+        >
+          {generateAllScenarios.isPending ? '生成中...' : '批量生成场景'}
+        </Button>
       </div>
 
       <div className="space-y-3">
@@ -83,6 +93,17 @@ export const ScenarioPanel: React.FC<ScenarioPanelProps> = ({ functionalModuleId
         ) : (
           <div className="flex items-center justify-center py-8 text-text-muted text-sm">暂无测试场景</div>
         )}
+      </div>
+
+      <div className="flex justify-end">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => generateModuleScenarios.mutate(functionalModuleId)}
+          disabled={generateModuleScenarios.isPending}
+        >
+          {generateModuleScenarios.isPending ? '生成中...' : '生成场景'}
+        </Button>
       </div>
 
       <ScenarioEditor

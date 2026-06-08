@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRuns, useRunScript, executionKeys, ExecutionRun } from '../store/executionApi';
-import { useSSE } from '@/shared/hooks/useSSE';
+import { useSSE } from '@/hooks/use-sse.js';
 import { useAIStatusStore } from '../../ai-status/store/aiStatusStore';
 import { ExecutionControls } from './ExecutionControls';
 import { ResultDashboard } from './ResultDashboard';
@@ -29,56 +29,53 @@ export default function ExecutionPanel() {
 
   // SSE Connection
   useSSE({
-    url: `/api/projects/${projectId}/events`,
-    events: ['execution.started', 'execution.progress', 'execution.completed', 'execution.failed', 'ai.diagnosis'],
-    enabled: !!projectId,
-    onUpdate: (event, data) => {
-      switch (event) {
-        case 'execution.started':
-          setIsRunning(true);
-          setCurrentScript(data.scriptId);
-          setCurrentStep('初始化...');
-          setProgress(0);
-          setAIStatus('running');
-          setAIMessage(`开始执行脚本: ${data.scriptId}`);
-          queryClient.invalidateQueries({ queryKey: executionKeys.runs(projectId!) });
-          break;
-        case 'execution.progress':
-          setCurrentStep(data.step);
-          setAIMessage(`执行中: ${data.step}`);
-          // Increment progress by a small amount since backend doesn't provide step index
-          setProgress(prev => Math.min(prev + 5, 90));
-          break;
-        case 'execution.completed':
-          setIsRunning(false);
-          setCurrentScript(undefined);
-          setCurrentStep(undefined);
-          setProgress(100);
-          setAIStatus('completed');
-          setAIMessage('执行完成');
-          queryClient.invalidateQueries({ queryKey: executionKeys.runs(projectId!) });
-          // execution.completed has { run: ExecutionRun }, so access run.id
-          if (selectedRunId === data.run?.id) {
-            queryClient.invalidateQueries({ queryKey: executionKeys.runDetail(projectId!, data.run.id) });
-          }
-          break;
-        case 'execution.failed':
-          setIsRunning(false);
-          setCurrentScript(undefined);
-          setCurrentStep(undefined);
-          setProgress(100);
-          setAIStatus('error');
-          setAIMessage(`执行失败: ${data.error}`);
-          queryClient.invalidateQueries({ queryKey: executionKeys.runs(projectId!) });
-          if (selectedRunId === data.runId) {
-            queryClient.invalidateQueries({ queryKey: executionKeys.runDetail(projectId!, data.runId) });
-          }
-          break;
-        case 'ai.diagnosis':
-          queryClient.invalidateQueries({ queryKey: executionKeys.diagnosis(projectId!, data.runId) });
-          break;
-      }
+    projectId: projectId || '',
+    handlers: {
+      'execution.started': (data) => {
+        setIsRunning(true);
+        setCurrentScript(data.scriptId);
+        setCurrentStep('初始化...');
+        setProgress(0);
+        setAIStatus('running');
+        setAIMessage(`开始执行脚本: ${data.scriptId}`);
+        queryClient.invalidateQueries({ queryKey: executionKeys.runs(projectId!) });
+      },
+      'execution.progress': (data) => {
+        setCurrentStep(data.step);
+        setAIMessage(`执行中: ${data.step}`);
+        // Increment progress by a small amount since backend doesn't provide step index
+        setProgress(prev => Math.min(prev + 5, 90));
+      },
+      'execution.completed': (data) => {
+        setIsRunning(false);
+        setCurrentScript(undefined);
+        setCurrentStep(undefined);
+        setProgress(100);
+        setAIStatus('completed');
+        setAIMessage('执行完成');
+        queryClient.invalidateQueries({ queryKey: executionKeys.runs(projectId!) });
+        // execution.completed has { run: ExecutionRun }, so access run.id
+        if (selectedRunId === data.run?.id) {
+          queryClient.invalidateQueries({ queryKey: executionKeys.runDetail(projectId!, data.run.id) });
+        }
+      },
+      'execution.failed': (data) => {
+        setIsRunning(false);
+        setCurrentScript(undefined);
+        setCurrentStep(undefined);
+        setProgress(100);
+        setAIStatus('error');
+        setAIMessage(`执行失败: ${data.error}`);
+        queryClient.invalidateQueries({ queryKey: executionKeys.runs(projectId!) });
+        if (selectedRunId === data.runId) {
+          queryClient.invalidateQueries({ queryKey: executionKeys.runDetail(projectId!, data.runId) });
+        }
+      },
+      'ai.diagnosis': (data) => {
+        queryClient.invalidateQueries({ queryKey: executionKeys.diagnosis(projectId!, data.runId) });
+      },
     },
+    enabled: !!projectId,
   });
 
   // Check if any run is currently running on initial load
