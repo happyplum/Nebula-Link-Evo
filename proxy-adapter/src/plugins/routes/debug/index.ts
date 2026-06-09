@@ -194,6 +194,7 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
             type: 'object',
             properties: {
               success: { type: 'boolean' },
+              error: { type: 'string' },
               message: { type: 'string' },
             },
           },
@@ -221,6 +222,7 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
             type: 'object',
             properties: {
               success: { type: 'boolean' },
+              error: { type: 'string' },
               message: { type: 'string' },
             },
           },
@@ -248,6 +250,7 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
             type: 'object',
             properties: {
               success: { type: 'boolean' },
+              error: { type: 'string' },
               isOpen: { type: 'boolean' },
               url: { type: 'string' },
               title: { type: 'string' },
@@ -277,6 +280,7 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
             type: 'object',
             properties: {
               success: { type: 'boolean' },
+              error: { type: 'string' },
               tabs: {
                 type: 'array',
                 items: {
@@ -322,6 +326,7 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
             type: 'object',
             properties: {
               success: { type: 'boolean' },
+              error: { type: 'string' },
               message: { type: 'string' },
             },
           },
@@ -350,6 +355,7 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
             type: 'object',
             properties: {
               success: { type: 'boolean' },
+              error: { type: 'string' },
               message: { type: 'string' },
             },
           },
@@ -441,6 +447,7 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
             type: 'object',
             properties: {
               success: { type: 'boolean' },
+              error: { type: 'string' },
               screenshot: { type: 'string' },
               viewport: {
                 type: 'object',
@@ -547,6 +554,7 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
             type: 'object',
             properties: {
               success: { type: 'boolean' },
+              error: { type: 'string' },
               message: { type: 'string' },
             },
           },
@@ -575,6 +583,7 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
             type: 'object',
             properties: {
               success: { type: 'boolean' },
+              error: { type: 'string' },
               message: { type: 'string' },
             },
           },
@@ -614,6 +623,7 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
             type: 'object',
             properties: {
               success: { type: 'boolean' },
+              error: { type: 'string' },
               result: {},
             },
           },
@@ -642,6 +652,7 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
             type: 'object',
             properties: {
               success: { type: 'boolean' },
+              error: { type: 'string' },
               cookies: {
                 type: 'array',
                 items: {
@@ -679,6 +690,7 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
             type: 'object',
             properties: {
               success: { type: 'boolean' },
+              error: { type: 'string' },
               data: {
                 type: 'object',
                 additionalProperties: { type: 'string' },
@@ -709,6 +721,7 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
             type: 'object',
             properties: {
               success: { type: 'boolean' },
+              error: { type: 'string' },
               message: { type: 'string' },
             },
           },
@@ -736,6 +749,7 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
             type: 'object',
             properties: {
               success: { type: 'boolean' },
+              error: { type: 'string' },
               message: { type: 'string' },
             },
           },
@@ -785,6 +799,7 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
             type: 'object',
             properties: {
               success: { type: 'boolean' },
+              error: { type: 'string' },
               message: { type: 'string' },
             },
           },
@@ -822,6 +837,7 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
             type: 'object',
             properties: {
               success: { type: 'boolean' },
+              error: { type: 'string' },
               message: { type: 'string' },
             },
           },
@@ -888,6 +904,7 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
             type: 'object',
             properties: {
               success: { type: 'boolean' },
+              error: { type: 'string' },
               message: { type: 'string' },
             },
           },
