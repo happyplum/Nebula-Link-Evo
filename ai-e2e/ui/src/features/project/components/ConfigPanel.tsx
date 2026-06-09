@@ -42,6 +42,14 @@ export const ConfigPanel: React.FC = () => {
   const [urlErrors, setUrlErrors] = useState<Record<number, string>>({});
   const [baseUrlError, setBaseUrlError] = useState<string | null>(null);
 
+  const [loginSteps, setLoginSteps] = useState<LoginStep[]>([]);
+  const [savedScriptId, setSavedScriptId] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  const { data: loginScripts } = useLoginScripts(projectId);
+  const createScriptMutation = useCreateLoginScript();
+  const testScriptMutation = useTestLoginScript();
+
   useEffect(() => {
     if (config) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -53,6 +61,22 @@ export const ConfigPanel: React.FC = () => {
       });
     }
   }, [config]);
+
+  // Load existing login scripts when data arrives and local state is empty
+  useEffect(() => {
+    if (loginScripts && loginScripts.length > 0 && loginSteps.length === 0) {
+      setLoginSteps(loginScripts[0].steps);
+      setSavedScriptId(loginScripts[0].id);
+    }
+  }, [loginScripts]);
+
+  const updateLoginStep = useCallback((index: number, patch: Partial<LoginStep>) => {
+    setLoginSteps(prev => {
+      const next = [...prev];
+      next[index] = { ...next[index], ...patch };
+      return next;
+    });
+  }, []);
 
   if (isLoading) {
     return <div className="flex items-center justify-center py-8">加载配置中...</div>;
@@ -120,30 +144,6 @@ export const ConfigPanel: React.FC = () => {
       seed_urls: newUrls
     });
   };
-
-  const [loginSteps, setLoginSteps] = useState<LoginStep[]>([]);
-  const [savedScriptId, setSavedScriptId] = useState<string | null>(null);
-  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
-
-  const { data: loginScripts } = useLoginScripts(projectId);
-  const createScriptMutation = useCreateLoginScript();
-  const testScriptMutation = useTestLoginScript();
-
-  // Load existing login scripts when data arrives and local state is empty
-  useEffect(() => {
-    if (loginScripts && loginScripts.length > 0 && loginSteps.length === 0) {
-      setLoginSteps(loginScripts[0].steps);
-      setSavedScriptId(loginScripts[0].id);
-    }
-  }, [loginScripts]);
-
-  const updateLoginStep = useCallback((index: number, patch: Partial<LoginStep>) => {
-    setLoginSteps(prev => {
-      const next = [...prev];
-      next[index] = { ...next[index], ...patch };
-      return next;
-    });
-  }, []);
 
   const addLoginStep = () => {
     setLoginSteps(prev => [...prev, { ...DEFAULT_STEP }]);
