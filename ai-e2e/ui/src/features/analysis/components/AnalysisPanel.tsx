@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { PRDUpload } from './PRDUpload.js';
 import { ModuleTree } from './ModuleTree.js';
@@ -6,8 +6,6 @@ import { ModuleDetail } from './ModuleDetail.js';
 import { Button, Modal, Input, Card } from '@/shared/components';
 import { useSSE } from '@/hooks/use-sse.js';
 import { createAIStatusStore } from '../../ai-status/store/aiStatusStore.js';
-
-const usePanelAIStatus = createAIStatusStore();
 import {
   useModules,
   useDocuments,
@@ -39,7 +37,8 @@ export const AnalysisPanel: React.FC = () => {
   const transitionState = useTransitionState(projectId || '');
   const decomposeAll = useDecomposeAll(projectId || '');
 
-  // AI Status Store
+  // AI Status Store (lazy init to avoid React dispatcher null at module load)
+  const usePanelAIStatus = useRef(createAIStatusStore()).current;
   const { status, setStatus, setProgress, setMessage } = usePanelAIStatus();
   const isAnalyzing = status === 'running';
 

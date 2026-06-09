@@ -1,12 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRuns, useRunDetail, useRunScript, executionKeys, ExecutionRun } from '../store/executionApi';
 import { scriptsKeys } from '@/features/scripts/store/scriptsApi.js';
 import { useSSE } from '@/hooks/use-sse.js';
 import { createAIStatusStore } from '../../ai-status/store/aiStatusStore';
-
-const usePanelAIStatus = createAIStatusStore();
 import { reportKeys } from '../../report/store/reportApi.js';
 import { ExecutionControls } from './ExecutionControls';
 import { ResultDashboard } from './ResultDashboard';
@@ -28,6 +26,8 @@ export default function ExecutionPanel() {
   const [currentStep, setCurrentStep] = useState<string>();
   const [progress, setProgress] = useState(0);
 
+  // AI Status Store (lazy init)
+  const usePanelAIStatus = useRef(createAIStatusStore()).current;
   const setAIStatus = usePanelAIStatus(state => state.setStatus);
   const setAIMessage = usePanelAIStatus(state => state.setMessage);
 

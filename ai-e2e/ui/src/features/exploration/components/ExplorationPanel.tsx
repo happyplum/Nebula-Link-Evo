@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { ExplorationControls } from './ExplorationControls';
 import { URLList } from './URLList';
@@ -8,8 +8,6 @@ import { UnboundModuleIndicator } from './UnboundModuleIndicator';
 import { Button, Modal, Input, Card } from '@/shared/components';
 import { useSSE } from '@/hooks/use-sse.js';
 import { createAIStatusStore } from '../../ai-status/store/aiStatusStore';
-
-const usePanelAIStatus = createAIStatusStore();
 import {
   useExplorationStatus,
   useUrls,
@@ -48,7 +46,8 @@ export const ExplorationPanel: React.FC = () => {
   const rejectBinding = useRejectBinding(projectId || '');
   const transitionState = useTransitionState(projectId || '');
 
-  // AI Status Store
+  // AI Status Store (lazy init)
+  const usePanelAIStatus = useRef(createAIStatusStore()).current;
   const { status, setStatus, setProgress, setMessage } = usePanelAIStatus();
   const isExploring = status === 'running' || statusData?.status === 'running';
 

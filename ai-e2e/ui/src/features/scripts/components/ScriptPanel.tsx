@@ -1,11 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button, Card } from '@/shared/components';
 import { useSSE } from '@/hooks/use-sse.js';
 import { createAIStatusStore } from '../../ai-status/store/aiStatusStore';
-
-const usePanelAIStatus = createAIStatusStore();
 import { useScripts, useGenerateScripts, useTransitionState, scriptsKeys, Script } from '../store/scriptsApi';
 import { ScriptList } from './ScriptList';
 import { ScriptEditor } from './ScriptEditor';
@@ -23,6 +21,8 @@ export default function ScriptPanel() {
   const { mutate: transitionState, isPending: isTransitioning } = useTransitionState(projectId!);
   const queryClient = useQueryClient();
   
+  // AI Status Store (lazy init to avoid React dispatcher null at module load)
+  const usePanelAIStatus = useRef(createAIStatusStore()).current;
   const aiStatus = usePanelAIStatus((state) => state.status);
   const aiProgress = usePanelAIStatus((state) => state.progress);
   const aiMessage = usePanelAIStatus((state) => state.message);
