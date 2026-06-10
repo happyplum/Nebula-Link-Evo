@@ -25,15 +25,15 @@ export const createAIStatusStore = () => create<AIStatusState>((set) => ({
   message: null,
 
   setStatus: (status) => set({ status }),
-  
+
   setCurrentTask: (currentTask) => set({ currentTask }),
-  
+
   setProgress: (progress) => set({ progress }),
-  
+
   setMessage: (message) => set({ message }),
-  
+
   updateFromSnapshot: (snapshot) => set((state) => ({
     ...state,
     ...snapshot
   })),
-}))();
+}));
