@@ -26,6 +26,7 @@ export function loadConfig(configPath?: string): LoadResult {
 
   let foundPath: string | null = null;
   let resolvedConfig: ResolvedConfig | null = null;
+  let lastResolveResult: ResolveResult | null = null;
 
   for (const p of searchPaths) {
     const absolutePath = path.resolve(p);
@@ -33,11 +34,14 @@ export function loadConfig(configPath?: string): LoadResult {
       try {
         const content = fs.readFileSync(absolutePath, 'utf-8');
         const parsedConfig = JSON.parse(content) as Config;
-        const { config, result } = resolveConfig(parsedConfig);
-        if (result.success) {
-          resolvedConfig = config;
+        const resolveResult = resolveConfig(parsedConfig);
+        if (resolveResult.result.success) {
+          resolvedConfig = resolveResult.config;
+          lastResolveResult = resolveResult.result;
           foundPath = absolutePath;
           break;
+        } else {
+          lastResolveResult = resolveResult.result;
         }
       } catch (error) {
         logger.warn({ err: error, path: absolutePath }, 'Failed to parse config');
@@ -59,7 +63,7 @@ export function loadConfig(configPath?: string): LoadResult {
 
   return {
     config: resolvedConfig,
-    result: { success: true, errors: [], warnings: [] },
+    result: lastResolveResult ?? { success: true, errors: [], warnings: [] },
     configPath: foundPath!,
   };
 }

@@ -42,6 +42,13 @@ export function resolveConfig(
   }
   const defaults = options?.defaults || {};
 
+  // Pre-parse defaults to determine which providers are decision-critical
+  const decisionSelector = parseProviderModelString(config.defaults.decision, 'decision', result);
+  const visionSelector = config.defaults.vision
+    ? parseProviderModelString(config.defaults.vision, 'vision', result)
+    : null;
+  const decisionProviderName = decisionSelector.provider;
+
   const resolvedProviders: Record<string, ResolvedProvider> = {};
 
   for (const [key, provider] of Object.entries(config.providers)) {
@@ -56,7 +63,12 @@ export function resolveConfig(
 
     const apiKeyResult = resolveVariable(provider.apiKey, env, defaults);
     if (!apiKeyResult.success) {
-      result.errors.push(`Provider ${key}: ${apiKeyResult.error}`);
+      // Decision provider failure is fatal; others are non-fatal warnings
+      if (key === decisionProviderName) {
+        result.errors.push(`Provider ${key}: ${apiKeyResult.error}`);
+      } else {
+        result.warnings.push(`Provider ${key}: ${apiKeyResult.error} (non-decision provider, skipping)`);
+      }
       continue;
     }
 
@@ -87,10 +99,8 @@ export function resolveConfig(
     ...config,
     defaults: {
       mode: config.defaults.mode,
-      decision: parseProviderModelString(config.defaults.decision, 'decision', result),
-      ...(config.defaults.vision
-        ? { vision: parseProviderModelString(config.defaults.vision, 'vision', result) }
-        : {}),
+      decision: decisionSelector,
+      ...(visionSelector ? { vision: visionSelector } : {}),
     },
     settings: resolvedSettings,
     providers: resolvedProviders,

@@ -1,6 +1,10 @@
 import { EventEmitter } from 'node:events';
 import type { BrowserClient } from '../../browser-client.js';
-import { loadVisionConfig, type VisionConfig } from '../../mcps/vision-agent/config.js';
+import {
+  loadVisionConfig,
+  type VisionConfig,
+  type VisionConfigOverride,
+} from '../../mcps/vision-agent/config.js';
 import { createSnapshotCache, type SnapshotCache } from '../../mcps/vision-agent/snapshot-cache.js';
 import { createVisionAgentTools } from '../../mcps/vision-agent/tools/index.js';
 import type { ToolDeps } from '../../mcps/vision-agent/types.js';
@@ -15,13 +19,13 @@ export class VisionAgentProvider extends EventEmitter implements ToolProvider {
   status: ToolProviderStatus = 'initializing';
 
   private readonly browserClient: BrowserClient;
-  private readonly configOverride?: Record<string, unknown>;
+  private readonly configOverride?: VisionConfigOverride;
   private config?: VisionConfig;
   private visionAnalyzer?: VisionAnalyzer;
   private cache?: SnapshotCache;
   private _tools: GatewayTool[] = [];
 
-  constructor(browserClient: BrowserClient, configOverride?: Record<string, unknown>) {
+  constructor(browserClient: BrowserClient, configOverride?: VisionConfigOverride) {
     super();
     this.browserClient = browserClient;
     this.configOverride = configOverride;
