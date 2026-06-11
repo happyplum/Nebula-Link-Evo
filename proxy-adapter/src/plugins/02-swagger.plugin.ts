@@ -39,7 +39,7 @@ Web automation and AI integration service that orchestrates browser automation t
     ▼
  [Proxy Adapter :3000] ──→ [Decision Model Provider]
     │
-    ├──→ [vision-server MCP]
+    ├──→ [vision-agent (built-in)]
     └──→ [Playwright Server :3001] ──→ Chromium
 \`\`\`
 
@@ -90,7 +90,7 @@ Successful task execution returns:
 
 ## Configuration
 - **Decision provider config**: resolved from config/config.json
-- **vision-server MCP env**: injected at runtime from defaults.vision + matching provider config
+- **Vision Agent**: built-in vision analysis via VisionAgentProvider, configured from \`defaults.vision\` + provider config
 - **ENABLE_SWAGGER**: Enable Swagger UI (default: true in dev, false in production)
 
 ## Error Handling

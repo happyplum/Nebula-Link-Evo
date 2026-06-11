@@ -66,10 +66,6 @@ export function validateConfig(config: ResolvedConfig): ValidationResult {
       }
     }
 
-    if (config.mcp.servers['vision-server']?.enabled && !config.defaults.vision) {
-      warnings.push('vision-server is enabled but defaults.vision is not configured — VISION_* env vars will not be injected');
-    }
-
     if (config.mcp.reconnect) {
       const r = config.mcp.reconnect;
       if (r.maxAttempts !== undefined && r.maxAttempts < 0) {

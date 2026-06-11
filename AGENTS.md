@@ -14,7 +14,6 @@ debug-ui/           Primary web UI — React SPA, Vite (:5173 dev)
 ai-e2e/             AI E2E test orchestration (:3002)
   ui/               Nested workspace — React SPA served at /ai-e2e/ (:5174 dev)
 mcps/               MCP servers (stdio transport)
-  vision-mcp-server/          Vision analysis MCP server
 config/             Shared config templates (not a package)
 tools/              Utility scripts (not a package)
 ```
@@ -68,6 +67,5 @@ pnpm format         # prettier --write on same 3 packages
 - `shared/AGENTS.md`
 - `ai-e2e/AGENTS.md`
 - `ai-e2e/ui/AGENTS.md`
-- `mcps/vision-mcp-server/AGENTS.md`
 - `config/AGENTS.md`
 - `tools/AGENTS.md`

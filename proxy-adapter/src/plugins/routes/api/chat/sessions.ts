@@ -292,7 +292,7 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       if ('vision' in body) {
         reply.status(400);
         return {
-          error: 'vision model override has been removed; use vision-server MCP config instead',
+          error: 'vision model override has been removed; vision is configured via defaults.vision in config',
         };
       }
 

@@ -14,12 +14,15 @@ import type { ProviderConfig } from './provider/types.js';
 import type { Logger } from 'pino';
 import { createWorkerLogger } from './logger.js';
 import { browserClient } from '../browser-client.js';
+import type { ToolRegistry } from '../tools/registry.js';
+import type { ToolProviderStatus } from '../tools/types.js';
 
 export class AppService {
   private config: ResolvedConfig | null = null;
   private configPath: string = '';
   private registry: ProviderRegistry | null = null;
   private mcpClient: MCPSDKClient | null = null;
+  private toolRegistry: ToolRegistry | null = null;
   private actionExecutor: ActionExecutor;
   private logger: Logger;
 
@@ -92,18 +95,96 @@ export class AppService {
   }
 
   getMCPStatus() {
+    const externalServers = (this.mcpClient?.getServerList() || []).map((s) => ({
+      ...s,
+      source: 'external' as const,
+    }));
+
+    const builtInServers = this.getBuiltInProviderStatus();
+
     return {
-      enabled: this.mcpClient?.isEnabled() || false,
-      servers: this.mcpClient?.getServerList() || [],
+      enabled: true,
+      servers: [...builtInServers, ...externalServers],
     };
   }
 
   getMCPTools() {
-    return this.mcpClient?.getAvailableTools() || [];
+    const externalTools = (this.mcpClient?.getAvailableTools() || []).map((t) => ({
+      name: t.name,
+      description: t.description || '',
+      inputSchema: t.inputSchema as Record<string, unknown> | undefined,
+      annotations: t.annotations,
+      source: 'external' as const,
+    }));
+
+    const builtInTools = this.getBuiltInProviderTools();
+
+    return [...builtInTools, ...externalTools];
+  }
+
+  setToolRegistry(registry: ToolRegistry): void {
+    this.toolRegistry = registry;
+  }
+
+  getToolRegistry(): ToolRegistry | null {
+    return this.toolRegistry;
   }
 
   getMCPSDKClient() {
     return this.mcpClient;
+  }
+
+  private getBuiltInProviderStatus(): Array<{
+    name: string;
+    running: boolean;
+    state: 'stopped' | 'starting' | 'running' | 'reconnecting' | 'failed' | 'shutting_down';
+    toolsCount: number;
+    source: 'built-in';
+  }> {
+    if (!this.toolRegistry) return [];
+
+    const providers = [
+      { id: 'browser-tools', name: 'browser-control' },
+      { id: 'vision-agent', name: 'vision-agent' },
+    ];
+
+    return providers
+      .map(({ id, name }) => {
+        const provider = this.toolRegistry!.getProvider(id);
+        if (!provider) return null;
+
+        const status = provider.status;
+        const tools = provider.getTools();
+        const availableTools = tools.filter((t) => t.isAvailable);
+
+        return {
+          name,
+          running: status === 'ready' || status === 'degraded',
+          state: mapProviderStatusToState(status),
+          toolsCount: availableTools.length,
+          source: 'built-in' as const,
+        };
+      })
+      .filter((p): p is NonNullable<typeof p> => p !== null);
+  }
+
+  private getBuiltInProviderTools(): Array<{
+    name: string;
+    description: string;
+    inputSchema: Record<string, unknown>;
+    source: 'built-in';
+  }> {
+    if (!this.toolRegistry) return [];
+
+    const tools = this.toolRegistry.getAvailableTools({ consumer: 'all' });
+    return tools
+      .filter((t) => t.providerId === 'browser-tools' || t.providerId === 'vision-agent')
+      .map((t) => ({
+        name: t.name,
+        description: t.description,
+        inputSchema: t.inputSchema,
+        source: 'built-in' as const,
+      }));
   }
 
   getActionExecutor(): ActionExecutor {
@@ -148,13 +229,11 @@ export class AppService {
       error?: string | null;
       intro?: string;
     };
-    mcp: {
-      visionServer: {
-        status: string;
-        tools: string[];
-        responseTime: number;
-        error?: string | null;
-      };
+    visionAgent: {
+      status: string;
+      tools: string[];
+      responseTime: number;
+      error?: string | null;
     };
     totalResponseTime: number;
   }> {
@@ -165,9 +244,7 @@ export class AppService {
     if (!defaults || !this.registry) {
       return {
         decision: { status: 'not_configured', responseTime: 0, error: 'No config or registry' },
-        mcp: {
-          visionServer: { status: 'not_configured', tools: [], responseTime: 0, error: 'No config or registry' },
-        },
+        visionAgent: { status: 'not_configured', tools: [], responseTime: 0, error: 'No config or registry' },
         totalResponseTime: Date.now() - startTime,
       };
     }
@@ -217,8 +294,8 @@ export class AppService {
       };
     }
 
-    const visionServerStart = Date.now();
-    let visionServerResult: {
+    const visionAgentStart = Date.now();
+    let visionAgentResult: {
       status: string;
       tools: string[];
       responseTime: number;
@@ -226,31 +303,26 @@ export class AppService {
     };
 
     try {
-      const mcpClient = this.mcpClient;
-      if (!mcpClient || !mcpClient.isServerRunning('vision-server')) {
-        visionServerResult = {
-          status: 'disconnected',
-          tools: [],
-          responseTime: Date.now() - visionServerStart,
-          error: 'vision-server is not running',
-        };
-      } else {
-        const tools = await mcpClient.listTools('vision-server');
-        const toolNames = tools.map((tool) => tool.name);
+      const visionTools =
+        this.toolRegistry
+          ?.getAvailableTools({ consumer: 'mcp-server' })
+          .filter((t) => t.name.startsWith('vision-agent.')) ?? [];
 
-        visionServerResult = {
-          status: toolNames.length > 0 ? 'connected' : 'disconnected',
-          tools: toolNames,
-          responseTime: Date.now() - visionServerStart,
-          error: toolNames.length > 0 ? null : 'No tools discovered from vision-server',
-        };
-      }
+      visionAgentResult = {
+        status: visionTools.length > 0 ? 'connected' : 'degraded',
+        tools: visionTools.map((t) => t.name),
+        responseTime: Date.now() - visionAgentStart,
+        error:
+          visionTools.length > 0
+            ? null
+            : 'Vision agent has no available tools (config may be missing or provider disabled)',
+      };
     } catch (err) {
       const errMsg = (err as Error).message;
-      visionServerResult = {
-        status: 'disconnected',
+      visionAgentResult = {
+        status: 'error',
         tools: [],
-        responseTime: Date.now() - visionServerStart,
+        responseTime: Date.now() - visionAgentStart,
         error: errMsg.length > 200 ? errMsg.substring(0, 200) + '...' : errMsg,
       };
     }
@@ -258,9 +330,7 @@ export class AppService {
     this.logger.info({ elapsedMs: Date.now() - startTime }, 'AI connectivity test completed');
     return {
       decision: decisionResult,
-      mcp: {
-        visionServer: visionServerResult,
-      },
+      visionAgent: visionAgentResult,
       totalResponseTime: Date.now() - startTime,
     };
   }
@@ -322,3 +392,22 @@ export class AppService {
 const appService = new AppService();
 AppService.setInstance(appService);
 export { appService };
+
+/** 将 ToolProviderStatus 映射为 MCPServerState，用于统一展示 */
+function mapProviderStatusToState(
+  status: ToolProviderStatus,
+): 'stopped' | 'starting' | 'running' | 'reconnecting' | 'failed' | 'shutting_down' {
+  switch (status) {
+    case 'initializing':
+      return 'starting';
+    case 'ready':
+    case 'degraded':
+      return 'running';
+    case 'disabled':
+      return 'stopped';
+    case 'failed':
+      return 'failed';
+    default:
+      return 'stopped';
+  }
+}

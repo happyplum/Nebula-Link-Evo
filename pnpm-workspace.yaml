@@ -5,7 +5,6 @@ packages:
   - playwright-server
   - ai-e2e
   - ai-e2e/ui
-  - mcps/vision-mcp-server
 
 onlyBuiltDependencies:
   - better-sqlite3

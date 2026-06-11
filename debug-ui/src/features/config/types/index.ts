@@ -27,6 +27,7 @@ export interface McpServerStatus {
   running: boolean;
   state: McpServerState;
   toolsCount: number;
+  source?: 'built-in' | 'external';
 }
 
 export interface HealthResponse {
@@ -66,6 +67,7 @@ export interface McpToolInputProperty {
 export interface McpTool {
   name: string;
   description: string;
+  source?: 'built-in' | 'external';
   annotations?: {
     title?: string;
     readOnlyHint?: boolean;
@@ -124,13 +126,11 @@ export interface AiTestResult {
 
 export interface TestAiResponse {
   decision?: AiTestResult;
-  mcp?: {
-    visionServer?: {
-      status: string;
-      tools?: string[];
-      responseTime?: number;
-      error?: string;
-    };
+  visionAgent?: {
+    status: string;
+    tools?: string[];
+    responseTime?: number;
+    error?: string;
   };
   totalResponseTime?: number;
 }

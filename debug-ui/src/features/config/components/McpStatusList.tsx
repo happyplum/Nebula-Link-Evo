@@ -90,18 +90,23 @@ export function McpStatusList({ onSelectServer }: McpStatusListProps) {
                 data-testid={testIds.mcpServerItem}
               >
                 <div className={styles.serverInfo}>
-                  <StatusIndicator
-                    status={display.status}
-                    label={display.label}
-                    size="sm"
-                  />
-                  <div className={styles.serverMeta}>
-                    <span className={styles.serverName}>{server.name}</span>
-                    <span className={styles.serverStatus}>
-                      {display.label} · {server.toolsCount} 工具
-                    </span>
-                  </div>
-                </div>
+                   <StatusIndicator
+                     status={display.status}
+                     label={display.label}
+                     size="sm"
+                   />
+                   <div className={styles.serverMeta}>
+                     <span className={styles.serverName}>
+                       {server.name}
+                       {server.source === 'built-in' && (
+                         <span className={styles.builtInBadge}>内置</span>
+                       )}
+                     </span>
+                     <span className={styles.serverStatus}>
+                       {display.label} · {server.toolsCount} 工具
+                     </span>
+                   </div>
+                 </div>
                 
                 {server.state === 'running' && server.toolsCount > 0 && onSelectServer && (
                   <button

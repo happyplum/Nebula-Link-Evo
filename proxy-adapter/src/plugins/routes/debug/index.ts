@@ -91,18 +91,13 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
                   intro: { type: 'string' },
                 },
               },
-              mcp: {
+              visionAgent: {
                 type: 'object',
                 properties: {
-                  visionServer: {
-                    type: 'object',
-                    properties: {
-                      status: { type: 'string' },
-                      tools: { type: 'array', items: { type: 'string' } },
-                      responseTime: { type: 'number' },
-                      error: { type: 'string' },
-                    },
-                  },
+                  status: { type: 'string' },
+                  tools: { type: 'array', items: { type: 'string' } },
+                  responseTime: { type: 'number' },
+                  error: { type: 'string' },
                 },
               },
               totalResponseTime: { type: 'number' },
@@ -926,7 +921,7 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     '/api/mcp/status',
     {
       schema: {
-        description: 'Get MCP servers status',
+        description: 'Get MCP servers status (built-in providers and external servers)',
         tags: ['Debug'],
         response: {
           200: {
@@ -940,7 +935,9 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
                   properties: {
                     name: { type: 'string' },
                     running: { type: 'boolean' },
+                    state: { type: 'string' },
                     toolsCount: { type: 'number' },
+                    source: { type: 'string', enum: ['built-in', 'external'] },
                   },
                 },
               },
@@ -958,7 +955,7 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     '/api/mcp/tools',
     {
       schema: {
-        description: 'Get available MCP tools',
+        description: 'Get available MCP tools (built-in and external)',
         tags: ['Debug'],
         response: {
           200: {
@@ -972,6 +969,7 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
                     name: { type: 'string' },
                     description: { type: 'string' },
                     inputSchema: { type: 'object' },
+                    source: { type: 'string', enum: ['built-in', 'external'] },
                     annotations: {
                       type: 'object',
                       properties: {

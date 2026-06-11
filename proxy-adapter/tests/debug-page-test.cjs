@@ -405,23 +405,9 @@ async function runTests() {
       }
     }
 
-    // ========== 阶段5: MCP 工具调用测试 (vision-server) ==========
-    // 注: browser-control.* 工具已从 MCP server 迁移为 proxy-adapter 本地模块，
-    //     MCP 层仅保留 vision-server (视觉分析)。
-    logSection('阶段5: MCP 工具调用测试 (vision-server)');
-
-    logStep(1, '调用 vision-server screenshot 工具');
-    try {
-      const result = await proxy.callMCP('vision-server', 'screenshot', { type: 'raw' });
-      const hasContent = result.result?.content?.length > 0 || result.success === true;
-      recordTest('vision-server screenshot 调用', hasContent);
-      if (result.result?.content) {
-        const hasImage = result.result.content.some((c) => c.type === 'image');
-        logInfo(`截图包含图像数据: ${hasImage}`);
-      }
-    } catch (e) {
-      recordTest('vision-server screenshot 调用', false, e.message);
-    }
+    // ========== 阶段5: 内置 Vision Agent 工具测试 ==========
+    logSection('阶段5: 内置 Vision Agent 工具测试');
+    logInfo('Vision agent tools are now built-in; tested via ToolRegistry unit tests');
 
     // ========== 阶段6: 清理 ==========
     logSection('阶段6: 清理');
