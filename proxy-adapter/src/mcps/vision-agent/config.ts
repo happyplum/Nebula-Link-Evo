@@ -12,11 +12,24 @@ const visionConfigSchema = z.object({
 
 export type VisionConfig = z.infer<typeof visionConfigSchema>;
 
-export function loadVisionConfig(config?: Record<string, unknown>): VisionConfig {
+/**
+ * External config override passed into VisionAgentProvider.
+ * Settings fields are optional — zod defaults in loadVisionConfig fill them.
+ */
+export interface VisionConfigOverride {
+  providerBaseUrl: string;
+  apiKey: string;
+  modelId: string;
+  maxTokens?: number;
+  temperature?: number;
+  timeoutMs?: number;
+  maxRetries?: number;
+}
+
+export function loadVisionConfig(config?: VisionConfigOverride): VisionConfig {
   const raw = {
     providerBaseUrl:
       config?.providerBaseUrl ??
-      config?.baseUrl ??
       process.env.VISION_PROVIDER_BASE_URL ??
       '',
     apiKey:

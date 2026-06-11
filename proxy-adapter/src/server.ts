@@ -26,6 +26,8 @@ import { runPreflight } from './services/provider/preflight.js';
 import { ToolRegistry } from './tools/registry.js';
 import { BrowserToolsProvider } from './tools/providers/browser-tools-provider.js';
 import { VisionAgentProvider } from './tools/providers/vision-agent-provider.js';
+import { buildVisionAgentConfig } from './tools/providers/build-vision-agent-config.js';
+import type { VisionConfigOverride } from './mcps/vision-agent/config.js';
 import { MCPClientProvider } from './tools/providers/mcp-client-provider.js';
 import mcpServerPlugin from './mcp-server/index.js';
 
@@ -119,7 +121,8 @@ async function start() {
     const browserToolsProvider = new BrowserToolsProvider(browserClient);
     toolRegistry.registerProvider(browserToolsProvider);
 
-    const visionAgentProvider = new VisionAgentProvider(browserClient);
+    const visionConfigOverride = buildVisionAgentConfig(config);
+    const visionAgentProvider = new VisionAgentProvider(browserClient, visionConfigOverride);
     toolRegistry.registerProvider(visionAgentProvider);
 
     const mcpClient = appService.getMCPSDKClient();
@@ -129,6 +132,9 @@ async function start() {
     }
 
     await toolRegistry.initializeAll();
+
+    // Make ToolRegistry accessible through AppService for debug endpoints
+    appService.setToolRegistry(toolRegistry);
 
     chatHandler = new ChatHandler(
       conversationManager,
@@ -224,20 +230,6 @@ async function start() {
 }
 
 process.on('SIGINT', async () => {
-  app.log.info('Shutting down gracefully...');
-  if (toolRegistry) {
-    await toolRegistry.shutdownAll();
-  }
-  if (conversationManager) {
-    await conversationManager.close();
-  }
-  await debugStreamBridge.stop();
-  await appService.shutdown();
-  await app.close();
-  process.exit(0);
-});
-
-process.on('SIGTERM', async () => {
   app.log.info('Shutting down gracefully...');
   if (toolRegistry) {
     await toolRegistry.shutdownAll();
