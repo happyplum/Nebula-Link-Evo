@@ -147,7 +147,7 @@ describe('PATCH /api/chat/sessions/:id/models', () => {
     });
 
     expect(res.statusCode).toBe(400);
-    expect(res.json().error).toBe('vision model override has been removed; use vision-server MCP config instead');
+    expect(res.json().error).toBe('vision model override has been removed; vision is configured via defaults.vision in config');
   });
 
   it('returns 404 for non-existent session', async () => {

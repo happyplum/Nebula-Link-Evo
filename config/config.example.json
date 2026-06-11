@@ -37,16 +37,7 @@
   },
   "mcp": {
     "enabled": true,
-    "servers": {
-      "vision-server": {
-        "enabled": true,
-        "command": "node",
-        "args": ["../mcps/vision-mcp-server/dist/index.js"],
-        "env": {
-          "PLAYWRIGHT_SERVER_URL": "http://localhost:3001"
-        }
-      }
-    }
+    "servers": {}
   },
   "settings": {
     "timeout": "{TIMEOUT:30000}",
