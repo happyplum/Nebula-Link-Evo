@@ -465,7 +465,7 @@ export class MCPSDKClient extends EventEmitter {
         arguments: args,
       });
 
-      this.logger.info({ toolName, result: JSON.stringify(result).substring(0, 500) }, 'MCP tool result');
+      this.logger.info({ toolName, result: this.summarizeResult(result) }, 'MCP tool result');
 
       if (result && result.content && Array.isArray(result.content)) {
         const textContent = result.content
@@ -636,49 +636,7 @@ export class MCPSDKClient extends EventEmitter {
   // =========================================================================
 
   private buildServerEnv(name: string, config: MCPServerConfig): Record<string, string> {
-    const env = { ...getDefaultEnvironment(), ...config.env };
-
-    // Vision-server-specific: inject VISION_* env from defaults.vision provider config.
-    // This coupling exists because the vision MCP server needs to know which AI provider
-    // to call at runtime. If vision-server is refactored or other servers need similar
-    // injection, consider adding a generic `providerEnvPrefix` field to MCPServerConfig.
-    if (name !== 'vision-server') {
-      return env;
-    }
-
-    const defaultVision = this.config.defaults.vision;
-    if (!defaultVision?.provider || !defaultVision?.model) {
-      this.logger.warn({ name }, 'Skipping vision-server env injection: defaults.vision is not configured');
-      return env;
-    }
-
-    const provider = this.config.providers[defaultVision.provider];
-    if (!provider) {
-      this.logger.warn(
-        { name, provider: defaultVision.provider },
-        'Skipping vision-server env injection: provider not found',
-      );
-      return env;
-    }
-
-    if (!provider.enabled) {
-      this.logger.warn(
-        { name, provider: defaultVision.provider },
-        'Skipping vision-server env injection: provider disabled',
-      );
-      return env;
-    }
-
-    try {
-      env.VISION_PROVIDER_BASE_URL = provider.baseUrl ?? '';
-      env.VISION_PROVIDER_API_KEY = provider.apiKey;
-      env.VISION_MODEL_ID = defaultVision.model;
-    } catch (error) {
-      const details = error instanceof ProviderError ? error.details : (error as Error).message;
-      this.logger.warn({ name, details }, 'Skipping vision-server env injection due to provider config error');
-    }
-
-    return env;
+    return { ...getDefaultEnvironment(), ...config.env };
   }
 
   private async fetchToolsList(client: Client): Promise<MCPTool[]> {
@@ -704,6 +662,30 @@ export class MCPSDKClient extends EventEmitter {
       return JSON.parse(text);
     } catch {
       return null;
+    }
+  }
+
+  private static readonly SENSITIVE_JSON_RE =
+    /("(?:password|token|api[_-]?key|authorization|cookie|secret|access[_-]?token)"\s*:\s*")[^"]*(")/gi;
+
+  /** Summarize MCP tool result for terminal logging — safe, truncated, redacted. */
+  private summarizeResult(result: unknown): string {
+    try {
+      const text = JSON.stringify(result, (_key, val) => {
+        if (typeof val === 'bigint') return `${val}n`;
+        return val;
+      });
+      if (!text) return '[empty]';
+      // Redact JSON field values: "token":"secret" → "token":"***"
+      let redacted = text.replace(MCPSDKClient.SENSITIVE_JSON_RE, '$1***$2');
+      // Also redact inline patterns: Bearer xxx, api_key=xxx, etc.
+      redacted = redacted.replace(
+        /(Bearer\s+|api[_-]?key\s*=\s*|token\s*=\s*|password\s*=\s*|authorization\s*:\s*)[^\s;,"'}\]]+/gi,
+        '$1***',
+      );
+      return redacted.length > 300 ? redacted.slice(0, 297) + '...' : redacted;
+    } catch {
+      return '[Unserializable]';
     }
   }
 }

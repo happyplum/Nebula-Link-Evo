@@ -348,6 +348,11 @@ class ChatHandler {
     let totalSteps = 0;
     let totalToolCalls = 0;
 
+    // Timing for terminal logging
+    const runStartedAt = Date.now();
+    let stepStartedAt = runStartedAt;
+    const toolStartedAtByCallId = new Map<string, number>();
+
     await this.emitSessionEvent(sessionId, 'assistant.started', {
       sessionId,
       runId,
@@ -386,8 +391,8 @@ class ChatHandler {
         `当前单次请求内容已超出模型上下文限制（约 ${Math.round(minViableTokens / 1000)}K tokens > ${Math.round(contextWindowTokens / 1024)}K）。` +
         `请缩短输入内容或减小附件大小后重试。`;
       this.logger.error(
-        { minViableTokens, inputBudget, contextWindowTokens, messageCount: messages.length },
-        'Single request exceeds context window — impossible to send',
+        { sessionId, runId, code: 'VALIDATION_ERROR', minViableTokens, inputBudget, contextWindowTokens, messageCount: messages.length },
+        'chat.error',
       );
       await this.emitSessionEvent(sessionId, 'run.error', {
         sessionId,
@@ -430,8 +435,8 @@ class ChatHandler {
           `超出模型上限（${Math.round(contextWindowTokens / 1024)}K tokens）。` +
           `请缩短输入内容或减少当前对话历史后重试。`;
         this.logger.error(
-          { estimatedTokens: estimatedInputTokens, budget: inputBudget, messageCount: budgetedMessages.length },
-          'Context overflow even after compression — reporting to frontend',
+          { sessionId, runId, code: 'CONTEXT_OVERFLOW', estimatedTokens: estimatedInputTokens, budget: inputBudget, messageCount: budgetedMessages.length },
+          'chat.error',
         );
       await this.emitSessionEvent(sessionId, 'run.error', {
         sessionId,
@@ -503,6 +508,7 @@ class ChatHandler {
           const toolInput = this.normalizeToRecord(part.input);
           stepToolCount++;
           totalToolCalls++;
+          toolStartedAtByCallId.set(toolCallId, Date.now());
           this.logger.info(
             { sessionId, runId, step: currentStep, tool: toolName, call: toolCallId, args: this.summarizeArgs(toolInput) },
             'chat.tool.call',
@@ -560,8 +566,12 @@ class ChatHandler {
           const toolInput = this.normalizeToRecord(part.input);
           const output = part.output;
           const resultSummary = this.summarizeToolResult(output);
+          const toolMs = toolStartedAtByCallId.has(toolCallId)
+            ? Date.now() - (toolStartedAtByCallId.get(toolCallId) as number)
+            : undefined;
+          toolStartedAtByCallId.delete(toolCallId);
           this.logger.info(
-            { sessionId, runId, step: currentStep, tool: toolName, call: toolCallId, ok: resultSummary.ok, result: resultSummary.summary },
+            { sessionId, runId, step: currentStep, tool: toolName, call: toolCallId, ok: resultSummary.ok, result: resultSummary.summary, ms: toolMs },
             'chat.tool.result',
           );
 
@@ -598,6 +608,7 @@ class ChatHandler {
 
         if (part.type === 'finish-step') {
           totalSteps++;
+          const stepMs = Date.now() - stepStartedAt;
           this.logger.info(
             {
               sessionId,
@@ -609,6 +620,7 @@ class ChatHandler {
               tools: stepToolCount,
               textChars: stepTextChars,
               reasoning: stepHadReasoning,
+              ms: stepMs,
             },
             'chat.step.done',
           );
@@ -617,6 +629,7 @@ class ChatHandler {
           stepTextChars = 0;
           stepToolCount = 0;
           stepHadReasoning = false;
+          stepStartedAt = Date.now();
 
           await this.flushSessionEvents();
 
@@ -726,11 +739,12 @@ class ChatHandler {
         {
           sessionId,
           runId,
-          finishReason: terminalReason,
+          terminalReason,
           steps: totalSteps,
           tools: totalToolCalls,
           textChars: accumulatedContent.length,
           usage: this.formatUsage(totalUsage),
+          ms: Date.now() - runStartedAt,
         },
         'chat.done',
       );
@@ -759,7 +773,7 @@ class ChatHandler {
 
       const errorMessage = error instanceof Error ? error.message : String(error);
       const errorStack = error instanceof Error ? error.stack : undefined;
-      this.logger.error({ sessionId, runId, provider: session.provider, model: session.model, iteration, error: errorMessage, stack: errorStack }, 'Failed to stream AI response');
+      this.logger.error({ sessionId, runId, code: 'STREAM_ERROR', provider: session.provider, model: session.model, iteration, error: errorMessage, stack: errorStack }, 'chat.error');
       await this.flushSessionEvents();
       this.conversationManager.clearActiveToolCalls(sessionId);
 
@@ -767,6 +781,10 @@ class ChatHandler {
       const classification = classifyRateLimitError(error, { provider: session.provider, logger: this.logger });
 
       if (classification.isRateLimited) {
+        this.logger.warn(
+          { sessionId, runId, code: 'RATE_LIMITED', provider: session.provider, model: session.model, retryAfterMs: classification.retryAfterMs },
+          'chat.error',
+        );
         await this.emitSessionEvent(sessionId, 'run.error', {
           sessionId,
           runId,
@@ -779,12 +797,10 @@ class ChatHandler {
         throw classification.providerError;
       }
 
-      await this.emitSessionEvent(sessionId, 'run.error', {
-        sessionId,
-        runId,
-        error: errorMessage,
-        code: 'API_ERROR',
-      });
+      this.logger.error(
+        { sessionId, runId, code: 'API_ERROR', provider: session.provider, model: session.model, error: errorMessage },
+        'chat.error',
+      );
     }
   }
 
@@ -905,7 +921,9 @@ class ChatHandler {
   // --- Log summarization helpers ---
 
   private static readonly SENSITIVE_KEY_RE = /password|token|api[_-]?key|authorization|cookie|secret|access[_-]?token/i;
+  private static readonly SENSITIVE_TEXT_RE = /(Bearer\s+|api[_-]?key\s*=\s*|token\s*=\s*|password\s*=\s*|authorization\s*:\s*)[^\s;,"'}\]]+/gi;
 
+  /** Safe JSON stringify — never throws. Handles BigInt, circular refs, unserializable values. */
   private safeStringify(value: unknown): string {
     try {
       if (typeof value === 'string') return value;
@@ -922,56 +940,109 @@ class ChatHandler {
         if (typeof val === 'bigint') return `${val}n`;
         return val;
       });
-      return json ?? String(value);
+      return json ?? '[Unserializable]';
     } catch {
-      return String(value);
+      return '[Unserializable]';
     }
   }
 
+  /** Recursively mask sensitive keys in objects. Returns '[MaxDepth]' past depth limit.
+   *  Never throws — Object.entries is wrapped in try/catch for getter/proxy safety. */
   private maskSensitive(obj: unknown, depth = 0): unknown {
-    if (depth > 3 || obj === null || obj === undefined) return obj;
+    if (obj === null || obj === undefined) return obj;
     if (typeof obj !== 'object') return obj;
-    if (Array.isArray(obj)) return obj.map((v) => this.maskSensitive(v, depth + 1));
-    const result: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
-      if (ChatHandler.SENSITIVE_KEY_RE.test(key)) {
-        result[key] = '***';
-      } else {
-        result[key] = this.maskSensitive(value, depth + 1);
+    if (depth > 3) return '[MaxDepth]';
+    try {
+      if (Array.isArray(obj)) return obj.map((v) => this.maskSensitive(v, depth + 1));
+      const result: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+        if (ChatHandler.SENSITIVE_KEY_RE.test(key)) {
+          result[key] = '***';
+        } else {
+          result[key] = this.maskSensitive(value, depth + 1);
+        }
       }
+      return result;
+    } catch {
+      return '[Unserializable]';
     }
-    return result;
   }
 
+  /** Redact sensitive patterns in plain text (Bearer tokens, api_key=..., etc.). */
+  private redactSensitiveText(text: string): string {
+    return text.replace(ChatHandler.SENSITIVE_TEXT_RE, '$1***');
+  }
+
+  /** Detect error indicators in a parsed value (object or array). Returns true if error detected. */
+  private detectErrorInParsed(value: unknown): boolean {
+    if (!value || typeof value !== 'object') return false;
+    if (Array.isArray(value)) {
+      return value.some((item) => this.detectErrorInParsed(item));
+    }
+    const obj = value as Record<string, unknown>;
+    if (('isError' in obj && obj.isError) || ('success' in obj && obj.success === false)) {
+      return true;
+    }
+    return false;
+  }
+
+  /** Summarize tool call arguments with masking + truncation. Never throws. */
   private summarizeArgs(args: Record<string, unknown>): string {
-    const masked = this.maskSensitive(args) as Record<string, unknown>;
-    const json = this.safeStringify(masked);
-    return json.length > 200 ? json.slice(0, 197) + '...' : json;
+    try {
+      const masked = this.maskSensitive(args);
+      const json = this.safeStringify(masked);
+      const redacted = this.redactSensitiveText(json);
+      return redacted.length > 200 ? redacted.slice(0, 197) + '...' : redacted;
+    } catch {
+      return '[Unserializable]';
+    }
   }
 
+  /** Summarize tool result with ok detection, masking, and truncation. Never throws. */
   private summarizeToolResult(output: unknown): { ok: boolean; summary: string } {
-    // ok detection on raw output
-    const rawText = typeof output === 'string' ? output : this.safeStringify(output);
-    const trimmed = rawText.trimStart();
-    const isStringError = trimmed.startsWith('Error:');
-    const isObjError = !isStringError
-      && typeof output === 'object' && output !== null
-      && (('isError' in output && (output as { isError: unknown }).isError)
-        || ('success' in output && (output as { success: unknown }).success === false));
-    const ok = !isStringError && !isObjError;
-    // summary: mask sensitive fields for object outputs
-    const safeOutput = (typeof output === 'object' && output !== null) ? this.maskSensitive(output) : output;
-    const text = this.safeStringify(safeOutput);
-    const summary = text.length > 200 ? text.slice(0, 197) + '...' : text;
-    return { ok, summary };
+    try {
+      // --- ok detection ---
+      let ok = true;
+
+      if (typeof output === 'string') {
+        const trimmed = output.trimStart();
+        // Direct error string
+        if (trimmed.startsWith('Error:')) {
+          ok = false;
+        }
+        // JSON-stringified error objects: try limited parse
+        else if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+          try {
+            const parsed = JSON.parse(trimmed.length > 4096 ? trimmed.slice(0, 4096) : trimmed);
+            ok = !this.detectErrorInParsed(parsed);
+          } catch { /* not valid JSON — treat as ok */ }
+        }
+      } else if (typeof output === 'object' && output !== null) {
+        ok = !this.detectErrorInParsed(output);
+      }
+
+      // --- summary with masking + text redaction ---
+      let text: string;
+      if (typeof output === 'object' && output !== null) {
+        text = this.safeStringify(this.maskSensitive(output));
+      } else {
+        text = this.safeStringify(output);
+      }
+      // Always apply text-level redaction as final pass (catches Bearer tokens, etc.)
+      text = this.redactSensitiveText(text);
+      const summary = text.length > 200 ? text.slice(0, 197) + '...' : text;
+      return { ok, summary };
+    } catch {
+      return { ok: true, summary: '[Unserializable]' };
+    }
   }
 
   private formatUsage(usage: Record<string, unknown> | undefined): string {
     if (!usage) return 'N/A';
-    const input = (usage.inputTokens ?? usage.promptTokens) ?? '?';
-    const output = (usage.outputTokens ?? usage.completionTokens) ?? '?';
-    const total = usage.totalTokens ?? '?';
-    return `in=${input} out=${output} total=${total}`;
+    const input = (usage.inputTokens ?? usage.promptTokens);
+    const output = (usage.outputTokens ?? usage.completionTokens);
+    const total = usage.totalTokens ?? (typeof input === 'number' && typeof output === 'number' ? input + output : '?');
+    return `in=${input ?? '?'} out=${output ?? '?'} total=${total}`;
   }
 
 }
