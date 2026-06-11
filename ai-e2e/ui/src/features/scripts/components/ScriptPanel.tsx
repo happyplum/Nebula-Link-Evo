@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button, Card } from '@/shared/components';
 import { useSSE } from '@/hooks/use-sse.js';
+import { useStore } from 'zustand';
 import { createAIStatusStore } from '../../ai-status/store/aiStatusStore';
 import { useScripts, useGenerateScripts, useTransitionState, scriptsKeys, Script } from '../store/scriptsApi';
 import { ScriptList } from './ScriptList';
@@ -21,14 +22,13 @@ export default function ScriptPanel() {
   const { mutate: transitionState, isPending: isTransitioning } = useTransitionState(projectId!);
   const queryClient = useQueryClient();
   
-  // AI Status Store (lazy init to avoid React dispatcher null at module load)
-  const usePanelAIStatus = useRef(createAIStatusStore()).current;
-  const aiStatus = usePanelAIStatus((state) => state.status);
-  const aiProgress = usePanelAIStatus((state) => state.progress);
-  const aiMessage = usePanelAIStatus((state) => state.message);
-
-  const setAIStatus = usePanelAIStatus((state) => state.setStatus);
-  const setAIProgress = usePanelAIStatus((state) => state.setProgress);
+  // AI Status Store (vanilla store + useStore with selectors)
+  const aiStatusStore = useRef(createAIStatusStore()).current;
+  const aiStatus = useStore(aiStatusStore, (state) => state.status);
+  const aiProgress = useStore(aiStatusStore, (state) => state.progress);
+  const aiMessage = useStore(aiStatusStore, (state) => state.message);
+  const setAIStatus = useStore(aiStatusStore, (state) => state.setStatus);
+  const setAIProgress = useStore(aiStatusStore, (state) => state.setProgress);
 
   const invalidateScripts = () => {
     if (projectId) {
