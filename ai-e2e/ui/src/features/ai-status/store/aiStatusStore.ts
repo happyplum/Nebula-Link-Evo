@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+import { createStore } from 'zustand';
 
 export type AIStatus = 'idle' | 'running' | 'paused' | 'interrupted' | 'cancelled' | 'completed' | 'error';
 
@@ -18,7 +18,7 @@ export interface AIStatusState {
   updateFromSnapshot: (snapshot: Partial<AIStatusState>) => void;
 }
 
-export const createAIStatusStore = () => create<AIStatusState>((set) => ({
+export const createAIStatusStore = () => createStore<AIStatusState>((set) => ({
   status: 'idle',
   currentTask: null,
   progress: 0,

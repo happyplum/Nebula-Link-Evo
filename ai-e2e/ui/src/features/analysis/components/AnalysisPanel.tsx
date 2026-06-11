@@ -5,6 +5,7 @@ import { ModuleTree } from './ModuleTree.js';
 import { ModuleDetail } from './ModuleDetail.js';
 import { Button, Modal, Input, Card } from '@/shared/components';
 import { useSSE } from '@/hooks/use-sse.js';
+import { useStore } from 'zustand';
 import { createAIStatusStore } from '../../ai-status/store/aiStatusStore.js';
 import {
   useModules,
@@ -37,9 +38,9 @@ export const AnalysisPanel: React.FC = () => {
   const transitionState = useTransitionState(projectId || '');
   const decomposeAll = useDecomposeAll(projectId || '');
 
-  // AI Status Store (lazy init to avoid React dispatcher null at module load)
-  const usePanelAIStatus = useRef(createAIStatusStore()).current;
-  const { status, setStatus, setProgress, setMessage } = usePanelAIStatus();
+  // AI Status Store (vanilla store + useStore avoids dynamic hook creation)
+  const aiStatusStore = useRef(createAIStatusStore()).current;
+  const { status, setStatus, setProgress, setMessage } = useStore(aiStatusStore);
   const isAnalyzing = status === 'running';
 
   // SSE Integration

@@ -7,6 +7,7 @@ import { BindingEditor } from './BindingEditor';
 import { UnboundModuleIndicator } from './UnboundModuleIndicator';
 import { Button, Modal, Input, Card } from '@/shared/components';
 import { useSSE } from '@/hooks/use-sse.js';
+import { useStore } from 'zustand';
 import { createAIStatusStore } from '../../ai-status/store/aiStatusStore';
 import {
   useExplorationStatus,
@@ -46,9 +47,9 @@ export const ExplorationPanel: React.FC = () => {
   const rejectBinding = useRejectBinding(projectId || '');
   const transitionState = useTransitionState(projectId || '');
 
-  // AI Status Store (lazy init)
-  const usePanelAIStatus = useRef(createAIStatusStore()).current;
-  const { status, setStatus, setProgress, setMessage } = usePanelAIStatus();
+  // AI Status Store (vanilla store + useStore)
+  const aiStatusStore = useRef(createAIStatusStore()).current;
+  const { status, setStatus, setProgress, setMessage } = useStore(aiStatusStore);
   const isExploring = status === 'running' || statusData?.status === 'running';
 
   // SSE Integration
