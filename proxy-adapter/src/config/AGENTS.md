@@ -22,6 +22,14 @@ Runtime config loading, placeholder resolution, validation, and capability check
 - Resolve env placeholders before provider availability or capability checks.
 - Validate enabled MCP servers for `command`; missing args are warnings, not fatal errors.
 
+## Resolver Provider Grading
+
+- `resolver.ts` grades provider apiKey resolution failures by role:
+  - **Decision provider** (carries `defaults.decision`): apiKey missing → `errors` (fatal, blocks startup)
+  - **Non-decision provider** (e.g., vision-only): apiKey missing → `warnings` (non-fatal, allows startup)
+  - **Shared provider** (used by both decision and vision): apiKey missing → fatal
+- `loader.ts` preserves resolver `warnings` in its return value so upstream consumers can display them.
+
 ## Contributor Traps
 
 - A config can be structurally present but still invalid because `providers.*.apiKey` is empty (no _resolved wrapper anymore).

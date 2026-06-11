@@ -22,7 +22,7 @@ Browser ←→ Debug UI (:5173 dev / standalone build)
 
 **目标定位**：采用 7 级目标链，依次尝试 nebula-id → role → testid → aria → text → css → xpath 选择器，确保精准定位页面元素。
 
-**视觉标记**：Vision Marker System 将操作坐标与 DOM 元素关联；`vision-agent` 负责基于标注截图和 DOM 快照调用视觉模型完成元素匹配，配置缺失或初始化失败时降级为不可用工具而不阻断 Proxy Adapter 启动。
+**视觉标记**：Vision Marker System 将操作坐标与 DOM 元素关联；`vision-agent` 负责基于标注截图和 DOM 快照调用视觉模型完成元素匹配。Vision agent 配置通过 `config.json` 的 `defaults.vision` 字段指定 provider/model，由 resolver 自动解析对应的 apiKey 和 baseUrl，不需要设置独立环境变量；配置缺失或初始化失败时降级为不可用工具而不阻断 Proxy Adapter 启动。
 
 ### Agent Chat 会话
 
@@ -114,7 +114,9 @@ curl http://localhost:3000/api/health
 
 ```
 debug-ui/           # Frontend (React 19 + TypeScript + Vite)
-proxy-adapter/      # Backend (Fastify, AI orchestration)
+proxy-adapter/      # Backend (Fastify, AI orchestration, MCP Gateway)
+  src/mcps/         #   Built-in MCP modules (vision-agent)
+  src/tools/        #   ToolRegistry + providers (browser-control, vision-agent, MCP client)
 playwright-server/  # Browser service (Playwright)
 ai-e2e/             # E2E automation orchestrator (consumes proxy-adapter HTTP API)
 shared/             # Shared types & utils (@nebula-link-evo/shared)
