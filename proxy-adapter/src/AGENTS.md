@@ -11,7 +11,7 @@ Backend source for AI clients, conversations, debug APIs, and chat session coord
 | Server bootstrap | `server.ts`     | Route registration, service init                               |
 | Services         | `services/`     | Config facade, session control, stream persistence, chat       |
 | Plugins          | `plugins/`      | Fastify plugins and route modules                              |
-| Clients          | `clients/`      | Decision, vision, MCP, Vercel AI SDK                           |
+| Clients          | `clients/`      | Decision, MCP, Vercel AI SDK                              |
 | Conversation     | `conversation/` | SQLite storage, compression, manager                           |
 | Config           | `config/`       | Schema, loader, resolver, validator                            |
 | Debug helpers    | `debug/`        | Debug-specific types and helpers                               |
