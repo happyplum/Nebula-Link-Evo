@@ -340,6 +340,14 @@ class ChatHandler {
     let loopVerdict: LoopGuardVerdict | null = null;
     let pendingNudge: string | undefined;
 
+    // Step-level tracking for terminal logging
+    let currentStep = 0;
+    let stepTextChars = 0;
+    let stepToolCount = 0;
+    let stepHadReasoning = false;
+    let totalSteps = 0;
+    let totalToolCalls = 0;
+
     await this.emitSessionEvent(sessionId, 'assistant.started', {
       sessionId,
       runId,
@@ -451,7 +459,7 @@ class ChatHandler {
     this.logger.debug({ screenshotLength: screenshot?.length ?? 0 }, 'executeAIResponse');
 
     try {
-      this.logger.info({ provider: activeProvider, model: activeModel }, 'Using SDK model');
+      this.logger.info({ sessionId, runId, provider: activeProvider, model: activeModel }, 'chat.ai.start');
       const result = await streamText(streamOptions);
 
       for await (const streamPart of result.fullStream) {
@@ -459,6 +467,7 @@ class ChatHandler {
 
         if (part.type === 'text-delta' && typeof part.text === 'string') {
           accumulatedContent += part.text;
+          stepTextChars += part.text.length;
           this.emitStreamingEvent(sessionId, 'assistant.delta', {
             sessionId,
             runId,
@@ -472,6 +481,10 @@ class ChatHandler {
           (part.type === 'reasoning' || part.type === 'reasoning-delta') &&
           typeof part.text === 'string'
         ) {
+          if (!stepHadReasoning) {
+            stepHadReasoning = true;
+            this.logger.info({ sessionId, runId, step: currentStep }, 'chat.reasoning.start');
+          }
           this.emitStreamingEvent(sessionId, 'assistant.thinking', {
             sessionId,
             runId,
@@ -488,6 +501,12 @@ class ChatHandler {
           const toolCallId = rawId ?? `tc_${sessionId}_${runId ?? 'run'}_${emittedToolCalls.length}`;
           const toolName = typeof part.toolName === 'string' ? part.toolName : 'unknown.tool';
           const toolInput = this.normalizeToRecord(part.input);
+          stepToolCount++;
+          totalToolCalls++;
+          this.logger.info(
+            { sessionId, runId, step: currentStep, tool: toolName, call: toolCallId, args: this.summarizeArgs(toolInput) },
+            'chat.tool.call',
+          );
           const toolCall = {
             id: toolCallId,
             type: 'function',
@@ -540,6 +559,11 @@ class ChatHandler {
           const toolName = typeof part.toolName === 'string' ? part.toolName : 'unknown.tool';
           const toolInput = this.normalizeToRecord(part.input);
           const output = part.output;
+          const resultSummary = this.summarizeToolResult(output);
+          this.logger.info(
+            { sessionId, runId, step: currentStep, tool: toolName, call: toolCallId, ok: resultSummary.ok, result: resultSummary.summary },
+            'chat.tool.result',
+          );
 
           this.conversationManager.addMessage(sessionId, {
             role: 'tool',
@@ -573,6 +597,27 @@ class ChatHandler {
         }
 
         if (part.type === 'finish-step') {
+          totalSteps++;
+          this.logger.info(
+            {
+              sessionId,
+              runId,
+              step: currentStep,
+              finishReason: typeof (part as { finishReason?: string }).finishReason === 'string'
+                ? (part as { finishReason?: string }).finishReason
+                : undefined,
+              tools: stepToolCount,
+              textChars: stepTextChars,
+              reasoning: stepHadReasoning,
+            },
+            'chat.step.done',
+          );
+          // Reset per-step counters for the next step
+          currentStep++;
+          stepTextChars = 0;
+          stepToolCount = 0;
+          stepHadReasoning = false;
+
           await this.flushSessionEvents();
 
           if (sessionController.shouldPause(sessionId, 'afterGeneration')) {
@@ -615,7 +660,8 @@ class ChatHandler {
         }
 
         if (part.type === 'abort') {
-          this.logger.debug({ sessionId }, 'Stream aborted');
+          this.logger.warn({ sessionId, runId, step: currentStep, tools: totalToolCalls }, 'chat.aborted');
+          this.conversationManager.clearActiveToolCalls(sessionId);
           return;
         }
       }
@@ -625,7 +671,8 @@ class ChatHandler {
       }
 
       if (signal?.aborted) {
-        this.logger.debug({ sessionId }, 'Execution aborted');
+        this.logger.warn({ sessionId, runId, step: currentStep, tools: totalToolCalls }, 'chat.aborted');
+        this.conversationManager.clearActiveToolCalls(sessionId);
         return;
       }
 
@@ -635,6 +682,10 @@ class ChatHandler {
         // Critical: force terminate, fall through to completion with override
       } else if (loopVerdict && pendingNudge) {
         if (restartCount < MAX_RESTARTS) {
+          this.logger.info(
+            { sessionId, runId, steps: totalSteps, tools: totalToolCalls, restartCount: restartCount + 1 },
+            'chat.loop.restart',
+          );
           return this.executeAIResponse(
             _clientId, sessionId, session,
             iteration, screenshot, signal,
@@ -670,6 +721,20 @@ class ChatHandler {
         messageId,
         terminal_reason: terminalReason,
       });
+
+      this.logger.info(
+        {
+          sessionId,
+          runId,
+          finishReason: terminalReason,
+          steps: totalSteps,
+          tools: totalToolCalls,
+          textChars: accumulatedContent.length,
+          usage: this.formatUsage(totalUsage),
+        },
+        'chat.done',
+      );
+
       const completionStatus: SessionStatus = pauseRequested ? 'paused' : 'completed';
       const latestState = await this.conversationManager.getSessionState(sessionId);
       const nextAgentState = {
@@ -687,13 +752,14 @@ class ChatHandler {
       }
     } catch (error) {
       if (signal?.aborted || this.isAbortLikeError(error)) {
-        this.logger.debug({ sessionId }, 'Execution aborted');
+        this.logger.warn({ sessionId, runId, step: currentStep, tools: totalToolCalls }, 'chat.aborted');
+        this.conversationManager.clearActiveToolCalls(sessionId);
         return;
       }
 
       const errorMessage = error instanceof Error ? error.message : String(error);
       const errorStack = error instanceof Error ? error.stack : undefined;
-      this.logger.error({ sessionId, provider: session.provider, model: session.model, iteration, error: errorMessage, stack: errorStack }, 'Failed to stream AI response');
+      this.logger.error({ sessionId, runId, provider: session.provider, model: session.model, iteration, error: errorMessage, stack: errorStack }, 'Failed to stream AI response');
       await this.flushSessionEvents();
       this.conversationManager.clearActiveToolCalls(sessionId);
 
@@ -834,6 +900,78 @@ class ChatHandler {
       abortError.message === 'canceled' ||
       abortError.message === 'interrupted'
     );
+  }
+
+  // --- Log summarization helpers ---
+
+  private static readonly SENSITIVE_KEY_RE = /password|token|api[_-]?key|authorization|cookie|secret|access[_-]?token/i;
+
+  private safeStringify(value: unknown): string {
+    try {
+      if (typeof value === 'string') return value;
+      if (value === undefined) return '';
+      if (value === null) return 'null';
+      if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+      if (typeof value === 'bigint') return `${value}n`;
+      const seen = new WeakSet();
+      const json = JSON.stringify(value, (_key, val) => {
+        if (typeof val === 'object' && val !== null) {
+          if (seen.has(val)) return '[Circular]';
+          seen.add(val);
+        }
+        if (typeof val === 'bigint') return `${val}n`;
+        return val;
+      });
+      return json ?? String(value);
+    } catch {
+      return String(value);
+    }
+  }
+
+  private maskSensitive(obj: unknown, depth = 0): unknown {
+    if (depth > 3 || obj === null || obj === undefined) return obj;
+    if (typeof obj !== 'object') return obj;
+    if (Array.isArray(obj)) return obj.map((v) => this.maskSensitive(v, depth + 1));
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+      if (ChatHandler.SENSITIVE_KEY_RE.test(key)) {
+        result[key] = '***';
+      } else {
+        result[key] = this.maskSensitive(value, depth + 1);
+      }
+    }
+    return result;
+  }
+
+  private summarizeArgs(args: Record<string, unknown>): string {
+    const masked = this.maskSensitive(args) as Record<string, unknown>;
+    const json = this.safeStringify(masked);
+    return json.length > 200 ? json.slice(0, 197) + '...' : json;
+  }
+
+  private summarizeToolResult(output: unknown): { ok: boolean; summary: string } {
+    // ok detection on raw output
+    const rawText = typeof output === 'string' ? output : this.safeStringify(output);
+    const trimmed = rawText.trimStart();
+    const isStringError = trimmed.startsWith('Error:');
+    const isObjError = !isStringError
+      && typeof output === 'object' && output !== null
+      && (('isError' in output && (output as { isError: unknown }).isError)
+        || ('success' in output && (output as { success: unknown }).success === false));
+    const ok = !isStringError && !isObjError;
+    // summary: mask sensitive fields for object outputs
+    const safeOutput = (typeof output === 'object' && output !== null) ? this.maskSensitive(output) : output;
+    const text = this.safeStringify(safeOutput);
+    const summary = text.length > 200 ? text.slice(0, 197) + '...' : text;
+    return { ok, summary };
+  }
+
+  private formatUsage(usage: Record<string, unknown> | undefined): string {
+    if (!usage) return 'N/A';
+    const input = (usage.inputTokens ?? usage.promptTokens) ?? '?';
+    const output = (usage.outputTokens ?? usage.completionTokens) ?? '?';
+    const total = usage.totalTokens ?? '?';
+    return `in=${input} out=${output} total=${total}`;
   }
 
 }
