@@ -116,9 +116,7 @@ export const useChatStore = create<ChatState>()((set) => ({
 
   removeSession: (sessionId) =>
     set((s) => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { [sessionId]: _removedMsg, ...msgRest } = s.messagesBySession;
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { [sessionId]: _removedVis, ...visRest } = s.visibleMessageCounts;
       return {
         sessions: s.sessions.filter((session) => session.id !== sessionId),
@@ -315,7 +313,6 @@ export const useChatStore = create<ChatState>()((set) => ({
 
   resetVisibleMessages: (sessionId) =>
     set((s) => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { [sessionId]: _removed, ...rest } = s.visibleMessageCounts;
       return { visibleMessageCounts: rest };
     }),

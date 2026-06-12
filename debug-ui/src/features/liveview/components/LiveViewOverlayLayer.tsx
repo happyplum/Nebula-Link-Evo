@@ -607,11 +607,13 @@ export function LiveViewOverlayLayer({
   useEffect(() => {
     if (!elementPickerEnabled) {
       pickerCursorRef.current = null;
-      setHoveredElement(null);
+      // Delay state update to avoid synchronous setState in effect
+      const timeoutId = setTimeout(() => setHoveredElement(null), 0);
       if (hoverDebounceRef.current !== null) {
         window.clearTimeout(hoverDebounceRef.current);
         hoverDebounceRef.current = null;
       }
+      return () => clearTimeout(timeoutId);
     }
   }, [elementPickerEnabled]);
 

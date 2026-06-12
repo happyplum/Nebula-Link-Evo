@@ -37,7 +37,7 @@ function SchemaProp({
     if (prop.type === 'object' && prop.required) return new Set(prop.required);
     if (prop.type === 'array' && prop.items?.required) return new Set(prop.items.required);
     return EMPTY_SET;
-  }, [open, prop.type, prop.required, prop.items?.required]);
+  }, [prop.type, prop.required, prop.items]);
 
   return (
     <li className={styles.schemaItem}>
@@ -201,7 +201,7 @@ export function McpToolsModal({ serverName, onClose }: McpToolsModalProps) {
           <div className={styles.toolsList}>
             {serverTools.map((tool) => {
               const isSelected = selectedTool === tool.name;
-              const actualToolName = tool.name.substring(serverName!.length + 1);
+              const actualToolName = serverName ? tool.name.substring(serverName.length + 1) : '';
               const req = new Set(tool.inputSchema?.required ?? []);
 
               return (

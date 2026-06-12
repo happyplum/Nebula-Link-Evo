@@ -5,7 +5,6 @@ import {
   selectActiveSessionId,
   selectScreenshotData,
 } from '../store/chat.store.js';
-import { useRuntimeStore } from '@/features/runtime/store/index.js';
 import { apiChatSessionMessages, DEBUG_PLAYWRIGHT_SCREENSHOT } from '@/shared/api/endpoints.js';
 import { testIds } from '@/shared/testing/testids.js';
 import styles from './Composer.module.css';

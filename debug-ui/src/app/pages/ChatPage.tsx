@@ -362,7 +362,9 @@ export default function ChatPage() {
         )}
         <MessageList />
         <div ref={queuePanelRef}>
-          <QueueFloatingPanel sessionId={activeSessionId!} />
+          {activeSessionId != null && (
+            <QueueFloatingPanel sessionId={activeSessionId} />
+          )}
         </div>
       </div>
 

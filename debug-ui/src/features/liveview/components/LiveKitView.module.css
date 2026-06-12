@@ -6,6 +6,14 @@
   overflow: hidden;
 }
 
+.container :global(video) {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .canvas {
   position: absolute;
   inset: 0;

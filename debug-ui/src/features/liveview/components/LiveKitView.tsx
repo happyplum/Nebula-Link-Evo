@@ -48,7 +48,6 @@ export default function LiveKitView({
 
   // Viewport ref for use inside render loop callbacks (avoids stale closure)
   const viewportRef = useRef(viewport);
-  viewportRef.current = viewport;
 
   // rVFC lifecycle: track callback ID for explicit cancel
   const videoFrameCallbackIdRef = useRef<number | null>(null);
@@ -58,7 +57,12 @@ export default function LiveKitView({
   const isConfirmedClosed = playwrightStatusHydrated && !isPlaywrightOpen;
 
   const isConfirmedClosedRef = useRef(isConfirmedClosed);
-  isConfirmedClosedRef.current = isConfirmedClosed;
+
+  // Sync refs with latest values after render
+  useEffect(() => {
+    viewportRef.current = viewport;
+    isConfirmedClosedRef.current = isConfirmedClosed;
+  }, [viewport, isConfirmedClosed]);
 
   const captureScreenshot = useCallback(
     (canvas: HTMLCanvasElement) => {
@@ -211,8 +215,9 @@ export default function LiveKitView({
   // Fetch LiveKit token when transport should start
   useEffect(() => {
     if (!shouldStartTransport) {
-      setTokenData(null);
-      return;
+      // Delay state update to avoid synchronous setState in effect
+      const timeoutId = setTimeout(() => setTokenData(null), 0);
+      return () => clearTimeout(timeoutId);
     }
 
     let cancelled = false;
@@ -255,7 +260,9 @@ export default function LiveKitView({
   useEffect(() => {
     if (isConfirmedClosed && isConnected) {
       disconnect();
-      setTokenData(null);
+      // Delay state update to avoid synchronous setState in effect
+      const timeoutId = setTimeout(() => setTokenData(null), 0);
+      return () => clearTimeout(timeoutId);
     }
   }, [disconnect, isConnected, isConfirmedClosed]);
 
@@ -291,16 +298,19 @@ export default function LiveKitView({
     videoRef.current = videoElement;
 
     if (videoElement) {
-      videoElement.style.cssText =
-        'position:absolute;width:0;height:0;opacity:0;pointer-events:none;';
-      containerRef.current?.appendChild(videoElement);
-      startVideoFrameLoop();
+      // Append to container - video element will be hidden by CSS
+      const container = containerRef.current;
+      if (container) {
+        container.appendChild(videoElement);
+        startVideoFrameLoop();
+      }
     }
 
     return () => {
       cancelVideoFrameLoop();
-      if (videoElement && videoElement.parentNode) {
-        videoElement.parentNode.removeChild(videoElement);
+      // Only remove from our container, don't modify the element itself
+      if (videoElement && containerRef.current?.contains(videoElement)) {
+        containerRef.current.removeChild(videoElement);
       }
       // Only clear overlay on confirmed close, not during optimistic bootstrap
       if (isConfirmedClosedRef.current) {

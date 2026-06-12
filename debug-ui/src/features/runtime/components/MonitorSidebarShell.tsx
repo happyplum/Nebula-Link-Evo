@@ -146,7 +146,6 @@ export function MonitorSidebarShell() {
 
   const handleFetchTabs = useCallback(async () => {
     setFetchingTabs(true);
-    setActionError(null);
     try {
       const res = await fetchBrowserTabs();
       if (res.success && res.tabs) {
@@ -192,7 +191,15 @@ export function MonitorSidebarShell() {
 
   useEffect(() => {
     if (playwrightStatus === 'ready') {
-      void handleFetchTabs();
+      // Use a ref to prevent duplicate calls, avoiding synchronous setState issues
+      const calledRef = { current: false };
+      const fetchTabsIfNotCalled = async () => {
+        if (!calledRef.current) {
+          calledRef.current = true;
+          await handleFetchTabs();
+        }
+      };
+      void fetchTabsIfNotCalled();
     }
   }, [playwrightStatus, handleFetchTabs]);
 

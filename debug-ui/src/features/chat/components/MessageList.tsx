@@ -27,13 +27,15 @@ export const MessageList: React.FC = () => {
 
   const streamingMessage = useMemo(() => {
     if (!isStreaming || (!streamingContent && !streamingThinking && streamingToolCalls.length === 0)) return null;
+    // Use a stable timestamp based on content data instead of Date.now() which is impure
+    const contentBasedTimestamp = streamingContent.length + streamingThinking.length + streamingToolCalls.length * 1000;
     return {
       id: '__streaming__',
       role: 'assistant' as const,
       content: streamingContent || '',
       thinking: streamingThinking || undefined,
       isStreaming: true,
-      timestamp: Date.now(),
+      timestamp: contentBasedTimestamp,
     };
   }, [isStreaming, streamingContent, streamingThinking, streamingToolCalls]);
   const visibleCount = useChatStore((s) =>

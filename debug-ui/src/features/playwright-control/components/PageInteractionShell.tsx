@@ -71,8 +71,13 @@ export const PageInteractionShell: FC<PageInteractionShellProps> = ({
       return;
     }
 
-    setCoordX(String(capturedCoordinates.x));
-    setCoordY(String(capturedCoordinates.y));
+    // Delay state updates to avoid synchronous setState in effect
+    const timeoutId = setTimeout(() => {
+      setCoordX(String(capturedCoordinates.x));
+      setCoordY(String(capturedCoordinates.y));
+    }, 0);
+
+    return () => clearTimeout(timeoutId);
   }, [capturedCoordinates]);
 
   useEffect(() => {
@@ -80,17 +85,22 @@ export const PageInteractionShell: FC<PageInteractionShellProps> = ({
       return;
     }
 
-    if (selectedElement.markerNumber !== undefined) {
-      setSelectorMode('marker');
-      setMarkerId(String(selectedElement.markerNumber));
-    }
-
-    if (selectedElement.selector) {
-      if (selectedElement.markerNumber === undefined) {
-        setSelectorMode('css');
+    // Delay state updates to avoid synchronous setState in effect
+    const timeoutId = setTimeout(() => {
+      if (selectedElement.markerNumber !== undefined) {
+        setSelectorMode('marker');
+        setMarkerId(String(selectedElement.markerNumber));
       }
-      setCssSelector(selectedElement.selector);
-    }
+
+      if (selectedElement.selector) {
+        if (selectedElement.markerNumber === undefined) {
+          setSelectorMode('css');
+        }
+        setCssSelector(selectedElement.selector);
+      }
+    }, 0);
+
+    return () => clearTimeout(timeoutId);
   }, [selectedElement]);
 
   const handleCoordClick = useCallback(async () => {

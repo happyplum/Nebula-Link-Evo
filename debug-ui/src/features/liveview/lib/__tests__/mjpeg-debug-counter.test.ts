@@ -41,7 +41,7 @@ function toStream(data: Uint8Array): ReadableStream<Uint8Array> {
 }
 
 /** Collect all frames from a TransformStream */
-async function collectFramesFromTransform(
+async function _collectFramesFromTransform(
   stream: ReadableStream<Uint8Array>,
   boundary: string
 ): Promise<Uint8Array[]> {
