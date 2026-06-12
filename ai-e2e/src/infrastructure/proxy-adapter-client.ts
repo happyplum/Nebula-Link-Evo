@@ -15,7 +15,12 @@ export interface TextGenerationResult {
 export interface ProxyAdapterClientConfig {
   baseUrl?: string;
   projectId?: string;
+  /** Legacy single timeout applied to both AI and Playwright requests. Use aiTimeout / playwrightTimeout for fine-grained control. */
   timeout?: number;
+  /** Timeout for AI text generation requests (ms). Overrides timeout for AI calls. */
+  aiTimeout?: number;
+  /** Timeout for Playwright / debug requests (ms). Overrides timeout for Playwright calls. */
+  playwrightTimeout?: number;
 }
 
 interface AiGenerateResponse {
@@ -55,8 +60,8 @@ export class ProxyAdapterClient {
   constructor(config: ProxyAdapterClientConfig = {}) {
     this.baseUrl = resolveBaseUrl(config.baseUrl);
     this.projectId = config.projectId;
-    this.aiTimeout = config.timeout ?? DEFAULT_AI_TIMEOUT_MS;
-    this.playwrightTimeout = config.timeout ?? DEFAULT_PLAYWRIGHT_TIMEOUT_MS;
+    this.aiTimeout = config.aiTimeout ?? config.timeout ?? DEFAULT_AI_TIMEOUT_MS;
+    this.playwrightTimeout = config.playwrightTimeout ?? config.timeout ?? DEFAULT_PLAYWRIGHT_TIMEOUT_MS;
     this.client = axios.create({
       baseURL: this.baseUrl ?? undefined,
       headers: {

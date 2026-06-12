@@ -12,7 +12,7 @@ import type { ScriptRepository } from '../database/repositories/script-repositor
 import type { ExecutionRunRepository, ExecutionRun } from '../database/repositories/execution-run-repository.js';
 
 /** Default execution timeout: 5 minutes */
-const DEFAULT_TIMEOUT_MS = 300_000;
+export const DEFAULT_TIMEOUT_MS = 300_000;
 
 /** Artifacts base directory relative to ai-e2e root */
 const ARTIFACTS_DIR = join(process.cwd(), 'artifacts');
@@ -43,13 +43,67 @@ export interface ExecuteOptions {
   timeout?: number;
 }
 
+export interface ExecutorServiceOptions {
+  /** Default per-execution timeout in ms (falls back to DEFAULT_TIMEOUT_MS). */
+  defaultTimeout?: number;
+  /** Maximum number of concurrent executions. Default: 1 (serial, backward compatible). */
+  maxConcurrency?: number;
+}
+
+/**
+ * Simple semaphore for limiting concurrency.
+ * No external dependencies — just a counter + FIFO wait queue.
+ * When a slot is immediately available, tryAcquire() succeeds synchronously
+ * so callers can keep the fast path non-async.
+ */
+class Semaphore {
+  private available: number;
+  private readonly waiters: Array<() => void> = [];
+
+  constructor(maxConcurrency: number) {
+    this.available = Math.max(1, Math.floor(maxConcurrency));
+  }
+
+  /** Synchronously acquire a slot if available. Returns true on success. */
+  tryAcquire(): boolean {
+    if (this.available > 0) {
+      this.available--;
+      return true;
+    }
+    return false;
+  }
+
+  /** Asynchronously wait for a slot. Only call after tryAcquire() returned false. */
+  waitForSlot(): Promise<void> {
+    return new Promise((resolve) => {
+      this.waiters.push(resolve);
+    });
+  }
+
+  release(): void {
+    const next = this.waiters.shift();
+    if (next) {
+      // Hand the slot directly to the next waiter without incrementing.
+      next();
+    } else {
+      this.available++;
+    }
+  }
+}
+
 export class ExecutorService {
   private activeProcesses = new Map<string, ChildProcess>();
+  private readonly defaultTimeout: number;
+  private readonly semaphore: Semaphore;
 
   constructor(
     private scriptRepo: ScriptRepository,
     private runRepo: ExecutionRunRepository,
-  ) {}
+    options?: ExecutorServiceOptions,
+  ) {
+    this.defaultTimeout = options?.defaultTimeout ?? DEFAULT_TIMEOUT_MS;
+    this.semaphore = new Semaphore(options?.maxConcurrency ?? 1);
+  }
 
   /**
    * Execute a script by ID.
@@ -63,6 +117,27 @@ export class ExecutorService {
       throw new Error(`Script not found: ${scriptId}`);
     }
 
+    const runWithSlot = (): Promise<ExecutionResult> =>
+      this.spawnScript(script, options).finally(() => this.semaphore.release());
+
+    // Fast path: slot available → spawn synchronously (preserves original timing)
+    if (this.semaphore.tryAcquire()) {
+      return runWithSlot();
+    }
+
+    // Slow path: all slots busy → wait in queue
+    return this.semaphore.waitForSlot().then(runWithSlot);
+  }
+
+  /**
+   * Core spawn lifecycle — assumes a concurrency slot has already been acquired.
+   * The caller is responsible for releasing the semaphore via the returned
+   * promise's finally chain.
+   */
+  private spawnScript(
+    script: { id: string; version: number; content: string },
+    options?: ExecuteOptions,
+  ): Promise<ExecutionResult> {
     // Create execution run record
     const run = this.runRepo.create({
       script_id: script.id,
@@ -81,19 +156,22 @@ export class ExecutorService {
     // Write script content to temp file
     writeFileSync(scriptPath, script.content, 'utf-8');
 
-    const timeout = options?.timeout ?? DEFAULT_TIMEOUT_MS;
+    const timeout = options?.timeout ?? this.defaultTimeout;
     let stdout = '';
     let stderr = '';
     let killed = false;
 
     return new Promise<ExecutionResult>((resolve) => {
-      const cp = spawn('npx', ['tsx', scriptPath], {
+      // Use platform-specific npx binary directly (no shell) to avoid
+      // shell injection and quoting issues. SCRIPTS_TMP_DIR is under
+      // the OS temp directory so there are no spaces in the path.
+      const npxBin = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+      const cp = spawn(npxBin, ['tsx', scriptPath], {
         env: {
           ...process.env,
           PLAYWRIGHT_BROWSERS_PATH: process.env.PLAYWRIGHT_BROWSERS_PATH,
         },
         stdio: ['pipe', 'pipe', 'pipe'],
-        shell: true,
       });
 
       this.activeProcesses.set(runId, cp);
