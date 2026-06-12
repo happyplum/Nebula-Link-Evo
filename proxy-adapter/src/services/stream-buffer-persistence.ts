@@ -101,7 +101,7 @@ export class StreamBufferPersistenceManager {
        ORDER BY chunk_index ASC`
     );
 
-    const rows = stmt.all(sessionId, fromIndex) as ChunkRow[];
+    const rows = stmt.all(sessionId, fromIndex) as unknown as ChunkRow[];
 
     return rows.map((row) => ({
       index: row.chunk_index,
@@ -178,7 +178,7 @@ export class StreamBufferPersistenceManager {
 
     logger.info({ changes: result.changes, olderThanHours }, 'Cleaned up old chunks');
 
-    return result.changes;
+    return Number(result.changes);
   }
 
   /**
@@ -201,7 +201,7 @@ export class StreamBufferPersistenceManager {
 
     logger.info({ changes: result.changes, sessionId }, 'Cleaned up session chunks');
 
-    return result.changes;
+    return Number(result.changes);
   }
 
   /**

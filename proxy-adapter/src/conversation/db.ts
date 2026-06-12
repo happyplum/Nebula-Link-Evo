@@ -1,4 +1,4 @@
-import { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { randomUUID } from 'node:crypto';
 import { SessionStateDAO } from './session-state-dao.js';
 import { SessionEventsDAO } from './session-events-dao.js';
@@ -354,7 +354,7 @@ class DatabaseManager {
     // Build SQL with placeholders - safe from SQL injection as values are passed separately
     const sql = `UPDATE sessions SET ${updates.join(', ')} WHERE id = ?`;
     const stmt = this.db.prepare(sql);
-    stmt.run(...values);
+    stmt.run(...(values as SQLInputValue[]));
 
     return this.getSession(id);
   }
@@ -375,7 +375,7 @@ class DatabaseManager {
 
     // Use rowid as a stable tie-breaker when timestamps are equal (common in fast unit tests).
     const stmt = this.db.prepare('SELECT * FROM sessions ORDER BY updated_at DESC, rowid DESC');
-    const rows = stmt.all() as SessionRow[];
+    const rows = stmt.all() as unknown as SessionRow[];
 
     return rows.map((row) => ({
       id: row.id,
@@ -448,7 +448,7 @@ class DatabaseManager {
     const stmt = this.db.prepare(
       'SELECT * FROM messages WHERE session_id = ? ORDER BY created_at ASC'
     );
-    const rows = stmt.all(sessionId) as MessageRow[];
+    const rows = stmt.all(sessionId) as unknown as MessageRow[];
 
     return rows.map((row) => ({
       id: row.id,
@@ -473,7 +473,7 @@ class DatabaseManager {
     const stmt = this.db.prepare(
       'SELECT * FROM messages WHERE session_id = ? ORDER BY created_at ASC LIMIT ? OFFSET ?'
     );
-    const rows = stmt.all(sessionId, limit, offset) as MessageRow[];
+    const rows = stmt.all(sessionId, limit, offset) as unknown as MessageRow[];
 
     const countStmt = this.db.prepare(
       'SELECT COUNT(*) as total FROM messages WHERE session_id = ?'
@@ -542,7 +542,7 @@ class DatabaseManager {
     }
 
     const stmt = this.db.prepare(sql);
-    return stmt.all(...params);
+    return stmt.all(...(params as SQLInputValue[]));
   }
 
   insertInteraction(params: CreateInteractionParams): Interaction {
@@ -574,7 +574,7 @@ class DatabaseManager {
     );
 
     const insertStmt = this.db.prepare('SELECT * FROM interactions WHERE id = ?');
-    const row = insertStmt.get(result.lastInsertRowid) as InteractionRow;
+    const row = insertStmt.get(result.lastInsertRowid) as unknown as InteractionRow;
 
     return this.mapRowToInteraction(row);
   }
@@ -634,7 +634,7 @@ class DatabaseManager {
     }
 
     const stmt = this.db.prepare(sql);
-    const rows = stmt.all(...params) as InteractionRow[];
+    const rows = stmt.all(...(params as SQLInputValue[])) as unknown as InteractionRow[];
 
     return rows.map((row) => this.mapRowToInteraction(row));
   }
@@ -775,7 +775,7 @@ class DatabaseManager {
 
     const sql = `UPDATE operation_logs SET ${updates.join(', ')} WHERE id = ?`;
     const stmt = this.db.prepare(sql);
-    stmt.run(...values);
+    stmt.run(...(values as SQLInputValue[]));
 
     return this.getOperation(traceId);
   }
@@ -788,7 +788,7 @@ class DatabaseManager {
     const stmt = this.db.prepare(
       'SELECT * FROM operation_logs WHERE session_id = ? ORDER BY start_time DESC'
     );
-    const rows = stmt.all(sessionId) as OperationLogRow[];
+    const rows = stmt.all(sessionId) as unknown as OperationLogRow[];
 
     return rows.map((row) => ({
       traceId: row.id,

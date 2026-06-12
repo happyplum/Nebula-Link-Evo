@@ -2,7 +2,7 @@
   "name": "playwright-server",
   "version": "1.0.0",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.5.0"
   },
   "type": "module",
   "scripts": {
@@ -31,7 +31,7 @@
     "fastify-plugin": "catalog:",
     "livekit-server-sdk": "catalog:",
     "pino": "^10.3.1",
-    "playwright": "^1.41.0",
+    "playwright": "^1.58.2",
     "sharp": "catalog:",
     "ws": "catalog:"
   },

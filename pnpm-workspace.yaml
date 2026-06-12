@@ -19,7 +19,7 @@ catalog:
   '@fastify/type-provider-typebox': ^4.1.0
   '@fastify/websocket': ^11.1.0
   '@sinclair/typebox': ^0.32.35
-  '@types/node': ^20.0.0
+  '@types/node': ^22.0.0
   '@types/ws': ^8.18.1
   '@vitest/coverage-v8': ^4.0.18
   axios: ^1.6.5
