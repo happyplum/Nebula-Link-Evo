@@ -158,7 +158,7 @@ ai-e2e (:3002)
 
 ### 当前缺口（2026-06-05 验收后识别）
 
-4. **SPA 探索器无效** — BFS 对 HashRouter/History API SPA 发现 0 个 URL
+4. ~~SPA 探索器无效~~ — 已实现 SPA-aware BFS：通过渲染后 DOM、History API / hashchange 观察器和可访问 router 配置补充 HashRouter / History API 路由发现
 5. **page_snapshot_json 缺失** — 手动 URL 无快照，脚本质量崩溃（4.6% 通过率）
 6. **AI 模板约束执行不足** — AI 偶尔生成 test()/expect()/waitForLoadState/前缀
 

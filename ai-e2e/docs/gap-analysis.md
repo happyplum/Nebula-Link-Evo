@@ -93,7 +93,7 @@
 
 #### 未完全对齐
 
-- **SPA 探索无效**：BFS 爬取策略对 HashRouter/History API SPA 发现 0 个 URL
+- **SPA 探索增强已实现**：BFS 现在会补充读取渲染后 DOM、HashRouter/History API 观察结果和可访问 router 配置来发现 SPA 路由
 - 手动添加 URL 时无 DOM 快照 → 下游脚本质量崩溃（见模式五）
 
 ---
@@ -186,11 +186,13 @@
 
 ### 第二批（2026-06-05 验收后识别）
 
-#### Gap 4：SPA 探索能力缺失
+#### Gap 4：SPA 探索能力缺失 ✅ 已实现
 
-**问题**：BFS 爬取策略对 HashRouter/History API SPA 发现 0 个 URL。探索阶段对 SPA 应用完全无效。
+**原问题**：BFS 爬取策略对 HashRouter/History API SPA 发现 0 个 URL。探索阶段对 SPA 应用完全无效。
 
-**影响**：所有 URL 必须手动添加，所有功能模块必须手动绑定。53 个功能模块的人工绑定工作量显著。
+**当前实现**：`ExplorerService` 保留原有 BFS/AI 链路，同时通过 `ProxyAdapterClient.executeScript()` 安装 History API / `hashchange` 观察器，读取渲染后 DOM 链接与常见 router 属性，并扫描可访问的 router 配置对象来补充 SPA 路由。
+
+**影响**：SPA URL 不再只能手动添加，探索阶段可为 URL 绑定与快照链路提供更多自动发现入口。
 
 **优先级** — **高**
 
@@ -227,7 +229,7 @@
 
 ### 5.3 "探索阶段"对 SPA 的有效性（2026-06-05 新增）
 
-当前探索器对传统多页应用有效，对 SPA 应用（HashRouter / History API）发现 0 个 URL。任何关于"AI 驱动页面探索"的文档，必须注明这一限制。
+当前探索器对传统多页应用继续使用 BFS/AI 链路；对 SPA 应用（HashRouter / History API）会额外读取渲染后 DOM、History API / `hashchange` 观察结果和可访问 router 配置。任何关于"AI 驱动页面探索"的文档，应注明它是 SPA-aware 的 best-effort 探索，而不是仅靠静态 HTML 链接。
 
 ### 5.4 "脚本质量"的决定因素（2026-06-05 新增）
 
@@ -243,7 +245,7 @@
 
 第二批（端到端质量，2026-06-05 识别）：
 
-4. **补 SPA 探索能力** — Gap 4，高优先级
+4. **补 SPA 探索能力** ✅ 已完成 — Gap 4
 5. **补 page_snapshot_json 降级策略** — Gap 5，高优先级
 6. **补脚本生成后验证** — Gap 6，中优先级
 

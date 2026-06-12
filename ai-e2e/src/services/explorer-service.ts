@@ -66,10 +66,25 @@ interface AIBindingResponse {
   unclassifiable: boolean;
 }
 
+interface SPADiscoveryCandidate {
+  text?: string;
+  href?: string;
+  path?: string;
+  url?: string;
+  source?: string;
+}
+
+interface SPADiscoveryResponse {
+  links?: SPADiscoveryCandidate[];
+  routes?: Array<string | SPADiscoveryCandidate>;
+  observedUrls?: string[];
+}
+
 interface ExplorerRuntimeClient {
   navigate(url: string): Promise<{ url: string }>;
   getSnapshot(): Promise<{ elements: Record<string, unknown>; screenshot?: string }>;
   getPageInfo(): Promise<{ url: string; title: string }>;
+  executeScript?(script: string, args?: unknown[]): Promise<{ result: unknown }>;
   generateText(prompt: string): Promise<{
     text: string;
     tokenUsage: {
@@ -362,6 +377,15 @@ export class ExplorerService {
     active.urlsDiscovered.push(urlRecord.id);
     active.pagesVisited.push(currentUrl);
 
+    const spaRoutes = await this.withAbort(active, () =>
+      this.discoverSPARoutes(currentUrl, snapshot.elements),
+    );
+    if (spaRoutes) {
+      for (const href of spaRoutes) {
+        this.enqueueDiscoveredUrl(active, href, currentUrl, item.depth + 1);
+      }
+    }
+
     // AI analysis for navigation decision
     const prompt = await this.withAbort(active, () =>
       this.promptManager.render('exploration-guide', {
@@ -384,10 +408,7 @@ export class ExplorerService {
     // Enqueue discovered links
     if (parsed.discovered_links) {
       for (const link of parsed.discovered_links) {
-        const fullUrl = this.resolveUrl(active.baseUrl, link.href);
-        if (fullUrl && this.isSameOrigin(active.baseUrl, fullUrl) && !active.visited.has(fullUrl)) {
-          active.queue.push({ url: fullUrl, depth: item.depth + 1 });
-        }
+        this.enqueueDiscoveredUrl(active, link.href, currentUrl, item.depth + 1);
       }
     }
 
@@ -395,10 +416,7 @@ export class ExplorerService {
     if (parsed.navigation_decision) {
       const decision = parsed.navigation_decision;
       if (decision.action === 'navigate' && decision.target) {
-        const targetUrl = this.resolveUrl(active.baseUrl, decision.target);
-        if (targetUrl && this.isSameOrigin(active.baseUrl, targetUrl) && !active.visited.has(targetUrl)) {
-          active.queue.unshift({ url: targetUrl, depth: item.depth + 1 });
-        }
+        this.enqueueDiscoveredUrl(active, decision.target, currentUrl, item.depth + 1, true);
       }
     }
 
@@ -412,6 +430,226 @@ export class ExplorerService {
   private async withAbort<T>(active: ActiveExploration, fn: () => Promise<T>): Promise<T | null> {
     if (active.abortController.signal.aborted) return null;
     return fn();
+  }
+
+  /**
+   * Discover SPA-only routes from the live rendered page.
+   *
+   * This complements the AI snapshot pass with deterministic browser-side extraction:
+   * - installs History API / hashchange observers for routes triggered by client navigation;
+   * - reads rendered links and router-ish attributes from the hydrated DOM;
+   * - scans bounded router configuration objects exposed on window/globalThis.
+   *
+   * The method is deliberately optional and best-effort so non-SPA sites keep the existing BFS path.
+   */
+  private async discoverSPARoutes(
+    currentUrl: string,
+    snapshotElements: Record<string, unknown>,
+  ): Promise<string[]> {
+    const discovered = new Set<string>();
+
+    this.collectRoutesFromSnapshot(snapshotElements, discovered);
+
+    if (!this.proxyClient.executeScript) {
+      return Array.from(discovered);
+    }
+
+    try {
+      const result = await this.proxyClient.executeScript(this.getSPADiscoveryScript(), [currentUrl]);
+      this.collectRoutesFromSPADiscoveryResult(result.result, discovered);
+    } catch {
+      // SPA route discovery is a best-effort enhancement; keep traditional BFS intact.
+    }
+
+    return Array.from(discovered);
+  }
+
+  private collectRoutesFromSnapshot(elements: Record<string, unknown>, discovered: Set<string>): void {
+    const scan = (value: unknown, depth: number): void => {
+      if (depth > 4 || value === null || typeof value !== 'object') return;
+      if (Array.isArray(value)) {
+        for (const item of value) scan(item, depth + 1);
+        return;
+      }
+
+      const record = value as Record<string, unknown>;
+      for (const key of ['href', 'url', 'path', 'to', 'route']) {
+        const route = record[key];
+        if (typeof route === 'string') {
+          this.addRouteCandidate(discovered, route);
+        }
+      }
+
+      for (const child of Object.values(record)) {
+        scan(child, depth + 1);
+      }
+    };
+
+    scan(elements, 0);
+  }
+
+  private collectRoutesFromSPADiscoveryResult(result: unknown, discovered: Set<string>): void {
+    if (!result) return;
+
+    if (Array.isArray(result)) {
+      for (const item of result) {
+        this.addRouteFromUnknown(discovered, item);
+      }
+      return;
+    }
+
+    if (typeof result !== 'object') {
+      this.addRouteFromUnknown(discovered, result);
+      return;
+    }
+
+    const response = result as SPADiscoveryResponse;
+    for (const link of response.links ?? []) {
+      this.addRouteCandidate(discovered, link.href ?? link.url ?? link.path);
+    }
+    for (const route of response.routes ?? []) {
+      this.addRouteFromUnknown(discovered, route);
+    }
+    for (const observedUrl of response.observedUrls ?? []) {
+      this.addRouteCandidate(discovered, observedUrl);
+    }
+  }
+
+  private addRouteFromUnknown(discovered: Set<string>, route: unknown): void {
+    if (typeof route === 'string') {
+      this.addRouteCandidate(discovered, route);
+      return;
+    }
+    if (route && typeof route === 'object') {
+      const candidate = route as SPADiscoveryCandidate;
+      this.addRouteCandidate(discovered, candidate.href ?? candidate.url ?? candidate.path);
+    }
+  }
+
+  private addRouteCandidate(discovered: Set<string>, href: unknown): void {
+    if (typeof href !== 'string') return;
+
+    const trimmed = href.trim();
+    if (!trimmed || this.isIgnoredHref(trimmed)) return;
+
+    discovered.add(trimmed);
+  }
+
+  private enqueueDiscoveredUrl(
+    active: ActiveExploration,
+    href: string,
+    currentUrl: string,
+    depth: number,
+    front = false,
+  ): void {
+    const fullUrl = this.resolveUrl(currentUrl || active.baseUrl, href);
+    if (!fullUrl) return;
+    if (!this.isSameOrigin(active.baseUrl, fullUrl)) return;
+    if (active.visited.has(fullUrl)) return;
+    if (active.queue.some(item => item.url === fullUrl)) return;
+
+    const queueItem = { url: fullUrl, depth };
+    if (front) {
+      active.queue.unshift(queueItem);
+    } else {
+      active.queue.push(queueItem);
+    }
+  }
+
+  private isIgnoredHref(href: string): boolean {
+    const lower = href.toLowerCase();
+    return (
+      lower === '#' ||
+      lower.startsWith('javascript:') ||
+      lower.startsWith('mailto:') ||
+      lower.startsWith('tel:') ||
+      lower.startsWith('data:') ||
+      lower.startsWith('blob:')
+    );
+  }
+
+  private getSPADiscoveryScript(): string {
+    return `(() => {
+      const observed = new Set();
+      const links = [];
+      const routes = new Set();
+      const addObserved = value => {
+        if (typeof value === 'string' && value.trim()) observed.add(value);
+      };
+      const addRoute = value => {
+        if (typeof value !== 'string') return;
+        const route = value.trim();
+        if (!route || route === '#' || /^(javascript|mailto|tel|data|blob):/i.test(route)) return;
+        if (/^(#?\/|\.\.?\/|https?:\/\/)/i.test(route)) routes.add(route);
+      };
+      const win = window;
+      if (!win.__nebulaSpaRouteObserverInstalled) {
+        win.__nebulaSpaRouteObserverInstalled = true;
+        win.__nebulaSpaDiscoveredUrls = win.__nebulaSpaDiscoveredUrls || [];
+        const remember = () => {
+          const href = String(win.location.href || '');
+          win.__nebulaSpaDiscoveredUrls.push(href);
+        };
+        const originalPushState = history.pushState;
+        const originalReplaceState = history.replaceState;
+        history.pushState = function (...args) {
+          const result = originalPushState.apply(this, args);
+          remember();
+          return result;
+        };
+        history.replaceState = function (...args) {
+          const result = originalReplaceState.apply(this, args);
+          remember();
+          return result;
+        };
+        win.addEventListener('hashchange', remember, true);
+        win.addEventListener('popstate', remember, true);
+        remember();
+      }
+      for (const href of win.__nebulaSpaDiscoveredUrls || []) addObserved(href);
+
+      const selector = 'a[href],area[href],[role="link"],[data-href],[data-to],[to],[routerlink],[ng-reflect-router-link]';
+      for (const element of Array.from(document.querySelectorAll(selector))) {
+        const href = element.getAttribute('href') ||
+          element.getAttribute('data-href') ||
+          element.getAttribute('data-to') ||
+          element.getAttribute('to') ||
+          element.getAttribute('routerlink') ||
+          element.getAttribute('ng-reflect-router-link') || '';
+        addRoute(href);
+        if (href) links.push({ text: (element.textContent || '').trim(), href, source: 'rendered-dom' });
+      }
+
+      const queue = [];
+      const seen = new WeakSet();
+      for (const key of Object.getOwnPropertyNames(win)) {
+        if (/router|routes|route|app/i.test(key)) {
+          try { queue.push({ value: win[key], depth: 0 }); } catch {}
+        }
+      }
+      while (queue.length > 0 && routes.size < 200) {
+        const item = queue.shift();
+        const value = item.value;
+        if (value == null || item.depth > 4) continue;
+        if (typeof value === 'string') {
+          addRoute(value);
+          continue;
+        }
+        if (typeof value !== 'object') continue;
+        if (seen.has(value)) continue;
+        seen.add(value);
+        if (Array.isArray(value)) {
+          for (const child of value.slice(0, 100)) queue.push({ value: child, depth: item.depth + 1 });
+          continue;
+        }
+        for (const key of ['path', 'href', 'url', 'to']) addRoute(value[key]);
+        for (const key of ['children', 'routes', 'options']) {
+          if (value[key]) queue.push({ value: value[key], depth: item.depth + 1 });
+        }
+      }
+
+      return { links, routes: Array.from(routes), observedUrls: Array.from(observed) };
+    })()`;
   }
 
   // ===== Helpers =====

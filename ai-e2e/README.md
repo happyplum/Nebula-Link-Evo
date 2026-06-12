@@ -36,6 +36,7 @@ PRD / 业务描述
 - **PRD 分析**：把需求拆成 L1 业务模块、L2 功能模块和测试场景
 - **模块编辑**：支持业务模块 / 功能模块的增删改排
 - **站点探索**：AI 驱动探索页面并提出 URL 与功能模块的绑定建议
+- **SPA-aware URL 探索**：探索流程会补充读取渲染后 DOM、HashRouter 路由、History API 路由观察结果，以及可访问的客户端 router 配置；非 SPA 站点继续走原有 BFS/AI 链路
 - **脚本生成**：按测试场景生成 Playwright TypeScript 脚本
 - **脚本编辑与版本管理**：人工修改脚本、保存版本、查看版本历史
 - **脚本执行**：执行单个脚本、批量执行、查看 run 历史与详情
@@ -270,11 +271,9 @@ ai-e2e/
 
 ### 当前已知限制（2026-06-05 验收后识别）
 
-#### SPA 探索器无效
+#### SPA 探索器无效（已解决）
 
-BFS 爬取策略对 HashRouter / History API SPA 发现 0 个 URL。对 SPA 应用，所有 URL 必须手动添加。
-
-**影响**：探索阶段的自动化价值在 SPA 场景下无法体现。
+探索器已实现 SPA-aware BFS：在原有 AI 引导 BFS 基础上，使用 `ProxyAdapterClient.executeScript()` 从浏览器上下文安装 History API / `hashchange` 观察器，读取渲染后 DOM 链接与常见 router 属性，并扫描可访问的 router 配置对象，自动补充 HashRouter / History API 路由。非 SPA 站点会保留原有 BFS 降级路径。
 
 #### 脚本质量依赖 page_snapshot_json
 

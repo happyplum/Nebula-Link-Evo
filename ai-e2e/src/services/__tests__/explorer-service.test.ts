@@ -322,6 +322,59 @@ describe('ExplorerService', () => {
       const session = await service.startExploration(PROJECT_ID, { maxDepth: 1, maxPages: 10 });
       expect(session).not.toBeNull();
     });
+
+    it('should discover HashRouter routes from rendered SPA links without AI links', async () => {
+      setupService(JSON.stringify({
+        analysis: 'SPA shell without static HTML links',
+        discovered_links: [],
+        navigation_decision: { action: 'complete', target: '', reason: 'done' },
+      }));
+
+      (proxyClient.navigate as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) => ({
+        success: true,
+        url,
+      }));
+      (proxyClient.executeScript as ReturnType<typeof vi.fn>).mockResolvedValue({
+        result: {
+          links: [
+            { text: 'Dashboard', href: '#/dashboard', source: 'rendered-link' },
+          ],
+          routes: [],
+          observedUrls: [],
+        },
+      });
+
+      await service.startExploration(PROJECT_ID, { maxDepth: 1, maxPages: 3 });
+
+      expect(proxyClient.executeScript).toHaveBeenCalled();
+      expect(proxyClient.navigate).toHaveBeenCalledWith(`${BASE_URL}/#/dashboard`);
+    });
+
+    it('should discover History API SPA routes from browser-side router metadata', async () => {
+      setupService(JSON.stringify({
+        analysis: 'SPA shell with client router only',
+        discovered_links: [],
+        navigation_decision: { action: 'complete', target: '', reason: 'done' },
+      }));
+
+      (proxyClient.navigate as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) => ({
+        success: true,
+        url,
+      }));
+      (proxyClient.executeScript as ReturnType<typeof vi.fn>).mockResolvedValue({
+        result: {
+          links: [],
+          routes: ['/settings', { path: '/reports' }],
+          observedUrls: [],
+        },
+      });
+
+      await service.startExploration(PROJECT_ID, { maxDepth: 1, maxPages: 4 });
+
+      expect(proxyClient.executeScript).toHaveBeenCalled();
+      expect(proxyClient.navigate).toHaveBeenCalledWith(`${BASE_URL}/settings`);
+      expect(proxyClient.navigate).toHaveBeenCalledWith(`${BASE_URL}/reports`);
+    });
   });
 
   // ===== stopExploration =====
