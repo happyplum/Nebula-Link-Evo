@@ -6,6 +6,19 @@
  */
 
 import type { Action, ActionResult } from '../types.js';
+import type {
+  ClickAction,
+  TypeAction,
+  FocusAction,
+  BlurAction,
+  HoverAction,
+  ValueAction,
+  DispatchAction,
+  ScrollAction,
+  NavigateAction,
+  WaitAction,
+  MCPAction,
+} from '@nebula-link-evo/shared';
 import { browserClient } from '../browser-client.js';
 import { interactionLogger } from './interaction-logger.js';
 import { failureSampleCollector } from './failure-sample-collector.js';
@@ -17,39 +30,35 @@ const logger = createWorkerLogger('ActionExecutor');
 
 export type { ActionResult };
 
-export function getNumberParam(params: Record<string, unknown>, key: string): number | undefined {
-  const val = params[key];
-  return typeof val === 'number' ? val : undefined;
-}
-
-export function getStringParam(params: Record<string, unknown>, key: string): string | undefined {
-  const val = params[key];
-  return typeof val === 'string' ? val : undefined;
-}
-
-export function getRecordParam(params: Record<string, unknown>, key: string): Record<string, unknown> | undefined {
-  const val = params[key];
-  return val && typeof val === 'object' && !Array.isArray(val) ? val as Record<string, unknown> : undefined;
-}
+/** Union of action types that carry target-resolution fields. */
+type TargetableAction =
+  | ClickAction
+  | TypeAction
+  | FocusAction
+  | BlurAction
+  | HoverAction
+  | ValueAction
+  | DispatchAction;
 
 export type ResolvedTargetAction = 
   | { type: 'marker'; snapshotId: string; nebulaId: number }
   | { type: 'selector'; selector: string };
 
-export function resolveTargetAction(action: Action, actionName: string): ResolvedTargetAction {
+export function resolveTargetAction(action: TargetableAction, actionName: string): ResolvedTargetAction {
   const params = action.params;
-  const resolvedTarget = getRecordParam(params, 'resolved_target');
+  const resolvedTarget = params.resolved_target;
 
   if (resolvedTarget) {
-    const resolvedType = getStringParam(resolvedTarget, 'type');
-    const format = getStringParam(resolvedTarget, 'format');
+    const resolvedType = resolvedTarget.type;
+    // `format` is a legacy runtime field not present in the ResolvedTarget type definition
+    const format = (resolvedTarget as unknown as Record<string, unknown>).format as string | undefined;
 
     if (resolvedType === 'marker' || format === 'target_id') {
-      const snapshotId = getStringParam(resolvedTarget, 'snapshot_id') || getStringParam(params, 'snapshot_id');
+      const snapshotId = resolvedTarget.snapshot_id ?? params.snapshot_id;
       const nebulaIdRaw = resolvedTarget.nebula_id ?? resolvedTarget.target_id ?? params.target_id;
       const nebulaId = Number(nebulaIdRaw);
 
-      if (typeof snapshotId === 'string' && Number.isFinite(nebulaId)) {
+      if (snapshotId != null && Number.isFinite(nebulaId)) {
         return { type: 'marker', snapshotId, nebulaId };
       }
       const prefix = actionName === 'click' ? 'Marker action' : `Marker ${actionName} action`;
@@ -57,8 +66,8 @@ export function resolveTargetAction(action: Action, actionName: string): Resolve
     }
 
     if (resolvedType === 'selector' || format === 'selector') {
-      const selector = getStringParam(resolvedTarget, 'selector') || getStringParam(params, 'selector');
-      if (typeof selector === 'string' && selector.length > 0) {
+      const selector = resolvedTarget.selector ?? params.selector;
+      if (selector && selector.length > 0) {
         return { type: 'selector', selector };
       }
       const prefix = actionName === 'click' ? 'Selector click' : `Selector ${actionName} action`;
@@ -66,7 +75,7 @@ export function resolveTargetAction(action: Action, actionName: string): Resolve
     }
   }
 
-  const selector = getStringParam(params, 'selector');
+  const selector = params.selector;
   if (selector) {
     return { type: 'selector', selector };
   }
@@ -78,10 +87,10 @@ export type ResolvedClickAction =
   | { type: 'coordinates'; x: number; y: number }
   | ResolvedTargetAction;
 
-export function resolveClickAction(action: Action): ResolvedClickAction {
+export function resolveClickAction(action: ClickAction): ResolvedClickAction {
   const params = action.params;
-  const x = getNumberParam(params, 'x');
-  const y = getNumberParam(params, 'y');
+  const x = params.x;
+  const y = params.y;
 
   if (x !== undefined && y !== undefined) {
     return { type: 'coordinates', x, y };
@@ -99,15 +108,14 @@ export function resolveClickAction(action: Action): ResolvedClickAction {
 
 export type ResolvedTypeAction = ResolvedTargetAction & { text: string };
 
-export function resolveTypeAction(action: Action): ResolvedTypeAction {
+export function resolveTypeAction(action: TypeAction): ResolvedTypeAction {
   const params = action.params;
-  const text = getStringParam(params, 'text') ?? getStringParam(params, 'param') ?? '';
+  const text = params.text ?? params.param ?? '';
   
-  const resolvedTarget = getRecordParam(params, 'resolved_target');
+  const resolvedTarget = params.resolved_target;
   if (resolvedTarget) {
-    const resolvedType = getStringParam(resolvedTarget, 'type');
-    const format = getStringParam(resolvedTarget, 'format');
-    if (resolvedType === 'selector' || format === 'selector') {
+    const format = (resolvedTarget as unknown as Record<string, unknown>).format as string | undefined;
+    if (resolvedTarget.type === 'selector' || format === 'selector') {
       const target = resolveTargetAction(action, 'type');
       if (target.type === 'selector' && !text) {
         throw new Error('Selector type action requires selector and text');
@@ -132,24 +140,23 @@ export function resolveTypeAction(action: Action): ResolvedTypeAction {
 
 export type ResolvedValueAction = ResolvedTargetAction & { value: string };
 
-export function resolveValueAction(action: Action): ResolvedValueAction {
+export function resolveValueAction(action: ValueAction): ResolvedValueAction {
   const params = action.params;
-  const value = getStringParam(params, 'value') ?? getStringParam(params, 'param') ?? '';
+  const value = params.value ?? params.param ?? '';
   const target = resolveTargetAction(action, 'value');
   return { ...target, value };
 }
 
 export type ResolvedDispatchAction = ResolvedTargetAction & { eventType: string };
 
-export function resolveDispatchAction(action: Action): ResolvedDispatchAction {
+export function resolveDispatchAction(action: DispatchAction): ResolvedDispatchAction {
   const params = action.params;
-  const eventType = getStringParam(params, 'eventType') ?? getStringParam(params, 'param') ?? '';
+  const eventType = params.eventType ?? params.param ?? '';
   
-  const resolvedTarget = getRecordParam(params, 'resolved_target');
+  const resolvedTarget = params.resolved_target;
   if (resolvedTarget) {
-    const resolvedType = getStringParam(resolvedTarget, 'type');
-    const format = getStringParam(resolvedTarget, 'format');
-    if (resolvedType === 'selector' || format === 'selector') {
+    const format = (resolvedTarget as unknown as Record<string, unknown>).format as string | undefined;
+    if (resolvedTarget.type === 'selector' || format === 'selector') {
       const target = resolveTargetAction(action, 'dispatch');
       if (target.type === 'selector' && !eventType) {
         throw new Error('Selector dispatch action requires selector and eventType');
@@ -172,32 +179,31 @@ export function resolveDispatchAction(action: Action): ResolvedDispatchAction {
   }
 }
 
-export function resolveScrollAction(action: Action): { x: number; y: number } {
+export function resolveScrollAction(action: ScrollAction): { x: number; y: number } {
   const params = action.params;
-  const x = getNumberParam(params, 'x') || 0;
-  const y = getNumberParam(params, 'y') || 0;
+  const x = params.x ?? 0;
+  const y = params.y ?? 0;
   return { x, y };
 }
 
-export function resolveNavigateAction(action: Action): { url: string } {
-  const params = action.params;
-  const url = getStringParam(params, 'url');
+export function resolveNavigateAction(action: NavigateAction): { url: string } {
+  const url = action.params.url;
   if (url) {
     return { url };
   }
   throw new Error('Navigate action requires url');
 }
 
-export function resolveWaitAction(action: Action): { delay: number } {
+export function resolveWaitAction(action: WaitAction): { delay: number } {
   const params = action.params;
-  const delay = getNumberParam(params, 'delay') || getNumberParam(params, 'duration') || 1000;
+  const delay = params.delay ?? params.duration ?? 1000;
   return { delay };
 }
 
-export function resolveMCPCallAction(action: Action): { serverName: string; toolName: string; args: Record<string, unknown> } {
+export function resolveMCPCallAction(action: MCPAction): { serverName: string; toolName: string; args: Record<string, unknown> } {
   const params = action.params;
-  const server = getStringParam(params, 'server');
-  const tool = getStringParam(params, 'tool');
+  const server = params.server;
+  const tool = params.tool;
 
   if (server && tool) {
     let serverName = server;
@@ -211,7 +217,7 @@ export function resolveMCPCallAction(action: Action): { serverName: string; tool
       }
     }
 
-    const args = getRecordParam(params, 'args') || {};
+    const args = params.args ?? {};
     return { serverName, toolName, args };
   }
   throw new Error('MCP call requires server and tool');
@@ -315,108 +321,108 @@ export class ActionExecutor {
   }
 
   private async executeClick(action: Action): Promise<ActionResult> {
-    const resolved = resolveClickAction(action);
-    
+    const resolved = resolveClickAction(action as unknown as ClickAction);
+
     if (resolved.type === 'coordinates') {
       await browserClient.click(resolved.x, resolved.y);
       return { action, success: true, message: `Clicked at (${resolved.x}, ${resolved.y})` };
     }
-    
+
     if (resolved.type === 'marker') {
       await browserClient.clickByMarker(resolved.snapshotId, resolved.nebulaId);
       return { action, success: true, message: `Clicked marker: ${resolved.snapshotId}/${resolved.nebulaId}` };
     }
-    
+
     await browserClient.clickBySelector(resolved.selector);
     return { action, success: true, message: `Clicked selector: ${resolved.selector}` };
   }
 
   private async executeType(action: Action): Promise<ActionResult> {
-    const resolved = resolveTypeAction(action);
-    
+    const resolved = resolveTypeAction(action as unknown as TypeAction);
+
     if (resolved.type === 'marker') {
       await browserClient.typeByMarker(resolved.snapshotId, resolved.nebulaId, resolved.text);
       return { action, success: true, message: `Typed "${resolved.text}" into marker: ${resolved.snapshotId}/${resolved.nebulaId}` };
     }
-    
+
     await browserClient.type(resolved.selector, resolved.text);
     return { action, success: true, message: `Typed "${resolved.text}" into ${resolved.selector}` };
   }
 
   private async executeFocus(action: Action): Promise<ActionResult> {
-    const resolved = resolveTargetAction(action, 'focus');
-    
+    const resolved = resolveTargetAction(action as unknown as FocusAction, 'focus');
+
     if (resolved.type === 'marker') {
       await browserClient.focusByMarker(resolved.snapshotId, resolved.nebulaId);
       return { action, success: true, message: `Focused marker: ${resolved.snapshotId}/${resolved.nebulaId}` };
     }
-    
+
     await browserClient.focus(resolved.selector);
     return { action, success: true, message: `Focused selector: ${resolved.selector}` };
   }
 
   private async executeBlur(action: Action): Promise<ActionResult> {
-    const resolved = resolveTargetAction(action, 'blur');
-    
+    const resolved = resolveTargetAction(action as unknown as BlurAction, 'blur');
+
     if (resolved.type === 'marker') {
       await browserClient.blurByMarker(resolved.snapshotId, resolved.nebulaId);
       return { action, success: true, message: `Blurred marker: ${resolved.snapshotId}/${resolved.nebulaId}` };
     }
-    
+
     await browserClient.blur(resolved.selector);
     return { action, success: true, message: `Blurred selector: ${resolved.selector}` };
   }
 
   private async executeHover(action: Action): Promise<ActionResult> {
-    const resolved = resolveTargetAction(action, 'hover');
-    
+    const resolved = resolveTargetAction(action as unknown as HoverAction, 'hover');
+
     if (resolved.type === 'marker') {
       await browserClient.hoverByMarker(resolved.snapshotId, resolved.nebulaId);
       return { action, success: true, message: `Hovered marker: ${resolved.snapshotId}/${resolved.nebulaId}` };
     }
-    
+
     await browserClient.hover(resolved.selector);
     return { action, success: true, message: `Hovered selector: ${resolved.selector}` };
   }
 
   private async executeValue(action: Action): Promise<ActionResult> {
-    const resolved = resolveValueAction(action);
-    
+    const resolved = resolveValueAction(action as unknown as ValueAction);
+
     if (resolved.type === 'marker') {
       await browserClient.setValueByMarker(resolved.snapshotId, resolved.nebulaId, resolved.value);
       return { action, success: true, message: `Set value "${resolved.value}" for marker: ${resolved.snapshotId}/${resolved.nebulaId}` };
     }
-    
+
     await browserClient.setValue(resolved.selector, resolved.value);
     return { action, success: true, message: `Set value "${resolved.value}" for selector: ${resolved.selector}` };
   }
 
   private async executeDispatch(action: Action): Promise<ActionResult> {
-    const resolved = resolveDispatchAction(action);
-    
+    const resolved = resolveDispatchAction(action as unknown as DispatchAction);
+
     if (resolved.type === 'marker') {
       await browserClient.dispatchEventByMarker(resolved.snapshotId, resolved.nebulaId, resolved.eventType);
       return { action, success: true, message: `Dispatched event "${resolved.eventType}" on marker: ${resolved.snapshotId}/${resolved.nebulaId}` };
     }
-    
+
     await browserClient.dispatchEvent(resolved.selector, resolved.eventType);
     return { action, success: true, message: `Dispatched event "${resolved.eventType}" on selector: ${resolved.selector}` };
   }
 
   private async executeScroll(action: Action): Promise<ActionResult> {
-    const resolved = resolveScrollAction(action);
+    const resolved = resolveScrollAction(action as unknown as ScrollAction);
     await browserClient.scroll(resolved.x, resolved.y);
     return { action, success: true, message: `Scrolled by (${resolved.x}, ${resolved.y})` };
   }
 
   private async executeNavigate(action: Action): Promise<ActionResult> {
-    const resolved = resolveNavigateAction(action);
+    const resolved = resolveNavigateAction(action as unknown as NavigateAction);
     await browserClient.navigate(resolved.url);
     return { action, success: true, message: `Navigated to ${resolved.url}` };
   }
 
   private async executeWait(action: Action): Promise<ActionResult> {
-    const resolved = resolveWaitAction(action);
+    const resolved = resolveWaitAction(action as unknown as WaitAction);
     await this.sleep(resolved.delay);
     return { action, success: true, message: `Waited ${resolved.delay}ms` };
   }
@@ -432,7 +438,7 @@ export class ActionExecutor {
   }
 
   private async executeMCPCall(action: Action): Promise<ActionResult> {
-    const resolved = resolveMCPCallAction(action);
+    const resolved = resolveMCPCallAction(action as unknown as MCPAction);
 
     if (this.mcpClient) {
       const toolResult = await this.mcpClient.callTool(resolved.serverName, resolved.toolName, resolved.args);
@@ -474,14 +480,11 @@ export class ActionExecutor {
 
   private resolveTargetType(action: Action): string {
     const params = action.params;
-    const x = getNumberParam(params, 'x');
-    const y = getNumberParam(params, 'y');
-
     if (action.type === 'click') {
-      if (x !== undefined && y !== undefined) {
+      if (typeof params.x === 'number' && typeof params.y === 'number') {
         return 'coordinates';
       }
-      if (getStringParam(params, 'selector') || this.getResolvedTarget(action).selector) {
+      if ((typeof params.selector === 'string' && params.selector) || this.getResolvedTarget(action).selector) {
         return 'selector';
       }
       if (this.resolveSnapshotId(action) || this.resolveNebulaId(action) !== undefined) {
@@ -504,14 +507,11 @@ export class ActionExecutor {
 
   private resolveLocatorStrategy(action: Action): string | undefined {
     const params = action.params;
-    const x = getNumberParam(params, 'x');
-    const y = getNumberParam(params, 'y');
-
     if (action.type === 'click') {
-      if (x !== undefined && y !== undefined) {
+      if (typeof params.x === 'number' && typeof params.y === 'number') {
         return 'coordinates';
       }
-      if (getStringParam(params, 'selector') || this.getResolvedTarget(action).selector) {
+      if ((typeof params.selector === 'string' && params.selector) || this.getResolvedTarget(action).selector) {
         return 'selector';
       }
       if (this.resolveSnapshotId(action) || this.resolveNebulaId(action) !== undefined) {
@@ -536,13 +536,13 @@ export class ActionExecutor {
 
   private resolveSnapshotId(action: Action): string | undefined {
     const resolvedTarget = this.getResolvedTarget(action);
-    const snapshotId = resolvedTarget.snapshot_id ?? getStringParam(action.params, 'snapshot_id');
+    const snapshotId = resolvedTarget.snapshot_id ?? this.getParamsSnapshotId(action);
     return typeof snapshotId === 'string' ? snapshotId : undefined;
   }
 
   private resolveNebulaId(action: Action): number | undefined {
     const resolvedTarget = this.getResolvedTarget(action);
-    const rawNebulaId = resolvedTarget.nebula_id ?? resolvedTarget.target_id ?? action.params.target_id;
+    const rawNebulaId = resolvedTarget.nebula_id ?? resolvedTarget.target_id ?? this.getParamsTargetId(action);
     const nebulaId = Number(rawNebulaId);
     return Number.isFinite(nebulaId) ? nebulaId : undefined;
   }
@@ -574,6 +574,18 @@ export class ActionExecutor {
         typeof resolvedTarget.snapshot_id === 'string' ? resolvedTarget.snapshot_id : undefined,
       selector: typeof resolvedTarget.selector === 'string' ? resolvedTarget.selector : undefined,
     };
+  }
+
+  /** Extract snapshot_id from action params. */
+  private getParamsSnapshotId(action: Action): string | undefined {
+    const val = action.params.snapshot_id;
+    return typeof val === 'string' ? val : undefined;
+  }
+
+  /** Extract target_id from action params. */
+  private getParamsTargetId(action: Action): number | undefined {
+    const val = action.params.target_id;
+    return typeof val === 'number' ? val : undefined;
   }
 
   private sleep(ms: number): Promise<void> {
