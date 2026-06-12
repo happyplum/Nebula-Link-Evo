@@ -190,24 +190,24 @@ ai-e2e 的前端是挂在 `/ai-e2e/` 路径下的单页应用（React SPA），�
 
 以下缺口通过真实执行 280 个测试脚本（对 debug-ui）暴露，之前未被文档记录。
 
-#### Gap D：SPA 探索器对 HashRouter 应用无效
+#### Gap D：SPA 探索器对 HashRouter 应用无效 ✅ 已实现
 
 **当前现状**
 
-- 探索器使用 BFS 爬取策略，依赖 `<a href>` 链接发现页面
-- HashRouter SPA 的路由变化不产生传统导航，BFS 发现 0 个 URL
+- 探索器保留原有 BFS / AI 引导链路
+- 对 SPA 应用，额外通过浏览器上下文读取渲染后 DOM、History API / `hashchange` 观察结果，以及可访问的 router 配置对象
+- HashRouter（如 `#/dashboard`）和 History API 路由（如 `/settings`）会被解析为同源 URL 并加入 BFS 队列
 
-**尚未实现**
+**已实现**
 
 - 对 HashRouter / History API 路由的感知能力
-- 基于已知 seed URL + AI 辅助的路由发现
-- 对 SPA 路由模式的专用探索策略
+- 基于渲染后页面内容 + AI 辅助的路由发现
+- 对 SPA 路由模式的专用补充探索策略，且非 SPA 站点保留原有降级路径
 
 **实际影响**
 
-- 对 debug-ui（HashRouter SPA）探索发现 0 个 URL
-- 必须手动添加 URL 并手动绑定所有功能模块
-- 53 个功能模块全部需要人工绑定，工作量显著
+- SPA URL 不再只能依赖人工添加
+- 探索阶段可为后续 URL 绑定和 `page_snapshot_json` 数据链路提供更多自动发现入口
 
 **优先级** — **高**
 
@@ -353,7 +353,7 @@ ai-e2e 的前端是挂在 `/ai-e2e/` 路径下的单页应用（React SPA），�
 
 推荐的第二批后续顺序（基于 2026-06-05 验收发现）：
 
-1. **补 SPA 探索能力** — Gap D，高优先级
+1. **补 SPA 探索能力** ✅ 已完成 — Gap D
 2. **补 page_snapshot_json 降级策略** — Gap E，高优先级
 3. **补脚本生成后验证** — Gap F，中优先级
 4. **补 AI 超时差异化配置** — Gap G，中优先级
