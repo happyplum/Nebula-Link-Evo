@@ -227,7 +227,7 @@ ai-chat-service (AI 对话服务)
 
 ### Tech Debt
 
-- [tech-debt] Root `pnpm lint` reports ~299 ESLint problems (142 errors, 157 warnings). ~139 errors are test-file parsing issues (tests excluded from tsconfig). ~6 source errors are React Compiler warnings in debug-ui (purity/memoization rules, not dead code). Remaining ~3 are style issues in non-test source.
+- [tech-debt] Root `pnpm lint` reports ~345 ESLint problems (155 errors, 190 warnings). ~139 errors are test-file parsing issues (tests excluded from tsconfig). ~12 source errors are React Compiler warnings in debug-ui (purity/memoization rules, not dead code). Remaining ~4 are style issues in non-test source.
 - [tech-debt] `playwright-server` has ~6 env-dependent test failures (browser launch timeouts, LiveKit not running) — pass with real Chromium + LiveKit.
 - [tech-debt] Root `pnpm test` occasionally flakes due to resource contention on Windows (LiveKit canvas timeout, marker-injector hook timeout). Individual package runs are stable.
 

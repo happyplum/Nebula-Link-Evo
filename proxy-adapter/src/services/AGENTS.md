@@ -8,7 +8,7 @@ Backend service layer: config facade, action execution, chat/session coordinatio
 
 | File                           | Purpose                                                            |
 | ------------------------------ | ------------------------------------------------------------------ |
-| `task-service.ts`              | Singleton facade — config, MCP state, provider registry            |
+| `app-service.ts`               | Singleton facade — config, MCP state, provider registry            |
 | `action-executor.ts`           | Browser action dispatch, failure capture                           |
 | `chat-session-controller.ts`   | Session lifecycle, pause/resume/interrupt                          |
 | `session-event-hub.ts`         | Fan-out for session events and stream consumers                    |

@@ -18,7 +18,7 @@ vi.mock('../../conversation/index.js', () => ({
 }));
 
 vi.mock('../../services/index.js', () => {
-  const mockTaskServiceInstance = {
+  const mockAppServiceInstance = {
     initialize: vi.fn().mockResolvedValue(undefined),
     getConfig: vi.fn().mockReturnValue({}),
     getConfigPath: vi.fn().mockReturnValue('/test/config.json'),
@@ -29,9 +29,9 @@ vi.mock('../../services/index.js', () => {
 
   return {
     AppService: {
-      getInstance: vi.fn(() => mockTaskServiceInstance),
+      getInstance: vi.fn(() => mockAppServiceInstance),
     },
-    appService: mockTaskServiceInstance,
+    appService: mockAppServiceInstance,
   };
 });
 
