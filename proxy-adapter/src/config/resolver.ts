@@ -203,6 +203,8 @@ export function getDefaultDecisionModel(
 }
 
 export function isUnifiedMode(_config: ResolvedConfig): boolean {
+  // Unified mode is the only supported mode since vision-mcp-server removal.
+  // Kept as explicit function for downstream consumers that may need mode checks.
   return true;
 }
 

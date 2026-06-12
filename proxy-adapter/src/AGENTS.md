@@ -12,6 +12,8 @@ Backend source for AI clients, conversations, debug APIs, and chat session coord
 | Services         | `services/`     | Config facade, session control, stream persistence, chat       |
 | Plugins          | `plugins/`      | Fastify plugins and route modules                              |
 | Clients          | `clients/`      | Decision, MCP, Vercel AI SDK                              |
+| Tool registry    | `tools/`        | ToolRegistry + 3 Providers (browser-control, vision-agent, MCP client) + adapters |
+| Vision agent     | `mcps/vision-agent/` | Built-in vision analysis module (config, tools, cache)    |
 | Conversation     | `conversation/` | SQLite storage, compression, manager                           |
 | Config           | `config/`       | Schema, loader, resolver, validator                            |
 | Debug helpers    | `debug/`        | Debug-specific types and helpers                               |
@@ -36,6 +38,8 @@ Backend source for AI clients, conversations, debug APIs, and chat session coord
 
 - `services/AGENTS.md`
 - `clients/AGENTS.md`
+- `tools/AGENTS.md`
+- `mcps/vision-agent/AGENTS.md`
 - `conversation/AGENTS.md`
 - `config/AGENTS.md`
 - `plugins/AGENTS.md`

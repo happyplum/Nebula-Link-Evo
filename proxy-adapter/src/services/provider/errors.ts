@@ -22,7 +22,6 @@ export type ProviderErrorCode = typeof PROVIDER_ERRORS[keyof typeof PROVIDER_ERR
  *
  * Other codes:
  * - NOT_FOUND: Provider or model not found in configuration
- * - VISION_UNAVAILABLE: Vision capability not available
  * - RATE_LIMITED: Provider rate limit exceeded
  */
 
@@ -47,7 +46,6 @@ export const PROVIDER_ERRORS = {
   INSTALL_FAILED: 'PROVIDER_INSTALL_FAILED',
   INIT_FAILED: 'PROVIDER_INIT_FAILED',
   CONFIG_INVALID: 'PROVIDER_CONFIG_INVALID',
-  VISION_UNAVAILABLE: 'VISION_UNAVAILABLE',
   RATE_LIMITED: 'RATE_LIMITED',
 } as const;
 
