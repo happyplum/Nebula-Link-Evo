@@ -51,6 +51,30 @@ const app = Fastify({
 
 const PORT = parseInt(process.env.PROXY_PORT || '3000');
 
+/**
+ * CORS origin configuration.
+ * - Set CORS_ORIGINS to a comma-separated whitelist (e.g. "http://localhost:5173,http://localhost:3000")
+ * - Set CORS_ORIGINS="*" to allow all origins (equivalent to previous behavior)
+ * - Default: ["http://localhost:5173"] (debug-ui dev server)
+ */
+function resolveCorsOrigin(): (string | RegExp)[] | boolean {
+  const envVal = process.env.CORS_ORIGINS;
+  if (!envVal) {
+    return ['http://localhost:5173'];
+  }
+  if (envVal === '*') {
+    return true;
+  }
+  return envVal.split(',').map(o => o.trim()).filter(Boolean);
+}
+
+/**
+ * Server bind address.
+ * - Default: 127.0.0.1 (localhost only)
+ * - Set HOST=0.0.0.0 to listen on all interfaces (for Docker/remote)
+ */
+const HOST = process.env.HOST || '127.0.0.1';
+
 let conversationManager: ConversationManager;
 let chatHandler: ChatHandler;
 let toolRegistry: ToolRegistry;
@@ -65,7 +89,7 @@ async function start() {
     }
 
     await app.register(cors, {
-      origin: true,
+      origin: resolveCorsOrigin(),
       credentials: true,
     });
 
@@ -155,15 +179,25 @@ async function start() {
     const jobQueue = new ConversationJobQueue(persistWorker, SessionEventHub.getInstance());
     await app.decorate('jobQueue', jobQueue);
 
+    // Register API routes with v1 versioning prefix
+    // Versioned routes (canonical)
+    await app.register(healthRoutes, { prefix: '/api/v1/health' });
+    await app.register(configRoutes, { prefix: '/api/v1/config' });
+    await app.register(livekitTokenRoutes, { prefix: '/api/v1' });
+    await app.register(aiServiceRoutes, { prefix: '/api/v1/ai' });
+    await app.register(apiChatRoutes, { prefix: '/api/v1/chat' });
+
+    // Legacy unversioned routes (backward compatibility, will be deprecated)
     await app.register(healthRoutes, { prefix: '/api/health' });
     await app.register(configRoutes, { prefix: '/api/config' });
     await app.register(livekitTokenRoutes, { prefix: '/api' });
     await app.register(aiServiceRoutes, { prefix: '/api/ai' });
-
-    // Register API chat routes - Async message handling and SSE streaming
     await app.register(apiChatRoutes, { prefix: '/api/chat' });
-    app.log.info({ prefix: '/api/chat' }, 'API chat routes registered');
-    app.log.info({ prefix: '/api/ai' }, 'AI service routes registered');
+
+    app.log.info({ prefix: '/api/v1/chat' }, 'API v1 chat routes registered');
+    app.log.info({ prefix: '/api/v1/ai' }, 'API v1 AI service routes registered');
+    app.log.info({ prefix: '/api/chat' }, 'Legacy chat routes registered (deprecated)');
+    app.log.info({ prefix: '/api/ai' }, 'Legacy AI routes registered (deprecated)');
 
     // Register Debug routes
     await app.register(debugRoutes, { prefix: '/debug' });
@@ -205,23 +239,28 @@ async function start() {
               version: '2.0.0',
               mode: 'multi-model',
               endpoints: {
-                'GET /api/health': 'Health check',
-                'GET /api/config': 'Show current configuration',
-                'POST /api/ai/generate': 'Generate plain text with the decision model',
+                'GET /api/v1/health': 'Health check',
+                'GET /api/v1/config': 'Show current configuration',
+                'POST /api/v1/ai/generate': 'Generate plain text with the decision model',
+                'GET /api/v1/chat/*': 'Chat API (SSE)',
                 'GET /debug/api/*': 'Debug API endpoints',
+              },
+              deprecation: {
+                note: 'Unversioned /api/* routes are deprecated. Use /api/v1/* instead.',
               },
             };
       }
     );
 
-    await app.listen({ port: PORT, host: '0.0.0.0' });
+    await app.listen({ port: PORT, host: HOST });
     app.log.info({ url: `http://localhost:${PORT}` }, 'Proxy Adapter running');
     app.log.info('Available endpoints:');
-    app.log.info({ endpoint: 'GET  /api/health' });
-    app.log.info({ endpoint: 'GET  /api/config' });
-    app.log.info({ endpoint: 'POST /api/ai/generate' });
-    app.log.info({ endpoint: 'GET  /api/chat/*    - Chat API (SSE)' });
-    app.log.info({ endpoint: 'GET  /debug/api/*    - Debug API' });
+    app.log.info({ endpoint: 'GET  /api/v1/health' });
+    app.log.info({ endpoint: 'GET  /api/v1/config' });
+    app.log.info({ endpoint: 'POST /api/v1/ai/generate' });
+    app.log.info({ endpoint: 'GET  /api/v1/chat/*    - Chat API (SSE)' });
+    app.log.info({ endpoint: 'GET  /debug/api/*       - Debug API' });
+    app.log.info({ endpoint: '(deprecated) /api/*     - Use /api/v1/* instead' });
   } catch (err) {
     await debugStreamBridge.stop();
     app.log.error(err);
