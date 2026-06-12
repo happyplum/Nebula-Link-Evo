@@ -257,7 +257,7 @@ ai-e2e/
 - 不与 proxy-adapter 合并为单一包
 - 不共享 proxy-adapter 的数据库
 - 不统一到 debug-ui 的 SSE 模型
-- 不做 UI 视觉重设计
+- 不再把 UI 视觉重设计作为临时执行计划维护；当前 Atlas UI 架构见 `../docs/reference/ai-e2e-ui-architecture.md`
 - 不做浏览器会话隔离系统
 - 不做通用测试平台化抽象
 
