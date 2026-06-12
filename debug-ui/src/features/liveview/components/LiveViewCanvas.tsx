@@ -67,7 +67,11 @@ export function LiveViewCanvas({
 
   // Track connection state for cleanup: distinguish tab-switch refresh from real disconnect
   const isConfirmedDisconnectedRef = useRef(isConfirmedDisconnected);
-  isConfirmedDisconnectedRef.current = isConfirmedDisconnected;
+
+  // Sync ref with latest value after render
+  useEffect(() => {
+    isConfirmedDisconnectedRef.current = isConfirmedDisconnected;
+  }, [isConfirmedDisconnected]);
 
   const replaceDownloadUrl = useCallback(
     (nextBlob: Blob | null, revokeCurrent: boolean) => {
