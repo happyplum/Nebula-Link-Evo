@@ -193,7 +193,7 @@ export class SessionEventsDAO {
        ORDER BY seq ASC
        LIMIT ?`
     );
-    const rows = stmt.all(sessionId, effectiveLastSeq, clampedLimit) as SessionEventRow[];
+    const rows = stmt.all(sessionId, effectiveLastSeq, clampedLimit) as unknown as SessionEventRow[];
     return rows.map((row) => this.rowToEvent(row));
   }
 
@@ -232,7 +232,7 @@ export class SessionEventsDAO {
        WHERE session_id = ?
        ORDER BY seq ASC`
     );
-    const rows = stmt.all(sessionId) as SessionEventRow[];
+    const rows = stmt.all(sessionId) as unknown as SessionEventRow[];
 
     const messages: Message[] = [];
     let state: SessionState = 'idle';
@@ -337,7 +337,7 @@ export class SessionEventsDAO {
       `DELETE FROM session_events WHERE ttl_expires_at IS NOT NULL AND ttl_expires_at < ?`
     );
     const result = stmt.run(now);
-    return result.changes;
+    return Number(result.changes);
   }
 
   /**

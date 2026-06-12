@@ -1,4 +1,4 @@
-import { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import type {
   SessionState,
   CreateSessionStateParams,
@@ -133,7 +133,7 @@ export class SessionStateDAO {
       values.push(sessionId, expectedVersion);
       const sql = `UPDATE sessions_state SET ${updates.join(', ')} WHERE session_id = ? AND version = ?`;
       const stmt = this.db!.prepare(sql);
-      const result = stmt.run(...values);
+      const result = stmt.run(...(values as SQLInputValue[]));
 
       if (result.changes === 0) {
         throw new OptimisticLockError(
@@ -144,7 +144,7 @@ export class SessionStateDAO {
       values.push(sessionId);
       const sql = `UPDATE sessions_state SET ${updates.join(', ')} WHERE session_id = ?`;
       const stmt = this.db!.prepare(sql);
-      stmt.run(...values);
+      stmt.run(...(values as SQLInputValue[]));
     }
   }
 
@@ -211,7 +211,7 @@ export class SessionStateDAO {
        WHERE status IN ('running', 'paused', 'blocked')
        ORDER BY last_active_at DESC`
     );
-    const rows = stmt.all() as SessionStateRow[];
+    const rows = stmt.all() as unknown as SessionStateRow[];
 
     return rows.map((row) => this.rowToState(row));
   }
@@ -225,7 +225,7 @@ export class SessionStateDAO {
     const stmt = this.db!.prepare(
       `SELECT * FROM sessions_state WHERE status = ? ORDER BY last_active_at DESC`
     );
-    const rows = stmt.all(status) as SessionStateRow[];
+    const rows = stmt.all(status) as unknown as SessionStateRow[];
 
     return rows.map((row) => this.rowToState(row));
   }

@@ -10,7 +10,7 @@ export function up(db: DatabaseSync): void {
   const sessions = sessionsStmt.all() as { id: string }[];
 
   const existingStmt = db.prepare('SELECT session_id FROM sessions_state');
-  const existing = new Set(existingStmt.all().map((row: { session_id: string }) => row.session_id));
+  const existing = new Set((existingStmt.all() as unknown as { session_id: string }[]).map((row: { session_id: string }) => row.session_id));
 
   const insertStmt = db.prepare(
     `INSERT OR IGNORE INTO sessions_state (

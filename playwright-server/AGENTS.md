@@ -39,7 +39,7 @@ pnpm test     # Vitest
 
 - Keep browser state in service layer, not route files.
 - Extend `BrowserService`/`BrowserLifecycle` over ad-hoc route logic.
-- Preserve Node `>=20` compatibility (proxy-adapter requires Node 22+).
+- Node `>=22.5` required (aligned with monorepo).
 
 ## Anti-Patterns
 
