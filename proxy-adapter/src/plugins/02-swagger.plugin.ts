@@ -28,7 +28,7 @@ Web automation and AI integration service that orchestrates browser automation t
 ## Features
 - **Web Automation**: Execute complex multi-step browser tasks with natural language instructions
 - **Decision Model Orchestration**: Uses a unified decision model for planning and tool selection
-- **MCP Extensibility**: Vision analysis via MCP servers; browser-control tools registered locally
+- **MCP Extensibility**: Vision analysis via built-in vision-agent ToolProvider; browser-control tools registered locally
 - **Browser Screenshot Support**: Retains screenshot/snapshot browser tools without embedding vision provider logic
 - **Debug Dashboard**: Real-time task execution monitoring
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Provider loading layer for decision/vision models. Owns package normalization, dynamic import/install, availability probing, registry caching, and adapter-specific boot.
+Provider loading layer for decision models. Owns package normalization, dynamic import/install, availability probing, registry caching, and adapter-specific boot.
 
 ## Structure
 
@@ -14,7 +14,6 @@ provider/
 ├── preflight.ts     # Startup probe; fatal only when zero providers pass
 ├── schema.ts        # Provider config validation helpers
 ├── errors.ts        # ProviderError taxonomy
-├── vision-tool.ts   # Vision tool wiring
 ├── adapters/        # Alias-specific adapters (GLM JWT path)
 └── built-in.ts      # Deprecated built-in provider map
 ```
