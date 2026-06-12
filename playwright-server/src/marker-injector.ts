@@ -1,4 +1,5 @@
 import { Page } from 'playwright';
+import { RELEVANT_ELEMENT_ATTRS } from './dom-utils.js';
 
 /**
  * Element information extracted from the page during marker injection.
@@ -106,9 +107,9 @@ export function generateMarkerInjectionScript(): string {
       const tag = el.tagName.toLowerCase();
       const text = el.textContent?.trim().substring(0, 100) || '';
 
-      // Collect relevant attributes
+      // Collect relevant attributes (list from shared dom-utils)
       const attributes = {};
-      const relevantAttrs = ['id', 'class', 'name', 'type', 'placeholder', 'href', 'src', 'alt', 'role', 'aria-label'];
+      const relevantAttrs = [${RELEVANT_ELEMENT_ATTRS.map(a => `'${a}'`).join(', ')}];
       relevantAttrs.forEach(attr => {
         const value = el.getAttribute(attr);
         if (value) {

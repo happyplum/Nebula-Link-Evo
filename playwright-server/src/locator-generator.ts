@@ -1,8 +1,19 @@
 import { Page, ElementHandle } from 'playwright';
 import type { LocatorBundle } from '@nebula-link-evo/shared/types/vision-marker';
 import { createWorkerLogger } from './services/logger.js';
+import {
+  getElementAttributes as doGetElementAttributes,
+  getElementTagName,
+  getElementText,
+  escapeSelector,
+  escapeXPath,
+  getImplicitRole,
+} from './dom-utils.js';
 
 const logger = createWorkerLogger('LocatorGenerator');
+
+// Re-export for backward compatibility (tests import getElementAttributes from this module)
+export { doGetElementAttributes as getElementAttributes };
 
 /**
  * Generate multiple locator strategies for an element in priority order.
@@ -17,13 +28,13 @@ export async function generateLocatorBundle(
   const bundle: LocatorBundle = {};
 
   try {
-    const attributes = await getElementAttributes(element);
-    const tagName = await element.evaluate((el) => {
-      if (el instanceof Element) {
-        return el.tagName.toLowerCase();
-      }
-      return '';
-    });
+    const attributes = await doGetElementAttributes(element);
+    const tagName = await getElementTagName(element);
+
+    // Bail out early for invalid/disposed elements
+    if (!tagName) {
+      throw new Error('Element not available');
+    }
 
     // Role locator (highest priority)
     const role = attributes['role'] || getImplicitRole(tagName);
@@ -52,7 +63,7 @@ export async function generateLocatorBundle(
     }
 
     // Text locator (exact text match)
-    const text = await element.evaluate((el) => el.textContent?.trim());
+    const text = await getElementText(element);
     if (text && text.length > 0 && text.length < 100) {
       bundle.text = `text=${escapeSelector(text)}`;
     }
@@ -118,14 +129,7 @@ export async function generateStableSelector(
   }
 
   // Fallback: use a basic tag selector
-  const tagName = await element
-    .evaluate((el) => {
-      if (el instanceof Element) {
-        return el.tagName.toLowerCase();
-      }
-      return '';
-    })
-    .catch(() => '*');
+  const tagName = await getElementTagName(element).catch(() => '*');
   return tagName;
 }
 
@@ -159,13 +163,8 @@ export async function generateCssSelector(
   element: ElementHandle
 ): Promise<string> {
   try {
-    const attributes = await getElementAttributes(element);
-    const tagName = await element.evaluate((el) => {
-      if (el instanceof Element) {
-        return el.tagName.toLowerCase();
-      }
-      return '';
-    });
+    const attributes = await doGetElementAttributes(element);
+    const tagName = await getElementTagName(element);
 
     // Try ID first (most stable)
     if (attributes.id) {
@@ -241,13 +240,8 @@ export async function generateCssSelector(
  */
 export async function generateXPath(element: ElementHandle): Promise<string> {
   try {
-    const attributes = await getElementAttributes(element);
-    const tagName = await element.evaluate((el) => {
-      if (el instanceof Element) {
-        return el.tagName.toLowerCase();
-      }
-      return '';
-    });
+    const attributes = await doGetElementAttributes(element);
+    const tagName = await getElementTagName(element);
 
     // Build XPath with attribute filters for uniqueness
     let xpath = `//${tagName}`;
@@ -285,7 +279,7 @@ export async function generateXPath(element: ElementHandle): Promise<string> {
     }
 
     // Add text content filter for non-empty text
-    const text = await element.evaluate((el) => el.textContent?.trim());
+    const text = await getElementText(element);
     if (text && text.length > 0 && text.length < 50) {
       attrFilters.push(`text()='${escapeXPath(text)}'`);
     }
@@ -301,95 +295,4 @@ export async function generateXPath(element: ElementHandle): Promise<string> {
   }
 }
 
-/**
- * Extract all attributes from an element as a key-value record.
- *
- * @param element - Playwright ElementHandle to extract attributes from
- * @returns Promise<Record<string, string>> object with all attributes
- */
-export async function getElementAttributes(
-  element: ElementHandle
-): Promise<Record<string, string>> {
-  try {
-    return await element.evaluate((el) => {
-      if (!(el instanceof Element)) {
-        return {};
-      }
-      const attrs: Record<string, string> = {};
-      if (el.hasAttributes()) {
-        for (let i = 0; i < el.attributes.length; i++) {
-          const attr = el.attributes[i];
-          attrs[attr.name] = attr.value;
-        }
-      }
-      return attrs;
-    });
-  } catch {
-    return {};
-  }
-}
 
-/**
- * Escape special characters in CSS selectors.
- *
- * @param selector - Selector string to escape
- * @returns Escaped selector string
- */
-function escapeSelector(selector: string): string {
-  return selector.replace(
-    new RegExp('([!"#$%&\'()*+,.\\/:;<=>?@[\\]^`{|}~])', 'g'),
-    '\\$1'
-  );
-}
-
-/**
- * Escape special characters in XPath values.
- *
- * @param value - Value string to escape
- * @returns Escaped value string
- */
-function escapeXPath(value: string): string {
-  return value.replace(/'/g, "\\'");
-}
-
-/**
- * Get implicit ARIA role for common HTML elements.
- *
- * @param tagName - HTML tag name in lowercase
- * @returns Implicit role name or undefined
- */
-function getImplicitRole(tagName: string): string | undefined {
-  const implicitRoles: Record<string, string> = {
-    a: 'link',
-    button: 'button',
-    input: 'textbox',
-    textarea: 'textbox',
-    select: 'combobox',
-    option: 'option',
-    h1: 'heading',
-    h2: 'heading',
-    h3: 'heading',
-    h4: 'heading',
-    h5: 'heading',
-    h6: 'heading',
-    img: 'img',
-    nav: 'navigation',
-    header: 'banner',
-    footer: 'contentinfo',
-    main: 'main',
-    aside: 'complementary',
-    article: 'article',
-    section: 'region',
-    ul: 'list',
-    ol: 'list',
-    li: 'listitem',
-    table: 'table',
-    thead: 'rowgroup',
-    tbody: 'rowgroup',
-    tr: 'row',
-    th: 'columnheader',
-    td: 'cell',
-  };
-
-  return implicitRoles[tagName];
-}
