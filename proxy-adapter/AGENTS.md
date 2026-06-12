@@ -20,7 +20,7 @@ pnpm test:debug   # Debug page smoke check
 | Area             | Path                                | Notes                                                 |
 | ---------------- | ----------------------------------- | ----------------------------------------------------- |
 | Server entry     | `src/server.ts`                     | Env load, plugins, route registration                 |
-| Task facade      | `src/services/task-service.ts`      | Config, MCP, provider registry, singleton facade      |
+| Task facade      | `src/services/app-service.ts`       | Config, MCP, provider registry, singleton facade      |
 | Action execution | `src/services/action-executor.ts`   | Browser action dispatch                               |
 | Tool registry    | `src/tools/`                        | ToolRegistry + 3 Providers + Vercel AI / MCP adapters |
 | MCP Server       | `src/mcp-server/`                   | StreamableHTTP plugin + transport                     |
