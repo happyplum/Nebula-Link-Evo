@@ -86,7 +86,10 @@ if "!NEED_UPDATE!"=="1" (
 REM Start LiveKit Server
 echo.
 echo [INFO] Starting LiveKit Server...
-start "LiveKit Server" cmd /c ""%LK_BINARY%" --dev 2>&1"
+REM LiveKit 1.13+ removed the --log-level CLI flag; use env var instead
+set "LIVEKIT_LOG_LEVEL=error"
+REM Filter harmless "CPU monitoring unsupported" error on Windows
+start "LiveKit Server" cmd /c ""%LK_BINARY%" --dev 2>&1 | findstr /v /c:"CPU monitoring unsupported""
 
 REM Wait for port 7880
 set /a lk_count=0
