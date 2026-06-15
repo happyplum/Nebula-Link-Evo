@@ -266,28 +266,23 @@ ai-e2e 的前端是挂在 `/ai-e2e/` 路径下的单页应用（React SPA），�
 
 **优先级** — **中**
 
-#### Gap G：AI 超时配置与实际负载不匹配
+#### Gap G：AI 超时预算尚未按操作细分
 
 **当前现状**
 
-- `config/config.json` 中 `settings.timeout` 默认 30000ms（30s）
-- `proxy-adapter-client.ts` 中 `DEFAULT_AI_TIMEOUT_MS` 默认 120000ms（120s）
-- PRD 分析、模块分解等复杂 prompt 处理时间经常超过这些限制
+- `config/config.json` 中 `settings.timeout` 当前默认 180000ms（180s）
+- `proxy-adapter-client.ts` 中 `DEFAULT_AI_TIMEOUT_MS` 当前默认 300000ms（300s）
+- 基础默认值已覆盖 2026-06-05 验收中暴露的 30s/120s 超时问题
 
 **尚未实现**
 
 - 按操作类型（分析/分解/生成/诊断）设置差异化超时
-- 默认配置满足大多数 AI provider 的实际响应时间
+- 按 provider 响应特征调整不同 AI 调用的超时预算
 
 **实际影响**
 
-- 首次运行时 30s 超时导致所有模块分解失败（502 错误）
-- 调整到 180s/300s 后问题解决
-
-**已临时修复**
-
-- `config/config.json` timeout → 180000ms
-- `proxy-adapter-client.ts` DEFAULT_AI_TIMEOUT_MS → 300000ms
+- 30s/120s 的基础默认超时问题已由当前配置修正
+- 剩余风险是所有 AI 操作仍共享较粗的默认预算，无法精确反映不同阶段负载
 
 **优先级** — **中**
 
@@ -321,7 +316,7 @@ ai-e2e 的前端是挂在 `/ai-e2e/` 路径下的单页应用（React SPA），�
 | 主要失败类型 | typescript 前缀(75), 选择器超时(54), 断言不匹配(33), strict_mode(33), waitForLoadState(26) |
 | 关键瓶颈 | page_snapshot_json 缺失 → AI 编造选择器 |
 
-**结论**：完整链路已打通（PRD → 分析 → 探索 → 脚本 → 执行 → 诊断），但脚本质量严重依赖快照数据完整性和 AI 模板约束执行力。在 Gap D/E/F 解决前，首次生成脚本的通过率预期较低。
+**结论**：完整链路已打通（PRD → 分析 → 探索 → 脚本 → 执行 → 诊断），但脚本质量严重依赖快照数据完整性和 AI 模板约束执行力。在 Gap E/F 解决前，首次生成脚本的通过率预期仍然较低。
 
 ## 7. 后续文档维护规则
 
@@ -356,10 +351,10 @@ ai-e2e 的前端是挂在 `/ai-e2e/` 路径下的单页应用（React SPA），�
 1. **补 SPA 探索能力** ✅ 已完成 — Gap D
 2. **补 page_snapshot_json 降级策略** — Gap E，高优先级
 3. **补脚本生成后验证** — Gap F，中优先级
-4. **补 AI 超时差异化配置** — Gap G，中优先级
+4. **补 AI 超时差异化预算** — Gap G，中优先级
 
 原因：
 
-- Gap D/E 直接影响探索和脚本生成两个核心阶段的自动化价值
+- Gap E 直接影响脚本生成质量的核心输入
 - Gap F 是质量保障层，可通过后处理临时缓解
-- Gap G 已通过配置修改临时解决
+- Gap G 是运行可靠性优化层，基础默认超时已对齐但尚未按操作/provider 细分
