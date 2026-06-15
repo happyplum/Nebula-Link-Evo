@@ -268,12 +268,9 @@ ai-e2e/
 1. ~~诊断能力是 run 级，不是 project 级~~ — 已支持项目级诊断聚合与导出
 2. ~~URL 绑定校验粒度不足~~ — 已强制每个功能模块必须绑定 URL
 3. ~~scenario 人工编辑面不完整~~ — 已提供完整的独立编辑能力
+4. ~~SPA 探索器无效~~ — 已实现 SPA-aware BFS：通过浏览器上下文读取渲染后 DOM、History API / `hashchange` 观察器和可访问 router 配置，补充 HashRouter / History API 路由发现；非 SPA 站点保留原有 BFS 降级路径
 
 ### 当前已知限制（2026-06-05 验收后识别）
-
-#### SPA 探索器无效（已解决）
-
-探索器已实现 SPA-aware BFS：在原有 AI 引导 BFS 基础上，使用 `ProxyAdapterClient.executeScript()` 从浏览器上下文安装 History API / `hashchange` 观察器，读取渲染后 DOM 链接与常见 router 属性，并扫描可访问的 router 配置对象，自动补充 HashRouter / History API 路由。非 SPA 站点会保留原有 BFS 降级路径。
 
 #### 脚本质量依赖 page_snapshot_json
 
@@ -289,11 +286,11 @@ AI 偶尔生成不兼容的代码：`test()`/`expect()`（Playwright Test API，
 
 **变通方案**：批量生成后用脚本自动检测和替换。
 
-#### AI 超时默认值不匹配实际负载
+#### AI 超时预算尚未按操作细分
 
-`config/config.json` 中 `settings.timeout` 默认 30s，对复杂 prompt（PRD 分析、模块分解）不够。`proxy-adapter-client.ts` 中 `DEFAULT_AI_TIMEOUT_MS` 默认 120s 也可能不够。
+基础默认值已对齐实际负载：`config/config.json` 中 `settings.timeout` 当前默认 180s，`proxy-adapter-client.ts` 中 `DEFAULT_AI_TIMEOUT_MS` 当前默认 300s。
 
-**已临时修复**：分别调整到 180s 和 300s。
+**剩余限制**：尚未按操作类型（分析 / 分解 / 生成 / 诊断）或 provider 响应特征设置差异化超时预算。
 
 #### 并发执行不支持
 
@@ -307,10 +304,10 @@ AI 偶尔生成不兼容的代码：`test()`/`expect()`（Playwright Test API，
 
 ```text
 config/config.json:
-  settings.timeout: 180000（推荐，默认 30000 太短）
+  settings.timeout: 180000（当前默认）
 
 proxy-adapter-client.ts:
-  DEFAULT_AI_TIMEOUT_MS: 300000（推荐，默认 120000 不够）
+  DEFAULT_AI_TIMEOUT_MS: 300000（当前默认）
 ```
 
 ### 批量操作策略

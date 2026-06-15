@@ -155,10 +155,10 @@ ai-e2e (:3002)
 1. ~~项目级诊断报告未实现~~ — 已支持
 2. ~~URL 绑定校验粒度不足~~ — 已强制每个功能模块绑定 URL
 3. ~~Scenario 编辑能力不完整~~ — 已提供完整编辑能力
+4. ~~SPA 探索器无效~~ — 已实现 SPA-aware BFS：通过渲染后 DOM、History API / hashchange 观察器和可访问 router 配置补充 HashRouter / History API 路由发现
 
 ### 当前缺口（2026-06-05 验收后识别）
 
-4. ~~SPA 探索器无效~~ — 已实现 SPA-aware BFS：通过渲染后 DOM、History API / hashchange 观察器和可访问 router 配置补充 HashRouter / History API 路由发现
 5. **page_snapshot_json 缺失** — 手动 URL 无快照，脚本质量崩溃（4.6% 通过率）
 6. **AI 模板约束执行不足** — AI 偶尔生成 test()/expect()/waitForLoadState/前缀
 
@@ -198,9 +198,9 @@ ai-e2e (:3002)
 
 ### AI 超时配置
 
-- `config/config.json` `settings.timeout` 默认 30s — 对复杂 prompt 太短，建议 180s
-- `proxy-adapter-client.ts` `DEFAULT_AI_TIMEOUT_MS` 默认 120s — 建议 300s
-- 已在代码中临时调整为推荐值
+- `config/config.json` `settings.timeout` 当前默认 180s
+- `proxy-adapter-client.ts` `DEFAULT_AI_TIMEOUT_MS` 当前默认 300s
+- 剩余技术债是按操作类型或 provider 响应特征拆分差异化超时预算
 
 ### PowerShell JSON 序列化陷阱
 
