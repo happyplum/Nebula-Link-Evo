@@ -39,7 +39,7 @@
 - PRD / 需求分析
 - 业务模块（L1）与功能模块（L2）生成
 - 测试场景生成
-- 页面探索（传统多页应用有效，SPA 有限制）
+- 页面探索（SPA-aware best-effort：传统多页应用走 BFS/AI，SPA 补充渲染后 DOM、History API / hashchange 和 router 配置发现）
 - URL 绑定建议与人工调整
 - Playwright 脚本生成
 - 脚本人工编辑与版本历史
@@ -81,7 +81,7 @@
 - 一个功能一定有一个 URL
 - 允许人工修改绑定关系
 
-**当前实现判断：传统多页应用对齐，SPA 应用有缺口。**
+**当前实现判断：已对齐。** 传统多页应用保留 BFS/AI 链路；SPA 应用已补充渲染后 DOM、History API / `hashchange` 观察结果和可访问 router 配置发现。
 
 #### 已实现
 
@@ -91,7 +91,7 @@
 - 一个 URL 绑定多个功能模块 ✅
 - 每个功能模块必须绑定 URL 的强校验 ✅
 
-#### 未完全对齐
+#### 仍有限制
 
 - **SPA 探索增强已实现**：BFS 现在会补充读取渲染后 DOM、HashRouter/History API 观察结果和可访问 router 配置来发现 SPA 路由
 - 手动添加 URL 时无 DOM 快照 → 下游脚本质量崩溃（见模式五）
