@@ -40,19 +40,11 @@ Expected result: extract reusable DOM operations only if the current code still 
 
 ### Environment loading centralization
 
-Status: `needs-verification`
+Status: `pending`
 
-The old plan mentioned split `.env` loading between server startup and env helpers. Current ownership needs re-check before editing.
+Verification found environment loading still split across startup boundaries such as `proxy-adapter/src/server.ts` and `ai-e2e/src/server/index.ts`. Current ownership should be documented before changing loader behavior.
 
 Expected result: either document the current single source of truth or centralize loading in one startup boundary.
-
-### Chat lifecycle E2E test backfill
-
-Status: `needs-verification`
-
-Core chat API gap closure appears implemented, but old lifecycle E2E filenames were not found during cleanup.
-
-Expected result: decide whether the current test suite already covers resume/session lifecycle behavior; add focused regression tests only if coverage is still missing.
 
 ## Cleanup Rule
 
