@@ -241,10 +241,10 @@
   position: relative;
 }
 
-/* Ensure MessageList takes full height */
-.messageRegion > div {
-  height: 100%;
-}
+/* MessageList has its own flex:1 and fills available space.
+   A blanket "height:100%" on all children gave the queue
+   panel wrapper a forced full height, collapsing MessageList
+   to 0px. */
 
 /* Footer — legacy: chat input area */
 .footer {
