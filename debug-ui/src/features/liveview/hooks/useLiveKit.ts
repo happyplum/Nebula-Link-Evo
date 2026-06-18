@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Room, RoomEvent } from 'livekit-client';
+import { Room, RoomEvent, setLogLevel } from 'livekit-client';
 import type { RemoteParticipant, RemoteTrack } from 'livekit-client';
+
+// Suppress livekit-client SDK console logs
+setLogLevel('error');
 
 type TrackStatus = 'disconnected' | 'waiting' | 'ready' | 'timeout';
 
