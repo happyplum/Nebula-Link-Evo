@@ -111,7 +111,7 @@ export async function startPublisher(
         const reasons = Object.entries(s.dropReasons)
           .map(([k, v]) => `${k}=${v}`)
           .join(', ');
-        logger.info(
+        logger.debug(
           { fps: s.fps, drops: s.totalDrops, reasons },
           'livekit debug stats'
         );
@@ -220,7 +220,7 @@ async function cleanupPublisher(): Promise<void> {
     const reasons = Object.entries(s.dropReasons)
       .map(([k, v]) => `${k}=${v}`)
       .join(', ');
-    logger.info(
+    logger.debug(
       { fps: s.fps, drops: s.totalDrops, reasons },
       'livekit final debug stats'
     );
