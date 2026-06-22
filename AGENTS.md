@@ -17,6 +17,7 @@ ai-e2e/             AI E2E test orchestration (:3002)
   ui/               Nested workspace — React SPA served at /ai-e2e/ (:5174 dev)
 config/             Shared config templates (not a package)
 tools/              Utility scripts (not a package)
+docs/               Architecture docs, API references, skill docs (not a package)
 ```
 
 ## Commands

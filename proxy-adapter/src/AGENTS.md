@@ -13,12 +13,16 @@ Backend source for AI clients, conversations, debug APIs, and chat session coord
 | Plugins          | `plugins/`      | Fastify plugins and route modules                              |
 | Clients          | `clients/`      | Decision, MCP, Vercel AI SDK                              |
 | Tool registry    | `tools/`        | ToolRegistry + 3 Providers (browser-control, vision-agent, MCP client) + adapters |
+| Browser tools    | `browser-tools/`| Action definitions, param/result adapters, tool-map            |
+| MCP Server       | `mcp-server/`   | StreamableHTTP plugin + transport                              |
 | Vision agent     | `mcps/vision-agent/` | Built-in vision analysis module (config, tools, cache)    |
 | Conversation     | `conversation/` | SQLite storage, compression, manager                           |
 | Config           | `config/`       | Schema, loader, resolver, validator                            |
-| Debug helpers    | `debug/`        | Debug-specific types and helpers                               |
 | Errors           | `errors/`       | Typed error classes                                            |
 | Schemas          | `schemas/`      | TypeBox request/response schemas                               |
+| Types            | `types/`        | Fastify and node-sqlite type augmentations                     |
+| Utils            | `utils/`        | DB backup helper                                               |
+| Workers          | `workers/`      | Stream persist worker (child process)                          |
 | Tests            | `__tests__/`    | Unit, integration, e2e                                         |
 
 ## Working Rules
