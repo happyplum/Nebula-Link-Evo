@@ -23,6 +23,7 @@ pnpm test:debug   # Debug page smoke check
 | Task facade      | `src/services/app-service.ts`       | Config, MCP, provider registry, singleton facade      |
 | Action execution | `src/services/action-executor.ts`   | Browser action dispatch                               |
 | Tool registry    | `src/tools/`                        | ToolRegistry + 3 Providers + Vercel AI / MCP adapters |
+| Browser tools    | `src/browser-tools/`                | Action definitions, param/result adapters, tool-map   |
 | MCP Server       | `src/mcp-server/`                   | StreamableHTTP plugin + transport                     |
 | Vision agent     | `src/mcps/vision-agent/`            | Internal vision analysis module (config, tools, cache)|
 | Chat routes      | `src/plugins/routes/api/chat/`      | Session, stream, control (sole execution path)        |
