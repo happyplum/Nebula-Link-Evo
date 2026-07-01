@@ -20,6 +20,12 @@ vi.mock('../store/analysisApi.js', () => ({
   }),
 }));
 
+// Mock the agent workflow so UnderstandStep tests stay focused on its own UI
+// (prompt capture + preview) without wiring the full analysis/exploration chain.
+vi.mock('../../agent/hooks/useAgentWorkflow.js', () => ({
+  useAgentWorkflow: () => ({ send: vi.fn(), isRunning: false, currentPhase: 'idle' }),
+}));
+
 // Helper that exposes the current URL search params for navigation assertions.
 function SearchParamsProbe() {
   const [params] = useSearchParams();

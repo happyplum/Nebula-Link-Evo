@@ -4,12 +4,14 @@ import { Button } from '@/shared/components';
 import { AnalysisPanel } from './AnalysisPanel.js';
 import { ScenarioPanel } from '../../scenario/components/ScenarioPanel.js';
 import { useUploadPRD } from '../store/analysisApi.js';
+import { useAgentWorkflow } from '../../agent/hooks/useAgentWorkflow.js';
+import { useAgentStore } from '../../agent/store/agentStore.js';
 
 /**
  * Wizard step "理解测试意图". Collects a natural-language test intent,
  * offers a quick PRD upload shortcut, and renders the existing analysis
  * and scenario panels below. The natural-language prompt is displayed in
- * a preview card; Phase B will wire it to the agent workflow.
+ * a preview card and forwarded to the agent workflow (opens AgentChat).
  */
 export const UnderstandStep: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>();
@@ -20,11 +22,15 @@ export const UnderstandStep: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const uploadPRD = useUploadPRD(projectId || '');
+  const { send } = useAgentWorkflow(projectId || '');
+  const { setOpen } = useAgentStore();
 
   const handleGenerate = () => {
     const trimmed = prompt.trim();
     if (!trimmed) return;
     setLastPrompt(trimmed);
+    setOpen(true);
+    send(trimmed);
   };
 
   const handleUploadClick = () => {
@@ -109,7 +115,7 @@ export const UnderstandStep: React.FC = () => {
         </div>
       </div>
 
-      {/* Prompt preview card (Phase B will wire this to the agent workflow) */}
+      {/* Prompt preview card (also forwarded to the agent workflow) */}
       {lastPrompt && (
         <div
           data-testid="prompt-preview"
