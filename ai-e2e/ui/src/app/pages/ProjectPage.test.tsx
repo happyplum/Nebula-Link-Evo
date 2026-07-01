@@ -184,4 +184,39 @@ describe('ProjectPage wizard', () => {
     renderAt('/project/p1');
     expect(screen.getByText('项目: Demo Project')).toBeInTheDocument();
   });
+
+  // --- Full wizard regression (Task 10) -------------------------------------
+
+  it('full wizard: all 4 labels visible and every step panel renders on click', () => {
+    // status='completed' makes prepare/understand/explore 'completed' (clickable).
+    // Starting at ?step=run makes 'run' the current step, so it is also
+    // interactive. This is the only configuration where all four Stepper
+    // buttons are simultaneously clickable in a single mount.
+    setProject('completed');
+    renderAt('/project/p1?step=run');
+
+    // All 4 Stepper labels are visible.
+    expect(screen.getByText(LABELS.prepare)).toBeInTheDocument();
+    expect(screen.getByText(LABELS.understand)).toBeInTheDocument();
+    expect(screen.getByText(LABELS.explore)).toBeInTheDocument();
+    expect(screen.getByText(LABELS.run)).toBeInTheDocument();
+
+    // Step 4 — run (current) renders GenerateRunStep.
+    expect(screen.getByTestId('generate-run-step')).toBeInTheDocument();
+
+    // Navigate to explore via Stepper click.
+    fireEvent.click(screen.getByText(LABELS.explore));
+    expect(screen.getByTestId('exploration-panel')).toBeInTheDocument();
+    expect(screen.queryByTestId('generate-run-step')).not.toBeInTheDocument();
+
+    // Navigate to understand via Stepper click.
+    // UnderstandStep is not mocked, so we confirm it rendered by checking
+    // its child AnalysisPanel mock.
+    fireEvent.click(screen.getByText(LABELS.understand));
+    expect(screen.getByTestId('analysis-panel')).toBeInTheDocument();
+
+    // Navigate to prepare via Stepper click.
+    fireEvent.click(screen.getByText(LABELS.prepare));
+    expect(screen.getByTestId('config-panel')).toBeInTheDocument();
+  });
 });
