@@ -1,8 +1,7 @@
 import { useParams, useSearchParams, Link } from 'react-router-dom';
 import { Stepper, type Step, type StepStatus } from '@/components/ui/stepper.js';
 import { ConfigPanel } from '../../features/project/components/ConfigPanel.js';
-import { AnalysisPanel } from '../../features/analysis/components/AnalysisPanel.js';
-import { ScenarioPanel } from '../../features/scenario/components/ScenarioPanel.js';
+import { UnderstandStep } from '../../features/analysis/components/UnderstandStep.js';
 import ExplorationPanel from '../../features/exploration/components/ExplorationPanel.js';
 import ScriptPanel from '../../features/scripts/components/ScriptPanel.js';
 import ExecutionPanel from '../../features/execution/components/ExecutionPanel.js';
@@ -124,16 +123,7 @@ export function ProjectPage() {
       {/* Step panel */}
       <div className="flex-1 overflow-y-auto p-6">
         {activeStep === 'prepare' && <ConfigPanel />}
-        {activeStep === 'understand' && (
-          <div className="flex flex-col gap-4 lg:flex-row">
-            <div className="min-w-0 flex-1">
-              <AnalysisPanel />
-            </div>
-            <div className="w-full shrink-0 lg:w-[360px]">
-              <ScenarioPanel />
-            </div>
-          </div>
-        )}
+        {activeStep === 'understand' && <UnderstandStep />}
         {activeStep === 'explore' && <ExplorationPanel />}
         {activeStep === 'run' && projectId && (
           <div className="flex flex-col gap-4">
