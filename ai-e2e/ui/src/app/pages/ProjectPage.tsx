@@ -3,9 +3,7 @@ import { Stepper, type Step, type StepStatus } from '@/components/ui/stepper.js'
 import { ConfigPanel } from '../../features/project/components/ConfigPanel.js';
 import { UnderstandStep } from '../../features/analysis/components/UnderstandStep.js';
 import ExplorationPanel from '../../features/exploration/components/ExplorationPanel.js';
-import ScriptPanel from '../../features/scripts/components/ScriptPanel.js';
-import ExecutionPanel from '../../features/execution/components/ExecutionPanel.js';
-import { ReportPanel } from '../../features/report/components/ReportPanel.js';
+import { GenerateRunStep } from '../../features/scripts/components/GenerateRunStep.js';
 import { useProject } from '../../features/project/store/projectApi.js';
 import type { ProjectStatus } from '@/types/project.js';
 
@@ -125,13 +123,7 @@ export function ProjectPage() {
         {activeStep === 'prepare' && <ConfigPanel />}
         {activeStep === 'understand' && <UnderstandStep />}
         {activeStep === 'explore' && <ExplorationPanel />}
-        {activeStep === 'run' && projectId && (
-          <div className="flex flex-col gap-4">
-            <ScriptPanel />
-            <ExecutionPanel />
-            <ReportPanel projectId={projectId} />
-          </div>
-        )}
+        {activeStep === 'run' && <GenerateRunStep />}
       </div>
     </div>
   );

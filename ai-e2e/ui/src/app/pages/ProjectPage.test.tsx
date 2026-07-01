@@ -46,17 +46,9 @@ vi.mock('../../features/exploration/components/ExplorationPanel.js', () => ({
   default: () => <div data-testid="exploration-panel">ExplorationPanel</div>,
   ExplorationPanel: () => <div data-testid="exploration-panel">ExplorationPanel</div>,
 }));
-vi.mock('../../features/scripts/components/ScriptPanel.js', () => ({
-  __esModule: true,
-  default: () => <div data-testid="script-panel">ScriptPanel</div>,
-}));
-vi.mock('../../features/execution/components/ExecutionPanel.js', () => ({
-  __esModule: true,
-  default: () => <div data-testid="execution-panel">ExecutionPanel</div>,
-}));
-vi.mock('../../features/report/components/ReportPanel.js', () => ({
-  ReportPanel: ({ projectId }: { projectId: string }) => (
-    <div data-testid="report-panel">ReportPanel:{projectId}</div>
+vi.mock('../../features/scripts/components/GenerateRunStep.js', () => ({
+  GenerateRunStep: ({ projectId }: { projectId?: string }) => (
+    <div data-testid="generate-run-step">GenerateRunStep:{projectId ?? ''}</div>
   ),
 }));
 
@@ -128,12 +120,10 @@ describe('ProjectPage wizard', () => {
     expect(screen.getByTestId('exploration-panel')).toBeInTheDocument();
   });
 
-  it('renders script + execution + report panels for ?step=run', () => {
+  it('renders the GenerateRunStep panel for ?step=run', () => {
     setProject('draft');
     renderAt('/project/p1?step=run');
-    expect(screen.getByTestId('script-panel')).toBeInTheDocument();
-    expect(screen.getByTestId('execution-panel')).toBeInTheDocument();
-    expect(screen.getByTestId('report-panel')).toHaveTextContent('ReportPanel:p1');
+    expect(screen.getByTestId('generate-run-step')).toBeInTheDocument();
   });
 
   it('falls back to the prepare step for an invalid ?step= value', () => {

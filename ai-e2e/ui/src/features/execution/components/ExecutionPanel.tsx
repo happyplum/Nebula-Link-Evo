@@ -7,11 +7,13 @@ import { useSSE } from '@/hooks/use-sse.js';
 import { useStore } from 'zustand';
 import { createAIStatusStore } from '../../ai-status/store/aiStatusStore';
 import { reportKeys } from '../../report/store/reportApi.js';
+import { Card } from '@/shared/components';
 import { ExecutionControls } from './ExecutionControls';
 import { ResultDashboard } from './ResultDashboard';
 import { RunDetail } from './RunDetail';
 import { DiagnosisPanel } from './DiagnosisPanel';
 import { ExecutionHistory } from './ExecutionHistory';
+import { RunTimeline, type RunTimelineStep } from './RunTimeline.js';
 
 export default function ExecutionPanel() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -26,6 +28,8 @@ export default function ExecutionPanel() {
   const [currentScript, setCurrentScript] = useState<string>();
   const [currentStep, setCurrentStep] = useState<string>();
   const [progress, setProgress] = useState(0);
+  // Accumulated execution step timeline driven by execution.progress SSE events.
+  const [timelineSteps, setTimelineSteps] = useState<RunTimelineStep[]>([]);
 
   // AI Status Store (vanilla store + useStore)
   const aiStatusStore = useRef(createAIStatusStore()).current;
@@ -44,12 +48,51 @@ export default function ExecutionPanel() {
         setAIStatus('running');
         setAIMessage(`开始执行脚本: ${data.scriptId}`);
         queryClient.invalidateQueries({ queryKey: executionKeys.runs(projectId!) });
+        // Reset the timeline with a single "started" step.
+        setTimelineSteps([
+          {
+            id: 'start',
+            label: '开始执行',
+            status: 'completed',
+            detail: data.scriptId,
+          },
+        ]);
       },
       'execution.progress': (data) => {
         setCurrentStep(data.step);
         setAIMessage(`执行中: ${data.step}`);
         // Increment progress by a small amount since backend doesn't provide step index
         setProgress(prev => Math.min(prev + 5, 90));
+        // Append a new step or advance the current running step.
+        const stepName = data.step || '执行中...';
+        const now = Date.now();
+        setTimelineSteps((prev) => {
+          const existing = prev.find((s) => s.label === stepName);
+          if (existing) {
+            return prev.map((s) =>
+              s.label === stepName
+                ? {
+                    ...s,
+                    status: 'running' as const,
+                    durationMs: s.startedAt ? now - s.startedAt : s.durationMs,
+                  }
+                : s.status === 'running'
+                  ? { ...s, status: 'completed' as const }
+                  : s,
+            );
+          }
+          return [
+            ...prev.map((s) =>
+              s.status === 'running' ? { ...s, status: 'completed' as const } : s,
+            ),
+            {
+              id: `${stepName}-${now}`,
+              label: stepName,
+              status: 'running' as const,
+              startedAt: now,
+            },
+          ];
+        });
       },
       'execution.completed': (data) => {
         setIsRunning(false);
@@ -64,6 +107,13 @@ export default function ExecutionPanel() {
         if (selectedRunId === data.run?.id) {
           queryClient.invalidateQueries({ queryKey: executionKeys.runDetail(projectId!, data.run.id) });
         }
+        // Finalize the timeline: mark every running step completed and append a done step.
+        setTimelineSteps((prev) => [
+          ...prev.map((s) =>
+            s.status === 'running' ? { ...s, status: 'completed' as const } : s,
+          ),
+          { id: 'done', label: '执行完成', status: 'completed' as const },
+        ]);
       },
       'execution.failed': (data) => {
         setIsRunning(false);
@@ -77,6 +127,21 @@ export default function ExecutionPanel() {
         if (selectedRunId === data.runId) {
           queryClient.invalidateQueries({ queryKey: executionKeys.runDetail(projectId!, data.runId) });
         }
+        // Mark the last running step as failed and append a terminal failure step.
+        setTimelineSteps((prev) => {
+          const lastRunning = [...prev].reverse().find((s) => s.status === 'running');
+          return [
+            ...prev.map((s) =>
+              s === lastRunning ? { ...s, status: 'failed' as const } : s,
+            ),
+            {
+              id: 'failed',
+              label: '执行失败',
+              status: 'failed' as const,
+              detail: data.error,
+            },
+          ];
+        });
       },
       'ai.diagnosis': (data) => {
         queryClient.invalidateQueries({ queryKey: executionKeys.diagnosis(projectId!, data.runId) });
@@ -127,6 +192,12 @@ export default function ExecutionPanel() {
 
       <div className="flex-1 flex gap-4 overflow-hidden p-4">
         <div className="flex-1 flex flex-col gap-4 overflow-auto">
+          {timelineSteps.length > 0 && (
+            <Card title="执行进度">
+              <RunTimeline steps={timelineSteps} />
+            </Card>
+          )}
+
           <ExecutionControls
             projectId={projectId}
             isRunning={isRunning}
