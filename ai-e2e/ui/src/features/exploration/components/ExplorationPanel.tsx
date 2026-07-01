@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { ExplorationControls } from './ExplorationControls';
 import { URLList } from './URLList';
 import { PagePreview } from './PagePreview';
@@ -25,8 +25,13 @@ import {
 } from '../store/explorationApi';
 import { useQueryClient } from '@tanstack/react-query';
 
-export const ExplorationPanel: React.FC = () => {
+export interface ExplorationPanelProps {
+  stepTitle?: string;
+}
+
+export const ExplorationPanel: React.FC<ExplorationPanelProps> = ({ stepTitle = '探索与绑定' }) => {
   const { projectId } = useParams<{ projectId: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   
   const [selectedUrlId, setSelectedUrlId] = useState<string | undefined>();
@@ -145,8 +150,21 @@ export const ExplorationPanel: React.FC = () => {
     }
   };
 
+  // Advance the wizard to the "run" step. Mirrors ProjectPage's Stepper
+  // navigation contract (sets ?step=run via useSearchParams).
+  const handleNextStep = () => {
+    const next = new URLSearchParams(searchParams);
+    next.set('step', 'run');
+    setSearchParams(next, { replace: false });
+  };
+
   return (
     <div className="flex flex-col h-full">
+      <div className="border-b border-border-default pb-3">
+        <h1 className="text-lg font-semibold text-text-primary">{stepTitle}</h1>
+        <p className="mt-1 text-xs text-text-secondary">探索目标站点并绑定功能模块 URL</p>
+      </div>
+
       <div className="flex gap-4">
         <ExplorationControls
           isExploring={isExploring}
@@ -198,6 +216,9 @@ export const ExplorationPanel: React.FC = () => {
           isLoading={transitionState.isPending}
         >
           确认完成，进入生成阶段
+        </Button>
+        <Button variant="secondary" onClick={handleNextStep}>
+          下一步
         </Button>
       </div>
 
