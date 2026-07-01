@@ -1,78 +1,148 @@
-import { useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { useParams, useSearchParams, Link } from 'react-router-dom';
+import { Stepper, type Step, type StepStatus } from '@/components/ui/stepper.js';
 import { ConfigPanel } from '../../features/project/components/ConfigPanel.js';
 import { AnalysisPanel } from '../../features/analysis/components/AnalysisPanel.js';
-import ExplorationPanel from '../../features/exploration/components/ExplorationPanel.js';
 import { ScenarioPanel } from '../../features/scenario/components/ScenarioPanel.js';
+import ExplorationPanel from '../../features/exploration/components/ExplorationPanel.js';
 import ScriptPanel from '../../features/scripts/components/ScriptPanel.js';
 import ExecutionPanel from '../../features/execution/components/ExecutionPanel.js';
 import { ReportPanel } from '../../features/report/components/ReportPanel.js';
 import { useProject } from '../../features/project/store/projectApi.js';
+import type { ProjectStatus } from '@/types/project.js';
 
-const TABS = [
-  { value: 'config', label: '配置' },
-  { value: 'analysis', label: 'PRD 分析' },
-  { value: 'scenario', label: '场景' },
-  { value: 'exploration', label: '探索' },
-  { value: 'scripts', label: '脚本' },
-  { value: 'execution', label: '执行' },
-  { value: 'report', label: '报告' },
+// 4-step wizard definition. Labels match the plan's Task 5 spec.
+const WIZARD_STEPS = [
+  { id: 'prepare', label: '准备目标站点', description: '配置项目与登录脚本' },
+  { id: 'understand', label: '理解测试意图', description: '分析 PRD 与设计场景' },
+  { id: 'explore', label: '探索与绑定', description: '探索站点并绑定 URL' },
+  { id: 'run', label: '生成与执行', description: '生成脚本并执行测试' },
 ] as const;
 
-type TabValue = (typeof TABS)[number]['value'];
+type WizardStepId = (typeof WIZARD_STEPS)[number]['id'];
+
+const STEP_IDS: readonly WizardStepId[] = WIZARD_STEPS.map((s) => s.id);
+
+const VALID_STEP_SET = new Set<string>(STEP_IDS);
+
+/**
+ * Step completion is derived from `project.status`, which is the backend state
+ * machine's authoritative signal. The state-machine gates (documented in
+ * ai-e2e/AGENTS.md) guarantee the equivalences below:
+ *   - prepare is done once the project leaves `draft`
+ *   - understand (analysis) is done once status reaches `analyzed` or beyond
+ *   - explore (URL binding) is done once status reaches `explored` or beyond
+ *   - run is the terminal step and is never auto-completed
+ */
+const COMPLETED_STATUSES: Record<WizardStepId, ReadonlySet<ProjectStatus>> = {
+  prepare: new Set<ProjectStatus>([
+    'configuring',
+    'analyzing',
+    'analyzed',
+    'exploring',
+    'explored',
+    'generating',
+    'ready',
+    'running',
+    'completed',
+  ]),
+  understand: new Set<ProjectStatus>([
+    'analyzed',
+    'exploring',
+    'explored',
+    'generating',
+    'ready',
+    'running',
+    'completed',
+  ]),
+  explore: new Set<ProjectStatus>([
+    'explored',
+    'generating',
+    'ready',
+    'running',
+    'completed',
+  ]),
+  run: new Set<ProjectStatus>(),
+};
+
+function computeStepStatus(
+  stepId: WizardStepId,
+  activeStep: WizardStepId,
+  projectStatus: ProjectStatus | undefined,
+): StepStatus {
+  if (stepId === activeStep) return 'current';
+  if (projectStatus && COMPLETED_STATUSES[stepId].has(projectStatus)) return 'completed';
+  return 'pending';
+}
+
+function resolveActiveStep(rawStep: string | null): WizardStepId {
+  if (rawStep && VALID_STEP_SET.has(rawStep)) return rawStep as WizardStepId;
+  return 'prepare';
+}
 
 export function ProjectPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const { data: project } = useProject(projectId || '');
-  const [activeTab, setActiveTab] = useState<TabValue>('config');
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const activeStep = resolveActiveStep(searchParams.get('step'));
+  const projectStatus = project?.status;
+
+  const steps: Step[] = WIZARD_STEPS.map((s) => ({
+    ...s,
+    status: computeStepStatus(s.id, activeStep, projectStatus),
+  }));
+
+  const handleStepClick = (stepId: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('step', stepId);
+    setSearchParams(next, { replace: false });
+  };
 
   return (
     <div className="flex h-full flex-col">
-      <Tabs key={projectId} value={activeTab} onValueChange={(v) => setActiveTab(v as TabValue)} className="flex h-full flex-col">
-        {/* Tab Bar */}
-        <div className="border-b border-border-default bg-surface-content px-6 pt-4">
-          <h1 className="mb-3 text-lg font-semibold text-text-primary">
-            项目: {project?.name || projectId}
-          </h1>
-          <TabsList className="h-9 w-full justify-start rounded-none border-b-0 bg-transparent p-0">
-            {TABS.map((tab) => (
-              <TabsTrigger
-                key={tab.value}
-                value={tab.value}
-                className="rounded-none border-b-2 border-transparent px-4 py-2 text-[13px] text-text-muted data-[state=active]:border-b-status-info data-[state=active]:text-text-primary data-[state=active]:shadow-none"
-              >
-                {tab.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
+      {/* Header: back link + project title + status */}
+      <div className="border-b border-border-default bg-surface-content px-6 pt-4 pb-3">
+        <div className="mb-3 flex items-center gap-3">
+          <Link
+            to="/"
+            className="text-xs text-text-muted transition-colors hover:text-text-primary"
+          >
+            ← 工作区
+          </Link>
         </div>
+        <h1 className="text-lg font-semibold text-text-primary">
+          项目: {project?.name || projectId}
+        </h1>
+        {projectStatus && (
+          <div className="mt-1 text-xs text-text-secondary">状态: {projectStatus}</div>
+        )}
+        <div className="mt-4">
+          <Stepper steps={steps} onStepClick={handleStepClick} />
+        </div>
+      </div>
 
-        {/* Tab content */}
-        <div className="flex-1 overflow-y-auto p-6">
-          <TabsContent value="config" className="mt-0">
-            {activeTab === 'config' && <ConfigPanel />}
-          </TabsContent>
-          <TabsContent value="analysis" className="mt-0">
-            {activeTab === 'analysis' && <AnalysisPanel />}
-          </TabsContent>
-          <TabsContent value="scenario" className="mt-0">
-            {activeTab === 'scenario' && <ScenarioPanel />}
-          </TabsContent>
-          <TabsContent value="exploration" className="mt-0">
-            {activeTab === 'exploration' && <ExplorationPanel />}
-          </TabsContent>
-          <TabsContent value="scripts" className="mt-0">
-            {activeTab === 'scripts' && <ScriptPanel />}
-          </TabsContent>
-          <TabsContent value="execution" className="mt-0">
-            {activeTab === 'execution' && <ExecutionPanel />}
-          </TabsContent>
-          <TabsContent value="report" className="mt-0">
-            {activeTab === 'report' && projectId && <ReportPanel projectId={projectId} />}
-          </TabsContent>
-        </div>
-      </Tabs>
+      {/* Step panel */}
+      <div className="flex-1 overflow-y-auto p-6">
+        {activeStep === 'prepare' && <ConfigPanel />}
+        {activeStep === 'understand' && (
+          <div className="flex flex-col gap-4 lg:flex-row">
+            <div className="min-w-0 flex-1">
+              <AnalysisPanel />
+            </div>
+            <div className="w-full shrink-0 lg:w-[360px]">
+              <ScenarioPanel />
+            </div>
+          </div>
+        )}
+        {activeStep === 'explore' && <ExplorationPanel />}
+        {activeStep === 'run' && projectId && (
+          <div className="flex flex-col gap-4">
+            <ScriptPanel />
+            <ExecutionPanel />
+            <ReportPanel projectId={projectId} />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
