@@ -145,11 +145,16 @@ describe('ProjectPage wizard', () => {
   it('marks the active step as current via aria-current="step"', () => {
     setProject('draft');
     renderAt('/project/p1?step=understand');
-    // The Stepper renders a <button aria-current="step"> for the current step.
-    const currentButton = screen.getByText(LABELS.understand).closest('button');
+    // UnderstandStep also renders the label as an <h2>, so scope the text
+    // search to the Stepper's <span> via the selector option.
+    const currentButton = screen
+      .getByText(LABELS.understand, { selector: 'span' })
+      .closest('button');
     expect(currentButton).toHaveAttribute('aria-current', 'step');
     // prepare is pending (draft project) so it must NOT be marked current.
-    const prepareButton = screen.getByText(LABELS.prepare).closest('button');
+    const prepareButton = screen
+      .getByText(LABELS.prepare, { selector: 'span' })
+      .closest('button');
     expect(prepareButton).not.toHaveAttribute('aria-current', 'step');
   });
 
