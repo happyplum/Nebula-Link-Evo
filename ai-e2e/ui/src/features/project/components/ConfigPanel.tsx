@@ -1,9 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { Button, Input } from '@/shared/components';
-import { 
-  useProjectConfig, 
-  useUpdateProjectConfig, 
+// shadcn primitive powers the wizard footer navigation button; the shared
+// Button above still drives the existing form actions (primary/ghost/loading).
+import { Button as ShadcnButton } from '@/components/ui/button.js';
+import {
+  useProjectConfig,
+  useUpdateProjectConfig,
   useTransitionProjectState,
   useCreateLoginScript,
   useTestLoginScript,
@@ -25,8 +28,13 @@ const STEP_TYPE_LABELS: Record<LoginStep['type'], string> = {
 
 const DEFAULT_STEP: LoginStep = { type: 'navigate', description: '' };
 
-export const ConfigPanel: React.FC = () => {
+interface ConfigPanelProps {
+  stepTitle?: string;
+}
+
+export const ConfigPanel: React.FC<ConfigPanelProps> = ({ stepTitle = '准备目标站点' }) => {
   const { projectId } = useParams<{ projectId: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   
   const { data: project } = useProject(projectId);
   const { data: config, isLoading } = useProjectConfig(projectId);
@@ -113,6 +121,14 @@ export const ConfigPanel: React.FC = () => {
     }
   };
 
+  // Advance the wizard to the "understand" step. Mirrors ProjectPage's
+  // Stepper navigation contract (sets ?step=understand via useSearchParams).
+  const handleNextStep = () => {
+    const next = new URLSearchParams(searchParams);
+    next.set('step', 'understand');
+    setSearchParams(next, { replace: false });
+  };
+
   const addSeedUrl = () => {
     setLocalConfig({
       ...localConfig,
@@ -188,6 +204,10 @@ export const ConfigPanel: React.FC = () => {
 
   return (
     <div className="flex flex-col gap-4">
+      <div className="border-b border-border-default pb-3">
+        <h1 className="text-lg font-semibold text-text-primary">{stepTitle}</h1>
+        <p className="mt-1 text-xs text-text-secondary">配置目标站点基础信息与登录脚本</p>
+      </div>
       <div className="space-y-3">
         <h2 className="text-sm font-medium text-text-secondary">目标配置</h2>
         
@@ -423,6 +443,10 @@ export const ConfigPanel: React.FC = () => {
             开始分析
           </Button>
         )}
+
+        <ShadcnButton variant="default" onClick={handleNextStep}>
+          下一步
+        </ShadcnButton>
       </div>
     </div>
   );
