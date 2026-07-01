@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { useProjects, useProject, projectKeys } from '../features/project/store/projectApi.js';
 import { useSSE } from '@/hooks/use-sse.js';
+import { AgentEntry } from '../features/agent/components/AgentEntry.js';
 
 export function Layout() {
   const { data: projects } = useProjects();
@@ -30,6 +31,9 @@ export function Layout() {
         .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
         .slice(0, 5)
     : [];
+
+  // Workspace header title: project name when inside a project, otherwise the workspace label.
+  const workspaceTitle = projectId ? (currentProject?.name || projectId) : '工作区';
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden">
@@ -91,8 +95,17 @@ export function Layout() {
         </aside>
 
         {/* Main Content */}
-        <main className="flex flex-1 flex-col overflow-y-auto bg-surface-content">
-          <Outlet />
+        <main className="flex flex-1 flex-col overflow-hidden bg-surface-content">
+          {/* Workspace Header */}
+          <header className="flex h-12 shrink-0 items-center justify-between border-b border-border-default px-6">
+            <h1 className="truncate text-sm font-semibold text-text-primary">{workspaceTitle}</h1>
+            <AgentEntry />
+          </header>
+
+          {/* Page Content */}
+          <div className="flex-1 overflow-y-auto">
+            <Outlet />
+          </div>
         </main>
       </div>
 
