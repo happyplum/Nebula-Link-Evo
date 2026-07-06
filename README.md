@@ -34,7 +34,7 @@ Browser ←→ Debug UI (:5173 dev)
 
 **会话状态机**：idle → running ↔ paused，interrupt → interrupted，cancel → cancelled，completed。每个会话通过互斥锁保证同一时间只有一个活跃执行，支持暂停、恢复、中断等操作。
 
-**工具与扩展**：MCP（Model Context Protocol，从 stdio 服务器自动发现）提供丰富的扩展能力。Chat 中 `browser-control.*` 浏览器工具由 Proxy Adapter 本地 `browser-tools` 模块注册并通过内置 Playwright 驱动 Chromium；视觉工具由内置 `vision-agent` 注册为 `vision-agent.analyze`、`vision-agent.find_element`、`vision-agent.get_element_info`、`vision-agent.screenshot`，同时暴露给 Chat 与 MCP Server。其他外部 MCP 工具继续通过 MCP 协议动态注册与调用。MCP 客户端具备崩溃恢复机制：状态机管理 server 生命周期，事件驱动检测断链，指数退避自动重连（最多 5 次），`toolsChanged` 事件通知工具变更。
+**工具与扩展**：MCP（Model Context Protocol）提供丰富的扩展能力。Chat 中 `browser-control.*` 与 `vision-agent.*` 工具由 ai-chat-service 通过 MCP-over-HTTP 自动连接 `proxy-adapter` 的 `gateway` 服务器（默认 `PROXY_ADAPTER_URL` + `/mcp`）获取；其他外部 MCP 工具可继续通过 stdio 或 StreamableHTTP 协议动态注册与调用。外部 MCP 工具默认保留原始工具名，若与已注册工具同名则按 `<serverName>-<toolName>` 前缀规则暴露。MCP 客户端具备崩溃恢复机制：状态机管理 server 生命周期，事件驱动检测断链，指数退避自动重连（最多 5 次），`toolsChanged` 事件通知工具变更。
 
 **上下文管理**：消息数超过 20 时自动压缩上下文，Chat SSE 每次建连都会先发送完整 `session.snapshot` 再继续 live stream，后台任务队列支持 3 次重试和 10 分钟空闲清理。
 
