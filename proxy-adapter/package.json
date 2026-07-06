@@ -24,6 +24,7 @@
     "@fastify/swagger": "catalog:",
     "@fastify/swagger-ui": "catalog:",
     "@fastify/type-provider-typebox": "catalog:",
+    "@livekit/rtc-node": "catalog:",
     "@microsoft/fetch-event-source": "^2.0.1",
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@nebula-link-evo/shared": "workspace:*",
@@ -37,6 +38,8 @@
     "fastify-plugin": "catalog:",
     "livekit-server-sdk": "catalog:",
     "pino": "^10.3.1",
+    "playwright": "^1.58.2",
+    "sharp": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

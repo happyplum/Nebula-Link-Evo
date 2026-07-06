@@ -450,6 +450,9 @@ importers:
       '@fastify/type-provider-typebox':
         specifier: 'catalog:'
         version: 4.1.0(@sinclair/typebox@0.32.35)
+      '@livekit/rtc-node':
+        specifier: 'catalog:'
+        version: 0.13.24
       '@microsoft/fetch-event-source':
         specifier: ^2.0.1
         version: 2.0.1
@@ -489,6 +492,12 @@ importers:
       pino:
         specifier: ^10.3.1
         version: 10.3.1
+      playwright:
+        specifier: ^1.58.2
+        version: 1.58.2
+      sharp:
+        specifier: 'catalog:'
+        version: 0.34.5
       zod:
         specifier: 'catalog:'
         version: 4.3.6
