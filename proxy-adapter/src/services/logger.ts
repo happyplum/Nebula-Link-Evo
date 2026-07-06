@@ -27,3 +27,5 @@ export function normalizeLogLevel(): PinoLevel {
 export function createWorkerLogger(name: string) {
   return pino({ name, level: normalizeLogLevel() });
 }
+
+export type Logger = ReturnType<typeof createWorkerLogger>;

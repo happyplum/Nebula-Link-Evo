@@ -53,7 +53,7 @@ function buildRetryDelay(attempt: number): number {
 }
 
 function ensureFetchEventSourceGlobals(): () => void {
-  const globalWithDom = globalThis as typeof globalThis & {
+  const globalWithDom = globalThis as unknown as {
     document?: FetchEventSourceDocumentLike;
     window?: FetchEventSourceWindowLike;
   };

@@ -1,14 +1,38 @@
-import axios from 'axios';
-import { ScreenshotData } from './types.js';
-
-// 为所有 BrowserClient 请求自动附加 x-browser-owner header
-// 可选链确保测试 mock 环境下 axios.defaults 不可用时不会崩溃
-axios.defaults?.headers?.common && (axios.defaults.headers.common['x-browser-owner'] = 'chat');
-import type { DOMSnapshotResponse, ElementInfo, ElementLocator } from '@nebula-link-evo/shared';
-import { getServiceEndpointsCached } from './config/services.js';
+import type {
+  DOMSnapshotResponse,
+  ElementInfo,
+  ElementLocator,
+} from '@nebula-link-evo/shared';
+import type {
+  DebugMarkerEvent,
+  DebugOverlayEvent,
+  DebugStatusReason,
+} from '@nebula-link-evo/shared/types/debug-events.js';
+import { BrowserService } from './browser-engine/index.js';
+import type { MarkerActionResult } from './browser-engine/index.js';
+import { debugEventHub } from './services/debug-event-hub.js';
 import { createWorkerLogger } from './services/logger.js';
+import type { ScreenshotData } from './types.js';
 
 const logger = createWorkerLogger('BrowserClient');
+
+const browserService = BrowserService.getInstance();
+
+// Replaces the previous x-browser-owner header (always 'chat' for BrowserClient calls)
+const OWNER = 'chat';
+
+const DEBUG_MARKER_TTL_MS = 5000;
+
+// Patterns from the former /dom/script route safety check
+const DANGEROUS_SCRIPT_PATTERNS: readonly RegExp[] = [
+  /eval\s*\(/,
+  /Function\s*\(/,
+  /document\.cookie/,
+  /localStorage\.setItem/,
+  /fetch\s*\(/,
+  /XMLHttpRequest/,
+  /\$http/,
+];
 
 interface PageStateElement {
   tag: string;
@@ -18,108 +42,141 @@ interface PageStateElement {
   isInteractable: boolean;
 }
 
-const endpoints = getServiceEndpointsCached();
-const PLAYWRIGHT_URL = endpoints.playwright.url;
+// ---------------------------------------------------------------------------
+// Debug event helpers (migrated from playwright-server route handlers)
+// ---------------------------------------------------------------------------
 
-const BROWSER_TIMEOUT_MS = 30000;
+type MarkerDebugAction = NonNullable<DebugMarkerEvent['marker']['action']>;
+
+async function publishDebugStatus(reason: DebugStatusReason): Promise<void> {
+  try {
+    debugEventHub.publish({
+      type: 'debug.status',
+      status: await browserService.getDebugStatus(reason, OWNER),
+      emittedAt: new Date().toISOString(),
+    });
+  } catch {
+    // Best-effort publishing must never affect browser operations.
+  }
+}
+
+async function publishMarkerDebugEvents(
+  action: MarkerDebugAction,
+  result: MarkerActionResult
+): Promise<void> {
+  if (!result.bbox) {
+    return;
+  }
+
+  try {
+    const pageX = result.bbox.x + result.bbox.width / 2;
+    const pageY = result.bbox.y + result.bbox.height / 2;
+
+    const markerEvent: DebugMarkerEvent = {
+      type: 'debug.marker',
+      marker: {
+        source: 'ai',
+        action,
+        pageX,
+        pageY,
+        bbox: result.bbox,
+        selector: result.selector,
+        nebulaId: result.nebulaId,
+        ttlMs: DEBUG_MARKER_TTL_MS,
+      },
+      emittedAt: new Date().toISOString(),
+    };
+
+    const overlayEvent: DebugOverlayEvent = {
+      type: 'debug.overlay',
+      overlay: {
+        kind: 'highlight',
+        source: 'ai',
+        bbox: result.bbox,
+        selector: result.selector,
+        ttlMs: DEBUG_MARKER_TTL_MS,
+      },
+      emittedAt: new Date().toISOString(),
+    };
+
+    debugEventHub.publish(markerEvent);
+    debugEventHub.publish(overlayEvent);
+  } catch {
+    // Best-effort only: debug push must never affect browser operations.
+  }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export class BrowserClient {
   private cdpPort: number = 9222;
 
-  /**
-   * 封装 axios 请求，提取 HTTP 错误响应体到错误消息。
-   * 仅增强错误路径；正常返回值由调用方自行处理（如 response.data / response.data.result）。
-   */
-  private async doRequest<T>(requestFn: () => Promise<T>): Promise<T> {
-    try {
-      return await requestFn();
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        if (error.response) {
-          logger.error(
-            { status: error.response.status, data: error.response.data },
-            'Playwright Server returned error'
-          );
-          throw new Error(
-            `Playwright Server error: ${error.response.status} - ${JSON.stringify(error.response.data)}`
-          );
-        } else if (error.request) {
-          logger.error({ message: error.message }, 'No response from Playwright Server');
-          throw new Error(`Playwright Server unreachable: ${error.message}`);
-        }
-      }
-      logger.error({ err: error }, 'Unexpected browser request error');
-      throw error;
-    }
-  }
-
   async openBrowser(): Promise<void> {
-    await this.doRequest(() => axios.post(`${PLAYWRIGHT_URL}/browser/open`, {
-      headless: false,
-      cdpPort: this.cdpPort,
-    }, { timeout: BROWSER_TIMEOUT_MS }));
+    await browserService.open(false, { width: 1920, height: 1080 }, this.cdpPort, OWNER);
+    await publishDebugStatus('open');
   }
 
   async closeBrowser(): Promise<void> {
-    await this.doRequest(() => axios.post(`${PLAYWRIGHT_URL}/browser/close`, {}, { timeout: BROWSER_TIMEOUT_MS }));
+    await browserService.close(OWNER);
+    await publishDebugStatus('close');
   }
 
   async navigate(url: string): Promise<void> {
-    await this.doRequest(() => axios.post(`${PLAYWRIGHT_URL}/browser/navigate`, { url }, { timeout: BROWSER_TIMEOUT_MS }));
+    await browserService.navigate(url, 'networkidle', OWNER);
+    await publishDebugStatus('navigate');
   }
 
   async screenshot(fullPage: boolean = false): Promise<ScreenshotData> {
-    const response = await this.doRequest(() => axios.post(`${PLAYWRIGHT_URL}/browser/screenshot`, {
-      fullPage,
-      type: 'png',
-    }, { timeout: BROWSER_TIMEOUT_MS }));
-    return response.data;
+    const result = await browserService.screenshot(fullPage, OWNER);
+    return { screenshot: result.screenshot, viewport: result.viewport };
   }
 
   async getSimplifiedDOM(): Promise<DOMSnapshotResponse> {
-    try {
-      const response = await axios.get(`${PLAYWRIGHT_URL}/dom/simplified`, { timeout: BROWSER_TIMEOUT_MS });
-      const data = response.data;
-      if (data.snapshot_id) {
-        return data;
-      }
+    const data = await browserService.getSimplifiedDOMV2(OWNER);
+    if (!data.snapshot_id) {
       logger.warn('DOM response missing snapshot_id');
-      return data;
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        // Handle network errors or HTTP errors
-        if (error.response) {
-          // Server responded with error status
-          logger.error({ status: error.response.status, data: error.response.data }, 'Playwright Server returned error');
-          throw new Error(
-            `Playwright Server error: ${error.response.status} - ${JSON.stringify(error.response.data)}`
-          );
-        } else if (error.request) {
-          // Request made but no response received
-          logger.error({ message: error.message }, 'No response from Playwright Server');
-          throw new Error(`Playwright Server unreachable: ${error.message}`);
-        }
-      }
-      // Other errors
-      logger.error({ err: error }, 'Unexpected error fetching DOM');
-      throw error;
     }
+    return data;
   }
 
   async click(x: number, y: number): Promise<void> {
-    await this.doRequest(() => axios.post(`${PLAYWRIGHT_URL}/action/click`, { x, y }, { timeout: BROWSER_TIMEOUT_MS }));
+    // Preserves the 3-attempt retry from the former /action/click route
+    let lastError: Error | null = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        await browserService.click(x, y, OWNER);
+        return;
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        if (attempt < 3) {
+          await delay(attempt * 1000);
+        }
+      }
+    }
+    throw lastError!;
   }
 
   async clickBySelector(selector: string): Promise<void> {
-    await this.doRequest(() => axios.post(`${PLAYWRIGHT_URL}/action/click-by-selector`, { selector }, { timeout: BROWSER_TIMEOUT_MS }));
+    // Preserves the force-click fallback from the former /action/click-by-selector route
+    try {
+      await browserService.clickBySelector(selector, undefined, OWNER);
+    } catch {
+      logger.info({ selector }, 'Normal click failed, retrying with force');
+      await browserService.clickBySelector(selector, { force: true }, OWNER);
+    }
   }
 
   async executeScript(script: string, args?: unknown[]): Promise<unknown> {
-    const response = await this.doRequest(() => axios.post(`${PLAYWRIGHT_URL}/dom/script`, {
-      script,
-      args: args ?? [],
-    }, { timeout: BROWSER_TIMEOUT_MS }));
-    return response.data.result;
+    // Preserves the safety check from the former /dom/script route
+    for (const pattern of DANGEROUS_SCRIPT_PATTERNS) {
+      if (pattern.test(script)) {
+        throw new Error('Potentially dangerous script detected');
+      }
+    }
+    const result = await browserService.executeScript(script, args ?? [], OWNER);
+    return result;
   }
 
   async getCookies(): Promise<Array<{ name: string; value: string; domain: string }>> {
@@ -161,52 +218,45 @@ export class BrowserClient {
   }
 
   async clickByMarker(snapshotId: string, nebulaId: number): Promise<void> {
-    await this.doRequest(() => axios.post(`${PLAYWRIGHT_URL}/action/click-by-marker`, {
-      snapshot_id: snapshotId,
-      nebula_id: nebulaId,
-    }, { timeout: BROWSER_TIMEOUT_MS }));
+    const result = await browserService.clickByMarker(snapshotId, nebulaId, OWNER);
+    if (result.success) {
+      await publishMarkerDebugEvents('click', result);
+    }
   }
 
   async typeByMarker(snapshotId: string, nebulaId: number, text: string): Promise<void> {
-    await this.doRequest(() => axios.post(`${PLAYWRIGHT_URL}/action/execute-by-marker`, {
-      snapshot_id: snapshotId,
-      nebula_id: nebulaId,
-      action: 'type',
-      param: text,
-    }, { timeout: BROWSER_TIMEOUT_MS }));
+    const result = await browserService.typeByMarker(snapshotId, nebulaId, text, undefined, OWNER);
+    if (result.success) {
+      await publishMarkerDebugEvents('type', result);
+    }
   }
 
   async focusByMarker(snapshotId: string, nebulaId: number): Promise<void> {
-    await this.doRequest(() => axios.post(`${PLAYWRIGHT_URL}/action/execute-by-marker`, {
-      snapshot_id: snapshotId,
-      nebula_id: nebulaId,
-      action: 'focus',
-    }, { timeout: BROWSER_TIMEOUT_MS }));
+    const result = await browserService.focusByMarker(snapshotId, nebulaId, OWNER);
+    if (result.success) {
+      await publishMarkerDebugEvents('focus', result);
+    }
   }
 
   async blurByMarker(snapshotId: string, nebulaId: number): Promise<void> {
-    await this.doRequest(() => axios.post(`${PLAYWRIGHT_URL}/action/execute-by-marker`, {
-      snapshot_id: snapshotId,
-      nebula_id: nebulaId,
-      action: 'blur',
-    }, { timeout: BROWSER_TIMEOUT_MS }));
+    const result = await browserService.blurByMarker(snapshotId, nebulaId, OWNER);
+    if (result.success) {
+      await publishMarkerDebugEvents('blur', result);
+    }
   }
 
   async hoverByMarker(snapshotId: string, nebulaId: number): Promise<void> {
-    await this.doRequest(() => axios.post(`${PLAYWRIGHT_URL}/action/execute-by-marker`, {
-      snapshot_id: snapshotId,
-      nebula_id: nebulaId,
-      action: 'hover',
-    }, { timeout: BROWSER_TIMEOUT_MS }));
+    const result = await browserService.hoverByMarker(snapshotId, nebulaId, OWNER);
+    if (result.success) {
+      await publishMarkerDebugEvents('hover', result);
+    }
   }
 
   async setValueByMarker(snapshotId: string, nebulaId: number, value: string): Promise<void> {
-    await this.doRequest(() => axios.post(`${PLAYWRIGHT_URL}/action/execute-by-marker`, {
-      snapshot_id: snapshotId,
-      nebula_id: nebulaId,
-      action: 'value',
-      param: value,
-    }, { timeout: BROWSER_TIMEOUT_MS }));
+    const result = await browserService.setValueByMarker(snapshotId, nebulaId, value, OWNER);
+    if (result.success) {
+      await publishMarkerDebugEvents('value', result);
+    }
   }
 
   async dispatchEventByMarker(
@@ -214,40 +264,59 @@ export class BrowserClient {
     nebulaId: number,
     eventType: string
   ): Promise<void> {
-    await this.doRequest(() => axios.post(`${PLAYWRIGHT_URL}/action/execute-by-marker`, {
-      snapshot_id: snapshotId,
-      nebula_id: nebulaId,
-      action: 'dispatch',
-      param: eventType,
-    }, { timeout: BROWSER_TIMEOUT_MS }));
+    const result = await browserService.dispatchEventByMarker(snapshotId, nebulaId, eventType, OWNER);
+    if (result.success) {
+      await publishMarkerDebugEvents('dispatch', result);
+    }
   }
 
   async type(selector: string, text: string): Promise<void> {
-    await this.doRequest(() => axios.post(`${PLAYWRIGHT_URL}/action/type`, { selector, text }, { timeout: BROWSER_TIMEOUT_MS }));
+    // Preserves the 3-attempt retry with force escalation from the former /action/type route
+    let currentOptions: { delay?: number; clear?: boolean; force?: boolean } | undefined = undefined;
+    let lastError: Error | null = null;
+
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        await browserService.type(selector, text, currentOptions, OWNER);
+        return;
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+
+        if (attempt < 3) {
+          logger.info({ attempt }, 'Type attempt failed, retrying');
+          await delay(attempt * 1000);
+          if (!currentOptions?.force) {
+            currentOptions = { ...(currentOptions ?? {}), force: true };
+          }
+        }
+      }
+    }
+
+    throw lastError!;
   }
 
   async scroll(x: number, y: number): Promise<void> {
-    await this.doRequest(() => axios.post(`${PLAYWRIGHT_URL}/action/scroll`, { x, y }, { timeout: BROWSER_TIMEOUT_MS }));
+    await browserService.scroll(x, y, OWNER);
   }
 
   async focus(selector: string): Promise<void> {
-    await this.doRequest(() => axios.post(`${PLAYWRIGHT_URL}/action/focus`, { selector }, { timeout: BROWSER_TIMEOUT_MS }));
+    await browserService.focus(selector, OWNER);
   }
 
   async blur(selector: string): Promise<void> {
-    await this.doRequest(() => axios.post(`${PLAYWRIGHT_URL}/action/blur`, { selector }, { timeout: BROWSER_TIMEOUT_MS }));
+    await browserService.blur(selector, OWNER);
   }
 
   async hover(selector: string): Promise<void> {
-    await this.doRequest(() => axios.post(`${PLAYWRIGHT_URL}/action/hover`, { selector }, { timeout: BROWSER_TIMEOUT_MS }));
+    await browserService.hover(selector, OWNER);
   }
 
   async setValue(selector: string, value: string): Promise<void> {
-    await this.doRequest(() => axios.post(`${PLAYWRIGHT_URL}/action/value`, { selector, value }, { timeout: BROWSER_TIMEOUT_MS }));
+    await browserService.setValue(selector, value, OWNER);
   }
 
   async dispatchEvent(selector: string, eventType: string): Promise<void> {
-    await this.doRequest(() => axios.post(`${PLAYWRIGHT_URL}/action/dispatch`, { selector, eventType }, { timeout: BROWSER_TIMEOUT_MS }));
+    await browserService.dispatchEvent(selector, eventType, OWNER);
   }
 
   async elementAction(selector: string, action: string, param?: string): Promise<void> {
@@ -285,12 +354,11 @@ export class BrowserClient {
     viewport?: { width: number; height: number };
   }> {
     try {
-      const response = await axios.get(`${PLAYWRIGHT_URL}/browser/status`, { timeout: BROWSER_TIMEOUT_MS });
       return {
-        isOpen: response.data.isOpen || false,
-        url: response.data.currentUrl || response.data.url,
-        title: response.data.title,
-        viewport: response.data.viewport,
+        isOpen: browserService.isOpen(),
+        url: browserService.getCurrentUrl(),
+        title: await browserService.getTitle(OWNER),
+        viewport: browserService.getViewport() ?? undefined,
       };
     } catch {
       return { isOpen: false };
@@ -299,26 +367,20 @@ export class BrowserClient {
 
   async getTabs(): Promise<Array<{ id: string; url: string; title: string; isActive: boolean }>> {
     try {
-      const response = await axios.get(`${PLAYWRIGHT_URL}/browser/tabs`, { timeout: BROWSER_TIMEOUT_MS });
-      return response.data.tabs || [];
+      return await browserService.getTabs(OWNER);
     } catch {
       return [];
     }
   }
 
   async switchTab(id: string): Promise<void> {
-    await this.doRequest(() => axios.post(`${PLAYWRIGHT_URL}/browser/tabs/switch`, { id }, { timeout: 15000 }));
+    await browserService.switchTab(id, OWNER);
+    await publishDebugStatus('switch_tab');
   }
 
   async getElementAt(x: number, y: number): Promise<ElementInfo | null> {
-    const response = await this.doRequest(() => axios.get(`${PLAYWRIGHT_URL}/dom/element-at`, {
-      params: { x, y },
-      timeout: BROWSER_TIMEOUT_MS,
-    }));
-    if (response.data.success && response.data.element) {
-      return response.data.element;
-    }
-    return null;
+    const element = await browserService.getElementAt(x, y, OWNER);
+    return element;
   }
 
   async getPageState(): Promise<{

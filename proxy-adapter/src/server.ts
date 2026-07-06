@@ -5,6 +5,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { appService } from './services/index.js';
 import { browserClient } from './browser-client.js';
+import { shutdownBrowserEngine } from './browser-engine/index.js';
 import { ConversationManager, ChatHandler } from './conversation/index.js';
 import { DatabaseManager } from './conversation/db.js';
 import { createCompressionClient } from './clients/compression.js';
@@ -277,6 +278,7 @@ process.on('SIGINT', async () => {
     await conversationManager.close();
   }
   await debugStreamBridge.stop();
+  await shutdownBrowserEngine();
   await appService.shutdown();
   await app.close();
   process.exit(0);
