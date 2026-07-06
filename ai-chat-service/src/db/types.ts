@@ -100,3 +100,30 @@ export interface UpdateSessionStateParams {
   readonly jobId?: string;
   readonly lastActiveAt?: string;
 }
+
+export type ControlCommandType = 'create' | 'interrupt' | 'cancel' | 'cleanup' | 'pause' | 'resume' | 'set_current_job' | 'update_metadata' | 'set_pause_flags' | 'mark_as_paused';
+
+export type OperationStatus = 'pending' | 'success' | 'failed';
+
+export interface TracedOperation {
+  readonly traceId: string;
+  readonly sessionId: string;
+  readonly operation: ControlCommandType;
+  readonly startTime: number;
+  readonly endTime?: number;
+  readonly status: OperationStatus;
+  readonly error?: string;
+}
+
+export interface CreateOperationParams {
+  readonly sessionId: string;
+  readonly operation: ControlCommandType;
+  readonly status?: OperationStatus;
+  readonly error?: string;
+}
+
+export interface UpdateOperationParams {
+  readonly endTime?: number;
+  readonly status?: OperationStatus;
+  readonly error?: string;
+}
