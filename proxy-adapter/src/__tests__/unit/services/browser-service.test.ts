@@ -43,23 +43,29 @@ const mockDOMExtractor = {
 
 };
 
-vi.mock('../../../../../playwright-server/src/services/browser-lifecycle.js', () => ({
+vi.mock('../../../browser-engine/services/browser-lifecycle.js', () => ({
   BrowserLifecycle: vi.fn(function() {
     return mockBrowserLifecycle;
   }),
 }));
 
-vi.mock('../../../../../playwright-server/src/services/page-actions.js', () => ({
+vi.mock('../../../browser-engine/services/page-actions.js', () => ({
   PageActions: vi.fn(function() {
     return mockPageActions;
   }),
   MarkerActionResult: {},
 }));
 
-vi.mock('../../../../../playwright-server/src/services/dom-extractor.js', () => ({
+vi.mock('../../../browser-engine/services/dom-extractor.js', () => ({
   DOMExtractor: vi.fn(function() {
     return mockDOMExtractor;
   }),
+}));
+
+vi.mock('../../../browser-engine/services/browser-lock.js', () => ({
+  acquireLock: vi.fn(async () => vi.fn()),
+  browserMutex: {},
+  getCurrentOwner: vi.fn(() => null),
 }));
 
 describe('BrowserService', () => {
@@ -71,7 +77,7 @@ describe('BrowserService', () => {
     vi.clearAllMocks();
     
     // Reset the singleton instance
-    const module = await import('../../../../../playwright-server/src/services/browser-service.js');
+    const module = await import('../../../browser-engine/services/browser-service.js');
     BrowserService = module.BrowserService;
     BrowserService.resetInstance();
     

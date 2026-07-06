@@ -38,7 +38,7 @@ await stop(service);
 - **Port Availability Check**: `isPortAvailable(port, host?)` - Check if a port is free
 - **Automatic Port Selection**: `findAvailablePort(start, end)` - Find an available port in a range
 - **Wait for Service**: `waitForPort(port, host?, timeout?)` - Wait for a service to start, returns boolean
-- **Service Lifecycle**: `startService(serviceName, port?)` - Start 'proxy' or 'playwright' service
+- **Service Lifecycle**: `startService(serviceName, port?)` - Start 'proxy' service
 - **Stop Function**: Returns `{ port, stop }` with cleanup function
 - **TEST_MODE Support**: Automatically selects available ports when TEST_MODE is enabled
 - **Graceful Shutdown**: Sends SIGTERM first, force-kills only after timeout (10s)
@@ -47,7 +47,6 @@ await stop(service);
 
 The `startService` function accepts service names that map to actual server paths:
 - `'proxy'` → `proxy-adapter/src/server.js`
-- `'playwright'` → `playwright-server/src/server.js`
 
 ### TEST_MODE Behavior
 

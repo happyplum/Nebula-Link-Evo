@@ -4,7 +4,7 @@ import type {
   BrowserState,
   OpenBrowserOptions,
   NavigateOptions,
-} from '../../../playwright-server/src/services/browser-lifecycle.js';
+} from '../../../proxy-adapter/src/browser-engine/services/browser-lifecycle.js';
 
 /**
  * Mock Page implementation
@@ -160,6 +160,7 @@ export function createBrowserLifecycleMock(config?: {
     lastHeadless: null,
     lastViewport: null,
     lastCdpPort: null,
+    currentOwner: null,
     ...config?.state,
   };
 
@@ -181,7 +182,7 @@ export function createBrowserLifecycleMock(config?: {
       mockState.browser = { newContext: vi.fn(async () => mockContext) } as any;
       mockState.context = mockContext;
       mockState.page = mockPage;
-      mockState.lastHeadless = options.headless;
+      mockState.lastHeadless = options.headless ?? null;
       mockState.lastViewport = options.viewport || { width: 1920, height: 1080 };
       mockState.cdpPort = options.cdpPort || 0;
     }),
