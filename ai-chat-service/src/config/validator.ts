@@ -57,11 +57,11 @@ export function validateConfig(config: ResolvedConfig): ValidationResult {
     for (const [name, server] of Object.entries(config.mcp.servers)) {
       if (!server.enabled) continue;
 
-      if (!server.command) {
-        errors.push(`MCP server ${name}: missing command`);
+      if (!server.command && !server.url) {
+        errors.push(`MCP server ${name}: missing command or url`);
       }
 
-      if (!server.args || server.args.length === 0) {
+      if (server.command && (!server.args || server.args.length === 0)) {
         warnings.push(`MCP server ${name}: no args specified`);
       }
     }

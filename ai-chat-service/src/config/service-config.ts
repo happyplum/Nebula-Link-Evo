@@ -11,6 +11,9 @@ type PinoLevel = (typeof PINO_LEVELS)[number];
 
 /** Known provider aliases exposed as placeholders. Populated in T6-T9. */
 const KNOWN_PROVIDERS = ['glm', 'openai', 'anthropic', 'kimi', 'nvidia'] as const;
+const DEFAULT_GATEWAY_URL = 'http://127.0.0.1:3000';
+
+export const GATEWAY_MCP_SERVER_NAME = 'gateway' as const;
 
 export interface ProviderPlaceholder {
   /** Provider alias, e.g. "glm", "openai". */
@@ -33,6 +36,15 @@ export interface AiChatServiceConfig {
   corsOrigins: string[];
   /** Provider placeholders. Keys are provider aliases. */
   providers: Record<string, ProviderPlaceholder>;
+}
+
+export function loadGatewayUrlFromEnv(): string {
+  return process.env.PROXY_ADAPTER_URL ?? DEFAULT_GATEWAY_URL;
+}
+
+export function buildGatewayMcpUrl(gatewayUrl: string): string {
+  const normalized = gatewayUrl.endsWith('/') ? gatewayUrl.slice(0, -1) : gatewayUrl;
+  return normalized.endsWith('/mcp') ? normalized : `${normalized}/mcp`;
 }
 
 function normalizeLogLevel(): PinoLevel {
@@ -71,7 +83,7 @@ function readProviderEnv(alias: string): ProviderPlaceholder {
 export function loadConfig(): AiChatServiceConfig {
   const port = parseInt(process.env.AI_CHAT_SERVICE_PORT ?? '3001', 10);
   const host = process.env.HOST ?? '127.0.0.1';
-  const gatewayUrl = process.env.PROXY_ADAPTER_URL ?? 'http://127.0.0.1:3000';
+  const gatewayUrl = loadGatewayUrlFromEnv();
 
   const corsRaw = process.env.CORS_ORIGINS;
   const corsOrigins = corsRaw
