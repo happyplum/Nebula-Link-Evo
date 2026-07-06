@@ -16,6 +16,7 @@ import { initializeWithBackup } from './utils/db-backup.js';
 import { normalizeLogLevel } from './services/logger.js';
 import { ConversationJobQueue } from './services/conversation-job-queue.js';
 import { StreamPersistWorker } from './services/stream-persist-worker.js';
+import { interactionLogger } from './services/interaction-logger.js';
 import healthRoutes from './plugins/routes/health.js';
 import configRoutes from './plugins/routes/config.js';
 import livekitTokenRoutes from './plugins/routes/api/livekit-token.js';
@@ -50,6 +51,7 @@ const app = Fastify({
 });
 
 const PORT = parseInt(process.env.PROXY_PORT || '3000');
+const DEBUG_DB_PATH = path.join(process.cwd(), 'data', 'proxy-adapter', 'debug.sqlite');
 
 /**
  * CORS origin configuration.
@@ -85,7 +87,7 @@ async function start() {
 
     // Initialize database backup before starting server (skip in unit tests)
     if (!isTestMode) {
-      await initializeWithBackup();
+      await initializeWithBackup(DEBUG_DB_PATH);
     }
 
     await app.register(cors, {
@@ -115,7 +117,7 @@ async function start() {
     }
 
     // Initialize conversation management
-    const dbPath = path.join(process.cwd(), 'conversations.sqlite');
+    const dbPath = DEBUG_DB_PATH;
     conversationManager = new ConversationManager(dbPath);
     await conversationManager.initialize();
 
@@ -266,8 +268,9 @@ async function start() {
   }
 }
 
-process.on('SIGINT', async () => {
-  app.log.info('Shutting down gracefully...');
+async function shutdown(signal: 'SIGINT' | 'SIGTERM'): Promise<void> {
+  app.log.info({ signal }, '[proxy-adapter] shutdown');
+  await interactionLogger.destroy();
   if (toolRegistry) {
     await toolRegistry.shutdownAll();
   }
@@ -278,6 +281,14 @@ process.on('SIGINT', async () => {
   await appService.shutdown();
   await app.close();
   process.exit(0);
+}
+
+process.on('SIGINT', () => {
+  void shutdown('SIGINT');
+});
+
+process.on('SIGTERM', () => {
+  void shutdown('SIGTERM');
 });
 
 start();

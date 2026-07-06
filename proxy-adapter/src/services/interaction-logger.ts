@@ -64,12 +64,11 @@ export class InteractionLogger {
       void this.flush();
     };
     this.sigintHandler = () => {
-      void this.flush().finally(() => process.exit(0));
+      void this.flush();
     };
     this.sigtermHandler = () => {
-      void this.flush().finally(() => process.exit(0));
+      void this.flush();
     };
-
     process.on('exit', this.exitHandler);
     process.on('beforeExit', this.beforeExitHandler);
     process.on('SIGINT', this.sigintHandler);

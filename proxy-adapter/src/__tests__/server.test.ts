@@ -91,6 +91,11 @@ vi.mock('../services/debug-event-hub.js', () => ({
     publish: vi.fn(),
   },
 }));
+vi.mock('../services/interaction-logger.js', () => ({
+  interactionLogger: {
+    destroy: vi.fn().mockResolvedValue(undefined),
+  },
+}));
 vi.mock('../tools/registry.js', () => ({
   ToolRegistry: vi.fn().mockImplementation(function() {
     return {
