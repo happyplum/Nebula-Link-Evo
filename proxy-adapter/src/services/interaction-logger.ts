@@ -1,5 +1,4 @@
-import { DatabaseManager } from '../conversation/db.js';
-import type { CreateInteractionParams } from '../conversation/types.js';
+import { DebugDatabaseManager, type CreateInteractionParams } from '../debug-db.js';
 import { writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Logger } from 'pino';
@@ -12,7 +11,7 @@ interface QueuedInteraction {
 
 export class InteractionLogger {
   private static instance: InteractionLogger;
-  private dbManager: DatabaseManager;
+  private dbManager: DebugDatabaseManager;
   private queue: QueuedInteraction[] = [];
   private flushInterval: NodeJS.Timeout | null = null;
   private isFlushing = false;
@@ -29,7 +28,7 @@ export class InteractionLogger {
 
   private constructor(logger?: Logger) {
     this.logger = logger ?? createWorkerLogger('InteractionLogger');
-    this.dbManager = DatabaseManager.getInstance();
+    this.dbManager = DebugDatabaseManager.getInstance();
     this.startPeriodicFlush();
     this.registerExitHandlers();
   }
