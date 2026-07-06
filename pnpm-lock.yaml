@@ -105,6 +105,34 @@ importers:
         specifier: ^8.20.0
         version: 8.56.1(eslint@9.39.3(jiti@2.7.0))(typescript@5.9.3)
 
+  ai-chat-service:
+    dependencies:
+      '@fastify/cors':
+        specifier: 'catalog:'
+        version: 11.2.0
+      '@nebula-link-evo/shared':
+        specifier: workspace:*
+        version: link:../shared
+      dotenv:
+        specifier: 'catalog:'
+        version: 16.6.1
+      fastify:
+        specifier: 'catalog:'
+        version: 5.7.4
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.19.21
+      tsx:
+        specifier: 'catalog:'
+        version: 4.22.4
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@22.19.21)(jiti@2.7.0)(jsdom@28.1.0)(lightningcss@1.32.0)(terser@5.46.0)(tsx@4.22.4)(yaml@2.8.2)
+
   ai-e2e:
     dependencies:
       '@fastify/autoload':
