@@ -1,0 +1,232 @@
+import type { LanguageModelV3 } from '@ai-sdk/provider';
+import type { ProviderConfig } from './types.js';
+import {
+  ProviderError,
+  PROVIDER_ERRORS,
+  normalizeNpmPackage,
+  BUILTIN_PROVIDERS,
+} from './errors.js';
+import { loadProviderPackage } from './loader.js';
+import { createGLMAdapter } from './adapters/glm.js';
+
+/** Callable that produces a LanguageModelV3 for a given model ID. */
+type ProviderFn = (modelId: string) => LanguageModelV3;
+
+/** Probed availability state for a provider alias. */
+export interface AvailabilityStatus {
+  available: boolean;
+  /** Human-readable reason when unavailable. */
+  error?: string;
+}
+
+/**
+ * Alias-specific adapters that bypass the generic package+factory path.
+ * These adapters are explicitly wired for providers that require custom
+ * initialization logic (e.g., JWT signing for GLM).
+ */
+const ALIAS_ADAPTERS: Record<string, (config: ProviderConfig) => ProviderFn> = {
+  glm: createGLMAdapter,
+};
+
+/**
+ * Reverse mapping from npm package names to factory function names.
+ * Built from BUILTIN_PROVIDERS for fast lookup of known providers.
+ */
+const KNOWN_FACTORIES: Record<string, string> = {};
+for (const entry of Object.values(BUILTIN_PROVIDERS)) {
+  KNOWN_FACTORIES[entry.npmPackage] = entry.factory;
+}
+
+/**
+ * Derives the expected factory export name from an @ai-sdk/* package name.
+ * Best-effort fallback for packages not in KNOWN_FACTORIES.
+ * e.g. `@ai-sdk/google` → `createGoogle`
+ *
+ * Note: Does not handle multi-letter acronyms (e.g. "AI").
+ * Use `resolveFactoryName()` which checks KNOWN_FACTORIES first.
+ */
+function deriveFactoryName(npmPackage: string): string {
+  const name = npmPackage.replace(/^@ai-sdk\//, '');
+  return (
+    'create' +
+    name
+      .split('-')
+      .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+      .join('')
+  );
+}
+
+/**
+ * Resolves the factory name for an npm package.
+ * Checks KNOWN_FACTORIES (from BUILTIN_PROVIDERS) first, then falls back
+ * to deriveFactoryName() for unknown packages.
+ *
+ * @param npmPackage - The npm package name (e.g., '@ai-sdk/openai-compatible')
+ * @returns The expected factory function name (e.g., 'createOpenAICompatible')
+ */
+function resolveFactoryName(npmPackage: string): string {
+  const knownFactory = KNOWN_FACTORIES[npmPackage];
+  if (knownFactory) {
+    return knownFactory;
+  }
+  return deriveFactoryName(npmPackage);
+}
+
+/**
+ * Provider Registry — resolves provider keys + model IDs to LanguageModelV3 instances.
+ *
+ * Resolution order:
+ *   1. Cache (previously loaded providers)
+ *   2. Dynamic load via normalized package + named factory discovery
+ */
+export class ProviderRegistry {
+  private readonly config: Record<string, ProviderConfig>;
+  private readonly cache = new Map<string, ProviderFn>();
+  /** Probed availability state — populated by probeProvider(). */
+  private readonly availability = new Map<string, AvailabilityStatus>();
+
+  constructor(config: Record<string, ProviderConfig>) {
+    this.config = config;
+  }
+
+  async resolve(
+    providerKey: string,
+    modelId: string,
+  ): Promise<LanguageModelV3> {
+    const providerConfig = this.config[providerKey];
+    if (!providerConfig) {
+      throw new ProviderError(
+        PROVIDER_ERRORS.NOT_FOUND,
+        providerKey,
+        `Provider '${providerKey}' not found in configuration`,
+      );
+    }
+
+    const cached = this.cache.get(providerKey);
+    if (cached) {
+      return cached(modelId);
+    }
+
+    const provider = await this.loadProvider(providerKey, providerConfig);
+    this.cache.set(providerKey, provider);
+    return provider(modelId);
+  }
+
+  /**
+   * Checks whether a provider is available.
+   * After probing, returns the probed availability state.
+   * Before probing, falls back to config-presence check for backward compat.
+   */
+  isAvailable(providerKey: string): boolean {
+    const probed = this.availability.get(providerKey);
+    if (probed !== undefined) {
+      return probed.available;
+    }
+    return providerKey in this.config;
+  }
+
+  /**
+   * Returns the probed availability error for a provider, or undefined
+   * if the provider is available or has not been probed.
+   */
+  getAvailabilityError(providerKey: string): string | undefined {
+    return this.availability.get(providerKey)?.error;
+  }
+
+  /**
+   * Probes a single provider by attempting real load (normalization, import, factory discovery, init).
+   * Records success or failure in the availability map.
+   * Does NOT throw — errors are captured as availability state.
+   */
+  async probeProvider(providerKey: string): Promise<void> {
+    const providerConfig = this.config[providerKey];
+    if (!providerConfig) {
+      this.availability.set(providerKey, {
+        available: false,
+        error: `Provider '${providerKey}' not found in configuration`,
+      });
+      return;
+    }
+
+    try {
+      const provider = await this.loadProvider(providerKey, providerConfig);
+      this.cache.set(providerKey, provider);
+      this.availability.set(providerKey, { available: true });
+    } catch (err) {
+      const message =
+        err instanceof ProviderError
+          ? `${err.code}: ${String(err.details ?? err.message)}`
+          : err instanceof Error
+            ? err.message
+            : String(err);
+      this.availability.set(providerKey, {
+        available: false,
+        error: message,
+      });
+    }
+  }
+
+  listProviders(): string[] {
+    return Object.keys(this.config);
+  }
+
+  getProviderConfig(providerKey: string): ProviderConfig {
+    const cfg = this.config[providerKey];
+    if (!cfg) {
+      throw new ProviderError(
+        PROVIDER_ERRORS.NOT_FOUND,
+        providerKey,
+        `Provider '${providerKey}' not found`,
+      );
+    }
+    return cfg;
+  }
+
+  private async loadProvider(
+    providerKey: string,
+    providerConfig: ProviderConfig,
+  ): Promise<ProviderFn> {
+    // 1. Check alias-specific adapters first
+    const aliasAdapter = ALIAS_ADAPTERS[providerKey];
+    if (aliasAdapter) {
+      return aliasAdapter(providerConfig);
+    }
+
+    // 2. Generic normalized-package path (existing logic)
+    const npmPackage = normalizeNpmPackage(providerConfig.npmPackage);
+    const factoryName = resolveFactoryName(npmPackage);
+    const moduleNs = await loadProviderPackage(npmPackage);
+
+    const factory = (moduleNs as Record<string, unknown>)[factoryName];
+    if (typeof factory !== 'function') {
+      throw new ProviderError(
+        PROVIDER_ERRORS.INIT_FAILED,
+        providerKey,
+        `Package '${npmPackage}' does not export '${factoryName}'`,
+      );
+    }
+
+    // Bridge ProviderConfig → SDK-expected params ({name, baseURL, apiKey, headers})
+    const sdkParams: Record<string, unknown> = {
+      name: providerKey,
+      baseURL: providerConfig.baseUrl,
+      apiKey: providerConfig.apiKey,
+    };
+    if (providerConfig.headers) {
+      sdkParams.headers = providerConfig.headers;
+    }
+
+    const provider = (factory as (params: Record<string, unknown>) => unknown)(
+      sdkParams,
+    );
+    if (typeof provider !== 'function') {
+      throw new ProviderError(
+        PROVIDER_ERRORS.INIT_FAILED,
+        providerKey,
+        `Factory '${factoryName}' from '${npmPackage}' did not return a provider function`,
+      );
+    }
+
+    return provider as ProviderFn;
+  }
+}
