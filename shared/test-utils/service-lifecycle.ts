@@ -9,7 +9,6 @@ const DEFAULT_PORT_RANGE_END = 40000;
 // Service paths relative to project root
 const SERVICE_PATHS = {
   proxy: join(process.cwd(), 'proxy-adapter', 'src', 'server.js'),
-  playwright: join(process.cwd(), 'playwright-server', 'src', 'server.js'),
 } as const;
 
 /**
@@ -83,12 +82,12 @@ export async function waitForPort(
 
 /**
  * Start a service with automatic port management
- * @param serviceName - Service name ('proxy' or 'playwright')
+ * @param serviceName - Service name ('proxy')
  * @param port - Optional port number (will auto-select if not provided or busy)
  * @returns Object with port number and stop function
  */
 export async function startService(
-  serviceName: 'proxy' | 'playwright',
+  serviceName: 'proxy',
   port?: number
 ): Promise<{ port: number; stop: () => Promise<void> }> {
   let actualPort = port || 0;

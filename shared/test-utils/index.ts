@@ -2,7 +2,7 @@
  * Shared test utilities and mocks
  *
  * This module provides mock implementations for external dependencies
- * used in both proxy-adapter and playwright-server tests.
+ * used in proxy-adapter tests.
  */
 
 // Service lifecycle utilities
