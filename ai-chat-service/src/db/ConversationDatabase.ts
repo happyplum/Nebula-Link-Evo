@@ -11,9 +11,14 @@ import type {
   Message,
   MessageMetadata,
   MessageRole,
+  ControlCommandType,
+  CreateOperationParams,
   Session,
   SessionStatus,
+  TracedOperation,
   UpdateSessionParams,
+  UpdateOperationParams,
+  OperationStatus,
 } from './types.js';
 
 const DEFAULT_DB_PATH = join(process.cwd(), 'data', 'ai-chat-service', 'conversations.sqlite');
@@ -340,6 +345,75 @@ export class ConversationDatabase {
     db.exec('CREATE INDEX IF NOT EXISTS idx_session_events_session_seq ON session_events(session_id, seq)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_session_events_ttl ON session_events(ttl_expires_at)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_session_events_type ON session_events(event_type)');
+
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS operation_logs (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        operation TEXT NOT NULL,
+        start_time INTEGER NOT NULL,
+        end_time INTEGER,
+        status TEXT NOT NULL CHECK(status IN ('pending', 'success', 'failed')),
+        error TEXT
+      )
+    `);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_operation_logs_session_id ON operation_logs(session_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_operation_logs_start_time ON operation_logs(start_time DESC)');
+  }
+
+  createOperation(params: CreateOperationParams): TracedOperation {
+    const db = this.getDb();
+    const traceId = randomUUID();
+    const startTime = Date.now();
+    const status = params.status ?? 'pending';
+
+    const stmt = db.prepare(
+      `INSERT INTO operation_logs (id, session_id, operation, start_time, end_time, status, error)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    );
+    stmt.run(traceId, params.sessionId, params.operation, startTime, null, status, params.error ?? null);
+
+    return this.getOperation(traceId) as TracedOperation;
+  }
+
+  getOperation(traceId: string): TracedOperation | null {
+    const db = this.getDb();
+    const stmt = db.prepare('SELECT * FROM operation_logs WHERE id = ?');
+    const row = stmt.get(traceId) as OperationLogRow | undefined;
+    return row ? this.rowToOperation(row) : null;
+  }
+
+  updateOperation(traceId: string, params: UpdateOperationParams): TracedOperation | null {
+    const updates: string[] = [];
+    const values: unknown[] = [];
+
+    if (params.endTime !== undefined) {
+      updates.push('end_time = ?');
+      values.push(params.endTime);
+    }
+    if (params.status !== undefined) {
+      updates.push('status = ?');
+      values.push(params.status);
+    }
+    if (params.error !== undefined) {
+      updates.push('error = ?');
+      values.push(params.error);
+    }
+
+    if (updates.length === 0) {
+      return this.getOperation(traceId);
+    }
+
+    values.push(traceId);
+    const stmt = this.getDb().prepare(`UPDATE operation_logs SET ${updates.join(', ')} WHERE id = ?`);
+    stmt.run(...(values as SQLInputValue[]));
+    return this.getOperation(traceId);
+  }
+
+  getOperationsBySession(sessionId: string): TracedOperation[] {
+    const stmt = this.getDb().prepare('SELECT * FROM operation_logs WHERE session_id = ? ORDER BY start_time DESC');
+    const rows = stmt.all(sessionId) as unknown as OperationLogRow[];
+    return rows.map((row) => this.rowToOperation(row));
   }
 
   private async closeInternal(): Promise<void> {
@@ -415,6 +489,18 @@ export class ConversationDatabase {
       idempotency_key: row.idempotency_key ?? undefined,
     };
   }
+
+  private rowToOperation(row: OperationLogRow): TracedOperation {
+    return {
+      traceId: row.id,
+      sessionId: row.session_id,
+      operation: row.operation as ControlCommandType,
+      startTime: row.start_time,
+      endTime: row.end_time ?? undefined,
+      status: row.status as OperationStatus,
+      error: row.error ?? undefined,
+    };
+  }
 }
 
 interface SessionRow {
@@ -439,6 +525,16 @@ interface MessageRow {
   readonly created_at: string;
   readonly metadata: string | null;
   readonly idempotency_key: string | null;
+}
+
+interface OperationLogRow {
+  readonly id: string;
+  readonly session_id: string;
+  readonly operation: string;
+  readonly start_time: number;
+  readonly end_time: number | null;
+  readonly status: string;
+  readonly error: string | null;
 }
 
 export const conversationDatabase = ConversationDatabase.getInstance();
