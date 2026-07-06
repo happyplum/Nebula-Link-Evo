@@ -9,6 +9,7 @@ import {
   StdioClientTransport,
   getDefaultEnvironment,
 } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { ResolvedConfig, MCPServerConfig } from '../../config/schema.js';
 import { createWorkerLogger } from '../../services/logger.js';
 import type { Logger } from 'pino';
@@ -19,6 +20,8 @@ export interface MCPTool {
   name: string;
   description: string;
   inputSchema: object;
+  serverName?: string;
+  originalName?: string;
   annotations?: {
     title?: string;
     readOnlyHint?: boolean;
@@ -78,7 +81,7 @@ interface MCPServerRuntime {
   state: MCPServerState;
 
   client?: Client;
-  transport?: StdioClientTransport;
+  transport?: StdioClientTransport | StreamableHTTPClientTransport;
   tools: MCPTool[];
 
   reconnectAttempts: number;
@@ -231,12 +234,7 @@ export class MCPSDKClient extends EventEmitter {
       version: '1.0.0',
     });
 
-    const transport = new StdioClientTransport({
-      command: runtime.config.command,
-      args: runtime.config.args || [],
-      env: this.buildServerEnv(name, runtime.config),
-      stderr: 'inherit',
-    });
+    const transport = this.createTransport(name, runtime.config);
 
     // Reset disconnect guard before binding new listeners.
     runtime.disconnectHandled = false;
@@ -276,7 +274,7 @@ export class MCPSDKClient extends EventEmitter {
     name: string,
     runtime: MCPServerRuntime,
     client: Client,
-    transport: StdioClientTransport,
+    transport: StdioClientTransport | StreamableHTTPClientTransport,
   ): void {
     transport.onclose = () => {
       void this.handleServerDisconnect(name, 'transport_close');
@@ -590,7 +588,9 @@ export class MCPSDKClient extends EventEmitter {
       for (const tool of runtime.tools) {
         tools.push({
           ...tool,
-          name: `${serverName}.${tool.name}`,
+          name: tool.name,
+          serverName,
+          originalName: tool.name,
         });
       }
     }
@@ -637,6 +637,29 @@ export class MCPSDKClient extends EventEmitter {
 
   private buildServerEnv(name: string, config: MCPServerConfig): Record<string, string> {
     return { ...getDefaultEnvironment(), ...config.env };
+  }
+
+  private createTransport(name: string, config: MCPServerConfig): StdioClientTransport | StreamableHTTPClientTransport {
+    if (config.url) {
+      const url = this.buildHttpUrl(config.url);
+      this.logger.info({ name, url: url.toString() }, 'Using StreamableHTTP MCP transport');
+      return new StreamableHTTPClientTransport(url);
+    }
+
+    return new StdioClientTransport({
+      command: config.command,
+      args: config.args || [],
+      env: this.buildServerEnv(name, config),
+      stderr: 'inherit',
+    });
+  }
+
+  private buildHttpUrl(rawUrl: string): URL {
+    const url = new URL(rawUrl);
+    if (url.pathname === '' || url.pathname === '/') {
+      url.pathname = '/mcp';
+    }
+    return url;
   }
 
   private async fetchToolsList(client: Client): Promise<MCPTool[]> {
