@@ -1,10 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { browserClient } from '../browser-client.js';
 
 /**
  * Frontend E2E QA 验证测试
  * 测试 Debug UI 的 Marker 模式 7 种操作
- * 
+ *
  * 操作类型:
  * - click: 点击
  * - type: 输入文本
@@ -13,36 +12,96 @@ import { browserClient } from '../browser-client.js';
  * - hover: 悬停
  * - value: 设置值
  * - dispatch: 派发事件
+ *
+ * Migrated from axios HTTP mocks to in-process BrowserService mocks.
  */
 
-// Mock axios for HTTP requests
-vi.mock('axios', () => ({
-  default: {
-    post: vi.fn().mockResolvedValue({ data: { success: true } }),
-    get: vi.fn().mockResolvedValue({ data: { success: true } }),
-    isAxiosError: vi.fn((error: unknown) => {
-      return error instanceof Error && 'isAxiosError' in error;
-    }),
-    defaults: { headers: { common: {} } },
+// ---------------------------------------------------------------------------
+// Mock setup — must be hoisted above the import of browser-client.js
+// ---------------------------------------------------------------------------
+
+const mockBrowserService = vi.hoisted(() => ({
+  open: vi.fn(),
+  close: vi.fn(),
+  navigate: vi.fn(),
+  screenshot: vi.fn(),
+  getSimplifiedDOMV2: vi.fn(),
+  click: vi.fn(),
+  clickBySelector: vi.fn(),
+  executeScript: vi.fn(),
+  clickByMarker: vi.fn(),
+  typeByMarker: vi.fn(),
+  focusByMarker: vi.fn(),
+  blurByMarker: vi.fn(),
+  hoverByMarker: vi.fn(),
+  setValueByMarker: vi.fn(),
+  dispatchEventByMarker: vi.fn(),
+  type: vi.fn(),
+  scroll: vi.fn(),
+  focus: vi.fn(),
+  blur: vi.fn(),
+  hover: vi.fn(),
+  setValue: vi.fn(),
+  dispatchEvent: vi.fn(),
+  isOpen: vi.fn(),
+  getCurrentUrl: vi.fn(),
+  getTitle: vi.fn(),
+  getViewport: vi.fn(),
+  getTabs: vi.fn(),
+  switchTab: vi.fn(),
+  getElementAt: vi.fn(),
+  getDebugStatus: vi.fn(),
+}));
+
+vi.mock('../browser-engine/index.js', () => ({
+  BrowserService: {
+    getInstance: () => mockBrowserService,
   },
 }));
 
-import axios from 'axios';
+vi.mock('../services/debug-event-hub.js', () => ({
+  debugEventHub: { publish: vi.fn() },
+}));
 
-const mockAxios = axios as unknown as {
-  post: ReturnType<typeof vi.fn>;
-  get: ReturnType<typeof vi.fn>;
+vi.mock('../services/logger.js', () => ({
+  createWorkerLogger: () => ({
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+  }),
+}));
+
+import { browserClient } from '../browser-client.js';
+
+// Marker result returned by BrowserService on success (no bbox → no debug events)
+const SUCCESS_MARKER_RESULT = {
+  success: true,
+  strategy_used: 'nebula-id',
+  attempts: 1,
+  latency_ms: 10,
 };
 
 describe('Frontend E2E - Marker Mode Operations', () => {
   const mockSnapshotId = 'test-snapshot-123';
   const mockNebulaId = 42;
-  const PLAYWRIGHT_URL = 'http://localhost:3001';
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockAxios.post.mockResolvedValue({ data: { success: true } });
-    mockAxios.get.mockResolvedValue({ data: { success: true } });
+    // Default: all marker methods succeed
+    mockBrowserService.clickByMarker.mockResolvedValue(SUCCESS_MARKER_RESULT);
+    mockBrowserService.typeByMarker.mockResolvedValue(SUCCESS_MARKER_RESULT);
+    mockBrowserService.focusByMarker.mockResolvedValue(SUCCESS_MARKER_RESULT);
+    mockBrowserService.blurByMarker.mockResolvedValue(SUCCESS_MARKER_RESULT);
+    mockBrowserService.hoverByMarker.mockResolvedValue(SUCCESS_MARKER_RESULT);
+    mockBrowserService.setValueByMarker.mockResolvedValue(SUCCESS_MARKER_RESULT);
+    mockBrowserService.dispatchEventByMarker.mockResolvedValue(SUCCESS_MARKER_RESULT);
+    mockBrowserService.getDebugStatus.mockResolvedValue({
+      isOpen: false,
+      url: null,
+      title: null,
+      status: 'unknown',
+    });
   });
 
   afterEach(() => {
@@ -53,19 +112,16 @@ describe('Frontend E2E - Marker Mode Operations', () => {
     it('should execute click marker action successfully', async () => {
       await browserClient.clickByMarker(mockSnapshotId, mockNebulaId);
 
-      expect(mockAxios.post).toHaveBeenCalledTimes(1);
-      expect(mockAxios.post).toHaveBeenCalledWith(
-        `${PLAYWRIGHT_URL}/action/click-by-marker`,
-        {
-          snapshot_id: mockSnapshotId,
-          nebula_id: mockNebulaId,
-        },
-        { timeout: 30000 }
+      expect(mockBrowserService.clickByMarker).toHaveBeenCalledTimes(1);
+      expect(mockBrowserService.clickByMarker).toHaveBeenCalledWith(
+        mockSnapshotId,
+        mockNebulaId,
+        'chat'
       );
     });
 
     it('should handle click marker error', async () => {
-      mockAxios.post.mockRejectedValueOnce(new Error('Element not found'));
+      mockBrowserService.clickByMarker.mockRejectedValueOnce(new Error('Element not found'));
 
       await expect(
         browserClient.clickByMarker(mockSnapshotId, mockNebulaId)
@@ -75,11 +131,11 @@ describe('Frontend E2E - Marker Mode Operations', () => {
     it('should validate click parameters', async () => {
       await browserClient.clickByMarker(mockSnapshotId, mockNebulaId);
 
-      const callArgs = mockAxios.post.mock.calls[0][1];
-      expect(callArgs).toHaveProperty('snapshot_id');
-      expect(callArgs).toHaveProperty('nebula_id');
-      expect(typeof callArgs.snapshot_id).toBe('string');
-      expect(typeof callArgs.nebula_id).toBe('number');
+      const callArgs = mockBrowserService.clickByMarker.mock.calls[0];
+      expect(callArgs[0]).toBe(mockSnapshotId);
+      expect(typeof callArgs[0]).toBe('string');
+      expect(callArgs[1]).toBe(mockNebulaId);
+      expect(typeof callArgs[1]).toBe('number');
     });
   });
 
@@ -89,21 +145,18 @@ describe('Frontend E2E - Marker Mode Operations', () => {
     it('should execute type marker action successfully', async () => {
       await browserClient.typeByMarker(mockSnapshotId, mockNebulaId, testText);
 
-      expect(mockAxios.post).toHaveBeenCalledTimes(1);
-      expect(mockAxios.post).toHaveBeenCalledWith(
-        `${PLAYWRIGHT_URL}/action/execute-by-marker`,
-        {
-          snapshot_id: mockSnapshotId,
-          nebula_id: mockNebulaId,
-          action: 'type',
-          param: testText,
-        },
-        { timeout: 30000 }
+      expect(mockBrowserService.typeByMarker).toHaveBeenCalledTimes(1);
+      expect(mockBrowserService.typeByMarker).toHaveBeenCalledWith(
+        mockSnapshotId,
+        mockNebulaId,
+        testText,
+        undefined,
+        'chat'
       );
     });
 
     it('should handle type marker error', async () => {
-      mockAxios.post.mockRejectedValueOnce(new Error('Input failed'));
+      mockBrowserService.typeByMarker.mockRejectedValueOnce(new Error('Input failed'));
 
       await expect(
         browserClient.typeByMarker(mockSnapshotId, mockNebulaId, testText)
@@ -113,9 +166,10 @@ describe('Frontend E2E - Marker Mode Operations', () => {
     it('should validate type parameters', async () => {
       await browserClient.typeByMarker(mockSnapshotId, mockNebulaId, testText);
 
-      const callArgs = mockAxios.post.mock.calls[0][1];
-      expect(callArgs).toHaveProperty('action', 'type');
-      expect(callArgs).toHaveProperty('param', testText);
+      const callArgs = mockBrowserService.typeByMarker.mock.calls[0];
+      expect(callArgs[0]).toBe(mockSnapshotId);
+      expect(callArgs[1]).toBe(mockNebulaId);
+      expect(callArgs[2]).toBe(testText);
     });
   });
 
@@ -123,20 +177,16 @@ describe('Frontend E2E - Marker Mode Operations', () => {
     it('should execute focus marker action successfully', async () => {
       await browserClient.focusByMarker(mockSnapshotId, mockNebulaId);
 
-      expect(mockAxios.post).toHaveBeenCalledTimes(1);
-      expect(mockAxios.post).toHaveBeenCalledWith(
-        `${PLAYWRIGHT_URL}/action/execute-by-marker`,
-        {
-          snapshot_id: mockSnapshotId,
-          nebula_id: mockNebulaId,
-          action: 'focus',
-        },
-        { timeout: 30000 }
+      expect(mockBrowserService.focusByMarker).toHaveBeenCalledTimes(1);
+      expect(mockBrowserService.focusByMarker).toHaveBeenCalledWith(
+        mockSnapshotId,
+        mockNebulaId,
+        'chat'
       );
     });
 
     it('should handle focus marker error', async () => {
-      mockAxios.post.mockRejectedValueOnce(new Error('Focus failed'));
+      mockBrowserService.focusByMarker.mockRejectedValueOnce(new Error('Focus failed'));
 
       await expect(
         browserClient.focusByMarker(mockSnapshotId, mockNebulaId)
@@ -146,8 +196,9 @@ describe('Frontend E2E - Marker Mode Operations', () => {
     it('should not include param for focus action', async () => {
       await browserClient.focusByMarker(mockSnapshotId, mockNebulaId);
 
-      const callArgs = mockAxios.post.mock.calls[0][1];
-      expect(callArgs).not.toHaveProperty('param');
+      // focusByMarker(snapshotId, nebulaId, owner) — only 3 args, no text/param
+      const callArgs = mockBrowserService.focusByMarker.mock.calls[0];
+      expect(callArgs).toHaveLength(3);
     });
   });
 
@@ -155,20 +206,16 @@ describe('Frontend E2E - Marker Mode Operations', () => {
     it('should execute blur marker action successfully', async () => {
       await browserClient.blurByMarker(mockSnapshotId, mockNebulaId);
 
-      expect(mockAxios.post).toHaveBeenCalledTimes(1);
-      expect(mockAxios.post).toHaveBeenCalledWith(
-        `${PLAYWRIGHT_URL}/action/execute-by-marker`,
-        {
-          snapshot_id: mockSnapshotId,
-          nebula_id: mockNebulaId,
-          action: 'blur',
-        },
-        { timeout: 30000 }
+      expect(mockBrowserService.blurByMarker).toHaveBeenCalledTimes(1);
+      expect(mockBrowserService.blurByMarker).toHaveBeenCalledWith(
+        mockSnapshotId,
+        mockNebulaId,
+        'chat'
       );
     });
 
     it('should handle blur marker error', async () => {
-      mockAxios.post.mockRejectedValueOnce(new Error('Blur failed'));
+      mockBrowserService.blurByMarker.mockRejectedValueOnce(new Error('Blur failed'));
 
       await expect(
         browserClient.blurByMarker(mockSnapshotId, mockNebulaId)
@@ -178,8 +225,8 @@ describe('Frontend E2E - Marker Mode Operations', () => {
     it('should not include param for blur action', async () => {
       await browserClient.blurByMarker(mockSnapshotId, mockNebulaId);
 
-      const callArgs = mockAxios.post.mock.calls[0][1];
-      expect(callArgs).not.toHaveProperty('param');
+      const callArgs = mockBrowserService.blurByMarker.mock.calls[0];
+      expect(callArgs).toHaveLength(3);
     });
   });
 
@@ -187,20 +234,16 @@ describe('Frontend E2E - Marker Mode Operations', () => {
     it('should execute hover marker action successfully', async () => {
       await browserClient.hoverByMarker(mockSnapshotId, mockNebulaId);
 
-      expect(mockAxios.post).toHaveBeenCalledTimes(1);
-      expect(mockAxios.post).toHaveBeenCalledWith(
-        `${PLAYWRIGHT_URL}/action/execute-by-marker`,
-        {
-          snapshot_id: mockSnapshotId,
-          nebula_id: mockNebulaId,
-          action: 'hover',
-        },
-        { timeout: 30000 }
+      expect(mockBrowserService.hoverByMarker).toHaveBeenCalledTimes(1);
+      expect(mockBrowserService.hoverByMarker).toHaveBeenCalledWith(
+        mockSnapshotId,
+        mockNebulaId,
+        'chat'
       );
     });
 
     it('should handle hover marker error', async () => {
-      mockAxios.post.mockRejectedValueOnce(new Error('Hover failed'));
+      mockBrowserService.hoverByMarker.mockRejectedValueOnce(new Error('Hover failed'));
 
       await expect(
         browserClient.hoverByMarker(mockSnapshotId, mockNebulaId)
@@ -210,8 +253,8 @@ describe('Frontend E2E - Marker Mode Operations', () => {
     it('should not include param for hover action', async () => {
       await browserClient.hoverByMarker(mockSnapshotId, mockNebulaId);
 
-      const callArgs = mockAxios.post.mock.calls[0][1];
-      expect(callArgs).not.toHaveProperty('param');
+      const callArgs = mockBrowserService.hoverByMarker.mock.calls[0];
+      expect(callArgs).toHaveLength(3);
     });
   });
 
@@ -221,21 +264,17 @@ describe('Frontend E2E - Marker Mode Operations', () => {
     it('should execute setValue marker action successfully', async () => {
       await browserClient.setValueByMarker(mockSnapshotId, mockNebulaId, testValue);
 
-      expect(mockAxios.post).toHaveBeenCalledTimes(1);
-      expect(mockAxios.post).toHaveBeenCalledWith(
-        `${PLAYWRIGHT_URL}/action/execute-by-marker`,
-        {
-          snapshot_id: mockSnapshotId,
-          nebula_id: mockNebulaId,
-          action: 'value',
-          param: testValue,
-        },
-        { timeout: 30000 }
+      expect(mockBrowserService.setValueByMarker).toHaveBeenCalledTimes(1);
+      expect(mockBrowserService.setValueByMarker).toHaveBeenCalledWith(
+        mockSnapshotId,
+        mockNebulaId,
+        testValue,
+        'chat'
       );
     });
 
     it('should handle setValue marker error', async () => {
-      mockAxios.post.mockRejectedValueOnce(new Error('SetValue failed'));
+      mockBrowserService.setValueByMarker.mockRejectedValueOnce(new Error('SetValue failed'));
 
       await expect(
         browserClient.setValueByMarker(mockSnapshotId, mockNebulaId, testValue)
@@ -245,9 +284,10 @@ describe('Frontend E2E - Marker Mode Operations', () => {
     it('should validate value parameters', async () => {
       await browserClient.setValueByMarker(mockSnapshotId, mockNebulaId, testValue);
 
-      const callArgs = mockAxios.post.mock.calls[0][1];
-      expect(callArgs).toHaveProperty('action', 'value');
-      expect(callArgs).toHaveProperty('param', testValue);
+      const callArgs = mockBrowserService.setValueByMarker.mock.calls[0];
+      expect(callArgs[0]).toBe(mockSnapshotId);
+      expect(callArgs[1]).toBe(mockNebulaId);
+      expect(callArgs[2]).toBe(testValue);
     });
   });
 
@@ -257,21 +297,17 @@ describe('Frontend E2E - Marker Mode Operations', () => {
     it('should execute dispatchEvent marker action successfully', async () => {
       await browserClient.dispatchEventByMarker(mockSnapshotId, mockNebulaId, testEventType);
 
-      expect(mockAxios.post).toHaveBeenCalledTimes(1);
-      expect(mockAxios.post).toHaveBeenCalledWith(
-        `${PLAYWRIGHT_URL}/action/execute-by-marker`,
-        {
-          snapshot_id: mockSnapshotId,
-          nebula_id: mockNebulaId,
-          action: 'dispatch',
-          param: testEventType,
-        },
-        { timeout: 30000 }
+      expect(mockBrowserService.dispatchEventByMarker).toHaveBeenCalledTimes(1);
+      expect(mockBrowserService.dispatchEventByMarker).toHaveBeenCalledWith(
+        mockSnapshotId,
+        mockNebulaId,
+        testEventType,
+        'chat'
       );
     });
 
     it('should handle dispatchEvent marker error', async () => {
-      mockAxios.post.mockRejectedValueOnce(new Error('Dispatch failed'));
+      mockBrowserService.dispatchEventByMarker.mockRejectedValueOnce(new Error('Dispatch failed'));
 
       await expect(
         browserClient.dispatchEventByMarker(mockSnapshotId, mockNebulaId, testEventType)
@@ -281,66 +317,65 @@ describe('Frontend E2E - Marker Mode Operations', () => {
     it('should validate dispatch parameters', async () => {
       await browserClient.dispatchEventByMarker(mockSnapshotId, mockNebulaId, testEventType);
 
-      const callArgs = mockAxios.post.mock.calls[0][1];
-      expect(callArgs).toHaveProperty('action', 'dispatch');
-      expect(callArgs).toHaveProperty('param', testEventType);
+      const callArgs = mockBrowserService.dispatchEventByMarker.mock.calls[0];
+      expect(callArgs[0]).toBe(mockSnapshotId);
+      expect(callArgs[1]).toBe(mockNebulaId);
+      expect(callArgs[2]).toBe(testEventType);
     });
 
     it('should support various event types', async () => {
       const eventTypes = ['click', 'change', 'submit', 'input', 'focus', 'blur'];
 
       for (const eventType of eventTypes) {
-        mockAxios.post.mockClear();
+        mockBrowserService.dispatchEventByMarker.mockClear();
         await browserClient.dispatchEventByMarker(mockSnapshotId, mockNebulaId, eventType);
 
-        const callArgs = mockAxios.post.mock.calls[0][1];
-        expect(callArgs.param).toBe(eventType);
+        const callArgs = mockBrowserService.dispatchEventByMarker.mock.calls[0];
+        expect(callArgs[2]).toBe(eventType);
       }
     });
   });
 
-  describe('API Call Pattern Verification', () => {
-    it('should use correct endpoint for click-by-marker', async () => {
+  describe('BrowserService Call Pattern Verification', () => {
+    it('should call clickByMarker for click operation', async () => {
       await browserClient.clickByMarker(mockSnapshotId, mockNebulaId);
 
-      const endpoint = mockAxios.post.mock.calls[0][0];
-      expect(endpoint).toBe(`${PLAYWRIGHT_URL}/action/click-by-marker`);
+      expect(mockBrowserService.clickByMarker).toHaveBeenCalledTimes(1);
+      // Other marker methods should NOT be called
+      expect(mockBrowserService.typeByMarker).not.toHaveBeenCalled();
     });
 
-    it('should use unified execute-by-marker endpoint for other operations', async () => {
-      const operations = [
-        { method: 'typeByMarker', args: [mockSnapshotId, mockNebulaId, 'text'] },
-        { method: 'focusByMarker', args: [mockSnapshotId, mockNebulaId] },
-        { method: 'blurByMarker', args: [mockSnapshotId, mockNebulaId] },
-        { method: 'hoverByMarker', args: [mockSnapshotId, mockNebulaId] },
-        { method: 'setValueByMarker', args: [mockSnapshotId, mockNebulaId, 'value'] },
-        { method: 'dispatchEventByMarker', args: [mockSnapshotId, mockNebulaId, 'click'] },
+    it('should call correct BrowserService method for each marker operation', async () => {
+      const operations: Array<{ method: string; bsMethod: string; args: unknown[] }> = [
+        { method: 'typeByMarker', bsMethod: 'typeByMarker', args: [mockSnapshotId, mockNebulaId, 'text'] },
+        { method: 'focusByMarker', bsMethod: 'focusByMarker', args: [mockSnapshotId, mockNebulaId] },
+        { method: 'blurByMarker', bsMethod: 'blurByMarker', args: [mockSnapshotId, mockNebulaId] },
+        { method: 'hoverByMarker', bsMethod: 'hoverByMarker', args: [mockSnapshotId, mockNebulaId] },
+        { method: 'setValueByMarker', bsMethod: 'setValueByMarker', args: [mockSnapshotId, mockNebulaId, 'value'] },
+        { method: 'dispatchEventByMarker', bsMethod: 'dispatchEventByMarker', args: [mockSnapshotId, mockNebulaId, 'click'] },
       ];
 
       for (const op of operations) {
-        mockAxios.post.mockClear();
-        await (browserClient as unknown as Record<string, Function>)[op.method](...op.args);
+        vi.clearAllMocks();
+        await (browserClient as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>)[op.method](...op.args);
 
-        const endpoint = mockAxios.post.mock.calls[0][0];
-        expect(endpoint).toBe(`${PLAYWRIGHT_URL}/action/execute-by-marker`);
+        const bsMock = (mockBrowserService as unknown as Record<string, ReturnType<typeof vi.fn>>)[op.bsMethod];
+        expect(bsMock).toHaveBeenCalledTimes(1);
       }
     });
 
-    it('should include all required fields in request body', async () => {
+    it('should include snapshot_id and nebula_id in all marker calls', async () => {
       await browserClient.typeByMarker(mockSnapshotId, mockNebulaId, 'test');
 
-      const body = mockAxios.post.mock.calls[0][1];
-      expect(body).toMatchObject({
-        snapshot_id: expect.any(String),
-        nebula_id: expect.any(Number),
-        action: expect.any(String),
-      });
+      const callArgs = mockBrowserService.typeByMarker.mock.calls[0];
+      expect(typeof callArgs[0]).toBe('string'); // snapshot_id
+      expect(typeof callArgs[1]).toBe('number'); // nebula_id
     });
   });
 
   describe('Error Scenarios', () => {
-    it('should handle network errors gracefully', async () => {
-      mockAxios.post.mockRejectedValueOnce(new Error('Network Error'));
+    it('should handle network/browser errors gracefully', async () => {
+      mockBrowserService.clickByMarker.mockRejectedValueOnce(new Error('Network Error'));
 
       await expect(
         browserClient.clickByMarker(mockSnapshotId, mockNebulaId)
@@ -348,7 +383,7 @@ describe('Frontend E2E - Marker Mode Operations', () => {
     });
 
     it('should handle timeout errors', async () => {
-      mockAxios.post.mockRejectedValueOnce(new Error('Timeout of 30000ms exceeded'));
+      mockBrowserService.clickByMarker.mockRejectedValueOnce(new Error('Timeout of 30000ms exceeded'));
 
       await expect(
         browserClient.clickByMarker(mockSnapshotId, mockNebulaId)
@@ -356,7 +391,7 @@ describe('Frontend E2E - Marker Mode Operations', () => {
     });
 
     it('should handle invalid snapshot ID', async () => {
-      mockAxios.post.mockRejectedValueOnce(new Error('Invalid snapshot'));
+      mockBrowserService.clickByMarker.mockRejectedValueOnce(new Error('Invalid snapshot'));
 
       await expect(
         browserClient.clickByMarker('invalid-snapshot', mockNebulaId)
@@ -364,7 +399,7 @@ describe('Frontend E2E - Marker Mode Operations', () => {
     });
 
     it('should handle invalid nebula ID', async () => {
-      mockAxios.post.mockRejectedValueOnce(new Error('Element not found'));
+      mockBrowserService.clickByMarker.mockRejectedValueOnce(new Error('Element not found'));
 
       await expect(
         browserClient.clickByMarker(mockSnapshotId, 999999)
@@ -382,7 +417,9 @@ describe('Frontend E2E - Marker Mode Operations', () => {
 
       await Promise.all(operations);
 
-      expect(mockAxios.post).toHaveBeenCalledTimes(3);
+      expect(mockBrowserService.clickByMarker).toHaveBeenCalledTimes(1);
+      expect(mockBrowserService.typeByMarker).toHaveBeenCalledTimes(1);
+      expect(mockBrowserService.focusByMarker).toHaveBeenCalledTimes(1);
     });
 
     it('should maintain operation order in sequential execution', async () => {
@@ -390,12 +427,10 @@ describe('Frontend E2E - Marker Mode Operations', () => {
       await browserClient.typeByMarker(mockSnapshotId, 2, 'text');
       await browserClient.focusByMarker(mockSnapshotId, 3);
 
-      expect(mockAxios.post).toHaveBeenCalledTimes(3);
-
-      const calls = mockAxios.post.mock.calls;
-      expect(calls[0][1].nebula_id).toBe(1);
-      expect(calls[1][1].nebula_id).toBe(2);
-      expect(calls[2][1].nebula_id).toBe(3);
+      // Each method called once with correct nebula_id
+      expect(mockBrowserService.clickByMarker.mock.calls[0][1]).toBe(1);
+      expect(mockBrowserService.typeByMarker.mock.calls[0][1]).toBe(2);
+      expect(mockBrowserService.focusByMarker.mock.calls[0][1]).toBe(3);
     });
   });
 
@@ -403,22 +438,22 @@ describe('Frontend E2E - Marker Mode Operations', () => {
     it('should accept string snapshot_id', async () => {
       await browserClient.clickByMarker('string-snapshot-id', mockNebulaId);
 
-      const body = mockAxios.post.mock.calls[0][1];
-      expect(typeof body.snapshot_id).toBe('string');
+      const callArgs = mockBrowserService.clickByMarker.mock.calls[0];
+      expect(typeof callArgs[0]).toBe('string');
     });
 
     it('should accept number nebula_id', async () => {
       await browserClient.clickByMarker(mockSnapshotId, 123);
 
-      const body = mockAxios.post.mock.calls[0][1];
-      expect(typeof body.nebula_id).toBe('number');
+      const callArgs = mockBrowserService.clickByMarker.mock.calls[0];
+      expect(typeof callArgs[1]).toBe('number');
     });
 
     it('should accept string param for type operation', async () => {
       await browserClient.typeByMarker(mockSnapshotId, mockNebulaId, 'test string');
 
-      const body = mockAxios.post.mock.calls[0][1];
-      expect(typeof body.param).toBe('string');
+      const callArgs = mockBrowserService.typeByMarker.mock.calls[0];
+      expect(typeof callArgs[2]).toBe('string');
     });
   });
 });

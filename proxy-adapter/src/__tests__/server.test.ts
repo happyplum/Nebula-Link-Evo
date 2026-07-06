@@ -13,6 +13,14 @@ vi.mock('../services/index.js', () => ({
     getConfig: vi.fn().mockReturnValue({
       provider: 'test',
       model: 'test-model',
+      defaults: {},
+      providers: {},
+      settings: {
+        maxTokens: 4096,
+        temperature: 0.7,
+        timeout: 30000,
+        maxRetries: 3,
+      },
     }),
     getConfigPath: vi.fn().mockReturnValue('/test/config.json'),
     getMCPSDKClient: vi.fn().mockReturnValue(undefined),
@@ -20,11 +28,16 @@ vi.mock('../services/index.js', () => ({
       enabled: true,
     }),
     getRegistry: vi.fn().mockReturnValue(null),
+    setToolRegistry: vi.fn(),
     shutdown: vi.fn().mockResolvedValue(undefined),
   },
 }));
 vi.mock('../browser-client.js', () => ({
   browserClient: {},
+}));
+vi.mock('../browser-engine/index.js', () => ({
+  BrowserService: { getInstance: () => ({}) },
+  shutdownBrowserEngine: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('../conversation/index.js', () => ({
   ConversationManager: vi.fn().mockImplementation(function() {
@@ -66,11 +79,56 @@ vi.mock('../services/chat-session-controller.js', () => ({
     }),
   },
 }));
+vi.mock('../services/debug-stream-bridge.js', () => ({
+  debugStreamBridge: {
+    start: vi.fn(),
+    stop: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+vi.mock('../services/debug-event-hub.js', () => ({
+  debugEventHub: {
+    getSubscriberCount: vi.fn().mockReturnValue(0),
+    publish: vi.fn(),
+  },
+}));
+vi.mock('../tools/registry.js', () => ({
+  ToolRegistry: vi.fn().mockImplementation(function() {
+    return {
+      registerProvider: vi.fn(),
+      initializeAll: vi.fn().mockResolvedValue(undefined),
+      shutdownAll: vi.fn().mockResolvedValue(undefined),
+    };
+  }),
+}));
+vi.mock('../tools/providers/browser-tools-provider.js', () => ({
+  BrowserToolsProvider: vi.fn().mockImplementation(function() {}),
+}));
+vi.mock('../tools/providers/vision-agent-provider.js', () => ({
+  VisionAgentProvider: vi.fn().mockImplementation(function() {}),
+}));
+vi.mock('../tools/providers/build-vision-agent-config.js', () => ({
+  buildVisionAgentConfig: vi.fn().mockReturnValue(undefined),
+}));
+vi.mock('../tools/providers/mcp-client-provider.js', () => ({
+  MCPClientProvider: vi.fn().mockImplementation(function() {}),
+}));
+vi.mock('../mcp-server/index.js', () => ({
+  default: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock('../services/stream-persist-worker.js', () => ({
+  StreamPersistWorker: vi.fn().mockImplementation(function() {}),
+}));
+vi.mock('../services/conversation-job-queue.js', () => ({
+  ConversationJobQueue: vi.fn().mockImplementation(function() {
+    return {};
+  }),
+}));
 vi.mock('../plugins/routes/health.js', () => ({ default: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('../plugins/routes/config.js', () => ({ default: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('../plugins/routes/task.js', () => ({ default: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('../plugins/routes/debug/index.js', () => ({ default: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('../plugins/routes/api/livekit-token.js', () => ({ default: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('../plugins/routes/api/ai-service.js', () => ({ default: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('../plugins/routes/api/chat/index.js', () => ({ default: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('../plugins/routes/chat/index.js', () => ({ default: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('../services/provider/preflight.js', () => ({
