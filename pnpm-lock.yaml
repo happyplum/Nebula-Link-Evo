@@ -107,18 +107,54 @@ importers:
 
   ai-chat-service:
     dependencies:
+      '@ai-sdk/openai-compatible':
+        specifier: ^2.0.31
+        version: 2.0.31(zod@4.3.6)
+      '@ai-sdk/provider':
+        specifier: ^3.0.8
+        version: 3.0.8
       '@fastify/cors':
         specifier: 'catalog:'
         version: 11.2.0
+      '@fastify/type-provider-typebox':
+        specifier: 'catalog:'
+        version: 4.1.0(@sinclair/typebox@0.32.35)
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.26.0
+        version: 1.27.1(zod@4.3.6)
       '@nebula-link-evo/shared':
         specifier: workspace:*
         version: link:../shared
+      '@sinclair/typebox':
+        specifier: 'catalog:'
+        version: 0.32.35
+      ai:
+        specifier: ^6.0.105
+        version: 6.0.105(zod@4.3.6)
+      async-mutex:
+        specifier: ^0.5.0
+        version: 0.5.0
+      axios:
+        specifier: 'catalog:'
+        version: 1.13.5
       dotenv:
         specifier: 'catalog:'
         version: 16.6.1
+      execa:
+        specifier: ^9.0.0
+        version: 9.6.1
       fastify:
         specifier: 'catalog:'
         version: 5.7.4
+      fastify-plugin:
+        specifier: 'catalog:'
+        version: 4.5.1
+      pino:
+        specifier: ^10.3.1
+        version: 10.3.1
+      zod:
+        specifier: 'catalog:'
+        version: 4.3.6
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
