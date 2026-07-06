@@ -32,10 +32,12 @@ function expectHeaders(options: unknown, projectId?: string, timeout?: number) {
 
 describe('ProxyAdapterClient', () => {
   const originalProxyAdapterUrl = process.env.PROXY_ADAPTER_URL;
+  const originalAiChatUrl = process.env.AI_CHAT_SERVICE_URL;
 
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.PROXY_ADAPTER_URL = 'http://proxy-adapter.local:3000';
+    process.env.AI_CHAT_SERVICE_URL = 'http://ai-chat.local:3001';
     vi.spyOn(crypto, 'randomUUID').mockReturnValue('req-123');
     vi.mocked(isAxiosError).mockImplementation((error): error is any => {
       return (error as { isAxiosError?: boolean })?.isAxiosError === true;
@@ -48,6 +50,11 @@ describe('ProxyAdapterClient', () => {
       delete process.env.PROXY_ADAPTER_URL;
     } else {
       process.env.PROXY_ADAPTER_URL = originalProxyAdapterUrl;
+    }
+    if (originalAiChatUrl === undefined) {
+      delete process.env.AI_CHAT_SERVICE_URL;
+    } else {
+      process.env.AI_CHAT_SERVICE_URL = originalAiChatUrl;
     }
   });
 
@@ -63,8 +70,9 @@ describe('ProxyAdapterClient', () => {
     });
   });
 
-  it('uses localhost default when env is missing', async () => {
+  it('uses 127.0.0.1 defaults when env is missing', async () => {
     delete process.env.PROXY_ADAPTER_URL;
+    delete process.env.AI_CHAT_SERVICE_URL;
     const mockAxiosInstance = createAxiosInstance();
     mockAxiosInstance.get.mockResolvedValue({
       data: { success: true, isOpen: true, url: 'https://example.com', title: 'Example' },
@@ -74,10 +82,14 @@ describe('ProxyAdapterClient', () => {
     const client = new ProxyAdapterClient();
     await client.getPageInfo();
 
-    expect(mockedAxios.create).toHaveBeenCalledWith({
-      baseURL: 'http://localhost:3000',
-      headers: { 'Content-Type': 'application/json' },
-    });
+    // Facade creates two axios clients; browser gateway defaults to 127.0.0.1:3000.
+    expect(mockedAxios.create).toHaveBeenCalledWith(
+      expect.objectContaining({ baseURL: 'http://127.0.0.1:3000' }),
+    );
+    // AI chat client defaults to 127.0.0.1:3001.
+    expect(mockedAxios.create).toHaveBeenCalledWith(
+      expect.objectContaining({ baseURL: 'http://127.0.0.1:3001' }),
+    );
   });
 
   it('generateText calls AI endpoint and maps response shape', async () => {
@@ -378,7 +390,7 @@ describe('ProxyAdapterClient', () => {
     } satisfies Partial<ServiceError>);
   });
 
-  it('maps AI 503 responses to proxy-adapter unavailable errors', async () => {
+  it('maps AI 503 responses to ai-chat-service unavailable errors', async () => {
     const mockAxiosInstance = createAxiosInstance();
     const error = new Error('503') as Error & {
       isAxiosError: boolean;
@@ -395,7 +407,7 @@ describe('ProxyAdapterClient', () => {
 
     await expect(client.generateText('Hello')).rejects.toMatchObject({
       name: 'ServiceError',
-      message: 'proxy-adapter unavailable',
+      message: 'ai-chat-service unavailable',
       statusCode: 500,
       code: 'INTERNAL_ERROR',
     } satisfies Partial<ServiceError>);
@@ -556,7 +568,7 @@ describe('ProxyAdapterClient', () => {
 
     await expect(client.generateText('Hello')).rejects.toMatchObject({
       name: 'ServiceError',
-      message: 'proxy-adapter AI request failed',
+      message: 'ai-chat-service AI request failed',
       statusCode: 400,
       code: 'VALIDATION_ERROR',
     } satisfies Partial<ServiceError>);
@@ -696,18 +708,21 @@ describe('ProxyAdapterClient', () => {
     } satisfies Partial<ServiceError>);
   });
 
-  it('degrades gracefully when proxy-adapter URL is empty', async () => {
+  it('degrades gracefully when both backend URLs are empty', async () => {
     process.env.PROXY_ADAPTER_URL = '';
+    process.env.AI_CHAT_SERVICE_URL = '';
     const mockAxiosInstance = createAxiosInstance();
     mockedAxios.create.mockReturnValue(mockAxiosInstance as never);
 
     const client = new ProxyAdapterClient();
 
+    // generateText routes to ai-chat-service (:3001), disabled by AI_CHAT_SERVICE_URL=''.
     await expect(client.generateText('Hello')).rejects.toMatchObject({
       name: 'ServiceError',
-      message: 'proxy-adapter not configured (PROXY_ADAPTER_URL is empty)',
+      message: 'ai-chat-service not configured (AI_CHAT_SERVICE_URL is empty)',
       statusCode: 500,
     } satisfies Partial<ServiceError>);
+    // healthCheck routes to proxy-adapter (:3000), disabled by PROXY_ADAPTER_URL=''.
     await expect(client.healthCheck()).resolves.toBe(false);
     expect(mockAxiosInstance.post).not.toHaveBeenCalled();
     expect(mockAxiosInstance.get).not.toHaveBeenCalled();

@@ -2,7 +2,12 @@
 
 ## Overview
 
-`ai-e2e` 是一个 **AI 驱动的 E2E 自动化测试编排子包**。它自身不直连 AI provider，也不直连 Playwright，而是统一通过 `ProxyAdapterClient` 调用 `proxy-adapter` 暴露的 AI 与浏览器控制 HTTP API。
+`ai-e2e` 是一个 **AI 驱动的 E2E 自动化测试编排子包**。它自身不直连 AI provider，也不直连 Playwright，而是通过双后端 HTTP 客户端消费拆分后的两个服务：
+
+- **`AiChatClient`** → `ai-chat-service` (:3001)：AI 文本生成、provider 连通性探测、chat session/message（未来用）。
+- **`BrowserGatewayClient`** → `proxy-adapter` (:3000)：浏览器控制、debug DOM/截图、health。
+
+历史统一入口 `ProxyAdapterClient` 仍存在，但现在是一个 **facade**，内部组合上述两个客户端：`generateText()` 路由到 :3001，所有浏览器方法路由到 :3000。需要单一后端能力的新代码应直接依赖 `AiChatClient` 或 `BrowserGatewayClient`。
 
 它的核心职责不是“浏览器自动化底座”，而是：
 
@@ -34,9 +39,11 @@ pnpm type-check   # tsc --noEmit
 ai-e2e (:3002)
 ├── src/server.ts                     # 真实启动入口
 ├── src/server/index.ts               # createServer()/start()、DI、路由注册
-├── ProxyAdapterClient                # 唯一外部能力入口
-│   ├── POST /api/ai/generate
+├── AiChatClient (:3001)              # AI 能力入口
+│   └── POST /api/ai/generate
+├── BrowserGatewayClient (:3000)      # 浏览器能力入口
 │   └── /debug/api/playwright/*
+├── ProxyAdapterClient (facade)       # 组合 AiChatClient + BrowserGatewayClient
 ├── PromptTemplateManager             # prompts/*.md
 ├── TokenBudgetTracker                # token 预算统计
 ├── DatabaseManager                   # SQLite
@@ -61,11 +68,14 @@ ai-e2e (:3002)
 - 默认端口：`3002`
 - 默认数据库路径：`./data/ai-e2e.sqlite`
 - 当前 `start()` 读取的 env 名是：
-  - `PROXY_ADAPTER_URL`
+  - `AI_CHAT_SERVICE_URL`（ai-chat-service 基址，默认 `http://127.0.0.1:3001`；旧别名 `AI_CHAT_URL`）
+  - `PROXY_ADAPTER_URL`（proxy-adapter 浏览器网关基址，默认 `http://127.0.0.1:3000`）
   - `AI_E2E_PORT`
   - `AI_E2E_DB_PATH`
+- 任一基址为空时，DB-only 路由继续工作；依赖该后端的路由返回 `503`。
 - 启动成功后会打印：
   - `AI E2E server listening`
+  - `Backend topology`（记录 aiChat / browserGateway 解析出的基址）
   - `UI: http://localhost:<port>/ai-e2e/`
 
 ## Where To Look
@@ -74,7 +84,10 @@ ai-e2e (:3002)
 |---|---|---|
 | Runtime entry | `src/server.ts` | 仅负责调用 `start()` |
 | Bootstrap / DI | `src/server/index.ts` | 路由注册、静态 UI、SSE、env 读取 |
-| HTTP client | `src/infrastructure/proxy-adapter-client.ts` | AI / Playwright API、契约适配、错误映射 |
+| HTTP client (AI) | `src/infrastructure/ai-chat-client.ts` | ai-chat-service (:3001)：generateText / test-ai / verify-keys / chat sessions |
+| HTTP client (browser) | `src/infrastructure/browser-gateway-client.ts` | proxy-adapter (:3000)：browser control、debug DOM、health |
+| HTTP client (facade) | `src/infrastructure/proxy-adapter-client.ts` | 组合 AiChatClient + BrowserGatewayClient，保留历史统一 API |
+| HTTP client 共享工具 | `src/infrastructure/http-client-helpers.ts` | axios 创建、base URL 解析、错误映射 |
 | Services | `src/services/` | PRD 分析、探索、脚本、执行、诊断、状态机 |
 | Routes | `src/server/routes/` | 通过 plugin options 注入依赖 |
 | Prompts | `prompts/*.md` | 必须保留，属于稳定资产 |
@@ -112,17 +125,17 @@ ai-e2e (:3002)
 
 ## Hard Boundaries
 
-- **不直连 AI provider**：所有 AI 调用必须经 `ProxyAdapterClient.generateText()`
-- **不直连 `playwright-server`**：所有浏览器操作必须经 `ProxyAdapterClient`
+- **不直连 AI provider**：所有 AI 调用必须经 `AiChatClient.generateText()`（或 facade 的 `ProxyAdapterClient.generateText()`），最终落到 ai-chat-service (:3001) 的 `POST /api/ai/generate`
+- **不直连 `playwright-server`**：所有浏览器操作必须经 `BrowserGatewayClient`（或 facade 的 `ProxyAdapterClient`），最终落到 proxy-adapter (:3000) 的 `/debug/api/*`
 - **不引入 `@ai-sdk/*`**：ai-e2e 已被重构为零 AI SDK 依赖
-- **不共享 proxy-adapter 数据库**：ai-e2e 维护自己的 SQLite
-- **不在 proxy-adapter 中引入 ai-e2e 特有概念**
+- **不共享 proxy-adapter / ai-chat-service 数据库**：ai-e2e 维护自己的 SQLite
+- **不在 proxy-adapter / ai-chat-service 中引入 ai-e2e 特有概念**
 
 ## Conventions
 
 - 本地 TS import 保持 `.js` 后缀
-- `ProxyAdapterClient` 是唯一外部基础设施访问点
-- `PROXY_ADAPTER_URL` 为空时，DB-only 路由继续工作，AI / Playwright 路由返回 `503`
+- `AiChatClient` (:3001) 与 `BrowserGatewayClient` (:3000) 是两个后端的直接入口；`ProxyAdapterClient` 是保留的 facade，组合二者
+- 任一基址为空时，DB-only 路由继续工作，AI / Playwright 路由返回 `503`
 - `ServiceError.unavailable()` 用于服务缺失 / 降级场景
 - UI 通过 `/ai-e2e/` 前缀挂载，404 处理要兼顾 SPA 与 JSON API
 
