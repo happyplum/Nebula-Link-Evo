@@ -4,10 +4,10 @@
   "scripts": {
     "dev": "pnpm --filter shared build && pnpm -r --parallel --filter shared --filter debug-ui --filter proxy-adapter --filter ai-chat-service dev",
     "build": "pnpm --filter shared build && pnpm --filter debug-ui build && pnpm --filter proxy-adapter build && pnpm --filter ai-chat-service build && pnpm --filter ai-e2e build",
-    "lint": "eslint debug-ui/src proxy-adapter/src",
-    "lint:fix": "eslint debug-ui/src proxy-adapter/src --fix",
-    "format": "prettier --write \"debug-ui/src/**/*.{ts,tsx}\" \"proxy-adapter/src/**/*.ts\"",
-    "format:check": "prettier --check \"debug-ui/src/**/*.{ts,tsx}\" \"proxy-adapter/src/**/*.ts\"",
+"lint": "eslint debug-ui/src proxy-adapter/src ai-chat-service/src",
+"lint:fix": "eslint debug-ui/src proxy-adapter/src ai-chat-service/src --fix",
+"format": "prettier --write \"debug-ui/src/**/*.{ts,tsx}\" \"proxy-adapter/src/**/*.ts\" \"ai-chat-service/src/**/*.ts\"",
+"format:check": "prettier --check \"debug-ui/src/**/*.{ts,tsx}\" \"proxy-adapter/src/**/*.ts\" \"ai-chat-service/src/**/*.ts\"",
     "test": "pnpm -r test",
     "test:coverage": "pnpm -r test:coverage"
   },

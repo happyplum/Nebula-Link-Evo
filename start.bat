@@ -54,13 +54,19 @@ if %errorlevel% neq 0 (
     echo         Run stop.bat to stop the existing service.
     exit /b 1
 )
+call :check_port 3001
+if %errorlevel% neq 0 (
+    echo [ERROR] Port 3001 is already in use.
+    echo         Run stop.bat to stop the existing service.
+    exit /b 1
+)
 call :check_port 3002
 if %errorlevel% neq 0 (
     echo [ERROR] Port 3002 is already in use.
     echo         Run stop.bat to stop the existing service.
     exit /b 1
 )
-echo [OK] Ports 3000 and 3002 are available.
+echo [OK] Ports 3000, 3001 and 3002 are available.
 echo.
 
 REM ============================================
@@ -70,6 +76,13 @@ echo [INFO] Building proxy-adapter...
 cmd /c "cd /d ""%~dp0proxy-adapter"" && pnpm build"
 if %errorlevel% neq 0 (
     echo [ERROR] proxy-adapter build failed.
+    exit /b 1
+)
+
+echo [INFO] Building ai-chat-service...
+cmd /c "cd /d ""%~dp0ai-chat-service"" && pnpm build"
+if %errorlevel% neq 0 (
+    echo [ERROR] ai-chat-service build failed.
     exit /b 1
 )
 
@@ -95,6 +108,10 @@ if not exist "proxy-adapter\dist\server.js" (
     echo [ERROR] proxy-adapter\dist\server.js not found.
     exit /b 1
 )
+if not exist "ai-chat-service\dist\server.js" (
+    echo [ERROR] ai-chat-service\dist\server.js not found.
+    exit /b 1
+)
 if not exist "ai-e2e\dist\server.js" (
     echo [ERROR] ai-e2e\dist\server.js not found.
     exit /b 1
@@ -114,6 +131,12 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
+cmd /c ai-chat-service\start.bat --skip-build
+if %errorlevel% neq 0 (
+    echo [ERROR] AI Chat Service failed to start.
+    exit /b 1
+)
+
 cmd /c ai-e2e\start.bat --skip-build
 if %errorlevel% neq 0 (
     echo [ERROR] AI E2E failed to start.
@@ -127,6 +150,7 @@ echo ==========================================
 echo.
 echo   Services:
 echo     - Proxy Adapter:    http://localhost:3000
+echo     - AI Chat Service:  http://localhost:3001
 echo     - AI E2E:           http://localhost:3002/ai-e2e/
 echo     - LiveKit Server:   http://localhost:7880
 echo.

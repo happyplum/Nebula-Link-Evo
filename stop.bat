@@ -11,7 +11,7 @@ echo.
 cmd /c ai-e2e\stop.bat
 cmd /c debug-ui\stop.bat
 cmd /c proxy-adapter\stop.bat
-cmd /c playwright-server\stop.bat
+cmd /c ai-chat-service\stop.bat
 cmd /c tools\livekit\stop.bat
 
 echo.
