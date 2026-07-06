@@ -5,7 +5,7 @@ import type { GatewayTool, ToolProvider, ToolProviderStatus } from '../types.js'
 /**
  * MCPClientProvider 将外部 MCP Client 工具通过 ToolProvider 接入 Registry
  *
- * 从 MCPSDKClient 获取外部 MCP Server 提供的工具（排除 browser-control.*），
+ * 从 MCPSDKClient 获取外部 MCP Server 提供的工具，
  * 仅暴露给 chat 通道，不向下游 MCP Server 传播（不做 MCP proxy）。
  */
 export class MCPClientProvider extends EventEmitter implements ToolProvider {
@@ -44,29 +44,30 @@ export class MCPClientProvider extends EventEmitter implements ToolProvider {
   private _refreshTools(): void {
     const mcpTools = this.mcpClient.getAvailableTools();
 
-    this._tools = mcpTools
-      .filter((mcpTool) => !mcpTool.name.startsWith('browser-control.'))
-      .map((mcpTool) => this._toGatewayTool(mcpTool));
+    this._tools = mcpTools.map((mcpTool) => this._toGatewayTool(mcpTool));
   }
 
   private _toGatewayTool(mcpTool: MCPTool): GatewayTool {
-    const dotIndex = mcpTool.name.indexOf('.');
-    const serverName = mcpTool.name.substring(0, dotIndex);
-    const toolName = mcpTool.name.substring(dotIndex + 1);
+    const metadata = this._resolveToolMetadata(mcpTool);
 
     return {
-      id: `mcp-client:${mcpTool.name}`,
+      id: `mcp-client:${metadata.serverName}:${metadata.toolName}`,
       name: mcpTool.name,
       description: mcpTool.description,
       inputSchema: mcpTool.inputSchema as Record<string, unknown>,
       providerId: 'mcp-client',
       exposeTo: ['chat'] as const,
       isAvailable: true,
+      source: {
+        type: 'mcp',
+        serverName: metadata.serverName,
+        toolName: metadata.toolName,
+      },
       execute: async (args: unknown) => {
         try {
           const result = await this.mcpClient.callTool(
-            serverName,
-            toolName,
+            metadata.serverName,
+            metadata.toolName,
             args as Record<string, unknown>,
           );
           if (result && typeof result === 'object' && 'text' in result) {
@@ -78,5 +79,21 @@ export class MCPClientProvider extends EventEmitter implements ToolProvider {
         }
       },
     };
+  }
+
+  private _resolveToolMetadata(mcpTool: MCPTool): { readonly serverName: string; readonly toolName: string } {
+    if (mcpTool.serverName && mcpTool.originalName) {
+      return { serverName: mcpTool.serverName, toolName: mcpTool.originalName };
+    }
+
+    const dotIndex = mcpTool.name.indexOf('.');
+    if (dotIndex > 0) {
+      return {
+        serverName: mcpTool.name.substring(0, dotIndex),
+        toolName: mcpTool.name.substring(dotIndex + 1),
+      };
+    }
+
+    return { serverName: 'unknown', toolName: mcpTool.name };
   }
 }

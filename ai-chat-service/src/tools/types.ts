@@ -25,6 +25,11 @@ export interface GatewayTool {
   readonly exposeTo: readonly ('chat' | 'mcp-server')[];
   readonly isAvailable: boolean;
   readonly execute: (args: unknown) => Promise<string>;
+  readonly source?: {
+    readonly type: 'mcp';
+    readonly serverName: string;
+    readonly toolName: string;
+  };
 }
 
 /**
