@@ -8,8 +8,8 @@ describe('REST endpoint constants', () => {
   });
 
   it('should define debug AI endpoints', () => {
-    expect(endpoints.DEBUG_TEST_AI).toBe('/debug/api/test-ai');
-    expect(endpoints.DEBUG_VERIFY_KEYS).toBe('/debug/api/verify-keys');
+    expect(endpoints.DEBUG_TEST_AI).toBe('/api/test-ai');
+    expect(endpoints.DEBUG_VERIFY_KEYS).toBe('/api/verify-keys');
   });
 
   it('should define all playwright endpoints', () => {
