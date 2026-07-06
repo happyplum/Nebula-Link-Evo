@@ -16,10 +16,22 @@
     "format": "prettier --write \"src/**/*.ts\""
   },
   "dependencies": {
+    "@ai-sdk/openai-compatible": "^2.0.31",
+    "@ai-sdk/provider": "^3.0.8",
     "@fastify/cors": "catalog:",
+    "@fastify/type-provider-typebox": "catalog:",
+    "@modelcontextprotocol/sdk": "^1.26.0",
     "@nebula-link-evo/shared": "workspace:*",
+    "@sinclair/typebox": "catalog:",
+    "ai": "^6.0.105",
+    "async-mutex": "^0.5.0",
+    "axios": "catalog:",
     "dotenv": "catalog:",
-    "fastify": "catalog:"
+    "execa": "^9.0.0",
+    "fastify": "catalog:",
+    "fastify-plugin": "catalog:",
+    "pino": "^10.3.1",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",
