@@ -2,7 +2,7 @@
 
 ## Overview
 
-Fastify backend on port `3000`. AI orchestration, MCP Server (StreamableHTTP), chat/session APIs, debug APIs.
+Fastify backend on port `3000`. Browser MCP gateway — MCP Server via StreamableHTTP, Playwright browser-control + vision-agent tools.
 
 ## Commands
 
@@ -12,7 +12,6 @@ pnpm build        # tsc → dist/
 pnpm start        # node dist/server.js
 pnpm test         # Vitest
 pnpm test:e2e     # Playwright e2e
-pnpm test:debug   # Debug page smoke check
 ```
 
 ## Where To Look
@@ -20,15 +19,13 @@ pnpm test:debug   # Debug page smoke check
 | Area             | Path                                | Notes                                                 |
 | ---------------- | ----------------------------------- | ----------------------------------------------------- |
 | Server entry     | `src/server.ts`                     | Env load, plugins, route registration                 |
-| Task facade      | `src/services/app-service.ts`       | Config, MCP, provider registry, singleton facade      |
+| App service      | `src/services/app-service.ts`       | Browser session management, config, singleton facade  |
 | Action execution | `src/services/action-executor.ts`   | Browser action dispatch                               |
-| Tool registry    | `src/tools/`                        | ToolRegistry + 3 Providers + Vercel AI / MCP adapters |
+| Tool registry    | `src/tools/`                        | ToolRegistry + providers (browser-control, vision-agent, MCP client) |
 | Browser tools    | `src/browser-tools/`                | Action definitions, param/result adapters, tool-map   |
 | MCP Server       | `src/mcp-server/`                   | StreamableHTTP plugin + transport                     |
 | Vision agent     | `src/mcps/vision-agent/`            | Internal vision analysis module (config, tools, cache)|
-| Chat routes      | `src/plugins/routes/api/chat/`      | Session, stream, control (sole execution path)        |
-| Conversations    | `src/conversation/`                 | SQLite persistence, compression                       |
-| AI clients       | `src/clients/`                      | Provider factories (decision, Vercel AI, MCP)         |
+| Browser engine   | `src/browser-engine/`               | Playwright Chromium lifecycle                         |
 | Config           | `src/config/`                       | Schema, loader, resolver, validator                   |
 | Tests            | `src/__tests__/`                    | Unit, integration, e2e                                |
 
@@ -48,7 +45,6 @@ pnpm test:debug   # Debug page smoke check
 - No `dev:frontend` or `build:frontend` scripts here.
 - No `src/static/debug/` source tree.
 - No provider-specific logic in generic route handlers.
-- No bypassing service-layer locking/event/persistence helpers.
 
 ## Child AGENTS
 

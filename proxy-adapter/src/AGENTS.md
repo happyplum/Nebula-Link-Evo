@@ -2,32 +2,30 @@
 
 ## Overview
 
-Backend source for AI clients, conversations, debug APIs, and chat session coordination.
+Browser MCP gateway source — Playwright engine, tool providers, browser session services.
 
 ## Where To Look
 
 | Area             | Path            | Notes                                                          |
 | ---------------- | --------------- | -------------------------------------------------------------- |
 | Server bootstrap | `server.ts`     | Route registration, service init                               |
-| Services         | `services/`     | Config facade, session control, stream persistence, chat       |
+| Services         | `services/`     | Browser session mgmt, action execution, logging, diagnostics   |
 | Plugins          | `plugins/`      | Fastify plugins and route modules                              |
-| Clients          | `clients/`      | Decision, MCP, Vercel AI SDK                              |
-| Tool registry    | `tools/`        | ToolRegistry + 3 Providers (browser-control, vision-agent, MCP client) + adapters |
+| Tool registry    | `tools/`        | ToolRegistry + providers (browser-control, vision-agent, MCP client) + adapters |
 | Browser tools    | `browser-tools/`| Action definitions, param/result adapters, tool-map            |
+| Browser engine   | `browser-engine/` | Playwright Chromium lifecycle                                |
+| Browser client   | `browser-client.ts` | Shared browser page/context accessor                       |
 | MCP Server       | `mcp-server/`   | StreamableHTTP plugin + transport                              |
 | Vision agent     | `mcps/vision-agent/` | Built-in vision analysis module (config, tools, cache)    |
-| Conversation     | `conversation/` | SQLite storage, compression, manager                           |
 | Config           | `config/`       | Schema, loader, resolver, validator                            |
 | Errors           | `errors/`       | Typed error classes                                            |
 | Schemas          | `schemas/`      | TypeBox request/response schemas                               |
 | Types            | `types/`        | Fastify and node-sqlite type augmentations                     |
 | Utils            | `utils/`        | DB backup helper                                               |
-| Workers          | `workers/`      | Stream persist worker (child process)                          |
 | Tests            | `__tests__/`    | Unit, integration, e2e                                         |
 
 ## Working Rules
 
-- Old monolithic `task-executor.ts` is gone — extend service-oriented architecture.
 - Route handlers delegate to services, not orchestration logic.
 - Backend/frontend coupling stays at HTTP contract boundary.
 - Local imports keep `.js` extension.
@@ -36,15 +34,12 @@ Backend source for AI clients, conversations, debug APIs, and chat session coord
 
 - No stale `@shared/*` imports.
 - No production logic in tests or debug-only helpers.
-- No hardcoded AI provider config in service logic.
 
 ## Child AGENTS
 
 - `services/AGENTS.md`
-- `clients/AGENTS.md`
 - `tools/AGENTS.md`
 - `mcps/vision-agent/AGENTS.md`
-- `conversation/AGENTS.md`
 - `config/AGENTS.md`
 - `plugins/AGENTS.md`
 - `__tests__/AGENTS.md`
