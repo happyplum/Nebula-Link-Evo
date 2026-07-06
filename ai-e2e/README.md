@@ -134,7 +134,7 @@ ai-e2e 是 `proxy-adapter` 的下游消费者：
 因此：
 
 - ai-e2e **不应该**引入新的 AI SDK 依赖
-- ai-e2e **不应该**直接请求 `playwright-server`
+- ai-e2e **不应该**直接请求 `proxy-adapter` 内部浏览器引擎，应通过 MCP 接口
 - proxy-adapter 是 ai-e2e 唯一外部能力网关
 
 ## 失败诊断与自动修复
@@ -153,7 +153,7 @@ ai-e2e 是 `proxy-adapter` 的下游消费者：
 - Node.js >= 22.5.0
 - pnpm >= 8
 - `proxy-adapter` 已启动（默认 `http://localhost:3000`）
-- `playwright-server` 已启动（由 `proxy-adapter` 依赖）
+- `proxy-adapter` 内进程 Playwright 引擎
 
 ### 安装与启动
 

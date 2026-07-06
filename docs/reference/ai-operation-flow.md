@@ -1,6 +1,6 @@
 # Nebula-Link Evo — AI Operation Flow
 
-> Generated: 2026-03-27 | Source: proxy-adapter, playwright-server, shared
+> Generated: 2026-03-27 | Source: proxy-adapter, ai-chat-service, shared
 
 ## System Architecture
 
@@ -11,10 +11,10 @@
 └────────┬─────────────────┼──────────────────────────────────────┘
           │                 │
 ┌────────▼─────────────────▼──────────────────────────────────────┐
-│                     proxy-adapter (:3000)                       │
+│                   ai-chat-service (:3001)                        │
 │  ┌──────────┐  ┌──────────┐  ┌───────────┐                      │
-│  │ Chat API │  │ Debug API │  │ SSE Stream │                      │
-│  │ /api/chat│  │ /debug/api│  │ /api/chat/ │                      │
+│  │ Chat API │  │ Provider │  │ SSE Stream │                      │
+│  │/api/chat │  │ Preflight│  │/api/chat/  │                      │
 │  └────┬─────┘  └────┬─────┘  └─────┬─────┘                      │
 │       │              │              │                             │
 │  ┌────▼──────────────▼──────────────▼──────────────────────────┐ │
@@ -27,12 +27,14 @@
 │  │                   Persistence                              │ │
 │  │  SQLite (sessions, messages, events) │ Filesystem (logs)  │ │
 │  └────────────────────────────────────────────────────────────┘ │
-└──────────────────────────┬──────────────────────────────────────┘
-                           │
-┌──────────────────────────▼──────────────────────────────────────┐
-│                 playwright-server (:3001)                       │
-│  BrowserService → BrowserLifecycle → Playwright (Chromium)      │
+│                        │                                       │
+│  ┌─────────────────────▼─────────────────────────────────────┐ │
+│  │           MCP Client → proxy-adapter (:3000)                │ │
+│  │  MCP-over-HTTP for browser-control.* + vision-agent.*     │ │
+│  └────────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
+
+AI 能力经 MCP-over-HTTP 路由到 proxy-adapter (:3000)，后者内进程运行 Playwright 引擎控制 Chromium。
 ```
 
 ---

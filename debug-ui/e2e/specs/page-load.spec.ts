@@ -44,10 +44,10 @@ test.describe('Debug UI - Page Load', () => {
     await expect(debugPage.locator('[data-testid="playwright-status"]')).toBeVisible();
   });
 
-  // WebSocket connection test requires live playwright-server.
-  // Run with: PLAYWRIGHT_SERVER=true pnpm test:e2e
-  test('WebSocket connection establishes — requires live playwright-server', async ({ debugPage, wsMonitor }) => {
-    test.skip(!!process.env.CI, 'Requires live playwright-server');
+  // WebSocket connection test requires live proxy-adapter.
+  // Run with: PROXY_ADAPTER_LIVE=true pnpm test:e2e
+  test('WebSocket connection establishes — requires live proxy-adapter', async ({ debugPage, wsMonitor }) => {
+    test.skip(!!process.env.CI, 'Requires live proxy-adapter');
 
     await debugPage.waitForTimeout(TIMEOUTS.LONG);
 

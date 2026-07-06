@@ -21,7 +21,7 @@ Workspace package published as `@nebula-link-evo/shared`. Shared runtime-safe ty
 ## Conventions
 - Framework-neutral and service-neutral.
 - Pure functions and plain interfaces — no package-specific classes.
-- No cross-package imports back into `proxy-adapter` or `playwright-server`.
+- No cross-package imports back into `proxy-adapter`.
 
 ## Anti-Patterns
 - No backend-only business logic.

@@ -28,7 +28,7 @@ export interface DebugPage extends Page {
 }
 
 /**
- * Service manager for controlling playwright-server
+ * Service manager for controlling proxy-adapter browser engine
  */
 export interface ServiceManager {
   start: () => Promise<void>;
@@ -133,13 +133,13 @@ export const test = base.extend<{
     await use(monitor);
   },
 
-  // Provide service manager fixture for playwright-server
+  // Provide service manager fixture for proxy-adapter browser engine
   serviceManager: async ({}, use) => {
     const manager: ServiceManager = {
       isRunning: false,
       start: async () => {
         try {
-          const response = await fetch('http://localhost:3001/api/health');
+          const response = await fetch('http://localhost:3000/api/health');
           manager.isRunning = response.ok;
         } catch {
           manager.isRunning = false;

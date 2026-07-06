@@ -1,54 +1,32 @@
 # Nebula-Link Evo — 架构文档
 
-> Generated: 2026-03-28 | Source: proxy-adapter, playwright-server, debug-ui, shared
+> Generated: 2026-03-28 | Source: proxy-adapter, ai-chat-service, debug-ui, shared
 
 ## 系统架构
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                     Browser / Chromium                              │
-└─────────────────────────────┬───────────────────────────────────────┘
-                              │ Playwright API
-┌─────────────────────────────▼───────────────────────────────────────┐
-│                   playwright-server (:3001)                          │
-│  BrowserService → BrowserLifecycle → Playwright (Chromium)           │
-│  职责：浏览器控制、截图、DOM 提取、页面操作执行                        │
-└─────────────────────────────▲───────────────────────────────────────┘
-                              │ HTTP
-┌─────────────────────────────┴───────────────────────────────────────┐
-│                    proxy-adapter (:3000)                              │
-│  ┌──────────┐  ┌──────────┐  ┌──────────────┐                       │
-│  │ Chat API │  │ Debug API │  │ SSE Stream   │                       │
-│  │/api/chat │  │/debug/api │  │/api/chat/...│                       │
-│  └────┬─────┘  └────┬─────┘  └──────┬───────┘                       │
-│       │              │               │                                  │
-│  ┌────▼──────────────▼──────────────▼──────────────────────────────┐  │
-│  │                   Services Layer                              │  │
-│  │ ChatHandler │ ConversationManager │ SessionEventHub              │  │
-│  │ ActionExecutor │ ConversationManager │ SessionEventHub    │  │
-│  │                     @nebula-link-evo/shared                  │  │
-│  └────────────────────────┬──────────────────────────────────────┘  │
-│  ┌───────────────────────▼──────────────────────────────────────┐  │
-│  │                   Development / Production                     │  │
-│  │ Dev: Standalone Vite dev server (:5173)                        │  │
-│  │ Prod: Standalone build (no proxy-adapter static serving)       │  │
-│  └────────────────────────┬─────────────────────────────────────┘  │
-└───────────────────────────┼────────────────────────────────────────┘
-                            │
-┌───────────────────────────▼────────────────────────────────────────┐
-│                      AI Providers                                    │
-│  GLM │ OpenAI │ Anthropic │ Kimi │ NVIDIA (Vercel AI SDK)           │
-└─────────────────────────────────────────────────────────────────────┘
+Browser ←→ Debug UI (:5173 dev)
+              ↕ SSE (Chat)        ↕ REST (Browser/Config)
+         AI Chat Service       Proxy Adapter
+            (:3001)                (:3000)
+              ↕ MCP Client ──────→  ↕ MCP Server (StreamableHTTP)
+              ↕ HTTP                    ↕ Playwright (in-process)
+         AI Providers                Chromium
+    (GLM, OpenAI, Anthropic, Kimi, NVIDIA)
+
+         AI E2E (:3002) — 自动化测试编排
+    AiChatClient(:3001) + BrowserGatewayClient(:3000)
 ```
 
 ### 端口映射
 
 | 服务              | 端口     | 职责                                |
 | ----------------- | -------- | ----------------------------------- |
-| playwright-server | 3001     | 浏览器控制、截图、DOM 提取          |
-| proxy-adapter     | 3000     | AI 编排、任务执行、会话管理         |
+| proxy-adapter     | 3000     | 纯浏览器 MCP 网关（内进程 Playwright 引擎 + browser-control/vision-agent 工具） |
+| ai-chat-service   | 3001     | AI 对话服务（会话管理、AI provider 编排、Chat SSE） |
 | debug-ui (dev)    | 5173     | 前端开发服务器                      |
 | debug-ui (prod)   | 独立部署 | 独立构建，不通过 proxy-adapter 托管 |
+| ai-e2e            | 3002     | AI E2E 自动化测试编排                |
 
 ## 开发模式 vs 生产模式
 
@@ -106,22 +84,23 @@ Browser
 ### 服务间通信
 
 ```
-proxy-adapter (:3000)
-    │ HTTP
+debug-ui (:5173)
+    │ SSE (Chat)        ↕ REST (Browser/Config)
     ▼
-playwright-server (:3001)
-    │
-    ├─ Browser API: screenshot, getDOM, click, type, scroll, navigate, wait
-    ├─ 13 Action Types: click, type, focus, blur, hover, value, dispatch,
-    │   scroll, navigate, wait, screenshot, mcp_call, finish
-    └─ Targeting: coordinates, selector, marker (vision marker system)
+ai-chat-service (:3001)          proxy-adapter (:3000)
+    │                                  │
+    │ MCP Client ──────────────────→ MCP Server (StreamableHTTP)
+    │ HTTP                                  │ Playwright (in-process)
+    ▼                                       ▼
+AI Providers                            Chromium
 ```
 
 **设计原则:**
 
-- proxy-adapter 通过 HTTP 调用 playwright-server（无 WebSocket）
-- 所有浏览器操作统一通过 playwright-server 的 HTTP API
-- playwright-server 不包含业务逻辑，仅控制浏览器
+- ai-chat-service 通过 MCP-over-HTTP 从 proxy-adapter 获取浏览器控制与视觉能力
+- proxy-adapter 内进程运行 Playwright 引擎，不再依赖外部 playwright-server 进程
+- debug-ui 分别连接两个服务：chat SSE → ai-chat-service (:3001)，browser/debug → proxy-adapter (:3000)
+- ai-e2e 通过 AiChatClient(:3001) 和 BrowserGatewayClient(:3000) 消费
 
 ## 数据持久化
 
