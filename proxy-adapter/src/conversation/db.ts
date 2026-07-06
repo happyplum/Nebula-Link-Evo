@@ -1,5 +1,7 @@
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { randomUUID } from 'node:crypto';
+import { mkdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { SessionStateDAO } from './session-state-dao.js';
 import { SessionEventsDAO } from './session-events-dao.js';
 import { SessionEventsCleanup } from '../services/session-events-cleanup.js';
@@ -26,6 +28,8 @@ import type {
   ControlCommandType,
   OperationStatus,
 } from './types.js';
+
+const DEFAULT_DEBUG_DB_PATH = join(process.cwd(), 'data', 'proxy-adapter', 'debug.sqlite');
 
 class DatabaseManager {
   private static instance: DatabaseManager | null = null;
@@ -76,9 +80,12 @@ class DatabaseManager {
     }
   }
 
-  initialize(dbPath: string = ':memory:'): void {
+  initialize(dbPath: string = DEFAULT_DEBUG_DB_PATH): void {
     if (this.isInitialized && this.db) {
       return;
+    }
+    if (dbPath !== ':memory:') {
+      mkdirSync(dirname(dbPath), { recursive: true });
     }
     this.db = new DatabaseSync(dbPath);
     this.enableWalMode();
@@ -226,8 +233,7 @@ class DatabaseManager {
         start_time INTEGER NOT NULL,
         end_time INTEGER,
         status TEXT NOT NULL CHECK(status IN ('pending', 'success', 'failed')),
-        error TEXT,
-        FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+        error TEXT
       )
     `);
 

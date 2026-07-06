@@ -252,6 +252,11 @@ describe('DatabaseManager', () => {
   });
 
   describe('interactions', () => {
+    it('should keep operation_logs session_id as a soft reference', () => {
+      const foreignKeys = db.executeSql('PRAGMA foreign_key_list(operation_logs)');
+      expect(foreignKeys).toHaveLength(0);
+    });
+
     it('should create interactions table with correct schema', () => {
       const result = db.executeSql(
         "SELECT name FROM sqlite_master WHERE type='table' AND name='interactions'"
