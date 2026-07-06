@@ -12,7 +12,6 @@ Runtime config loading, placeholder resolution, validation, and capability check
 | `loader.ts`    | File loading + default config creation        |
 | `resolver.ts`  | Environment placeholder resolution            |
 | `validator.ts` | Errors/warnings, mode/provider/MCP validation |
-| `services.ts`  | Config service helpers used at runtime        |
 | `index.ts`     | Public config exports                         |
 
 ## Working Rules
