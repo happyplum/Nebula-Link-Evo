@@ -159,7 +159,10 @@ function registerGracefulShutdown(app: AppServer, databaseManager: DatabaseManag
 }
 
 export async function start() {
-  // Create AI service instances
+  // Create AI service instances.
+  // ProxyAdapterClient is now a facade over AiChatClient (:3001) and
+  // BrowserGatewayClient (:3000); each resolves its own base URL from env
+  // (AI_CHAT_SERVICE_URL / PROXY_ADAPTER_URL respectively).
   const proxyClient = new ProxyAdapterClient();
   const promptsDir = path.join(process.cwd(), 'prompts');
   const promptManager = new PromptTemplateManager(promptsDir);
@@ -221,6 +224,13 @@ export async function start() {
     });
 
     app.log.info({ port, dbPath }, 'AI E2E server listening');
+    app.log.info(
+      {
+        aiChat: proxyClient.aiChatClient.getBaseUrl(),
+        browserGateway: proxyClient.browserGatewayClient.getBaseUrl(),
+      },
+      'Backend topology',
+    );
     app.log.info(`UI: http://localhost:${port}/ai-e2e/`);
     return app;
   } catch (error) {
