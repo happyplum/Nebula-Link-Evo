@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import * as path from 'path';
 import * as fs from 'fs';
 import { loadConfig } from './config/index.js';
+import { conversationDatabase } from './db/index.js';
 
 const VERSION = '0.1.0';
 
@@ -31,6 +32,8 @@ async function start(): Promise<void> {
       origin: config.corsOrigins.includes('*') ? true : config.corsOrigins,
       credentials: true,
     });
+
+    conversationDatabase.initialize();
 
     app.get('/health', async () => ({
       status: 'ok',
@@ -65,10 +68,19 @@ async function start(): Promise<void> {
   }
 }
 
-process.on('SIGINT', async () => {
-  app.log.info('[ai-chat-service] shutdown');
+async function shutdown(signal: 'SIGINT' | 'SIGTERM'): Promise<void> {
+  app.log.info({ signal }, '[ai-chat-service] shutdown');
+  await conversationDatabase.close();
   await app.close();
   process.exit(0);
+}
+
+process.on('SIGINT', () => {
+  void shutdown('SIGINT');
+});
+
+process.on('SIGTERM', () => {
+  void shutdown('SIGTERM');
 });
 
 start();
