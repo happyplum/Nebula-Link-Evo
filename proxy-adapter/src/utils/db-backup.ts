@@ -4,13 +4,14 @@ import { createWorkerLogger } from '../services/logger.js';
 import type { Logger } from 'pino';
 
 const logger = createWorkerLogger('db-backup');
+const DEFAULT_DEBUG_DB_PATH = path.join(process.cwd(), 'data', 'proxy-adapter', 'debug.sqlite');
 
 export class DatabaseBackup {
   private dbPath: string;
   private backupDir: string;
   private logger: Logger;
 
-  constructor(dbPath: string = './conversations.sqlite', instanceLogger?: Logger) {
+  constructor(dbPath: string = DEFAULT_DEBUG_DB_PATH, instanceLogger?: Logger) {
     this.dbPath = dbPath;
     this.backupDir = path.join(path.dirname(dbPath), 'backups');
     this.logger = instanceLogger ?? logger;
@@ -18,7 +19,7 @@ export class DatabaseBackup {
 
   async createBackup(suffix: string = 'pre-refactor'): Promise<string> {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const backupName = `conversations.${suffix}.${timestamp}.sqlite`;
+    const backupName = `debug.${suffix}.${timestamp}.sqlite`;
     const backupPath = path.join(this.backupDir, backupName);
 
     await fs.mkdir(this.backupDir, { recursive: true });
@@ -57,7 +58,7 @@ export class DatabaseBackup {
   }
 }
 
-export async function initializeWithBackup(dbPath: string = './conversations.sqlite'): Promise<void> {
+export async function initializeWithBackup(dbPath: string = DEFAULT_DEBUG_DB_PATH): Promise<void> {
   try {
     await fs.access(dbPath);
     // 数据库存在才创建备份
