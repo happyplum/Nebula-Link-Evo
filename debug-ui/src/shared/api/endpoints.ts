@@ -8,8 +8,8 @@ export const API_CONFIG = '/api/config' as const;
 export const API_HEALTH = '/api/health' as const;
 
 // Debug API — AI & Keys
-export const DEBUG_TEST_AI = '/debug/api/test-ai' as const;
-export const DEBUG_VERIFY_KEYS = '/debug/api/verify-keys' as const;
+export const DEBUG_TEST_AI = '/api/test-ai' as const;
+export const DEBUG_VERIFY_KEYS = '/api/verify-keys' as const;
 
 // Debug API — Playwright
 export const DEBUG_PLAYWRIGHT_STATUS = '/debug/api/playwright/status' as const;
