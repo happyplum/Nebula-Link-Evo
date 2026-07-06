@@ -3,6 +3,7 @@ import * as path from 'path';
 import { Config, ResolvedConfig } from './schema.js';
 import { resolveConfig, ResolveResult } from './resolver.js';
 import { createWorkerLogger } from '../services/logger.js';
+import { buildGatewayMcpUrl, GATEWAY_MCP_SERVER_NAME, loadGatewayUrlFromEnv } from './service-config.js';
 
 const logger = createWorkerLogger('config-loader');
 
@@ -36,7 +37,7 @@ export function loadConfig(configPath?: string): LoadResult {
         const parsedConfig = JSON.parse(content) as Config;
         const resolveResult = resolveConfig(parsedConfig);
         if (resolveResult.result.success) {
-          resolvedConfig = resolveResult.config;
+          resolvedConfig = withAutoRegisteredGateway(resolveResult.config);
           lastResolveResult = resolveResult.result;
           foundPath = absolutePath;
           break;
@@ -65,6 +66,36 @@ export function loadConfig(configPath?: string): LoadResult {
     config: resolvedConfig,
     result: lastResolveResult ?? { success: true, errors: [], warnings: [] },
     configPath: foundPath!,
+  };
+}
+
+function withAutoRegisteredGateway(config: ResolvedConfig): ResolvedConfig {
+  if (!config.mcp.enabled) {
+    return config;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(config.mcp.servers, GATEWAY_MCP_SERVER_NAME)) {
+    return config;
+  }
+
+  const url = buildGatewayMcpUrl(loadGatewayUrlFromEnv());
+  logger.info({ serverName: GATEWAY_MCP_SERVER_NAME, url }, 'Auto-registering proxy gateway MCP server');
+
+  return {
+    ...config,
+    mcp: {
+      ...config.mcp,
+      servers: {
+        ...config.mcp.servers,
+        [GATEWAY_MCP_SERVER_NAME]: {
+          enabled: true,
+          command: '',
+          args: [],
+          env: {},
+          url,
+        },
+      },
+    },
   };
 }
 
