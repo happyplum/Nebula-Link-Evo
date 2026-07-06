@@ -22,8 +22,7 @@ import type {
 import { browserClient } from '../browser-client.js';
 import { interactionLogger } from './interaction-logger.js';
 import { failureSampleCollector } from './failure-sample-collector.js';
-import type { CreateInteractionParams } from '../conversation/types.js';
-import type { MCPSDKClient } from '../clients/mcp/sdk-client.js';
+import type { CreateInteractionParams } from '../debug-db.js';
 import { createWorkerLogger } from './logger.js';
 
 const logger = createWorkerLogger('ActionExecutor');
@@ -223,21 +222,7 @@ export function resolveMCPCallAction(action: MCPAction): { serverName: string; t
   throw new Error('MCP call requires server and tool');
 }
 
-export interface ActionExecutorDeps {
-  mcpClient: MCPSDKClient | null;
-}
-
 export class ActionExecutor {
-  private mcpClient: MCPSDKClient | null;
-
-  constructor(deps: ActionExecutorDeps) {
-    this.mcpClient = deps.mcpClient;
-  }
-
-  setMCPClient(client: MCPSDKClient | null): void {
-    this.mcpClient = client;
-  }
-
   async execute(action: Action): Promise<ActionResult> {
     const startedAt = Date.now();
     let result: ActionResult = {
@@ -438,17 +423,8 @@ export class ActionExecutor {
   }
 
   private async executeMCPCall(action: Action): Promise<ActionResult> {
-    const resolved = resolveMCPCallAction(action as unknown as MCPAction);
-
-    if (this.mcpClient) {
-      const toolResult = await this.mcpClient.callTool(resolved.serverName, resolved.toolName, resolved.args);
-      return {
-        action,
-        success: true,
-        message: `MCP call succeeded: ${JSON.stringify(toolResult)}`,
-      };
-    }
-    throw new Error('MCP call requires server and tool');
+    resolveMCPCallAction(action as unknown as MCPAction);
+    throw new Error('MCP calls are handled by ai-chat-service via proxy-adapter MCP-over-HTTP');
   }
 
   private buildInteractionLog(

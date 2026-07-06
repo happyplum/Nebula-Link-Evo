@@ -12,7 +12,7 @@ export default defineConfig({
     environment: 'node',
     include: ['src/**/*.test.ts'],
     exclude: ['src/__tests__/e2e/debug-ui/specs/**/*.e2e.test.ts'],
-    setupFiles: ['./src/__tests__/setup.ts'],
+    setupFiles: [],
     clearMocks: true,
     coverage: {
       provider: 'v8',
