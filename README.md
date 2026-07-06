@@ -24,7 +24,7 @@ Browser ←→ Debug UI (:5173 dev)
 
 ### 手眼协调
 
-**感知层**：通过带标注的截图和简化 DOM v2.0（含 data-nebula-id 属性）实现页面感知。Proxy Adapter 内置 `vision-agent` ToolProvider，通过 `browserClient` 复用浏览器截图/快照能力，并以 `vision-agent.*` 工具对 Chat 与 MCP Server 暴露视觉分析。系统支持 12 种操作类型：click、type、scroll、navigate、wait、screenshot、focus、blur、hover、value、dispatch、mcp_call。
+**感知层**：通过带标注的截图和简化 DOM v2.0（含 data-nebula-id 属性）实现页面感知。Proxy Adapter 内置 `vision-agent` ToolProvider，通过 `browserClient` 复用浏览器截图/快照能力，并以 `vision-agent.*` 工具对 Chat 与 MCP Server 暴露视觉分析。系统支持 12 种操作类型（对应 `shared/types/action.ts` 的 `Action` 联合）：click、type、focus、blur、hover、value、dispatch、scroll、navigate、wait、mcp_call、finish。
 
 **目标定位**：采用 7 级目标链，依次尝试 nebula-id → role → testid → aria → text → css → xpath 选择器，确保精准定位页面元素。
 
@@ -138,13 +138,14 @@ docs/               # Documentation
 - [AI Operation Flow](docs/reference/ai-operation-flow.md) — AI 执行模型
 - [API Reference (Chat & Debug)](docs/reference/debug-page-integration-api-reference.md) — Proxy Adapter API
 - [AI Chat Service API](docs/ai-chat-service-api.md) — AI 对话服务 API
+- [Product Spec Index](docs/PRODUCT-SPEC-INDEX.md) — 跨包产品规格索引（端口、API、SSE、MCP、shared 类型、依赖方向、强制维护协议）
 
 ## Product Spec
 
 ### AI E2E 需求基线
 
 - `ai-e2e` 当前定位是 **PRD 驱动的 E2E 自动化测试编排器**，不是新的浏览器底座；它负责把 **需求分析 → 页面探索 → URL 绑定 → 脚本生成 → 执行 → 单次失败诊断 → 可选自动修复** 串成闭环。
-- `ai-e2e` 必须继续作为 `proxy-adapter` 的纯消费者：**所有 AI 与浏览器能力都只能经由 `ProxyAdapterClient` 访问**，不得重新引入直连 provider 或 browser engine 的实现。
+- `ai-e2e` 必须继续作为 `proxy-adapter` 与 `ai-chat-service` 的纯消费者：AI 能力经 `AiChatClient` → `ai-chat-service` :3001（`POST /api/ai/generate`），浏览器能力经 `BrowserGatewayClient` → `proxy-adapter` :3000（`/debug/api/*`）；`ProxyAdapterClient` 仅作为组合 facade 保留，不得重新引入直连 provider 或 browser engine 的实现。
 - 当前已实现主链路：L1/L2 模块分析、测试场景生成、URL 绑定建议与人工调整、脚本生成、脚本人工编辑与版本历史、脚本执行、run 级失败诊断、自动修复审批/拒绝、`/ai-e2e/` 包级 UI。
 - 探索阶段已支持 SPA-aware URL 发现：在原有 AI/BFS 基础上，补充使用渲染后 DOM、HashRouter、History API 观察器和可访问 router 配置发现客户端路由；非 SPA 站点保持原有 BFS 行为。
 - 上述 3 个已知缺口现已全部实现：

@@ -71,3 +71,24 @@ pnpm format         # prettier --write debug-ui/src proxy-adapter/src ai-chat-se
 - `ai-e2e/ui/AGENTS.md`
 - `config/AGENTS.md`
 - `tools/AGENTS.md`
+
+## Product Specifications (PRODUCT-SPEC)
+
+每个包维护独立的 `PRODUCT-SPEC.md`，登记该包的**模块清单、页面/路由、功能清单、修改维护协议、已知缺口与技术债**。根索引 [`docs/PRODUCT-SPEC-INDEX.md`](docs/PRODUCT-SPEC-INDEX.md) 汇总跨包契约（端口、HTTP/SSE 路径、MCP 工具、shared 类型、依赖方向）。
+
+### 强制维护约束
+
+- 新增 / 修改 / 删除**模块、页面、路由、功能**时，**必须**同步更新对应包的 `PRODUCT-SPEC.md`，禁止漂移。
+- 任何**跨包契约变更**（端口、API 路径、SSE 事件结构、MCP 工具集、shared 公共类型、Chat 渲染行为、action 类型集合、目标定位链、DOM 快照格式、截图格式）**必须额外**更新 `docs/PRODUCT-SPEC-INDEX.md` 的跨包契约章节，并同步所有受影响包的 `PRODUCT-SPEC.md`。
+- 修改 `@nebula-link-evo/shared` 公共导出 = 跨包变更，必须同步所有消费方 `PRODUCT-SPEC.md` 与根索引。
+- 包内变更仅需更新本包 `PRODUCT-SPEC.md`；跨包变更按上节同步。
+- 每个包 `PRODUCT-SPEC.md` 第 5 节"修改维护协议 [MUST-MAINTAIN]"定义本包的细粒度触发条件与维护检查清单。
+
+### PRODUCT-SPEC 文件清单
+
+- `docs/PRODUCT-SPEC-INDEX.md` — 根索引 + 跨包契约 + 全局修改维护协议
+- `shared/PRODUCT-SPEC.md`
+- `proxy-adapter/PRODUCT-SPEC.md`
+- `ai-chat-service/PRODUCT-SPEC.md`
+- `debug-ui/PRODUCT-SPEC.md`
+- `ai-e2e/PRODUCT-SPEC.md`
