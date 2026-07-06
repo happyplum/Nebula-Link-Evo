@@ -10,7 +10,7 @@
     "skipLibCheck": true,
     "noEmit": true,
     "resolveJsonModule": true,
-    "rootDirs": ["./src", "../shared", "../playwright-server/src"],
+    "rootDirs": ["./src", "../shared"],
     "baseUrl": ".",
     "paths": {
       "@nebula-link-evo/shared": ["../shared/index.ts"],
