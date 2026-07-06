@@ -1,14 +1,12 @@
-import { once } from 'node:events';
 import { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import { browserClient } from '../../../browser-client.js';
+import { screencastManager } from '../../../browser-engine/screencast.js';
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { AppService } from '../../../services/index.js';
 import { DatabaseManager } from '../../../conversation/db.js';
-import { getServiceEndpointsCached } from '../../../config/services.js';
 import debugStreamRoutes from './stream.js';
 import type { ResolvedProvider } from '../../../config/schema.js';
-import { createFrameCounter } from '@nebula-link-evo/shared';
 import { debugEventHub } from '../../../services/debug-event-hub.js';
 
 interface InteractionQuery {
@@ -20,7 +18,6 @@ interface InteractionQuery {
   start_time?: number;
 }
 
-const PLAYWRIGHT_URL = getServiceEndpointsCached().playwright.url;
 const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
   const appService = AppService.getInstance();
 
@@ -372,62 +369,35 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     '/api/playwright/screenshot/stream',
     {
       schema: {
-        description: 'Proxy browser live stream',
+        description: 'Browser live MJPEG stream from in-process screencast engine',
         tags: ['Debug'],
       },
     },
     async (request, reply) => {
-      const abortController = new AbortController();
-      request.raw.on('close', () => abortController.abort());
-
-      const VIDEO_DEBUG = process.env.LOG_LEVEL === 'debug';
-      const counter = VIDEO_DEBUG ? createFrameCounter(1000) : null;
-      const upstreamUrl = `${PLAYWRIGHT_URL}/browser/stream${VIDEO_DEBUG ? '?debug=true' : ''}`;
-      const upstream = await fetch(upstreamUrl, {
-        signal: abortController.signal,
-      });
-
-      if (!upstream.ok || !upstream.body) {
+      // Serve MJPEG directly from the in-process screencast engine (migrated from playwright-server proxy)
+      if (!screencastManager.isActive()) {
         reply.status(502);
         return { success: false, error: 'LiveView stream unavailable' };
       }
 
+      const VIDEO_DEBUG = process.env.LOG_LEVEL === 'debug';
+      screencastManager.setDebugEnabled(VIDEO_DEBUG);
+
       reply.hijack();
       reply.raw.writeHead(200, {
-        'Content-Type':
-          upstream.headers.get('content-type') ?? 'multipart/x-mixed-replace; boundary=frame',
+        'Content-Type': 'multipart/x-mixed-replace; boundary=frame',
         'Cache-Control': 'no-cache',
         Connection: 'keep-alive',
       });
 
-      const reader = upstream.body.getReader();
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) {
-            break;
-          }
-          if (value) {
-            if (counter) {
-              counter.recordFrame();
-              counter.recordBytes(value.length);
-            }
-            if (!reply.raw.write(value)) {
-              if (counter) {
-                counter.recordDrop('relay_backpressure');
-              }
-              await once(reply.raw, 'drain');
-            }
-          }
-        }
-      } catch (error) {
-        if (!(error instanceof Error && error.name === 'AbortError')) {
-          request.log.error({ err: error }, 'Failed to proxy screenshot stream');
-        }
-      } finally {
-        reader.releaseLock();
-        reply.raw.end();
-      }
+      screencastManager.addListener(reply.raw);
+
+      return new Promise<void>((resolve) => {
+        request.raw.on('close', () => {
+          screencastManager.removeListener(reply.raw);
+          resolve();
+        });
+      });
     }
   );
 

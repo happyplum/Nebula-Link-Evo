@@ -1,6 +1,6 @@
 import { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import { HealthResponseSchema } from '../../schemas/health.js';
-import { getServiceEndpointsCached } from '../../config/services.js';
+import { browserClient } from '../../browser-client.js';
 import { AppService } from '../../services/index.js';
 const healthRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
   fastify.get(
@@ -18,13 +18,12 @@ const healthRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       const appService = AppService.getInstance();
       const config = appService.getConfig();
       const mcpStatus = appService.getMCPStatus();
-      const endpoints = getServiceEndpointsCached();
 
-      // Probe playwright-server health instead of returning the URL
+      // Check in-process browser engine health (migrated from playwright-server HTTP probe)
       let playwright: string;
       try {
-        const res = await fetch(`${endpoints.playwright.url}/health`);
-        playwright = res.ok ? 'ok' : 'error';
+        const status = await browserClient.getStatus();
+        playwright = status.isOpen ? 'ok' : 'error';
       } catch {
         playwright = 'error';
       }

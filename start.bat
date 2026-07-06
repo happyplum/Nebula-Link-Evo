@@ -48,12 +48,6 @@ REM ============================================
 REM Step 3: Check ports before building
 REM ============================================
 echo [INFO] Checking ports...
-call :check_port 3001
-if %errorlevel% neq 0 (
-    echo [ERROR] Port 3001 is already in use.
-    echo         Run stop.bat to stop the existing service.
-    exit /b 1
-)
 call :check_port 3000
 if %errorlevel% neq 0 (
     echo [ERROR] Port 3000 is already in use.
@@ -66,19 +60,12 @@ if %errorlevel% neq 0 (
     echo         Run stop.bat to stop the existing service.
     exit /b 1
 )
-echo [OK] Ports 3001, 3000 and 3002 are available.
+echo [OK] Ports 3000 and 3002 are available.
 echo.
 
 REM ============================================
 REM Step 4: Build packages sequentially
 REM ============================================
-echo [INFO] Building playwright-server...
-cmd /c "cd /d ""%~dp0playwright-server"" && pnpm build"
-if %errorlevel% neq 0 (
-    echo [ERROR] playwright-server build failed.
-    exit /b 1
-)
-
 echo [INFO] Building proxy-adapter...
 cmd /c "cd /d ""%~dp0proxy-adapter"" && pnpm build"
 if %errorlevel% neq 0 (
@@ -104,10 +91,6 @@ if not exist "shared\dist\index.js" (
     echo [ERROR] shared\dist\index.js not found.
     exit /b 1
 )
-if not exist "playwright-server\dist\server.js" (
-    echo [ERROR] playwright-server\dist\server.js not found.
-    exit /b 1
-)
 if not exist "proxy-adapter\dist\server.js" (
     echo [ERROR] proxy-adapter\dist\server.js not found.
     exit /b 1
@@ -124,12 +107,6 @@ REM Step 6: Start services
 REM ============================================
 echo [INFO] Starting services...
 echo.
-
-cmd /c playwright-server\start.bat --skip-build
-if %errorlevel% neq 0 (
-    echo [ERROR] Playwright Server failed to start.
-    exit /b 1
-)
 
 cmd /c proxy-adapter\start.bat --skip-build
 if %errorlevel% neq 0 (
@@ -149,7 +126,6 @@ echo   All services started successfully!
 echo ==========================================
 echo.
 echo   Services:
-echo     - Playwright Server: http://localhost:3001
 echo     - Proxy Adapter:    http://localhost:3000
 echo     - AI E2E:           http://localhost:3002/ai-e2e/
 echo     - LiveKit Server:   http://localhost:7880

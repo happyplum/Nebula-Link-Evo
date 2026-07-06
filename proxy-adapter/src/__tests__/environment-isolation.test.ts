@@ -47,12 +47,6 @@ vi.mock('dotenv', () => ({
   config: vi.fn(),
 }));
 
-vi.mock('../config/services.js', () => ({
-  getServiceEndpointsCached: vi.fn(() => ({
-    playwright: { url: 'http://localhost:9222' },
-  })),
-}));
-
 describe('Production Environment Isolation', () => {
   let originalNodeEnv: string | undefined;
 

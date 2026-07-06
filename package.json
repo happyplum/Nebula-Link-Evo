@@ -2,12 +2,12 @@
   "name": "nebula-link-evo",
   "private": true,
   "scripts": {
-    "dev": "pnpm --filter shared build && pnpm -r --parallel --filter shared --filter debug-ui --filter proxy-adapter --filter playwright-server dev",
-    "build": "pnpm --filter shared build && pnpm --filter debug-ui build && pnpm --filter playwright-server build && pnpm --filter proxy-adapter build && pnpm --filter ai-e2e build",
-    "lint": "eslint debug-ui/src proxy-adapter/src playwright-server/src",
-    "lint:fix": "eslint debug-ui/src proxy-adapter/src playwright-server/src --fix",
-    "format": "prettier --write \"debug-ui/src/**/*.{ts,tsx}\" \"proxy-adapter/src/**/*.ts\" \"playwright-server/src/**/*.ts\"",
-    "format:check": "prettier --check \"debug-ui/src/**/*.{ts,tsx}\" \"proxy-adapter/src/**/*.ts\" \"playwright-server/src/**/*.ts\"",
+    "dev": "pnpm --filter shared build && pnpm -r --parallel --filter shared --filter debug-ui --filter proxy-adapter dev",
+    "build": "pnpm --filter shared build && pnpm --filter debug-ui build && pnpm --filter proxy-adapter build && pnpm --filter ai-e2e build",
+    "lint": "eslint debug-ui/src proxy-adapter/src",
+    "lint:fix": "eslint debug-ui/src proxy-adapter/src --fix",
+    "format": "prettier --write \"debug-ui/src/**/*.{ts,tsx}\" \"proxy-adapter/src/**/*.ts\"",
+    "format:check": "prettier --check \"debug-ui/src/**/*.{ts,tsx}\" \"proxy-adapter/src/**/*.ts\"",
     "test": "pnpm -r test",
     "test:coverage": "pnpm -r test:coverage"
   },

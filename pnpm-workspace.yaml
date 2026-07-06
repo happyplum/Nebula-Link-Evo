@@ -2,7 +2,6 @@ packages:
   - debug-ui
   - shared
   - proxy-adapter
-  - playwright-server
   - ai-e2e
   - ai-e2e/ui
 

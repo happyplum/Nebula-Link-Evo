@@ -21,9 +21,6 @@ catalogs:
     '@fastify/type-provider-typebox':
       specifier: ^4.1.0
       version: 4.1.0
-    '@fastify/websocket':
-      specifier: ^11.1.0
-      version: 11.2.0
     '@livekit/rtc-node':
       specifier: ^0.13.0
       version: 0.13.24
@@ -33,9 +30,6 @@ catalogs:
     '@types/node':
       specifier: ^22.0.0
       version: 22.19.21
-    '@types/ws':
-      specifier: ^8.18.1
-      version: 8.18.1
     '@vitest/coverage-v8':
       specifier: ^4.0.18
       version: 4.0.18
@@ -81,9 +75,6 @@ catalogs:
     vitest:
       specifier: ^4.0.18
       version: 4.0.18
-    ws:
-      specifier: ^8.19.0
-      version: 8.19.0
     zod:
       specifier: ^4.3.6
       version: 4.3.6
@@ -344,85 +335,6 @@ importers:
       vite:
         specifier: 'catalog:'
         version: 5.4.21(@types/node@22.19.21)(lightningcss@1.32.0)(terser@5.46.0)
-      vitest:
-        specifier: 'catalog:'
-        version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@22.19.21)(jiti@2.7.0)(jsdom@28.1.0)(lightningcss@1.32.0)(terser@5.46.0)(tsx@4.22.4)(yaml@2.8.2)
-
-  playwright-server:
-    dependencies:
-      '@fastify/autoload':
-        specifier: 'catalog:'
-        version: 5.10.0
-      '@fastify/cors':
-        specifier: 'catalog:'
-        version: 11.2.0
-      '@fastify/swagger':
-        specifier: 'catalog:'
-        version: 9.7.0
-      '@fastify/swagger-ui':
-        specifier: 'catalog:'
-        version: 5.2.5
-      '@fastify/type-provider-typebox':
-        specifier: 'catalog:'
-        version: 4.1.0(@sinclair/typebox@0.32.35)
-      '@fastify/websocket':
-        specifier: 'catalog:'
-        version: 11.2.0
-      '@livekit/rtc-node':
-        specifier: 'catalog:'
-        version: 0.13.24
-      '@nebula-link-evo/shared':
-        specifier: workspace:*
-        version: link:../shared
-      '@sinclair/typebox':
-        specifier: 'catalog:'
-        version: 0.32.35
-      async-mutex:
-        specifier: ^0.5.0
-        version: 0.5.0
-      axios:
-        specifier: 'catalog:'
-        version: 1.13.5
-      dotenv:
-        specifier: 'catalog:'
-        version: 16.6.1
-      fastify:
-        specifier: 'catalog:'
-        version: 5.7.4
-      fastify-plugin:
-        specifier: 'catalog:'
-        version: 4.5.1
-      livekit-server-sdk:
-        specifier: 'catalog:'
-        version: 2.15.0
-      pino:
-        specifier: ^10.3.1
-        version: 10.3.1
-      playwright:
-        specifier: ^1.58.2
-        version: 1.58.2
-      sharp:
-        specifier: 'catalog:'
-        version: 0.34.5
-      ws:
-        specifier: 'catalog:'
-        version: 8.19.0
-    devDependencies:
-      '@types/node':
-        specifier: 'catalog:'
-        version: 22.19.21
-      '@types/ws':
-        specifier: 'catalog:'
-        version: 8.18.1
-      '@vitest/coverage-v8':
-        specifier: 'catalog:'
-        version: 4.0.18(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@22.19.21)(jiti@2.7.0)(jsdom@28.1.0)(lightningcss@1.32.0)(terser@5.46.0)(tsx@4.22.4)(yaml@2.8.2))
-      tsx:
-        specifier: 'catalog:'
-        version: 4.22.4
-      typescript:
-        specifier: 'catalog:'
-        version: 5.9.3
       vitest:
         specifier: 'catalog:'
         version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@22.19.21)(jiti@2.7.0)(jsdom@28.1.0)(lightningcss@1.32.0)(terser@5.46.0)(tsx@4.22.4)(yaml@2.8.2)
@@ -1269,9 +1181,6 @@ packages:
     resolution: {integrity: sha512-mXNBaBEoS6Yf4/O2ujNhu9yEZwvBC7niqRESsiftE9NP1hV6ZdV3ZsFbPf1S520BK3rTZ0F28zr+sMdIXNJlfw==}
     peerDependencies:
       '@sinclair/typebox': '>=0.26 <=0.33'
-
-  '@fastify/websocket@11.2.0':
-    resolution: {integrity: sha512-3HrDPbAG1CzUCqnslgJxppvzaAZffieOVbLp1DAy1huCSynUWPifSvfdEDUR8HlJLp3sp1A36uOM2tJogADS8w==}
 
   '@floating-ui/core@1.7.5':
     resolution: {integrity: sha512-1Ih4WTWyw0+lKyFMcBHGbb5U5FtuHJuujoyyr5zTaWS5EYMeT6Jb2AuDeftsCsEuchO+mM2ij5+q9crhydzLhQ==}
@@ -2321,9 +2230,6 @@ packages:
   '@types/unist@3.0.3':
     resolution: {integrity: sha512-ko/gIFJRv177XgZsZcBwnqJN5x/Gien8qNOn0D5bQU/zAzVf9Zt3BlcUiLqhV9y4ARk0GbT3tnUiPNgnTXzc/Q==}
 
-  '@types/ws@8.18.1':
-    resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
-
   '@typescript-eslint/eslint-plugin@8.56.1':
     resolution: {integrity: sha512-Jz9ZztpB37dNC+HU2HI28Bs9QXpzCz+y/twHOwhyrIRdbuVDxSytJNDl6z/aAKlaRIwC7y8wJdkBv7FxYGgi0A==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
@@ -2792,9 +2698,6 @@ packages:
   dunder-proto@1.0.1:
     resolution: {integrity: sha512-KIN/nDJBQRcXw0MLVhZE9iQHmG68qAVIBg9CqmUYjmQIhgij9U5MFvrqkUL5FbtyyzZuOeOt0zdeRe4UY7ct+A==}
     engines: {node: '>= 0.4'}
-
-  duplexify@4.1.3:
-    resolution: {integrity: sha512-M3BmBhwJRZsSx38lZyhE53Csddgzl5R7xGJNk7CVddZD6CcmwMCH8J+7AprIrQKH7TonKxaCjcv27Qmf+sQ+oA==}
 
   ee-first@1.1.1:
     resolution: {integrity: sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow==}
@@ -4183,9 +4086,6 @@ packages:
   std-env@3.10.0:
     resolution: {integrity: sha512-5GS12FdOZNliM5mAOxFRg7Ir0pWz8MdpYm6AY6VPkGpbA7ZzmbzNcBJQ0GPvvyWgcY7QAhCgf9Uy89I03faLkg==}
 
-  stream-shift@1.0.3:
-    resolution: {integrity: sha512-76ORR0DO1o1hlKwTbi/DM3EXWGf3ZJYO8cXX5RJwnul2DEg2oyoZyjLNoQM8WsvZiFKCRfC1O0J7iCvie3RZmQ==}
-
   string_decoder@1.3.0:
     resolution: {integrity: sha512-hkRX8U1WjJFd8LsDJ2yQ/wWWxaopEsABU1XfkM8A+j0+85JAGppt16cr1Whg6KIbb4okU6Mql6BOj+uup/wKeA==}
 
@@ -4567,18 +4467,6 @@ packages:
 
   wrappy@1.0.2:
     resolution: {integrity: sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ==}
-
-  ws@8.19.0:
-    resolution: {integrity: sha512-blAT2mjOEIi0ZzruJfIhb3nps74PRWTCz1IjglWEEpQl5XS/UNama6u2/rjFkDDouqr4L67ry+1aGIALViWjDg==}
-    engines: {node: '>=10.0.0'}
-    peerDependencies:
-      bufferutil: ^4.0.1
-      utf-8-validate: '>=5.0.2'
-    peerDependenciesMeta:
-      bufferutil:
-        optional: true
-      utf-8-validate:
-        optional: true
 
   xml-name-validator@5.0.0:
     resolution: {integrity: sha512-EvGK8EJ3DhaHfbRlETOWAS5pO9MZITeauHKJyb8wyajUfQUenkIg2MvLDTZ4T/TgIcm3HU0TFBgWWboAZ30UHg==}
@@ -5191,15 +5079,6 @@ snapshots:
   '@fastify/type-provider-typebox@4.1.0(@sinclair/typebox@0.32.35)':
     dependencies:
       '@sinclair/typebox': 0.32.35
-
-  '@fastify/websocket@11.2.0':
-    dependencies:
-      duplexify: 4.1.3
-      fastify-plugin: 5.1.0
-      ws: 8.19.0
-    transitivePeerDependencies:
-      - bufferutil
-      - utf-8-validate
 
   '@floating-ui/core@1.7.5':
     dependencies:
@@ -6103,10 +5982,6 @@ snapshots:
 
   '@types/unist@3.0.3': {}
 
-  '@types/ws@8.18.1':
-    dependencies:
-      '@types/node': 22.19.21
-
   '@typescript-eslint/eslint-plugin@8.56.1(@typescript-eslint/parser@8.56.1(eslint@9.39.3(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.3(jiti@2.7.0))(typescript@5.9.3)':
     dependencies:
       '@eslint-community/regexpp': 4.12.2
@@ -6598,13 +6473,6 @@ snapshots:
       call-bind-apply-helpers: 1.0.2
       es-errors: 1.3.0
       gopd: 1.2.0
-
-  duplexify@4.1.3:
-    dependencies:
-      end-of-stream: 1.4.5
-      inherits: 2.0.4
-      readable-stream: 3.6.2
-      stream-shift: 1.0.3
 
   ee-first@1.1.1: {}
 
@@ -8383,8 +8251,6 @@ snapshots:
 
   std-env@3.10.0: {}
 
-  stream-shift@1.0.3: {}
-
   string_decoder@1.3.0:
     dependencies:
       safe-buffer: 5.2.1
@@ -8719,8 +8585,6 @@ snapshots:
   word-wrap@1.2.5: {}
 
   wrappy@1.0.2: {}
-
-  ws@8.19.0: {}
 
   xml-name-validator@5.0.0: {}
 
