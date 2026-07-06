@@ -5,14 +5,6 @@ import {
   ModelConfig,
   ModelSelector,
 } from './schema.js';
-import { normalizeNpmPackage } from '../services/provider/errors.js';
-import {
-  DEFAULT_LOOP_GUARD_CONFIG,
-} from '../services/loop-guard/types.js';
-import type {
-  RawLoopGuardConfig,
-  LoopGuardConfig,
-} from '../services/loop-guard/types.js';
 
 export interface ResolverOptions {
   env?: Record<string, string>;
@@ -90,9 +82,6 @@ export function resolveConfig(
     maxTokens: resolveSetting(config.settings.maxTokens, env, defaults, 1000),
     maxSteps: resolveSetting(config.settings.maxSteps, env, defaults, 1),
     contextWindowTokens: resolveSetting(config.settings.contextWindowTokens ?? 131072, env, defaults, 131072),
-    loopGuard: config.settings.loopGuard
-      ? resolveLoopGuard(config.settings.loopGuard)
-      : undefined,
   };
 
   const resolvedConfig: ResolvedConfig = {
@@ -225,27 +214,18 @@ function parseProviderModelString(
   return { provider, model };
 }
 
-function safeParseInt(value: unknown, fallback: number): number {
-  if (typeof value === 'number') return Number.isFinite(value) ? value : fallback;
-  if (typeof value === 'string') { const n = parseInt(value, 10); return Number.isFinite(n) ? n : fallback; }
-  return fallback;
-}
+const DEFAULT_NPM_PACKAGE = '@ai-sdk/openai-compatible';
+const PACKAGE_NAME_RE = /^@ai-sdk\/[a-z0-9-]+$/;
 
-function resolveLoopGuard(raw: RawLoopGuardConfig): LoopGuardConfig {
-  return {
-    identicalAction: {
-      warnAt: raw.identicalAction?.warnAt ?? DEFAULT_LOOP_GUARD_CONFIG.identicalAction.warnAt,
-      blockAt: raw.identicalAction?.blockAt ?? DEFAULT_LOOP_GUARD_CONFIG.identicalAction.blockAt,
-    },
-    noProgress: {
-      warnAt: raw.noProgress?.warnAt ?? DEFAULT_LOOP_GUARD_CONFIG.noProgress.warnAt,
-      blockAt: raw.noProgress?.blockAt ?? DEFAULT_LOOP_GUARD_CONFIG.noProgress.blockAt,
-    },
-    pingPong: {
-      warnAt: raw.pingPong?.warnAt ?? DEFAULT_LOOP_GUARD_CONFIG.pingPong.warnAt,
-      blockAt: raw.pingPong?.blockAt ?? DEFAULT_LOOP_GUARD_CONFIG.pingPong.blockAt,
-    },
-    hardCap: safeParseInt(raw.hardCap, DEFAULT_LOOP_GUARD_CONFIG.hardCap),
-    windowSize: safeParseInt(raw.windowSize, DEFAULT_LOOP_GUARD_CONFIG.windowSize),
-  };
+function normalizeNpmPackage(raw?: string | null): string {
+  const trimmed = raw?.trim();
+  if (!trimmed) {
+    return DEFAULT_NPM_PACKAGE;
+  }
+
+  const packageName = trimmed.startsWith('@') ? trimmed : `@ai-sdk/${trimmed}`;
+  if (!PACKAGE_NAME_RE.test(packageName)) {
+    throw new Error(`Invalid provider npmPackage: ${trimmed}`);
+  }
+  return packageName;
 }

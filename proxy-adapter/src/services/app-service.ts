@@ -1,16 +1,12 @@
 /**
- * AppService - Facade for configuration, MCP, and provider registry
+ * AppService - Facade for configuration, browser actions, and gateway tools
  *
- * Provides config loading, MCP client management, provider registry,
- * and connectivity testing. Task execution orchestration removed.
+ * Provides config loading and the browser MCP gateway service surface.
  */
 
 import { loadConfig, validateConfig } from '../config/index.js';
-import { MCPSDKClient } from '../clients/mcp/sdk-client.js';
 import type { ResolvedConfig } from '../config/schema.js';
 import { ActionExecutor } from './action-executor.js';
-import { ProviderRegistry } from './provider/registry.js';
-import type { ProviderConfig } from './provider/types.js';
 import type { Logger } from 'pino';
 import { createWorkerLogger } from './logger.js';
 import { browserClient } from '../browser-client.js';
@@ -20,15 +16,13 @@ import type { ToolProviderStatus } from '../tools/types.js';
 export class AppService {
   private config: ResolvedConfig | null = null;
   private configPath: string = '';
-  private registry: ProviderRegistry | null = null;
-  private mcpClient: MCPSDKClient | null = null;
   private toolRegistry: ToolRegistry | null = null;
   private actionExecutor: ActionExecutor;
   private logger: Logger;
 
   constructor(logger?: Logger) {
     this.logger = logger ?? createWorkerLogger('AppService');
-    this.actionExecutor = new ActionExecutor({ mcpClient: null });
+    this.actionExecutor = new ActionExecutor();
   }
 
   async initialize(): Promise<void> {
@@ -46,26 +40,6 @@ export class AppService {
       if (validation.errors.length > 0) {
         throw new Error('Config validation failed: ' + validation.errors.join(', '));
       }
-    }
-
-    const configProviders: Record<string, ProviderConfig> = {};
-    for (const [key, provider] of Object.entries(this.config.providers)) {
-      if (provider.enabled) {
-        configProviders[key] = {
-          apiKey: provider.apiKey,
-          baseUrl: provider.baseUrl || undefined,
-          npmPackage: provider.npmPackage,
-        };
-      }
-    }
-    this.registry = new ProviderRegistry(configProviders);
-
-    this.mcpClient = new MCPSDKClient(this.config);
-    try {
-      await this.mcpClient.initialize();
-      this.actionExecutor.setMCPClient(this.mcpClient);
-    } catch (error) {
-      this.logger.warn({ err: error }, 'MCP initialization failed, continuing without MCP');
     }
 
     // Verify browser tools availability (local module, not MCP-dependent)
@@ -90,36 +64,17 @@ export class AppService {
     return this.configPath;
   }
 
-  getRegistry(): ProviderRegistry | null {
-    return this.registry;
-  }
-
   getMCPStatus() {
-    const externalServers = (this.mcpClient?.getServerList() || []).map((s) => ({
-      ...s,
-      source: 'external' as const,
-    }));
-
     const builtInServers = this.getBuiltInProviderStatus();
 
     return {
       enabled: true,
-      servers: [...builtInServers, ...externalServers],
+      servers: builtInServers,
     };
   }
 
   getMCPTools() {
-    const externalTools = (this.mcpClient?.getAvailableTools() || []).map((t) => ({
-      name: t.name,
-      description: t.description || '',
-      inputSchema: t.inputSchema as Record<string, unknown> | undefined,
-      annotations: t.annotations,
-      source: 'external' as const,
-    }));
-
-    const builtInTools = this.getBuiltInProviderTools();
-
-    return [...builtInTools, ...externalTools];
+    return this.getBuiltInProviderTools();
   }
 
   setToolRegistry(registry: ToolRegistry): void {
@@ -128,10 +83,6 @@ export class AppService {
 
   getToolRegistry(): ToolRegistry | null {
     return this.toolRegistry;
-  }
-
-  getMCPSDKClient() {
-    return this.mcpClient;
   }
 
   private getBuiltInProviderStatus(): Array<{
@@ -192,9 +143,7 @@ export class AppService {
   }
 
   async shutdown(): Promise<void> {
-    if (this.mcpClient) {
-      await this.mcpClient.shutdown();
-    }
+    return Promise.resolve();
   }
 
   /**
@@ -220,173 +169,6 @@ export class AppService {
     AppService.instance = instance;
   }
 
-  async testAIConnectivity(): Promise<{
-    decision: {
-      status: string;
-      provider?: string;
-      model?: string;
-      responseTime: number;
-      error?: string | null;
-      intro?: string;
-    };
-    visionAgent: {
-      status: string;
-      tools: string[];
-      responseTime: number;
-      error?: string | null;
-    };
-    totalResponseTime: number;
-  }> {
-    const startTime = Date.now();
-    this.logger.info('Starting AI connectivity test');
-
-    const defaults = this.config?.defaults;
-    if (!defaults || !this.registry) {
-      return {
-        decision: { status: 'not_configured', responseTime: 0, error: 'No config or registry' },
-        visionAgent: { status: 'not_configured', tools: [], responseTime: 0, error: 'No config or registry' },
-        totalResponseTime: Date.now() - startTime,
-      };
-    }
-
-    let decisionResult: {
-      status: string;
-      provider?: string;
-      model?: string;
-      responseTime: number;
-      error?: string | null;
-      intro?: string;
-    };
-    const decisionStart = Date.now();
-    const decisionProvider = defaults.decision.provider;
-    const decisionModel = defaults.decision.model;
-    try {
-      if (!this.registry.isAvailable(decisionProvider)) {
-        this.logger.info('Decision: not configured');
-        decisionResult = {
-          status: 'not_configured',
-          responseTime: Date.now() - decisionStart,
-          error: 'No decision provider available',
-        };
-      } else {
-        this.logger.info({ provider: decisionProvider, model: decisionModel }, 'Testing Decision');
-        const intro = await this.getModelIntro(decisionProvider, decisionModel);
-        decisionResult = {
-          status: 'connected',
-          provider: decisionProvider,
-          model: decisionModel,
-          responseTime: Date.now() - decisionStart,
-          error: null,
-          intro,
-        };
-        this.logger.info({ responseTime: decisionResult.responseTime }, 'Decision: OK');
-        this.logger.info({ introLength: intro?.length ?? 0 }, 'AI Response');
-        this.logger.debug({ intro }, 'AI Response (full)');
-      }
-    } catch (err) {
-      const errMsg = (err as Error).message;
-      const truncatedError = errMsg.length > 200 ? errMsg.substring(0, 200) + '...' : errMsg;
-        this.logger.warn({ error: truncatedError }, 'Decision: FAILED');
-      decisionResult = {
-        status: 'disconnected',
-        responseTime: Date.now() - decisionStart,
-        error: truncatedError,
-      };
-    }
-
-    const visionAgentStart = Date.now();
-    let visionAgentResult: {
-      status: string;
-      tools: string[];
-      responseTime: number;
-      error?: string | null;
-    };
-
-    try {
-      const visionTools =
-        this.toolRegistry
-          ?.getAvailableTools({ consumer: 'mcp-server' })
-          .filter((t) => t.name.startsWith('vision-agent.')) ?? [];
-
-      visionAgentResult = {
-        status: visionTools.length > 0 ? 'connected' : 'degraded',
-        tools: visionTools.map((t) => t.name),
-        responseTime: Date.now() - visionAgentStart,
-        error:
-          visionTools.length > 0
-            ? null
-            : 'Vision agent has no available tools (config may be missing or provider disabled)',
-      };
-    } catch (err) {
-      const errMsg = (err as Error).message;
-      visionAgentResult = {
-        status: 'error',
-        tools: [],
-        responseTime: Date.now() - visionAgentStart,
-        error: errMsg.length > 200 ? errMsg.substring(0, 200) + '...' : errMsg,
-      };
-    }
-
-    this.logger.info({ elapsedMs: Date.now() - startTime }, 'AI connectivity test completed');
-    return {
-      decision: decisionResult,
-      visionAgent: visionAgentResult,
-      totalResponseTime: Date.now() - startTime,
-    };
-  }
-
-  private getProviderDisplayName(provider: string): string {
-    const names: Record<string, string> = {
-      kimi: 'Moonshot AI',
-      glm: '智谱 AI',
-      nvidia: 'NVIDIA',
-      openai: 'OpenAI',
-      anthropic: 'Anthropic',
-      google: 'Google',
-    };
-    return names[provider] || provider;
-  }
-
-  private async getModelIntro(provider: string, model: string): Promise<string> {
-    try {
-      const config = this.config;
-      if (!config?.providers?.[provider]) {
-        return `我是 ${model} 决策模型，由 ${this.getProviderDisplayName(provider)} 提供。`;
-      }
-      const providerConfig = config.providers[provider];
-      const apiKey = providerConfig?.apiKey;
-      const baseUrl = providerConfig?.baseUrl || 'https://api.moonshot.cn/v1';
-      if (!apiKey || apiKey.startsWith('{')) {
-        return `我是 ${model} 决策模型，由 ${this.getProviderDisplayName(provider)} 提供。`;
-      }
-      const axios = (await import('axios')).default;
-      const response = await axios.post(
-        `${baseUrl}/chat/completions`,
-        {
-          model,
-          messages: [
-            {
-              role: 'user',
-              content: '请用一句话简短介绍你自己（不超过50字），说明你的模型名称和能力。',
-            },
-          ],
-          temperature: 0.7,
-          max_tokens: 100,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          timeout: 10000,
-        }
-      );
-      const intro = response.data.choices[0]?.message?.content || `我是 ${model} 决策模型。`;
-      return intro.trim();
-    } catch {
-      return `我是 ${model} 决策模型，由 ${this.getProviderDisplayName(provider)} 提供。`;
-    }
-  }
 }
 
 const appService = new AppService();

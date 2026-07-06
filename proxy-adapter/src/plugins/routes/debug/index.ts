@@ -4,7 +4,7 @@ import { screencastManager } from '../../../browser-engine/screencast.js';
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { AppService } from '../../../services/index.js';
-import { DatabaseManager } from '../../../conversation/db.js';
+import { DebugDatabaseManager } from '../../../debug-db.js';
 import debugStreamRoutes from './stream.js';
 import { debugEventHub } from '../../../services/debug-event-hub.js';
 
@@ -879,11 +879,20 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         args = {},
       } = request.body as { server: string; tool: string; args?: Record<string, unknown> };
       try {
-        const mcpClient = appService.getMCPSDKClient();
-        if (!mcpClient) {
-          return { success: false, error: 'MCP client not initialized' };
+        const toolRegistry = appService.getToolRegistry();
+        if (!toolRegistry) {
+          return { success: false, error: 'MCP gateway tools are not initialized' };
         }
-        const result = await mcpClient.callTool(server, tool, args);
+
+        const toolName = tool.includes('.') ? tool : `${server}.${tool}`;
+        const gatewayTool = toolRegistry
+          .getAvailableTools({ consumer: 'mcp-server' })
+          .find((candidate) => candidate.name === toolName);
+
+        if (!gatewayTool) {
+          return { success: false, error: `MCP gateway tool not found: ${toolName}` };
+        }
+        const result = await gatewayTool.execute(args);
 
         try {
           debugEventHub.publish({
@@ -932,7 +941,7 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         locator_strategy: query.locator_strategy,
         start_time: query.start_time ? Number(query.start_time) : undefined,
       };
-      const db = DatabaseManager.getInstance();
+      const db = DebugDatabaseManager.getInstance();
       const interactions = db.queryInteractions(options);
       return { success: true, data: interactions };
     }
@@ -947,7 +956,7 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       },
     },
     async (_request, _reply) => {
-      const db = DatabaseManager.getInstance();
+      const db = DebugDatabaseManager.getInstance();
       const stats = db.getStats();
       return { success: true, data: stats };
     }

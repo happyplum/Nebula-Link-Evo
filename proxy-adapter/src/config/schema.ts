@@ -101,7 +101,6 @@ export interface RawSettingsConfig {
   /** Maximum context window in tokens for the decision model. Used to truncate
    *  conversation history before it overflows the model's input limit. */
   contextWindowTokens?: number | string;
-  loopGuard?: import('../services/loop-guard/types.js').RawLoopGuardConfig;
 }
 
 export interface SettingsConfig {
@@ -112,7 +111,6 @@ export interface SettingsConfig {
   maxSteps: number;
   /** Maximum context window in tokens for the decision model. */
   contextWindowTokens: number;
-  loopGuard?: import('../services/loop-guard/types.js').LoopGuardConfig;
 }
 
 export interface ResolvedConfig extends Omit<Config, 'defaults' | 'settings' | 'providers'> {
