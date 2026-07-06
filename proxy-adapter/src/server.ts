@@ -6,30 +6,18 @@ import * as fs from 'fs';
 import { appService } from './services/index.js';
 import { browserClient } from './browser-client.js';
 import { shutdownBrowserEngine } from './browser-engine/index.js';
-import { ConversationManager, ChatHandler } from './conversation/index.js';
-import { DatabaseManager } from './conversation/db.js';
-import { createCompressionClient } from './clients/compression.js';
-import { ChatSessionController } from './services/chat-session-controller.js';
-import { SessionEventHub } from './services/session-event-hub.js';
 import { debugEventHub } from './services/debug-event-hub.js';
 import { initializeWithBackup } from './utils/db-backup.js';
 import { normalizeLogLevel } from './services/logger.js';
-import { ConversationJobQueue } from './services/conversation-job-queue.js';
-import { StreamPersistWorker } from './services/stream-persist-worker.js';
 import { interactionLogger } from './services/interaction-logger.js';
 import healthRoutes from './plugins/routes/health.js';
 import configRoutes from './plugins/routes/config.js';
 import livekitTokenRoutes from './plugins/routes/api/livekit-token.js';
-import aiServiceRoutes from './plugins/routes/api/ai-service.js';
 import debugRoutes from './plugins/routes/debug/index.js';
-import apiChatRoutes from './plugins/routes/api/chat/index.js';
-import { runPreflight } from './services/provider/preflight.js';
 import { ToolRegistry } from './tools/registry.js';
 import { BrowserToolsProvider } from './tools/providers/browser-tools-provider.js';
 import { VisionAgentProvider } from './tools/providers/vision-agent-provider.js';
 import { buildVisionAgentConfig } from './tools/providers/build-vision-agent-config.js';
-import type { VisionConfigOverride } from './mcps/vision-agent/config.js';
-import { MCPClientProvider } from './tools/providers/mcp-client-provider.js';
 import mcpServerPlugin from './mcp-server/index.js';
 
 const envLocal = path.join(process.cwd(), '.env');
@@ -77,8 +65,6 @@ function resolveCorsOrigin(): (string | RegExp)[] | boolean {
  */
 const HOST = process.env.HOST || '127.0.0.1';
 
-let conversationManager: ConversationManager;
-let chatHandler: ChatHandler;
 let toolRegistry: ToolRegistry;
 
 async function start() {
@@ -102,43 +88,11 @@ async function start() {
     // This must happen before route registration to ensure config is available
     await appService.initialize();
 
-    // Run provider preflight checks
-    const registry = appService.getRegistry();
-    const preflightConfig = appService.getConfig();
-    if (registry && preflightConfig) {
-      const providerKeys = Object.keys(preflightConfig.providers ?? {}).filter(k => preflightConfig.providers[k].enabled);
-      await runPreflight(registry, providerKeys);
-    }
-
-    // Get config for chat handler
+    // Get config for gateway tool providers.
     const config = appService.getConfig();
     if (!config) {
       throw new Error('Task service configuration is unavailable');
     }
-
-    // Initialize conversation management
-    const dbPath = DEBUG_DB_PATH;
-    conversationManager = new ConversationManager(dbPath);
-    await conversationManager.initialize();
-
-    const compressionClient = createCompressionClient(null);
-    if (compressionClient) {
-      conversationManager.setAiClient(compressionClient);
-    } else {
-      app.log.warn('Runtime compression disabled: no compatible decision client available');
-    }
-
-    // Initialize chat session controller (recover crashed sessions)
-    // In unit tests, ConversationManager/DB may be mocked and not initialized.
-    const sessionController = ChatSessionController.getInstance();
-    if (!isTestMode) {
-      sessionController.initialize();
-    }
-
-    // Initialize chat handler
-    const dbManager = DatabaseManager.getInstance();
-    const sessionEventsDAO = dbManager.getSessionEventsDAO();
-    const sessionEventHub = SessionEventHub.getInstance();
 
     // Initialize ToolRegistry and register providers
     toolRegistry = new ToolRegistry();
@@ -150,55 +104,21 @@ async function start() {
     const visionAgentProvider = new VisionAgentProvider(browserClient, visionConfigOverride);
     toolRegistry.registerProvider(visionAgentProvider);
 
-    const mcpClient = appService.getMCPSDKClient();
-    if (mcpClient) {
-      const mcpClientProvider = new MCPClientProvider(mcpClient);
-      toolRegistry.registerProvider(mcpClientProvider);
-    }
-
     await toolRegistry.initializeAll();
 
     // Make ToolRegistry accessible through AppService for debug endpoints
     appService.setToolRegistry(toolRegistry);
-
-    chatHandler = new ChatHandler(
-      conversationManager,
-      config,
-      mcpClient || undefined,
-      sessionEventsDAO,
-      sessionEventHub,
-      browserClient,
-      toolRegistry,
-    );
-
-    // Decorate Fastify with conversation management
-    await app.decorate('conversationManager', conversationManager);
-    await app.decorate('chatHandler', chatHandler);
-
-    // Initialize and decorate job queue
-    const persistWorker = new StreamPersistWorker();
-    const jobQueue = new ConversationJobQueue(persistWorker, SessionEventHub.getInstance());
-    await app.decorate('jobQueue', jobQueue);
 
     // Register API routes with v1 versioning prefix
     // Versioned routes (canonical)
     await app.register(healthRoutes, { prefix: '/api/v1/health' });
     await app.register(configRoutes, { prefix: '/api/v1/config' });
     await app.register(livekitTokenRoutes, { prefix: '/api/v1' });
-    await app.register(aiServiceRoutes, { prefix: '/api/v1/ai' });
-    await app.register(apiChatRoutes, { prefix: '/api/v1/chat' });
 
     // Legacy unversioned routes (backward compatibility, will be deprecated)
     await app.register(healthRoutes, { prefix: '/api/health' });
     await app.register(configRoutes, { prefix: '/api/config' });
     await app.register(livekitTokenRoutes, { prefix: '/api' });
-    await app.register(aiServiceRoutes, { prefix: '/api/ai' });
-    await app.register(apiChatRoutes, { prefix: '/api/chat' });
-
-    app.log.info({ prefix: '/api/v1/chat' }, 'API v1 chat routes registered');
-    app.log.info({ prefix: '/api/v1/ai' }, 'API v1 AI service routes registered');
-    app.log.info({ prefix: '/api/chat' }, 'Legacy chat routes registered (deprecated)');
-    app.log.info({ prefix: '/api/ai' }, 'Legacy AI routes registered (deprecated)');
 
     // Register Debug routes
     await app.register(debugRoutes, { prefix: '/debug' });
@@ -242,8 +162,7 @@ async function start() {
               endpoints: {
                 'GET /api/v1/health': 'Health check',
                 'GET /api/v1/config': 'Show current configuration',
-                'POST /api/v1/ai/generate': 'Generate plain text with the decision model',
-                'GET /api/v1/chat/*': 'Chat API (SSE)',
+                'POST /mcp': 'MCP StreamableHTTP endpoint exposing browser-control and vision-agent tools',
                 'GET /debug/api/*': 'Debug API endpoints',
               },
               deprecation: {
@@ -258,8 +177,7 @@ async function start() {
     app.log.info('Available endpoints:');
     app.log.info({ endpoint: 'GET  /api/v1/health' });
     app.log.info({ endpoint: 'GET  /api/v1/config' });
-    app.log.info({ endpoint: 'POST /api/v1/ai/generate' });
-    app.log.info({ endpoint: 'GET  /api/v1/chat/*    - Chat API (SSE)' });
+    app.log.info({ endpoint: 'POST /mcp              - MCP StreamableHTTP' });
     app.log.info({ endpoint: 'GET  /debug/api/*       - Debug API' });
     app.log.info({ endpoint: '(deprecated) /api/*     - Use /api/v1/* instead' });
   } catch (err) {
@@ -273,9 +191,6 @@ async function shutdown(signal: 'SIGINT' | 'SIGTERM'): Promise<void> {
   await interactionLogger.destroy();
   if (toolRegistry) {
     await toolRegistry.shutdownAll();
-  }
-  if (conversationManager) {
-    await conversationManager.close();
   }
   await shutdownBrowserEngine();
   await appService.shutdown();
