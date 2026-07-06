@@ -126,7 +126,7 @@ ai-e2e (:3002)
 ## Hard Boundaries
 
 - **不直连 AI provider**：所有 AI 调用必须经 `AiChatClient.generateText()`（或 facade 的 `ProxyAdapterClient.generateText()`），最终落到 ai-chat-service (:3001) 的 `POST /api/ai/generate`
-- **不直连 `playwright-server`**：所有浏览器操作必须经 `BrowserGatewayClient`（或 facade 的 `ProxyAdapterClient`），最终落到 proxy-adapter (:3000) 的 `/debug/api/*`
+- **不直连 `proxy-adapter` 内进程浏览器引擎**：所有浏览器操作必须经 `BrowserGatewayClient`（或 facade 的 `ProxyAdapterClient`），最终落到 proxy-adapter (:3000) 的 `/debug/api/*`
 - **不引入 `@ai-sdk/*`**：ai-e2e 已被重构为零 AI SDK 依赖
 - **不共享 proxy-adapter / ai-chat-service 数据库**：ai-e2e 维护自己的 SQLite
 - **不在 proxy-adapter / ai-chat-service 中引入 ai-e2e 特有概念**

@@ -260,5 +260,5 @@ GET    /debug/api/failure-sample              ?path Sample data
 | Service             | Port | Protocol |
 | ------------------- | ---- | -------- |
 | proxy-adapter       | 3000 | HTTP     |
-| playwright-server   | 3001 | HTTP     |
+| ai-chat-service     | 3001 | HTTP     |
 | debug-ui (Vite dev) | 5173 | HTTP     |

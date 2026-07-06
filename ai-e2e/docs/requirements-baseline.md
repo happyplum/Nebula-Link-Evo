@@ -39,7 +39,7 @@ ai-e2e 是一个 **PRD 驱动的 E2E 自动化测试编排器**。
 
 - ai-e2e **只能**通过 `proxy-adapter` 获取 AI 与浏览器能力
 - ai-e2e **不能**重新引入 AI SDK 依赖
-- ai-e2e **不能**直接请求 `playwright-server`
+- ai-e2e **不能**直接请求 `proxy-adapter` 内进程浏览器引擎（应通过 MCP 接口）
 - `PromptTemplateManager` 与 `TokenBudgetTracker` 继续保留在 ai-e2e 内部
 - ai-e2e 维持独立 SQLite，不与 proxy-adapter 共库
 

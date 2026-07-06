@@ -12,7 +12,7 @@ This document preserves the durable observability design for `proxy-adapter` wit
 
 - Fastify server logging is configured with Pino and `LOG_LEVEL`.
 - Global error handling writes error and request context through `request.log.error`.
-- `GET /api/health` returns a combined status payload for config, MCP servers, and playwright-server liveness.
+- `GET /api/health` returns a combined status payload for config, MCP servers, and proxy-adapter in-process browser engine liveness.
 - Browser action latency and success/failure are persisted through `InteractionLogger` into SQLite.
 - There is no Prometheus endpoint, no metrics registry, no readiness/liveness split, no dashboard, and no alerting surface.
 
@@ -80,4 +80,4 @@ Defer distributed tracing until the service topology or debugging needs justify 
 - What is the production deployment model: single-machine scripts, containers, or Kubernetes?
 - Is Prometheus/Grafana already available, and who owns that stack?
 - Should `/api/metrics` be protected behind a reverse proxy rule or served on a separate admin port?
-- Should `playwright-server` receive a companion metrics endpoint later, or is proxy-side instrumentation sufficient for now?
+- Should `proxy-adapter`'s in-process browser engine receive a companion metrics endpoint later, or is proxy-side instrumentation sufficient for now?
