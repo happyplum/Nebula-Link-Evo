@@ -6,7 +6,6 @@ import { join } from 'node:path';
 import { AppService } from '../../../services/index.js';
 import { DatabaseManager } from '../../../conversation/db.js';
 import debugStreamRoutes from './stream.js';
-import type { ResolvedProvider } from '../../../config/schema.js';
 import { debugEventHub } from '../../../services/debug-event-hub.js';
 
 interface InteractionQuery {
@@ -64,114 +63,6 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           },
         },
       };
-    }
-  );
-
-  fastify.post(
-    '/api/test-ai',
-    {
-      schema: {
-        description: 'Test AI provider connectivity',
-        tags: ['Debug'],
-        response: {
-          200: {
-            type: 'object',
-            properties: {
-              decision: {
-                type: 'object',
-                properties: {
-                  status: { type: 'string' },
-                  provider: { type: 'string' },
-                  model: { type: 'string' },
-                  responseTime: { type: 'number' },
-                  error: { type: 'string' },
-                  intro: { type: 'string' },
-                },
-              },
-              visionAgent: {
-                type: 'object',
-                properties: {
-                  status: { type: 'string' },
-                  tools: { type: 'array', items: { type: 'string' } },
-                  responseTime: { type: 'number' },
-                  error: { type: 'string' },
-                },
-              },
-              totalResponseTime: { type: 'number' },
-            },
-          },
-        },
-      },
-    },
-    async () => {
-      return await appService.testAIConnectivity();
-    }
-  );
-
-  fastify.get(
-    '/api/verify-keys',
-    {
-      schema: {
-        description: 'Verify API key configuration status',
-        tags: ['Debug'],
-        response: {
-          200: {
-            type: 'object',
-            properties: {
-              keys: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    provider: { type: 'string' },
-                    displayName: { type: 'string' },
-                    status: { type: 'string' },
-                    keyPreview: { type: 'string' },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-    async () => {
-      const config = appService.getConfig();
-      if (!config?.providers) {
-        return { keys: [] };
-      }
-
-      const results = [];
-
-      for (const [providerName, providerConfig] of Object.entries(config.providers)) {
-        const provider = providerConfig as ResolvedProvider;
-        if (!provider.enabled) continue;
-
-        const apiKey = provider.apiKey;
-        const providerDisplayName = provider.name;
-
-        if (!apiKey || apiKey === '' || apiKey.startsWith('{')) {
-          results.push({
-            provider: providerName,
-            displayName: providerDisplayName,
-            status: 'not_set',
-            keyPreview: 'N/A',
-          });
-          continue;
-        }
-
-        const keyPreview =
-          apiKey.length > 12 ? `${apiKey.slice(0, 8)}****${apiKey.slice(-4)}` : '****';
-
-        results.push({
-          provider: providerName,
-          displayName: providerDisplayName,
-          status: 'valid',
-          keyPreview,
-        });
-      }
-
-      return { keys: results };
     }
   );
 
