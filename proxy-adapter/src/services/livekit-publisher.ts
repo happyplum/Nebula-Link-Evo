@@ -12,7 +12,7 @@ import {
 } from '@livekit/rtc-node';
 import type { CDPSession, Page } from 'playwright';
 import { createFrameCounter } from '@nebula-link-evo/shared';
-import { createWorkerLogger } from '../services/logger.js';
+import { createWorkerLogger } from './logger.js';
 
 const logger = createWorkerLogger('LiveKitPublisher');
 
