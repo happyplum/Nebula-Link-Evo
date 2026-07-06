@@ -73,7 +73,7 @@ export class ToolRegistry extends EventEmitter {
       }
     }
 
-    return tools;
+    return this.applyMcpCollisionRule(tools);
   }
 
   /**
@@ -86,7 +86,25 @@ export class ToolRegistry extends EventEmitter {
       tools.push(...provider.getTools());
     }
 
-    return tools;
+    return this.applyMcpCollisionRule(tools);
+  }
+
+  private applyMcpCollisionRule(tools: readonly GatewayTool[]): GatewayTool[] {
+    const nameCounts = new Map<string, number>();
+    for (const tool of tools) {
+      nameCounts.set(tool.name, (nameCounts.get(tool.name) ?? 0) + 1);
+    }
+
+    return tools.map((tool) => {
+      if (tool.source?.type !== 'mcp' || (nameCounts.get(tool.name) ?? 0) <= 1) {
+        return tool;
+      }
+
+      return {
+        ...tool,
+        name: `${tool.source.serverName}-${tool.name}`,
+      };
+    });
   }
 
   /**
