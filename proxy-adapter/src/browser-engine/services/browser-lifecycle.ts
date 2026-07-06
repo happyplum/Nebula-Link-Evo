@@ -1,6 +1,6 @@
 import { chromium, Browser, Page, BrowserContext } from 'playwright';
 import * as crypto from 'node:crypto';
-import { startPublisher, stopPublisher } from '../livekit-publisher.js';
+import { startPublisher, stopPublisher } from '../../services/livekit-publisher.js';
 import { screencastManager } from '../screencast.js';
 import { createWorkerLogger, type Logger } from '../../services/logger.js';
 
