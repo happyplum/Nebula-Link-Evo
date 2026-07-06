@@ -104,7 +104,7 @@ describe('config.mutations', () => {
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-      expect(mockPost).toHaveBeenCalledWith('/debug/api/test-ai');
+      expect(mockPost).toHaveBeenCalledWith('/api/test-ai');
       expect(result.current.data?.decision?.status).toBe('ok');
       expect(result.current.data?.decision?.provider).toBe('anthropic');
       expect(result.current.data?.decision?.responseTime).toBe(320);

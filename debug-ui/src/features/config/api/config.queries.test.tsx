@@ -207,11 +207,11 @@ describe('config.queries', () => {
       expect(keys[1].status).toBe('not_set');
     });
 
-    it('fetches /debug/api/verify-keys endpoint', async () => {
+    it('fetches /api/verify-keys endpoint', async () => {
       mockFetchResponse(verifyKeysData);
 
       renderHook(() => useVerifyKeys(), { wrapper: createWrapper() });
-      await waitFor(() => expect(fetch).toHaveBeenCalledWith('/debug/api/verify-keys', { signal: expect.any(AbortSignal) }));
+      await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/verify-keys', { signal: expect.any(AbortSignal) }));
     });
   });
 
