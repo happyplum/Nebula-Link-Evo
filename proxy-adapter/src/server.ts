@@ -12,7 +12,6 @@ import { createCompressionClient } from './clients/compression.js';
 import { ChatSessionController } from './services/chat-session-controller.js';
 import { SessionEventHub } from './services/session-event-hub.js';
 import { debugEventHub } from './services/debug-event-hub.js';
-import { debugStreamBridge } from './services/debug-stream-bridge.js';
 import { initializeWithBackup } from './utils/db-backup.js';
 import { normalizeLogLevel } from './services/logger.js';
 import { ConversationJobQueue } from './services/conversation-job-queue.js';
@@ -100,7 +99,6 @@ async function start() {
     // Initialize task service first to load configuration
     // This must happen before route registration to ensure config is available
     await appService.initialize();
-    debugStreamBridge.start();
 
     // Run provider preflight checks
     const registry = appService.getRegistry();
@@ -263,7 +261,6 @@ async function start() {
     app.log.info({ endpoint: 'GET  /debug/api/*       - Debug API' });
     app.log.info({ endpoint: '(deprecated) /api/*     - Use /api/v1/* instead' });
   } catch (err) {
-    await debugStreamBridge.stop();
     app.log.error(err);
     process.exit(1);
   }
@@ -277,7 +274,6 @@ process.on('SIGINT', async () => {
   if (conversationManager) {
     await conversationManager.close();
   }
-  await debugStreamBridge.stop();
   await shutdownBrowserEngine();
   await appService.shutdown();
   await app.close();
