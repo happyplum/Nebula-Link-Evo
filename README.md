@@ -137,7 +137,6 @@ docs/               # Documentation
 - [Architecture](docs/architecture.md) — 系统架构、开发/生产模式
 - [AI Operation Flow](docs/reference/ai-operation-flow.md) — AI 执行模型
 - [API Reference (Chat & Debug)](docs/reference/debug-page-integration-api-reference.md) — Proxy Adapter API
-- [AI Chat Service API](docs/ai-chat-service-api.md) — AI 对话服务 API
 - [Product Spec Index](docs/PRODUCT-SPEC-INDEX.md) — 跨包产品规格索引（端口、API、SSE、MCP、shared 类型、依赖方向、强制维护协议）
 
 ## Product Spec

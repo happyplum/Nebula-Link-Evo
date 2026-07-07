@@ -33,13 +33,12 @@ Browser ←→ Debug UI (:5173 dev)
 ### 开发模式
 
 ```
-Browser (http://localhost:5173)
-     │ /api, /debug/api
-     ▼
-proxy-adapter (:3000)
+Browser (http://localhost:5173 /debug)
+     │ chat/AI: /api/chat, /api/ai, /api/test-ai, /api/verify-keys → ai-chat-service (:3001)
+     │ browser/debug: /api (其他), /debug/api → proxy-adapter (:3000)
 ```
 
-debug-ui 通过 Vite dev server (`:5173`) 独立运行，直接将 `/api`、`/debug/api` 请求代理到 proxy-adapter。proxy-adapter 不再反向代理 `/debug*` 到 Vite。
+debug-ui 通过 Vite dev server (`:5173`) 独立运行，chat/AI 请求代理到 ai-chat-service (`:3001`)，browser/debug 请求代理到 proxy-adapter (`:3000`)。proxy-adapter 不再反向代理 `/debug*` 到 Vite。
 
 ### 生产模式
 

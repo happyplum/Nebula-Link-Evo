@@ -38,14 +38,8 @@ pnpm type-check   # tsc --noEmit
 - `@nebula-link-evo/shared` via `workspace:*`.
 - Localhost-only bind (`127.0.0.1`) by default.
 
-## Migration Status (M2)
-
-- T5 (this commit): skeleton package — Fastify :3001, /health, /config, env config loader. No chat code yet.
-- T6-T9: migrate conversation/session, AI providers, Chat SSE, loop-guard, db-backup from proxy-adapter.
-- T10: remove migrated code from proxy-adapter.
-
 ## Anti-Patterns
 
-- No direct Playwright/browser imports — browser access only via the gateway MCP client (T6-T9).
+- No direct Playwright/browser imports — browser access only via the gateway MCP client.
 - No sharing of proxy-adapter's database.
 - No auth layer (binding constraint: localhost-only).

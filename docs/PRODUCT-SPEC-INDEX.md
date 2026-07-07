@@ -196,5 +196,4 @@ debug-ui  ←──  （仅被用户消费）
 - `docs/architecture.md` — 系统架构详解
 - `docs/reference/ai-operation-flow.md` — AI 操作执行模型
 - `docs/reference/debug-page-integration-api-reference.md` — Proxy Adapter API
-- `docs/ai-chat-service-api.md` — AI 对话服务 API
 - `docs/reference/ai-e2e-ui-architecture.md` — ai-e2e UI 架构
