@@ -17,7 +17,7 @@ pnpm type-check   # tsc --noEmit
 
 | Area        | Path                  | Notes                                                                                            |
 | ----------- | --------------------- | ------------------------------------------------------------------------------------------------ |
-| Vite config | `vite.config.ts`      | base `/debug/`, dev proxies to `:3000`, `@/` alias                                               |
+| Vite config | `vite.config.ts`      | base `/debug/`, dev proxies chat/AI→`:3001`、browser/debug→`:3000`, `@/` alias                    |
 | App shell   | `src/app/`            | App.tsx, routes, layout                                                                          |
 | Features    | `src/features/`       | Feature-based architecture: layout, runtime, chat, playwright-control, config, liveview |
 | Shared UI   | `src/shared/`         | Reusable components, hooks, utilities, testids                                                   |
@@ -38,7 +38,7 @@ pnpm type-check   # tsc --noEmit
 
 ## Runtime Model
 
-- **Dev**: Vite dev server (`:5173`), proxies `/api`, `/debug/api` → `:3000`
+- **Dev**: Vite dev server (`:5173`), proxies chat/AI (`/api/chat`, `/api/ai`, `/api/test-ai`, `/api/verify-keys`) → `:3001`, browser/debug (`/api`, `/debug/api`, `/debug/stream`) → `:3000`
 - **Prod**: Standalone build, accessed directly (not served by proxy-adapter)
 - Routes: `/` → DebugPage, `/chat` → ChatPage (via HashRouter)
 - Modules use same-origin paths: `/api`, `/debug/api`

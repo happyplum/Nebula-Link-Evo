@@ -149,7 +149,6 @@
 ## 7. 关联文档
 
 - `ai-chat-service/AGENTS.md` — 开发约束与边界
-- `docs/ai-chat-service-api.md` — AI 对话服务 API 参考
 - `docs/PRODUCT-SPEC-INDEX.md` — 跨包契约与全局索引
 - `docs/architecture.md` — 系统架构
 - 根 `AGENTS.md` — 仓库范围约束
