@@ -89,6 +89,27 @@ async function start(): Promise<void> {
     if (mcpClient) {
       toolRegistry.registerProvider(new MCPClientProvider(mcpClient));
     }
+
+    // 注册 VisionToolProvider（视觉分析能力）
+    const visionDefaults = providerConfig?.defaults?.vision;
+    if (visionDefaults && providerRegistry && mcpClient) {
+      try {
+        const visionModel = await providerRegistry.resolve(visionDefaults.provider, visionDefaults.model);
+        const { VisionAnalyzer } = await import('./vision/index.js');
+        const { VisionToolProvider } = await import('./tools/providers/vision-tool-provider.js');
+        const visionConfig = {
+          maxTokens: providerConfig!.settings.maxTokens,
+          temperature: providerConfig!.settings.temperature,
+          timeoutMs: providerConfig!.settings.timeout,
+          maxRetries: providerConfig!.settings.maxRetries,
+        };
+        const visionAnalyzer = new VisionAnalyzer(visionModel, visionConfig);
+        toolRegistry.registerProvider(new VisionToolProvider(visionAnalyzer, mcpClient, visionConfig));
+      } catch (error) {
+        app.log.warn({ err: error }, 'Vision tool provider initialization failed, continuing without vision tools');
+      }
+    }
+
     await toolRegistry.initializeAll();
     appService.setToolRegistry(toolRegistry);
 

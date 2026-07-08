@@ -194,12 +194,12 @@ export class AppService {
     const visionStartedAt = Date.now();
     const visionTools = this.toolRegistry
       ?.getAvailableTools({ consumer: 'chat' })
-      .filter((tool) => tool.name.startsWith('vision-agent.')) ?? [];
+      .filter((tool) => tool.name.startsWith('vision.')) ?? [];
     const visionAgent = {
       status: visionTools.length > 0 ? 'connected' : 'degraded',
       tools: visionTools.map((tool) => tool.name),
       responseTime: Date.now() - visionStartedAt,
-      error: visionTools.length > 0 ? null : 'Vision agent tools are unavailable from the MCP gateway',
+      error: visionTools.length > 0 ? null : 'Vision tools are unavailable',
     };
 
     return { decision, visionAgent, totalResponseTime: Date.now() - startedAt };
