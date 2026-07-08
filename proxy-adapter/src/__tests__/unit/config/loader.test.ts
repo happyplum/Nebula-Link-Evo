@@ -34,7 +34,6 @@ describe('config/loader', () => {
       defaults: {
         mode: 'unified',
         decision: 'glm/glm-4.7-flash',
-        vision: 'glm/glm-4.6v-flash',
       },
       mcp: { enabled: false, servers: {} },
       settings: {
@@ -79,8 +78,7 @@ describe('config/loader', () => {
     expect(config.providers.openai?.npmPackage).toBe('@ai-sdk/openai');
     expect(config.providers.anthropic?.npmPackage).toBe('@ai-sdk/anthropic');
     expect(config.providers.glm?.npmPackage).toBeUndefined();
-    expect(config.defaults.decision).toBe('glm/glm-4.7-flash');
-    expect(config.defaults.vision).toBe('glm/glm-4.6v-flash');
+    expect(config.defaults?.decision).toBe('glm/glm-4.7-flash');
   });
 
   it('saveConfig writes prettified JSON', () => {

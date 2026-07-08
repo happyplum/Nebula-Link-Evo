@@ -2,7 +2,7 @@
 
 ## Overview
 
-Fastify backend on port `3000`. Browser MCP gateway — MCP Server via StreamableHTTP, Playwright browser-control + vision-agent tools.
+Fastify backend on port `3000`. Browser MCP gateway — MCP Server via StreamableHTTP, Playwright browser-control tools. Zero AI calls; all AI logic has been migrated to ai-chat-service.
 
 ## Commands
 
@@ -21,10 +21,9 @@ pnpm test:e2e     # Playwright e2e
 | Server entry     | `src/server.ts`                     | Env load, plugins, route registration                 |
 | App service      | `src/services/app-service.ts`       | Browser session management, config, singleton facade  |
 | Action execution | `src/services/action-executor.ts`   | Browser action dispatch                               |
-| Tool registry    | `src/tools/`                        | ToolRegistry + providers (browser-control, vision-agent, MCP client) |
+| Tool registry    | `src/tools/`                        | ToolRegistry + providers (browser-control, MCP client) |
 | Browser tools    | `src/browser-tools/`                | Action definitions, param/result adapters, tool-map   |
 | MCP Server       | `src/mcp-server/`                   | StreamableHTTP plugin + transport                     |
-| Vision agent     | `src/mcps/vision-agent/`            | Internal vision analysis module (config, tools, cache)|
 | Browser engine   | `src/browser-engine/`               | Playwright Chromium lifecycle                         |
 | Config           | `src/config/`                       | Schema, loader, resolver, validator                   |
 | Tests            | `src/__tests__/`                    | Unit, integration, e2e                                |

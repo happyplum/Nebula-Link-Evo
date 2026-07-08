@@ -29,16 +29,16 @@ export function validateConfig(config: ResolvedConfig): ValidationResult {
     if (!provider.enabled) continue;
 
     if (!provider.apiKey) {
-      errors.push(`Provider ${name}: missing apiKey`);
+      warnings.push(`Provider ${name}: missing apiKey`);
     }
 
     if (!provider.baseUrl) {
-      errors.push(`Provider ${name}: missing baseUrl`);
+      warnings.push(`Provider ${name}: missing baseUrl`);
     }
   }
 
   if (!config.defaults) {
-    errors.push('Missing defaults configuration');
+    warnings.push('Missing defaults configuration');
   } else {
     if (!config.defaults.decision?.provider) {
       errors.push('Unified mode requires decision.provider');

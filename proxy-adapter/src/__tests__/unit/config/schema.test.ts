@@ -42,11 +42,9 @@ describe('config/schema types', () => {
     const defaults: DefaultsConfig = {
       mode: 'unified',
       decision: 'glm/glm-4.7-flash',
-      vision: 'glm/glm-4.6v-flash',
     };
 
     expect(defaults.decision).toContain('/');
-    expect(defaults.vision).toContain('/');
   });
 
   it('keeps resolved defaults as provider/model objects', () => {
@@ -92,7 +90,6 @@ describe('config/schema types', () => {
       defaults: {
         mode: 'unified',
         decision: 'glm/glm-4.7-flash',
-        vision: 'glm/glm-4.6v-flash',
       },
       settings: {
         timeout: 30000,
@@ -105,6 +102,6 @@ describe('config/schema types', () => {
 
     expect(selector.model).toContain('glm');
     expect(modelConfig.capabilities).toContain('decision');
-    expect(config.defaults.vision).toContain('/');
+    expect(config.defaults?.decision).toContain('/');
   });
 });

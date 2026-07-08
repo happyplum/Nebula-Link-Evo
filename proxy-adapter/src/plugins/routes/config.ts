@@ -23,7 +23,7 @@ const configRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       }
       return {
         mode: config.defaults?.mode ?? 'unknown',
-        decision: config.defaults?.decision ?? 'unknown',
+        decision: config.defaults?.decision,
         providers: Object.keys(config.providers || {}).filter(k => config.providers[k].enabled),
       };
     }

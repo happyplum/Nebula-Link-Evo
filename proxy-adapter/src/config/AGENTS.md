@@ -2,13 +2,13 @@
 
 ## Overview
 
-Runtime config loading, placeholder resolution, validation, and capability checks for providers, MCP servers, and default mode selection.
+Runtime config loading, placeholder resolution, validation, and capability checks for providers, MCP servers, and default mode selection. proxy-adapter no longer makes AI calls — provider config is purely informational (consumed by ai-chat-service via separate config). Missing provider keys/baseUrls are warnings, not fatal errors.
 
 ## Where To Look
 
 | File           | Purpose                                       |
 | -------------- | --------------------------------------------- |
-| `schema.ts`    | Config type surface                           |
+| `schema.ts`    | Config type surface (`defaults` optional)     |
 | `loader.ts`    | File loading + default config creation        |
 | `resolver.ts`  | Environment placeholder resolution            |
 | `validator.ts` | Errors/warnings, mode/provider/MCP validation |
@@ -17,23 +17,21 @@ Runtime config loading, placeholder resolution, validation, and capability check
 ## Working Rules
 
 - Keep validation split into hard errors vs warnings; startup and UI surfaces rely on that distinction.
-- `separation` mode requires both `vision` and `decision`; `unified` requires only `decision`.
+- `defaults` is optional — missing defaults is a warning, not a fatal error.
+- Missing provider apiKey or baseUrl is a warning, not an error (proxy-adapter does not make AI calls).
 - Resolve env placeholders before provider availability or capability checks.
 - Validate enabled MCP servers for `command`; missing args are warnings, not fatal errors.
 
 ## Resolver Provider Grading
 
-- `resolver.ts` grades provider apiKey resolution failures by role:
-  - **Decision provider** (carries `defaults.decision`): apiKey missing → `errors` (fatal, blocks startup)
-  - **Non-decision provider** (e.g., vision-only): apiKey missing → `warnings` (non-fatal, allows startup)
-  - **Shared provider** (used by both decision and vision): apiKey missing → fatal
+- `resolver.ts` treats ALL apiKey resolution failures as non-fatal warnings — proxy-adapter does not make AI calls.
 - `loader.ts` preserves resolver `warnings` in its return value so upstream consumers can display them.
 
 ## Contributor Traps
 
-- A config can be structurally present but still invalid because `providers.*.apiKey` is empty (no _resolved wrapper anymore).
-- Disabled default providers currently warn rather than fail; changing that affects startup behavior and tests.
-- Capability helpers stay lightweight; provider/model pairing still determines runtime truth.
+- A config can be structurally present but still invalid because `providers.*.apiKey` is empty.
+- `defaults` may be absent in configs that only need browser/MCP features.
+- Capability helpers stay lightweight; provider/model pairing still determines runtime truth (for downstream consumers).
 - DO NOT reintroduce raw-vs-resolved provider duplication; `ResolvedConfig.providers` is the single canonical runtime provider map.
 
 ## Anti-Patterns
