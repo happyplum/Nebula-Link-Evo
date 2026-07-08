@@ -4,6 +4,7 @@ import type { DOMSnapshotResponse } from '@nebula-link-evo/shared';
 import type { MCPSDKClient } from '../../clients/mcp/sdk-client.js';
 import { MCPServerUnavailableError } from '../../clients/mcp/sdk-client.js';
 import type { VisionAnalyzer } from '../../vision/vision-analyzer.js';
+import { VisionAnalysisError } from '../../vision/errors.js';
 import type { VisionConfig } from '../../vision/types.js';
 import type { GatewayTool, ToolProvider, ToolProviderStatus } from '../types.js';
 
@@ -132,10 +133,15 @@ export class VisionToolProvider extends EventEmitter implements ToolProvider {
         element: enriched,
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (message.includes('timeout') || message.includes('aborted') || message.includes('AbortError')) {
-        return JSON.stringify({ ok: false, code: 'VISION_TIMEOUT', message, retryable: true });
+      if (error instanceof VisionAnalysisError) {
+        return JSON.stringify({
+          ok: false,
+          code: error.code,
+          message: error.message,
+          retryable: error.retryable,
+        });
       }
+      const message = error instanceof Error ? error.message : String(error);
       return JSON.stringify({ ok: false, code: 'VISION_ERROR', message, retryable: false });
     }
   }
