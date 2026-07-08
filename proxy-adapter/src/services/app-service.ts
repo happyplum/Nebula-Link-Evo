@@ -30,13 +30,19 @@ export class AppService {
     this.config = loadResult.config || null;
     this.configPath = loadResult.configPath;
 
+    if (loadResult.result.warnings.length > 0) {
+      this.logger.warn({ warnings: loadResult.result.warnings }, 'Config load warnings');
+    }
+
     if (!this.config) {
       throw new Error('Failed to load config: ' + loadResult.result.errors.join(', '));
     }
 
     const validation = validateConfig(this.config);
-    if (!validation.valid) {
+    if (validation.warnings.length > 0) {
       this.logger.warn({ warnings: validation.warnings }, 'Config validation warnings');
+    }
+    if (!validation.valid) {
       if (validation.errors.length > 0) {
         throw new Error('Config validation failed: ' + validation.errors.join(', '));
       }
@@ -96,7 +102,6 @@ export class AppService {
 
     const providers = [
       { id: 'browser-tools', name: 'browser-control' },
-      { id: 'vision-agent', name: 'vision-agent' },
     ];
 
     return providers
@@ -129,7 +134,7 @@ export class AppService {
 
     const tools = this.toolRegistry.getAvailableTools({ consumer: 'all' });
     return tools
-      .filter((t) => t.providerId === 'browser-tools' || t.providerId === 'vision-agent')
+      .filter((t) => t.providerId === 'browser-tools')
       .map((t) => ({
         name: t.name,
         description: t.description,

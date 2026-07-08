@@ -23,7 +23,7 @@ export interface Config {
   description?: string;
   providers: Record<string, FlatProvider>;
   mcp: MCPConfig;
-  defaults: DefaultsConfig;
+  defaults?: DefaultsConfig;
   settings: RawSettingsConfig;
 }
 
@@ -77,7 +77,6 @@ export interface MCPServerConfig {
 
 export interface DefaultsConfig {
   mode: 'unified';
-  vision?: string;
   decision: string;
 }
 
@@ -89,7 +88,6 @@ export interface ModelSelector {
 export interface ResolvedDefaultsConfig {
   mode: 'unified';
   decision: ModelSelector;
-  vision?: ModelSelector;
 }
 
 export interface RawSettingsConfig {
@@ -114,7 +112,7 @@ export interface SettingsConfig {
 }
 
 export interface ResolvedConfig extends Omit<Config, 'defaults' | 'settings' | 'providers'> {
-  defaults: ResolvedDefaultsConfig;
+  defaults?: ResolvedDefaultsConfig;
   settings: SettingsConfig;
   providers: Record<string, ResolvedProvider>;
 }

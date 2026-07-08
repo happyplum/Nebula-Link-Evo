@@ -32,14 +32,13 @@ export function resolveConfig(
   for (const [key, value] of Object.entries(envInput)) {
     env[key] = value || '';
   }
-  const defaults = options?.defaults || {};
+  const resolverDefaults = options?.defaults || {};
 
-  // Pre-parse defaults to determine which providers are decision-critical
-  const decisionSelector = parseProviderModelString(config.defaults.decision, 'decision', result);
-  const visionSelector = config.defaults.vision
-    ? parseProviderModelString(config.defaults.vision, 'vision', result)
+  // defaults is optional — proxy-adapter no longer makes AI calls, so missing
+  // decision config is a non-fatal warning rather than a hard error.
+  const decisionSelector = config.defaults?.decision
+    ? parseProviderModelString(config.defaults.decision, 'decision', result)
     : null;
-  const decisionProviderName = decisionSelector.provider;
 
   const resolvedProviders: Record<string, ResolvedProvider> = {};
 
@@ -53,14 +52,10 @@ export function resolveConfig(
       continue;
     }
 
-    const apiKeyResult = resolveVariable(provider.apiKey, env, defaults);
+    const apiKeyResult = resolveVariable(provider.apiKey, env, {});
     if (!apiKeyResult.success) {
-      // Decision provider failure is fatal; others are non-fatal warnings
-      if (key === decisionProviderName) {
-        result.errors.push(`Provider ${key}: ${apiKeyResult.error}`);
-      } else {
-        result.warnings.push(`Provider ${key}: ${apiKeyResult.error} (non-decision provider, skipping)`);
-      }
+      // All apiKey failures are non-fatal warnings — proxy-adapter does not make AI calls
+      result.warnings.push(`Provider ${key}: ${apiKeyResult.error}`);
       continue;
     }
 
@@ -76,21 +71,22 @@ export function resolveConfig(
   }
 
   const resolvedSettings = {
-    timeout: resolveSetting(config.settings.timeout, env, defaults, 30000),
-    maxRetries: resolveSetting(config.settings.maxRetries, env, defaults, 3),
-    temperature: resolveSetting(config.settings.temperature, env, defaults, 0.2),
-    maxTokens: resolveSetting(config.settings.maxTokens, env, defaults, 1000),
-    maxSteps: resolveSetting(config.settings.maxSteps, env, defaults, 1),
-    contextWindowTokens: resolveSetting(config.settings.contextWindowTokens ?? 131072, env, defaults, 131072),
+    timeout: resolveSetting(config.settings.timeout, env, resolverDefaults, 30000),
+    maxRetries: resolveSetting(config.settings.maxRetries, env, resolverDefaults, 3),
+    temperature: resolveSetting(config.settings.temperature, env, resolverDefaults, 0.2),
+    maxTokens: resolveSetting(config.settings.maxTokens, env, resolverDefaults, 1000),
+    maxSteps: resolveSetting(config.settings.maxSteps, env, resolverDefaults, 1),
+    contextWindowTokens: resolveSetting(config.settings.contextWindowTokens ?? 131072, env, resolverDefaults, 131072),
   };
 
   const resolvedConfig: ResolvedConfig = {
     ...config,
-    defaults: {
-      mode: config.defaults.mode,
-      decision: decisionSelector,
-      ...(visionSelector ? { vision: visionSelector } : {}),
-    },
+    defaults: decisionSelector
+      ? {
+          mode: config.defaults?.mode ?? 'unified',
+          decision: decisionSelector,
+        }
+      : undefined,
     settings: resolvedSettings,
     providers: resolvedProviders,
   };
@@ -188,7 +184,7 @@ export function getProviderModel(
 export function getDefaultDecisionModel(
   config: ResolvedConfig
 ): { provider: string; model: string } | null {
-  return config.defaults.decision;
+  return config.defaults?.decision ?? null;
 }
 
 export function isUnifiedMode(_config: ResolvedConfig): boolean {
@@ -199,7 +195,7 @@ export function isUnifiedMode(_config: ResolvedConfig): boolean {
 
 function parseProviderModelString(
   value: string,
-  key: 'decision' | 'vision',
+  key: 'decision',
   result: ResolveResult
 ): ModelSelector {
   const slashIndex = value.indexOf('/');

@@ -11,12 +11,11 @@ Browser MCP gateway source — Playwright engine, tool providers, browser sessio
 | Server bootstrap | `server.ts`     | Route registration, service init                               |
 | Services         | `services/`     | Browser session mgmt, action execution, logging, diagnostics   |
 | Plugins          | `plugins/`      | Fastify plugins and route modules                              |
-| Tool registry    | `tools/`        | ToolRegistry + providers (browser-control, vision-agent, MCP client) + adapters |
+| Tool registry    | `tools/`        | ToolRegistry + providers (browser-control, MCP client) + adapters |
 | Browser tools    | `browser-tools/`| Action definitions, param/result adapters, tool-map            |
 | Browser engine   | `browser-engine/` | Playwright Chromium lifecycle                                |
 | Browser client   | `browser-client.ts` | Shared browser page/context accessor                       |
 | MCP Server       | `mcp-server/`   | StreamableHTTP plugin + transport                              |
-| Vision agent     | `mcps/vision-agent/` | Built-in vision analysis module (config, tools, cache)    |
 | Config           | `config/`       | Schema, loader, resolver, validator                            |
 | Errors           | `errors/`       | Typed error classes                                            |
 | Schemas          | `schemas/`      | TypeBox request/response schemas                               |
@@ -39,7 +38,6 @@ Browser MCP gateway source — Playwright engine, tool providers, browser sessio
 
 - `services/AGENTS.md`
 - `tools/AGENTS.md`
-- `mcps/vision-agent/AGENTS.md`
 - `config/AGENTS.md`
 - `plugins/AGENTS.md`
 - `__tests__/AGENTS.md`

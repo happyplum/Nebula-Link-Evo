@@ -117,7 +117,6 @@ export function createDefaultConfig(): Config {
     defaults: {
       mode: 'unified',
       decision: 'glm/glm-4.7-flash',
-      vision: 'glm/glm-4.6v-flash',
     },
     settings: {
       timeout: 30000,

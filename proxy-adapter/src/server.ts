@@ -16,8 +16,6 @@ import livekitTokenRoutes from './plugins/routes/api/livekit-token.js';
 import debugRoutes from './plugins/routes/debug/index.js';
 import { ToolRegistry } from './tools/registry.js';
 import { BrowserToolsProvider } from './tools/providers/browser-tools-provider.js';
-import { VisionAgentProvider } from './tools/providers/vision-agent-provider.js';
-import { buildVisionAgentConfig } from './tools/providers/build-vision-agent-config.js';
 import mcpServerPlugin from './mcp-server/index.js';
 
 const envLocal = path.join(process.cwd(), '.env');
@@ -100,10 +98,6 @@ async function start() {
     const browserToolsProvider = new BrowserToolsProvider(browserClient);
     toolRegistry.registerProvider(browserToolsProvider);
 
-    const visionConfigOverride = buildVisionAgentConfig(config);
-    const visionAgentProvider = new VisionAgentProvider(browserClient, visionConfigOverride);
-    toolRegistry.registerProvider(visionAgentProvider);
-
     await toolRegistry.initializeAll();
 
     // Make ToolRegistry accessible through AppService for debug endpoints
@@ -162,7 +156,7 @@ async function start() {
               endpoints: {
                 'GET /api/v1/health': 'Health check',
                 'GET /api/v1/config': 'Show current configuration',
-                'POST /mcp': 'MCP StreamableHTTP endpoint exposing browser-control and vision-agent tools',
+                'POST /mcp': 'MCP StreamableHTTP endpoint exposing browser-control tools',
                 'GET /debug/api/*': 'Debug API endpoints',
               },
               deprecation: {

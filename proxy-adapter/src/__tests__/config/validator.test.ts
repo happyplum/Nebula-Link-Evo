@@ -81,7 +81,7 @@ describe('validateConfig', () => {
   });
 
   describe('provider validation', () => {
-    it('should error when provider missing apiKey', () => {
+    it('should warn when provider missing apiKey', () => {
       const config: ResolvedConfig = {
         version: '1.0.0',
         providers: {
@@ -106,11 +106,10 @@ describe('validateConfig', () => {
 };
 
       const result = validateConfig(config);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Provider test-provider: missing apiKey');
+      expect(result.warnings).toContain('Provider test-provider: missing apiKey');
     });
 
-    it('should error when provider missing baseUrl', () => {
+    it('should warn when provider missing baseUrl', () => {
       const config: ResolvedConfig = {
         version: '1.0.0',
         providers: {
@@ -135,8 +134,7 @@ describe('validateConfig', () => {
 };
 
       const result = validateConfig(config);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Provider test-provider: missing baseUrl');
+      expect(result.warnings).toContain('Provider test-provider: missing baseUrl');
     });
 
     it('should allow provider with no models (dynamic resolution)', () => {
@@ -378,7 +376,7 @@ describe('validateConfig', () => {
   });
 
   describe('missing defaults', () => {
-    it('should error when defaults configuration is missing', () => {
+    it('should warn when defaults configuration is missing', () => {
       const config: ResolvedConfig = {
         version: '1.0.0',
         providers: {},
@@ -394,8 +392,7 @@ describe('validateConfig', () => {
 };
 
       const result = validateConfig(config);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Missing defaults configuration');
+      expect(result.warnings).toContain('Missing defaults configuration');
     });
   });
 
@@ -522,7 +519,7 @@ describe('validateConfig', () => {
   });
 
   describe('resolved provider validation', () => {
-    it('should error when provider apiKey not resolved', () => {
+    it('should warn when provider apiKey not resolved', () => {
       const config: ResolvedConfig = {
         version: '1.0.0',
         providers: {
@@ -548,8 +545,7 @@ describe('validateConfig', () => {
 };
 
       const result = validateConfig(config);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Provider test-provider: missing apiKey');
+      expect(result.warnings).toContain('Provider test-provider: missing apiKey');
     });
   });
 });

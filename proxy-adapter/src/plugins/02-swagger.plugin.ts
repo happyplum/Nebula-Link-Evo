@@ -23,74 +23,36 @@ export default fp(
           description: `# Nebula-Link Evo - Proxy Adapter API
 
 ## Overview
-Web automation and AI integration service that orchestrates browser automation tasks using a decision model plus MCP servers.
+Browser MCP gateway that exposes Playwright browser-control tools via MCP StreamableHTTP, plus debug streams and configuration endpoints.
 
 ## Features
-- **Web Automation**: Execute complex multi-step browser tasks with natural language instructions
-- **Decision Model Orchestration**: Uses a unified decision model for planning and tool selection
-- **MCP Extensibility**: Vision analysis via built-in vision-agent ToolProvider; browser-control tools registered locally
-- **Browser Screenshot Support**: Retains screenshot/snapshot browser tools without embedding vision provider logic
+- **Browser Automation**: Execute browser actions (click, type, scroll, navigate) via MCP tools
+- **Browser Screenshot & DOM Snapshot**: Capture annotated screenshots and simplified DOM for page perception
+- **MCP Extensibility**: browser-control tools registered locally; external MCP servers supported via stdio/HTTP
 - **Debug Dashboard**: Real-time task execution monitoring
 
 ## Architecture
 \`\`\`
-[User Request]
+[MCP Client]
     │
     ▼
- [Proxy Adapter :3000] ──→ [Decision Model Provider]
+ [Proxy Adapter :3000] ──→ [Playwright] ──→ Chromium
     │
-    ├──→ [vision-agent (built-in)]
-    └──→ [Playwright Server :3001] ──→ Chromium
+    ├──→ browser-control.* tools (screenshot, DOM, action)
+    └──→ /debug/api/* (MJPEG, DOM snapshot)
 \`\`\`
 
 ## Usage Examples
 
-### Execute Simple Task
+### Execute Browser Action via MCP
 \`\`\`bash
-curl -X POST http://localhost:3000/task \\
+curl -X POST http://localhost:3000/mcp \\
   -H "Content-Type: application/json" \\
-  -d '{"url": "https://example.com", "instruction": "点击登录按钮"}'
-\`\`\`
-
-### Execute Multi-Step Task
-\`\`\`bash
-curl -X POST http://localhost:3000/task \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "url": "https://example.com",
-    "instruction": "填写表单并提交",
-    "context": {
-      "maxSteps": 20
-    }
-  }'
-\`\`\`
-
-## Response Format
-Successful task execution returns:
-- \`success\`: boolean - overall task status
-- \`url\`: string - final page URL
-- \`actions\`: array - list of executed actions
-  - \`action.type\`: click, type, scroll, finish
-  - \`action.params\`: specific action parameters
-  - \`action.reasoning\`: AI reasoning for the action
-- \`result\`: string - task completion message
-
-### Action Example
-\`\`\`json
-{
-  "action": {
-    "type": "click",
-    "params": {"x": 500, "y": 300},
-    "reasoning": "点击登录按钮"
-  },
-  "success": true,
-  "message": "Clicked at (500, 300)"
-}
+  -d '{"method": "tools/call", "params": {"name": "browser-control.screenshot"}}'
 \`\`\`
 
 ## Configuration
-- **Decision provider config**: resolved from config/config.json
-- **Vision Agent**: built-in vision analysis via VisionAgentProvider, configured from \`defaults.vision\` + provider config
+- **Decision/Vision providers**: resolved from config/config.json (consumed by ai-chat-service, not by proxy-adapter)
 - **ENABLE_SWAGGER**: Enable Swagger UI (default: true in dev, false in production)
 
 ## Error Handling
@@ -104,8 +66,6 @@ All endpoints return consistent error format:
 
 ## Runtime Notes
 \`\`\`env
-GLM_API_KEY=your_provider_key_here
-NVIDIA_API_KEY=your_provider_key_here
 ENABLE_SWAGGER=true
 NODE_ENV=development
 \`\`\`

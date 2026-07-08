@@ -15,7 +15,6 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@ai-sdk/openai-compatible": "^2.0.31",
     "@fastify/autoload": "catalog:",
     "@fastify/cors": "catalog:",
     "@fastify/swagger": "catalog:",
@@ -25,7 +24,6 @@
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@nebula-link-evo/shared": "workspace:*",
     "@sinclair/typebox": "catalog:",
-    "ai": "^6.0.105",
     "async-mutex": "^0.5.0",
     "dotenv": "catalog:",
     "execa": "^9.0.0",
