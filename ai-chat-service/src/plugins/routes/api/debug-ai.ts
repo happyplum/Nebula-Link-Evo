@@ -1,5 +1,28 @@
 import type { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
+import { Type } from '@sinclair/typebox';
 import { appService } from '../../../services/index.js';
+
+const DecisionResultSchema = Type.Object({
+  status: Type.String(),
+  provider: Type.Optional(Type.String()),
+  model: Type.Optional(Type.String()),
+  responseTime: Type.Number(),
+  error: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  intro: Type.Optional(Type.String()),
+});
+
+const VisionAgentResultSchema = Type.Object({
+  status: Type.String(),
+  tools: Type.Array(Type.String()),
+  responseTime: Type.Number(),
+  error: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+});
+
+const TestAIResponseSchema = Type.Object({
+  decision: DecisionResultSchema,
+  visionAgent: VisionAgentResultSchema,
+  totalResponseTime: Type.Number(),
+});
 
 const debugAiRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
   fastify.post(
@@ -9,14 +32,7 @@ const debugAiRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         description: 'Test AI provider connectivity',
         tags: ['AI'],
         response: {
-          200: {
-            type: 'object',
-            properties: {
-              decision: { type: 'object' },
-              visionAgent: { type: 'object' },
-              totalResponseTime: { type: 'number' },
-            },
-          },
+          200: TestAIResponseSchema,
         },
       },
     },
