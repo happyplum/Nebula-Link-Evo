@@ -3,6 +3,7 @@ import { gzipSync } from 'node:zlib';
 import { describe, expect, it, vi } from 'vitest';
 import type { MCPSDKClient } from '../../clients/mcp/sdk-client.js';
 import type { VisionAnalyzer } from '../../vision/vision-analyzer.js';
+import { VisionAnalysisError } from '../../vision/errors.js';
 import type { VisionConfig } from '../../vision/types.js';
 import { VisionToolProvider } from './vision-tool-provider.js';
 
@@ -196,5 +197,164 @@ describe('VisionToolProvider', () => {
 
     expect(parsed.ok).toBe(false);
     expect(parsed.code).toBe('SNAPSHOT_DECODE_FAILED');
+  });
+
+  it('returns INVALID_INPUT when description is missing or empty', async () => {
+    const fakeMcp = new FakeMCPClient();
+    const fakeAnalyzer = new FakeVisionAnalyzer();
+
+    const provider = new VisionToolProvider(
+      fakeAnalyzer as unknown as VisionAnalyzer,
+      fakeMcp as unknown as MCPSDKClient,
+      fakeVisionConfig,
+    );
+    await provider.initialize();
+
+    const tool = provider.getTools()[0];
+
+    // Missing description
+    const result1 = await tool.execute({});
+    const parsed1 = JSON.parse(result1);
+    expect(parsed1.ok).toBe(false);
+    expect(parsed1.code).toBe('INVALID_INPUT');
+    expect(parsed1.retryable).toBe(false);
+
+    // Empty string description
+    const result2 = await tool.execute({ description: '' });
+    const parsed2 = JSON.parse(result2);
+    expect(parsed2.ok).toBe(false);
+    expect(parsed2.code).toBe('INVALID_INPUT');
+
+    // Null description
+    const result3 = await tool.execute({ description: null });
+    const parsed3 = JSON.parse(result3);
+    expect(parsed3.ok).toBe(false);
+    expect(parsed3.code).toBe('INVALID_INPUT');
+
+    // MCP should never be called for invalid input
+    expect(fakeMcp.callTool).not.toHaveBeenCalled();
+  });
+
+  it('returns SNAPSHOT_EMPTY when elements_map is empty', async () => {
+    const snapshot = buildSnapshotResponse({ elements_map: {} });
+    const fakeMcp = new FakeMCPClient();
+    fakeMcp.callTool.mockResolvedValueOnce({
+      parsed: snapshot,
+      text: JSON.stringify(snapshot),
+    });
+
+    const fakeAnalyzer = new FakeVisionAnalyzer();
+
+    const provider = new VisionToolProvider(
+      fakeAnalyzer as unknown as VisionAnalyzer,
+      fakeMcp as unknown as MCPSDKClient,
+      fakeVisionConfig,
+    );
+    await provider.initialize();
+
+    const tool = provider.getTools()[0];
+    const result = await tool.execute({ description: 'anything' });
+    const parsed = JSON.parse(result);
+
+    expect(parsed.ok).toBe(false);
+    expect(parsed.code).toBe('SNAPSHOT_EMPTY');
+    expect(parsed.retryable).toBe(true);
+    expect(fakeAnalyzer.findElement).not.toHaveBeenCalled();
+  });
+
+  it('returns VISION_TIMEOUT when VisionAnalyzer throws VisionAnalysisError with code VISION_TIMEOUT', async () => {
+    const snapshot = buildSnapshotResponse();
+    const fakeMcp = new FakeMCPClient();
+    fakeMcp.callTool.mockResolvedValueOnce({
+      parsed: snapshot,
+      text: JSON.stringify(snapshot),
+    });
+
+    const fakeAnalyzer = new FakeVisionAnalyzer();
+    fakeAnalyzer.findElement.mockRejectedValueOnce(
+      new VisionAnalysisError({
+        code: 'VISION_TIMEOUT',
+        message: 'Vision model request timed out after 30000ms',
+        retryable: true,
+      }),
+    );
+
+    const provider = new VisionToolProvider(
+      fakeAnalyzer as unknown as VisionAnalyzer,
+      fakeMcp as unknown as MCPSDKClient,
+      fakeVisionConfig,
+    );
+    await provider.initialize();
+
+    const tool = provider.getTools()[0];
+    const result = await tool.execute({ description: 'the submit button' });
+    const parsed = JSON.parse(result);
+
+    expect(parsed.ok).toBe(false);
+    expect(parsed.code).toBe('VISION_TIMEOUT');
+    expect(parsed.message).toBe('Vision model request timed out after 30000ms');
+    expect(parsed.retryable).toBe(true);
+  });
+
+  it('returns VISION_ERROR when VisionAnalyzer throws VisionAnalysisError with code VISION_ERROR', async () => {
+    const snapshot = buildSnapshotResponse();
+    const fakeMcp = new FakeMCPClient();
+    fakeMcp.callTool.mockResolvedValueOnce({
+      parsed: snapshot,
+      text: JSON.stringify(snapshot),
+    });
+
+    const fakeAnalyzer = new FakeVisionAnalyzer();
+    fakeAnalyzer.findElement.mockRejectedValueOnce(
+      new VisionAnalysisError({
+        code: 'VISION_ERROR',
+        message: 'Failed to parse vision response: invalid json',
+        retryable: false,
+      }),
+    );
+
+    const provider = new VisionToolProvider(
+      fakeAnalyzer as unknown as VisionAnalyzer,
+      fakeMcp as unknown as MCPSDKClient,
+      fakeVisionConfig,
+    );
+    await provider.initialize();
+
+    const tool = provider.getTools()[0];
+    const result = await tool.execute({ description: 'the submit button' });
+    const parsed = JSON.parse(result);
+
+    expect(parsed.ok).toBe(false);
+    expect(parsed.code).toBe('VISION_ERROR');
+    expect(parsed.message).toBe('Failed to parse vision response: invalid json');
+    expect(parsed.retryable).toBe(false);
+  });
+
+  it('falls back to VISION_ERROR for non-typed errors from VisionAnalyzer', async () => {
+    const snapshot = buildSnapshotResponse();
+    const fakeMcp = new FakeMCPClient();
+    fakeMcp.callTool.mockResolvedValueOnce({
+      parsed: snapshot,
+      text: JSON.stringify(snapshot),
+    });
+
+    const fakeAnalyzer = new FakeVisionAnalyzer();
+    fakeAnalyzer.findElement.mockRejectedValueOnce(new Error('unexpected crash'));
+
+    const provider = new VisionToolProvider(
+      fakeAnalyzer as unknown as VisionAnalyzer,
+      fakeMcp as unknown as MCPSDKClient,
+      fakeVisionConfig,
+    );
+    await provider.initialize();
+
+    const tool = provider.getTools()[0];
+    const result = await tool.execute({ description: 'the submit button' });
+    const parsed = JSON.parse(result);
+
+    expect(parsed.ok).toBe(false);
+    expect(parsed.code).toBe('VISION_ERROR');
+    expect(parsed.message).toBe('unexpected crash');
+    expect(parsed.retryable).toBe(false);
   });
 });

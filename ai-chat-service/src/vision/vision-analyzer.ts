@@ -3,6 +3,7 @@ import type { LanguageModelV3 } from '@ai-sdk/provider';
 import type { DOMSnapshotResponse } from '@nebula-link-evo/shared';
 import type { VisionConfig } from './types.js';
 import type { VisionMatchResult } from './types.js';
+import { VisionAnalysisError } from './errors.js';
 import { buildElementsContext, buildFindingPrompt } from './prompts/element-finding.js';
 
 export class VisionAnalyzer {
@@ -59,11 +60,16 @@ export class VisionAnalyzer {
       } catch (error) {
         if (attempt === maxRetries) {
           const message = error instanceof Error ? error.message : String(error);
-          return {
-            nebula_id: null,
-            confidence: 0,
-            reasoning: `Vision analysis failed: ${message}`,
-          };
+          const isTimeout =
+            message.includes('timeout') ||
+            message.includes('aborted') ||
+            message.includes('AbortError') ||
+            error instanceof DOMException && error.name === 'TimeoutError';
+          throw new VisionAnalysisError(
+            isTimeout
+              ? { code: 'VISION_TIMEOUT', message, retryable: true }
+              : { code: 'VISION_ERROR', message, retryable: false },
+          );
         }
       }
     }
