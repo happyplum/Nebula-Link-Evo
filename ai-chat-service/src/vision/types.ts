@@ -7,9 +7,6 @@ export interface VisionMatchResult {
 
 /** Configuration for the vision analyzer. */
 export interface VisionConfig {
-  providerBaseUrl: string;
-  apiKey: string;
-  modelId: string;
   maxTokens: number;
   temperature: number;
   timeoutMs: number;
