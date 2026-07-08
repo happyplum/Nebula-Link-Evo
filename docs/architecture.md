@@ -22,7 +22,7 @@ Browser ←→ Debug UI (:5173 dev)
 
 | 服务              | 端口     | 职责                                |
 | ----------------- | -------- | ----------------------------------- |
-| proxy-adapter     | 3000     | 纯浏览器 MCP 网关（内进程 Playwright 引擎 + browser-control/vision-agent 工具） |
+| proxy-adapter     | 3000     | 纯浏览器 MCP 网关（内进程 Playwright 引擎 + browser-control.* 工具） |
 | ai-chat-service   | 3001     | AI 对话服务（会话管理、AI provider 编排、Chat SSE） |
 | debug-ui (dev)    | 5173     | 前端开发服务器                      |
 | debug-ui (prod)   | 独立部署 | 独立构建，不通过 proxy-adapter 托管 |
@@ -96,7 +96,7 @@ AI Providers                            Chromium
 
 **设计原则:**
 
-- ai-chat-service 通过 MCP-over-HTTP 从 proxy-adapter 获取浏览器控制与视觉能力
+- ai-chat-service 通过 MCP-over-HTTP 从 proxy-adapter 获取浏览器控制能力；视觉分析由 ai-chat-service 内部 VisionAnalyzer 提供
 - proxy-adapter 内进程运行 Playwright 引擎，不再依赖外部 playwright-server 进程
 - debug-ui 分别连接两个服务：chat SSE → ai-chat-service (:3001)，browser/debug → proxy-adapter (:3000)
 - ai-e2e 通过 AiChatClient(:3001) 和 BrowserGatewayClient(:3000) 消费
