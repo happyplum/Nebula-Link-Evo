@@ -1,0 +1,214 @@
+diff --git a/ai-chat-service/src/vision/index.ts b/ai-chat-service/src/vision/index.ts
+new file mode 100644
+index 0000000..f42102d
+--- /dev/null
++++ b/ai-chat-service/src/vision/index.ts
+@@ -0,0 +1,3 @@
++export { VisionAnalyzer } from './vision-analyzer.js';
++export type { VisionConfig } from './types.js';
++export type { VisionMatchResult } from './types.js';
+diff --git a/ai-chat-service/src/vision/prompts/element-finding.ts b/ai-chat-service/src/vision/prompts/element-finding.ts
+new file mode 100644
+index 0000000..a3df862
+--- /dev/null
++++ b/ai-chat-service/src/vision/prompts/element-finding.ts
+@@ -0,0 +1,44 @@
++import type { ElementLocator } from '@nebula-link-evo/shared';
++
++/**
++ * Build a formatted element context string from elements_map.
++ * Format: [ID] <tag> "text" @ (x,y,w,h) — one line per element.
++ */
++export function buildElementsContext(elementsMap: Record<string, ElementLocator>): string {
++  const entries = Object.values(elementsMap).filter((el) => el.id);
++
++  entries.sort((a, b) => {
++    const numA = parseInt(a.id, 10);
++    const numB = parseInt(b.id, 10);
++    if (Number.isNaN(numA) && Number.isNaN(numB)) return a.id.localeCompare(b.id);
++    if (Number.isNaN(numA)) return 1;
++    if (Number.isNaN(numB)) return -1;
++    return numA - numB;
++  });
++
++  return entries
++    .map((el) => {
++      const textPart = el.text ? ` "${el.text}"` : '';
++      const { x, y, width, height } = el.bbox;
++      return `[${el.id}] <${el.tag}>${textPart} @ (${x},${y},${width},${height})`;
++    })
++    .join('\n');
++}
++
++/** Build the complete user prompt for the vision model. */
++export function buildFindingPrompt(elementsContext: string, description: string): string {
++  return [
++    'You are a web page element matcher. You see an annotated screenshot with red ID labels on interactive elements.',
++    '',
++    'Here are all the labeled elements:',
++    elementsContext,
++    '',
++    `Find the element matching this description: "${description}"`,
++    '',
++    'Respond ONLY with a JSON object (no markdown, no extra text):',
++    '{ "nebula_id": "<id>", "confidence": <0-1>, "reasoning": "<brief explanation>" }',
++    '',
++    'If no element matches, respond with:',
++    '{ "nebula_id": null, "confidence": 0, "reasoning": "<why no match>" }',
++  ].join('\n');
++}
+diff --git a/ai-chat-service/src/vision/types.ts b/ai-chat-service/src/vision/types.ts
+new file mode 100644
+index 0000000..abf58b0
+--- /dev/null
++++ b/ai-chat-service/src/vision/types.ts
+@@ -0,0 +1,14 @@
++/** Vision model matching result. */
++export interface VisionMatchResult {
++  nebula_id: string | null;
++  confidence: number;
++  reasoning: string;
++}
++
++/** Configuration for the vision analyzer. */
++export interface VisionConfig {
++  maxTokens: number;
++  temperature: number;
++  timeoutMs: number;
++  maxRetries: number;
++}
+diff --git a/ai-chat-service/src/vision/vision-analyzer.ts b/ai-chat-service/src/vision/vision-analyzer.ts
+new file mode 100644
+index 0000000..6dc0f57
+--- /dev/null
++++ b/ai-chat-service/src/vision/vision-analyzer.ts
+@@ -0,0 +1,129 @@
++import { generateText } from 'ai';
++import type { LanguageModelV3 } from '@ai-sdk/provider';
++import type { DOMSnapshotResponse } from '@nebula-link-evo/shared';
++import type { VisionConfig } from './types.js';
++import type { VisionMatchResult } from './types.js';
++import { buildElementsContext, buildFindingPrompt } from './prompts/element-finding.js';
++
++export class VisionAnalyzer {
++  private model: LanguageModelV3;
++  private config: VisionConfig;
++
++  constructor(model: LanguageModelV3, config: VisionConfig) {
++    this.model = model;
++    this.config = config;
++  }
++
++  getConfig(): VisionConfig {
++    return this.config;
++  }
++
++  async findElement(
++    snapshot: DOMSnapshotResponse,
++    description: string,
++  ): Promise<VisionMatchResult> {
++    const elementsContext = buildElementsContext(snapshot.elements_map);
++    const prompt = buildFindingPrompt(elementsContext, description);
++    const maxRetries = this.config.maxRetries;
++
++    for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
++      try {
++        const result = await generateText({
++          model: this.model,
++          messages: [
++            {
++              role: 'user',
++              content: [
++                { type: 'image', image: snapshot.annotated_screenshot_base64 },
++                { type: 'text', text: prompt },
++              ],
++            },
++          ],
++          maxOutputTokens: this.config.maxTokens,
++          temperature: this.config.temperature,
++          abortSignal: AbortSignal.timeout(this.config.timeoutMs),
++        });
++
++        const parsed = this.parseResponse(result.text);
++
++        if (parsed.nebula_id !== null && !(parsed.nebula_id in snapshot.elements_map)) {
++          if (attempt < maxRetries) continue;
++          return {
++            nebula_id: null,
++            confidence: 0,
++            reasoning: `Vision model returned invalid nebula_id "${parsed.nebula_id}"`,
++          };
++        }
++
++        return parsed;
++      } catch (error) {
++        if (attempt === maxRetries) {
++          const message = error instanceof Error ? error.message : String(error);
++          return {
++            nebula_id: null,
++            confidence: 0,
++            reasoning: `Vision analysis failed: ${message}`,
++          };
++        }
++      }
++    }
++
++    return { nebula_id: null, confidence: 0, reasoning: 'Max retries exceeded' };
++  }
++
++  private parseResponse(text: string): VisionMatchResult {
++    if (!text || !text.trim()) {
++      throw new Error('Empty response from vision model');
++    }
++
++    try {
++      const parsed: unknown = JSON.parse(text);
++      return normalizeResult(parsed);
++    } catch {
++      // not pure JSON
++    }
++
++    const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
++    if (codeBlockMatch) {
++      try {
++        const parsed: unknown = JSON.parse(codeBlockMatch[1].trim());
++        return normalizeResult(parsed);
++      } catch {
++        // code block content not valid JSON
++      }
++    }
++
++    const braceMatch = text.match(/\{[\s\S]*\}/);
++    if (braceMatch) {
++      try {
++        const parsed: unknown = JSON.parse(braceMatch[0]);
++        return normalizeResult(parsed);
++      } catch {
++        // embedded JSON not valid
++      }
++    }
++
++    throw new Error(`Failed to parse vision response: ${text.slice(0, 200)}`);
++  }
++}
++
++function normalizeResult(value: unknown): VisionMatchResult {
++  if (typeof value !== 'object' || value === null) {
++    return {
++      nebula_id: null,
++      confidence: 0,
++      reasoning: 'Vision response is not a JSON object',
++    };
++  }
++
++  const obj = value as Record<string, unknown>;
++
++  return {
++    nebula_id:
++      obj.nebula_id === null || typeof obj.nebula_id === 'string'
++        ? (obj.nebula_id as string | null)
++        : null,
++    confidence: typeof obj.confidence === 'number' ? obj.confidence : 0,
++    reasoning: typeof obj.reasoning === 'string' ? obj.reasoning : 'No reasoning provided',
++  };
++}
