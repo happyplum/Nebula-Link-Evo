@@ -24,17 +24,17 @@ Browser ←→ Debug UI (:5173 dev)
 
 ### 手眼协调
 
-**感知层**：通过带标注的截图和简化 DOM v2.0（含 data-nebula-id 属性）实现页面感知。Proxy Adapter 内置 `vision-agent` ToolProvider，通过 `browserClient` 复用浏览器截图/快照能力，并以 `vision-agent.*` 工具对 Chat 与 MCP Server 暴露视觉分析。系统支持 12 种操作类型（对应 `shared/types/action.ts` 的 `Action` 联合）：click、type、focus、blur、hover、value、dispatch、scroll、navigate、wait、mcp_call、finish。
+**感知层**：通过带标注的截图和简化 DOM v2.0（含 data-nebula-id 属性）实现页面感知。`proxy-adapter` 通过 `browser-control.*` 工具（`browser_screenshot`、`dom_snapshot` 等）提供截图和 DOM 快照能力。视觉分析由 `ai-chat-service` 内部的 `VisionAnalyzer` 负责，以 `vision.find_element` 工具对 Chat 暴露元素匹配能力。系统支持 12 种操作类型（对应 `shared/types/action.ts` 的 `Action` 联合）：click、type、focus、blur、hover、value、dispatch、scroll、navigate、wait、mcp_call、finish。
 
 **目标定位**：采用 7 级目标链，依次尝试 nebula-id → role → testid → aria → text → css → xpath 选择器，确保精准定位页面元素。
 
-**视觉标记**：Vision Marker System 将操作坐标与 DOM 元素关联；`vision-agent` 负责基于标注截图和 DOM 快照调用视觉模型完成元素匹配。Vision agent 配置通过 `config.json` 的 `defaults.vision` 字段指定 provider/model，由 resolver 自动解析对应的 apiKey 和 baseUrl，不需要设置独立环境变量；配置缺失或初始化失败时降级为不可用工具而不阻断 Proxy Adapter 启动。
+**视觉标记**：Vision Marker System 将操作坐标与 DOM 元素关联；标注截图由 `proxy-adapter` 的 `browser-control.dom_snapshot` 工具生成，视觉模型元素匹配由 `ai-chat-service` 的 `VisionAnalyzer` 完成。Vision 配置通过 `ai-chat-service` 的 `config.json` `defaults.vision` 字段指定 provider/model，由 resolver 自动解析对应的 apiKey 和 baseUrl；配置缺失或初始化失败时降级为不可用工具而不阻断服务启动。
 
 ### Agent Chat 会话
 
 **会话状态机**：idle → running ↔ paused，interrupt → interrupted，cancel → cancelled，completed。每个会话通过互斥锁保证同一时间只有一个活跃执行，支持暂停、恢复、中断等操作。
 
-**工具与扩展**：MCP（Model Context Protocol）提供丰富的扩展能力。Chat 中 `browser-control.*` 与 `vision-agent.*` 工具由 ai-chat-service 通过 MCP-over-HTTP 自动连接 `proxy-adapter` 的 `gateway` 服务器（默认 `PROXY_ADAPTER_URL` + `/mcp`）获取；其他外部 MCP 工具可继续通过 stdio 或 StreamableHTTP 协议动态注册与调用。外部 MCP 工具默认保留原始工具名，若与已注册工具同名则按 `<serverName>-<toolName>` 前缀规则暴露。MCP 客户端具备崩溃恢复机制：状态机管理 server 生命周期，事件驱动检测断链，指数退避自动重连（最多 5 次），`toolsChanged` 事件通知工具变更。
+**工具与扩展**：MCP（Model Context Protocol）提供丰富的扩展能力。Chat 中 `browser-control.*` 工具由 ai-chat-service 通过 MCP-over-HTTP 自动连接 `proxy-adapter` 的 `gateway` 服务器（默认 `PROXY_ADAPTER_URL` + `/mcp`）获取；视觉分析工具 `vision.find_element` 由 ai-chat-service 内部提供，不通过 MCP 暴露。其他外部 MCP 工具可继续通过 stdio 或 StreamableHTTP 协议动态注册与调用。外部 MCP 工具默认保留原始工具名，若与已注册工具同名则按 `<serverName>-<toolName>` 前缀规则暴露。MCP 客户端具备崩溃恢复机制：状态机管理 server 生命周期，事件驱动检测断链，指数退避自动重连（最多 5 次），`toolsChanged` 事件通知工具变更。
 
 **上下文管理**：消息数超过 20 时自动压缩上下文，Chat SSE 每次建连都会先发送完整 `session.snapshot` 再继续 live stream，后台任务队列支持 3 次重试和 10 分钟空闲清理。
 
@@ -63,8 +63,8 @@ Browser ←→ Debug UI (:5173 dev)
 
 | Package | Port | Role |
 |---------|------|------|
-| `proxy-adapter` | :3000 | 纯浏览器 MCP 网关（browser-control.* + vision-agent.* 工具、调试流、LiveKit 令牌、配置与健康检查） |
-| `ai-chat-service` | :3001 | AI 对话服务（会话管理、AI provider 编排、Chat SSE、provider preflight、数据库备份） |
+| `proxy-adapter` | :3000 | 纯浏览器 MCP 网关（browser-control.* 工具、调试流、LiveKit 令牌、配置与健康检查） |
+| `ai-chat-service` | :3001 | AI 对话服务（会话管理、AI provider 编排、Chat SSE、provider preflight、视觉分析、数据库备份） |
 | `debug-ui` | :5173 | 实时调试监控面板（chat SSE → :3001, browser/debug → :3000） |
 | `ai-e2e` | :3002 | AI 驱动的 E2E 自动化测试编排（通过 AiChatClient(:3001) 和 BrowserGatewayClient(:3000) 消费） |
 | `shared` | — | 共享类型和工具库 |
@@ -115,8 +115,8 @@ curl http://localhost:3000/api/health
 ```
 debug-ui/           # Frontend (React 19 + TypeScript + Vite)
 proxy-adapter/      # Browser MCP gateway (Fastify, MCP Server, Playwright control)
-  src/mcps/         #   Built-in MCP modules (vision-agent)
-  src/tools/        #   ToolRegistry + providers (browser-control, vision-agent, MCP client)
+  src/mcps/         #   Built-in MCP modules
+  src/tools/        #   ToolRegistry + providers (browser-control, MCP client)
 ai-chat-service/    # AI chat backend (Fastify, conversation, chat SSE, provider orchestration)
 ai-e2e/             # E2E automation orchestrator (consumes proxy-adapter and ai-chat-service HTTP APIs)
 shared/             # Shared types & utils (@nebula-link-evo/shared)
@@ -198,7 +198,7 @@ docs/               # Documentation
 
 ```
 proxy-adapter (:3000) — 纯浏览器 MCP 网关
-  ├── MCP Server (StreamableHTTP) 对外暴露 browser-control.* + vision-agent.*
+  ├── MCP Server (StreamableHTTP) 对外暴露 browser-control.*
   ├── 浏览器调试 REST 端点（MJPEG、DOM 快照）
   ├── LiveKit 令牌
   └── 配置与健康检查

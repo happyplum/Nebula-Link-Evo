@@ -82,7 +82,7 @@ debug-ui  ←──  （仅被用户消费）
 
 | 契约 | 提供方 | 消费方 | 路径 | 备注 |
 |------|--------|--------|------|------|
-| MCP Server (StreamableHTTP) | `proxy-adapter` | `ai-chat-service` (MCP Client) | `POST /mcp` | 暴露 `browser-control.*` + `vision-agent.*` |
+| MCP Server (StreamableHTTP) | `proxy-adapter` | `ai-chat-service` (MCP Client) | `POST /mcp` | 暴露 `browser-control.*`（15 个工具） |
 | LiveKit token | `proxy-adapter` | `debug-ui` | `GET /api/livekit-token` | 用于 LiveView 升级 |
 | Health | `proxy-adapter` / `ai-chat-service` | 任意 | `GET /api/health` 或 `/health` | 健康检查 |
 | Config | `proxy-adapter` / `ai-chat-service` | `debug-ui` | `GET /api/config` 或 `/config` | 当前运行配置 |
@@ -95,8 +95,9 @@ debug-ui  ←──  （仅被用户消费）
 
 ### 3.3 MCP 工具契约
 
-- `proxy-adapter` 通过 MCP Server 暴露 `browser-control.*`（12 action）+ `vision-agent.*` 工具。
-- `ai-chat-service` 通过 MCP Client 自动拉取，状态机管理 server 生命周期，指数退避重连（最多 5 次），`toolsChanged` 事件通知工具变更。
+- `proxy-adapter` 通过 MCP Server 暴露 `browser-control.*`（15 个工具）。Vision-agent 工具已移除。
+- `ai-chat-service` 通过 MCP Client 自动拉取 browser-control 工具；状态机管理 server 生命周期，指数退避重连（最多 5 次），`toolsChanged` 事件通知工具变更。
+- 视觉分析由 `ai-chat-service` 内部 `VisionAnalyzer` + `VisionToolProvider` 提供，注册 `vision.find_element` 工具（`exposeTo: ['chat']`），不通过 MCP Server 暴露。
 - 同名工具命名规则：`<serverName>-<toolName>` 前缀。
 - 配置入口：`PROXY_ADAPTER_URL + /mcp`（默认 `http://127.0.0.1:3000/mcp`）。
 
@@ -128,7 +129,8 @@ debug-ui  ←──  （仅被用户消费）
 - 12 种 action（`shared/types/action.ts` 的 `Action` 联合）：`click / type / focus / blur / hover / value / dispatch / scroll / navigate / wait / mcp_call / finish`。注意：`screenshot` 是 browser-control MCP **工具名**，不在 `Action` 联合中。
 - 7 级目标链：nebula-id → role → testid → aria → text → css → xpath。
 - DOM 快照 v2.0：含 `data-nebula-id` 属性；element 归一化字段 `id` + `locator_bundle`。
-- vision-agent 配置：`config.json` 的 `defaults.vision.{provider,model}`，由 resolver 自动解析 `apiKey`/`baseUrl`；缺失或初始化失败时降级为不可用工具，不阻断启动。
+- 视觉标记（Vision Marker）系统：通过 `data-nebula-id` 属性关联操作坐标与 DOM 元素；标注截图由 `browser-control.dom_snapshot` 工具生成，消费方（如 `ai-chat-service` 的 `VisionAnalyzer`）负责基于标注截图调用视觉模型完成元素匹配。
+- Vision 配置（ai-chat-service 内部）：`config.json` 的 `defaults.vision.{provider,model}`，由 resolver 自动解析 `apiKey`/`baseUrl`；缺失或初始化失败时降级为不可用工具，不阻断启动。
 - 截图返回格式：raw JPEG base64 **或** gzip-compressed JPEG bytes（消费方必须都支持）。
 
 ### 3.7 ai-e2e 后端消费契约
@@ -151,7 +153,7 @@ debug-ui  ←──  （仅被用户消费）
 |------|----------|
 | 新增 / 删除 / 重命名包 | 全局产品规格索引 + 依赖方向 + 端口与基址 |
 | 新增 / 删除 / 修改跨包 HTTP/SSE 路径 | 跨包契约（3.2） + 提供方与所有消费方 PRODUCT-SPEC 的路由登记 |
-| 修改 MCP 工具集（`browser-control.*` / `vision-agent.*`） | 跨包契约（3.3） + `proxy-adapter` + `ai-chat-service` PRODUCT-SPEC |
+| 修改 MCP 工具集（`browser-control.*`）或 ai-chat-service 内部工具（`vision.find_element`） | 跨包契约（3.3） + `proxy-adapter` + `ai-chat-service` PRODUCT-SPEC |
 | 修改 `@nebula-link-evo/shared` 公共类型 | 跨包契约（3.4） + `shared` + 所有消费方 PRODUCT-SPEC |
 | 修改 Chat 渲染行为 | 跨包契约（3.5） + `debug-ui` + `ai-chat-service` PRODUCT-SPEC + 根 README "Debug Chat Rendering" |
 | 修改 action 类型集合 / 7 级目标链 / DOM 快照格式 / 截图格式 | 跨包契约（3.6） + `proxy-adapter` + `debug-ui` + `ai-chat-service` PRODUCT-SPEC + 根 README 相关章节 |

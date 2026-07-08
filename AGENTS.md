@@ -2,15 +2,15 @@
 
 ## Overview
 
-AI-assisted browser automation platform. `proxy-adapter` is the browser MCP gateway (browser-control + vision-agent tools, MCP Server via StreamableHTTP). `ai-chat-service` is the AI conversation backend (session management, provider orchestration, Chat SSE). `debug-ui` provides the primary web UI. `ai-e2e` is an AI-driven E2E test orchestration subsystem with its own React SPA at `/ai-e2e/`.
+AI-assisted browser automation platform. `proxy-adapter` is the browser MCP gateway (browser-control.* MCP tools via StreamableHTTP). `ai-chat-service` is the AI conversation backend (session management, provider orchestration, Chat SSE, vision analysis via internal `vision.find_element` tool). `debug-ui` provides the primary web UI. `ai-e2e` is an AI-driven E2E test orchestration subsystem with its own React SPA at `/ai-e2e/`.
 
 ## Structure
 
 ```text
 shared/             Shared types and utilities (no src/ dir — source at package root)
 proxy-adapter/      Browser MCP gateway — MCP Server, Playwright control, debug streams (:3000)
-  src/mcps/         Built-in MCP modules (vision-agent — internal ToolProvider, not stdio)
-  src/tools/        ToolRegistry + providers (browser-control, vision-agent, MCP client)
+  src/mcps/         Built-in MCP modules (not stdio)
+  src/tools/        ToolRegistry + providers (browser-control, MCP client)
 ai-chat-service/    AI chat backend — conversation, provider orchestration, Chat SSE (:3001)
 debug-ui/           Primary web UI — React SPA, Vite (:5173 dev)
 ai-e2e/             AI E2E test orchestration (:3002)

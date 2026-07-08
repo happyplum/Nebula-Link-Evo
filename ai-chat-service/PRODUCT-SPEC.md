@@ -1,6 +1,6 @@
 # ai-chat-service — 产品规格 (PRODUCT-SPEC)
 
-> 一句话目标：承载平台所有 **AI 对话、会话管理、provider 编排、Chat SSE 流式**能力，并通过 MCP-over-HTTP 消费 `proxy-adapter` 的浏览器/视觉工具。
+> 一句话目标：承载平台所有 **AI 对话、会话管理、provider 编排、Chat SSE 流式**能力，并通过 MCP-over-HTTP 消费 `proxy-adapter` 的浏览器工具，视觉分析由内部 `VisionAnalyzer` 提供。
 > 端口：`:3001` ｜ 角色：AI 对话服务 ｜ 默认绑定 `127.0.0.1`（localhost-only，无 auth 层）
 
 ---
@@ -11,7 +11,8 @@
 
 - 提供 Agent Chat 会话状态机（idle → running ↔ paused，interrupt → interrupted，cancel → cancelled，completed）与互斥锁。
 - 编排多 AI provider（GLM / OpenAI / Anthropic / Kimi / NVIDIA）通过 Vercel AI SDK。
-- 通过 MCP Client 连接 `proxy-adapter` MCP Server，自动获取 `browser-control.*` 与 `vision-agent.*` 工具。
+- 通过 MCP Client 连接 `proxy-adapter` MCP Server，自动获取 `browser-control.*` 工具。
+- 通过内部 `VisionAnalyzer` 提供视觉分析工具 `vision.find_element`（`exposeTo: ['chat']`，不通过 MCP 暴露）。
 - 向 `debug-ui` 提供 Chat SSE 流（每次建连先发完整 `session.snapshot` 再续 live stream）。
 - 提供 provider preflight（`/test-ai`、`/verify-keys`）、loop-guard（防止 AI 重复陷入同一种失败）、数据库备份。
 
@@ -57,7 +58,8 @@
 | Conversation 子系统 | `src/conversation/`（manager / types / chat-handler / db / compressor / session-state-dao / session-events-dao / session-event-hub / index） | shipped | 会话、消息压缩、DAO、事件 hub | 压缩触发阈值：消息数 > 20 |
 | DB 迁移 | `src/conversation/migrations/`（004-sessions-state / 005-migrate-existing-sessions / 006-session-events / 007-add-vision-model-columns） | shipped | SQLite schema 迁移 | 顺序不可乱 |
 | 数据库 | `src/db/`（ConversationDatabase / SessionStateDAO / SessionEventsDAO / SessionEventsCleanup / types / index） | shipped | 独立 SQLite 数据库与 DAO | 不与 `proxy-adapter` 共享 |
-| 工具注册 | `src/tools/`（registry / types / index / providers/mcp-client-provider / adapters/{vercel-ai,json-schema-to-zod}） | shipped | ToolRegistry + MCP client provider | MCP 客户端：状态机管理 server 生命周期、指数退避重连（最多 5 次）、`toolsChanged` 事件 |
+| 视觉分析 | `src/vision/`（vision-analyzer / prompts / types / index） | shipped | Vision 分析引擎，通过 AI 模型识别 DOM 元素 | 构造函数接收 `LanguageModelV3` + `VisionConfig`；提供 `findElement()` 方法 |
+| 工具注册 | `src/tools/`（registry / types / index / providers/{mcp-client-provider,vision-tool-provider} / adapters/{vercel-ai,json-schema-to-zod}） | shipped | ToolRegistry + providers（MCP client + VisionToolProvider） | MCP 客户端：状态机管理 server 生命周期、指数退避重连（最多 5 次）、`toolsChanged` 事件 |
 | 客户端 | `src/clients/`（vercel-ai/provider / mcp/sdk-client / mcp/fetch / compression / types） | shipped | Vercel AI Provider 与 MCP SDK 客户端（含 fetch MCP server） |  |
 | 插件与路由 | `src/plugins/routes/api/`（chat/{stream,sessions,control,connectivity-test,runtime-state,index} / ai-service / debug-ai） | shipped | Fastify 路由 | Chat SSE 每次建连发完整 `session.snapshot` |
 | 错误 | `src/errors/`（http-errors / index） | shipped | HTTP 错误分类 | API 边界：未知 provider → 400；不可用 provider → 503 |
@@ -83,7 +85,7 @@
 | `/api/test-ai`（同样存在于 `/api/v1/test-ai`） | POST | shipped | provider preflight：实时探测 | services/provider/preflight、plugins/routes/api/debug-ai |
 | `/api/verify-keys`（同样存在于 `/api/v1/verify-keys`） | GET | shipped | API key 验证 | services/provider/preflight、plugins/routes/api/debug-ai |
 | `/debug-ai` | * | shipped | 调试用 AI 接口 | plugins/routes/api/debug-ai |
-| `MCP Client → proxy-adapter /mcp` | out | shipped | 拉取 `browser-control.*` + `vision-agent.*` 工具 | clients/mcp、tools/providers/mcp-client-provider |
+| `MCP Client → proxy-adapter /mcp` | out | shipped | 拉取 `browser-control.*` 工具 | clients/mcp、tools/providers/mcp-client-provider |
 
 ---
 
@@ -109,6 +111,8 @@
 | 错误分类（CONFIG_INVALID / INSTALL_FAILED / INIT_FAILED） | services/provider/{errors,error-classifier} | shipped | `errors.test.ts` | errors、services/provider |
 | 连接性 gate | services/connectivity-gate-service | shipped | 单元测试 | services |
 | Vision model 列（007 迁移） | conversation/migrations/007 | shipped | `007-add-vision-model-columns.test.ts`、`session-vision-config.test.ts` | conversation |
+| Vision 分析引擎（VisionAnalyzer） | src/vision/ | shipped | `vision-analyzer.test.ts` | src/vision/ |
+| 视觉元素查找工具（`vision.find_element`） | tools/providers/vision-tool-provider | shipped | `vision-tool-provider.test.ts` | tools/providers、src/vision/、clients/mcp |
 
 ---
 
