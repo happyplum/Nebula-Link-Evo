@@ -16,10 +16,7 @@ import { createWorkerLogger } from './logger.js';
 
 const logger = createWorkerLogger('LiveKitPublisher');
 
-const LIVEKIT_URL = process.env.LIVEKIT_URL || 'ws://127.0.0.1:7880';
-const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY;
-const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET;
-const LIVEKIT_ROOM = process.env.LIVEKIT_ROOM_NAME || 'nebula-link-screen';
+// LiveKit env vars are read at call sites, not module level, to ensure dotenv has loaded.
 
 type ScreencastFrameEvent = {
   data: string;
@@ -60,11 +57,13 @@ export async function startPublisher(
 
   try {
     const { width, height } = options;
+    const livekitUrl = process.env.LIVEKIT_URL || 'ws://127.0.0.1:7880';
+    const livekitRoom = process.env.LIVEKIT_ROOM_NAME || 'nebula-link-screen';
     publishWidth = width;
     publishHeight = height;
 
     room = new Room();
-    await room.connect(LIVEKIT_URL, await generateToken(), {
+    await room.connect(livekitUrl, await generateToken(), {
       autoSubscribe: false,
       dynacast: false,
     });
@@ -118,7 +117,7 @@ export async function startPublisher(
       }, 1000);
     }
 
-    logger.info({ width, height, room: LIVEKIT_ROOM }, 'Publishing started');
+    logger.info({ width, height, room: livekitRoom }, 'Publishing started');
   } catch (error) {
     await cleanupPublisher();
     throw error;
@@ -233,16 +232,19 @@ async function cleanupPublisher(): Promise<void> {
 }
 
 async function generateToken(): Promise<string> {
-  if (!LIVEKIT_API_KEY || !LIVEKIT_API_SECRET) {
+  const apiKey = process.env.LIVEKIT_API_KEY;
+  const apiSecret = process.env.LIVEKIT_API_SECRET;
+  if (!apiKey || !apiSecret) {
     throw new Error(
       'LIVEKIT_API_KEY and LIVEKIT_API_SECRET environment variables are required'
     );
   }
+  const room = process.env.LIVEKIT_ROOM_NAME || 'nebula-link-screen';
   const { AccessToken } = await import('livekit-server-sdk');
-  const accessToken = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
+  const accessToken = new AccessToken(apiKey, apiSecret, {
     identity: 'proxy-adapter',
   });
 
-  accessToken.addGrant({ roomJoin: true, room: LIVEKIT_ROOM });
+  accessToken.addGrant({ roomJoin: true, room });
   return accessToken.toJwt();
 }

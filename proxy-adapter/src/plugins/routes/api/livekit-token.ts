@@ -1,10 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { AccessToken } from 'livekit-server-sdk';
 
-const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY;
-const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET;
-const LIVEKIT_ROOM = process.env.LIVEKIT_ROOM_NAME || 'nebula-link-screen';
-const LIVEKIT_URL = process.env.LIVEKIT_URL || 'ws://127.0.0.1:7880';
+// Env vars are read at call sites, not module level, to ensure dotenv has loaded.
 
 const routes: FastifyPluginAsync = async (fastify) => {
   fastify.get(
@@ -29,20 +26,25 @@ const routes: FastifyPluginAsync = async (fastify) => {
       },
     },
     async () => {
-      if (!LIVEKIT_API_KEY || !LIVEKIT_API_SECRET) {
+      const apiKey = process.env.LIVEKIT_API_KEY;
+      const apiSecret = process.env.LIVEKIT_API_SECRET;
+      const room = process.env.LIVEKIT_ROOM_NAME || 'nebula-link-screen';
+      const url = process.env.LIVEKIT_URL || 'ws://127.0.0.1:7880';
+
+      if (!apiKey || !apiSecret) {
         throw new Error(
           'LIVEKIT_API_KEY and LIVEKIT_API_SECRET environment variables are required'
         );
       }
-      const accessToken = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
+      const accessToken = new AccessToken(apiKey, apiSecret, {
         identity: `debug-ui-${Date.now()}`,
       });
-      accessToken.addGrant({ roomJoin: true, room: LIVEKIT_ROOM });
+      accessToken.addGrant({ roomJoin: true, room });
 
       return {
         token: await accessToken.toJwt(),
-        room: LIVEKIT_ROOM,
-        url: LIVEKIT_URL,
+        room,
+        url,
         serverActive: true,
       };
     }
