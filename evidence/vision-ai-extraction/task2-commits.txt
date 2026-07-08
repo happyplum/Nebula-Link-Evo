@@ -1,0 +1,2 @@
+51144e8 fix(ai-chat-service): 调整 VisionConfig 字段为计划定义
+b38548f feat(ai-chat-service): 迁移 VisionAnalyzer 和 prompt 模板
