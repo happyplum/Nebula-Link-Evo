@@ -8,6 +8,8 @@ import { VisionAnalysisError } from '../../vision/errors.js';
 import type { VisionConfig } from '../../vision/types.js';
 import type { GatewayTool, ToolProvider, ToolProviderStatus } from '../types.js';
 
+const MAX_SNAPSHOT_CACHE_SIZE = 5;
+
 /**
  * VisionToolProvider 在 ai-chat-service 内注册 vision.find_element 工具。
  * 内部通过 MCP Client 调用 gateway 的 browser-control.dom_snapshot 获取截图和 DOM，
@@ -21,6 +23,7 @@ export class VisionToolProvider extends EventEmitter implements ToolProvider {
   private mcpClient: MCPSDKClient;
   private config: VisionConfig;
   private _tools: GatewayTool[] = [];
+  private snapshots = new Map<string, DOMSnapshotResponse>();
 
   constructor(visionAnalyzer: VisionAnalyzer, mcpClient: MCPSDKClient, config: VisionConfig) {
     super();
@@ -41,6 +44,7 @@ export class VisionToolProvider extends EventEmitter implements ToolProvider {
   async shutdown(): Promise<void> {
     this.status = 'disabled';
     this._tools = [];
+    this.snapshots.clear();
   }
 
   private buildFindElementTool(): GatewayTool {
@@ -77,12 +81,12 @@ export class VisionToolProvider extends EventEmitter implements ToolProvider {
     if (!description) {
       return JSON.stringify({ ok: false, code: 'INVALID_INPUT', message: 'description is required', retryable: false });
     }
+    const snapshotId = typeof input.snapshot_id === 'string' && input.snapshot_id ? input.snapshot_id : undefined;
 
     // 1. Call MCP gateway for DOM snapshot
     let snapshot: DOMSnapshotResponse;
     try {
-      const result = await this.mcpClient.callTool('gateway', 'browser-control.dom_snapshot', {});
-      snapshot = this.extractSnapshot(result);
+      snapshot = await this.resolveSnapshot(snapshotId);
     } catch (error) {
       if (error instanceof MCPServerUnavailableError) {
         return JSON.stringify({ ok: false, code: 'MCP_UNAVAILABLE', message: error.message, retryable: true });
@@ -143,6 +147,34 @@ export class VisionToolProvider extends EventEmitter implements ToolProvider {
       }
       const message = error instanceof Error ? error.message : String(error);
       return JSON.stringify({ ok: false, code: 'VISION_ERROR', message, retryable: false });
+    }
+  }
+
+  private async resolveSnapshot(snapshotId?: string): Promise<DOMSnapshotResponse> {
+    const cached = snapshotId ? this.snapshots.get(snapshotId) : undefined;
+    if (cached) {
+      this.snapshots.delete(snapshotId!);
+      this.snapshots.set(snapshotId!, cached);
+      return cached;
+    }
+
+    const result = await this.mcpClient.callTool('gateway', 'browser-control.dom_snapshot', {});
+    const snapshot = this.extractSnapshot(result);
+    if (snapshot.snapshot_id) {
+      this.cacheSnapshot(snapshot);
+    }
+    return snapshot;
+  }
+
+  private cacheSnapshot(snapshot: DOMSnapshotResponse): void {
+    if (this.snapshots.has(snapshot.snapshot_id)) {
+      this.snapshots.delete(snapshot.snapshot_id);
+    }
+    this.snapshots.set(snapshot.snapshot_id, snapshot);
+    while (this.snapshots.size > MAX_SNAPSHOT_CACHE_SIZE) {
+      const oldest = this.snapshots.keys().next().value;
+      if (!oldest) break;
+      this.snapshots.delete(oldest);
     }
   }
 
