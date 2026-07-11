@@ -142,4 +142,17 @@ describe('config/resolver with flat provider config', () => {
     expect(result.success).toBe(true);
     expect(resolved.providers.glm.models).toEqual({});
   });
+
+  it('keeps enabled providers when apiKey env is missing', () => {
+    const { config: resolved, result } = resolveConfig(baseConfig, {
+      env: {},
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.warnings.some((warning) => warning.includes('Provider glm'))).toBe(true);
+    expect(resolved.providers.glm).toBeDefined();
+    expect(resolved.providers.glm.enabled).toBe(true);
+    expect(resolved.providers.glm.apiKey).toBe('');
+    expect(resolved.providers.glm.npmPackage).toBe('@ai-sdk/openai-compatible');
+  });
 });

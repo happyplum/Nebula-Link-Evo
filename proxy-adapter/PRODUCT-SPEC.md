@@ -38,7 +38,7 @@
 
 | 模块 | 路径 | 状态 | 职责 | 边界/契约 |
 |------|------|------|------|----------|
-| 服务入口 | `src/server.ts` | shipped | Env 加载、插件注册、路由 autoload、启动 | 单一启动序列：env → DB backup init（非测试）→ 插件 → `AppService.initialize()` → provider preflight → surfaces |
+| 服务入口 | `src/server.ts` | shipped | Env 加载、插件注册、路由 autoload、启动 | 单一启动序列：env → DB backup init（非测试）→ 插件 → `AppService.initialize()` → browser-control provider → surfaces |
 | 应用服务 | `src/services/app-service.ts` | shipped | 浏览器会话管理、配置、单例 facade | 其他模块通过 AppService 访问能力 |
 | Action 执行 | `src/services/action-executor.ts` | shipped | 浏览器动作分发 | 12 种 action 类型的执行入口（见 `shared/types/action.ts` 的 `Action` 联合） |
 | 交互日志 | `src/services/interaction-logger.ts` | shipped | 记录 AI 交互历史 | 写入本地 DB |
@@ -46,7 +46,7 @@
 | Debug 事件中枢 | `src/services/debug-event-hub.ts` | shipped | SSE debug 事件总线 | 供 `/debug/stream` 与 `debug-ui` 消费 |
 | 失败样本收集 | `src/services/failure-sample-collector.ts` | shipped | 收集失败交互样本 | 用于诊断与改进 |
 | 日志 | `src/services/logger.ts` | shipped | 结构化日志 |  |
-| 配置 | `src/config/`（schema / loader / resolver / validator） | shipped | env + `config.json` 驱动的配置 | `defaults` 可选；缺 provider key 仅 warning |
+| 配置 | `src/config/`（schema / loader / resolver / validator） | shipped | env + `config.json` 驱动的配置 | `defaults` 可选；缺 provider key 仅 warning，并保留 provider 记录（`apiKey: ""`） |
 | 工具注册 | `src/tools/`（registry / types / index / providers/* / adapters/*） | shipped | ToolRegistry + providers + 适配器 | providers: browser-tools-provider、mcp-client-provider；adapters: mcp-server、json-schema-to-zod |
 | 浏览器工具适配 | `src/browser-tools/`（definitions / tool-map / param-adapter / result-adapter / types / index） | shipped | browser-control.* 工具定义与参数/结果适配 | 工具集含 screenshot、click、type 等；区别于 `Action` 联合类型（12 种） |
 | MCP Server | `src/mcp-server/`（index / transport） | shipped | StreamableHTTP 传输层 + MCP Server 入口 | 路径 `/mcp`；`ai-chat-service` 通过 `PROXY_ADAPTER_URL + /mcp` 接入 |

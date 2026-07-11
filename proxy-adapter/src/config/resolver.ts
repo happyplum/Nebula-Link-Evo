@@ -56,6 +56,13 @@ export function resolveConfig(
     if (!apiKeyResult.success) {
       // All apiKey failures are non-fatal warnings — proxy-adapter does not make AI calls
       result.warnings.push(`Provider ${key}: ${apiKeyResult.error}`);
+      const resolvedProvider: ResolvedProvider = {
+        ...provider,
+        apiKey: '',
+        models: provider.models ?? {},
+      };
+      resolvedProvider.npmPackage = normalizeNpmPackage(resolvedProvider.npmPackage);
+      resolvedProviders[key] = resolvedProvider;
       continue;
     }
 
