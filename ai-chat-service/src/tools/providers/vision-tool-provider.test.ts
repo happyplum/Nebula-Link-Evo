@@ -116,6 +116,41 @@ describe('VisionToolProvider', () => {
     expect(parsed.element).toEqual({ tag: 'button', text: 'Submit', bbox: { x: 10, y: 20, width: 100, height: 40 } });
   });
 
+  it('uses cached snapshot when snapshot_id is provided', async () => {
+    const snapshot = buildSnapshotResponse();
+    const fakeMcp = new FakeMCPClient();
+    fakeMcp.callTool
+      .mockResolvedValueOnce({
+        raw: {},
+        text: JSON.stringify(snapshot),
+        parsed: snapshot,
+      })
+      .mockRejectedValueOnce(new Error('should not fetch a new snapshot'));
+
+    const fakeAnalyzer = new FakeVisionAnalyzer();
+    fakeAnalyzer.findElement.mockResolvedValue({
+      nebula_id: null,
+      confidence: 0,
+      reasoning: 'not found',
+    });
+
+    const provider = new VisionToolProvider(
+      fakeAnalyzer as unknown as VisionAnalyzer,
+      fakeMcp as unknown as MCPSDKClient,
+      fakeVisionConfig,
+    );
+    await provider.initialize();
+
+    const tool = provider.getTools()[0];
+    await tool.execute({ description: 'the submit button' });
+    const result = await tool.execute({ description: 'the submit button', snapshot_id: 'snap-001' });
+    const parsed = JSON.parse(result);
+
+    expect(fakeMcp.callTool).toHaveBeenCalledTimes(1);
+    expect(parsed.ok).toBe(true);
+    expect(parsed.snapshot_id).toBe('snap-001');
+  });
+
   it('failure path: MCP call throws → returns ok:false with code MCP_UNAVAILABLE', async () => {
     const fakeMcp = new FakeMCPClient();
     fakeMcp.callTool.mockRejectedValueOnce(new Error('gateway not reachable'));

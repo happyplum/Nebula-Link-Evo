@@ -7,6 +7,7 @@ import { ProviderRegistry } from './provider/registry.js';
 import type { ProviderConfig } from './provider/types.js';
 import { createWorkerLogger } from './logger.js';
 import type { ToolRegistry } from '../tools/registry.js';
+import { GATEWAY_MCP_SERVER_NAME } from '../config/service-config.js';
 
 export interface ApiKeyStatus {
   readonly provider: string;
@@ -195,11 +196,21 @@ export class AppService {
     const visionTools = this.toolRegistry
       ?.getAvailableTools({ consumer: 'chat' })
       .filter((tool) => tool.name.startsWith('vision.')) ?? [];
+    const gatewayServer = this.mcpClient
+      ?.getServerList()
+      .find((server) => server.name === GATEWAY_MCP_SERVER_NAME);
+    const gatewayRunning = gatewayServer?.running === true;
+    const visionStatus = visionTools.length > 0 && gatewayRunning ? 'connected' : 'degraded';
+    const visionError = visionTools.length === 0
+      ? 'Vision tools are unavailable'
+      : gatewayRunning
+        ? null
+        : `Gateway MCP server is unavailable${gatewayServer ? ` (state: ${gatewayServer.state})` : ''}`;
     const visionAgent = {
-      status: visionTools.length > 0 ? 'connected' : 'degraded',
+      status: visionStatus,
       tools: visionTools.map((tool) => tool.name),
       responseTime: Date.now() - visionStartedAt,
-      error: visionTools.length > 0 ? null : 'Vision tools are unavailable',
+      error: visionError,
     };
 
     return { decision, visionAgent, totalResponseTime: Date.now() - startedAt };

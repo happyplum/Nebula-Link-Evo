@@ -82,7 +82,7 @@
 | `/api/chat/runtime-state` | GET | shipped | 运行时状态查询 | plugins/routes/api/chat/runtime-state |
 | `/api/ai-service`（实际挂载前缀 `/api/ai`，含 `/api/v1/ai` 双版本） | * | shipped | AI 服务元信息 | plugins/routes/api/ai-service |
 | `/api/ai/generate` | POST | shipped | 文本生成（**ai-e2e 消费端点**；同样存在于 `/api/v1/ai/generate`） | plugins/routes/api/ai-service |
-| `/api/test-ai`（同样存在于 `/api/v1/test-ai`） | POST | shipped | provider preflight：实时探测 | services/provider/preflight、plugins/routes/api/debug-ai |
+| `/api/test-ai`（同样存在于 `/api/v1/test-ai`） | POST | shipped | provider preflight：实时探测；`visionAgent` 同时检查 `vision.*` 工具与 gateway MCP server 运行状态 | services/provider/preflight、plugins/routes/api/debug-ai |
 | `/api/verify-keys`（同样存在于 `/api/v1/verify-keys`） | GET | shipped | API key 验证 | services/provider/preflight、plugins/routes/api/debug-ai |
 | `/debug-ai` | * | shipped | 调试用 AI 接口 | plugins/routes/api/debug-ai |
 | `MCP Client → proxy-adapter /mcp` | out | shipped | 拉取 `browser-control.*` 工具 | clients/mcp、tools/providers/mcp-client-provider |
@@ -111,8 +111,8 @@
 | 错误分类（CONFIG_INVALID / INSTALL_FAILED / INIT_FAILED） | services/provider/{errors,error-classifier} | shipped | `errors.test.ts` | errors、services/provider |
 | 连接性 gate | services/connectivity-gate-service | shipped | 单元测试 | services |
 | Vision model 列（007 迁移） | conversation/migrations/007 | shipped | `007-add-vision-model-columns.test.ts`、`session-vision-config.test.ts` | conversation |
-| Vision 分析引擎（VisionAnalyzer） | src/vision/ | shipped | `vision-analyzer.test.ts` | src/vision/ |
-| 视觉元素查找工具（`vision.find_element`） | tools/providers/vision-tool-provider | shipped | `vision-tool-provider.test.ts` | tools/providers、src/vision/、clients/mcp |
+| Vision 分析引擎（VisionAnalyzer） | src/vision/ | shipped | 通过 `vision-tool-provider.test.ts` 覆盖调用与错误映射 | src/vision/ |
+| 视觉元素查找工具（`vision.find_element`） | tools/providers/vision-tool-provider | shipped | `vision-tool-provider.test.ts` | tools/providers、src/vision/、clients/mcp；支持 `snapshot_id` 复用最近 5 个本地快照 |
 
 ---
 

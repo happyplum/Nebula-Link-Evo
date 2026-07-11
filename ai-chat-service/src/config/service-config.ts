@@ -1,15 +1,14 @@
 /**
  * Environment-driven configuration for ai-chat-service.
  *
- * Mirrors the proxy-adapter config spirit (typed config object + LOG_LEVEL
- * normalization) but is purely env-based: there is no config.json yet. Provider
- * entries are placeholders consumed by T6-T9 once the AI stack migrates here.
+ * Holds process-level service settings (port, host, gateway URL, CORS) that sit
+ * beside the AI provider config loaded from config.json.
  */
 
 const PINO_LEVELS = ['trace', 'debug', 'info', 'warn', 'error', 'fatal'] as const;
 type PinoLevel = (typeof PINO_LEVELS)[number];
 
-/** Known provider aliases exposed as placeholders. Populated in T6-T9. */
+/** Known provider aliases exposed for service-level status surfaces. */
 const KNOWN_PROVIDERS = ['glm', 'openai', 'anthropic', 'kimi', 'nvidia'] as const;
 const DEFAULT_GATEWAY_URL = 'http://127.0.0.1:3000';
 
