@@ -90,14 +90,14 @@ debug-ui  ←──  （仅被用户消费）
 | Chat SSE | `ai-chat-service` | `debug-ui` | `GET /api/chat/stream/:sessionId` | **必须先发 `session.snapshot`**；无 `Last-Event-ID` resume |
 | Chat sessions | `ai-chat-service` | `debug-ui` | `* /api/chat/sessions` | 会话 CRUD |
 | Chat control | `ai-chat-service` | `debug-ui` | `POST /api/chat/control/:sessionId` | 暂停/恢复/中断/取消 |
-| Provider preflight | `ai-chat-service` | 任意 | `POST /test-ai`、`POST /verify-keys` | provider 探测 |
+| Provider preflight | `ai-chat-service` | 任意 | `POST /test-ai`、`POST /verify-keys` | provider 探测；`visionAgent` 同时反映 gateway MCP server 状态 |
 | AI 生成 | `ai-chat-service` | `ai-e2e` | `POST /api/ai/generate` | 文本生成 |
 
 ### 3.3 MCP 工具契约
 
 - `proxy-adapter` 通过 MCP Server 暴露 `browser-control.*`（15 个工具）。Vision-agent 工具已移除。
 - `ai-chat-service` 通过 MCP Client 自动拉取 browser-control 工具；状态机管理 server 生命周期，指数退避重连（最多 5 次），`toolsChanged` 事件通知工具变更。
-- 视觉分析由 `ai-chat-service` 内部 `VisionAnalyzer` + `VisionToolProvider` 提供，注册 `vision.find_element` 工具（`exposeTo: ['chat']`），不通过 MCP Server 暴露。
+- 视觉分析由 `ai-chat-service` 内部 `VisionAnalyzer` + `VisionToolProvider` 提供，注册 `vision.find_element` 工具（`exposeTo: ['chat']`），不通过 MCP Server 暴露；工具本地缓存最近 5 个 DOM snapshot，`snapshot_id` 命中时复用缓存。
 - 同名工具命名规则：`<serverName>-<toolName>` 前缀。
 - 配置入口：`PROXY_ADAPTER_URL + /mcp`（默认 `http://127.0.0.1:3000/mcp`）。
 
@@ -131,7 +131,7 @@ debug-ui  ←──  （仅被用户消费）
 - DOM 快照 v2.0：含 `data-nebula-id` 属性；element 归一化字段 `id` + `locator_bundle`。
 - 视觉标记（Vision Marker）系统：通过 `data-nebula-id` 属性关联操作坐标与 DOM 元素；标注截图由 `browser-control.dom_snapshot` 工具生成，消费方（如 `ai-chat-service` 的 `VisionAnalyzer`）负责基于标注截图调用视觉模型完成元素匹配。
 - Vision 配置（ai-chat-service 内部）：`config.json` 的 `defaults.vision.{provider,model}`，由 resolver 自动解析 `apiKey`/`baseUrl`；缺失或初始化失败时降级为不可用工具，不阻断启动。
-- 截图返回格式：raw JPEG base64 **或** gzip-compressed JPEG bytes（消费方必须都支持）。
+- 标注截图返回格式：`annotated_screenshot_base64` 为 gzip-compressed JPEG bytes 的 base64 字符串；消费方调用视觉模型前必须先解压为 raw JPEG base64。
 
 ### 3.7 ai-e2e 后端消费契约
 
