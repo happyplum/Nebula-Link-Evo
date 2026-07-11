@@ -92,3 +92,13 @@ pnpm format         # prettier --write debug-ui/src proxy-adapter/src ai-chat-se
 - `ai-chat-service/PRODUCT-SPEC.md`
 - `debug-ui/PRODUCT-SPEC.md`
 - `ai-e2e/PRODUCT-SPEC.md`
+
+<!-- shipped-workflow:start -->
+## shipped 清单工作流（防回退 / 漂移）
+
+- shipped root：`docs/shipped/`（本项目的 shipped 清单目录）
+- **修改 / 开发功能单元前**：先加载该单元对应的 `docs/shipped/<unit>.md` shipped 清单，了解已落实事实和当前边界。
+- **开发前记录计划**：可用 `[pending]` 记录计划开发的内容（文件路径、预期行为、接口签名）；落地后改为 `[shipped]`。
+- **功能单元开发完毕后**：必须维护对应的 `docs/shipped/<unit>.md` shipped 清单——将 `[pending]` 改为 `[shipped]`、追加新事实、修正过时标记，不新建重复条目。
+- **单元级事实不入 README**：每个功能单元独立一份文件；根 README 与 `docs/shipped/README.md` 只放索引，不放单元事实。
+<!-- shipped-workflow:end -->
