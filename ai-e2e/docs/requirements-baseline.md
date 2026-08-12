@@ -241,7 +241,7 @@
 - 决策、证据 manifest、内容哈希和默认保留结构已锁定；脱敏管线、身份访问控制和清理任务仍待实现设计。
 - 不同环境与副作用风险等级下哪些动作必须用户审批；这是当前剩余的关键产品策略。
 - 可视操作动画的表现、节奏和重放协议。
-- 现有 TypeScript 脚本、历史项目和运行记录的迁移兼容方式。
+- 现有 TypeScript、登录录制、历史项目/run 的保守导入、双轨 API、版本级切流、回滚和技术验收已在 `migration-compatibility-acceptance-contract.md` 锁定；正式 migrations/importer 和 fixtures 尚未实现。
 - 标准 Playwright 文件导出能力。
 
 ## 11. 需求验收原则
@@ -284,6 +284,7 @@
 - `ai-e2e/docs/target-data-model.md`：目标关系表、不可变修订、copy 事务、页面匹配、运行事件与证据存储。
 - `ai-e2e/docs/service-api-event-contract.md`：三服务目标 API、MCP 原子操作、事件信封、幂等与重启恢复。
 - `ai-e2e/docs/ai-model-skill-contract.md`：分析/决策模型、单次视觉模型、受限 Agent task 与 Skills runtime。
+- `ai-e2e/docs/migration-compatibility-acceptance-contract.md`：旧库/旧资产迁移、双轨切流、故障恢复、回滚和发布门禁。
 - `ai-e2e/AGENTS.md`：开发边界与运行时事实。
 - `docs/PRODUCT-SPEC-INDEX.md`：跨包契约索引。
 - `docs/architecture.md`：系统分层与服务拓扑。

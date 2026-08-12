@@ -60,6 +60,27 @@ interface ApiProblem {
 
 幂等响应必须覆盖所属测试流程全部非终态生命周期，并在终态后默认保留 7 天；被未解决决定、`outcome_unknown` 或人工 pin 引用时继续保留。更长期审计由 `ai-e2e` 的 operation link/evidence manifest 保存，不要求 proxy 热账本与 30 天媒体保留期完全一致；记录不得因进程重启清空。
 
+### 2.4 能力协商
+
+三项服务均目标提供 `GET /api/v1/capabilities`：
+
+```ts
+interface ServiceCapabilitiesV1 {
+  schema: 'nebula.service-capabilities/1.0';
+  service: 'ai-e2e' | 'ai-chat-service' | 'proxy-adapter';
+  serviceVersion: string;
+  protocols: Record<string, { major: number; minor: number }>;
+  features: Record<string, boolean | string | number>;
+  limits: Record<string, number>;
+  generatedAt: string;
+}
+```
+
+- `ai-chat-service` 至少声明 agent-task、vision、skill-manifest 协议版本和可用模型角色。
+- `proxy-adapter` 至少声明 browser-execution/operation 协议、受支持动作/观测、持久账本和可视画面能力。
+- `ai-e2e` 在创建 run 前执行并缓存短期 preflight，确认 major 兼容、所需功能/Skill/hash 可用；不兼容时返回 `503 dependency_unavailable`，不得在同一 run 静默回退旧执行器。
+- capability 只说明能力，不包含 provider key、lease token、文件路径或其他机密。
+
 ## 3. `ai-e2e` 对外业务 API
 
 ### 3.1 业务资产

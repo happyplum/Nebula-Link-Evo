@@ -93,8 +93,9 @@ proxy-adapter
 - `ai-e2e` 通过持久 `run.snapshot`、单调事件序号和不可变证据 manifest 向 UI 提供权威状态；浏览器视频用于实时观察，默认不等于永久录像。
 - Run、Agent task 和 Browser session 各自使用 snapshot-first SSE 与独立序号；现有 Chat SSE、Debug SSE 和项目阶段 SSE 是兼容面，不能混用序号或替代业务状态。
 - 跨服务不使用分布式事务：`ai-e2e` 先写 intent/outbox，再用同一幂等键创建/查询 Agent task 和浏览器 operation；超时后先查账本。
+- 创建 semantic run 前核对三服务 `/api/v1/capabilities`；旧 TypeScript run 与 `semantic_v1` run 分链保存和展示，不能在运行中回退或混合。
 
-完整需求见 `ai-e2e/docs/requirements-baseline.md`；功能脚本、场景编排、代理浏览器执行、运行状态/证据、跨服务 API/事件和双模型/Skills 分别见 `ai-e2e/docs/functional-script-contract.md`、`ai-e2e/docs/scenario-orchestration-contract.md`、`ai-e2e/docs/agent-browser-execution-contract.md`、`ai-e2e/docs/run-state-decision-evidence-contract.md`、`ai-e2e/docs/service-api-event-contract.md`、`ai-e2e/docs/ai-model-skill-contract.md`。
+完整需求见 `ai-e2e/docs/requirements-baseline.md`；功能脚本、场景编排、代理浏览器执行、运行状态/证据、跨服务 API/事件、双模型/Skills 和迁移验收分别见 `ai-e2e/docs/functional-script-contract.md`、`ai-e2e/docs/scenario-orchestration-contract.md`、`ai-e2e/docs/agent-browser-execution-contract.md`、`ai-e2e/docs/run-state-decision-evidence-contract.md`、`ai-e2e/docs/service-api-event-contract.md`、`ai-e2e/docs/ai-model-skill-contract.md`、`ai-e2e/docs/migration-compatibility-acceptance-contract.md`。
 
 ---
 

@@ -106,6 +106,7 @@ debug-ui  ←──  （仅被用户消费）
 | 业务版本资产（pending） | `ai-e2e` | `ai-e2e ui` | `/api/v1/projects/:projectId/business-versions`、`/api/v1/business-versions/*` | 业务版本、copy、校验和不可变 asset revision |
 | E2E Run（pending） | `ai-e2e` | `ai-e2e ui` | `/api/v1/projects/:projectId/runs`、`/api/v1/runs/:runId/*` | run 命令、决策、证据、snapshot-first SSE 与持久 event log |
 | 浏览器执行控制面（pending） | `proxy-adapter` | `ai-e2e` / `ai-chat-service` | `/api/v1/browser-execution/*` | application-level session/lease/operation/artifact；与 MCP transport session 解耦 |
+| 能力协商（pending） | 三个后端服务 | 其他服务/UI | `GET /api/v1/capabilities` | 协议 major、功能和限制；不含 secret，run preflight 不兼容时禁止静默回退 |
 
 ### 3.3 MCP 工具契约
 
@@ -184,6 +185,7 @@ debug-ui  ←──  （仅被用户消费）
 - **页面任务与控制租约（pending）**：主代理派发不可变页面任务包并持有共享浏览器生命周期；子代理只取得指定 TODO、Tab、工具、输出槽的短期控制租约。跨服务只传递稳定会话/Tab/操作/快照/目标引用，不传 Playwright 对象。
 - **可视语义执行（pending）**：系统内权威资产是结构化语义功能脚本；执行按单个语义步骤推进，每个 `proxy-adapter` 浏览器原子操作具有幂等 ID、结构化结果和通用生命周期事件，并关联实时画面、脚本步骤与证据。无法确认动作是否发生时进入结果不确定态并先检查副作用。当前 `npx tsx` 子进程执行器不满足该目标。完整契约见 `ai-e2e/docs/agent-browser-execution-contract.md`。
 - **跨服务 API/事件（pending）**：业务版本/Run API、Agent task、browser execution control plane、MCP operation tools 和三类 snapshot-first SSE 已在 `ai-e2e/docs/service-api-event-contract.md` 锁定；现有 Chat/Debug/项目阶段 SSE 继续兼容且序号互不混用。
+- **迁移与切流（pending）**：先对 001–013 做结构 preflight 并建立 checksum migration 账本；旧 TypeScript、登录录制和历史 run 只读保留，导入只生成 `needs_recheck` 版本/候选。同一 run 固定为 legacy 或 `semantic_v1`，版本级 opt-in 后再逐步关闭旧写/执行。完整契约见 `ai-e2e/docs/migration-compatibility-acceptance-contract.md`。
 - **分层状态与传播（pending）**：测试流程、运行 TODO、执行尝试、Agent 会话和浏览器操作分别持有状态。blocked/interrupted/waiting_decision 未收敛前不提前跳过下游；终态失败只传播到真实依赖节点。
 - **决策与证据（pending）**：运行操作决定和业务版本长期决定分载体追加审计；`proxy-adapter` 生成短期浏览器原始产物，`ai-e2e` 持有不可变证据 manifest、长期业务关联、完整度、脱敏和保留策略。UI 通过持久 `run.snapshot` 与单调运行事件序号恢复。完整契约见 `ai-e2e/docs/run-state-decision-evidence-contract.md`。
 - **DOM 变化局部修复（in-progress）**：当前只有 run 级诊断/自动修复；目标是只修复当前业务版本内受影响的功能脚本并重新验证。
@@ -212,6 +214,7 @@ debug-ui  ←──  （仅被用户消费）
 | 修改运行/TODO/尝试状态、决策、依赖传播、证据所有权/完整度/保留/脱敏或运行快照事件 | 跨包契约（3.9） + `ai-e2e` PRODUCT-SPEC/AGENTS/UI AGENTS + `proxy-adapter` PRODUCT-SPEC（涉及原始产物时） + `ai-e2e/docs/run-state-decision-evidence-contract.md` |
 | 修改语义脚本 Schema、动作/断言/引用白名单或映射 | 跨包契约（3.6、3.9） + `ai-e2e`/`proxy-adapter` PRODUCT-SPEC + `ai-e2e/docs/functional-script-contract.md` + `ai-e2e/docs/semantic-script-schema.md` |
 | 修改业务版本/资产修订/运行/决策/事件/证据/outbox 表、copy 或状态事务 | 跨包契约（3.9） + `ai-e2e` PRODUCT-SPEC/AGENTS + `ai-e2e/docs/target-data-model.md` + `ai-e2e/docs/service-api-event-contract.md` + 相关产品契约 |
+| 修改 migration baseline、旧资产导入、能力门禁、legacy/semantic 切流、回滚或发布验收 | 跨包契约（3.2、3.9） + 三服务 PRODUCT-SPEC + `ai-e2e/docs/migration-compatibility-acceptance-contract.md` + `ai-e2e/docs/target-data-model.md` |
 | 修改端口分配 | 跨包契约（3.1） + 全局索引 + 根 README Packages 表 + 根 README Architecture 拓扑 |
 | 修改依赖方向（如新包依赖、facade 拆分） | 依赖方向图 + 全局索引 |
 

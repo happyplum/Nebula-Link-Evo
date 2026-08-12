@@ -105,6 +105,7 @@
 | `/debug-ai` | * | shipped | 调试用 AI 接口 | plugins/routes/api/debug-ai |
 | `MCP Client → proxy-adapter /mcp` | out | shipped | 拉取 `browser-control.*` 工具 | clients/mcp、tools/providers/mcp-client-provider |
 | `/api/v1/agent-tasks`、`/api/v1/agent-tasks/:taskId/*` | POST/GET/SSE | pending | 创建/查询/控制受限 Agent task、snapshot-first 事件和持久审计 | 目标契约见 `ai-e2e/docs/service-api-event-contract.md` |
+| `/api/v1/capabilities` | GET | pending | 声明 agent-task/vision/skill 协议、模型角色和限制 | 不包含 provider key 或其他机密 |
 
 ---
 
@@ -191,5 +192,6 @@
 - `ai-e2e/docs/run-state-decision-evidence-contract.md` — Agent 会话审计与 E2E 业务状态/决策/长期证据的所有权边界
 - `ai-e2e/docs/service-api-event-contract.md` — Agent task API、事件、浏览器 binding 与跨服务恢复
 - `ai-e2e/docs/ai-model-skill-contract.md` — 双模型、单次视觉 Schema、Skill manifest 与权限隔离
+- `ai-e2e/docs/migration-compatibility-acceptance-contract.md` — 服务升级顺序、能力门禁、故障注入与发布验收
 - 根 `AGENTS.md` — 仓库范围约束
 - 根 `README.md` 的 "AI Provider System" 与 "Agent Chat 会话" 章节 — provider 加载契约与会话行为
