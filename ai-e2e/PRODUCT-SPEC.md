@@ -64,7 +64,8 @@
 | 页面子代理 | pending | 只执行派发的页面场景片段，负责固定重新检查、执行、验证、职责内修复和汇报；不得自行登录、造数或调用场景外脚本。 |
 | 上下文策略 | pending | 默认创建干净子代理上下文；登出等可恢复中断可由主代理在状态/副作用检查后续接原上下文，否则从检查点重建。 |
 | Agent 执行路径 | pending | 页面任务图和验收归 ai-e2e，模型/MCP/未来 Skills 执行归 ai-chat-service；当前 `AiChatClient.generateText()` 是纯文本生成，不执行 tool loop。 |
-| 可视执行与证据 | in-progress | `proxy-adapter` 已有实时画面、marker/overlay、交互日志和失败样本基础；目标是所有功能脚本步骤通过该链路执行并关联场景、步骤、结果和失败证据。 |
+| 页面任务与浏览器控制租约 | pending | 主代理派发不可变页面任务包并持有浏览器生命周期；子代理只取得指定 TODO、Tab、工具和输出槽的短期控制租约。 |
+| 可视执行与证据 | in-progress | `proxy-adapter` 已有实时画面、marker/overlay、交互日志和失败样本基础；目标按单个语义步骤推进，每个浏览器原子操作使用幂等 ID，并关联场景、步骤、结果和失败证据；状态不确定时先检查副作用。 |
 | 失败/阻塞/暂停/跳过 | pending | 失败先保存截图和现场并评估后续阻碍；明确缺少前置条件与意外中断分开记录，主代理按依赖跳过或继续。需要决策时暂停并持久化决策后恢复。 |
 | DOM 变化局部修复 | in-progress | 当前已支持 run 级诊断与可选自动修复；目标是只修复当前业务版本内受影响的功能脚本并重新验证。 |
 
@@ -174,9 +175,9 @@
 | 模块需求文档 | — | pending | 尚无验收面 | 需把 PRD 与真实页面证据收敛为持久化、可追溯输入 |
 | 功能脚本 + 场景调用图 | services/ScriptGeneratorService、database/scripts | pending | 当前仅验证 scenario 级 TypeScript 脚本 | 脚本契约见 `docs/functional-script-contract.md`；无环调用图、运行计划快照、TODO、尝试、依赖传播及追加式修订见 `docs/scenario-orchestration-contract.md` |
 | 业务版本 + 深复制 | — | pending | 尚无验收面 | 需原子复制当前有效资产、生成新身份并重建引用，排除编辑历史、运行状态、证据、实际数据和秘密 |
-| 主代理 / 页面子代理调度与上下文策略 | — | pending | 尚无验收面 | 首期同一时刻一个主代理只运行一个执行型子代理，共享 proxy-adapter 浏览器会话并串行动作；仍需任务、变量、暂停、检查点、恢复和依赖跳过协议 |
-| ai-chat-service Agent 会话消费 | infrastructure/ai-chat-client | pending | 当前仅有纯文本 generate 与基础 chat session 客户端 | 需面向页面任务的 tool/skill loop 调用与状态契约 |
-| proxy-adapter 可视语义执行 | services/ExecutorService | pending | 当前仍由 `npx tsx` 子进程执行 | 需替换为经 MCP 的语义步骤执行、实时画面关联和可复现操作记录 |
+| 主代理 / 页面子代理调度与上下文策略 | — | pending | 尚无验收面 | 首期同一时刻一个主代理只运行一个执行型子代理，共享 proxy-adapter 浏览器会话并串行动作；任务包、租约、暂停、检查点和恢复契约见 `docs/agent-browser-execution-contract.md` |
+| ai-chat-service Agent 会话消费 | infrastructure/ai-chat-client | pending | 当前仅有纯文本 generate 与基础 chat session 客户端 | 需面向页面任务的 tool/skill loop、工具白名单、结构化结果和控制传播契约 |
+| proxy-adapter 可视语义执行 | services/ExecutorService | pending | 当前仍由 `npx tsx` 子进程执行 | 需替换为经 MCP 的语义步骤执行；浏览器操作具备稳定会话/Tab 引用、幂等 ID、结果账本、可视事件和可复现记录 |
 | 失败证据、影响评估与依赖跳过 | database/execution_runs、services/AIDiagnosisService | in-progress | 当前有日志/截图路径和 run 级诊断 | 需场景/调用/步骤证据包、后续阻碍评估与依赖跳过 |
 | DOM 变化后的功能脚本局部修复 | services/AIDiagnosisService | in-progress | 当前仅有 run 级诊断/自动修复 | 需当前业务版本内的页面/模块/功能脚本影响定位与定向修复 |
 
@@ -212,8 +213,8 @@
 | 新增 DB migration | 模块清单（database/migrations） + 功能清单 |
 | 新增业务服务 | 模块清单（services/） + 功能清单 + Dependency Injection Rule 条目 |
 | 修改业务版本、页面、模块、功能脚本或场景调用 | 目标领域与代理编排 + 功能清单 + DB schema + `docs/PRODUCT-SPEC-INDEX.md` + `docs/requirements-baseline.md`；版本/页面同步 `docs/version-page-asset-contract.md`，功能脚本同步 `docs/functional-script-contract.md`，场景编排同步 `docs/scenario-orchestration-contract.md` |
-| 实现或修改主/页面子代理 | 目标领域与代理编排 + 功能清单 + `ai-e2e/AGENTS.md` + ai-chat-service 消费契约 + `docs/PRODUCT-SPEC-INDEX.md` |
-| 修改可视执行、证据或重放契约 | 目标领域与代理编排 + 功能清单 + proxy-adapter PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
+| 实现或修改主/页面子代理 | 目标领域与代理编排 + 功能清单 + `ai-e2e/AGENTS.md` + ai-chat-service 消费契约 + `docs/PRODUCT-SPEC-INDEX.md` + `docs/agent-browser-execution-contract.md` |
+| 修改浏览器控制租约、原子操作、可视执行、证据或重放契约 | 目标领域与代理编排 + 功能清单 + proxy-adapter/ai-chat-service PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` + `docs/agent-browser-execution-contract.md` |
 | 修改 executor 约束 | 包级目标与边界 + 功能清单（脚本执行） + Runtime Gotchas |
 | 修改 facade 行为 | 模块清单 + 包级目标与边界 |
 | 跨包契约变更（端口、API 路径、SSE 事件、tool 命名） | 本文件 + 所有消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
@@ -234,8 +235,8 @@
 | 缺少业务版本与独立 copy | requirement-gap | pending | 当前没有来源版本、部署/Git 标识、独立资产身份重映射或原子深复制模型 |
 | 缺少模块下多功能脚本与场景调用图 | requirement-gap | pending | 当前 script version 归属 scenario，`run-all` 只是顺序遍历，无法表达运行计划、TODO、重复、依赖、跨脚本输入输出和追加式修订 |
 | 主代理 / 页面子代理编排未实现 | requirement-gap | pending | 当前没有页面任务、运行变量、暂停决策、检查点、恢复与依赖跳过运行时 |
-| ai-e2e 尚未消费 Agent tool loop | requirement-gap | pending | 当前业务服务调用 `POST /api/ai/generate`，无法在同一页面任务中执行 MCP/Skills |
-| 目标执行链仍绕过 proxy-adapter | requirement-gap | pending | 当前 `ExecutorService` 用 `npx tsx` 执行独立脚本，不满足统一可视、可复现执行要求 |
+| ai-e2e 尚未消费 Agent tool loop | requirement-gap | pending | 当前业务服务调用 `POST /api/ai/generate`，无法派发受工具/Tab/输出槽约束的页面任务或在任务中执行 MCP/Skills |
+| 目标执行链仍绕过 proxy-adapter | requirement-gap | pending | 当前 `ExecutorService` 用 `npx tsx` 执行独立脚本；尚无浏览器控制租约、原子操作幂等/结果账本、结果不确定态和语义步骤事件 |
 | 统一失败证据与影响评估未实现 | requirement-gap | pending | 当前证据未贯通业务版本、场景、功能脚本调用和语义步骤，也没有后续阻碍/依赖跳过模型 |
 | DOM 变化影响定位未实现 | requirement-gap | pending | 当前自动修复由失败 run 触发，尚不能按当前业务版本的功能脚本定向维护 |
 
@@ -248,6 +249,7 @@
 - `ai-e2e/AGENTS.md` — 开发约束、硬边界、运行时真相
 - `ai-e2e/README.md` — 包内产品文档
 - `ai-e2e/docs/requirements-baseline.md` — 需求基线
+- `ai-e2e/docs/agent-browser-execution-contract.md` — 页面任务包、Agent 边界、浏览器控制租约、原子操作与可视执行契约
 - `ai-e2e/docs/gap-analysis.md` — `deprecated` 历史缺口对照
 - `ai-e2e/docs/roadmap.md` — `deprecated` 历史路线，不用于制定新目标
 - `ai-e2e/ui/AGENTS.md` — UI 子工作区约束

@@ -158,6 +158,7 @@ debug-ui  ←──  （仅被用户消费）
 - **目标引用**：跨服务只传递可序列化的 `snapshot_id` / `nebula_id` / `locator_bundle` / confidence / evidence；`Page` / `Locator` / `ElementHandle` 等真实 Playwright 对象只存在于 `proxy-adapter` 进程内。
 - **MCP**：`proxy-adapter` 只提供浏览器 MCP 服务；MCP client、工具聚合和 AI 工具调用归 `ai-chat-service`。
 - **Skills**：可复用 Skills 的发现、加载、注册、权限和执行隔离归 `ai-chat-service`；当前仓库没有 Skills runtime，状态为 `pending`，任何消费方不得假定其可用。
+- **受限 Agent 任务（pending）**：`ai-chat-service` 目标接收不可变任务输入、工具/Skills 白名单、预算与不透明关联信息，并返回结构化结果、传播暂停/中断；调用方业务运行计划和浏览器操作账本不进入本服务。
 - provider alias/model name 只是角色实现配置，不改变“分析/决策模型”和“视觉模型”的产品职责。
 
 ### 3.9 ai-e2e 业务版本、脚本与代理编排契约
@@ -171,7 +172,8 @@ debug-ui  ←──  （仅被用户消费）
 - **上下文（pending）**：大多数派发使用干净子代理上下文；登出等可恢复中断可由主代理在页面状态和副作用检查后续接原上下文，否则从检查点与授权变量重建。
 - **串行调度（pending）**：首期一个主代理在任一时刻只运行一个执行型子代理，同一测试流程复用 `proxy-adapter` 托管的 Playwright/Chromium 实例和浏览器会话，所有浏览器动作进入单一串行队列。子代理上下文可按任务重建；多 Tab 并发仅作为后期扩展。
 - **编排与执行分属两层（pending）**：页面任务图、模块范围与验收标准归 `ai-e2e`；模型调用、MCP 工具和未来 Skills 执行归 `ai-chat-service`。当前 `AiChatClient.generateText()` 只调用纯文本生成端点，尚不具备 Agent tool loop。
-- **可视语义执行（pending）**：系统内权威资产是结构化语义功能脚本；所有浏览器动作经 `proxy-adapter` 执行，并关联实时画面、场景、脚本调用、步骤和结果。当前 `npx tsx` 子进程执行器不满足该目标。
+- **页面任务与控制租约（pending）**：主代理派发不可变页面任务包并持有共享浏览器生命周期；子代理只取得指定 TODO、Tab、工具、输出槽的短期控制租约。跨服务只传递稳定会话/Tab/操作/快照/目标引用，不传 Playwright 对象。
+- **可视语义执行（pending）**：系统内权威资产是结构化语义功能脚本；执行按单个语义步骤推进，每个 `proxy-adapter` 浏览器原子操作具有幂等 ID、结构化结果和通用生命周期事件，并关联实时画面、脚本步骤与证据。无法确认动作是否发生时进入结果不确定态并先检查副作用。当前 `npx tsx` 子进程执行器不满足该目标。完整契约见 `ai-e2e/docs/agent-browser-execution-contract.md`。
 - **失败、阻塞、暂停与跳过（pending）**：失败先保存截图和现场并评估后续阻碍；明确缺少前置条件与意外中断分开记录，主代理按依赖跳过或继续。需要决策时暂停并在决策写入版本文档后恢复。
 - **DOM 变化局部修复（in-progress）**：当前只有 run 级诊断/自动修复；目标是只修复当前业务版本内受影响的功能脚本并重新验证。
 
@@ -194,7 +196,8 @@ debug-ui  ←──  （仅被用户消费）
 | 修改 ai-e2e 后端消费契约 | 跨包契约（3.7） + `ai-e2e` PRODUCT-SPEC |
 | 修改 ai-e2e 客户端架构（facade 拆分、客户端增删、消费端点变更） | 跨包契约（3.7） + `ai-e2e` PRODUCT-SPEC §1 + 根 README "AI E2E 需求基线" |
 | 修改分析/决策模型、视觉模型、MCP 聚合或 Skills 职责 | 跨包契约（3.8） + `ai-chat-service` PRODUCT-SPEC + 根 README "核心产品架构" |
-| 修改业务版本、页面锚点、功能脚本、场景调用图、主/页面子代理、上下文、可视执行或失败证据 | 跨包契约（3.9） + `ai-e2e` PRODUCT-SPEC + `ai-e2e/AGENTS.md` + `ai-e2e/docs/requirements-baseline.md`；涉及版本/页面同步 `ai-e2e/docs/version-page-asset-contract.md`，功能脚本同步 `ai-e2e/docs/functional-script-contract.md`，场景编排同步 `ai-e2e/docs/scenario-orchestration-contract.md` + 根 README "核心产品架构" |
+| 修改业务版本、页面锚点、功能脚本、场景调用图、主/页面子代理、上下文、可视执行或失败证据 | 跨包契约（3.9） + `ai-e2e` PRODUCT-SPEC + `ai-e2e/AGENTS.md` + `ai-e2e/docs/requirements-baseline.md`；涉及版本/页面同步 `ai-e2e/docs/version-page-asset-contract.md`，功能脚本同步 `ai-e2e/docs/functional-script-contract.md`，场景编排同步 `ai-e2e/docs/scenario-orchestration-contract.md`，代理/浏览器执行同步 `ai-e2e/docs/agent-browser-execution-contract.md` + 根 README "核心产品架构" |
+| 修改 Agent 任务输入/工具作用域或浏览器会话、Tab、控制租约、原子操作、结果账本与生命周期事件 | 跨包契约（3.8、3.9） + `ai-chat-service`、`proxy-adapter`、`ai-e2e` PRODUCT-SPEC + `ai-e2e/docs/agent-browser-execution-contract.md` |
 | 修改端口分配 | 跨包契约（3.1） + 全局索引 + 根 README Packages 表 + 根 README Architecture 拓扑 |
 | 修改依赖方向（如新包依赖、facade 拆分） | 依赖方向图 + 全局索引 |
 
@@ -235,3 +238,4 @@ debug-ui  ←──  （仅被用户消费）
 - `docs/reference/ai-operation-flow.md` — AI 操作执行模型
 - `docs/reference/debug-page-integration-api-reference.md` — Proxy Adapter API
 - `docs/reference/ai-e2e-ui-architecture.md` — ai-e2e UI 架构
+- `ai-e2e/docs/agent-browser-execution-contract.md` — 页面任务、Agent 作用域、浏览器控制租约、原子操作与可视事件契约

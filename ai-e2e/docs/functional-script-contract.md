@@ -124,6 +124,7 @@
 - `requirements-baseline.md`：完整产品需求与运行边界。
 - `scenario-orchestration-contract.md`：调用功能脚本的场景、运行计划和 TODO 契约。
 - `version-page-asset-contract.md`：脚本所属页面、入口锚点、参数和基线资产契约。
+- `agent-browser-execution-contract.md`：语义步骤到浏览器原子操作、目标解析、幂等与证据的执行边界。
 - `../PRODUCT-SPEC.md`：当前能力、目标能力与缺口状态。
 - `../../docs/PRODUCT-SPEC-INDEX.md`：跨服务执行边界。
 - `../../docs/reference/ai-operation-flow.md`：目标代理执行流程。

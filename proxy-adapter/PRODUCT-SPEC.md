@@ -24,13 +24,15 @@
 | 浏览器调试 REST 端点（MJPEG、DOM 快照、debug stream） |  | 任何 `src/static/debug/` 静态前端目录 |
 | LiveKit 令牌发放、配置、健康检查 |  | 共享数据库（`ai-chat-service` 独立 DB） |
 | DB 备份（`utils/db-backup.ts`） |  |  |
-| 目标语义步骤的 Playwright 执行、实时画面与浏览器侧证据 | `ai-e2e` 传入的可序列化关联信息 | PRD、场景依赖、代理调度或业务版本 |
+| 通用浏览器执行会话、Tab、原子操作、实时画面与浏览器侧证据 | 上层传入的不透明可序列化关联信息 | PRD、场景依赖、功能脚本、代理调度或业务版本 |
 
 ### 硬约束
 
 - 不引入 AI provider 编排、conversation、Chat SSE、视觉分析（这些已迁移至 `ai-chat-service`）。
 - `proxy-adapter` 是 Playwright/CDP 集成的唯一所有者；上层服务不得直接导入浏览器引擎或绕过 MCP/调试 API。
 - 目标 E2E 执行不得存在上层独立启动 Playwright/Chromium 的不可视旁路；本包不因此持有 ai-e2e 的 PRD、业务版本、场景或代理概念。
+- 目标原子操作以唯一操作 ID 去重并可查询结果；无法确认副作用动作是否发生时返回结果不确定态，不得自动重复执行。
+- 目标页面控制必须校验执行会话、稳定 Tab 引用和短期控制租约；上层不得跨服务传递 `Page`、`Locator` 或 `ElementHandle`。
 - 不在 `src/` 下恢复 `static/debug/` 前端源码。
 - 不在 generic route handler 中写 provider-specific 逻辑。
 - 不与其他服务共享数据库。
@@ -97,6 +99,7 @@
 | 配置加载与校验 | config/ | shipped | `__tests__/config/validator.test.ts`、unit/config/* | config |
 | DB 备份 | utils/db-backup | shipped | `__tests__/db-backup.test.ts` | utils |
 | 服务生命周期 | services/app-service | shipped | `__tests__/service-lifecycle.test.ts`、app-service-marker | services |
+| 通用浏览器执行会话与操作账本 | — | pending | 尚无验收面 | 目标提供会话/Tab/控制租约、FIFO 原子操作、幂等去重、结果查询、结果不确定态和通用生命周期事件；不解释 E2E 业务关联 |
 | 错误分类 | errors/http-errors | shipped | `__tests__/errors.test.ts` | errors |
 
 ---
@@ -112,6 +115,7 @@
 > 6. 修改 7 级目标定位链顺序
 > 7. 与 `ai-chat-service` / `debug-ui` / `ai-e2e` 之间的契约变更
 > 8. 修改 Playwright/CDP 所有权、浏览器启动/连接方式或跨服务目标引用边界
+> 9. 修改浏览器执行会话、Tab、控制租约、原子操作幂等、结果账本或通用可视事件契约
 
 ### 维护检查清单
 
@@ -122,6 +126,7 @@
 | 新增 action 类型 | 模块清单（browser-tools/definitions） + 功能清单 + shared 类型 |
 | 修改启动顺序 | 包级目标与边界的"硬约束"列 + 启动序列说明 |
 | 修改 Playwright/CDP 拓扑 | 包级目标与边界 + 浏览器引擎模块 + 功能清单 + `docs/PRODUCT-SPEC-INDEX.md` |
+| 修改浏览器执行会话或原子操作协议 | 包级目标与边界 + 功能清单 + `ai-e2e/docs/agent-browser-execution-contract.md` + 所有消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
 | 跨包契约变更（端口、API 路径、SSE 事件） | 本文件 + 所有消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
 
 ---
@@ -131,7 +136,7 @@
 | 缺口 | 类型 | 状态 | 备注 |
 |------|------|------|------|
 | ToolConsumer 仍保留 legacy `chat` 值 | tech-debt | pending | `BrowserToolsProvider.exposeTo` 与 `GatewayTool` 类型仍含 `chat`，但本包已无 Chat 消费面；后续应在不影响 MCP Server 的前提下清理 |
-| E2E 可视语义执行契约未实现 | requirement-gap | pending | 当前已有单步 MCP 工具、MJPEG、marker/overlay、交互日志和失败样本，但尚未贯通场景/脚本调用/语义步骤关联、执行结果与可复现记录 |
+| E2E 可视执行所需通用协议未实现 | requirement-gap | pending | 当前已有 15 个单步 MCP 工具、进程内浏览器锁、MJPEG、marker/overlay、交互日志和失败样本；尚无执行会话租约、稳定 Tab 归属、操作 ID 去重/结果账本、结果不确定态和可关联的操作生命周期事件 |
 
 ---
 
@@ -142,5 +147,6 @@
 - `docs/PRODUCT-SPEC-INDEX.md` — 跨包契约与全局索引
 - `docs/architecture.md` — 系统架构
 - `docs/reference/ai-operation-flow.md` — AI 操作执行模型
+- `ai-e2e/docs/agent-browser-execution-contract.md` — 上层页面任务与本包通用浏览器执行协议的边界
 - `docs/reference/debug-page-integration-api-reference.md` — Proxy Adapter API 参考
 - 根 `AGENTS.md` — 仓库范围约束

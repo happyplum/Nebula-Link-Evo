@@ -16,6 +16,7 @@
 - 向 `debug-ui` 提供 Chat SSE 流（每次建连先发完整 `session.snapshot` 再续 live stream）。
 - 提供 provider preflight（`/test-ai`、`/verify-keys`）、loop-guard（防止 AI 重复陷入同一种失败）、数据库备份。
 - 为后续可复用 Skills 提供统一归属；Skills loader / registry / execution path 当前为设计目标，尚未实现。
+- 目标提供通用的受限 Agent 任务执行面：调用方传入不可变任务输入、工具/Skills 白名单和预算，服务返回结构化结果并传播暂停/中断；不持有调用方业务运行计划。
 
 ### 边界
 
@@ -29,6 +30,7 @@
 | 独立 SQLite DB（含 sessions / session_state / session_events） |  |  |
 | DB 备份 |  |  |
 | Token 估算、流式持久化 worker、连接性测试 |  |  |
+| 目标通用 Agent 任务会话、工具/Skills 作用域和结构化执行结果 | 调用方提供的不可变任务输入与不透明关联标识 | ai-e2e 的场景、TODO、业务断言、浏览器生命周期或操作幂等账本 |
 
 ### 硬约束
 
@@ -49,6 +51,7 @@
 | 通用页面状态理解 | pending | 在元素查找之外，向调用代理提供结构化的页面功能、视觉区域和 DOM 状态摘要；当前没有独立接口。 |
 | MCP client / ToolRegistry | shipped | 接入 `proxy-adapter` 的浏览器工具及其他外部 MCP 工具，并只向 Chat 能力面暴露。 |
 | Skills runtime | pending | 加载、注册并执行可复用 AI 工作流；当前仓库中没有 Skills loader、registry 或执行路径，不得视为已交付。 |
+| 受限 Agent 任务执行 | pending | 目标按每个任务显式限制工具、Skills、预算和不透明关联信息，结构化报告调用结果；Agent 暂停/中断不推断已经下发的浏览器动作被回滚。 |
 
 ---
 
@@ -127,6 +130,7 @@
 | Vision 分析引擎（VisionAnalyzer） | src/vision/ | shipped | 通过 `vision-tool-provider.test.ts` 覆盖调用与错误映射 | src/vision/ |
 | 视觉元素查找工具（`vision.find_element`） | tools/providers/vision-tool-provider | shipped | `vision-tool-provider.test.ts` | tools/providers、src/vision/、clients/mcp；支持 `snapshot_id` 复用最近 5 个本地快照 |
 | Skills 加载与执行 | — | pending | 尚无验收面 | 目标归属 ai-chat-service，不得下沉到 proxy-adapter 或复制到 ai-e2e |
+| 受限 Agent 任务执行面 | conversation、tools、services/chat-session-controller | pending | 当前只有面向 Chat 的 tool loop 与会话控制 | 需不可变任务输入、按任务工具/Skill 白名单、预算、结构化结果和控制传播；不复制 E2E 业务状态 |
 
 ---
 
@@ -145,6 +149,7 @@
 > 10. 与 `proxy-adapter` / `debug-ui` / `ai-e2e` 之间的契约变更
 > 11. 修改分析/决策模型与视觉模型的职责边界
 > 12. 新增 / 删除 / 修改 Skills runtime、Skill 权限或执行隔离规则
+> 13. 新增 / 删除 / 修改通用 Agent 任务输入、工具作用域、结构化结果或控制传播契约
 
 ### 维护检查清单
 
@@ -155,6 +160,7 @@
 | 新增 provider adapter | 模块清单（services/provider/adapters） + 功能清单 + Provider 错误分类说明 |
 | 修改双模型职责或视觉输出边界 | 双模型与扩展能力契约 + 功能清单 + `docs/PRODUCT-SPEC-INDEX.md` + 根 README |
 | 新增或修改 Skills runtime | 双模型与扩展能力契约 + 模块清单 + 功能清单 + 已知缺口 + `docs/PRODUCT-SPEC-INDEX.md` |
+| 新增或修改受限 Agent 任务执行 | 包级目标与边界 + 双模型与扩展能力契约 + 功能清单 + `ai-e2e/docs/agent-browser-execution-contract.md` + 消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
 | 修改 Chat SSE 行为 | 包级目标与边界 + 功能清单（Chat SSE 条目） + `debug-ui` 的 PRODUCT-SPEC |
 | 跨包契约变更（端口、MCP 路径、SSE 事件） | 本文件 + 所有消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
 
@@ -167,6 +173,7 @@
 | 当前已实现能力暂无活跃技术债 | — | — | 2026-08-12 本地验证 82/82 测试通过；下列为新增目标能力缺口 |
 | 通用页面状态理解接口未实现 | requirement-gap | pending | 当前视觉能力聚焦 `vision.find_element`，尚不能独立输出完整页面功能与 DOM 状态摘要 |
 | Skills runtime 未实现 | requirement-gap | pending | 当前无 Skills loader、registry、版本与执行隔离机制 |
+| 受限 Agent 任务执行面未实现 | requirement-gap | pending | 当前 Chat tool loop 对会话暴露可用工具，但没有调用方任务包、逐任务工具/Skills 白名单、结构化任务结果和 E2E 控制传播契约 |
 
 ---
 
@@ -175,5 +182,6 @@
 - `ai-chat-service/AGENTS.md` — 开发约束与边界
 - `docs/PRODUCT-SPEC-INDEX.md` — 跨包契约与全局索引
 - `docs/architecture.md` — 系统架构
+- `ai-e2e/docs/agent-browser-execution-contract.md` — E2E 页面任务消费本包通用 Agent 能力时的所有权与控制边界
 - 根 `AGENTS.md` — 仓库范围约束
 - 根 `README.md` 的 "AI Provider System" 与 "Agent Chat 会话" 章节 — provider 加载契约与会话行为

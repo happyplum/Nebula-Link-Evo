@@ -34,7 +34,7 @@ pnpm test:e2e     # Playwright e2e
 - Shared contracts from `@nebula-link-evo/shared`.
 - Upstream packages must consume browser capabilities through MCP or debug HTTP APIs; they must not import or bypass the browser engine.
 - Current runtime launches Chromium in-process, may expose a remote-debugging port, and creates page `CDPSession` instances for screencast. There is no external `playwright-server` or `connectOverCDP` path.
-- The target ai-e2e path sends structured semantic steps through this gateway so execution stays visible and reproducible. Preserve the ability to associate actions, live frames, markers/overlays, results and failure evidence; the exact E2E execution/event contract is still pending.
+- The target ai-e2e path advances one structured semantic step at a time through this gateway. The gateway remains generic and owns browser execution sessions, stable Tab references, scoped control leases, FIFO atomic operations, idempotent result lookup, unknown-outcome reporting, raw events and browser-side artifacts; it treats upstream correlation tags as opaque. Full target contract: `ai-e2e/docs/agent-browser-execution-contract.md`.
 
 ## Conventions
 
@@ -47,6 +47,8 @@ pnpm test:e2e     # Playwright e2e
 - No `dev:frontend` or `build:frontend` scripts here.
 - No `src/static/debug/` source tree.
 - No provider-specific logic in generic route handlers.
+- No PRD, business-version, scenario, functional-script, TODO or agent-scheduling concepts in browser execution services.
+- No blind replay of a side-effecting operation after timeout/disconnect, and no stale-marker fallback to unrecorded coordinate clicks.
 
 ## Child AGENTS
 
