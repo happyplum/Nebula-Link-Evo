@@ -36,33 +36,43 @@
 
 ## 选择器策略
 
-页面快照是一个 JSON 对象，其中**每个 key 就是 `data-testid` 的值**，value 包含该元素的属性（tag、text、visible、bbox 等）。
+页面快照是一个 JSON 对象。可交互元素位于 `elements_map` 中；`elements_map` 的 key 是元素 ID，元素的稳定定位候选位于 `locator_bundle`。当 `locator_bundle.testid` 存在时，它的值才是 `data-testid`。
 
 ### 快照格式示例
 
 ```json
 {
-  "send-button": { "tag": "button", "text": "发送", "visible": true, "bbox": {...} },
-  "session-selector": { "tag": "select", "text": "Session 1", "visible": true, "bbox": {...} },
-  "message-list": { "tag": "div", "text": "", "visible": true, "bbox": {...} }
+  "snapshot_id": "snap-1",
+  "elements_map": {
+    "el-1": {
+      "tag": "button",
+      "text": "发送",
+      "visible": true,
+      "locator_bundle": {
+        "testid": "send-button",
+        "role": { "name": "button", "attributes": { "name": "发送" } },
+        "css": "button.send"
+      }
+    }
+  }
 }
 ```
 
 ### 定位规则（严格按优先级）
 
-1. **data-testid（最高优先级，必须使用）**：快照中每个元素的 key 就是 `data-testid` 值。**必须**使用 `page.locator('[data-testid="KEY"]')` 格式定位元素。
-   - 快照 key 为 `"send-button"` → 使用 `page.locator('[data-testid="send-button"]')`
-   - 快照 key 为 `"session-selector"` → 使用 `page.locator('[data-testid="session-selector"]')`
-   - **禁止**在快照中存在对应 key 时使用 css、xpath、text 或其他选择器
+1. **data-testid（最高优先级，必须使用）**：若目标元素的 `locator_bundle.testid` 存在，**必须**使用 `page.locator('[data-testid="VALUE"]')` 格式定位元素。
+   - `locator_bundle.testid` 为 `"send-button"` → 使用 `page.locator('[data-testid="send-button"]')`
+   - **禁止**把 `elements_map` 的元素 ID 当成 testid
+   - **禁止**在目标元素存在 `locator_bundle.testid` 时使用 css、xpath、text 或其他选择器
 
-2. **text（快照中不存在对应 testid 时）**：使用 `page.getByText('...')` 或 `page.locator('text=...')`
+2. **role / text（目标元素没有 testid 时）**：优先使用 `locator_bundle.role` 生成 `page.getByRole(...)`；没有可用 role 时使用 `page.getByText('...')`。
 
-3. **css / xpath（最后手段）**：仅当快照中完全没有相关元素时才使用
+3. **css / xpath（最后手段）**：仅当目标元素的 `locator_bundle` 没有可用 testid、role 或文本定位时才使用其中的 css / xpath 候选
 
 **关键规则**：
-- 快照中的每个 key 都是一个真实存在的 `data-testid`，必须直接使用
-- 绝对禁止编造快照中不存在的 testid
-- 绝对禁止在快照有对应 key 时使用低优先级选择器
+- 只使用目标元素 `locator_bundle` 中真实存在的定位候选
+- 绝对禁止编造 `locator_bundle.testid` 中不存在的 testid
+- 绝对禁止在目标元素有 testid 时使用低优先级选择器
 
 ## 输出格式
 

@@ -97,7 +97,7 @@
 | 目标 authoring 协调器 | `src/database/repositories/semantic-{asset,workflow,evidence}-repository.ts`、`src/services/`（runtime 待新增） | in-progress | authoring job/task/attempt/event、candidate verification/activation、coverage/dependency 物理模型已交付；外部 Agent/browser 调用 worker、影响分析与阶段协调器仍 pending | 外部调用只允许走 outbox；同一版本一个写 job，完整契约见 `docs/asset-authoring-repair-contract.md` |
 | 类型 | `src/types/`（project / test-scenario / state-machine / sse-events / script / url / business-version） | shipped | 后端领域类型 / API schema |  |
 | 工具 | `src/utils/`（retry、report-html、html-escape） | shipped | 通用工具 |  |
-| Prompts（稳定资产） | `prompts/*.md` | shipped | AI 提示词模板 | **必须保留**，属于稳定资产 |
+| Prompts（稳定资产） | `prompts/*.md` | shipped | AI 提示词模板；脚本生成按 DOM 快照 v2 的 `elements_map[*].locator_bundle` 选择定位器，`testid` 优先 | **必须保留**，属于稳定资产 |
 | 测试 | `src/__tests__/`（ai、database 等） | shipped | unit + 集成 |  |
 | 数据 | `data/`（gitignored） | runtime | SQLite 数据文件 |  |
 | 产物 | `artifacts/` | runtime | 执行产物 |  |
