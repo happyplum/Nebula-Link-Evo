@@ -234,7 +234,7 @@ interface CreateAgentTaskRequestV1 {
 - `responseSchema` 必须受平台大小、深度和关键字白名单约束，防止任意递归 Schema。
 - `browserBinding` 是模型不可见的执行能力；`observe` 只能读取 snapshot/页面状态，`control` 才能提交 act。租约 token 只存在于受限任务运行态或 secret store，不进入模型消息、普通日志、事件 payload 或数据库明文字段。
 - `browserLeaseSequence` 是 proxy 防重放所需的模型不可见租约序号；与 session/lease/token/tab 一并由 wrapper 注入，模型不能提交或覆盖。
-- 当前 shipped wrapper 只执行 `toolPolicy.constraints['browser-control.operation_execute'].steps` 冻结的 `stepId/kind/operation/effectId`，写步骤只接受单项数量边界；普通工具按精确 allowlist 求交集。Skills Runtime 允许每 task 一个当前 Skill，要求当前 catalog 精确 id/version/hash、输入/输出 Schema 匹配，并再与 Skill patterns 和更小预算求交集；v1 Skill 工具只允许 `vision.*` 与受控 operation execute。policy evaluation/风险投影/active grant 与参数级数量交集仍未实现，相关输入在实现前不得被宣称已校验。
+- 当前 shipped wrapper 只执行 `toolPolicy.constraints['browser-control.operation_execute'].steps` 冻结的 `stepId/kind/operation/effectId`，写步骤只接受单项数量边界；step 可预授权真实 `beforeScreenshot/afterScreenshot/domSnapshot` capture，`videoSegment=true` 仍在 ai-chat-service 请求边界拒绝。普通工具按精确 allowlist 求交集。Skills Runtime 允许每 task 一个当前 Skill，要求当前 catalog 精确 id/version/hash、输入/输出 Schema 匹配，并再与 Skill patterns 和更小预算求交集；v1 Skill 工具只允许 `vision.*` 与受控 operation execute。policy evaluation/风险投影/active grant 与参数级数量交集仍未实现，相关输入在实现前不得被宣称已校验。
 - 工具包装层注入 session、Tab、租约、operation/correlation 元数据，并在每次调用前校验“task allowlist ∩ 当前语义步骤 ∩ effectId/数量边界 ∩ active grant ∩ browser lease”；模型不能覆盖、替换 effectId 或把只读步骤改为写步骤。
 - 默认每个页面任务创建新 Agent task。恢复只接受调用方提供的显式 checkpoint，不依赖旧对话隐式记忆。
 

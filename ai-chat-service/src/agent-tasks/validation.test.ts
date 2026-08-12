@@ -74,7 +74,7 @@ describe('Agent task validation', () => {
     );
   });
 
-  it('rejects capture requests until proxy artifact capture is available', () => {
+  it('accepts screenshot/DOM capture and rejects unsupported video capture', () => {
     const request = {
       ...validRequest(),
       browserBinding: {
@@ -94,7 +94,7 @@ describe('Agent task validation', () => {
                 stepId: 'state',
                 kind: 'observe',
                 operation: 'page_state',
-                capture: { afterScreenshot: true },
+                capture: { beforeScreenshot: true, afterScreenshot: true, domSnapshot: true },
               },
             ],
           },
@@ -102,8 +102,14 @@ describe('Agent task validation', () => {
       },
     };
 
+    expect(
+      validateCreateAgentTaskRequest(request).browserSteps.get('state')?.capture
+    ).toMatchObject({ beforeScreenshot: true, afterScreenshot: true, domSnapshot: true });
+    request.toolPolicy.constraints['browser-control.operation_execute'].steps[0].capture = {
+      videoSegment: true,
+    };
     expect(() => validateCreateAgentTaskRequest(request)).toThrow(
-      'capture artifacts are not available'
+      'video capture is not available'
     );
   });
 

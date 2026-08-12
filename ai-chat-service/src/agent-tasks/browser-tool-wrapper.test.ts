@@ -13,7 +13,16 @@ function createWrapper(callTool: ReturnType<typeof vi.fn>) {
       access: 'control',
     },
     steps: new Map([
-      ['login', { stepId: 'login', kind: 'act', operation: 'click', effectId: 'effect-login' }],
+      [
+        'login',
+        {
+          stepId: 'login',
+          kind: 'act',
+          operation: 'click',
+          effectId: 'effect-login',
+          capture: { beforeScreenshot: true, afterScreenshot: true, domSnapshot: true },
+        },
+      ],
     ]),
     deadlineAt: Date.now() + 60_000,
     maxToolCalls: 2,
@@ -54,6 +63,7 @@ describe('BrowserToolWrapper', () => {
     expect(envelope.request).toMatchObject({
       leaseSequence: 7,
       operation: 'click',
+      capture: { beforeScreenshot: true, afterScreenshot: true, domSnapshot: true },
       presentation: { animation: 'off' },
     });
     expect(wrapper.summaries[0]).not.toHaveProperty('args');

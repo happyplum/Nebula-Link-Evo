@@ -147,7 +147,7 @@
 | 可序列化目标解析（`vision.resolve_target`） | vision、tools/providers/vision-tool-provider（待扩展） | pending | 当前 `vision.find_element` 兼容面 | 返回有序 locator candidates、约束和显式视觉兜底；由 proxy 在当前 DOM 重解析 |
 | Skills registry 与 task pin 数据层 | `src/agent-tasks/repository.ts` | shipped | `repository.foundation.test.ts` | 同 id/version 不同 hash 拒绝，版本内容不可更新，task 精确 pin + policy hash 不可变 |
 | Skills 加载与执行 | `src/skills/`、agent task service/executor | shipped | loader/runtime/service/executor/Fastify 测试 | 本地只读发现、manifest/hash/Schema/symlink 校验、精确 catalog、单 Skill 指令装载、默认拒绝权限交集、预算收缩、Skill 审计与幂等重放 |
-| 受限 Agent 任务执行核心 | `src/agent-tasks/`、tools、plugins/routes/api/agent-tasks | shipped | unit + Fastify inject | POST/GET/capability、独立 `agent-tasks.sqlite`、幂等、预算、严格 response Schema、模型不可见 binding、预授权步骤、operation ledger 恢复与结构化结果；普通 Chat 行为不变 |
+| 受限 Agent 任务执行核心 | `src/agent-tasks/`、tools、plugins/routes/api/agent-tasks | shipped | unit + Fastify inject | POST/GET/capability、独立 `agent-tasks.sqlite`、幂等、预算、严格 response Schema、模型不可见 binding、预授权步骤及 screenshot/DOM capture、operation ledger 恢复与结构化结果；video capture 仍拒绝，普通 Chat 行为不变 |
 | Agent task command/event/checkpoint 控制面 | `src/agent-tasks/`、`plugins/routes/api/agent-tasks.ts` | shipped | repository/service/Fastify/SSE 测试 | task 状态更新、stateVersion 与事件同事务；command ID/hash 幂等 + expected stateVersion；pause 与安全 checkpoint 同事务；snapshot-first SSE/event-log；重启将遗留任务中断并拒绝 accepted 命令 |
 | 完整副作用授权 | `src/agent-tasks/`（待扩展） | pending | 尚无端到端验收面 | policy evaluation/projection/grant 逐调用交集仍按跨服务契约实现；现有 Skill 只能在预授权 step/lease 内继续缩权 |
 
