@@ -136,5 +136,6 @@
 
 - `requirements-baseline.md`：完整产品需求与运行边界。
 - `functional-script-contract.md`：被场景调用的功能脚本契约。
+- `version-page-asset-contract.md`：运行计划冻结的业务版本、部署和页面锚点契约。
 - `../PRODUCT-SPEC.md`：当前能力、目标能力与缺口状态。
 - `../../docs/reference/ai-operation-flow.md`：主代理与子代理目标执行流程。

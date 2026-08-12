@@ -142,6 +142,7 @@ AI Providers                            Chromium
 
 - [AI Operation Flow](reference/ai-operation-flow.md) — AI 操作流程与执行模型
 - [AI E2E UI Architecture](reference/ai-e2e-ui-architecture.md) — AI E2E UI 的 Atlas 视觉系统、路由、Tab 与 SSE 架构
+- [AI E2E Version & Page Assets](../ai-e2e/docs/version-page-asset-contract.md) — 业务版本 copy、部署、页面锚点、URL 参数和页面基线契约
 - [Proxy Adapter Observability Design](reference/observability-design.md) — proxy-adapter 可观测性设计参考
 - [Technical Debt Backlog](reference/technical-debt-backlog.md) — 已从大型清理计划提炼出的剩余维护项
 - [Debug Page Integration API Reference](reference/debug-page-integration-api-reference.md) — 完整的 API 端点、SSE 事件参考

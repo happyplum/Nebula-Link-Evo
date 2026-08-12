@@ -54,12 +54,12 @@
 
 | 概念 | 状态 | 定义与当前差距 |
 |------|------|----------------|
-| 页面目标 | pending | 由规范化 URL（含 path/hash route）+ 路由/查询参数集合唯一锚定。当前仅有 `urls.url` 完整字符串和 URL binding，没有独立 Page/参数模型。 |
+| 页面目标 | pending | 页面定义由不含 Origin 的规范化路由模板 + 身份参数约束标识；运行锚点再绑定部署和动态参数，并可选择命名基线变体。当前仅有 `urls.url` 完整字符串和 URL binding，完整契约见 `docs/version-page-asset-contract.md`。 |
 | 功能模块 | in-progress | 一个页面内可包含多个有顺序的功能模块，一个模块目标上包含多个功能脚本。当前 `functional_modules.sort_order` 与多模块绑定同一 URL 已提供基础。 |
 | 模块需求文档 | pending | 融合 PRD 片段、真实页面 DOM/截图、页面锚点、功能说明和有序测试场景，作为脚本生成与修复的可追溯输入；当前信息分散在多个表和 prompt 上下文中。 |
 | 功能脚本 | pending | 模块下最小复用、执行、验证、修复和重复调用单元；目标为结构化语义脚本。当前 `scripts` 以 `test_scenario_id` 为归属，内容是 TypeScript。 |
 | 测试场景 | in-progress | 业务验收单位，目标以无环调用图跨模块/页面编排多个功能脚本；业务版本保存场景定义与 TODO 模板，运行时冻结计划并产生 TODO 与独立执行尝试。当前 scenario 只能直接拥有一组测试数据和脚本版本。 |
-| 业务版本 | pending | 用户创建，可记录来源、部署和 Git 标识；`copy` 深复制需求与测试资产，复制后不共享可变引用，也不复制运行数据、证据或凭据。 |
+| 业务版本 | pending | 用户创建，可记录来源、部署和 Git 标识；`copy` 原子复制当前有效资产、生成新身份并重建内部引用，不复制编辑历史、运行状态、实际数据、证据或秘密。 |
 | 主代理 | pending | 持有 PRD 流程、TODO 依赖、运行变量和决策，负责拆分、派发、恢复、跳过、验收与汇总。 |
 | 页面子代理 | pending | 只执行派发的页面场景片段，负责固定重新检查、执行、验证、职责内修复和汇报；不得自行登录、造数或调用场景外脚本。 |
 | 上下文策略 | pending | 默认创建干净子代理上下文；登出等可恢复中断可由主代理在状态/副作用检查后续接原上下文，否则从检查点重建。 |
@@ -170,10 +170,10 @@
 | 登录步骤录制与回放 | services/LoginRecorderService | shipped | 集成 | services |
 | 重试工具 | utils/retry | shipped | `utils/__tests__/retry.test.ts` | utils |
 | HTML 报告生成 | utils/report-html、html-escape | shipped | `utils/__tests__/report-html.test.ts` | utils |
-| 页面 URL + 参数锚点 | — | pending | 尚无验收面 | 需新增规范化页面身份模型，避免把易变完整 URL 当作唯一身份 |
+| 页面 URL + 参数锚点 | — | pending | 尚无验收面 | 需新增 Origin 无关路由模板、身份/运行/忽略参数分类、运行锚点与命名基线变体，详见 `docs/version-page-asset-contract.md` |
 | 模块需求文档 | — | pending | 尚无验收面 | 需把 PRD 与真实页面证据收敛为持久化、可追溯输入 |
 | 功能脚本 + 场景调用图 | services/ScriptGeneratorService、database/scripts | pending | 当前仅验证 scenario 级 TypeScript 脚本 | 脚本契约见 `docs/functional-script-contract.md`；无环调用图、运行计划快照、TODO、尝试、依赖传播及追加式修订见 `docs/scenario-orchestration-contract.md` |
-| 业务版本 + 深复制 | — | pending | 尚无验收面 | 需独立资产快照、来源追溯及 DOM/定位/截图基线复制 |
+| 业务版本 + 深复制 | — | pending | 尚无验收面 | 需原子复制当前有效资产、生成新身份并重建引用，排除编辑历史、运行状态、证据、实际数据和秘密 |
 | 主代理 / 页面子代理调度与上下文策略 | — | pending | 尚无验收面 | 首期同一时刻一个主代理只运行一个执行型子代理，共享 proxy-adapter 浏览器会话并串行动作；仍需任务、变量、暂停、检查点、恢复和依赖跳过协议 |
 | ai-chat-service Agent 会话消费 | infrastructure/ai-chat-client | pending | 当前仅有纯文本 generate 与基础 chat session 客户端 | 需面向页面任务的 tool/skill loop 调用与状态契约 |
 | proxy-adapter 可视语义执行 | services/ExecutorService | pending | 当前仍由 `npx tsx` 子进程执行 | 需替换为经 MCP 的语义步骤执行、实时画面关联和可复现操作记录 |
@@ -211,7 +211,7 @@
 | 修改状态机 | 包级目标与边界 + 状态机条目 + README "AI E2E 需求基线" |
 | 新增 DB migration | 模块清单（database/migrations） + 功能清单 |
 | 新增业务服务 | 模块清单（services/） + 功能清单 + Dependency Injection Rule 条目 |
-| 修改业务版本、页面、模块、功能脚本或场景调用 | 目标领域与代理编排 + 功能清单 + DB schema + `docs/PRODUCT-SPEC-INDEX.md` + `docs/requirements-baseline.md`；功能脚本同步 `docs/functional-script-contract.md`，场景编排同步 `docs/scenario-orchestration-contract.md` |
+| 修改业务版本、页面、模块、功能脚本或场景调用 | 目标领域与代理编排 + 功能清单 + DB schema + `docs/PRODUCT-SPEC-INDEX.md` + `docs/requirements-baseline.md`；版本/页面同步 `docs/version-page-asset-contract.md`，功能脚本同步 `docs/functional-script-contract.md`，场景编排同步 `docs/scenario-orchestration-contract.md` |
 | 实现或修改主/页面子代理 | 目标领域与代理编排 + 功能清单 + `ai-e2e/AGENTS.md` + ai-chat-service 消费契约 + `docs/PRODUCT-SPEC-INDEX.md` |
 | 修改可视执行、证据或重放契约 | 目标领域与代理编排 + 功能清单 + proxy-adapter PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
 | 修改 executor 约束 | 包级目标与边界 + 功能清单（脚本执行） + Runtime Gotchas |
@@ -229,9 +229,9 @@
 | AI 超时预算未按操作细分 | tech-debt | known | 当前默认：`config.json settings.timeout=180s`，`proxy-adapter-client.ts DEFAULT_AI_TIMEOUT_MS=300s` |
 | 旧执行链只有基础串行 | tech-debt | known | `POST /execution/run/:scriptId` 不支持并发；首期目标也采用串行，但必须替换为主代理逐项派发、子代理执行并共享 proxy-adapter 浏览器会话的受控串行链 |
 | PowerShell JSON 序列化陷阱 | tech-debt | known | 上传 PRD 应用 `curl --data-binary @file.json`；中文 stderr 可能 GBK 乱码但不影响逻辑 |
-| 缺少规范化页面与 URL 参数模型 | requirement-gap | pending | 当前 `urls.url` 保存完整字符串，无法稳定表达 path/hash route 与参数模板 |
+| 缺少规范化页面与 URL 参数模型 | requirement-gap | pending | 当前 `urls.url` 保存完整字符串，无法区分部署 Origin、路由模板、身份/运行参数与基线变体 |
 | 缺少持久化模块需求文档 | requirement-gap | pending | PRD、页面快照、URL binding、scenario 仍是分散输入 |
-| 缺少业务版本与独立 copy | requirement-gap | pending | 当前没有来源版本、部署/Git 标识或深复制测试资产的模型 |
+| 缺少业务版本与独立 copy | requirement-gap | pending | 当前没有来源版本、部署/Git 标识、独立资产身份重映射或原子深复制模型 |
 | 缺少模块下多功能脚本与场景调用图 | requirement-gap | pending | 当前 script version 归属 scenario，`run-all` 只是顺序遍历，无法表达运行计划、TODO、重复、依赖、跨脚本输入输出和追加式修订 |
 | 主代理 / 页面子代理编排未实现 | requirement-gap | pending | 当前没有页面任务、运行变量、暂停决策、检查点、恢复与依赖跳过运行时 |
 | ai-e2e 尚未消费 Agent tool loop | requirement-gap | pending | 当前业务服务调用 `POST /api/ai/generate`，无法在同一页面任务中执行 MCP/Skills |
