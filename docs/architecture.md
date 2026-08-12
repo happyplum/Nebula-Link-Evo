@@ -26,6 +26,8 @@ Browser ←→ Debug UI (:5173 dev)
 
 目标上下文边界以页面场景片段为单位：主代理维护 PRD 流程、TODO 依赖、运行变量和决策并持有浏览器生命周期；子代理只执行不可变任务包授权的模块、功能脚本、Tab 与工具。默认使用干净子代理上下文，可恢复中断在重新检查页面状态和副作用后可由主代理决定续接。首期一个主代理在任一时刻只运行一个执行型子代理，同一测试流程复用 `proxy-adapter` 托管的浏览器会话并串行动作；后期再以多 Tab 为单位扩展并发。所有目标浏览器操作按语义步骤经 `proxy-adapter` 可视执行，使用可去重、可查询的原子操作身份，并关联实时画面与结果证据；结果不确定时先检查副作用。
 
+目标运行状态按测试流程、TODO、执行尝试、Agent 与浏览器操作分层；`ai-e2e` 以持久 snapshot、单调运行事件和不可变证据 manifest 作为业务真相。`proxy-adapter` 只保留可提升的短期浏览器原始产物，`ai-chat-service` 只保留 Agent/工具审计；运行决策、失败传播、长期证据和汇总仍归 `ai-e2e`。
+
 ### 端口映射
 
 | 服务              | 端口     | 职责                                |
@@ -144,6 +146,7 @@ AI Providers                            Chromium
 - [AI E2E UI Architecture](reference/ai-e2e-ui-architecture.md) — AI E2E UI 的 Atlas 视觉系统、路由、Tab 与 SSE 架构
 - [AI E2E Version & Page Assets](../ai-e2e/docs/version-page-asset-contract.md) — 业务版本 copy、部署、页面锚点、URL 参数和页面基线契约
 - [AI E2E Agent & Browser Execution](../ai-e2e/docs/agent-browser-execution-contract.md) — 页面任务包、Agent 作用域、浏览器控制租约、原子操作和可视事件契约
+- [AI E2E Run State, Decision & Evidence](../ai-e2e/docs/run-state-decision-evidence-contract.md) — 分层状态、失败传播、决策、证据和人工控制契约
 - [Proxy Adapter Observability Design](reference/observability-design.md) — proxy-adapter 可观测性设计参考
 - [Technical Debt Backlog](reference/technical-debt-backlog.md) — 已从大型清理计划提炼出的剩余维护项
 - [Debug Page Integration API Reference](reference/debug-page-integration-api-reference.md) — 完整的 API 端点、SSE 事件参考

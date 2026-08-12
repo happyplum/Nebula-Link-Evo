@@ -35,6 +35,7 @@ pnpm test:e2e     # Playwright e2e
 - Upstream packages must consume browser capabilities through MCP or debug HTTP APIs; they must not import or bypass the browser engine.
 - Current runtime launches Chromium in-process, may expose a remote-debugging port, and creates page `CDPSession` instances for screencast. There is no external `playwright-server` or `connectOverCDP` path.
 - The target ai-e2e path advances one structured semantic step at a time through this gateway. The gateway remains generic and owns browser execution sessions, stable Tab references, scoped control leases, FIFO atomic operations, idempotent result lookup, unknown-outcome reporting, raw events and browser-side artifacts; it treats upstream correlation tags as opaque. Full target contract: `ai-e2e/docs/agent-browser-execution-contract.md`.
+- Browser screenshots, DOM and media are target-side short-lived raw artifacts with integrity metadata. Long-term evidence manifests, business retention/pinning and decision records remain upstream in `ai-e2e`; see `ai-e2e/docs/run-state-decision-evidence-contract.md`.
 
 ## Conventions
 

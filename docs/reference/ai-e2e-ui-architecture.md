@@ -120,5 +120,11 @@ The current execution workspace does not yet provide the confirmed target experi
 - Surface failure screenshots, page/DOM evidence, downstream-blocking assessment and skipped dependency reasons.
 - Preserve pause/interruption context so a main-agent decision or recovery task can resume from a verified checkpoint.
 - Support later visual action animation and replay without mutating the tested page DOM.
+- Render persisted run/TODO/attempt states and service-calculated progress; reconnect from a `run.snapshot` plus monotonic run event sequence instead of local progress accumulation.
+- Keep repeated script calls and attempts as distinct timeline nodes even when their display labels match.
+- Provide separate, state-aware controls for safe-boundary pause, resume, cancel and browser close. Cancellation must disclose completed side effects and optional cleanup before confirmation.
+- Provide a decision center with facts, evidence, mutually exclusive options, recommendation, authority and the persisted plan amendment produced by the answer.
+- Show evidence completeness, redaction status, retention deadline and the exact upstream chain for every skipped TODO.
+- Keep the live browser read-only during Agent control; future manual takeover requires an exclusive lease, recorded human actions and a fresh checkpoint before resume.
 
-Exact layout, transport, event payloads and replay controls remain technical-design work and must not be inferred from the current four-step wizard.
+Exact layout, transport payloads and animation styling remain technical-design work and must not be inferred from the current four-step wizard. Durable behavior is defined in `../../ai-e2e/docs/run-state-decision-evidence-contract.md` and `../../ai-e2e/docs/agent-browser-execution-contract.md`.

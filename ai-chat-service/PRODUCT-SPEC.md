@@ -30,7 +30,7 @@
 | 独立 SQLite DB（含 sessions / session_state / session_events） |  |  |
 | DB 备份 |  |  |
 | Token 估算、流式持久化 worker、连接性测试 |  |  |
-| 目标通用 Agent 任务会话、工具/Skills 作用域和结构化执行结果 | 调用方提供的不可变任务输入与不透明关联标识 | ai-e2e 的场景、TODO、业务断言、浏览器生命周期或操作幂等账本 |
+| 目标通用 Agent 任务会话、工具/Skills 作用域和结构化执行结果 | 调用方提供的不可变任务输入与不透明关联标识 | ai-e2e 的场景、TODO、业务断言、决策/长期证据，浏览器生命周期或操作幂等账本 |
 
 ### 硬约束
 
@@ -183,5 +183,6 @@
 - `docs/PRODUCT-SPEC-INDEX.md` — 跨包契约与全局索引
 - `docs/architecture.md` — 系统架构
 - `ai-e2e/docs/agent-browser-execution-contract.md` — E2E 页面任务消费本包通用 Agent 能力时的所有权与控制边界
+- `ai-e2e/docs/run-state-decision-evidence-contract.md` — Agent 会话审计与 E2E 业务状态/决策/长期证据的所有权边界
 - 根 `AGENTS.md` — 仓库范围约束
 - 根 `README.md` 的 "AI Provider System" 与 "Agent Chat 会话" 章节 — provider 加载契约与会话行为

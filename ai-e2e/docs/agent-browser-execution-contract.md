@@ -226,5 +226,6 @@
 - `functional-script-contract.md`：语义步骤、输入输出、副作用与恢复契约。
 - `scenario-orchestration-contract.md`：运行计划、TODO、尝试和依赖传播。
 - `version-page-asset-contract.md`：业务版本、页面运行锚点和基线资产。
+- `run-state-decision-evidence-contract.md`：运行/TODO/尝试状态、决策、证据与人工控制。
 - `../PRODUCT-SPEC.md`：当前实现状态和目标缺口。
 - `../../docs/PRODUCT-SPEC-INDEX.md`：跨包契约索引。
