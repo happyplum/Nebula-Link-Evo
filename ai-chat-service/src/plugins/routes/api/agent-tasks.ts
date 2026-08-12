@@ -4,6 +4,7 @@ import { AgentTaskError } from '../../../agent-tasks/errors.js';
 import type { AgentTaskService } from '../../../agent-tasks/service.js';
 import type { AgentTaskEventRecord } from '../../../agent-tasks/repository.js';
 import { buildAgentTaskCapabilities } from '../../../agent-tasks/capabilities.js';
+import type { SkillCatalogEntry } from '../../../skills/runtime.js';
 
 const ProblemSchema = Type.Object(
   {
@@ -140,6 +141,17 @@ const EventLogQuerySchema = Type.Object(
   },
   { additionalProperties: false }
 );
+const SkillCatalogEntrySchema = Type.Object(
+  {
+    skillId: Type.String(),
+    version: Type.String(),
+    contentHash: Type.String({ pattern: '^[a-f0-9]{64}$' }),
+    description: Type.String(),
+    requiredModelRole: Type.Literal('decision'),
+    requiredToolPatterns: Type.Array(Type.String()),
+  },
+  { additionalProperties: false }
+);
 const CapabilitiesSchema = Type.Object(
   {
     schema: Type.Literal('nebula.service-capabilities/1.0'),
@@ -169,6 +181,7 @@ export interface AgentTaskRoutesOptions {
   service: AgentTaskService;
   serviceVersion: string;
   localControlPlane: boolean;
+  skillCatalog?: readonly SkillCatalogEntry[];
 }
 
 const agentTaskRoutes: FastifyPluginAsyncTypebox<AgentTaskRoutesOptions> = async (
@@ -212,7 +225,29 @@ const agentTaskRoutes: FastifyPluginAsyncTypebox<AgentTaskRoutesOptions> = async
         response: { 200: CapabilitiesSchema },
       },
     },
-    async () => buildAgentTaskCapabilities(options.serviceVersion, options.localControlPlane)
+    async () =>
+      buildAgentTaskCapabilities(
+        options.serviceVersion,
+        options.localControlPlane,
+        options.skillCatalog?.length ?? 0
+      )
+  );
+
+  fastify.get(
+    '/skills',
+    {
+      preHandler: requireLocalControlPlane,
+      schema: {
+        description: 'List loaded immutable Skill versions without instructions or source paths',
+        tags: ['Agent Tasks', 'Skills'],
+        response: {
+          200: Type.Array(SkillCatalogEntrySchema),
+          403: ErrorSchema,
+          500: ErrorSchema,
+        },
+      },
+    },
+    async () => options.skillCatalog ?? []
   );
 
   fastify.post<{ Body: unknown; Headers: { 'idempotency-key'?: string } }>(

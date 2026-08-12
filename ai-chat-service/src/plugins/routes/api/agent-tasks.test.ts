@@ -80,10 +80,15 @@ describe('Agent task routes', () => {
         agentTasks: true,
         taskEvents: true,
         taskCommands: true,
-        skillsRuntime: false,
+        skillsRuntime: true,
         operationPresentationAnimation: false,
       },
+      protocols: { 'nebula.ai.skill': { major: 1, minor: 0 } },
+      limits: { maxSkillsPerTask: 1, loadedSkillVersions: 0 },
     });
+    const skills = await app.inject({ method: 'GET', url: '/api/v1/skills' });
+    expect(skills.statusCode).toBe(200);
+    expect(skills.json()).toEqual([]);
   });
 
   it('returns a structured conflict and refuses non-loopback control-plane exposure', async () => {

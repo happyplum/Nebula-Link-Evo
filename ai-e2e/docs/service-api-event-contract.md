@@ -2,7 +2,7 @@
 
 > 状态：已确认目标设计，部分实现。
 > 更新时间：2026-08-12。
-> 本文固定 `ai-e2e`、`ai-chat-service` 与 `proxy-adapter` 的目标调用面、事件信封、幂等和恢复语义。三服务已分别交付 browser capture/artifact/event、Agent task create/get/command/event/checkpoint/Skill registry、ai-e2e authoring/run/evidence/outbox/external-link 数据基座；`proxy-adapter` browser control/capture/event 与 `ai-chat-service` Agent task create/get/commands/events/event-log 已成为公开核心。Skills runtime、ai-e2e authoring/run API/SSE 与 outbox worker 尚未实现。现有 `/api/ai/generate`、项目级 SSE 和兼容浏览器 MCP 工具继续存在；各节必须按实际状态描述。
+> 本文固定 `ai-e2e`、`ai-chat-service` 与 `proxy-adapter` 的目标调用面、事件信封、幂等和恢复语义。三服务已分别交付 browser capture/artifact/event、Agent task create/get/command/event/checkpoint/Skill runtime、ai-e2e authoring/run/evidence/outbox/external-link 数据基座；`proxy-adapter` browser control/capture/event 与 `ai-chat-service` Agent task create/get/commands/events/event-log/Skill catalog 已成为公开核心。ai-e2e authoring/run API/SSE 与 outbox worker 尚未实现。现有 `/api/ai/generate`、项目级 SSE 和兼容浏览器 MCP 工具继续存在；各节必须按实际状态描述。
 
 ## 1. 设计目标
 
@@ -76,7 +76,7 @@ interface ServiceCapabilitiesV1 {
 }
 ```
 
-- `ai-chat-service` 当前声明 agent-task/browser-operation 协议、任务/结构化输出/模型不可见 binding、预授权步骤包装能力和限制；`taskEvents/taskCommands=true`，Skills 与操作动画不可用；未来再补 vision/skill-manifest 与完整逐工具副作用授权。它不声明环境矩阵，也不签发审批。
+- `ai-chat-service` 当前声明 agent-task/skill/browser-operation 协议、任务/结构化输出/模型不可见 binding、预授权步骤包装能力和限制；`taskEvents/taskCommands/skillsRuntime=true`，并声明 loaded Skill version 数与 `maxSkillsPerTask=1`；操作动画不可用，未来再补 vision v2 与完整逐工具副作用授权。它不声明环境矩阵，也不签发审批。
 - `proxy-adapter` 至少声明 browser-execution/operation 协议、受支持动作/观测、持久账本和可视画面能力；v1 还必须声明 `maxActiveBrowserSessions=1`、`maxBrowserContextsPerSession=1` 且不支持运行中 storage-state 切换。它只执行通用 lease/operation 约束，不解释环境或审批。
 - `ai-e2e` 至少声明 `side-effect-policy/1.0`、四类环境矩阵和审批协议；在创建 run 前执行并缓存短期依赖 preflight，确认 major 兼容、所需功能/Skill/hash 可用。不兼容时返回 `503 dependency_unavailable`，不得在同一 run 静默回退旧执行器。
 - capability 只说明能力，不包含 provider key、lease token、文件路径或其他机密。
@@ -189,6 +189,7 @@ interface RunCommandRequestV1 {
 | POST | `/api/v1/agent-tasks/:taskId/commands` | shipped：以 command ID/hash 幂等和 `expectedStateVersion` 乐观并发执行 `pause/resume/interrupt/cancel`；不推断浏览器操作回滚。 |
 | GET | `/api/v1/agent-tasks/:taskId/events` | shipped：Agent 任务 SSE；先发当前 `agent_task.snapshot`，再发提交后的单调 live event。 |
 | GET | `/api/v1/agent-tasks/:taskId/event-log?afterSeq=N&limit=M` | shipped：读取持久 Agent 审计事件，用于诊断与受控补洞。 |
+| GET | `/api/v1/skills` | shipped：读取当前已加载 Skill 的安全 catalog；不返回指令正文、sourceRef 或文件路径。 |
 
 当前控制语义：pause 只允许首个工具调用开始前，并与 `safe_pause` checkpoint 在同一事务落盘；工具已开始时 pause 返回结构化 conflict，调用方应选择 interrupt/cancel。interrupt/cancel 立即形成任务终态且不推断外部副作用回滚。服务重启将 created/running/paused 收敛为 interrupted，并将遗留 accepted command 收敛为 rejected；paused 只在同一进程仍保有安全运行上下文时允许 resume。capability 声明 `taskCommands=true/taskEvents=true`。
 
@@ -233,7 +234,7 @@ interface CreateAgentTaskRequestV1 {
 - `responseSchema` 必须受平台大小、深度和关键字白名单约束，防止任意递归 Schema。
 - `browserBinding` 是模型不可见的执行能力；`observe` 只能读取 snapshot/页面状态，`control` 才能提交 act。租约 token 只存在于受限任务运行态或 secret store，不进入模型消息、普通日志、事件 payload 或数据库明文字段。
 - `browserLeaseSequence` 是 proxy 防重放所需的模型不可见租约序号；与 session/lease/token/tab 一并由 wrapper 注入，模型不能提交或覆盖。
-- 当前 shipped wrapper 只执行 `toolPolicy.constraints['browser-control.operation_execute'].steps` 冻结的 `stepId/kind/operation/effectId`，写步骤只接受单项数量边界；普通工具按精确 allowlist 求交集。Skill registry/pin 只有内部持久化，任务验证仍拒绝非空 allowlist；Skills runtime、policy evaluation/风险投影/active grant 与参数级数量交集仍未实现，相关输入在实现前不得被宣称已校验。
+- 当前 shipped wrapper 只执行 `toolPolicy.constraints['browser-control.operation_execute'].steps` 冻结的 `stepId/kind/operation/effectId`，写步骤只接受单项数量边界；普通工具按精确 allowlist 求交集。Skills Runtime 允许每 task 一个当前 Skill，要求当前 catalog 精确 id/version/hash、输入/输出 Schema 匹配，并再与 Skill patterns 和更小预算求交集；v1 Skill 工具只允许 `vision.*` 与受控 operation execute。policy evaluation/风险投影/active grant 与参数级数量交集仍未实现，相关输入在实现前不得被宣称已校验。
 - 工具包装层注入 session、Tab、租约、operation/correlation 元数据，并在每次调用前校验“task allowlist ∩ 当前语义步骤 ∩ effectId/数量边界 ∩ active grant ∩ browser lease”；模型不能覆盖、替换 effectId 或把只读步骤改为写步骤。
 - 默认每个页面任务创建新 Agent task。恢复只接受调用方提供的显式 checkpoint，不依赖旧对话隐式记忆。
 
@@ -366,7 +367,7 @@ interface RunEventV1 {
 
 ### 6.2 Agent 与浏览器事件
 
-- `AgentTaskEventV1` 使用 task-scoped `seq`；当前事件集包含 `agent_task.snapshot/created/state_changed/model_turn/tool_call/tool_result/budget_updated/command.accepted/command.completed/command.rejected/checkpoint.created`，Skills runtime 交付后增加 `skill_loaded/skill_result/skill_failure`。
+- `AgentTaskEventV1` 使用 task-scoped `seq`；当前事件集包含 `agent_task.snapshot/created/state_changed/model_turn/tool_call/tool_result/budget_updated/command.accepted/command.completed/command.rejected/checkpoint.created/skill_loaded/skill_execute/skill_result/skill_failure`。
 - `BrowserEventV1` 使用 browser-session-scoped `seq`，最低事件集：`browser_session.snapshot`、`tab.created/selected/closed`、`lease.issued/revoked/expired`、`operation.queued/started/completed`、`target.resolved/stale/ambiguous`、`artifact.created`、`animation.started/completed`。
 - Agent/浏览器事件只有过程事实；`ai-e2e` 写入自己的关联事件后才成为业务时间线的一部分。
 

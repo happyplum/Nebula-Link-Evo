@@ -1,8 +1,8 @@
 # AI 模型角色与 Skills 运行契约
 
-> 状态：已确认目标设计，Agent task 核心部分实现。
-> 更新时间：2026-08-12。
-> 本文定义 `ai-chat-service` 的分析/决策模型、单次视觉模型、受限 Agent task 与 Skills runtime。当前已交付 provider 角色配置、Chat tool loop、MCP client/ToolRegistry、`vision.find_element`，以及受限 Agent task 的 POST/GET、持久状态、结构化输出、精确工具白名单、模型不可见 browser wrapper、command/event/checkpoint 与 Skill registry/pin 数据层；页面分析、目标解析 v2、Skills runtime、任务命令/事件公开接口与完整副作用授权仍是目标协议。
+> 状态：已确认目标设计；Agent task 命令/事件与 Skills Runtime 已实现。
+> 更新时间：2026-08-13。
+> 本文定义 `ai-chat-service` 的分析/决策模型、单次视觉模型、受限 Agent task 与 Skills runtime。当前已交付 provider 角色配置、Chat tool loop、MCP client/ToolRegistry、`vision.find_element`，以及受限 Agent task 的创建/查询/命令/事件、持久状态、结构化输出、模型不可见 browser wrapper 与本地只读单 Skill runtime；页面分析、目标解析 v2 与完整副作用授权仍是目标协议。
 
 ## 1. 服务边界
 
@@ -208,6 +208,10 @@ interface SkillManifestV1 {
 - Agent task 精确钉住 `id + version + contentHash`；任务运行期间 registry 更新不影响已有任务。
 - 首期不支持按任务联网安装 Skill；新增/升级通过受控部署完成。
 
+当前 package 布局固定为 `<root>/<skillId>/<version>/manifest.json` 与 `instructions.md`，roots 由 `AI_SKILLS_DIRS` 使用平台路径分隔符配置。目录 symlink/逃逸、额外文件、超限内容、目录名与 manifest 不一致均拒绝；catalog 只通过 `GET /api/v1/skills` 返回 id/version/hash/描述/角色/工具 patterns，不返回指令正文、sourceRef 或本地路径。空 catalog 表示当前未部署版本，不表示 runtime 协议不可用。
+
+v1 每个 Agent task 最多固定一个当前 Skill，因此“当前被调用 Skill”就是本 task 的唯一 pin；多 Skill 组合、嵌套调用或权限并集尚不支持，调用方必须拆为独立 task。幂等重放先返回既有持久任务事实，不要求当前部署目录仍保留该版本；新任务必须命中当前已加载 catalog 的精确 hash。
+
 ### 4.2 权限计算
 
 对一次普通 Agent turn，实际允许工具是 runtime 可用工具、task allowlist、当前语义步骤/副作用授权与 browser lease 的交集。对一次 Skill 调用，再与**当前被调用 Skill**的 required tool patterns 求交集：
@@ -226,6 +230,8 @@ provider/runtime 可用工具
 - secret 值仅在确定性的输入/工具边界按 secret ref 注入；模型和 Skill 指令只看到引用或脱敏替代值。
 - Skill 指令中的工具名、模型角色或输出 Schema 与 manifest 不一致时加载失败。
 - Skill 版本/hash、实际工具调用和预算消耗写入 Agent task 审计，并由 `ai-e2e` 关联到 evidence manifest。
+
+当前 v1 服务端 Skill 工具 policy 只放行 `vision.*` 与 `browser-control.operation_execute` 命名空间；后者仍必须通过 task 精确 allowlist、冻结 browser step/effectId/数量边界、observe/control binding 与有效 lease。任务与 Skill 的模型 turn/tool/token 上限取更小值。运行时发布 `agent_task.skill_loaded/skill_execute/skill_result/skill_failure`，事件只含安全元数据和消耗，不含指令正文。
 
 未来如需可执行代码 Skill，必须另设受信代码包、签名、sandbox、资源配额和供应链审计协议，不属于 v1。
 
@@ -267,8 +273,8 @@ provider/runtime 可用工具
 
 - 受限 Agent task 已独立于 ChatSessionController，具备逐任务精确 tool allowlist、Tab/lease binding、预算和结构化结果；普通 Chat 仍使用原有 tool loop 并过滤三项受控 operation 工具。
 - 当前 `/api/ai/generate` 只调用 `generateText()`，不执行工具。
-- 当前只有 `vision.find_element`，内部临时缓存最近 5 份 DOM snapshot；尚无通用页面状态分析、目标候选 v2、持久 snapshot 授权或 Agent task 事件 SSE/event-log。
-- 当前已有 immutable Skill registry/version/hash 与 task pin/policy hash 数据层；没有本地目录 loader、完整 manifest 引用/权限校验、任务输入放行、指令装载或执行隔离。
+- 当前只有 `vision.find_element`，内部临时缓存最近 5 份 DOM snapshot；尚无通用页面状态分析、目标候选 v2 或持久 snapshot 授权。
+- 当前 Skills Runtime 已支持本地只读目录加载、immutable registry/version/hash、task 单 Skill exact pin/policy hash、Schema/hash/path 校验、指令装载、权限/预算收缩、catalog 与执行事件；多 Skill 组合/嵌套调用不在 v1。
 - 当前 Agent browser wrapper 已冻结 `stepId/kind/operation/effectId` 并限制 observe/control，模糊失败先查询 operation ledger；仍没有 policy evaluation、风险投影 hash、active grant 与参数级数量的完整逐调用交集校验。
 - 当前 `ai-e2e` prompts 是业务侧模板，可继续作为迁移输入；不得把它们直接等同于可复用 Skill。
 

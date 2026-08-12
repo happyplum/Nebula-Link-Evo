@@ -70,6 +70,7 @@ export const AGENT_TASK_LIMITS = Object.freeze({
   maxTokens: 64_000,
   maxAllowedTools: 32,
   maxBrowserSteps: 100,
+  maxSkillsPerTask: 1,
 });
 
 export interface ValidatedAgentTaskRequest {
@@ -107,7 +108,7 @@ export function validateCreateAgentTaskRequest(value: unknown): ValidatedAgentTa
   validateNoInlineSecrets(request.input, 'input');
   const responseSchema = validateResponseSchema(request.responseSchema);
   validateBudgets(request.budgets);
-  validateSkillPolicy(request.skillPolicy);
+  const skillAllow = validateSkillPolicy(request.skillPolicy);
   validateCorrelation(request.correlation);
 
   const toolPolicy = requireObject(request.toolPolicy, 'toolPolicy');
@@ -145,6 +146,7 @@ export function validateCreateAgentTaskRequest(value: unknown): ValidatedAgentTa
       allow,
       ...(request.toolPolicy.constraints ? { constraints: request.toolPolicy.constraints } : {}),
     },
+    skillPolicy: { allow: skillAllow },
     ...(browserBinding ? { browserBinding } : {}),
   };
   const persistedRequest = redactAgentTaskRequest(normalized);
@@ -221,6 +223,10 @@ export function validateResponseValue(
   } else if (type === 'number' || type === 'integer') {
     validateRange(value as number, schema.minimum, schema.maximum, `Response ${path}`);
   }
+}
+
+export function validateBoundedObjectSchema(value: unknown): Record<string, unknown> {
+  return validateResponseSchema(structuredClone(value));
 }
 
 function validateResponseSchema(value: unknown): Record<string, unknown> {
@@ -326,11 +332,48 @@ function validateBudgets(value: unknown): void {
     requireIntegerRange(budgets.maxTokens, 'budgets.maxTokens', 1, AGENT_TASK_LIMITS.maxTokens);
 }
 
-function validateSkillPolicy(value: unknown): void {
+function validateSkillPolicy(value: unknown): CreateAgentTaskRequest['skillPolicy']['allow'] {
   const policy = requireObject(value, 'skillPolicy');
   assertAllowedKeys(policy, ['allow'], 'skillPolicy');
   if (!Array.isArray(policy.allow)) fail('skillPolicy.allow must be an array');
-  if (policy.allow.length > 0) fail('Skills runtime is not available in semantic v1 phase 2');
+  if (policy.allow.length > AGENT_TASK_LIMITS.maxSkillsPerTask) {
+    fail(`skillPolicy.allow supports at most ${AGENT_TASK_LIMITS.maxSkillsPerTask} Skill`);
+  }
+  const pins = policy.allow.map((rawPin, index) => {
+    const pin = requireObject(rawPin, `skillPolicy.allow[${index}]`);
+    assertAllowedKeys(pin, ['skillId', 'version', 'contentHash'], `skillPolicy.allow[${index}]`);
+    const skillId = requireBoundedString(
+      pin.skillId,
+      `skillPolicy.allow[${index}].skillId`,
+      1,
+      128
+    );
+    if (!/^[a-z0-9][a-z0-9._-]*$/.test(skillId))
+      fail(`skillPolicy.allow[${index}].skillId is invalid`);
+    const version = requireBoundedString(
+      pin.version,
+      `skillPolicy.allow[${index}].version`,
+      1,
+      100
+    );
+    if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) {
+      fail(`skillPolicy.allow[${index}].version must use semantic versioning`);
+    }
+    const contentHash = requireBoundedString(
+      pin.contentHash,
+      `skillPolicy.allow[${index}].contentHash`,
+      64,
+      64
+    );
+    if (!/^[a-f0-9]{64}$/.test(contentHash)) {
+      fail(`skillPolicy.allow[${index}].contentHash must be lowercase SHA-256`);
+    }
+    return { skillId, version, contentHash };
+  });
+  if (new Set(pins.map((pin) => pin.skillId)).size !== pins.length) {
+    fail('skillPolicy.allow must not contain duplicate Skill ids');
+  }
+  return pins;
 }
 
 function validateCorrelation(value: unknown): void {

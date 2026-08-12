@@ -25,6 +25,7 @@ import { AgentTaskRepository } from './agent-tasks/repository.js';
 import { AgentTaskModelExecutor } from './agent-tasks/executor.js';
 import { AgentTaskService } from './agent-tasks/service.js';
 import { isLoopbackHost } from './agent-tasks/capabilities.js';
+import { SkillRuntime } from './skills/runtime.js';
 
 const VERSION = '0.1.0';
 
@@ -125,13 +126,39 @@ async function start(): Promise<void> {
     appService.setToolRegistry(toolRegistry);
 
     const agentTaskRepository = new AgentTaskRepository(AGENT_TASKS_DB_PATH);
+    const skillRuntime = new SkillRuntime(agentTaskRepository);
+    const skillAvailableTools = new Set(
+      toolRegistry.getAvailableTools({ consumer: 'chat' }).map((tool) => tool.name)
+    );
+    if (
+      mcpClient?.getAvailableTools().some(
+        (tool) =>
+          tool.originalName === 'browser-control.operation_execute' ||
+          tool.name === 'browser-control.operation_execute'
+      )
+    ) {
+      skillAvailableTools.add('browser-control.operation_execute');
+    }
+    const skillCatalog = skillRuntime.loadFromDirectories(
+      config.skillDirectories,
+      [...skillAvailableTools]
+    );
+    app.log.info(
+      { configuredRoots: config.skillDirectories.length, loadedVersions: skillCatalog.length },
+      'Skills runtime initialized'
+    );
     const agentTaskExecutor = new AgentTaskModelExecutor({
       config: providerConfig,
       providerRegistry,
       toolRegistry,
       ...(mcpClient ? { mcpClient } : {}),
     });
-    agentTaskService = new AgentTaskService(agentTaskRepository, agentTaskExecutor, app.log);
+    agentTaskService = new AgentTaskService(
+      agentTaskRepository,
+      agentTaskExecutor,
+      app.log,
+      skillRuntime
+    );
     const recoveredTaskCount = agentTaskService.recoverUnfinished();
     if (recoveredTaskCount > 0) {
       app.log.warn({ recoveredTaskCount }, 'Recovered unfinished Agent tasks as interrupted');
@@ -183,6 +210,7 @@ async function start(): Promise<void> {
       service: agentTaskService,
       serviceVersion: VERSION,
       localControlPlane: isLoopbackHost(config.host),
+      skillCatalog,
     });
     await app.register(aiServiceRoutes, { prefix: '/api/ai' });
     await app.register(chatRoutes, { prefix: '/api/chat' });

@@ -5,6 +5,8 @@
  * beside the AI provider config loaded from config.json.
  */
 
+import { delimiter } from 'node:path';
+
 const PINO_LEVELS = ['trace', 'debug', 'info', 'warn', 'error', 'fatal'] as const;
 type PinoLevel = (typeof PINO_LEVELS)[number];
 
@@ -33,6 +35,8 @@ export interface AiChatServiceConfig {
   gatewayUrl: string;
   /** Allowed CORS origins for debug-ui. Empty array denies all; ["*"] allows all. */
   corsOrigins: string[];
+  /** Local read-only roots containing declarative Skill packages. */
+  skillDirectories: string[];
   /** Provider placeholders. Keys are provider aliases. */
   providers: Record<string, ProviderPlaceholder>;
 }
@@ -77,6 +81,7 @@ function readProviderEnv(alias: string): ProviderPlaceholder {
  * - `LOG_LEVEL` (default info)
  * - `PROXY_ADAPTER_URL` (default http://127.0.0.1:3000) — browser MCP gateway
  * - `CORS_ORIGINS` (comma-separated; default http://localhost:5173)
+ * - `AI_SKILLS_DIRS` (platform-delimited local read-only Skill roots; default empty)
  * - `<ALIAS>_API_KEY` / `<ALIAS>_BASE_URL` / `<ALIAS>_ENABLED` per provider
  */
 export function loadConfig(): AiChatServiceConfig {
@@ -91,6 +96,10 @@ export function loadConfig(): AiChatServiceConfig {
         .map(o => o.trim())
         .filter(Boolean)
     : ['http://localhost:5173'];
+  const skillDirectories = (process.env.AI_SKILLS_DIRS ?? '')
+    .split(delimiter)
+    .map((directory) => directory.trim())
+    .filter(Boolean);
 
   const providers: Record<string, ProviderPlaceholder> = {};
   for (const alias of KNOWN_PROVIDERS) {
@@ -103,6 +112,7 @@ export function loadConfig(): AiChatServiceConfig {
     logLevel: normalizeLogLevel(),
     gatewayUrl,
     corsOrigins,
+    skillDirectories,
     providers,
   });
 }

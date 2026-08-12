@@ -1,12 +1,17 @@
 import { AGENT_TASK_LIMITS } from './validation.js';
 
-export function buildAgentTaskCapabilities(serviceVersion: string, localControlPlane: boolean) {
+export function buildAgentTaskCapabilities(
+  serviceVersion: string,
+  localControlPlane: boolean,
+  loadedSkillVersions = 0
+) {
   return {
     schema: 'nebula.service-capabilities/1.0' as const,
     service: 'ai-chat-service' as const,
     serviceVersion,
     protocols: {
       'nebula.ai.agent-task': { major: 1, minor: 0 },
+      'nebula.ai.skill': { major: 1, minor: 0 },
       'nebula.browser.operation': { major: 1, minor: 0 },
     },
     features: {
@@ -18,7 +23,7 @@ export function buildAgentTaskCapabilities(serviceVersion: string, localControlP
       durableTaskState: true,
       taskEvents: true,
       taskCommands: true,
-      skillsRuntime: false,
+      skillsRuntime: true,
       operationCaptureArtifacts: true,
       sideEffectAuthorization: 'preauthorized_steps_only',
       operationPresentationAnimation: false,
@@ -34,6 +39,8 @@ export function buildAgentTaskCapabilities(serviceVersion: string, localControlP
       maxTokens: AGENT_TASK_LIMITS.maxTokens,
       maxAllowedTools: AGENT_TASK_LIMITS.maxAllowedTools,
       maxBrowserSteps: AGENT_TASK_LIMITS.maxBrowserSteps,
+      maxSkillsPerTask: AGENT_TASK_LIMITS.maxSkillsPerTask,
+      loadedSkillVersions,
     },
     generatedAt: new Date().toISOString(),
   };
