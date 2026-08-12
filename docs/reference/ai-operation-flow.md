@@ -88,8 +88,10 @@ proxy-adapter
 - 浏览器操作使用稳定 `operationId` 去重并查询结果；模型中断或传输超时不能证明动作未发生，结果不确定时必须先检查副作用。
 - 失败先保存截图与现场并评估后续阻碍；依赖失败输出的后续任务可跳过，不受影响的任务可继续。
 - 需要主代理决策时暂停，影响需求或验收的决定写入业务版本文档后再恢复。
+- 流程、TODO、尝试、Agent 和浏览器操作分别持有状态；blocked/interrupted/waiting_decision 未收敛前不提前把下游标为跳过。
+- `ai-e2e` 通过持久 `run.snapshot`、单调事件序号和不可变证据 manifest 向 UI 提供权威状态；浏览器视频用于实时观察，默认不等于永久录像。
 
-完整需求见 `ai-e2e/docs/requirements-baseline.md`；功能脚本、场景编排和代理浏览器执行分别见 `ai-e2e/docs/functional-script-contract.md`、`ai-e2e/docs/scenario-orchestration-contract.md`、`ai-e2e/docs/agent-browser-execution-contract.md`。
+完整需求见 `ai-e2e/docs/requirements-baseline.md`；功能脚本、场景编排、代理浏览器执行和运行状态/证据分别见 `ai-e2e/docs/functional-script-contract.md`、`ai-e2e/docs/scenario-orchestration-contract.md`、`ai-e2e/docs/agent-browser-execution-contract.md`、`ai-e2e/docs/run-state-decision-evidence-contract.md`。
 
 ---
 

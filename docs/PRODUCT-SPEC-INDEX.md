@@ -174,7 +174,8 @@ debug-ui  ←──  （仅被用户消费）
 - **编排与执行分属两层（pending）**：页面任务图、模块范围与验收标准归 `ai-e2e`；模型调用、MCP 工具和未来 Skills 执行归 `ai-chat-service`。当前 `AiChatClient.generateText()` 只调用纯文本生成端点，尚不具备 Agent tool loop。
 - **页面任务与控制租约（pending）**：主代理派发不可变页面任务包并持有共享浏览器生命周期；子代理只取得指定 TODO、Tab、工具、输出槽的短期控制租约。跨服务只传递稳定会话/Tab/操作/快照/目标引用，不传 Playwright 对象。
 - **可视语义执行（pending）**：系统内权威资产是结构化语义功能脚本；执行按单个语义步骤推进，每个 `proxy-adapter` 浏览器原子操作具有幂等 ID、结构化结果和通用生命周期事件，并关联实时画面、脚本步骤与证据。无法确认动作是否发生时进入结果不确定态并先检查副作用。当前 `npx tsx` 子进程执行器不满足该目标。完整契约见 `ai-e2e/docs/agent-browser-execution-contract.md`。
-- **失败、阻塞、暂停与跳过（pending）**：失败先保存截图和现场并评估后续阻碍；明确缺少前置条件与意外中断分开记录，主代理按依赖跳过或继续。需要决策时暂停并在决策写入版本文档后恢复。
+- **分层状态与传播（pending）**：测试流程、运行 TODO、执行尝试、Agent 会话和浏览器操作分别持有状态。blocked/interrupted/waiting_decision 未收敛前不提前跳过下游；终态失败只传播到真实依赖节点。
+- **决策与证据（pending）**：运行操作决定和业务版本长期决定分载体追加审计；`proxy-adapter` 生成短期浏览器原始产物，`ai-e2e` 持有不可变证据 manifest、长期业务关联、完整度、脱敏和保留策略。UI 通过持久 `run.snapshot` 与单调运行事件序号恢复。完整契约见 `ai-e2e/docs/run-state-decision-evidence-contract.md`。
 - **DOM 变化局部修复（in-progress）**：当前只有 run 级诊断/自动修复；目标是只修复当前业务版本内受影响的功能脚本并重新验证。
 
 ---
@@ -198,6 +199,7 @@ debug-ui  ←──  （仅被用户消费）
 | 修改分析/决策模型、视觉模型、MCP 聚合或 Skills 职责 | 跨包契约（3.8） + `ai-chat-service` PRODUCT-SPEC + 根 README "核心产品架构" |
 | 修改业务版本、页面锚点、功能脚本、场景调用图、主/页面子代理、上下文、可视执行或失败证据 | 跨包契约（3.9） + `ai-e2e` PRODUCT-SPEC + `ai-e2e/AGENTS.md` + `ai-e2e/docs/requirements-baseline.md`；涉及版本/页面同步 `ai-e2e/docs/version-page-asset-contract.md`，功能脚本同步 `ai-e2e/docs/functional-script-contract.md`，场景编排同步 `ai-e2e/docs/scenario-orchestration-contract.md`，代理/浏览器执行同步 `ai-e2e/docs/agent-browser-execution-contract.md` + 根 README "核心产品架构" |
 | 修改 Agent 任务输入/工具作用域或浏览器会话、Tab、控制租约、原子操作、结果账本与生命周期事件 | 跨包契约（3.8、3.9） + `ai-chat-service`、`proxy-adapter`、`ai-e2e` PRODUCT-SPEC + `ai-e2e/docs/agent-browser-execution-contract.md` |
+| 修改运行/TODO/尝试状态、决策、依赖传播、证据所有权/完整度/保留/脱敏或运行快照事件 | 跨包契约（3.9） + `ai-e2e` PRODUCT-SPEC/AGENTS/UI AGENTS + `proxy-adapter` PRODUCT-SPEC（涉及原始产物时） + `ai-e2e/docs/run-state-decision-evidence-contract.md` |
 | 修改端口分配 | 跨包契约（3.1） + 全局索引 + 根 README Packages 表 + 根 README Architecture 拓扑 |
 | 修改依赖方向（如新包依赖、facade 拆分） | 依赖方向图 + 全局索引 |
 
@@ -239,3 +241,4 @@ debug-ui  ←──  （仅被用户消费）
 - `docs/reference/debug-page-integration-api-reference.md` — Proxy Adapter API
 - `docs/reference/ai-e2e-ui-architecture.md` — ai-e2e UI 架构
 - `ai-e2e/docs/agent-browser-execution-contract.md` — 页面任务、Agent 作用域、浏览器控制租约、原子操作与可视事件契约
+- `ai-e2e/docs/run-state-decision-evidence-contract.md` — 分层状态、失败传播、决策、证据与人工控制契约

@@ -53,3 +53,4 @@ pnpm type-check   # tsc --noEmit
 - No auth layer (binding constraint: localhost-only).
 - No E2E-specific page/module orchestration in this package; that product context belongs to `ai-e2e`.
 - No implicit all-tools access for scoped tasks, and no use of conversation memory as the authoritative store for caller business state.
+- Agent/tool-call audit may be referenced by callers, but this package does not own E2E decisions, evidence manifests, retention or pass/fail aggregation; see `ai-e2e/docs/run-state-decision-evidence-contract.md`.

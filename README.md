@@ -153,6 +153,8 @@ docs/               # Documentation
 
 **代理与执行目标（pending）**：主代理负责 PRD 流程、TODO、依赖、全局运行变量、决策和调度，并持有共享浏览器生命周期；子代理只执行不可变页面任务包授权的 TODO、Tab 和工具。首期一个主代理在任一时刻只运行一个执行型子代理，复用 `proxy-adapter` 托管的同一浏览器会话并串行执行动作；子代理上下文可按任务重建，多 Tab 并发留作后期扩展。可恢复中断可以由主代理决定继续原上下文。主/子代理都可调用只完成单次分析的视觉模型。浏览器操作必须按语义步骤通过 `proxy-adapter` 的同一可视执行链完成，每个原子操作具备幂等身份；状态不确定时先检查副作用。系统内权威脚本是可编排、可重放的结构化语义功能脚本，而不是独立启动 Chromium 的 `.spec.ts`。完整基线见 [`ai-e2e/docs/requirements-baseline.md`](ai-e2e/docs/requirements-baseline.md)，执行细节见 [`ai-e2e/docs/agent-browser-execution-contract.md`](ai-e2e/docs/agent-browser-execution-contract.md)。
 
+**状态、决策与证据目标（pending）**：测试流程、运行 TODO、执行尝试、Agent 和浏览器操作分别持有状态；登出中断、前置阻塞、待决策、依赖跳过、用户取消和业务失败不会混为一个 fail。运行级决定与业务版本长期决定追加审计，失败证据缺失只降低证据完整度。执行 UI 从持久化运行快照和单调事件序号恢复，并同时展示实时浏览器、当前语义步骤、依赖影响、决策与证据。完整契约见 [`ai-e2e/docs/run-state-decision-evidence-contract.md`](ai-e2e/docs/run-state-decision-evidence-contract.md)。
+
 ### AI E2E 需求基线
 
 - `ai-e2e` 当前定位是 **PRD 驱动的 E2E 自动化测试编排器**，不是新的浏览器底座；它负责把 **需求分析 → 页面探索 → URL 绑定 → 脚本生成 → 执行 → 单次失败诊断 → 可选自动修复** 串成闭环。
@@ -169,6 +171,7 @@ docs/               # Documentation
   - `ai-e2e/docs/scenario-orchestration-contract.md`
   - `ai-e2e/docs/version-page-asset-contract.md`
   - `ai-e2e/docs/agent-browser-execution-contract.md`
+  - `ai-e2e/docs/run-state-decision-evidence-contract.md`
   - `ai-e2e/docs/gap-analysis.md`（`deprecated`，旧需求对照）
   - `ai-e2e/docs/roadmap.md`（`deprecated`，旧路线，不用于制定新目标）
 

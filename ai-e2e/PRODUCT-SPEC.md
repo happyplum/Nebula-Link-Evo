@@ -66,7 +66,9 @@
 | Agent 执行路径 | pending | 页面任务图和验收归 ai-e2e，模型/MCP/未来 Skills 执行归 ai-chat-service；当前 `AiChatClient.generateText()` 是纯文本生成，不执行 tool loop。 |
 | 页面任务与浏览器控制租约 | pending | 主代理派发不可变页面任务包并持有浏览器生命周期；子代理只取得指定 TODO、Tab、工具和输出槽的短期控制租约。 |
 | 可视执行与证据 | in-progress | `proxy-adapter` 已有实时画面、marker/overlay、交互日志和失败样本基础；目标按单个语义步骤推进，每个浏览器原子操作使用幂等 ID，并关联场景、步骤、结果和失败证据；状态不确定时先检查副作用。 |
-| 失败/阻塞/暂停/跳过 | pending | 失败先保存截图和现场并评估后续阻碍；明确缺少前置条件与意外中断分开记录，主代理按依赖跳过或继续。需要决策时暂停并持久化决策后恢复。 |
+| 分层运行状态 | pending | 测试流程、运行 TODO、执行尝试、Agent 会话和浏览器操作分别持有状态；取消、登出中断、待决策、依赖跳过和业务失败不混用。 |
+| 失败/阻塞/暂停/跳过 | pending | blocked/interrupted/waiting_decision 在主代理收敛前不提前跳过下游；终态失败只传播到真实依赖节点，独立节点可重新检查后继续。 |
+| 决策与证据 | pending | 运行决定与业务版本长期决定分载体追加保存；ai-e2e 持有不可变证据 manifest、业务关联、完整度、脱敏与保留策略。 |
 | DOM 变化局部修复 | in-progress | 当前已支持 run 级诊断与可选自动修复；目标是只修复当前业务版本内受影响的功能脚本并重新验证。 |
 
 ---
@@ -178,7 +180,9 @@
 | 主代理 / 页面子代理调度与上下文策略 | — | pending | 尚无验收面 | 首期同一时刻一个主代理只运行一个执行型子代理，共享 proxy-adapter 浏览器会话并串行动作；任务包、租约、暂停、检查点和恢复契约见 `docs/agent-browser-execution-contract.md` |
 | ai-chat-service Agent 会话消费 | infrastructure/ai-chat-client | pending | 当前仅有纯文本 generate 与基础 chat session 客户端 | 需面向页面任务的 tool/skill loop、工具白名单、结构化结果和控制传播契约 |
 | proxy-adapter 可视语义执行 | services/ExecutorService | pending | 当前仍由 `npx tsx` 子进程执行 | 需替换为经 MCP 的语义步骤执行；浏览器操作具备稳定会话/Tab 引用、幂等 ID、结果账本、可视事件和可复现记录 |
-| 失败证据、影响评估与依赖跳过 | database/execution_runs、services/AIDiagnosisService | in-progress | 当前有日志/截图路径和 run 级诊断 | 需场景/调用/步骤证据包、后续阻碍评估与依赖跳过 |
+| 分层运行状态、决策与依赖传播 | database/execution_runs、types/execution、types/sse-events | pending | 当前只有 script run 的 running/pass/fail/error/timeout | 目标契约见 `docs/run-state-decision-evidence-contract.md`；需流程/TODO/尝试状态、追加式决策、权威 snapshot/事件序号和跳过传播链 |
+| 失败证据、影响评估与依赖跳过 | database/execution_runs、services/AIDiagnosisService | in-progress | 当前有日志/截图路径和 run 级诊断 | 需不可变证据 manifest、哈希、完整度、脱敏/保留、场景/调用/步骤关联和后续阻碍评估 |
+| 可视运行控制台 | ui/features/execution | pending | 当前有运行列表、简单时间线、诊断和修复审批 | 需实时浏览器、服务端进度、分层状态、依赖图、决策中心、证据浏览及安全暂停/恢复/取消控制 |
 | DOM 变化后的功能脚本局部修复 | services/AIDiagnosisService | in-progress | 当前仅有 run 级诊断/自动修复 | 需当前业务版本内的页面/模块/功能脚本影响定位与定向修复 |
 
 ---
@@ -202,6 +206,7 @@
 > 14. 修改业务版本、页面锚点、功能模块、功能脚本或测试场景调用关系
 > 15. 修改主代理 / 页面子代理的任务边界、上下文、决策、恢复、失败或跳过协议
 > 16. 修改目标浏览器执行入口、可视步骤、重放或失败证据契约
+> 17. 修改测试流程/TODO/尝试状态、决策、依赖传播、证据完整度/保留/脱敏或运行事件快照契约
 
 ### 维护检查清单
 
@@ -215,6 +220,7 @@
 | 修改业务版本、页面、模块、功能脚本或场景调用 | 目标领域与代理编排 + 功能清单 + DB schema + `docs/PRODUCT-SPEC-INDEX.md` + `docs/requirements-baseline.md`；版本/页面同步 `docs/version-page-asset-contract.md`，功能脚本同步 `docs/functional-script-contract.md`，场景编排同步 `docs/scenario-orchestration-contract.md` |
 | 实现或修改主/页面子代理 | 目标领域与代理编排 + 功能清单 + `ai-e2e/AGENTS.md` + ai-chat-service 消费契约 + `docs/PRODUCT-SPEC-INDEX.md` + `docs/agent-browser-execution-contract.md` |
 | 修改浏览器控制租约、原子操作、可视执行、证据或重放契约 | 目标领域与代理编排 + 功能清单 + proxy-adapter/ai-chat-service PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` + `docs/agent-browser-execution-contract.md` |
+| 修改状态、决策、依赖传播、证据或运行控制 UI | 目标领域与代理编排 + 功能清单 + UI 模块清单 + `ui/AGENTS.md` + `docs/run-state-decision-evidence-contract.md` + `docs/requirements-baseline.md` + `docs/PRODUCT-SPEC-INDEX.md` |
 | 修改 executor 约束 | 包级目标与边界 + 功能清单（脚本执行） + Runtime Gotchas |
 | 修改 facade 行为 | 模块清单 + 包级目标与边界 |
 | 跨包契约变更（端口、API 路径、SSE 事件、tool 命名） | 本文件 + 所有消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
@@ -238,6 +244,7 @@
 | ai-e2e 尚未消费 Agent tool loop | requirement-gap | pending | 当前业务服务调用 `POST /api/ai/generate`，无法派发受工具/Tab/输出槽约束的页面任务或在任务中执行 MCP/Skills |
 | 目标执行链仍绕过 proxy-adapter | requirement-gap | pending | 当前 `ExecutorService` 用 `npx tsx` 执行独立脚本；尚无浏览器控制租约、原子操作幂等/结果账本、结果不确定态和语义步骤事件 |
 | 统一失败证据与影响评估未实现 | requirement-gap | pending | 当前证据未贯通业务版本、场景、功能脚本调用和语义步骤，也没有后续阻碍/依赖跳过模型 |
+| 分层运行状态、决策与权威事件未实现 | requirement-gap | pending | 当前项目阶段和 script run 状态不能表达 TODO/尝试/中断/待决策/取消；SSE 无持久事件序号与运行 snapshot，UI 仍本地推断进度 |
 | DOM 变化影响定位未实现 | requirement-gap | pending | 当前自动修复由失败 run 触发，尚不能按当前业务版本的功能脚本定向维护 |
 
 完整目标需求、已确认边界与尚待技术设计内容见 `docs/requirements-baseline.md`。
@@ -250,6 +257,7 @@
 - `ai-e2e/README.md` — 包内产品文档
 - `ai-e2e/docs/requirements-baseline.md` — 需求基线
 - `ai-e2e/docs/agent-browser-execution-contract.md` — 页面任务包、Agent 边界、浏览器控制租约、原子操作与可视执行契约
+- `ai-e2e/docs/run-state-decision-evidence-contract.md` — 分层状态、失败传播、决策、证据和人工控制契约
 - `ai-e2e/docs/gap-analysis.md` — `deprecated` 历史缺口对照
 - `ai-e2e/docs/roadmap.md` — `deprecated` 历史路线，不用于制定新目标
 - `ai-e2e/ui/AGENTS.md` — UI 子工作区约束

@@ -24,7 +24,7 @@
 | 浏览器调试 REST 端点（MJPEG、DOM 快照、debug stream） |  | 任何 `src/static/debug/` 静态前端目录 |
 | LiveKit 令牌发放、配置、健康检查 |  | 共享数据库（`ai-chat-service` 独立 DB） |
 | DB 备份（`utils/db-backup.ts`） |  |  |
-| 通用浏览器执行会话、Tab、原子操作、实时画面与浏览器侧证据 | 上层传入的不透明可序列化关联信息 | PRD、场景依赖、功能脚本、代理调度或业务版本 |
+| 通用浏览器执行会话、Tab、原子操作、实时画面与短期浏览器侧原始产物 | 上层传入的不透明可序列化关联信息 | PRD、场景依赖、功能脚本、代理调度、业务版本或长期业务证据目录 |
 
 ### 硬约束
 
@@ -33,6 +33,7 @@
 - 目标 E2E 执行不得存在上层独立启动 Playwright/Chromium 的不可视旁路；本包不因此持有 ai-e2e 的 PRD、业务版本、场景或代理概念。
 - 目标原子操作以唯一操作 ID 去重并可查询结果；无法确认副作用动作是否发生时返回结果不确定态，不得自动重复执行。
 - 目标页面控制必须校验执行会话、稳定 Tab 引用和短期控制租约；上层不得跨服务传递 `Page`、`Locator` 或 `ElementHandle`。
+- 本包只生成并短期保留通用浏览器原始产物及内容校验信息；长期证据 manifest、业务关联、保留/pin 和决策归调用方，清理前必须提供可提升或明确过期的产物引用。
 - 不在 `src/` 下恢复 `static/debug/` 前端源码。
 - 不在 generic route handler 中写 provider-specific 逻辑。
 - 不与其他服务共享数据库。
@@ -99,7 +100,7 @@
 | 配置加载与校验 | config/ | shipped | `__tests__/config/validator.test.ts`、unit/config/* | config |
 | DB 备份 | utils/db-backup | shipped | `__tests__/db-backup.test.ts` | utils |
 | 服务生命周期 | services/app-service | shipped | `__tests__/service-lifecycle.test.ts`、app-service-marker | services |
-| 通用浏览器执行会话与操作账本 | — | pending | 尚无验收面 | 目标提供会话/Tab/控制租约、FIFO 原子操作、幂等去重、结果查询、结果不确定态和通用生命周期事件；不解释 E2E 业务关联 |
+| 通用浏览器执行会话与操作账本 | — | pending | 尚无验收面 | 目标提供会话/Tab/控制租约、FIFO 原子操作、幂等去重、结果查询、结果不确定态、通用生命周期事件和带内容校验的短期原始产物；不解释 E2E 业务关联 |
 | 错误分类 | errors/http-errors | shipped | `__tests__/errors.test.ts` | errors |
 
 ---
@@ -116,6 +117,7 @@
 > 7. 与 `ai-chat-service` / `debug-ui` / `ai-e2e` 之间的契约变更
 > 8. 修改 Playwright/CDP 所有权、浏览器启动/连接方式或跨服务目标引用边界
 > 9. 修改浏览器执行会话、Tab、控制租约、原子操作幂等、结果账本或通用可视事件契约
+> 10. 修改截图/DOM/媒体等原始产物的引用、完整性、提升或短期清理契约
 
 ### 维护检查清单
 
@@ -127,6 +129,7 @@
 | 修改启动顺序 | 包级目标与边界的"硬约束"列 + 启动序列说明 |
 | 修改 Playwright/CDP 拓扑 | 包级目标与边界 + 浏览器引擎模块 + 功能清单 + `docs/PRODUCT-SPEC-INDEX.md` |
 | 修改浏览器执行会话或原子操作协议 | 包级目标与边界 + 功能清单 + `ai-e2e/docs/agent-browser-execution-contract.md` + 所有消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
+| 修改浏览器原始产物与上层证据边界 | 包级目标与边界 + 功能清单 + `ai-e2e/docs/run-state-decision-evidence-contract.md` + 消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
 | 跨包契约变更（端口、API 路径、SSE 事件） | 本文件 + 所有消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
 
 ---
@@ -148,5 +151,6 @@
 - `docs/architecture.md` — 系统架构
 - `docs/reference/ai-operation-flow.md` — AI 操作执行模型
 - `ai-e2e/docs/agent-browser-execution-contract.md` — 上层页面任务与本包通用浏览器执行协议的边界
+- `ai-e2e/docs/run-state-decision-evidence-contract.md` — 浏览器原始产物与上层长期业务证据的所有权边界
 - `docs/reference/debug-page-integration-api-reference.md` — Proxy Adapter API 参考
 - 根 `AGENTS.md` — 仓库范围约束
