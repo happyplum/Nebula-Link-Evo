@@ -41,9 +41,14 @@ PRD 驱动的 E2E 自动化测试编排器。把"需求分析 → 页面探索 �
 - [designed] 失败先保存截图和现场并评估后续阻碍；主代理按依赖跳过或继续。意外登出按可恢复中断上报，需要决策时暂停并在决策写入版本文档后恢复。
 - [designed] 测试流程、运行 TODO、执行尝试、Agent 和浏览器操作分别持有状态；blocked/interrupted/waiting_decision 未收敛前不提前跳过下游，取消不再记作超时。
 - [designed] ai-e2e 持有不可变证据 manifest、业务关联、完整度、脱敏与保留策略；UI 从持久 `run.snapshot` + 单调运行事件恢复，并展示实时浏览器、依赖传播、决策与证据。目标契约见 `ai-e2e/docs/run-state-decision-evidence-contract.md`。
-- [designed] 目标业务版本/Run API、`ai-chat-service /api/v1/agent-tasks`、`proxy-adapter /api/v1/browser-execution/*` 与 `browser-control.operation_*`、三类 snapshot-first SSE 和重启恢复协议见 `ai-e2e/docs/service-api-event-contract.md`；当前路由均未实现，同一 run 禁止混用新旧执行器。
+- [designed] 目标业务版本/Authoring/Run API、`ai-chat-service /api/v1/agent-tasks`、`proxy-adapter /api/v1/browser-execution/*` 与 `browser-control.operation_*`、四类目标 snapshot-first SSE（Authoring/Run/Agent/Browser）和重启恢复协议见 `ai-e2e/docs/service-api-event-contract.md`；当前路由均未实现，同一 run 禁止混用新旧执行器。
 - [designed] 双模型、`vision.analyze_page`/`vision.resolve_target`、声明式 Skill manifest、版本/hash pin、工具权限交集和 prompt injection 边界见 `ai-e2e/docs/ai-model-skill-contract.md`。
 - [designed] 目标 migration 对 001–013 做结构 preflight/checksum baseline，旧 TypeScript/login/run 只读保留，legacy import 只生成 needs_recheck 版本/候选；新链按业务版本 opt-in 且 run 固定 `semantic_v1`。切流、回滚和验收见 `ai-e2e/docs/migration-compatibility-acceptance-contract.md`。
+- [designed] 主代理是由持久 authoring/run 状态驱动的确定性工作流协调器，不依赖长模型对话。bootstrap/recheck/repair/import_conversion 保存 job/task/attempt/event 和 coverage；candidate 经静态校验、真实浏览器验证后原子激活，完整契约见 `ai-e2e/docs/asset-authoring-repair-contract.md`。
+- [designed] revision dependency index 由已校验资产确定性生成，页面变化按 none/locator_only/interaction/contract/requirement/environment 分类；局部修复只修改并重验受影响闭包。
+- [designed] copy 后执行资产在目标版本保持 current 选择但标为 stale，目标版本 `needs_recheck`；目标 deployment 上真实重验前不能创建正式 semantic run。
+- [designed] 首期每个 proxy 进程全局最多一个活动 browser execution session，authoring verification 与 test run 共用 FIFO；主代理安全边界 observe、当前子代理 control、UI live view 只读。
+- [designed] v1 语义控制面只在 loopback/local 单用户边界启用；远程或多用户拓扑必须先交付统一认证、授权与租户隔离。
 - [designed] 页面或 DOM 节点变化后只修复当前业务版本内受影响的功能脚本并重新验证；当前仅有 run 级失败诊断与自动修复。
 - [tech-debt] `page_snapshot_json` 缺失：手动 URL 不经过探索，该字段为 NULL，导致 AI 编造选择器，通过率从 60%+ 降到 4.6%。变通：手动注入 DOM 快照。
 - [tech-debt] AI 模板约束执行不足：AI 偶尔生成 `test()` / `expect()` / `waitForLoadState('networkidle')` / `typescript` 前缀。变通：批量后处理。

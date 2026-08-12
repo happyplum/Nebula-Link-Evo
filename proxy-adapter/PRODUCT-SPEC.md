@@ -33,6 +33,7 @@
 - 目标 E2E 执行不得存在上层独立启动 Playwright/Chromium 的不可视旁路；本包不因此持有 ai-e2e 的 PRD、业务版本、场景或代理概念。
 - 目标原子操作以唯一操作 ID 去重并可查询结果；无法确认副作用动作是否发生时返回结果不确定态，不得自动重复执行。
 - 目标页面控制必须校验执行会话、稳定 Tab 引用和短期控制租约；上层不得跨服务传递 `Page`、`Locator` 或 `ElementHandle`。
+- v1 每个 proxy 进程全局最多一个活动 browser execution session；上游负责任务 FIFO，本包只做不解释业务类型的通用独占门禁。最多一个 `control` lease，`observe` 只在原子操作安全边界读取，UI live view 无控制权；会话活动期间 legacy MCP/debug 写工具返回 `browser_busy`。
 - 本包只生成并短期保留通用浏览器原始产物及内容校验信息；长期证据 manifest、业务关联、保留/pin 和决策归调用方，清理前必须提供可提升或明确过期的产物引用。
 - 不在 `src/` 下恢复 `static/debug/` 前端源码。
 - 不在 generic route handler 中写 provider-specific 逻辑。
@@ -57,7 +58,7 @@
 | 工具注册 | `src/tools/`（registry / types / index / providers/browser-tools-provider / adapters/*） | shipped | ToolRegistry + 本地 browser-control provider + MCP Server 适配器 | 外部 MCP client/provider 已归 `ai-chat-service`；本包不存在 mcp-client-provider |
 | 浏览器工具适配 | `src/browser-tools/`（definitions / tool-map / param-adapter / result-adapter / types / index） | shipped | browser-control.* 工具定义与参数/结果适配 | 工具集含 screenshot、click、type 等；区别于 `Action` 联合类型（12 种） |
 | MCP Server | `src/mcp-server/`（index / transport） | shipped | StreamableHTTP 传输层 + MCP Server 入口 | 路径 `/mcp`；`ai-chat-service` 通过 `PROXY_ADAPTER_URL + /mcp` 接入 |
-| 目标浏览器执行控制面 | `src/browser-execution/`（待新增） | pending | application-level session/Tab/lease、FIFO queue、operation ledger、短期 artifact 与 session event | 与 stateless MCP transport session 解耦；目标协议见 `ai-e2e/docs/service-api-event-contract.md` |
+| 目标浏览器执行控制面 | `src/browser-execution/`（待新增） | pending | application-level session/Tab/observe-control lease、通用独占 admission gate、operation ledger、短期 artifact 与 session event | v1 每进程最多一个活动 session；32-byte opaque token 只存 hash/process epoch，ledger 默认本包 SQLite WAL；与 stateless MCP transport session 解耦 |
 | 浏览器引擎 | `src/browser-engine/`（services/{browser-lifecycle,browser-service,dom-extractor,page-actions,click-resolution,snapshot-cache,browser-lock} / screencast / locator-generator / marker-injector / dom-utils / index） | shipped | 进程内 Playwright Chromium 控制、可选远程调试端口、页面 CDP 会话、DOM 提取、点击解析、快照缓存、视觉标记注入、屏播 | 当前自行启动 Chromium，不存在外部 `playwright-server` 或 `connectOverCDP` 连接链；7 级目标链：nebula-id → role → testid → aria → text → css → xpath |
 | 插件 | `src/plugins/`（01-cors / 02-swagger / 03-error-handler / 10-routes-autoload / routes/{api/livekit-token, debug/index, debug/stream, config, health}） | shipped | Fastify 插件与路由 | 路由按编号约定加载顺序 |
 | Schemas | `src/schemas/`（health / config） | shipped | 健康检查与配置响应 schema |  |
@@ -104,7 +105,7 @@
 | 配置加载与校验 | config/ | shipped | `__tests__/config/validator.test.ts`、unit/config/* | config |
 | DB 备份 | utils/db-backup | shipped | `__tests__/db-backup.test.ts` | utils |
 | 服务生命周期 | services/app-service | shipped | `__tests__/service-lifecycle.test.ts`、app-service-marker | services |
-| 通用浏览器执行会话与操作账本 | `src/browser-execution/`（待新增） | pending | 尚无验收面 | 目标 control plane、session/lease/event/operation API 和恢复语义见 `ai-e2e/docs/service-api-event-contract.md`；不解释 E2E 业务关联 |
+| 通用浏览器执行会话与操作账本 | `src/browser-execution/`（待新增） | pending | 尚无验收面 | 目标 control plane、全局单 session、observe/control lease、独占 admission gate、event/operation API 和恢复语义见 `ai-e2e/docs/service-api-event-contract.md`；不解释 E2E 业务关联 |
 | E2E 受限 MCP 原子工具 | tools/providers/browser-tools-provider、browser-execution（待扩展） | pending | 当前 15 个工具继续作为兼容面 | 新增 `browser-control.operation_execute/get/cancel`；session/Tab/lease 由模型不可见包装层注入，禁止任意 JS、CDP 和隐式坐标回退 |
 | 语义脚本原子动作/观测覆盖 | browser-tools、browser-engine | pending | 当前 15 个工具只覆盖基础操作 | v1 目标补齐语义动作及 page_state/target_state/text/value/attribute/count/tabs 等观测；不得以 dom_script 代替，映射见两份脚本/API 契约 |
 | 错误分类 | errors/http-errors | shipped | `__tests__/errors.test.ts` | errors |
@@ -125,6 +126,7 @@
 > 9. 修改浏览器执行会话、Tab、控制租约、原子操作幂等、结果账本或通用可视事件契约
 > 10. 修改截图/DOM/媒体等原始产物的引用、完整性、提升或短期清理契约
 > 11. 修改语义脚本动作/断言白名单到通用浏览器原子操作的映射
+> 12. 修改全局活动浏览器 session 数量、通用 admission gate 或 observe/control/live-view 权限
 
 ### 维护检查清单
 
@@ -148,6 +150,7 @@
 |------|------|------|------|
 | ToolConsumer 仍保留 legacy `chat` 值 | tech-debt | pending | `BrowserToolsProvider.exposeTo` 与 `GatewayTool` 类型仍含 `chat`，但本包已无 Chat 消费面；后续应在不影响 MCP Server 的前提下清理 |
 | E2E 可视执行所需通用协议未实现 | requirement-gap | pending | session/lease/operation/event/API 已设计；当前仍只有 15 个单步 MCP 工具、进程内浏览器锁、MJPEG、marker/overlay、交互日志和失败样本 |
+| singleton Context 尚无受控独占门禁 | requirement-gap | pending | 当前进程内 mutex 不等于 application-level 单 session；需按已设计的 opaque lease、process epoch、proxy SQLite WAL 对 observe/control、暂停占用、legacy 写阻断和 browser_busy 建立持久可恢复控制面，上游业务 FIFO 不下沉本包 |
 
 ---
 
@@ -163,5 +166,6 @@
 - `ai-e2e/docs/semantic-script-schema.md` — 首期语义脚本动作/断言白名单与本包通用操作映射
 - `ai-e2e/docs/service-api-event-contract.md` — 浏览器执行 control plane、MCP 原子操作、事件、幂等与恢复
 - `ai-e2e/docs/migration-compatibility-acceptance-contract.md` — 服务升级顺序、重启语义、故障注入和发布门禁
+- `ai-e2e/docs/asset-authoring-repair-contract.md` — authoring verification 与正式 run 共享浏览器 FIFO 的消费边界
 - `docs/reference/debug-page-integration-api-reference.md` — Proxy Adapter API 参考
 - 根 `AGENTS.md` — 仓库范围约束

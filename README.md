@@ -141,6 +141,7 @@ docs/               # Documentation
 - [AI E2E Service API & Events](ai-e2e/docs/service-api-event-contract.md) — 三服务目标 API、MCP 原子操作、事件、幂等与恢复
 - [AI Models & Skills](ai-e2e/docs/ai-model-skill-contract.md) — 双模型、单次视觉分析、受限 Agent task 与声明式 Skills
 - [AI E2E Migration & Acceptance](ai-e2e/docs/migration-compatibility-acceptance-contract.md) — 旧数据/脚本迁移、版本级切流、回滚与发布门禁
+- [AI E2E Asset Authoring & Repair](ai-e2e/docs/asset-authoring-repair-contract.md) — 从零生成、复核、真实验证、影响分析与局部修复
 
 ## Product Spec
 
@@ -154,7 +155,7 @@ docs/               # Documentation
 
 **领域层级**：逻辑页面由不含部署 Origin 的规范化路由模板与身份参数约束标识；实际运行再绑定部署、动态参数和参考基线。一个页面包含多个功能模块，一个模块包含多个可复用、可独立验证和修复的功能脚本。首期脚本采用显式输入、线性步骤、硬业务断言、成功后输出和声明副作用；场景使用无环调用图负责跨模块/页面的顺序、重复、分支、依赖和数据传递。PRD 形成场景定义与 TODO 模板，每次执行冻结独立运行计划并产生运行 TODO 和执行尝试。
 
-**代理与执行目标（pending）**：主代理负责 PRD 流程、TODO、依赖、全局运行变量、决策和调度，并持有共享浏览器生命周期；子代理只执行不可变页面任务包授权的 TODO、Tab 和工具。首期一个主代理在任一时刻只运行一个执行型子代理，复用 `proxy-adapter` 托管的同一浏览器会话并串行执行动作；子代理上下文可按任务重建，多 Tab 并发留作后期扩展。可恢复中断可以由主代理决定继续原上下文。主/子代理都可调用只完成单次 snapshot 分析的视觉模型。浏览器操作必须按语义步骤通过 `proxy-adapter` 的同一可视执行链完成，每个原子操作具备幂等身份；状态不确定时先检查副作用。系统内权威脚本是可编排、可重放的结构化语义功能脚本，而不是独立启动 Chromium 的 `.spec.ts`。目标 `/api/v1`、Agent task、浏览器 session/lease/operation、事件重连和 Skills 协议分别见 [`ai-e2e/docs/service-api-event-contract.md`](ai-e2e/docs/service-api-event-contract.md) 与 [`ai-e2e/docs/ai-model-skill-contract.md`](ai-e2e/docs/ai-model-skill-contract.md)。
+**代理、资产生成与执行目标（pending）**：主代理是 `ai-e2e` 内可暂停、可恢复的持久工作流协调器，负责 PRD/页面资产生成、TODO、依赖、全局运行变量、决策和调度；模型对话不是状态源。bootstrap/recheck/repair 先生成 candidate，再经静态校验、真实可视浏览器验证和原子激活。子代理只执行不可变页面任务包授权的 TODO、Tab 和工具。首期每个 `proxy-adapter` 进程全局最多一个活动浏览器执行会话，authoring 与正式 run 共用 FIFO；只有当前执行型子代理持有 control，主代理只在安全边界 observe，UI 实时画面只读。子代理上下文可按任务重建，多 Tab 并发留作后期扩展。可恢复中断可以由主代理决定继续原上下文。主/子代理都可调用只完成单次 snapshot 分析的视觉模型。浏览器操作必须按语义步骤通过 `proxy-adapter` 的同一可视执行链完成，每个原子操作具备幂等身份；状态不确定时先检查副作用。系统内权威脚本是可编排、可重放的结构化语义功能脚本，而不是独立启动 Chromium 的 `.spec.ts`。目标协议见 [`ai-e2e/docs/asset-authoring-repair-contract.md`](ai-e2e/docs/asset-authoring-repair-contract.md)、[`ai-e2e/docs/service-api-event-contract.md`](ai-e2e/docs/service-api-event-contract.md) 与 [`ai-e2e/docs/ai-model-skill-contract.md`](ai-e2e/docs/ai-model-skill-contract.md)。
 
 **状态、决策与证据目标（pending）**：测试流程、运行 TODO、执行尝试、Agent 和浏览器操作分别持有状态；登出中断、前置阻塞、待决策、依赖跳过、用户取消和业务失败不会混为一个 fail。运行级决定与业务版本长期决定追加审计，失败证据缺失只降低证据完整度。执行 UI 从持久化运行快照和单调事件序号恢复，并同时展示实时浏览器、当前语义步骤、依赖影响、决策与证据。完整契约见 [`ai-e2e/docs/run-state-decision-evidence-contract.md`](ai-e2e/docs/run-state-decision-evidence-contract.md)。
 
@@ -182,6 +183,7 @@ docs/               # Documentation
   - `ai-e2e/docs/service-api-event-contract.md`
   - `ai-e2e/docs/ai-model-skill-contract.md`
   - `ai-e2e/docs/migration-compatibility-acceptance-contract.md`
+  - `ai-e2e/docs/asset-authoring-repair-contract.md`
   - `ai-e2e/docs/gap-analysis.md`（`deprecated`，旧需求对照）
   - `ai-e2e/docs/roadmap.md`（`deprecated`，旧路线，不用于制定新目标）
 

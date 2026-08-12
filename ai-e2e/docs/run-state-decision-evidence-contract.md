@@ -325,3 +325,4 @@ open → answered → applied
 - `../../docs/reference/ai-e2e-ui-architecture.md`：UI 架构事实与目标执行体验。
 - `target-data-model.md`：运行、TODO、尝试、决策、事件、证据和产物表结构。
 - `service-api-event-contract.md`：运行命令、决策、snapshot、事件日志与跨服务恢复协议。
+- `asset-authoring-repair-contract.md`：运行前复检、嵌套 repair、验证 run 与计划修订的边界。

@@ -47,7 +47,9 @@ AI 能力经 MCP-over-HTTP 路由到 proxy-adapter (:3000)，后者内进程运�
 PRD + 目标链接 / 已有业务版本
         │
         ▼
-ai-e2e 主代理
+ai-e2e 持久主代理（authoring 或 run workflow）
+  ├─ bootstrap：需求 → 页面 → 模块 → 脚本/场景 candidate
+  ├─ recheck/repair：影响分析 → 最小范围重验/新 revision → 原子激活
   ├─ 加载场景定义并冻结运行计划、TODO、依赖和运行变量
   ├─ 持久化 outbox，以幂等键驱动外部任务并在重启后收敛
   ├─ 按页面场景片段串行派发不可变任务包（同一时刻一个子代理）
@@ -66,8 +68,8 @@ ai-chat-service /api/v1/agent-tasks 子代理运行
         │
         ▼ MCP-over-HTTP
 proxy-adapter
-  ├─ 唯一 Playwright/Chromium 执行入口
-  ├─ 通用浏览器会话、Tab、控制租约与 FIFO 动作队列
+  ├─ 唯一 Playwright/Chromium 执行入口；v1 全局一个活动 session
+  ├─ authoring/run 共用 FIFO；主代理 observe、当前子代理 control
   ├─ DOM/截图与执行前目标重解析
   ├─ 幂等原子操作、结果查询与结果不确定态
   ├─ 实时画面、marker/overlay 与后续操作动画
@@ -77,6 +79,7 @@ proxy-adapter
 目标运行规则：
 
 - 一个页面包含多个功能模块，一个功能模块包含多个功能脚本；测试场景可跨模块/页面编排脚本调用。
+- 主代理进度来自持久 authoring/run job、task、attempt、coverage 和事件，不来自模型对话；candidate 只有静态 valid + 真实浏览器 verified 后才能进入可运行版本。
 - 系统内权威脚本是结构化语义功能脚本，不是要求独立启动浏览器的 `.spec.ts`。
 - 首期功能脚本只执行显式输入驱动的线性职责内步骤，不嵌套调用其他脚本；业务循环、分支、重复和跨脚本输入输出映射由场景及主代理处理。
 - 脚本全部业务断言通过后才发布输出；创建、更新、删除或认证副作用在状态未知时不得盲目重试。
@@ -84,7 +87,7 @@ proxy-adapter
 - 主代理与子代理均可调用视觉模型；每次调用只处理一个完整输入的分析问题，视觉模型不持有连续任务状态。
 - 子代理发现意外登出或外部前置条件缺失时停止并上报，不自行解决；主代理安排前置任务后决定恢复或重派。
 - 大多数派发创建干净上下文；可恢复中断在重新检查页面状态和副作用后可以续接原上下文。
-- 首期同一测试流程复用 `proxy-adapter` 的浏览器会话，一个主代理在任一时刻只运行一个执行型子代理，所有 Tab 的浏览器动作均串行；多 Tab 并发留作后期扩展。
+- 首期每个 `proxy-adapter` 进程全局最多一个活动浏览器执行会话，authoring verification 与 test run 共用 FIFO；一个主代理在任一时刻只运行一个执行型子代理，所有 Tab 动作均串行，多 Tab 并发留作后期扩展。
 - 子代理只获得当前页面任务指定 TODO、Tab、工具和输出槽的短期控制租约，不持有共享浏览器生命周期。
 - 浏览器操作使用稳定 `operationId` 去重并查询结果；模型中断或传输超时不能证明动作未发生，结果不确定时必须先检查副作用。
 - 失败先保存截图与现场并评估后续阻碍；依赖失败输出的后续任务可跳过，不受影响的任务可继续。
@@ -94,8 +97,9 @@ proxy-adapter
 - Run、Agent task 和 Browser session 各自使用 snapshot-first SSE 与独立序号；现有 Chat SSE、Debug SSE 和项目阶段 SSE 是兼容面，不能混用序号或替代业务状态。
 - 跨服务不使用分布式事务：`ai-e2e` 先写 intent/outbox，再用同一幂等键创建/查询 Agent task 和浏览器 operation；超时后先查账本。
 - 创建 semantic run 前核对三服务 `/api/v1/capabilities`；旧 TypeScript run 与 `semantic_v1` run 分链保存和展示，不能在运行中回退或混合。
+- v1 控制面只允许 loopback/local 单用户部署；远程或多用户使用必须先实现统一认证、授权和租户隔离。
 
-完整需求见 `ai-e2e/docs/requirements-baseline.md`；功能脚本、场景编排、代理浏览器执行、运行状态/证据、跨服务 API/事件、双模型/Skills 和迁移验收分别见 `ai-e2e/docs/functional-script-contract.md`、`ai-e2e/docs/scenario-orchestration-contract.md`、`ai-e2e/docs/agent-browser-execution-contract.md`、`ai-e2e/docs/run-state-decision-evidence-contract.md`、`ai-e2e/docs/service-api-event-contract.md`、`ai-e2e/docs/ai-model-skill-contract.md`、`ai-e2e/docs/migration-compatibility-acceptance-contract.md`。
+完整需求见 `ai-e2e/docs/requirements-baseline.md`；资产生成/修复、功能脚本、场景编排、代理浏览器执行、运行状态/证据、跨服务 API/事件、双模型/Skills 和迁移验收分别见 `ai-e2e/docs/asset-authoring-repair-contract.md`、`ai-e2e/docs/functional-script-contract.md`、`ai-e2e/docs/scenario-orchestration-contract.md`、`ai-e2e/docs/agent-browser-execution-contract.md`、`ai-e2e/docs/run-state-decision-evidence-contract.md`、`ai-e2e/docs/service-api-event-contract.md`、`ai-e2e/docs/ai-model-skill-contract.md`、`ai-e2e/docs/migration-compatibility-acceptance-contract.md`。
 
 ---
 

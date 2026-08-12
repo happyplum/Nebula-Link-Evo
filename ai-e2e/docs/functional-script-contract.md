@@ -56,7 +56,7 @@
 - 等待、同一步骤内的有限重试和目标重新解析属于技术执行策略，不算业务循环；必须有明确上限。
 - 每个浏览器动作执行前重新解析目标，执行后立即检查预期页面变化，并记录可关联的步骤结果。
 - 目标定义保存业务语义和可序列化定位依据；`Page`、`Locator`、`ElementHandle` 等 Playwright 进程内对象不进入脚本或跨服务传输。
-- 任意 JavaScript / `dom_script` 不作为首期功能脚本的业务动作。必要的只读诊断可由系统单独调用并保存证据，但不能绕过可视语义执行链改变页面或业务状态。
+- 任意 JavaScript / `dom_script` 不作为首期功能脚本的业务动作。必要的只读诊断只能使用已登记、Schema 受限的 observation 并保存证据，不能执行任意脚本，也不能绕过可视语义执行链改变页面或业务状态。
 
 首期动作白名单、断言算子、目标引用结构及浏览器能力差距见 `semantic-script-schema.md`；缺失动作不得临时映射为 `dom_script`。
 
@@ -128,6 +128,7 @@
 - `run-state-decision-evidence-contract.md`：尝试结果、失败分类、断言证据和输出发布状态。
 - `semantic-script-schema.md`：首期机器可校验 JSON 字段、动作/断言白名单、引用与静态校验。
 - `target-data-model.md`：功能脚本/场景修订、运行计划、TODO、尝试和变量的持久化结构。
+- `asset-authoring-repair-contract.md`：从 PRD/页面生成 candidate、真实验证、激活与局部修复。
 - `../PRODUCT-SPEC.md`：当前能力、目标能力与缺口状态。
 - `../../docs/PRODUCT-SPEC-INDEX.md`：跨服务执行边界。
 - `../../docs/reference/ai-operation-flow.md`：目标代理执行流程。

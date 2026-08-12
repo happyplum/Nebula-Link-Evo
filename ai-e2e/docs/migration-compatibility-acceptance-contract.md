@@ -27,6 +27,7 @@
 5. **运行不混链**：旧 `execution_runs` 永远标记 `legacy`，目标 `test_runs.engine='semantic_v1'`；同一个 run 不能调用旧子进程和新 Agent/MCP 执行器。
 6. **回滚代码，不倒写数据**：新链异常时关闭 capability/切回旧只读或旧执行入口；不把语义资产反向生成任意 TypeScript，也不执行破坏性 down migration。
 7. **秘密零复制**：旧自由 JSON、登录 fill value、日志和 DOM 先扫描/脱敏；没有明确 secret ref 映射就阻止目标资产激活。
+8. **本地信任边界**：v1 语义控制面只在 loopback/local 单用户模式启用；非本机或多用户部署在统一认证、授权和租户隔离协议落地前禁止 authoring/run。
 
 ## 3. 正式 migration runner
 
@@ -125,7 +126,7 @@
 
 - `ai-chat-service` 支持 agent-task major 1、所需视觉/Skill 版本和结构化输出。
 - `proxy-adapter` 支持 browser-execution/operation major 1、所需动作/观测、持久 operation ledger 和可视画面。
-- ai-e2e 数据库目标 migration 已完成且 business version `valid`。
+- ai-e2e 数据库目标 migration 已完成，且所选 deployment/build/角色/locale/viewport scope 的 `business_version_validation` 为 `valid`。
 
 不满足时新 run 返回明确 503/validation problem；不得半途切回旧执行器。
 
@@ -136,7 +137,7 @@
 | A. 协议底座 | 新表/API/ledger/Agent task/Skills behind flag；旧功能不变 | 三服务 contract、migration、fault tests 通过 |
 | B. 只读导入 | 创建 migration candidates 和 diff 报告，不改变旧资产 | 旧库 fixtures 可重复导入且无秘密泄漏 |
 | C. 影子校验 | 生成/校验 semantic 资产与 run plan，但不执行副作用动作 | 计划/页面/脚本静态校验与只读观测通过 |
-| D. 版本级 opt-in | 用户对一个 valid business version 启用 semantic run；旧历史仍可看 | 核心 E2E、重启恢复、证据和 UI 验收通过 |
+| D. 版本级 opt-in | 用户对目标 verification scope 已 valid 的 business version 启用 semantic run；旧历史仍可看 | 核心 E2E、重启恢复、证据和 UI 验收通过 |
 | E. 新项目默认 | 新项目只创建 semantic assets；旧项目可继续 legacy 查看/执行 | 无关键回退且迁移率达到发布策略 |
 | F. Legacy 只读 | 关闭旧脚本生成/修复/执行，只保留历史和导出 | 用户确认保留期与导出能力 |
 
@@ -184,6 +185,7 @@
 | 非标准旧库 | 列/索引/约束不符时拒绝写迁移，报告差异且原库不变。 |
 | 中途崩溃 | migration/import 事务回滚或可从账本重入，不产生半版本/重复 ID。 |
 | Legacy import | 同 fingerprint 重跑结果一致；每个 source entity 有 imported/candidate/skipped/blocked 结论。 |
+| Authoring 验证 | import_conversion/recheck 可从持久 job 恢复；candidate 只有实跑验证后激活，copy 后 stale 资产不会进入正式 run。 |
 | 秘密 | 登录值/auth JSON/日志扫描不进入新 payload、event、模型上下文或普通日志。 |
 | 旧历史 | legacy run/诊断可读但不可 resume；semantic history 不依赖旧表。 |
 
@@ -239,6 +241,7 @@
 - 三服务 capability major 兼容，旧 API/Chat/Debug 回归测试通过。
 - 无未解释 `outcome_unknown` 自动重试、无秘密进入模型/事件/日志、无独立 Chromium 旁路。
 - 操作文档能明确停止新 run、等待安全边界、查询账本、恢复/取消和回滚应用版本。
+- 三个服务控制面保持 loopback/local 单用户边界；如发布拓扑需要远程或多用户访问，统一认证授权与租户隔离必须先单独验收。
 - 剩余多账号/多角色和环境审批策略已由产品决定并进入长期契约。
 
 ## 10. 仍需产品确认的高影响问题
@@ -254,3 +257,4 @@
 - `ai-model-skill-contract.md`：模型、视觉、Skills 和注入防护。
 - `agent-browser-execution-contract.md`：浏览器控制与上下文边界。
 - `run-state-decision-evidence-contract.md`：状态、决策、证据和人工控制。
+- `asset-authoring-repair-contract.md`：legacy candidate 的重新生成、真实验证、激活和局部修复。

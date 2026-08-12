@@ -79,6 +79,7 @@
 
 主代理负责：
 
+- 作为 `ai-e2e` 内由持久状态驱动的确定性工作流协调器运行，而不是依赖一个无限延续的模型对话；authoring/run 的阶段、任务、尝试、覆盖率、决策、检查点和事件是恢复源。
 - 理解完整 PRD，生成或维护测试流程、TODO 和依赖关系。
 - 维护全局运行上下文及功能脚本之间的数据传递。
 - 按页面和场景职责拆分任务，向子代理派发明确的输入、脚本调用、预期结果和允许写回的输出。
@@ -168,8 +169,8 @@
 ### 6.3 浏览器会话与串行调度
 
 - 首期采用单执行链：一个主代理在任一时刻只调度一个执行型子代理，等待该子代理完成、暂停或上报中断后，才派发下一项任务。
-- 同一测试流程复用 `proxy-adapter` 托管的同一 Playwright/Chromium 实例和浏览器会话；功能脚本调用及其浏览器动作进入同一串行队列，避免多个代理同时控制同一页面。
-- 主代理持有浏览器会话生命周期；子代理只取得页面任务范围内、限制 Tab 和操作集合的短期控制租约，不得打开或关闭共享浏览器。
+- 首期每个 `proxy-adapter` 进程全局最多一个活动浏览器执行会话；authoring verification 和正式 test run 共用一个公平 FIFO，不能把 singleton Context 包装成多个可并发的逻辑 session。
+- 主代理持有浏览器会话生命周期，只在原子操作安全边界获得 `observe` 租约；子代理只取得页面任务范围内、限制 Tab 和操作集合的短期 `control` 租约，不得打开或关闭共享浏览器。UI live view 始终只读。
 - 每个浏览器操作使用稳定 `operationId` 关联请求、结果和证据；传输重试复用同一 ID 并返回既有结果，不能重复执行。
 - “一个主代理管理一个子代理”描述的是同一时刻的调度并发度，不要求所有任务永久复用同一个子代理上下文。新的页面场景片段仍可创建干净的子代理上下文，同时继续使用主代理指定的浏览器会话。
 - 首期即使页面产生多个 Tab，也只允许一个活动操作流；切换 Tab 后继续串行执行，不并发操作多个页面。
@@ -211,6 +212,15 @@
 - 需要调用其他场景、补充登录或准备外部测试数据时，必须上报主代理调度。
 - 修复如果会改变 PRD 含义、业务预期、断言口径、数据安全边界或其他场景契约，必须暂停并由主代理决策；需要用户决定时由主代理继续上报。
 
+### 8.1 资产生成、复核与激活
+
+- 首次 PRD + URL 使用持久 `bootstrap` authoring job，按需求抽取、页面发现/建模、模块需求、功能脚本 candidate、场景 candidate、真实浏览器验证和版本校验推进。
+- copy、部署/Git 变化和正式运行前使用 `recheck`；运行失败或 DOM/交互变化使用 `repair`。legacy 转换使用 `import_conversion`，不直接执行旧 TypeScript。
+- candidate 的静态 Schema 校验、真实浏览器验证与 current 激活是三个独立门槛；模型自评、旧 run pass 或静态 valid 都不能代替 verified。
+- copy 后目标版本的执行资产标为 stale，必须在目标 deployment revision 上重新验证后才能恢复 `valid` 并创建正式 run。
+- revision dependency index 由已校验 payload 确定性生成；locator-only 只修当前脚本，交互变化重验引用场景，契约/需求变化扩大依赖范围并暂停决策。
+- 完整工作流、coverage、candidate 和影响分类见 `asset-authoring-repair-contract.md`。
+
 ## 9. 当前实现差距
 
 以下是经代码核对确认的现状，不得描述为已交付目标能力：
@@ -224,6 +234,7 @@
 - 当前 `proxy-adapter` 已有 MCP 浏览器工具、实时 MJPEG 画面、DOM marker、高亮事件、动作执行器和交互日志，但尚无执行会话租约、稳定 Tab 归属、原子操作去重/结果账本、结果不确定态及面向 E2E 语义步骤的正式事件契约。
 - 当前 `ai-chat-service` 已有 Agent 工具循环、MCP client/ToolRegistry、会话控制和 `vision.find_element`，但尚无 E2E 页面任务包、工具作用域租约和结构化任务结果；通用单次页面状态分析与 Skills runtime 也尚未实现。
 - 当前 `ai-e2e` 主要使用纯文本生成接口，尚未实现主代理/页面子代理的任务图、上下文隔离、暂停决策和恢复运行时。
+- 当前没有持久 authoring job/task/attempt/event、coverage disposition、candidate verified/current 分层或 revision dependency index；生成和修复仍围绕旧项目状态与短期调用。
 - 当前 `ai-e2e` UI 尚未集成测试浏览器的实时画面、语义步骤时间线和统一证据浏览。
 - 当前 UI 以本地 `isRunning`、同名步骤合并和 progress 事件递增 5% 推断执行状态；目标必须改为持久化运行快照、每运行单调事件序号和服务端计算进度。
 
@@ -231,15 +242,16 @@
 
 以下内容仍未全部锁定或尚待形成可执行实现，不得描述为已交付：
 
-- `target-data-model.md` 已锁定业务版本、部署、页面、基线、模块需求、脚本/场景修订、运行/TODO/尝试、决策、事件和证据的目标表与事务；物理 migration 和 repository 尚未实现。
+- `target-data-model.md` 已锁定业务版本、部署、页面、基线、模块需求、脚本/场景修订、authoring、依赖索引、运行/TODO/尝试、决策、事件和证据的目标表与事务；物理 migration 和 repository 尚未实现。
 - 场景调用图、运行计划、TODO、追加式修订和受控条件 payload 已锁定为 `nebula.ai-e2e.scenario/1.0` 与对应运行表；正式 JSON Schema 文件尚未生成。
 - 页面模板语法、参数类型、WHATWG URL 规范化、匹配评分、基线指纹/阈值和多部署 revision 已锁定；旧数据迁移仍待兼容契约。
 - 语义脚本 DSL v1 已在 `semantic-script-schema.md` 锁定；实现仍需按其中能力差距扩展 proxy 原子动作并生成正式 JSON Schema 文件。
-- 浏览器执行会话、Tab、控制租约、原子操作、去重账本、结果查询、Agent task 和三类事件流的目标 API/Schema 已在 `service-api-event-contract.md` 锁定；多账号隔离及后期多 Tab 并发的 BrowserContext 调度方式仍待设计。
-- 主代理与子代理运行时采用干净 Agent task、模型不可见租约 token、主代理签发/回收的协议已锁定；具体租约签名、持久介质和恢复时限仍待实现设计。
+- 浏览器执行会话、Tab、observe/control 租约、原子操作、去重账本、结果查询、Agent task 和四类目标事件流（Authoring/Run/Agent/Browser）的 API/Schema 已在 `service-api-event-contract.md` 锁定；多账号隔离及后期多 Tab 并发的 BrowserContext 调度方式仍待设计。
+- 主代理与子代理运行时采用干净 Agent task、模型不可见短期 opaque 租约 token、hash/process epoch、主代理签发/回收和 proxy SQLite WAL 操作账本的协议已锁定；正式 Schema、migration 和代码尚未实现。
 - 双模型调用、`vision.analyze_page`、`vision.resolve_target`、声明式 Skill manifest、版本 pin 和工具权限交集已在 `ai-model-skill-contract.md` 锁定；代码与正式 JSON Schema 尚未实现。
 - 决策、证据 manifest、内容哈希和默认保留结构已锁定；脱敏管线、身份访问控制和清理任务仍待实现设计。
 - 不同环境与副作用风险等级下哪些动作必须用户审批；这是当前剩余的关键产品策略。
+- 首期非本机/多用户部署不在当前信任边界内；若未来开放，必须先设计统一身份、授权和租户隔离，不以 capability/lease 代替认证。
 - 可视操作动画的表现、节奏和重放协议。
 - 现有 TypeScript、登录录制、历史项目/run 的保守导入、双轨 API、版本级切流、回滚和技术验收已在 `migration-compatibility-acceptance-contract.md` 锁定；正式 migrations/importer 和 fixtures 尚未实现。
 - 标准 Playwright 文件导出能力。
@@ -271,6 +283,10 @@
 21. 测试流程、TODO、尝试、Agent 和浏览器操作状态相互独立；取消、登出、待决策和断言失败不会混为同一 fail。
 22. UI 通过持久化运行快照和单调事件序号恢复，不能用本地累计百分比推断权威状态。
 23. 决策先持久化再恢复；失败证据缺失只降低证据完整度，不改变真实测试结果。
+24. 主代理或任一服务重启后可从 authoring job/task/attempt/event 恢复；模型对话不是状态源。
+25. candidate 只有静态 valid + 真实浏览器 verified 后才能进入可运行版本；copy 后 stale 资产不能直接运行。
+26. locator-only 变化不重写同页面无关脚本；修复范围可由 revision dependency index 和 change kind 解释。
+27. 首期一个 proxy 进程全局只有一个活动浏览器执行会话，authoring 与 run 不并发控制 singleton Context。
 
 ## 12. 关联文档
 
@@ -285,6 +301,7 @@
 - `ai-e2e/docs/service-api-event-contract.md`：三服务目标 API、MCP 原子操作、事件信封、幂等与重启恢复。
 - `ai-e2e/docs/ai-model-skill-contract.md`：分析/决策模型、单次视觉模型、受限 Agent task 与 Skills runtime。
 - `ai-e2e/docs/migration-compatibility-acceptance-contract.md`：旧库/旧资产迁移、双轨切流、故障恢复、回滚和发布门禁。
+- `ai-e2e/docs/asset-authoring-repair-contract.md`：从零生成、复核、真实验证、影响分析和局部修复。
 - `ai-e2e/AGENTS.md`：开发边界与运行时事实。
 - `docs/PRODUCT-SPEC-INDEX.md`：跨包契约索引。
 - `docs/architecture.md`：系统分层与服务拓扑。
