@@ -63,9 +63,9 @@
 | 业务版本 | pending | 用户创建，可记录来源、部署和 Git 标识；目标采用稳定资产 + 不可变修订，`copy` 以幂等事务生成新身份并重建引用，不复制运行状态、实际数据、证据或秘密；复制的执行资产 stale，recheck 前不能正式运行。数据模型见 `docs/target-data-model.md`。 |
 | 主代理 | pending | `ai-e2e` 确定性工作流协调器，状态来自持久 authoring/run job/task/attempt/event 而非长模型对话；持有 PRD 流程、TODO 依赖、运行变量和决策，负责拆分、派发、恢复、跳过、验收与汇总。 |
 | 页面子代理 | pending | 只执行派发的页面场景片段，负责固定重新检查、执行、验证、职责内修复和汇报；不得自行登录、造数或调用场景外脚本。 |
-| 上下文策略 | pending | 默认创建干净子代理上下文；登出等可恢复中断可由主代理在状态/副作用检查后续接原上下文，否则从检查点重建。 |
+| 上下文策略 | pending | 默认创建干净子代理上下文；登出等可恢复中断可由主代理在状态/副作用检查后续接原上下文，否则从检查点重建。v1 每个 browser session 固定一个 BrowserContext 和一个活动 actor；跨角色只允许主代理显式编排认证脚本串行切换。 |
 | Agent 执行路径 | pending | 页面任务图和验收归 ai-e2e，模型/MCP/未来 Skills 执行归 ai-chat-service；目标 Agent task、浏览器 operation 与事件协议见 `docs/service-api-event-contract.md`，当前 `AiChatClient.generateText()` 是纯文本生成，不执行 tool loop。 |
-| 页面任务与浏览器控制租约 | pending | 首期 proxy 进程全局最多一个活动 session；authoring/run 共用 FIFO。主代理派发不可变页面任务包并持有生命周期，只在安全边界 observe；子代理只取得指定 TODO、Tab、工具和输出槽的短期 control；UI live view 只读。 |
+| 页面任务与浏览器控制租约 | pending | 首期 proxy 进程全局最多一个活动 session，且每个 session 固定一个 BrowserContext；authoring/run 共用 FIFO。主代理派发不可变页面任务包并持有生命周期，只在安全边界 observe；子代理只取得指定 TODO、actor、Tab、工具和输出槽的短期 control；UI live view 只读。 |
 | 可视执行与证据 | in-progress | `proxy-adapter` 已有实时画面、marker/overlay、交互日志和失败样本基础；目标按单个语义步骤推进，每个浏览器原子操作使用幂等 ID，并关联场景、步骤、结果和失败证据；状态不确定时先检查副作用。 |
 | 分层运行状态 | pending | 测试流程、运行 TODO、执行尝试、Agent 会话和浏览器操作分别持有状态；取消、登出中断、待决策、依赖跳过和业务失败不混用。 |
 | 失败/阻塞/暂停/跳过 | pending | blocked/interrupted/waiting_decision 在主代理收敛前不提前跳过下游；终态失败只传播到真实依赖节点，独立节点可重新检查后继续。 |

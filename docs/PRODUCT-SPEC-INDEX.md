@@ -183,9 +183,9 @@ debug-ui  ←──  （仅被用户消费）
 - **目标持久化（pending）**：`ai-e2e` 使用稳定资产 ID + 不可变 revision + 唯一 current；运行冻结精确 revision/hash。copy 通过幂等 SQLite 事务重建引用，状态/event 同事务提交，大媒体使用内容寻址对象；跨服务调用使用 integration outbox + external task link 收敛。完整表与约束见 `ai-e2e/docs/target-data-model.md`。
 - **主代理 / 页面子代理（pending）**：主代理是由持久 authoring/run job、task、attempt 和事件驱动的确定性工作流协调器，不依赖长期模型对话；它维护 PRD 流程、TODO 依赖、运行变量和决策，并负责派发、恢复、跳过、验收与汇总。子代理只执行获授权的页面场景片段，负责重新检查、执行、验证、职责内修复和汇报。
 - **上下文（pending）**：大多数派发使用干净子代理上下文；登出等可恢复中断可由主代理在页面状态和副作用检查后续接原上下文，否则从检查点与授权变量重建。
-- **串行调度（pending）**：首期 `ai-e2e` 维护 authoring verification/test run 公平 FIFO，proxy 以通用门禁保证每进程全局最多一个活动 session；会话期间 legacy 写工具返回 browser_busy。只有当前执行型子代理持有 control，主代理仅在原子操作安全边界 observe，UI live view 只读。子代理上下文可按任务重建；多 Context/Tab 并发仅作为后期扩展。
+- **串行调度与身份（pending）**：首期 `ai-e2e` 维护 authoring verification/test run 公平 FIFO，proxy 以通用门禁保证每进程全局最多一个活动 session；每个 session 固定一个 BrowserContext 和一个活动 actor，会话期间 legacy 写工具返回 browser_busy。跨账号/角色只能由主代理显式编排认证脚本串行切换，子代理发现身份异常即停止。只有当前执行型子代理持有 control，主代理仅在原子操作安全边界 observe，UI live view 只读。子代理上下文可按任务重建；并存身份、多 Context/Tab 并发仅作为后期扩展。
 - **编排与执行分属两层（pending）**：页面任务图、模块范围与验收标准归 `ai-e2e`；模型调用、MCP 工具和未来 Skills 执行归 `ai-chat-service`。当前 `AiChatClient.generateText()` 只调用纯文本生成端点，尚不具备 Agent tool loop。
-- **页面任务与控制租约（pending）**：主代理派发不可变页面任务包并持有共享浏览器生命周期；子代理只取得指定 TODO、Tab、工具、输出槽的短期控制租约。跨服务只传递稳定会话/Tab/操作/快照/目标引用，不传 Playwright 对象。
+- **页面任务与控制租约（pending）**：主代理派发不可变页面任务包并持有共享浏览器生命周期；子代理只取得指定 TODO、actor、Tab、工具、输出槽的短期控制租约。跨服务只传递稳定会话/Tab/操作/快照/目标引用和非秘密 actor 约束，不传 Playwright 对象或凭据值。
 - **可视语义执行（pending）**：系统内权威资产是结构化语义功能脚本；执行按单个语义步骤推进，每个 `proxy-adapter` 浏览器原子操作具有幂等 ID、结构化结果和通用生命周期事件，并关联实时画面、脚本步骤与证据。无法确认动作是否发生时进入结果不确定态并先检查副作用。当前 `npx tsx` 子进程执行器不满足该目标。完整契约见 `ai-e2e/docs/agent-browser-execution-contract.md`。
 - **跨服务 API/事件（pending）**：业务版本/Authoring/Run API、Agent task、browser execution control plane、MCP operation tools 和四类目标 snapshot-first SSE（Authoring/Run/Agent/Browser）已在 `ai-e2e/docs/service-api-event-contract.md` 锁定；现有 Chat/Debug/项目阶段 SSE 继续兼容且序号互不混用。
 - **资产生成/复核/修复（pending）**：bootstrap 从 PRD + URL 生成页面、模块需求、功能脚本与场景 candidate；static validation、真实 browser verification 和 activation 分阶段。recheck/repair 依据 revision dependency index 计算影响闭包并只修改当前业务版本。完整契约见 `ai-e2e/docs/asset-authoring-repair-contract.md`。

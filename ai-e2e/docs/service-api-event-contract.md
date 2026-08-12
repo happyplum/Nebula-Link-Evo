@@ -77,7 +77,7 @@ interface ServiceCapabilitiesV1 {
 ```
 
 - `ai-chat-service` 至少声明 agent-task、vision、skill-manifest 协议版本和可用模型角色。
-- `proxy-adapter` 至少声明 browser-execution/operation 协议、受支持动作/观测、持久账本和可视画面能力。
+- `proxy-adapter` 至少声明 browser-execution/operation 协议、受支持动作/观测、持久账本和可视画面能力；v1 还必须声明 `maxActiveBrowserSessions=1`、`maxBrowserContextsPerSession=1` 且不支持运行中 storage-state 切换。
 - `ai-e2e` 在创建 run 前执行并缓存短期 preflight，确认 major 兼容、所需功能/Skill/hash 可用；不兼容时返回 `503 dependency_unavailable`，不得在同一 run 静默回退旧执行器。
 - capability 只说明能力，不包含 provider key、lease token、文件路径或其他机密。
 
@@ -143,6 +143,8 @@ interface CreateRunRequestV1 {
 公开 CreateRun 只创建 `purpose=formal`：必须确认所选 deployment revision + 当前 asset graph + Git/build/角色/locale/viewport scope 存在 `business_version_validations.status=valid`，所引用 current 脚本/场景均 static valid 且有匹配的 `asset_revision_verifications.status=verified`，并冻结精确 revision/hash。`needs_recheck`、stale 或 candidate 资产只能由 authoring coordinator 创建内部 `purpose=authoring_verification` run，不能经正式 Run API 绕过门禁。
 
 verification scope 由服务端从精确 deployment revision、冻结的 Git/build、场景/角色要求、locale、viewport、baseline 与策略 major 确定性生成；客户端不能直接提交 scope hash 冒充已验证环境。
+
+场景 actor、初始认证态和每个调用的认证前置/结果状态来自精确场景修订；`secretRefs` 只解析显式登录脚本所需的凭据输入。创建计划时必须证明认证变化节点形成单一依赖链并可从初始态到达，不能由客户端传一个“当前已登录”标志绕过页面复检。
 
 | Method | Path | 语义 |
 |---|---|---|
@@ -218,6 +220,7 @@ interface CreateAgentTaskRequestV1 {
 约束：
 
 - `input` 在任务开始后不可变；业务输入和页面任务包由 `ai-e2e` 生成。
+- 页面任务 `input` 必须包含所需 actor、派发时已确认认证态和本任务允许的认证状态变化；只包含 actorKey/角色和 secret reference，不包含凭据值。子代理不得据此自行扩展登录或切换身份。
 - `correlation` 对 `ai-chat-service` 不透明，只允许受限字符串；不能决定业务流程。
 - `responseSchema` 必须受平台大小、深度和关键字白名单约束，防止任意递归 Schema。
 - `browserBinding` 是模型不可见的执行能力；`observe` 只能读取 snapshot/页面状态，`control` 才能提交 act。租约 token 只存在于受限任务运行态或 secret store，不进入模型消息、普通日志、事件 payload 或数据库明文字段。
@@ -234,7 +237,7 @@ interface CreateAgentTaskRequestV1 {
 
 | Method | Path | 语义 |
 |---|---|---|
-| POST | `/api/v1/browser-execution/sessions` | 创建或绑定一个可视浏览器执行会话。 |
+| POST | `/api/v1/browser-execution/sessions` | 创建或绑定一个可视浏览器执行会话；v1 会话固定一个 BrowserContext。 |
 | GET | `/api/v1/browser-execution/sessions/:sessionId` | 读取会话、Tab、active observe/control lease 和画面能力摘要。 |
 | DELETE | `/api/v1/browser-execution/sessions/:sessionId` | 显式关闭；需要生命周期权限与幂等键。 |
 | POST | `/api/v1/browser-execution/sessions/:sessionId/leases` | 签发 `observe/control` 租约，限制 Tab、操作与期限；首期最多一个 control。 |
@@ -247,6 +250,8 @@ interface CreateAgentTaskRequestV1 {
 浏览器执行会话是应用层身份，与当前 stateless StreamableHTTP MCP transport session 无关。MCP 传输可以每个请求新建 server，仍必须依据 application-level session、lease 和 operation ledger 执行。
 
 首期 `ai-e2e` 通过持久 `browser_jobs.queue_seq` 持有 authoring/test browser job 的公平 FIFO，只把队首提交给 proxy；重启后从队列状态和外部 session link 收敛，不靠内存重新排序。`proxy-adapter` 不解释业务 job 类型，只用通用独占门禁保证每进程全局最多一个活动 browser execution session，并在 capability 声明 `maxActiveBrowserSessions=1`。其他创建请求返回 `browser_busy`，不能创建逻辑多 session 共享 singleton Context。observe lease 只能在原子操作安全边界供主代理分析；UI 实时画面是无控制权的只读流。
+
+v1 每个 application session 从创建到释放只能绑定一个 `BrowserContext`。同一 Context 可串行操作多个 Tab，但 API 不提供运行中 Context 切换、storage-state 导入/替换或并存认证 Context；业务 actor 由 `ai-e2e` 根据登录/退出脚本的确定性断言维护，不能下沉给 proxy 解释。
 
 活动 application session 期间，现有兼容 MCP/debug 写工具必须返回 `browser_busy`，不能绕过 lease 操作同一 Context。MJPEG/LiveKit/事件等只读实时流继续可用；直接 DOM/截图观测只能走受控 observe operation，或返回最近一次已封存的安全快照。session 释放后 legacy 工具恢复原行为。
 
@@ -412,6 +417,7 @@ ai-e2e 持久化 intent/outbox
 7. 旧执行面不会与新执行面在同一 run 中交叉调用。
 8. 跨服务超时、重启和事件缺号均有可重复的查询与收敛路径。
 9. 首期控制面保持 loopback/local 单用户边界；非本机或多用户部署在统一认证授权协议落地前不能启动 semantic authoring/run。
+10. v1 browser session 只绑定一个 BrowserContext；跨账号/角色只能通过场景内显式认证脚本串行切换，Agent task 或 proxy API 不能暗换 storage state。
 
 ## 10. 关联文档
 

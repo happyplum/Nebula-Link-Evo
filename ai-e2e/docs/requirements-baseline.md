@@ -170,11 +170,15 @@
 
 - 首期采用单执行链：一个主代理在任一时刻只调度一个执行型子代理，等待该子代理完成、暂停或上报中断后，才派发下一项任务。
 - 首期每个 `proxy-adapter` 进程全局最多一个活动浏览器执行会话；authoring verification 和正式 test run 共用一个公平 FIFO，不能把 singleton Context 包装成多个可并发的逻辑 session。
+- 首期一个浏览器执行会话只能绑定一个 `BrowserContext`，同一时刻只能存在一个已确认活动业务身份或匿名态；运行中不得通过切换 Context、导入另一份 storage state 或保留并存 Cookie 来隐藏切换账号。
+- 跨账号或跨角色流程仍可执行，但必须在场景中显式编排退出与登录功能脚本，并把每个 TODO 所需身份及认证变化写入冻结运行计划。认证变化只有在脚本硬断言通过后才更新已确认活动身份。
+- 子代理只检查任务包声明的所需身份。发现身份不符、意外登出或认证状态无法确认时立即停止并上报；由主代理串行安排身份恢复或切换，子代理不得自行登录。
+- 新 run 不继承“已确认身份”结论，认证上下文从 `unknown` 开始并读取当前页面重新确认；即使复用浏览器会话，也不能把上一个 run 的 actor 投影当作本次事实。
 - 主代理持有浏览器会话生命周期，只在原子操作安全边界获得 `observe` 租约；子代理只取得页面任务范围内、限制 Tab 和操作集合的短期 `control` 租约，不得打开或关闭共享浏览器。UI live view 始终只读。
 - 每个浏览器操作使用稳定 `operationId` 关联请求、结果和证据；传输重试复用同一 ID 并返回既有结果，不能重复执行。
 - “一个主代理管理一个子代理”描述的是同一时刻的调度并发度，不要求所有任务永久复用同一个子代理上下文。新的页面场景片段仍可创建干净的子代理上下文，同时继续使用主代理指定的浏览器会话。
 - 首期即使页面产生多个 Tab，也只允许一个活动操作流；切换 Tab 后继续串行执行，不并发操作多个页面。
-- 后期并发优先以同一 Playwright 实例内的多 Tab 为执行单元；每个 Tab 必须有独立任务归属和动作队列，且不得由多个子代理同时控制。具体调度、隔离和恢复协议在实现该能力前另行设计。
+- 同时保持多个认证身份、多 BrowserContext 或多 Tab 并发均不属于 v1。后期并发优先以同一 Playwright 实例内的多 Tab 为执行单元；每个 Tab 必须有独立任务归属和动作队列，且不得由多个子代理同时控制。具体身份隔离、调度和恢复协议在实现该能力前另行设计。
 
 ### 6.4 失败、中断、暂停与跳过
 
@@ -246,7 +250,7 @@
 - 场景调用图、运行计划、TODO、追加式修订和受控条件 payload 已锁定为 `nebula.ai-e2e.scenario/1.0` 与对应运行表；正式 JSON Schema 文件尚未生成。
 - 页面模板语法、参数类型、WHATWG URL 规范化、匹配评分、基线指纹/阈值和多部署 revision 已锁定；旧数据迁移仍待兼容契约。
 - 语义脚本 DSL v1 已在 `semantic-script-schema.md` 锁定；实现仍需按其中能力差距扩展 proxy 原子动作并生成正式 JSON Schema 文件。
-- 浏览器执行会话、Tab、observe/control 租约、原子操作、去重账本、结果查询、Agent task 和四类目标事件流（Authoring/Run/Agent/Browser）的 API/Schema 已在 `service-api-event-contract.md` 锁定；多账号隔离及后期多 Tab 并发的 BrowserContext 调度方式仍待设计。
+- 浏览器执行会话、Tab、observe/control 租约、原子操作、去重账本、结果查询、Agent task 和四类目标事件流（Authoring/Run/Agent/Browser）的 API/Schema 已在 `service-api-event-contract.md` 锁定；v1 单 BrowserContext、单活动身份与显式串行切换已锁定，同时多身份/多 Context 及后期多 Tab 并发仍需在启用前另行设计。
 - 主代理与子代理运行时采用干净 Agent task、模型不可见短期 opaque 租约 token、hash/process epoch、主代理签发/回收和 proxy SQLite WAL 操作账本的协议已锁定；正式 Schema、migration 和代码尚未实现。
 - 双模型调用、`vision.analyze_page`、`vision.resolve_target`、声明式 Skill manifest、版本 pin 和工具权限交集已在 `ai-model-skill-contract.md` 锁定；代码与正式 JSON Schema 尚未实现。
 - 决策、证据 manifest、内容哈希和默认保留结构已锁定；脱敏管线、身份访问控制和清理任务仍待实现设计。
