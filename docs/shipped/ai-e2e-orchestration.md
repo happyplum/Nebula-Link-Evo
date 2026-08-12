@@ -6,7 +6,7 @@ PRD 驱动的 E2E 自动化测试编排器。把"需求分析 → 页面探索 �
 - [shipped] PRD 上传与 L1/L2 模块分析：PRD → 业务模块 → 功能模块 → 测试场景。入口：PRDAnalyzerService。
 - [shipped] 模块编辑（业务/功能模块增删改排）：PRDAnalyzerService。
 - [shipped] 站点探索（AI + BFS）+ SPA-aware URL 发现：ExplorerService。补充使用渲染后 DOM、HashRouter、History API 观察器和可访问 router 配置发现客户端路由；非 SPA 站点保持原有 BFS 行为。
-- [shipped] URL 绑定建议与人工调整：ExplorerService + `ai-e2e/ui/src/features/exploration/`。
+- [shipped] URL 绑定建议与人工调整：ExplorerService + `ai-e2e/ui/src/features/exploration/`。查询、确认、拒绝和手动创建的 HTTP 响应统一输出前端 DTO：`module_id`、`confidence` 与 `proposed/confirmed/rejected`，不泄漏数据库字段名。
 - [shipped] 每个功能模块必须绑定 URL 的强校验（`ai_proposed` 计为已绑定）：StateMachineService。前端显示未绑定模块提示（UnboundModuleIndicator）。
 - [shipped] 测试场景 CRUD + 数据映射（preconditions ↔ expected_results）：TestScenarioService + `ai-e2e/ui/src/features/scenario/`（ScenarioPanel + ScenarioEditor）。
 - [shipped] 脚本生成（按 scenario，Playwright Library API）：ScriptGeneratorService。
