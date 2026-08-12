@@ -21,7 +21,7 @@ PRD 驱动的 E2E 自动化测试编排器。把"需求分析 → 页面探索 �
 - [shipped] 登录步骤录制与回放：LoginRecorderService。
 - [shipped] 双后端 HTTP 客户端：`AiChatClient`（→ ai-chat-service :3001 `POST /api/ai/generate`）、`BrowserGatewayClient`（→ proxy-adapter :3000 `/debug/api/*`）。`ProxyAdapterClient` 为 facade。
 - [shipped] 独立 SQLite（项目 / scenario / script / run / diagnosis）：`ai-e2e/src/database/`。不与 proxy-adapter / ai-chat-service 共享。
-- [shipped] Prompt 模板（稳定资产）：`ai-e2e/prompts/*.md`。必须保留。
+- [shipped] Prompt 模板（稳定资产）：`ai-e2e/prompts/*.md`。脚本生成模板按 DOM 快照 v2 的 `elements_map[*].locator_bundle` 读取定位候选，优先使用真实 `testid`，不会把元素 ID 当作 testid。必须保留。
 - [shipped] SPA UI 挂载前缀 `/ai-e2e/`：HomePage（`/`）+ ProjectPage（`/project/:projectId`），项目页为四步向导。
 - [shipped] 验收面：`ai-e2e/src/__tests__/`（ai、database 等）单元 + 集成测试。
 - [designed] 页面运行匹配器以已交付的 Origin 无关 semantic 页面修订、部署绑定和 baseline variant 为输入；legacy `urls.url` 仍只保存完整 URL。完整参数校验、动态参数和基线采集 runtime 尚未实现。
