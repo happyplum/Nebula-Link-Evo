@@ -12,6 +12,11 @@ export type ToolProviderStatus =
   | 'disabled'
   | 'failed';
 
+export interface GatewayToolExecutionContext {
+  readonly toolCallId?: string;
+  readonly abortSignal?: AbortSignal;
+}
+
 /**
  * 网关工具统一表示
  * 与 SDKTool.execute 签名兼容: (args: unknown) => Promise<string>
@@ -24,7 +29,10 @@ export interface GatewayTool {
   readonly providerId: string;
   readonly exposeTo: readonly ('chat' | 'mcp-server')[];
   readonly isAvailable: boolean;
-  readonly execute: (args: unknown) => Promise<string>;
+  readonly execute: (
+    args: unknown,
+    context?: GatewayToolExecutionContext,
+  ) => Promise<string>;
   readonly source?: {
     readonly type: 'mcp';
     readonly serverName: string;

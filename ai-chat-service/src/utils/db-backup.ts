@@ -19,7 +19,8 @@ export class DatabaseBackup {
 
   async createBackup(suffix: string = 'pre-refactor'): Promise<string> {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const backupName = `conversations.${suffix}.${timestamp}.sqlite`;
+    const databaseName = path.basename(this.dbPath, path.extname(this.dbPath));
+    const backupName = `${databaseName}.${suffix}.${timestamp}.sqlite`;
     const backupPath = path.join(this.backupDir, backupName);
 
     await fs.mkdir(this.backupDir, { recursive: true });
@@ -32,8 +33,9 @@ export class DatabaseBackup {
   async listBackups(): Promise<string[]> {
     try {
       const files = await fs.readdir(this.backupDir);
+      const databaseName = path.basename(this.dbPath, path.extname(this.dbPath));
       return files
-        .filter((f) => f.endsWith('.sqlite'))
+        .filter((f) => f.startsWith(`${databaseName}.`) && f.endsWith('.sqlite'))
         .map((f) => path.join(this.backupDir, f))
         .sort()
         .reverse();

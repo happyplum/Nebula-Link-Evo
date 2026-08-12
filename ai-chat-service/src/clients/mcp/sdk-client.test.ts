@@ -131,4 +131,26 @@ describe('MCPSDKClient HTTP transport', () => {
     expect(mocks.callToolRequests).toEqual([{ name: 'browser-control.screenshot', arguments: { format: 'png' } }]);
     await client.shutdown();
   });
+
+  it('redacts sensitive tool arguments before debug logging', async () => {
+    const logger = {
+      info: vi.fn(),
+      debug: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+    const client = new MCPSDKClient(createConfig(), logger as never);
+    await client.initialize();
+
+    await client.callTool('gateway', 'browser-control.operation_execute', {
+      leaseToken: 'top-secret',
+      authorization: 'Bearer private-value',
+    });
+
+    const logged = JSON.stringify(logger.debug.mock.calls);
+    expect(logged).not.toContain('top-secret');
+    expect(logged).not.toContain('private-value');
+    expect(logged).toContain('***');
+    await client.shutdown();
+  });
 });

@@ -20,6 +20,11 @@ import { initializeWithBackup } from './utils/db-backup.js';
 import chatRoutes from './plugins/routes/api/chat/index.js';
 import aiServiceRoutes from './plugins/routes/api/ai-service.js';
 import debugAiRoutes from './plugins/routes/api/debug-ai.js';
+import agentTaskRoutes from './plugins/routes/api/agent-tasks.js';
+import { AgentTaskRepository } from './agent-tasks/repository.js';
+import { AgentTaskModelExecutor } from './agent-tasks/executor.js';
+import { AgentTaskService } from './agent-tasks/service.js';
+import { isLoopbackHost } from './agent-tasks/capabilities.js';
 
 const VERSION = '0.1.0';
 
@@ -36,6 +41,7 @@ if (fs.existsSync(envLocal)) {
 
 const config = loadConfig();
 const CONVERSATIONS_DB_PATH = path.join(process.cwd(), 'data', 'ai-chat-service', 'conversations.sqlite');
+const AGENT_TASKS_DB_PATH = path.join(process.cwd(), 'data', 'ai-chat-service', 'agent-tasks.sqlite');
 
 const app = Fastify({
   logger: { level: config.logLevel },
@@ -45,6 +51,7 @@ const app = Fastify({
 let conversationManager: ConversationManager;
 let toolRegistry: ToolRegistry;
 let persistWorker: StreamPersistWorker;
+let agentTaskService: AgentTaskService;
 
 async function start(): Promise<void> {
   try {
@@ -56,6 +63,7 @@ async function start(): Promise<void> {
     const isTestMode = process.env.TEST_MODE === 'true' || process.env.NODE_ENV === 'test';
     if (!isTestMode) {
       await initializeWithBackup(CONVERSATIONS_DB_PATH);
+      await initializeWithBackup(AGENT_TASKS_DB_PATH);
     }
 
     conversationDatabase.initialize(CONVERSATIONS_DB_PATH);
@@ -70,6 +78,9 @@ async function start(): Promise<void> {
 
     if (!providerConfig) {
       throw new Error('AI provider configuration is unavailable');
+    }
+    if (!providerRegistry) {
+      throw new Error('AI provider registry is unavailable');
     }
 
     conversationManager = new ConversationManager(CONVERSATIONS_DB_PATH);
@@ -98,10 +109,10 @@ async function start(): Promise<void> {
         const { VisionAnalyzer } = await import('./vision/index.js');
         const { VisionToolProvider } = await import('./tools/providers/vision-tool-provider.js');
         const visionConfig = {
-          maxTokens: providerConfig!.settings.maxTokens,
-          temperature: providerConfig!.settings.temperature,
-          timeoutMs: providerConfig!.settings.timeout,
-          maxRetries: providerConfig!.settings.maxRetries,
+          maxTokens: providerConfig.settings.maxTokens,
+          temperature: providerConfig.settings.temperature,
+          timeoutMs: providerConfig.settings.timeout,
+          maxRetries: providerConfig.settings.maxRetries,
         };
         const visionAnalyzer = new VisionAnalyzer(visionModel, visionConfig);
         toolRegistry.registerProvider(new VisionToolProvider(visionAnalyzer, mcpClient, visionConfig));
@@ -112,6 +123,19 @@ async function start(): Promise<void> {
 
     await toolRegistry.initializeAll();
     appService.setToolRegistry(toolRegistry);
+
+    const agentTaskRepository = new AgentTaskRepository(AGENT_TASKS_DB_PATH);
+    const agentTaskExecutor = new AgentTaskModelExecutor({
+      config: providerConfig,
+      providerRegistry,
+      toolRegistry,
+      ...(mcpClient ? { mcpClient } : {}),
+    });
+    agentTaskService = new AgentTaskService(agentTaskRepository, agentTaskExecutor, app.log);
+    const recoveredTaskCount = agentTaskService.recoverUnfinished();
+    if (recoveredTaskCount > 0) {
+      app.log.warn({ recoveredTaskCount }, 'Recovered unfinished Agent tasks as interrupted');
+    }
 
     const chatHandler = new ChatHandler(
       conversationManager,
@@ -154,6 +178,12 @@ async function start(): Promise<void> {
     await app.register(aiServiceRoutes, { prefix: '/api/v1/ai' });
     await app.register(chatRoutes, { prefix: '/api/v1/chat' });
     await app.register(debugAiRoutes, { prefix: '/api/v1' });
+    await app.register(agentTaskRoutes, {
+      prefix: '/api/v1',
+      service: agentTaskService,
+      serviceVersion: VERSION,
+      localControlPlane: isLoopbackHost(config.host),
+    });
     await app.register(aiServiceRoutes, { prefix: '/api/ai' });
     await app.register(chatRoutes, { prefix: '/api/chat' });
     await app.register(debugAiRoutes, { prefix: '/api' });
@@ -167,6 +197,9 @@ async function start(): Promise<void> {
     app.log.info({ endpoint: 'GET  /api/v1/chat/*' });
     app.log.info({ endpoint: 'POST /api/v1/test-ai' });
     app.log.info({ endpoint: 'GET  /api/v1/verify-keys' });
+    app.log.info({ endpoint: 'POST /api/v1/agent-tasks' });
+    app.log.info({ endpoint: 'GET  /api/v1/agent-tasks/:taskId' });
+    app.log.info({ endpoint: 'GET  /api/v1/capabilities' });
   } catch (err) {
     app.log.error(err);
     process.exit(1);
@@ -175,6 +208,9 @@ async function start(): Promise<void> {
 
 async function shutdown(signal: 'SIGINT' | 'SIGTERM'): Promise<void> {
   app.log.info({ signal }, '[ai-chat-service] shutdown');
+  if (agentTaskService) {
+    await agentTaskService.close();
+  }
   if (toolRegistry) {
     await toolRegistry.shutdownAll();
   }

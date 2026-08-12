@@ -1,8 +1,8 @@
 # AI 模型角色与 Skills 运行契约
 
-> 状态：已确认目标设计，尚未实现。
+> 状态：已确认目标设计，Agent task 核心部分实现。
 > 更新时间：2026-08-12。
-> 本文定义 `ai-chat-service` 的分析/决策模型、单次视觉模型、受限 Agent task 与 Skills runtime。当前 shipped 能力只有 provider 角色配置、Chat tool loop、MCP client/ToolRegistry 和 `vision.find_element`；本文新增的 Agent task、页面分析、目标解析 v2 与 Skills 均是目标协议。
+> 本文定义 `ai-chat-service` 的分析/决策模型、单次视觉模型、受限 Agent task 与 Skills runtime。当前已交付 provider 角色配置、Chat tool loop、MCP client/ToolRegistry、`vision.find_element`，以及受限 Agent task 的 POST/GET、持久状态、结构化输出、精确工具白名单和模型不可见 browser wrapper；页面分析、目标解析 v2、Skills、任务命令/事件与完整副作用授权仍是目标协议。
 
 ## 1. 服务边界
 
@@ -265,11 +265,11 @@ provider/runtime 可用工具
 
 ## 7. 当前实现差距
 
-- 当前 ChatSessionController 有通用 tool loop，但向对话暴露 ToolRegistry 可用工具，尚无逐任务 tool/Skill/Tab/预算作用域和结构化 task 结果。
+- 受限 Agent task 已独立于 ChatSessionController，具备逐任务精确 tool allowlist、Tab/lease binding、预算和结构化结果；普通 Chat 仍使用原有 tool loop 并过滤三项受控 operation 工具。
 - 当前 `/api/ai/generate` 只调用 `generateText()`，不执行工具。
 - 当前只有 `vision.find_element`，内部临时缓存最近 5 份 DOM snapshot；尚无通用页面状态分析、目标候选 v2、持久 snapshot 授权或 Agent task 事件。
 - 当前仓库没有 Skills loader、registry、manifest 校验、版本 pin 或执行隔离。
-- 当前 Agent tool loop 没有调用方冻结的 policy evaluation、风险投影/effectId/grant 输入，也没有逐调用副作用授权校验。
+- 当前 Agent browser wrapper 已冻结 `stepId/kind/operation/effectId` 并限制 observe/control，模糊失败先查询 operation ledger；仍没有 policy evaluation、风险投影 hash、active grant 与参数级数量的完整逐调用交集校验。
 - 当前 `ai-e2e` prompts 是业务侧模板，可继续作为迁移输入；不得把它们直接等同于可复用 Skill。
 
 ## 8. 验收原则

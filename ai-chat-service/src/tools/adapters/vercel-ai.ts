@@ -31,10 +31,22 @@ function jsonSchemaToZod(schema: Record<string, unknown>): z.ZodTypeAny {
 // Safe execution wrapper
 // ---------------------------------------------------------------------------
 
-function safeExecute(fn: (args: unknown) => Promise<string>): (args: unknown) => Promise<string> {
-  return async (args: unknown) => {
+function safeExecute(
+  fn: GatewayTool['execute'],
+  swallowErrors: boolean,
+): (args: unknown, options: { toolCallId: string; abortSignal?: AbortSignal }) => Promise<string> {
+  return async (args, options) => {
+    if (!swallowErrors) {
+      return fn(args, {
+        toolCallId: options.toolCallId,
+        abortSignal: options.abortSignal,
+      });
+    }
     try {
-      return await fn(args);
+      return await fn(args, {
+        toolCallId: options.toolCallId,
+        abortSignal: options.abortSignal,
+      });
     } catch (error) {
       return error instanceof Error ? error.message : String(error);
     }
@@ -45,19 +57,24 @@ function safeExecute(fn: (args: unknown) => Promise<string>): (args: unknown) =>
 // GatewayTool → Vercel AI SDK tool
 // ---------------------------------------------------------------------------
 
-export function gatewayToolToVercelTool(gatewayTool: GatewayTool) {
+export function gatewayToolToVercelTool(
+  gatewayTool: GatewayTool,
+  options: { swallowErrors?: boolean } = {},
+) {
   return dynamicTool({
     description: gatewayTool.description,
     inputSchema: jsonSchemaToZod(gatewayTool.inputSchema),
-    execute: safeExecute(gatewayTool.execute),
+    execute: safeExecute(gatewayTool.execute, options.swallowErrors ?? true),
   });
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function gatewayToolsToVercelToolMap(tools: GatewayTool[]): Record<string, any> {
-  const map: Record<string, unknown> = {};
+export function gatewayToolsToVercelToolMap(
+  tools: GatewayTool[],
+  options: { swallowErrors?: boolean } = {},
+): Record<string, ReturnType<typeof dynamicTool>> {
+  const map: Record<string, ReturnType<typeof dynamicTool>> = {};
   for (const t of tools) {
-    map[t.name] = gatewayToolToVercelTool(t);
+    map[t.name] = gatewayToolToVercelTool(t, options);
   }
   return map;
 }

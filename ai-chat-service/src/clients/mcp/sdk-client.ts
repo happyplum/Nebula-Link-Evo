@@ -13,7 +13,6 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { ResolvedConfig, MCPServerConfig } from '../../config/schema.js';
 import { createWorkerLogger } from '../../services/logger.js';
 import type { Logger } from 'pino';
-import { ProviderError } from '../../services/provider/errors.js';
 import { EventEmitter } from 'node:events';
 
 export interface MCPTool {
@@ -455,7 +454,10 @@ export class MCPSDKClient extends EventEmitter {
     }
 
     this.logger.info({ serverName, toolName }, 'Calling MCP tool');
-    this.logger.debug({ serverName, toolName, args }, 'Calling MCP tool (full args)');
+    this.logger.debug(
+      { serverName, toolName, args: this.summarizeResult(args) },
+      'Calling MCP tool (redacted args)',
+    );
 
     try {
       const result = await runtime.client.callTool({
@@ -689,7 +691,7 @@ export class MCPSDKClient extends EventEmitter {
   }
 
   private static readonly SENSITIVE_JSON_RE =
-    /("(?:password|token|api[_-]?key|authorization|cookie|secret|access[_-]?token)"\s*:\s*")[^"]*(")/gi;
+    /("[^"]*(?:password|token|api[_-]?key|authorization|cookie|secret)[^"]*"\s*:\s*")[^"]*(")/gi;
 
   /** Summarize MCP tool result for terminal logging — safe, truncated, redacted. */
   private summarizeResult(result: unknown): string {
