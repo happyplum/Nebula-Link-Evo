@@ -181,6 +181,77 @@ export interface BrowserArtifactRefV1 {
   mimeType: string;
 }
 
+export type BrowserArtifactKind = 'screenshot' | 'dom_snapshot' | 'video_segment' | 'trace';
+export type BrowserArtifactCapturePhase = 'before' | 'after' | 'failure' | 'observation';
+export type BrowserArtifactStatus = 'pending' | 'available' | 'failed' | 'expired' | 'deleted';
+export type BrowserArtifactCompleteness = 'complete' | 'partial' | 'failed';
+
+export interface BrowserCaptureRecord {
+  id: string;
+  operationId: string;
+  sessionId: string;
+  tabId?: string;
+  requestHash: string;
+  requested: NonNullable<BrowserOperationRequestV1['capture']>;
+  status: 'pending' | 'completed' | 'failed';
+  completeness: BrowserArtifactCompleteness;
+  expectedItemCount: number;
+  actualItemCount: number;
+  createdAt: string;
+  completedAt?: string;
+  error?: BrowserExecutionProblem;
+}
+
+export interface BrowserArtifactRecord {
+  id: string;
+  sessionId: string;
+  operationId?: string;
+  captureId?: string;
+  tabId?: string;
+  kind: BrowserArtifactKind;
+  capturePhase: BrowserArtifactCapturePhase;
+  status: BrowserArtifactStatus;
+  completeness: BrowserArtifactCompleteness;
+  mimeType: string;
+  sha256?: string;
+  sizeBytes?: number;
+  storageBackend: 'local_file' | 'object_ref';
+  storageRef?: string;
+  redactionStatus: 'not_required' | 'pending' | 'redacted' | 'failed';
+  retentionClass: 'volatile' | 'success_7d' | 'failure_30d' | 'upstream_held';
+  expiresAt?: string;
+  createdAt: string;
+  availableAt?: string;
+  deletedAt?: string;
+  error?: BrowserExecutionProblem;
+}
+
+export interface BrowserArtifactHoldRecord {
+  id: string;
+  artifactId: string;
+  ownerService: string;
+  ownerRef: string;
+  requestHash: string;
+  createdAt: string;
+  expiresAt?: string;
+  releasedAt?: string;
+}
+
+export interface BrowserSessionEventRecord {
+  id: string;
+  sessionId: string;
+  seq: number;
+  type: string;
+  entityType: 'session' | 'lease' | 'operation' | 'capture' | 'artifact';
+  entityId: string;
+  stateVersion?: number;
+  correlationId?: string;
+  causationId?: string;
+  payload: Record<string, unknown>;
+  occurredAt: string;
+  createdAt: string;
+}
+
 export interface BrowserOperationRecord {
   schema: 'nebula.browser.operation-result/1.0';
   operationId: string;

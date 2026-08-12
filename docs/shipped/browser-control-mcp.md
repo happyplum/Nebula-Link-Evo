@@ -9,14 +9,15 @@ proxy-adapter 通过 MCP Server (StreamableHTTP) 对外暴露 `browser-control.*
 - [shipped] MCP 工具集共 18 个：15 个兼容 browser-control 工具（含 screenshot、click、type、dom_snapshot 等）+ 3 个受控原子工具 `browser-control.operation_execute/get/cancel`；区别于 `Action` 联合类型（12 种，不含 screenshot）。
 - [shipped] 12 种 action 类型（对应 `shared/types/action.ts` 的 `Action` 联合）：click / type / focus / blur / hover / value / dispatch / scroll / navigate / wait / mcp_call / finish。
 - [shipped] action 执行入口：`proxy-adapter/src/services/action-executor.ts`。
-- [shipped] 结构化语义步骤可通过 application-level session/稳定 Tab/短期 lease 进入 FIFO 原子操作链；网关只处理通用浏览器约束，不解释场景或脚本业务语义。session event/artifact 仍是后续缺口。
+- [shipped] 结构化语义步骤可通过 application-level session/稳定 Tab/短期 lease 进入 FIFO 原子操作链；网关只处理通用浏览器约束，不解释场景或脚本业务语义。
 - [shipped] `browser-control.operation_execute/get/cancel` 已注册到 MCP Server；`ai-chat-service` 受限 Agent wrapper 已模型不可见地注入 session/Tab/lease/token/leaseSequence/operation ID，并在 execute 结果不明时先调用 get 核账。普通 Chat provider 继续显式过滤三项工具，get/cancel 不暴露给任务模型。
 - [shipped] `GET /api/v1/capabilities` 已声明 browser-execution/operation `1.0`、支持动作/观测、持久账本、可视画面和当前限制；proxy 重启递增 process epoch、使旧租约失效，并将 running operation 收敛为 `outcome_unknown`。
 - [shipped] v1 固定 `maxActiveBrowserSessions=1`、`maxBrowserContextsPerSession=1`，不支持运行中 Context/storage-state 切换；最多一个 control lease，observe 只在安全边界签发且单次使用，live view 无控制权。受控 session 期间 legacy MCP/debug 写入及直接 DOM/截图读取返回 `browser_busy`。
 - [designed] deployment environment、副作用风险投影和计划级审批归 ai-e2e，逐工具授权交集归 ai-chat-service wrapper；proxy 不读取环境标签、不签发/解释 grant，只校验通用 lease/Tab/operation/target/args 与幂等账本。
 - [shipped] browser lease 使用 32-byte opaque token，proxy 仅保存 SHA-256 hash/policy/expiry/process epoch；observe 最长 30 秒、control 最长 5 分钟。operation ledger 使用 `data/proxy-adapter/browser-execution.sqlite` SQLite WAL，动作前写 queued，支持 operation ID 去重、queued cancel 和重启恢复；请求 payload 脱敏保存。
+- [shipped] `browser-execution` schema migration 2 提供短期证据数据地基：operation capture 请求/完成度、截图/DOM/video/trace artifact 元数据、TTL/opaque upstream hold/清理资格，以及 session-scoped 持久事件与事务内单调 seq；迁移有 checksum 且可重入，媒体 bytes 不进入 SQLite。
 - [shipped] 受控执行已覆盖 page_state/target_state/url/title/text/value/attribute/count/tabs 观测，以及 navigate/click/fill/type_text/press/select_option/check/uncheck/focus/blur/hover/scroll/switch_tab/close_tab 动作；重新解析 locator candidates 并拒绝歧义，不开放 JS/CDP/坐标。
-- [pending] dom_snapshot、set_files、before/after screenshot、video、失败截图、短期 artifact API、session SSE/event-log、control 续租、操作动画和保留清理尚未交付；capability 明确 `operationCaptureArtifacts=false`、`operationPresentationAnimation=false`。
+- [pending] dom_snapshot、set_files、before/after screenshot、video、失败截图的真实采集，短期 artifact API、session SSE/event-log、control 续租、操作动画和实际保留清理 worker 尚未交付；capability 明确 `operationCaptureArtifacts=false`、`operationPresentationAnimation=false`。
 - [designed] 浏览器截图、DOM 和媒体属于带完整性信息的短期原始产物；长期证据 manifest、业务关联、保留与 pin 由 ai-e2e 持有，原始产物清理前需可被提升或明确过期。
 - [shipped] 配置入口：消费方通过 `PROXY_ADAPTER_URL + /mcp`（默认 `http://127.0.0.1:3000/mcp`）接入。
 - [shipped] 验收面：既有 MCP/provider 测试 + `browser-execution-service.test.ts`、`browser-execution-routes.test.ts`、`browser-execution-tools-provider.test.ts`、`playwright-browser-execution.test.ts`；2026-08-12 proxy-adapter 全量测试通过。
