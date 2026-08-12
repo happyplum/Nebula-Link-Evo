@@ -1,5 +1,6 @@
 export const OBSERVE_OPERATIONS = [
   'page_state',
+  'dom_snapshot',
   'target_state',
   'url',
   'title',
@@ -179,6 +180,18 @@ export interface BrowserArtifactRefV1 {
   kind: string;
   sha256: string;
   mimeType: string;
+}
+
+export interface BrowserRawArtifact {
+  kind: Extract<BrowserArtifactKind, 'screenshot' | 'dom_snapshot'>;
+  mimeType: 'image/png' | 'application/json';
+  bytes: Buffer;
+  snapshotId?: string;
+}
+
+export interface BrowserArtifactDownload {
+  artifact: BrowserArtifactRecord;
+  bytes: Buffer;
 }
 
 export type BrowserArtifactKind = 'screenshot' | 'dom_snapshot' | 'video_segment' | 'trace';

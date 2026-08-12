@@ -176,6 +176,7 @@ export interface AppendBrowserSessionEvent {
 
 export class BrowserExecutionRepository {
   private db: DatabaseSync | null = null;
+  private transactionDepth = 0;
 
   constructor(private readonly dbPath: string) {}
 
@@ -840,9 +841,22 @@ export class BrowserExecutionRepository {
     return rows.map(mapSessionEvent);
   }
 
+  getLastSessionEventSeq(sessionId: string): number {
+    const row = this.requireDb()
+      .prepare(
+        'SELECT COALESCE(MAX(seq), 0) AS seq FROM browser_session_events WHERE session_id = ?'
+      )
+      .get(sessionId) as { seq: number };
+    return row.seq;
+  }
+
   transaction<T>(callback: () => T): T {
+    if (this.transactionDepth > 0) {
+      return callback();
+    }
     const db = this.requireDb();
     db.exec('BEGIN IMMEDIATE');
+    this.transactionDepth += 1;
     try {
       const result = callback();
       db.exec('COMMIT');
@@ -850,6 +864,8 @@ export class BrowserExecutionRepository {
     } catch (error) {
       db.exec('ROLLBACK');
       throw error;
+    } finally {
+      this.transactionDepth -= 1;
     }
   }
 

@@ -1,5 +1,9 @@
 import Fastify from 'fastify';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { LocalBrowserArtifactStore } from '../../browser-execution/artifact-store.js';
 import { BrowserExecutionRepository } from '../../browser-execution/repository.js';
 import {
   BrowserExecutionService,
@@ -27,17 +31,31 @@ class RouteTestBrowser implements BrowserExecutionBrowser {
       actual: 'about:blank',
     })
   );
+  readonly captureScreenshot = vi.fn(async () => ({
+    kind: 'screenshot' as const,
+    mimeType: 'image/png' as const,
+    bytes: Buffer.from('route-png'),
+  }));
+  readonly captureDomSnapshot = vi.fn(async () => ({
+    kind: 'dom_snapshot' as const,
+    mimeType: 'application/json' as const,
+    bytes: Buffer.from(JSON.stringify({ snapshot_id: 'route-snapshot' })),
+    snapshotId: 'route-snapshot',
+  }));
 }
 
 describe('browser execution HTTP contract', () => {
   let app: ReturnType<typeof Fastify>;
   let service: BrowserExecutionService;
+  let artifactDirectory: string;
 
   beforeEach(async () => {
     app = Fastify();
+    artifactDirectory = mkdtempSync(join(tmpdir(), 'nebula-browser-route-artifacts-'));
     service = new BrowserExecutionService({
       repository: new BrowserExecutionRepository(':memory:'),
       browser: new RouteTestBrowser(),
+      artifactStore: new LocalBrowserArtifactStore(artifactDirectory),
     });
     service.initialize();
     await app.register(capabilitiesRoutes, {
@@ -58,6 +76,7 @@ describe('browser execution HTTP contract', () => {
   afterEach(async () => {
     service.close();
     await app.close();
+    rmSync(artifactDirectory, { recursive: true, force: true });
   });
 
   it('advertises the single-session visual browser and durable ledger capabilities', async () => {
@@ -76,6 +95,10 @@ describe('browser execution HTTP contract', () => {
         visibleBrowser: true,
         liveView: true,
         storageStateSwitching: false,
+        operationCaptureArtifacts: true,
+        browserSessionEvents: true,
+        artifactDownload: true,
+        supportedObservations: expect.stringContaining('dom_snapshot'),
       },
       limits: {
         maxActiveBrowserSessions: 1,
@@ -203,6 +226,77 @@ describe('browser execution HTTP contract', () => {
       status: 'succeeded',
       actual: 'about:blank',
     });
+  });
+
+  it('downloads captured evidence and queries the durable event log', async () => {
+    const sessionResponse = await app.inject({
+      method: 'POST',
+      url: '/api/v1/browser-execution/sessions',
+      headers: { 'idempotency-key': 'create-session-artifact' },
+      payload: {},
+    });
+    const sessionId = sessionResponse.json().data.id as string;
+    const leaseResponse = await app.inject({
+      method: 'POST',
+      url: `/api/v1/browser-execution/sessions/${sessionId}/leases`,
+      headers: { 'idempotency-key': 'create-lease-artifact' },
+      payload: { mode: 'observe' },
+    });
+    const issued = leaseResponse.json().data;
+    const operation = await service.executeOperation({
+      sessionId,
+      leaseId: issued.lease.id,
+      leaseToken: issued.token,
+      tabId: '52d25db9-d44f-497a-9ec6-580aab5a4905',
+      request: {
+        schema: 'nebula.browser.operation/1.0',
+        operationId: 'b879376e-c6e7-4987-99ff-e1b28fcc687e',
+        leaseSequence: issued.lease.sequence,
+        deadlineAt: new Date(Date.now() + 60_000).toISOString(),
+        kind: 'observe',
+        operation: 'dom_snapshot',
+      },
+    });
+
+    const artifactResponse = await app.inject({
+      method: 'GET',
+      url: `/api/v1/browser-execution/sessions/${sessionId}/artifacts/${operation.artifacts[0]!.id}`,
+    });
+    expect(artifactResponse.statusCode).toBe(200);
+    expect(artifactResponse.headers['content-type']).toContain('application/json');
+    expect(JSON.parse(artifactResponse.body)).toMatchObject({ snapshot_id: 'route-snapshot' });
+
+    const eventLogResponse = await app.inject({
+      method: 'GET',
+      url: `/api/v1/browser-execution/sessions/${sessionId}/event-log?afterSeq=0&limit=100`,
+    });
+    expect(eventLogResponse.statusCode).toBe(200);
+    expect(eventLogResponse.json().data.map((event: { type: string }) => event.type)).toContain(
+      'artifact.created'
+    );
+  });
+
+  it('boots the session event stream from a fresh snapshot', async () => {
+    const sessionResponse = await app.inject({
+      method: 'POST',
+      url: '/api/v1/browser-execution/sessions',
+      headers: { 'idempotency-key': 'create-session-stream' },
+      payload: {},
+    });
+    const sessionId = sessionResponse.json().data.id as string;
+    const address = await app.listen({ host: '127.0.0.1', port: 0 });
+    const controller = new AbortController();
+    const response = await fetch(
+      `${address}/api/v1/browser-execution/sessions/${sessionId}/events`,
+      { signal: controller.signal }
+    );
+    const reader = response.body!.getReader();
+    const firstChunk = await reader.read();
+    controller.abort();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('text/event-stream');
+    expect(new TextDecoder().decode(firstChunk.value)).toContain('event: browser_session.snapshot');
   });
 
   it('returns browser_busy from legacy debug mutation and direct capture routes', async () => {

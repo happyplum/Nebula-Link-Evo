@@ -211,15 +211,15 @@
 ## 14. 当前实现差距
 
 - `proxy-adapter` 已交付 application session、稳定 Tab、observe/control lease、`operationId` 去重、queued cancel、持久结果查询、重启 `outcome_unknown` 和 legacy 门禁；当前 MCP Server 共 15 个兼容工具 + 3 个受控 operation 工具。
-- proxy 尚无 browser session SSE/event-log、短期 artifact/capture、受控 dom_snapshot、set_files、失败截图、操作动画、control 原地续租与保留清理，因此浏览器证据链仍不完整。
-- 当前 debug event hub 只有进程内全局递增序号，尚无浏览器操作生命周期和跨服务关联事件。
+- proxy 已交付受控 dom_snapshot、before/after screenshot、失败截图、内容寻址短期 artifact、完整性校验、browser session SSE/event-log 与会话范围 artifact GET；set_files、video、操作动画、control 原地续租、脱敏与保留清理 worker仍未实现。
+- browser execution 事件已按 session 持久化单调 seq 并采用 snapshot-first SSE；ai-e2e 尚未消费并写入自身业务关联事件，因此跨服务业务时间线仍不完整。
 - `ai-chat-service` 已交付独立受限 Agent task POST/GET、持久状态、精确工具白名单、预算、结构化结果和模型不可见 browser binding；普通 Chat 继续过滤 3 个受控 operation 工具。task commands/events/Skills 与 ai-e2e 页面任务消费仍未实现。
 - `ai-e2e` 当前主要调用 `/api/ai/generate`，旧 `ExecutorService` 仍通过 `npx tsx` 执行脚本，尚未进入上述 Agent + MCP 可视执行链。
 - `ai-chat-service` 已实现调用方冻结的 `stepId/kind/operation/effectId` 门禁和 observe/control 检查；三服务仍未贯通风险投影、policy evaluation/active grant 与参数级数量交集。
 
 ## 15. 仍待实现设计
 
-- Agent task、browser event/artifact、剩余动作/观测和跨服务证据关联已在 `service-api-event-contract.md` 锁定；proxy 的 session/lease/operation 核心与 ai-chat-service Agent task POST/GET/capability 已实现，正式 OpenAPI、任务命令/事件与其余服务代码尚未生成。
+- Agent task、browser event/artifact、剩余动作/观测和跨服务证据关联已在 `service-api-event-contract.md` 锁定；proxy 的 session/lease/operation、真实截图/DOM artifact 与 browser event API，以及 ai-chat-service Agent task POST/GET/capability 已实现，任务命令/事件与其余消费代码尚未生成。
 - proxy 已实现短期 opaque token + SHA-256 hash/process epoch 和自有 SQLite WAL operation ledger；不扩权续租、7 天保留、pin/引用保护和清理任务仍待实现。
 - 动画媒体协议、播放速度和重放索引格式。
 - 同时多身份、多 BrowserContext 与多 Tab 并发需要的隔离和调度模型；v1 单 Context、单活动身份不依赖该扩展。

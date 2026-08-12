@@ -255,9 +255,9 @@ interface CreateAgentTaskRequestV1 {
 | GET | `/api/v1/browser-execution/sessions/:sessionId/events` | 浏览器会话 SSE；先发 `browser_session.snapshot`。 |
 | GET | `/api/v1/browser-execution/sessions/:sessionId/event-log?afterSeq=N&limit=M` | 查询持久操作事件。 |
 | GET | `/api/v1/browser-execution/operations/:operationId` | 查询原子操作账本和最终/不确定结果。 |
-| GET | `/api/v1/browser-execution/artifacts/:artifactId` | 读取受授权的短期原始产物或下载链接。 |
+| GET    | `/api/v1/browser-execution/sessions/:sessionId/artifacts/:artifactId`        | 在会话边界内读取短期原始产物；返回前复核 storage ref、size 与 SHA-256。   |
 
-当前实现状态：session 创建/读取/关闭、lease 签发/撤销和 operation 查询已交付；session SSE、event-log 与 artifact GET 仍为 pending。当前 observe/control 创建、opaque token hash/process epoch、单 session 门禁和 SQLite operation ledger 已生效，control 原地续租与账本保留清理尚未实现。
+当前实现状态：session 创建/读取/关闭、lease 签发/撤销、operation 查询、真实 before/after screenshot、DOM capture、失败截图、内容寻址短期存储、session SSE、event-log 与 artifact GET 已交付。observe/control 创建、opaque token hash/process epoch、单 session 门禁和 SQLite operation ledger 已生效；control 原地续租、脱敏/清理 worker、video 与动画尚未实现。
 
 浏览器执行会话是应用层身份，与当前 stateless StreamableHTTP MCP transport session 无关。MCP 传输可以每个请求新建 server，仍必须依据 application-level session、lease 和 operation ledger 执行。
 
@@ -319,7 +319,7 @@ interface BrowserOperationRequestV1 {
 
 禁止 `evaluate/dom_script/任意 JavaScript/裸坐标/任意 CDP 命令`。目标、参数和文件引用必须再通过租约策略及 JSON Schema 校验。
 
-当前 proxy capability 已开放除 `dom_snapshot` 外的其余 9 种观测，以及除 `set_files` 外的 14 种动作；`dom_snapshot`、`set_files`、capture/artifact 和 presentation animation 在短期产物协议实现前保持关闭，调用方必须按 capability 协商，不能把目标全集当作当前全集。
+当前 proxy capability 已开放全部 10 种观测、除 `set_files` 外的 14 种动作，以及 screenshot/DOM capture、artifact download 与 browser session events；`set_files`、video segment 和 presentation animation 保持关闭，调用方必须按 capability 协商，不能把目标全集当作当前全集。
 
 结果：
 

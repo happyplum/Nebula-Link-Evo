@@ -20,6 +20,7 @@ import mcpServerPlugin from './mcp-server/index.js';
 import { BrowserExecutionRepository } from './browser-execution/repository.js';
 import { BrowserExecutionService } from './browser-execution/service.js';
 import { PlaywrightBrowserExecutionBrowser } from './browser-execution/playwright-browser.js';
+import { LocalBrowserArtifactStore } from './browser-execution/artifact-store.js';
 import { BrowserExecutionToolsProvider } from './tools/providers/browser-execution-tools-provider.js';
 import capabilitiesRoutes from './plugins/routes/capabilities.js';
 import browserExecutionRoutes from './plugins/routes/browser-execution.js';
@@ -50,6 +51,7 @@ const BROWSER_EXECUTION_DB_PATH = path.join(
   'proxy-adapter',
   'browser-execution.sqlite'
 );
+const BROWSER_ARTIFACT_ROOT = path.join(process.cwd(), 'data', 'proxy-adapter', 'artifacts');
 
 /**
  * CORS origin configuration.
@@ -114,6 +116,7 @@ async function start() {
     browserExecutionService = new BrowserExecutionService({
       repository: new BrowserExecutionRepository(BROWSER_EXECUTION_DB_PATH),
       browser: new PlaywrightBrowserExecutionBrowser(),
+      artifactStore: new LocalBrowserArtifactStore(BROWSER_ARTIFACT_ROOT),
       controlPlaneEnabled: HOST === '127.0.0.1' || HOST === 'localhost' || HOST === '::1',
     });
     browserExecutionService.initialize();

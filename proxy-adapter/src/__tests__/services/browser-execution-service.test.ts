@@ -1,10 +1,11 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BrowserExecutionError } from '../../browser-execution/errors.js';
+import { LocalBrowserArtifactStore } from '../../browser-execution/artifact-store.js';
 import { hashOpaqueToken, sha256 } from '../../browser-execution/hash.js';
 import { BrowserExecutionRepository } from '../../browser-execution/repository.js';
 import {
@@ -41,11 +42,28 @@ class FakeBrowser implements BrowserExecutionBrowser {
       actual: { ok: true },
     })
   );
+  readonly captureScreenshot = vi.fn(async () => ({
+    kind: 'screenshot' as const,
+    mimeType: 'image/png' as const,
+    bytes: Buffer.from('fake-png'),
+  }));
+  readonly captureDomSnapshot = vi.fn(async () => ({
+    kind: 'dom_snapshot' as const,
+    mimeType: 'application/json' as const,
+    bytes: Buffer.from(JSON.stringify({ snapshot_id: 'snapshot-1', simplified_dom: [] })),
+    snapshotId: 'snapshot-1',
+  }));
 }
 
 function makeService(browser: BrowserExecutionBrowser = new FakeBrowser()) {
   const repository = new BrowserExecutionRepository(':memory:');
-  const service = new BrowserExecutionService({ repository, browser });
+  const directory = mkdtempSync(join(tmpdir(), 'nebula-browser-artifacts-'));
+  tempDirectories.push(directory);
+  const service = new BrowserExecutionService({
+    repository,
+    browser,
+    artifactStore: new LocalBrowserArtifactStore(directory),
+  });
   service.initialize();
   return { service, repository, browser };
 }
@@ -229,6 +247,106 @@ describe('BrowserExecutionService', () => {
         request: { ...request, operation: 'title' },
       })
     ).rejects.toMatchObject({ code: 'idempotency_conflict' });
+  });
+
+  it('captures real screenshot and DOM bytes, verifies downloads, and persists ordered events', async () => {
+    const browser = new FakeBrowser();
+    const { service, repository } = makeService(browser);
+    const { session, lease, token } = await createSessionAndLease(service);
+    const request = operationRequest(lease.sequence, {
+      capture: {
+        beforeScreenshot: true,
+        afterScreenshot: true,
+        domSnapshot: true,
+      },
+    });
+
+    const operation = await service.executeOperation({
+      sessionId: session.id,
+      leaseId: lease.id,
+      leaseToken: token,
+      tabId: 'tab-1',
+      request,
+    });
+
+    expect(operation.status).toBe('succeeded');
+    expect(operation.artifacts.map((artifact) => artifact.kind)).toEqual([
+      'screenshot',
+      'screenshot',
+      'dom_snapshot',
+    ]);
+    const artifactRecords = repository.listOperationArtifacts(operation.operationId);
+    expect(artifactRecords).toHaveLength(3);
+    expect(artifactRecords.every((artifact) => artifact.status === 'available')).toBe(true);
+    const capture = repository.getCapture(artifactRecords[0]!.captureId!);
+    expect(capture).toMatchObject({
+      status: 'completed',
+      completeness: 'complete',
+      expectedItemCount: 3,
+      actualItemCount: 3,
+    });
+
+    const domRef = operation.artifacts.find((artifact) => artifact.kind === 'dom_snapshot')!;
+    const domDownload = await service.getArtifactDownload(session.id, domRef.id);
+    expect(JSON.parse(domDownload.bytes.toString('utf8'))).toMatchObject({
+      snapshot_id: 'snapshot-1',
+    });
+    const events = service.listSessionEvents(session.id, 0, 1000);
+    expect(events.map((event) => event.seq)).toEqual(
+      Array.from({ length: events.length }, (_, index) => index + 1)
+    );
+    expect(events.map((event) => event.type)).toEqual(
+      expect.arrayContaining([
+        'operation.queued',
+        'capture.started',
+        'artifact.created',
+        'capture.completed',
+        'operation.completed',
+      ])
+    );
+    expect(await service.getSessionEventSnapshot(session.id)).toMatchObject({
+      type: 'browser_session.snapshot',
+      seq: events.at(-1)!.seq,
+    });
+  });
+
+  it('always keeps a failure screenshot and rejects tampered artifact bytes', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'nebula-browser-failure-artifacts-'));
+    tempDirectories.push(directory);
+    const browser = new FakeBrowser();
+    browser.execute.mockRejectedValueOnce(
+      new BrowserExecutionError('state_conflict', 'Expected target was not present')
+    );
+    const repository = new BrowserExecutionRepository(':memory:');
+    const service = new BrowserExecutionService({
+      repository,
+      browser,
+      artifactStore: new LocalBrowserArtifactStore(directory),
+    });
+    service.initialize();
+    const { session, lease, token } = await createSessionAndLease(service);
+
+    const operation = await service.executeOperation({
+      sessionId: session.id,
+      leaseId: lease.id,
+      leaseToken: token,
+      tabId: 'tab-1',
+      request: operationRequest(lease.sequence),
+    });
+
+    expect(operation.status).toBe('failed');
+    expect(operation.artifacts).toHaveLength(1);
+    const artifact = repository.getArtifact(operation.artifacts[0]!.id)!;
+    expect(artifact).toMatchObject({
+      kind: 'screenshot',
+      capturePhase: 'failure',
+      retentionClass: 'failure_30d',
+      status: 'available',
+    });
+    writeFileSync(join(directory, artifact.storageRef!), 'tampered');
+    await expect(service.getArtifactDownload(session.id, artifact.id)).rejects.toMatchObject({
+      code: 'state_conflict',
+    });
   });
 
   it('marks an action outcome unknown when execution fails after start', async () => {

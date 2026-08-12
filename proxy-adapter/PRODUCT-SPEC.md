@@ -59,7 +59,7 @@
 | 工具注册 | `src/tools/`（registry / types / index / providers/browser-tools-provider / adapters/*） | shipped | ToolRegistry + 本地 browser-control provider + MCP Server 适配器 | 外部 MCP client/provider 已归 `ai-chat-service`；本包不存在 mcp-client-provider |
 | 浏览器工具适配 | `src/browser-tools/`（definitions / tool-map / param-adapter / result-adapter / types / index） | shipped | browser-control.* 工具定义与参数/结果适配 | 工具集含 screenshot、click、type 等；区别于 `Action` 联合类型（12 种） |
 | MCP Server | `src/mcp-server/`（index / transport） | shipped | StreamableHTTP 传输层 + MCP Server 入口 | 路径 `/mcp`；`ai-chat-service` 通过 `PROXY_ADAPTER_URL + /mcp` 接入 |
-| 浏览器执行控制面 | `src/browser-execution/` | in-progress | application-level session/Context/Tab、observe/control lease、通用独占 admission gate、白名单原子操作、持久 operation ledger 与短期 artifact/event 数据层 | 已交付单活动 session/单 Context、32-byte opaque token hash/process epoch、FIFO 操作互斥、SQLite WAL、重启收敛、语义 locator 执行，以及可重入 schema migration、capture 完整度、artifact 元数据/hold/清理资格和 session event 单调序号 repository；真实采集、SSE/API 与租约续租仍待实现 |
+| 浏览器执行控制面 | `src/browser-execution/`                                                                                                                                                                                             | in-progress | application-level session/Context/Tab、observe/control lease、通用独占 admission gate、白名单原子操作、持久 operation ledger 与短期 artifact/event 数据层 | 已交付单活动 session/单 Context、32-byte opaque token hash/process epoch、FIFO 操作互斥、SQLite WAL、重启收敛、语义 locator 执行、真实截图/DOM 采集、失败截图、内容寻址本地存储、完整性校验、snapshot-first SSE/event-log/artifact GET，以及 capture 完整度、artifact 元数据/hold/清理资格；租约续租和清理 worker 仍待实现 |
 | 浏览器引擎 | `src/browser-engine/`（services/{browser-lifecycle,browser-service,dom-extractor,page-actions,click-resolution,snapshot-cache,browser-lock} / screencast / locator-generator / marker-injector / dom-utils / index） | shipped | 进程内 Playwright Chromium 控制、可选远程调试端口、页面 CDP 会话、DOM 提取、点击解析、快照缓存、视觉标记注入、屏播 | 当前自行启动 Chromium，不存在外部 `playwright-server` 或 `connectOverCDP` 连接链；7 级目标链：nebula-id → role → testid → aria → text → css → xpath |
 | 插件 | `src/plugins/`（01-cors / 02-swagger / 03-error-handler / 10-routes-autoload / routes/{api/livekit-token, browser-execution, capabilities, debug/index, debug/stream, config, health}） | shipped | Fastify 插件与路由 | 浏览器控制路由通过 plugin options 注入领域服务；路由按编号约定加载顺序 |
 | Schemas | `src/schemas/`（health / config） | shipped | 健康检查与配置响应 schema |  |
@@ -84,7 +84,7 @@
 | `/api/v1/browser-execution/sessions`、`/:sessionId` | POST/GET/DELETE | shipped | 创建/读取/关闭全局单活动可视浏览器执行会话 | 创建/关闭要求 `Idempotency-Key`；活动会话关闭要求 control bearer token |
 | `/api/v1/browser-execution/sessions/:sessionId/leases`、`/:leaseId` | POST/DELETE | shipped | 签发/撤销 observe/control 租约 | observe 最长 30 秒且单次使用，control 最长 5 分钟；token 仅首次响应明文，SQLite 只存 SHA-256 hash |
 | `/api/v1/browser-execution/operations/:operationId` | GET | shipped | 原子操作账本查询与未知结果恢复 | 已开始但重启前无终态的操作收敛为 `outcome_unknown`；queued 重启后取消 |
-| `/api/v1/browser-execution/sessions/:sessionId/events`、`event-log`、`/artifacts/:artifactId` | GET/SSE | pending | snapshot-first 会话事件、持久事件查询与短期原始产物读取 | 尚未交付；当前 capability 明确 `operationCaptureArtifacts=false` |
+| `/api/v1/browser-execution/sessions/:sessionId/events`、`event-log`、`artifacts/:artifactId` | GET/SSE               | shipped | snapshot-first 会话事件、按 `afterSeq` 持久事件查询与会话范围内短期原始产物读取              | artifact GET 返回前重新校验安全 storage ref、字节数与 SHA-256；SSE heartbeat 不占持久 seq                                                            |
 | `/api/v1/capabilities` | GET | shipped | 声明 browser-execution/operation `1.0`、动作/观测、持久账本、画面能力与 session/Context 限制 | `maxActiveBrowserSessions=1`、`maxBrowserContextsPerSession=1`、不支持 storage-state 切换；非 loopback 绑定时 `localControlPlane=false` 并禁用控制面 |
 
 ---
@@ -109,9 +109,9 @@
 | DB 备份 | utils/db-backup | shipped | `__tests__/db-backup.test.ts` | utils |
 | 服务生命周期 | services/app-service | shipped | `__tests__/service-lifecycle.test.ts`、app-service-marker | services |
 | 通用浏览器执行会话与操作账本 | `src/browser-execution/` | shipped | service/repository 单元测试 + Fastify inject 契约测试 + 重启恢复测试 | 全局单 session/单 Context、lease token hash/process epoch、FIFO 原子边界、幂等冲突、queued cancel、`outcome_unknown`、脱敏请求账本和 legacy 门禁；不解释 E2E actor/environment/审批 |
-| 浏览器短期产物与会话事件数据地基 | `src/browser-execution/repository.ts`、`types.ts` | shipped | `repository.artifacts.test.ts` | schema migration 2 只增不毁；记录 operation capture 请求/完整度、截图/DOM/video/trace 元数据、短期 retention/opaque upstream hold、清理资格与 session-scoped 单调事件序号；不保存媒体 bytes，不实现采集或对外 API |
+| 浏览器短期产物与会话事件运行时                                                                                                    | `src/browser-execution/{artifact-store,repository,service}.ts`、`plugins/routes/browser-execution.ts` | shipped     | repository/service/真实 Playwright/Fastify SSE 与下载契约测试                          | schema migration 2 记录 capture/产物/hold/清理资格和 session-scoped 单调 seq；截图/DOM bytes 以 SHA-256 内容寻址保存到 SQLite 外，操作可请求 before/after/DOM，失败操作自动尝试现场截图；提供 snapshot-first SSE、event-log 和带完整性复核的会话范围 artifact GET                                  |
 | E2E 受限 MCP 原子工具 | tools/providers/browser-execution-tools-provider、browser-execution | shipped | `__tests__/browser-execution-tools-provider.test.ts` | `browser-control.operation_execute/get/cancel` 已交付；session/Tab/lease/token 仍须由未来 `ai-chat-service` 受限包装层注入，普通 Chat 已显式过滤三项工具 |
-| 语义脚本原子动作/观测覆盖 | browser-execution/playwright-browser、validation | in-progress | 真实 Playwright integration 测试 | 已交付 9 种观测（page_state/target_state/url/title/text/value/attribute/count/tabs）和除 set_files 外 14 种动作，按 role/test-id/label/placeholder/text/css/xpath 候选解析并拒绝歧义；禁止任意 JS/CDP/裸坐标。dom_snapshot、set_files、artifact capture 和操作动画待后续交付 |
+| 语义脚本原子动作/观测覆盖                                                                                                         | browser-execution/playwright-browser、validation                                                      | in-progress | 真实 Playwright integration 测试                                                       | 已交付 10 种观测（page_state/dom_snapshot/target_state/url/title/text/value/attribute/count/tabs）和除 set_files 外 14 种动作，按 role/test-id/label/placeholder/text/css/xpath 候选解析并拒绝歧义；禁止任意 JS/CDP/裸坐标。截图/DOM capture 已生效，set_files、video segment 和操作动画待后续交付 |
 | 错误分类 | errors/http-errors | shipped | `__tests__/errors.test.ts` | errors |
 
 ---
@@ -154,7 +154,7 @@
 | 缺口 | 类型 | 状态 | 备注 |
 |------|------|------|------|
 | ToolConsumer 仍保留 legacy `chat` 值 | tech-debt | pending | `BrowserToolsProvider.exposeTo` 与 `GatewayTool` 类型仍含 `chat`，但本包已无 Chat 消费面；后续应在不影响 MCP Server 的前提下清理 |
-| Browser session 事件与短期 artifact 执行/读取面未实现 | requirement-gap | pending | capture/artifact/hold/完整度/清理资格/session event 持久化已交付；snapshot-first SSE、event-log、artifact GET、真实截图/DOM/视频采集、失败自动取证和清理 worker 尚未交付，因此 capability 当前仍拒绝 capture，受控 dom_snapshot 暂不开放 |
+| 浏览器短期产物清理与脱敏 worker 未实现   | requirement-gap | pending | 真实截图/DOM、失败自动取证、内容寻址存储、完整性校验、SSE/event-log/artifact GET 已交付；TTL/opaque hold 目前只提供数据与清理资格，尚未自动删除文件或执行脱敏，video segment 也未开放 |
 | 剩余语义动作与演示效果未实现 | requirement-gap | pending | `set_files` 需要 artifact reference；`presentation.animation` 已校验但当前 capability 声明不支持操作动画，不能描述为已生效 |
 | 控制租约续租与账本保留清理 worker 未实现 | requirement-gap | pending | 当前 control 需撤销后重发，尚无不扩权续租；artifact 已支持 TTL、opaque upstream hold 与可删除资格查询，但 operation/idempotency 7 天保留和实际清理任务尚未实现 |
 
