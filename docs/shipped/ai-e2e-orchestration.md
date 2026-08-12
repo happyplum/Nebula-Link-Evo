@@ -24,15 +24,19 @@ PRD 驱动的 E2E 自动化测试编排器。把"需求分析 → 页面探索 �
 - [shipped] Prompt 模板（稳定资产）：`ai-e2e/prompts/*.md`。必须保留。
 - [shipped] SPA UI 挂载前缀 `/ai-e2e/`：HomePage（`/`）+ ProjectPage（`/project/:projectId`），项目页为四步向导。
 - [shipped] 验收面：`ai-e2e/src/__tests__/`（ai、database 等）单元 + 集成测试。
-- [designed] 页面定义以不含 Origin 的规范化路由模板 + 身份参数约束标识，运行锚点再绑定部署、动态参数和命名基线变体；当前仅保存完整 `urls.url`，目标契约见 `ai-e2e/docs/version-page-asset-contract.md`。
-- [designed] 模块需求文档融合 PRD 片段、真实 DOM/截图、页面锚点、功能说明与有序场景；当前这些信息仍分散存储。
-- [designed] 一个页面包含多个功能模块，一个功能模块包含多个功能脚本；功能脚本是最小复用、执行、验证和修复单元。首期脚本采用显式输入、线性步骤、硬业务断言、成功后输出和声明副作用，不嵌套调用其他脚本；场景负责跨模块/页面的顺序、依赖、重复、分支和输入输出映射。当前脚本版本仍以 scenario 为归属，目标契约见 `ai-e2e/docs/functional-script-contract.md`。
+- [designed] 页面运行匹配器以已交付的 Origin 无关 semantic 页面修订、部署绑定和 baseline variant 为输入；legacy `urls.url` 仍只保存完整 URL。完整参数校验、动态参数和基线采集 runtime 尚未实现。
+- [designed] 模块需求内容应融合 PRD 片段、真实 DOM/截图、页面锚点、功能说明与有序场景；不可变 requirement/coverage 表已交付，内容仍待 authoring runtime 生成。
+- [designed] semantic v1 已有“页面→模块→多个功能脚本→场景引用”的稳定身份/修订数据层；首期脚本的线性步骤、硬断言、输出/副作用 Schema 与跨模块执行 runtime 仍待实现，legacy 脚本继续按 scenario 归属。
 - [designed] 首期权威脚本 Schema 为 `nebula.ai-e2e.functional-script/1.0`：纯 JSON、白名单动作/断言/值引用、无任意代码/固定 sleep/裸 URL/坐标；副作用必须声明应用检查与重试策略。机器契约见 `ai-e2e/docs/semantic-script-schema.md`。
-- [designed] 场景调用图首期为无环图；业务版本保存场景定义与 TODO 模板，每次测试流程冻结运行计划并产生运行 TODO 和独立执行尝试。重复调用预先展开，恢复和修复使用追加式计划修订；当前 `run-all` 仍只是项目脚本顺序遍历。目标契约见 `ai-e2e/docs/scenario-orchestration-contract.md`。
+- [designed] 场景调用图首期为无环图；semantic run 已能冻结基础计划并展开 TODO/依赖/变量，后续仍需实现重复/条件展开、页面任务/尝试执行、追加式修订和恢复。legacy `run-all` 仍只是项目脚本顺序遍历。
 - [designed] 业务版本由用户创建，可记录来源版本及部署/Git 标识；`copy` 原子复制当前有效资产、生成新身份并重建内部引用，复制后独立维护，不复制编辑历史、运行状态、证据、实际数据或秘密。目标契约见 `ai-e2e/docs/version-page-asset-contract.md`。
 - [shipped] semantic v1 业务版本与独立资产快照基座：migration 014 新增版本/部署引用/PRD/变量/页面→业务模块→功能模块→功能脚本→场景 current revision；create/list/get/copy API 使用 plugin options 注入，copy 以幂等 `BEGIN IMMEDIATE` 重建全部已实现内部 ID、保留来源审计、把执行资产置为 stale，并在校验失败时整体回滚。本单元不接 AI、浏览器、运行状态或操作动画。
-- [designed] 目标数据模型使用稳定资产 ID + 不可变 revision + 唯一 current；运行冻结精确 revision/hash。copy 通过幂等 `BEGIN IMMEDIATE` 事务重建 ID，大媒体使用内容寻址文件对象，状态与 run event 同事务提交。完整模型见 `ai-e2e/docs/target-data-model.md`。
-- [designed] 跨服务写调用先进入 `integration_outbox`，以原幂等键驱动/查询外部 Agent task 与 browser operation；`external_task_links` 保存 opaque 恢复引用，不在 SQLite 写事务内等待网络。
+- [shipped] semantic v1 数据地基：migration 015–017 增量新增 decision/coverage/baseline/scoped verification/dependency、authoring job/task/attempt/command/event、semantic run/plan/TODO/page-task/attempt/variable/decision/event、全局 browser job FIFO、policy/artifact/evidence/outbox/external-link/legacy-import 表；不删除或改写 legacy 表。
+- [shipped] 015+ checksum migration runner：`schema_migrations` 保存 applying/applied/failed、SQL SHA-256 与应用版本；单 migration 使用 `BEGIN IMMEDIATE`，失败回滚并保留 failed 账本，已应用 checksum 漂移拒绝。001–014 preflight/baseline 与文件备份仍未交付。
+- [shipped] semantic 核心仓储事务：valid draft revision 只有命中精确 verification scope/依赖闭包后才能激活；current 切换、dependency index、business version validation 失效与 authoring event 同事务。正式 run 原子冻结 base plan、TODO/依赖和初始变量；command 使用 id+hash 幂等与 stateVersion 乐观并发，event seq 单调。
+- [shipped] semantic authoring/browser queue 数据层：同一业务版本一个写 authoring job，task/attempt 追加审计；standalone authoring 与 formal run 进入全局 FIFO，全库最多一个 acquiring/active/releasing browser job，authoring verification 与 run-triggered repair 复用父 browser job，避免自等待。
+- [shipped] semantic 证据与集成仓储：artifact 内容寻址去重、evidence item 追加、manifest 原子 seal、inline secret-like 字段拒绝；outbox 支持同 ID/hash 重放、claim/settle，external link 只保存 opaque ID/hash/secret ref 并拒绝外部 seq 倒退。网络 worker 与公开 API/SSE 仍未交付。
+- [shipped] business version copy 扩展：current decision、page baseline、module requirement、functional-point coverage 和 revision dependency 全量生成新 ID 并重写版本内引用；共享 content-addressed blob 只增加 ref count，不复制 asset/business-version verification、run、evidence manifest、实际变量或秘密，目标继续 `needs_recheck`。
 - [designed] 主代理维护 PRD 流程、TODO 依赖、运行变量和决策，并负责派发、恢复、跳过、验收与汇总；页面子代理只执行获授权的页面场景片段，负责重新检查、执行、验证、职责内修复和结构化汇报。
 - [designed] 默认创建干净子代理上下文；登出等可恢复中断可由主代理在页面状态和副作用检查后续接原上下文，否则从检查点和授权变量重建。
 - [designed] 首期一个主代理在任一时刻只运行一个执行型子代理，同一测试流程复用 proxy-adapter 托管的 Playwright/Chromium 实例和浏览器会话，所有动作串行；每个会话固定一个 BrowserContext 和一个活动 actor，跨角色由主代理显式编排退出/登录脚本，子代理发现身份异常即停止。子代理上下文可按任务重建，并存身份、多 Context/Tab 并发仅作为后期扩展。
@@ -41,14 +45,14 @@ PRD 驱动的 E2E 自动化测试编排器。把"需求分析 → 页面探索 �
 - [designed] 系统内权威脚本是结构化语义功能脚本；所有浏览器动作按语义步骤通过 proxy-adapter 可视执行。原子操作使用幂等 ID 和结果账本，状态不确定时先检查副作用；当前 `npx tsx` 子进程执行器不是目标执行路径。完整契约见 `ai-e2e/docs/agent-browser-execution-contract.md`。
 - [designed] 失败先保存截图和现场并评估后续阻碍；主代理按依赖跳过或继续。意外登出按可恢复中断上报，需要决策时暂停并在决策写入版本文档后恢复。
 - [designed] 测试流程、运行 TODO、执行尝试、Agent 和浏览器操作分别持有状态；blocked/interrupted/waiting_decision 未收敛前不提前跳过下游，取消不再记作超时。
-- [designed] ai-e2e 持有不可变证据 manifest、业务关联、完整度、脱敏与保留策略；UI 从持久 `run.snapshot` + 单调运行事件恢复，并展示实时浏览器、依赖传播、决策与证据。目标契约见 `ai-e2e/docs/run-state-decision-evidence-contract.md`。
+- [designed] ai-e2e 的不可变证据 manifest/item 与持久 run event 数据层已交付；后续 UI 从 `run.snapshot` + 单调事件恢复，并展示实时浏览器、依赖传播、决策与证据。
 - [designed] 目标业务版本/Authoring/Run API、`ai-chat-service /api/v1/agent-tasks`、`proxy-adapter /api/v1/browser-execution/*` 与 `browser-control.operation_*`、四类目标 snapshot-first SSE（Authoring/Run/Agent/Browser）和重启恢复协议见 `ai-e2e/docs/service-api-event-contract.md`；当前路由均未实现，同一 run 禁止混用新旧执行器。
 - [designed] 双模型、`vision.analyze_page`/`vision.resolve_target`、声明式 Skill manifest、版本/hash pin、工具权限交集和 prompt injection 边界见 `ai-e2e/docs/ai-model-skill-contract.md`。
-- [designed] 目标 migration 对 001–013 做结构 preflight/checksum baseline，旧 TypeScript/login/run 只读保留，legacy import 只生成 needs_recheck 版本/候选；新链按业务版本 opt-in 且 run 固定 `semantic_v1`。切流、回滚和验收见 `ai-e2e/docs/migration-compatibility-acceptance-contract.md`。
-- [designed] 主代理是由持久 authoring/run 状态驱动的确定性工作流协调器，不依赖长模型对话。bootstrap/recheck/repair/import_conversion 保存 job/task/attempt/event 和 coverage；candidate 经静态校验、真实浏览器验证后原子激活，完整契约见 `ai-e2e/docs/asset-authoring-repair-contract.md`。
+- [designed] 目标 migration 后续对 001–014 做结构 preflight/checksum baseline 和文件备份，旧 TypeScript/login/run 只读保留，legacy importer 只生成 needs_recheck 版本/候选；新链按业务版本 opt-in 且 run 固定 `semantic_v1`。
+- [designed] 主代理 runtime 由已交付的持久 authoring/run 数据驱动，不依赖长模型对话；后续仍需把 PRD/页面/Agent/browser 调用接入阶段协调、coverage 生成、真实验证和局部修复闭环。
 - [designed] revision dependency index 由已校验资产确定性生成，页面变化按 none/locator_only/interaction/contract/requirement/environment 分类；局部修复只修改并重验受影响闭包。
 - [designed] copy 后执行资产在目标版本保持 current 选择但标为 stale，目标版本 `needs_recheck`；目标 deployment 上真实重验前不能创建正式 semantic run。
-- [designed] 首期每个 proxy 进程全局最多一个活动 browser execution session，authoring verification 与 test run 共用 FIFO；主代理安全边界 observe、当前子代理 control、UI live view 只读。
+- [designed] ai-e2e 持久 FIFO/单 active browser job 已交付；后续 runtime 必须让每个 proxy 进程最多一个活动 browser execution session，主代理安全边界 observe、当前子代理 control、UI live view 只读。
 - [designed] v1 语义控制面只在 loopback/local 单用户边界启用；远程或多用户拓扑必须先交付统一认证、授权与租户隔离。
 - [designed] environment 固定在 immutable deployment revision。local/test 自动允许已声明、有界副作用；staging 单项非不可逆 create/update 自动，删除/批量/不可逆/上传做一次当前 run/job 计划级审批；production 只允许显式认证会话变化和只读行为且无 v1 绕过。ai-e2e 持有风险投影、policy evaluation/grant 与逐 effectId 授权，完整契约见 `ai-e2e/docs/environment-side-effect-policy-contract.md`。
 - [designed] 页面或 DOM 节点变化后只修复当前业务版本内受影响的功能脚本并重新验证；当前仅有 run 级失败诊断与自动修复。

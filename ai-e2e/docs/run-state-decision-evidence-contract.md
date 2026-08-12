@@ -1,6 +1,6 @@
 # AI E2E 运行状态、决策与证据契约
 
-> 状态：目标设计已确认，尚未实现。
+> 状态：`in-progress`。Run/plan/TODO/dependency/page-task/attempt/variable/decision/command/event 与 artifact/evidence manifest/item 数据模型已交付；正式 run 原子冻结、optimistic command/event、证据追加/封存仓储已实现。执行协调、依赖传播、决策应用、公开 API/SSE 与 UI 尚未实现。
 > 更新时间：2026-08-12。
 > 本文定义测试流程从调度到结果汇总的状态、失败传播、决策记录、证据包和人工控制语义。精确 Run API/SSE 见 `service-api-event-contract.md`；数据库物理字段和 UI 布局可以在实现设计中调整，但不同层级状态不得重新混为一个字段。
 

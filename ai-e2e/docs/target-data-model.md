@@ -1,6 +1,6 @@
 # AI E2E 目标数据模型
 
-> 状态：`in-progress`。migration 014 已交付业务版本与 current 资产快照/copy 基座；authoring、scoped verification、run、证据、outbox 和正式 migration runner 仍未实现。
+> 状态：`in-progress`。migration 014–017 已交付资产治理、authoring/run/browser queue、decision/policy/evidence/outbox/external link 目标表与核心仓储；015+ checksum runner 已落地。公开 API、执行协调器、001–014 preflight/baseline、备份与 legacy importer 仍未实现。
 > 更新时间：2026-08-12。
 > 本文定义 `ai-e2e` 首期最终关系模型、不可变修订、版本复制事务、页面规范化、运行数据与证据存储。迁移编号和物理 SQL 在实施时按现有 SQLite migration 链追加，但不得改变本文的所有权和唯一性约束。
 
@@ -562,8 +562,8 @@ SQLite `BEGIN IMMEDIATE` 防止 copy 期间来源 current 指针变化。重复�
 
 - `BusinessVersionRepository` 已实现空白创建和 copy 幂等 hash、来源 `valid/archived` 门禁、事务回滚、全图 hash/引用/场景 DAG 校验和目标 `needs_recheck`。
 - 已复制并重建当前 PRD/解析结果、变量定义、页面、业务模块、功能模块、功能脚本、场景及其 current revision ID；部署 binding 引用项目级 immutable deployment revision，Git 元数据可继承或覆盖。
-- 当前尚无 decision、coverage、baseline、verification/dependency、authoring 与 run 表，所以这些步骤仍 pending；copy 不会读取 legacy run/script/evidence 表。
-- 在 scoped `asset_revision_verifications` 落地前，migration 014 暂以功能脚本/场景 revision 上的 `readiness_status=stale` 保存 copy 后待复核事实。这是过渡字段，不能被解释为某 deployment scope 的真实验证结果，也不能据此创建 semantic formal run。
+- migration 015–017 已交付 decision、coverage、baseline、scoped verification/dependency、authoring、run、evidence 与 outbox 表。copy 已重建 current decision/baseline/requirement/coverage/dependency 引用，内容寻址 artifact 只增加引用计数；仍不读取或复制 legacy run/script/evidence，也不复制 semantic verification、business version validation、run 或 evidence manifest。
+- copy 后功能脚本/场景 revision 的 `readiness_status=stale` 仅是目标版本待复核投影；真实授权以 scoped `asset_revision_verifications` 与 `business_version_validations` 为准，不能据此创建 semantic formal run。
 
 ### 9.2 独立性判定
 
@@ -916,19 +916,19 @@ manifest sealed 后不可修改；补充证据创建新的 manifest revision 或
 
 跨服务调用不能纳入 SQLite 事务，采用 outbox/状态机：先记录 intent/command，再调用外部服务，最后以幂等回调/查询收敛。不得在持有 SQLite write transaction 时等待模型或浏览器网络调用。
 
-正式 migration runner、001–013 结构 baseline、备份、legacy import 账本和旧资产映射规则见 `migration-compatibility-acceptance-contract.md`。目标表通过增量 migration 新增；首轮不删除、重命名或反向改写旧表。
+015+ checksum migration runner 与 legacy import 账本表已交付；001–014 结构 baseline/preflight、文件备份和旧资产 importer 仍按 `migration-compatibility-acceptance-contract.md` pending。目标表只通过增量 migration 新增；不删除、重命名或反向改写旧表。
 
 ## 16. 当前实现差距
 
 - semantic v1 已有 business version 与独立 current asset graph；legacy module、URL、scenario 和 script 仍直接归项目链路，尚未导入或切流。
-- semantic v1 已有稳定功能脚本身份、不可变 revision payload/hash 和场景引用；公开 authoring/修订激活、完整 Schema 校验及语义执行尚未实现。legacy `scripts` 仍保存 scenario 级 TypeScript 文本与可变 status。
-- 现有 `execution_runs` 只关联 script，无法表达 run plan、TODO、page task、attempt、变量、决策、事件或 evidence manifest。
-- 现有数据库没有持久 outbox 或外部 Agent/browser task 恢复索引，跨服务调用结果尚不能在服务重启后确定性收敛。
-- 现有截图路径和日志直接挂在 execution run，没有内容寻址、完整度、脱敏、保留和跨服务产物提升。
+- semantic v1 已有稳定功能脚本身份、不可变 revision payload/hash、scoped verification、dependency index 和 verified-scope 激活事务；公开 authoring/修订 API、完整 Schema 校验及语义执行尚未实现。legacy `scripts` 仍保存 scenario 级 TypeScript 文本与可变 status。
+- semantic `test_runs` 已能原子冻结 base plan、TODO/依赖和初始变量，并通过 optimistic command + 持久 seq event 转换 run 状态；page task/attempt 执行、依赖传播、决策应用、公开 API/SSE 尚未实现。legacy `execution_runs` 保持原义且不混链。
+- 数据库已有持久 outbox、opaque external task link 与 claim/settle/单调 reconciliation 仓储；网络派发 worker、重启扫描和跨服务查询收敛 loop 尚未实现。
+- 数据库已有内容寻址 artifact、append-only evidence item 和 sealed manifest 仓储；proxy 截图/DOM/operation 的自动提升、保留清理 worker 和 UI 证据时间线尚未实现。
 - semantic 页面 revision 已保存 Origin 无关签名；legacy URL 表仍把实际 URL、单快照和逻辑页面混为一个实体，尚无运行匹配器、完整参数 Schema 或基线变体。
-- 当前启动直接重复调用 migration 001–014，没有 schema migration checksum/状态账本、旧库结构 preflight 或 legacy import 映射。
-- 当前没有持久 authoring job/task/attempt/event、candidate 验证层、coverage disposition、revision dependency index 或跨 authoring/run 的 browser job queue；PRD/探索/生成/修复依赖项目状态和短期调用。
-- 当前没有环境风险投影、policy evaluation、计划级 approval grant 或 production 写门禁。
+- 当前启动仍直接执行 legacy migration 001–014；015–017 已使用 checksum/状态账本并覆盖失败 rollback 与 checksum 漂移拒绝，但 001–014 结构 preflight/baseline、文件备份和 legacy importer 尚未实现。
+- 持久 authoring job/task/attempt/command/event、candidate verification/activation、coverage/dependency 和跨 authoring/run 的 browser FIFO 数据基座已交付；PRD/探索/生成/修复协调器仍围绕旧项目状态和短期调用。
+- 风险投影 hash、policy evaluation/grant/decision 表与 evaluation 仓储已交付；确定性环境规则、审批/grant 原子应用、逐 effectId 校验和 production 写门禁 runtime 尚未实现。
 
 ## 17. 验收原则
 

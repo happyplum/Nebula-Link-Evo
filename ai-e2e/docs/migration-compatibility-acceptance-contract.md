@@ -1,14 +1,14 @@
 # AI E2E 迁移、兼容与技术验收契约
 
-> 状态：`in-progress`。add-only migration 014 已交付 semantic 业务版本/current 资产与 copy 基座；checksum runner、旧库 preflight/import、双轨 capability/cutover 和回滚流程仍未实现。
+> 状态：`in-progress`。add-only migration 014–017 已交付 semantic 资产、authoring/run/evidence/outbox 目标表；015+ checksum runner 已落地。001–014 结构 preflight/baseline、文件备份、legacy importer、双轨 capability/cutover 和回滚流程仍未实现。
 > 更新时间：2026-08-12。
-> 本文基于 legacy 001–013 表、add-only 014 semantic foundation、scenario 级 TypeScript 执行器、项目级登录录制、三服务现有 API/SSE 与目标协议，定义可回滚迁移、渐进切流和发布门槛。它不授权执行生产数据导入、cutover 或删除旧表。
+> 本文基于 legacy 001–013 表、add-only 014–017 semantic foundation、scenario 级 TypeScript 执行器、项目级登录录制、三服务现有 API/SSE 与目标协议，定义可回滚迁移、渐进切流和发布门槛。它不授权执行生产数据导入、cutover 或删除旧表。
 
 ## 1. 当前迁移事实
 
 代码核对确认：
 
-- `ai-e2e/src/database/db.ts` 启动时顺序直接执行 migration 001–014，没有 `schema_migrations` 账本；001–012/014 主要依赖 `CREATE IF NOT EXISTS`，013 通过捕获通用 `SQLITE_ERROR` 忽略重复加列。
+- `ai-e2e/src/database/db.ts` 启动时仍顺序直接执行 migration 001–014；随后由 `migration-runner.ts` 对 015–017 使用 `schema_migrations` checksum/状态账本与 `BEGIN IMMEDIATE`。已应用 SQL checksum 改变会拒绝，失败会 rollback 并保留 failed 账本；001–014 尚未补做结构 preflight/baseline。
 - legacy 关系仍是 project → business module → functional module → test scenario → TypeScript/JavaScript script；014 已新增隔离的 business version、page definition、functional script、scenario current graph 和 immutable payload revision，但尚未导入或切换旧资产。
 - 由于 legacy 已占用不兼容的 `business_modules`、`functional_modules`、`test_scenarios`，014 使用 `semantic_business_modules`、`semantic_functional_modules`、`semantic_test_scenarios` 物理表；正式 importer/cutover 不得混用两套 ID。
 - `urls` 保存完整 URL、可选单份 `page_snapshot_json` 和 auth flag；没有部署 revision、Origin 无关页面模板、参数分类、截图基线或内容 hash。
