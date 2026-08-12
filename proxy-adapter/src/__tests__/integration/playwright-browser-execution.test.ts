@@ -19,6 +19,10 @@ describe('PlaywrightBrowserExecutionBrowser', () => {
       switchTab: async () => undefined,
       closeActiveTab: async () => undefined,
       getSimplifiedDOMV2: async () => ({ snapshot_id: 'snapshot-1' }),
+      screenshot: async () => ({
+        screenshot: (await page.screenshot()).toString('base64'),
+        viewport: page.viewportSize(),
+      }),
       withPage: async <T>(_owner: string, callback: (activePage: Page) => Promise<T>) =>
         callback(page),
       open: async () => undefined,
@@ -99,6 +103,15 @@ describe('PlaywrightBrowserExecutionBrowser', () => {
       code: 'validation_failed',
       details: { candidates: [{ strategy: 'role', count: 2, reason: 'cardinality' }] },
     });
+  });
+
+  it('captures real PNG bytes and a serializable DOM snapshot from the active page', async () => {
+    const screenshot = await executor.captureScreenshot('tab-1');
+    const dom = await executor.captureDomSnapshot('tab-1');
+
+    expect(screenshot.bytes.subarray(1, 4).toString('ascii')).toBe('PNG');
+    expect(JSON.parse(dom.bytes.toString('utf8'))).toEqual({ snapshot_id: 'snapshot-1' });
+    expect(dom.snapshotId).toBe('snapshot-1');
   });
 });
 

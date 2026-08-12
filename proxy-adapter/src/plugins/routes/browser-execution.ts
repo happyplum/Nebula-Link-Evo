@@ -7,6 +7,7 @@ import {
 } from '../../browser-execution/errors.js';
 import type { BrowserExecutionService } from '../../browser-execution/service.js';
 import type {
+  BrowserSessionEventRecord,
   BrowserExecutionCredentials,
   BrowserLeaseMode,
   BrowserOperationName,
@@ -45,6 +46,14 @@ const MutationHeadersSchema = Type.Object(
 const SessionParamsSchema = Type.Object({ sessionId: IdSchema });
 const LeaseParamsSchema = Type.Object({ sessionId: IdSchema, leaseId: IdSchema });
 const OperationParamsSchema = Type.Object({ operationId: IdSchema });
+const ArtifactParamsSchema = Type.Object({ sessionId: IdSchema, artifactId: IdSchema });
+const EventLogQuerySchema = Type.Object(
+  {
+    afterSeq: Type.Optional(Type.Integer({ minimum: 0 })),
+    limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 1000 })),
+  },
+  { additionalProperties: false }
+);
 const SessionBodySchema = Type.Object(
   {
     headless: Type.Optional(Type.Literal(false)),
@@ -133,6 +142,124 @@ const browserExecutionRoutes: FastifyPluginAsync<BrowserExecutionRoutesOptions> 
     },
     async (request) =>
       success(request, await browserExecutionService.getSession(request.params.sessionId))
+  );
+
+  fastify.get<{
+    Params: { sessionId: string };
+    Querystring: { afterSeq?: number; limit?: number };
+  }>(
+    '/sessions/:sessionId/event-log',
+    {
+      schema: {
+        description: 'Read durable browser session events after a sequence cursor',
+        tags: ['Browser Execution'],
+        params: SessionParamsSchema,
+        querystring: EventLogQuerySchema,
+        response: { 200: SuccessSchema, 400: ProblemSchema, 404: ProblemSchema },
+      },
+    },
+    async (request) =>
+      success(
+        request,
+        browserExecutionService.listSessionEvents(
+          request.params.sessionId,
+          request.query.afterSeq ?? 0,
+          request.query.limit ?? 100
+        )
+      )
+  );
+
+  fastify.get<{ Params: { sessionId: string } }>(
+    '/sessions/:sessionId/events',
+    {
+      schema: {
+        description: 'Stream a browser session snapshot followed by ordered durable events',
+        tags: ['Browser Execution', 'SSE'],
+        params: SessionParamsSchema,
+      },
+    },
+    async (request, reply) => {
+      const bufferedEvents: BrowserSessionEventRecord[] = [];
+      let bootstrapComplete = false;
+      let lastSeq = 0;
+      const unsubscribe = browserExecutionService.subscribeSessionEvents(
+        request.params.sessionId,
+        (event) => {
+          try {
+            if (!bootstrapComplete) {
+              bufferedEvents.push(event);
+              return;
+            }
+            if (event.seq <= lastSeq) return;
+            writeSse(reply, event.type, event.seq, event);
+            lastSeq = event.seq;
+          } catch {
+            // The close handler releases the subscription.
+          }
+        }
+      );
+
+      try {
+        reply.raw.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          Connection: 'keep-alive',
+          'X-Accel-Buffering': 'no',
+        });
+        const snapshot = await browserExecutionService.getSessionEventSnapshot(
+          request.params.sessionId
+        );
+        writeSse(reply, snapshot.type, snapshot.seq, snapshot);
+        lastSeq = snapshot.seq;
+        bootstrapComplete = true;
+        for (const event of bufferedEvents) {
+          if (event.seq <= lastSeq) continue;
+          writeSse(reply, event.type, event.seq, event);
+          lastSeq = event.seq;
+        }
+      } catch (error) {
+        unsubscribe();
+        throw error;
+      }
+
+      const heartbeat = setInterval(() => {
+        try {
+          reply.raw.write(': keepalive\n\n');
+        } catch {
+          clearInterval(heartbeat);
+        }
+      }, 15_000);
+
+      return new Promise<void>((resolve) => {
+        request.raw.on('close', () => {
+          clearInterval(heartbeat);
+          unsubscribe();
+          resolve();
+        });
+      });
+    }
+  );
+
+  fastify.get<{ Params: { sessionId: string; artifactId: string } }>(
+    '/sessions/:sessionId/artifacts/:artifactId',
+    {
+      schema: {
+        description: 'Download a browser artifact after metadata and content integrity checks',
+        tags: ['Browser Execution'],
+        params: ArtifactParamsSchema,
+      },
+    },
+    async (request, reply) => {
+      const { artifact, bytes } = await browserExecutionService.getArtifactDownload(
+        request.params.sessionId,
+        request.params.artifactId
+      );
+      return reply
+        .type(artifact.mimeType)
+        .header('etag', `"${artifact.sha256}"`)
+        .header('content-length', String(bytes.byteLength))
+        .send(bytes);
+    }
   );
 
   fastify.delete<{
@@ -315,3 +442,12 @@ function idempotencyKeyFrom(
 }
 
 export default browserExecutionRoutes;
+
+function writeSse(
+  reply: { raw: { write: (chunk: string) => void } },
+  type: string,
+  seq: number,
+  data: unknown
+): void {
+  reply.raw.write(`event: ${type}\nid: ${seq}\ndata: ${JSON.stringify(data)}\n\n`);
+}

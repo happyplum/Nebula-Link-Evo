@@ -26,6 +26,7 @@ const TARGET_REQUIRED = new Set([
 
 const ALLOWED_ARGS: Record<string, readonly string[]> = {
   page_state: [],
+  dom_snapshot: [],
   target_state: [],
   url: [],
   title: [],

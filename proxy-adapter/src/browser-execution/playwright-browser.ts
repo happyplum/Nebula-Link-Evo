@@ -3,6 +3,7 @@ import { BrowserService } from '../browser-engine/index.js';
 import { BrowserExecutionError } from './errors.js';
 import type { BrowserExecutionBrowser } from './service.js';
 import type {
+  BrowserRawArtifact,
   BrowserLocatorCandidate,
   BrowserOperationExecutionResult,
   BrowserOperationRequestV1,
@@ -56,13 +57,7 @@ export class PlaywrightBrowserExecutionBrowser implements BrowserExecutionBrowse
   }
 
   async execute(input: ExecuteBrowserOperationInput): Promise<BrowserOperationExecutionResult> {
-    if (input.tabId) {
-      const tabs = await this.browserService.getTabs(OWNER);
-      const active = tabs.find((tab) => tab.isActive);
-      if (active?.id !== input.tabId) {
-        await this.browserService.switchTab(input.tabId, OWNER);
-      }
-    }
+    await this.selectTab(input.tabId);
 
     const { request } = input;
     if (request.operation === 'tabs') {
@@ -82,6 +77,36 @@ export class PlaywrightBrowserExecutionBrowser implements BrowserExecutionBrowse
     return this.browserService.withPage(OWNER, async (page) => this.executeOnPage(page, request));
   }
 
+  async captureScreenshot(tabId?: string): Promise<BrowserRawArtifact> {
+    await this.selectTab(tabId);
+    const { screenshot } = await this.browserService.screenshot(false, OWNER);
+    return {
+      kind: 'screenshot',
+      mimeType: 'image/png',
+      bytes: Buffer.from(screenshot, 'base64'),
+    };
+  }
+
+  async captureDomSnapshot(tabId?: string): Promise<BrowserRawArtifact> {
+    await this.selectTab(tabId);
+    const snapshot = await this.browserService.getSimplifiedDOMV2(OWNER);
+    return {
+      kind: 'dom_snapshot',
+      mimeType: 'application/json',
+      bytes: Buffer.from(JSON.stringify(snapshot)),
+      snapshotId: snapshot.snapshot_id,
+    };
+  }
+
+  private async selectTab(tabId?: string): Promise<void> {
+    if (!tabId) return;
+    const tabs = await this.browserService.getTabs(OWNER);
+    const active = tabs.find((tab) => tab.isActive);
+    if (active?.id !== tabId) {
+      await this.browserService.switchTab(tabId, OWNER);
+    }
+  }
+
   private async executeOnPage(
     page: Page,
     request: BrowserOperationRequestV1
@@ -95,6 +120,8 @@ export class PlaywrightBrowserExecutionBrowser implements BrowserExecutionBrowse
             viewport: page.viewportSize(),
           },
         };
+      case 'dom_snapshot':
+        return { actual: { captured: true } };
       case 'url':
         return { actual: page.url() };
       case 'title':

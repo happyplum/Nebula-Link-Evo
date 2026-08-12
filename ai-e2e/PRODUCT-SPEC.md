@@ -67,8 +67,8 @@
 | 上下文策略 | pending | 默认创建干净子代理上下文；登出等可恢复中断可由主代理在状态/副作用检查后续接原上下文，否则从检查点重建。v1 每个 browser session 固定一个 BrowserContext 和一个活动 actor；跨角色只允许主代理显式编排认证脚本串行切换。 |
 | 环境与副作用策略 | in-progress | 已交付风险投影 hash、append-only policy evaluation、approval grant/decision 表与幂等 evaluation 仓储；确定性环境矩阵、审批/grant 原子应用和逐 effectId runtime 门禁仍 pending。完整契约见 `docs/environment-side-effect-policy-contract.md`。 |
 | Agent 执行路径 | pending | 页面任务图和验收归 ai-e2e，模型/MCP/未来 Skills 执行归 ai-chat-service；上游已具备 Agent task POST/GET、command/event/checkpoint 与 Skill registry/pin 内部数据层，但公开控制/事件和 Skills runtime 未接入。本包当前 `AiChatClient.generateText()` 仍是纯文本生成，不执行 tool loop。 |
-| 页面任务与浏览器控制租约 | in-progress | proxy 已交付 session/lease/operation 数据层；ai-e2e 已交付持久 `browser_jobs` FIFO、全库单 active 槽、authoring verification 与嵌套 repair 复用父槽规则，以及 page task/execution attempt 表。实际 session/lease 派发和页面任务执行仍 pending。 |
-| 可视执行与证据 | in-progress | proxy 已交付 operation/capture/artifact/session event 数据层；ai-e2e 已交付内容寻址 artifact、append-only evidence item、sealed manifest、浏览器 operation link 表和仓储事务。真实采集/提升 worker、语义步骤执行与 UI 时间线仍 pending。 |
+| 页面任务与浏览器控制租约 | in-progress | proxy 已交付 session/lease/operation 控制面、受控 DOM 观测和 session 事件 API；ai-e2e 已交付持久 `browser_jobs` FIFO、全库单 active 槽、authoring verification 与嵌套 repair 复用父槽规则，以及 page task/execution attempt 表。实际 session/lease 派发和页面任务执行仍 pending。                                                                 |
+| 可视执行与证据           | in-progress | proxy 已交付真实 before/after screenshot、DOM capture、失败截图、内容寻址短期存储、完整性校验、artifact GET 与 snapshot-first browser events；ai-e2e 已交付内容寻址 artifact、append-only evidence item、sealed manifest、浏览器 operation link 表和仓储事务。产物提升 worker、语义步骤执行与 UI 时间线仍 pending。                               |
 | 分层运行状态 | in-progress | 已交付 semantic run/plan/TODO/dependency/page task/attempt/variable/decision/command/event 物理模型，以及正式 run 原子冻结、optimistic command/state event 仓储；TODO 执行、依赖传播、暂停恢复和公开 API/SSE 仍 pending。 |
 | 失败/阻塞/暂停/跳过 | pending | blocked/interrupted/waiting_decision 在主代理收敛前不提前跳过下游；终态失败只传播到真实依赖节点，独立节点可重新检查后继续。 |
 | 决策与证据 | in-progress | 版本决策、运行/authoring decision、policy evaluation/grant、artifact/evidence manifest/item 表已交付；证据追加/封存、保留元数据与 inline secret 拒绝已有仓储测试。决策应用、grant 生命周期、产物提升和 UI 仍 pending。 |
@@ -194,7 +194,7 @@
 | 环境风险投影与计划级审批 | database/semantic evidence repository；services/ui 待新增 | in-progress | policy evaluation 幂等与 outbox 测试 | 风险 hash/evaluation/grant/decision 表已交付；环境规则、grant 应用和逐 effectId runtime 门禁仍 pending |
 | 主代理 / 页面子代理调度与上下文策略 | database/semantic workflow repository | in-progress | authoring/run command/event 与 browser FIFO 测试 | 持久状态和全局单 active 队列已交付；主代理协调器、页面任务派发、租约和恢复 runtime 仍 pending |
 | ai-chat-service Agent task 消费 | infrastructure/ai-chat-client | pending | ai-chat-service 已交付 Agent task POST/GET、capability，以及 command/event/checkpoint 与 Skill registry/pin 内部数据层；本包当前仍仅消费纯文本 generate 与基础 chat session 客户端 | 待接入不可变输入、tool policy、预算、模型不可见 browser binding 和结构化结果；上游公开 Skills/commands/events 仍不可用，不把 task completed 直接当 TODO passed |
-| proxy-adapter 可视语义执行 | services/ExecutorService | pending | 当前仍由 `npx tsx` 子进程执行 | 需替换为 browser session/lease + `browser-control.operation_*` 的语义步骤执行；精确控制面见 `docs/service-api-event-contract.md` |
+| proxy-adapter 可视语义执行                                    | services/ExecutorService                                               | pending     | proxy 已具备 browser session/lease、`operation_execute/get/cancel`、真实截图/DOM 与事件读取面；当前 ai-e2e 仍由 `npx tsx` 子进程执行                                               | 需替换为受控语义步骤执行并消费 operation artifact/browser events；精确控制面见 `docs/service-api-event-contract.md`                                            |
 | 跨服务 outbox 与恢复 | database/SemanticEvidenceRepository、后台 worker（待新增） | in-progress | outbox 幂等/claim/settle 与 opaque external link 单调核对测试 | 持久 intent/recovery index 已交付；网络 worker 与重启 reconciliation loop 仍 pending |
 | 旧资产导入与版本级切流 | database、services、ui（待新增） | pending | 当前无验收面 | 旧表只读保留；生成 needs_recheck 业务版本/候选，不自动转换任意 TypeScript；run 固定 legacy 或 semantic_v1 |
 | 分层运行状态、决策与依赖传播 | database/semantic workflow foundation | in-progress | formal run 原子冻结、optimistic command、单调 event 测试 | 物理模型与核心仓储已交付；TODO/attempt 执行、决策应用、依赖传播和公开 snapshot/SSE 仍 pending |
@@ -267,8 +267,8 @@
 | 模块下多功能脚本与场景调用图仅有持久化基座 | requirement-gap | pending | semantic stable identity/current revision 与无环引用校验已交付；authoring、重复/条件、运行计划、TODO、跨脚本输入输出和追加式修订仍未实现，legacy `run-all` 仍只是顺序遍历 |
 | 主代理 / 页面子代理编排 runtime 未实现 | requirement-gap | pending | authoring/run/page task/变量/命令/event/browser FIFO 已有数据基座；尚无确定性协调器、Agent 派发、暂停恢复与依赖跳过执行逻辑 |
 | ai-e2e 尚未消费 Agent task | requirement-gap | pending | ai-chat-service 已交付 `POST /api/v1/agent-tasks`、`GET /api/v1/agent-tasks/:taskId`、browser binding、结构化结果及内部 command/event/checkpoint 数据层；本包仍调用 `POST /api/ai/generate`，尚未实现 task client/outbox/polling，公开控制/事件上游也仍 pending |
-| ai-e2e 尚未切入 proxy 受控执行链 | requirement-gap | pending | proxy 已交付控制/证据数据层，ai-e2e 已有 browser job/outbox/external link/evidence 表；当前 `ExecutorService` 仍用 `npx tsx`，尚无语义步骤调用、lease 绑定或浏览器事件消费 worker |
-| 统一失败证据提升与影响评估未实现 | requirement-gap | pending | 内容寻址 artifact 与 sealed manifest 仓储已交付；尚未把 proxy 截图/DOM/operation 自动提升并贯通步骤，也没有后续阻碍/依赖跳过运行逻辑 |
+| ai-e2e 尚未切入 proxy 受控执行链           | requirement-gap | pending | proxy 已交付控制面、真实截图/DOM artifact 与 session event API，ai-e2e 已有 browser job/outbox/external link/evidence 表；当前 `ExecutorService` 仍用 `npx tsx`，尚无语义步骤调用、lease 绑定或浏览器事件消费 worker                                            |
+| 统一失败证据提升与影响评估未实现           | requirement-gap | pending | proxy 已能自动保存失败截图并按 opaque ref 提供完整性校验下载，ai-e2e 内容寻址 artifact 与 sealed manifest 仓储也已交付；尚无提升 worker、步骤贯通和后续阻碍/依赖跳过运行逻辑                                                                                    |
 | 分层状态公开控制面未实现 | requirement-gap | pending | Run/TODO/attempt/decision/command/event 数据层已交付；公开 snapshot/SSE、决策应用、依赖传播和 UI 仍 pending |
 | DOM 变化影响定位未实现 | requirement-gap | pending | 当前自动修复由失败 run 触发，尚不能按当前业务版本的功能脚本定向维护 |
 | migration baseline/import/cutover 未实现 | requirement-gap | pending | 015+ checksum runner 与 legacy import ledger 表已交付；001–014 preflight/baseline、文件备份、候选 importer、能力协商和版本级切流仍未实现 |

@@ -1,7 +1,10 @@
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import { EventEmitter } from 'node:events';
+import { join } from 'node:path';
 import { Mutex } from 'async-mutex';
+import { LocalBrowserArtifactStore, type BrowserArtifactStore } from './artifact-store.js';
 import { BrowserExecutionError, toBrowserExecutionProblem } from './errors.js';
-import { hashOpaqueToken, sha256 } from './hash.js';
+import { hashOpaqueToken, sha256, sha256Bytes } from './hash.js';
 import { BrowserExecutionRepository } from './repository.js';
 import { validateOperationInput } from './validation.js';
 import {
@@ -9,11 +12,17 @@ import {
   OBSERVE_OPERATIONS,
   type BrowserExecutionCapabilities,
   type BrowserExecutionCredentials,
+  type BrowserArtifactDownload,
+  type BrowserArtifactRecord,
+  type BrowserArtifactRefV1,
+  type BrowserCaptureRecord,
   type BrowserLeaseRecord,
   type BrowserLeaseView,
   type BrowserOperationExecutionResult,
   type BrowserOperationName,
   type BrowserOperationRecord,
+  type BrowserRawArtifact,
+  type BrowserSessionEventRecord,
   type BrowserSessionOptions,
   type BrowserSessionRecord,
   type BrowserSessionView,
@@ -32,6 +41,8 @@ export interface BrowserExecutionBrowser {
   close(): Promise<void>;
   getTabs(): Promise<BrowserTabSummary[]>;
   execute(input: ExecuteBrowserOperationInput): Promise<BrowserOperationExecutionResult>;
+  captureScreenshot(tabId?: string): Promise<BrowserRawArtifact>;
+  captureDomSnapshot(tabId?: string): Promise<BrowserRawArtifact>;
   setOnUnexpectedStateChange?(callback: (reason: string) => void): void;
 }
 
@@ -44,21 +55,27 @@ export interface BrowserExecutionServiceOptions {
   browser: BrowserExecutionBrowser;
   clock?: BrowserExecutionClock;
   controlPlaneEnabled?: boolean;
+  artifactStore?: BrowserArtifactStore;
 }
 
 export class BrowserExecutionService {
   private readonly repository: BrowserExecutionRepository;
   private readonly browser: BrowserExecutionBrowser;
+  private readonly artifactStore: BrowserArtifactStore;
   private readonly clock: BrowserExecutionClock;
   private readonly stateMutex = new Mutex();
   private readonly operationMutex = new Mutex();
   private processEpoch = 0;
   private initialized = false;
   private readonly controlPlaneEnabled: boolean;
+  private readonly sessionEvents = new EventEmitter();
 
   constructor(options: BrowserExecutionServiceOptions) {
     this.repository = options.repository;
     this.browser = options.browser;
+    this.artifactStore =
+      options.artifactStore ??
+      new LocalBrowserArtifactStore(join(process.cwd(), 'data', 'proxy-adapter', 'artifacts'));
     this.clock = options.clock ?? { now: () => new Date() };
     this.controlPlaneEnabled = options.controlPlaneEnabled ?? true;
     this.browser.setOnUnexpectedStateChange?.((reason) => {
@@ -102,7 +119,9 @@ export class BrowserExecutionService {
         visibleBrowser: true,
         liveView: true,
         storageStateSwitching: false,
-        operationCaptureArtifacts: false,
+        operationCaptureArtifacts: true,
+        browserSessionEvents: true,
+        artifactDownload: true,
         operationPresentationAnimation: false,
         localControlPlane: this.controlPlaneEnabled,
         observeLeaseSingleUse: true,
@@ -191,11 +210,18 @@ export class BrowserExecutionService {
           now
         );
       });
+      this.recordEvent(session.id, 'browser_session.state_changed', 'session', session.id, {
+        status: session.status,
+        processEpoch: session.processEpoch,
+      });
 
       try {
         await this.browser.open({ viewport: session.viewport, cdpPort: session.cdpPort });
         const activatedAt = this.now();
         this.repository.updateSessionStatus(session.id, 'active', { activatedAt });
+        this.recordEvent(session.id, 'browser_session.state_changed', 'session', session.id, {
+          status: 'active',
+        });
         return this.getSession(session.id);
       } catch (error) {
         const problem = toBrowserExecutionProblem(
@@ -208,6 +234,10 @@ export class BrowserExecutionService {
         this.repository.updateSessionStatus(session.id, 'failed', {
           closedAt: this.now(),
           failure: problem,
+        });
+        this.recordEvent(session.id, 'browser_session.state_changed', 'session', session.id, {
+          status: 'failed',
+          errorCode: problem.code,
         });
         throw new BrowserExecutionError('dependency_unavailable', problem.message, {
           retryable: true,
@@ -291,6 +321,9 @@ export class BrowserExecutionService {
           sessionId,
           closedAt
         );
+      });
+      this.recordEvent(sessionId, 'browser_session.state_changed', 'session', sessionId, {
+        status: 'closed',
       });
       return this.getSession(sessionId);
     });
@@ -402,6 +435,11 @@ export class BrowserExecutionService {
           lease.createdAt
         );
       });
+      this.recordEvent(sessionId, 'lease.issued', 'lease', lease.id, {
+        mode: lease.mode,
+        sequence: lease.sequence,
+        expiresAt: lease.expiresAt,
+      });
       return { lease: toLeaseView(lease), token, tokenIssued: true };
     });
   }
@@ -436,6 +474,10 @@ export class BrowserExecutionService {
           revokedAt
         );
       });
+      this.recordEvent(lease.sessionId, 'lease.revoked', 'lease', lease.id, {
+        status: 'revoked',
+        reason: 'requested',
+      });
       return toLeaseView(this.getLeaseRecord(lease.id));
     });
   }
@@ -463,12 +505,18 @@ export class BrowserExecutionService {
     }
 
     this.validateOperationLease(input);
-    this.rejectUnsupportedCapture(input);
+    this.rejectUnsupportedFeatures(input);
+    const captureRequest = effectiveCaptureRequest(input);
     const accepted = this.repository.insertOperation({
       requestHash,
       input,
       acceptedAt: this.now(),
     });
+    this.recordEvent(input.sessionId, 'operation.queued', 'operation', accepted.operationId, {
+      status: accepted.status,
+      queueSequence: accepted.queueSequence,
+    });
+    const capture = this.createCapture(accepted, captureRequest);
 
     return this.operationMutex.runExclusive(async () => {
       const queued = this.repository.getOperation(accepted.operationId);
@@ -480,12 +528,33 @@ export class BrowserExecutionService {
         this.validateOperationLease(input);
         this.assertBeforeDeadline(input.request.deadlineAt);
       } catch (error) {
-        return this.repository.completeOperation(accepted.operationId, 'cancelled', this.now(), {
-          error: toBrowserExecutionProblem(error, accepted.operationId),
-        });
+        const completed = this.repository.completeOperation(
+          accepted.operationId,
+          'cancelled',
+          this.now(),
+          {
+            error: toBrowserExecutionProblem(error, accepted.operationId),
+          }
+        );
+        this.finishCapture(capture, 0);
+        this.recordOperationCompleted(completed);
+        return completed;
       }
 
-      this.repository.markOperationRunning(accepted.operationId, this.now());
+      const running = this.repository.markOperationRunning(accepted.operationId, this.now());
+      this.recordEvent(input.sessionId, 'operation.started', 'operation', running.operationId, {
+        status: running.status,
+      });
+      const artifacts: BrowserArtifactRefV1[] = [];
+      let capturedRequestedItems = 0;
+      if (captureRequest?.beforeScreenshot) {
+        const artifact = await this.captureArtifact(accepted, capture?.id, 'before', 'screenshot');
+        if (artifact.ref) {
+          artifacts.push(artifact.ref);
+          capturedRequestedItems += 1;
+        }
+      }
+
       try {
         const lease = this.validateOperationLease(input);
         const result = await this.browser.execute(input);
@@ -501,6 +570,26 @@ export class BrowserExecutionService {
                 );
               })
             : result.actual;
+        if (captureRequest?.afterScreenshot) {
+          const artifact = await this.captureArtifact(accepted, capture?.id, 'after', 'screenshot');
+          if (artifact.ref) {
+            artifacts.push(artifact.ref);
+            capturedRequestedItems += 1;
+          }
+        }
+        if (captureRequest?.domSnapshot) {
+          const artifact = await this.captureArtifact(
+            accepted,
+            capture?.id,
+            'observation',
+            'dom_snapshot'
+          );
+          if (artifact.ref) {
+            artifacts.push(artifact.ref);
+            capturedRequestedItems += 1;
+          }
+        }
+        this.finishCapture(capture, capturedRequestedItems);
         const completed = this.repository.completeOperation(
           accepted.operationId,
           'succeeded',
@@ -508,12 +597,33 @@ export class BrowserExecutionService {
           {
             actual,
             resolvedTarget: result.resolvedTarget,
-            artifacts: result.artifacts ?? [],
+            artifacts: [...(result.artifacts ?? []), ...artifacts],
           }
         );
         this.consumeObserveLease(input.leaseId);
+        this.recordOperationCompleted(completed);
         return completed;
       } catch (error) {
+        const failureScreenshot = await this.captureArtifact(
+          accepted,
+          capture?.id,
+          'failure',
+          'screenshot'
+        );
+        if (failureScreenshot.ref) artifacts.push(failureScreenshot.ref);
+        if (captureRequest?.domSnapshot) {
+          const domArtifact = await this.captureArtifact(
+            accepted,
+            capture?.id,
+            'observation',
+            'dom_snapshot'
+          );
+          if (domArtifact.ref) {
+            artifacts.push(domArtifact.ref);
+            capturedRequestedItems += 1;
+          }
+        }
+        this.finishCapture(capture, capturedRequestedItems);
         const definiteFailure = error instanceof BrowserExecutionError;
         const status =
           input.request.kind === 'act' && !definiteFailure ? 'outcome_unknown' : 'failed';
@@ -531,9 +641,13 @@ export class BrowserExecutionService {
           accepted.operationId,
           status,
           this.now(),
-          { error: toBrowserExecutionProblem(normalized, accepted.operationId) }
+          {
+            error: toBrowserExecutionProblem(normalized, accepted.operationId),
+            artifacts,
+          }
         );
         this.consumeObserveLease(input.leaseId);
+        this.recordOperationCompleted(completed);
         return completed;
       }
     });
@@ -550,6 +664,96 @@ export class BrowserExecutionService {
       );
     }
     return operation;
+  }
+
+  async getArtifactDownload(
+    sessionId: string,
+    artifactId: string
+  ): Promise<BrowserArtifactDownload> {
+    this.assertInitialized();
+    this.assertControlPlaneEnabled();
+    this.getSessionRecord(sessionId);
+    const artifact = this.repository.getArtifact(artifactId);
+    if (!artifact || artifact.sessionId !== sessionId) {
+      throw new BrowserExecutionError('not_found', `Browser artifact ${artifactId} was not found`);
+    }
+    if (
+      artifact.status !== 'available' ||
+      !artifact.storageRef ||
+      !artifact.sha256 ||
+      artifact.sizeBytes === undefined
+    ) {
+      throw new BrowserExecutionError(
+        'state_conflict',
+        `Browser artifact ${artifactId} is not available`,
+        { details: { status: artifact.status } }
+      );
+    }
+    let bytes: Buffer;
+    try {
+      bytes = await this.artifactStore.read(artifact.storageRef);
+    } catch (error) {
+      throw new BrowserExecutionError(
+        'dependency_unavailable',
+        `Browser artifact ${artifactId} could not be read`,
+        {
+          details: { cause: error instanceof Error ? error.message : String(error) },
+        }
+      );
+    }
+    const actualSha256 = sha256Bytes(bytes);
+    if (bytes.byteLength !== artifact.sizeBytes || actualSha256 !== artifact.sha256) {
+      throw new BrowserExecutionError(
+        'state_conflict',
+        `Browser artifact ${artifactId} failed integrity validation`,
+        {
+          details: {
+            expectedSha256: artifact.sha256,
+            actualSha256,
+            expectedSizeBytes: artifact.sizeBytes,
+            actualSizeBytes: bytes.byteLength,
+          },
+        }
+      );
+    }
+    return { artifact, bytes };
+  }
+
+  listSessionEvents(sessionId: string, afterSeq = 0, limit = 100): BrowserSessionEventRecord[] {
+    this.assertInitialized();
+    this.assertControlPlaneEnabled();
+    this.getSessionRecord(sessionId);
+    if (!Number.isSafeInteger(afterSeq) || afterSeq < 0) {
+      throw new BrowserExecutionError(
+        'validation_failed',
+        'afterSeq must be a non-negative integer'
+      );
+    }
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1000) {
+      throw new BrowserExecutionError('validation_failed', 'limit must be between 1 and 1000');
+    }
+    return this.repository.listSessionEvents(sessionId, afterSeq, limit);
+  }
+
+  async getSessionEventSnapshot(sessionId: string) {
+    const session = await this.getSession(sessionId);
+    return {
+      type: 'browser_session.snapshot' as const,
+      seq: this.repository.getLastSessionEventSeq(sessionId),
+      session,
+    };
+  }
+
+  subscribeSessionEvents(
+    sessionId: string,
+    listener: (event: BrowserSessionEventRecord) => void
+  ): () => void {
+    this.assertInitialized();
+    this.assertControlPlaneEnabled();
+    this.getSessionRecord(sessionId);
+    const eventName = sessionEventName(sessionId);
+    this.sessionEvents.on(eventName, listener);
+    return () => this.sessionEvents.off(eventName, listener);
   }
 
   cancelOperation(
@@ -576,7 +780,7 @@ export class BrowserExecutionService {
         { details: { status: operation.status } }
       );
     }
-    return this.repository.cancelQueuedOperation(
+    const cancelled = this.repository.cancelQueuedOperation(
       operationId,
       this.now(),
       toBrowserExecutionProblem(
@@ -584,6 +788,198 @@ export class BrowserExecutionService {
         operationId
       )
     );
+    this.recordOperationCompleted(cancelled);
+    return cancelled;
+  }
+
+  private createCapture(
+    operation: BrowserOperationRecord,
+    requested: BrowserCaptureRecord['requested'] | undefined
+  ): BrowserCaptureRecord | undefined {
+    if (!requested) return undefined;
+    const expectedItemCount = [
+      requested.beforeScreenshot,
+      requested.afterScreenshot,
+      requested.domSnapshot,
+    ].filter(Boolean).length;
+    if (expectedItemCount === 0) return undefined;
+    const capture = this.repository.createCapture({
+      id: randomUUID(),
+      operationId: operation.operationId,
+      requestHash: sha256(requested),
+      requested,
+      expectedItemCount,
+      createdAt: this.now(),
+    });
+    this.recordEvent(operation.sessionId, 'capture.started', 'capture', capture.id, {
+      operationId: operation.operationId,
+      expectedItemCount,
+    });
+    return capture;
+  }
+
+  private async captureArtifact(
+    operation: BrowserOperationRecord,
+    captureId: string | undefined,
+    phase: BrowserArtifactRecord['capturePhase'],
+    kind: Extract<BrowserArtifactRecord['kind'], 'screenshot' | 'dom_snapshot'>
+  ): Promise<{ artifact: BrowserArtifactRecord; ref?: BrowserArtifactRefV1 }> {
+    const id = randomUUID();
+    const createdAt = this.now();
+    const retentionClass = phase === 'failure' ? 'failure_30d' : 'success_7d';
+    const expiresAt = addDays(createdAt, phase === 'failure' ? 30 : 7);
+    let raw: BrowserRawArtifact;
+    let stored: Awaited<ReturnType<BrowserArtifactStore['write']>>;
+    try {
+      raw =
+        kind === 'screenshot'
+          ? await this.browser.captureScreenshot(operation.tabId)
+          : await this.browser.captureDomSnapshot(operation.tabId);
+      if (raw.kind !== kind) {
+        throw new BrowserExecutionError(
+          'state_conflict',
+          `Browser capture returned ${raw.kind} instead of ${kind}`
+        );
+      }
+      stored = await this.artifactStore.write(kind, raw.bytes);
+    } catch (error) {
+      const problem = toBrowserExecutionProblem(error, id);
+      const artifact = this.repository.insertArtifact({
+        id,
+        sessionId: operation.sessionId,
+        operationId: operation.operationId,
+        ...(captureId ? { captureId } : {}),
+        ...(operation.tabId ? { tabId: operation.tabId } : {}),
+        kind,
+        capturePhase: phase,
+        status: 'failed',
+        completeness: 'failed',
+        mimeType: kind === 'screenshot' ? 'image/png' : 'application/json',
+        storageBackend: 'local_file',
+        redactionStatus: 'failed',
+        retentionClass,
+        expiresAt,
+        createdAt,
+        error: problem,
+      });
+      this.recordEvent(operation.sessionId, 'artifact.created', 'artifact', artifact.id, {
+        operationId: operation.operationId,
+        kind: artifact.kind,
+        capturePhase: artifact.capturePhase,
+        status: artifact.status,
+        errorCode: problem.code,
+      });
+      return { artifact };
+    }
+    const artifact = this.repository.insertArtifact({
+      id,
+      sessionId: operation.sessionId,
+      operationId: operation.operationId,
+      ...(captureId ? { captureId } : {}),
+      ...(operation.tabId ? { tabId: operation.tabId } : {}),
+      kind,
+      capturePhase: phase,
+      status: 'available',
+      completeness: 'complete',
+      mimeType: raw.mimeType,
+      sha256: stored.sha256,
+      sizeBytes: stored.sizeBytes,
+      storageBackend: 'local_file',
+      storageRef: stored.storageRef,
+      redactionStatus: 'pending',
+      retentionClass,
+      expiresAt,
+      createdAt,
+      availableAt: this.now(),
+    });
+    this.recordEvent(operation.sessionId, 'artifact.created', 'artifact', artifact.id, {
+      operationId: operation.operationId,
+      kind: artifact.kind,
+      capturePhase: artifact.capturePhase,
+      sha256: artifact.sha256,
+      sizeBytes: artifact.sizeBytes,
+      status: artifact.status,
+      ...(raw.snapshotId ? { snapshotId: raw.snapshotId } : {}),
+    });
+    return {
+      artifact,
+      ref: {
+        id: artifact.id,
+        kind: artifact.kind,
+        sha256: stored.sha256,
+        mimeType: artifact.mimeType,
+      },
+    };
+  }
+
+  private finishCapture(capture: BrowserCaptureRecord | undefined, actualItemCount: number): void {
+    if (!capture) return;
+    const completeness =
+      actualItemCount === capture.expectedItemCount
+        ? 'complete'
+        : actualItemCount > 0
+          ? 'partial'
+          : 'failed';
+    const status = completeness === 'failed' ? 'failed' : 'completed';
+    const completed = this.repository.completeCapture(capture.id, {
+      status,
+      completeness,
+      actualItemCount,
+      completedAt: this.now(),
+      ...(completeness === 'complete'
+        ? {}
+        : {
+            error: toBrowserExecutionProblem(
+              new BrowserExecutionError(
+                'dependency_unavailable',
+                'One or more requested browser artifacts could not be captured'
+              ),
+              capture.id
+            ),
+          }),
+    });
+    this.recordEvent(capture.sessionId, 'capture.completed', 'capture', capture.id, {
+      operationId: capture.operationId,
+      status: completed.status,
+      completeness: completed.completeness,
+      expectedItemCount: completed.expectedItemCount,
+      actualItemCount: completed.actualItemCount,
+    });
+  }
+
+  private recordOperationCompleted(operation: BrowserOperationRecord): void {
+    this.recordEvent(
+      operation.sessionId,
+      'operation.completed',
+      'operation',
+      operation.operationId,
+      {
+        status: operation.status,
+        artifactIds: operation.artifacts.map((artifact) => artifact.id),
+        ...(operation.error ? { errorCode: operation.error.code } : {}),
+      }
+    );
+  }
+
+  private recordEvent(
+    sessionId: string,
+    type: string,
+    entityType: BrowserSessionEventRecord['entityType'],
+    entityId: string,
+    payload: Record<string, unknown>
+  ): BrowserSessionEventRecord {
+    const occurredAt = this.now();
+    const event = this.repository.appendSessionEvent({
+      id: randomUUID(),
+      sessionId,
+      type,
+      entityType,
+      entityId,
+      payload,
+      occurredAt,
+    });
+    this.sessionEvents.emit(sessionEventName(sessionId), event);
+    return event;
   }
 
   private resolveIdempotency(scope: string, key: string, requestHash: string) {
@@ -688,11 +1084,11 @@ export class BrowserExecutionService {
     return lease;
   }
 
-  private rejectUnsupportedCapture(input: ExecuteBrowserOperationInput): void {
-    if (input.request.capture && Object.values(input.request.capture).some(Boolean)) {
+  private rejectUnsupportedFeatures(input: ExecuteBrowserOperationInput): void {
+    if (input.request.capture?.videoSegment) {
       throw new BrowserExecutionError(
         'validation_failed',
-        'Operation artifact capture is not available in this delivery phase'
+        'Browser video segment capture is not available in this delivery phase'
       );
     }
     if (input.request.presentation && input.request.presentation.animation !== 'off') {
@@ -717,6 +1113,10 @@ export class BrowserExecutionService {
     const lease = this.repository.getLease(leaseId);
     if (lease?.mode === 'observe' && lease.status === 'active') {
       this.repository.revokeLease(lease.id, this.now());
+      this.recordEvent(lease.sessionId, 'lease.revoked', 'lease', lease.id, {
+        status: 'revoked',
+        reason: 'observe_operation_consumed',
+      });
     }
   }
 
@@ -736,9 +1136,11 @@ export class BrowserExecutionService {
   }
 
   private handleUnexpectedBrowserState(reason: string): void {
-    if (!this.initialized || !this.hasActiveSession()) {
+    if (!this.initialized) {
       return;
     }
+    const active = this.repository.findActiveSession();
+    if (!active) return;
     const problem = toBrowserExecutionProblem(
       new BrowserExecutionError('dependency_unavailable', 'Visual browser state was interrupted', {
         retryable: true,
@@ -747,7 +1149,32 @@ export class BrowserExecutionService {
       randomUUID()
     );
     this.repository.interruptActiveSession(this.now(), problem);
+    this.recordEvent(active.id, 'browser_session.state_changed', 'session', active.id, {
+      status: 'interrupted',
+      errorCode: problem.code,
+      reason,
+    });
   }
+}
+
+function effectiveCaptureRequest(
+  input: ExecuteBrowserOperationInput
+): BrowserCaptureRecord['requested'] | undefined {
+  if (!input.request.capture && input.request.operation !== 'dom_snapshot') {
+    return undefined;
+  }
+  return {
+    ...input.request.capture,
+    ...(input.request.operation === 'dom_snapshot' ? { domSnapshot: true } : {}),
+  };
+}
+
+function addDays(timestamp: string, days: number): string {
+  return new Date(new Date(timestamp).getTime() + days * 24 * 60 * 60 * 1000).toISOString();
+}
+
+function sessionEventName(sessionId: string): string {
+  return `browser-session:${sessionId}`;
 }
 
 function toLeaseView(lease: BrowserLeaseRecord): BrowserLeaseView {
