@@ -12,3 +12,9 @@ export { ExecutionRunRepository, type ExecutionRun, type CreateExecutionRunParam
 export { AIInterventionLogRepository, type AIInterventionLog, type CreateAIInterventionLogParams } from './repositories/ai-intervention-log-repository.js';
 export { ExplorationSessionRepository, type ExplorationSession, type CreateExplorationSessionParams, type UpdateExplorationSessionParams } from './repositories/exploration-session-repository.js';
 export { LoginScriptRepository, type LoginScript, type CreateLoginScriptParams } from './repositories/login-script-repository.js';
+export {
+  BusinessVersionRepository,
+  BusinessVersionRepositoryError,
+  type CreateBusinessVersionParams,
+  type CopyBusinessVersionParams,
+} from './repositories/business-version-repository.js';

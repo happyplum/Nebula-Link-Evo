@@ -89,6 +89,8 @@ interface ServiceCapabilitiesV1 {
 
 ## 3. `ai-e2e` 对外业务 API
 
+实施状态：下表前四个业务版本 create/list/get/copy 端点已 `shipped`；validate、资产 revision、authoring、run、事件与 capability 仍为 `pending`。已交付写端点要求 `Idempotency-Key`，通过 Fastify plugin options 注入 `BusinessVersionService`，DB-only 可用。
+
 ### 3.1 业务资产
 
 路由状态：

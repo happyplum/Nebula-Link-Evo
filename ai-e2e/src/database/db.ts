@@ -13,6 +13,7 @@ import { up as migrate010 } from './migrations/010-ai-intervention-logs.js';
 import { up as migrate011 } from './migrations/011-exploration-sessions.js';
 import { up as migrate012 } from './migrations/012-login-scripts.js';
 import { up as migrate013 } from './migrations/013-add-failure-type-to-intervention-logs.js';
+import { up as migrate014 } from './migrations/014-semantic-asset-foundation.js';
 import { ProjectRepository } from './repositories/project-repository.js';
 import { PRDDocumentRepository } from './repositories/prd-document-repository.js';
 import { BusinessModuleRepository } from './repositories/business-module-repository.js';
@@ -25,6 +26,7 @@ import { ExecutionRunRepository } from './repositories/execution-run-repository.
 import { AIInterventionLogRepository } from './repositories/ai-intervention-log-repository.js';
 import { ExplorationSessionRepository } from './repositories/exploration-session-repository.js';
 import { LoginScriptRepository } from './repositories/login-script-repository.js';
+import { BusinessVersionRepository } from './repositories/business-version-repository.js';
 
 export function generateId(): string {
   return randomBytes(8).toString('hex');
@@ -47,6 +49,7 @@ class DatabaseManager {
   private aiInterventionLogRepo: AIInterventionLogRepository | null = null;
   private explorationSessionRepo: ExplorationSessionRepository | null = null;
   private loginScriptRepo: LoginScriptRepository | null = null;
+  private businessVersionRepo: BusinessVersionRepository | null = null;
 
   private constructor() {}
 
@@ -95,6 +98,7 @@ class DatabaseManager {
     migrate011(this.db);
     migrate012(this.db);
     migrate013(this.db);
+    migrate014(this.db);
   }
 
   private initRepositories(): void {
@@ -111,6 +115,7 @@ class DatabaseManager {
     this.aiInterventionLogRepo = new AIInterventionLogRepository(this.db);
     this.explorationSessionRepo = new ExplorationSessionRepository(this.db);
     this.loginScriptRepo = new LoginScriptRepository(this.db);
+    this.businessVersionRepo = new BusinessVersionRepository(this.db);
   }
 
   getDatabase(): Database.Database {
@@ -135,6 +140,7 @@ class DatabaseManager {
       this.aiInterventionLogRepo = null;
       this.explorationSessionRepo = null;
       this.loginScriptRepo = null;
+      this.businessVersionRepo = null;
     }
   }
 
@@ -150,6 +156,7 @@ class DatabaseManager {
   getAIInterventionLogRepo(): AIInterventionLogRepository { if (!this.aiInterventionLogRepo) throw new Error('Database not initialized'); return this.aiInterventionLogRepo; }
   getExplorationSessionRepo(): ExplorationSessionRepository { if (!this.explorationSessionRepo) throw new Error('Database not initialized'); return this.explorationSessionRepo; }
   getLoginScriptRepo(): LoginScriptRepository { if (!this.loginScriptRepo) throw new Error('Database not initialized'); return this.loginScriptRepo; }
+  getBusinessVersionRepo(): BusinessVersionRepository { if (!this.businessVersionRepo) throw new Error('Database not initialized'); return this.businessVersionRepo; }
 }
 
 export { DatabaseManager };

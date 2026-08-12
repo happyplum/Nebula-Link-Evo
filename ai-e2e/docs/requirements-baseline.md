@@ -240,7 +240,7 @@
 
 以下是经代码核对确认的现状，不得描述为已交付目标能力：
 
-- 当前数据链是项目 → 业务模块 → 功能模块 → 测试场景 → TypeScript 脚本版本，没有业务版本、显式页面实体、功能脚本实体、场景调用图或版本复制模型。
+- 当前并存两条数据链：legacy 仍是项目 → 业务模块 → 功能模块 → 测试场景 → TypeScript 脚本版本；semantic v1 已新增业务版本、显式页面、功能脚本、场景 current graph 和独立 copy 基座，但尚未接入 authoring/recheck、UI 或运行链。
 - 当前 `projects.target_base_url` 与 `urls.url` 把部署地址和完整运行 URL 直接当作项目/页面数据，没有 Origin 无关的路由模板、参数 Schema、页面锚点或多基线变体。
 - 当前脚本归属于单个测试场景，不能表达“一个模块包含多个功能脚本，再由跨模块场景编排”。
 - 当前 `ExecutorService` 把 TypeScript 写入临时文件并用 `npx tsx` 子进程执行；这与目标唯一可视浏览器执行链冲突，后续必须替换而不是继续扩展为目标执行器。
@@ -257,7 +257,7 @@
 
 以下内容仍未全部锁定或尚待形成可执行实现，不得描述为已交付：
 
-- `target-data-model.md` 已锁定业务版本、部署、页面、基线、模块需求、脚本/场景修订、authoring、依赖索引、运行/TODO/尝试、决策、事件和证据的目标表与事务；物理 migration 和 repository 尚未实现。
+- `target-data-model.md` 已锁定完整目标表与事务；migration 014 和 `BusinessVersionRepository` 已实现业务版本、部署引用、PRD/变量、页面/模块/功能脚本/场景 current revision 与 copy 子集，其余基线/决策/authoring/依赖索引/run/TODO/证据/outbox 仍未实现。
 - 场景调用图、运行计划、TODO、追加式修订和受控条件 payload 已锁定为 `nebula.ai-e2e.scenario/1.0` 与对应运行表；正式 JSON Schema 文件尚未生成。
 - 页面模板语法、参数类型、WHATWG URL 规范化、匹配评分、基线指纹/阈值和多部署 revision 已锁定；旧数据迁移仍待兼容契约。
 - 语义脚本 DSL v1 已在 `semantic-script-schema.md` 锁定；实现仍需按其中能力差距扩展 proxy 原子动作并生成正式 JSON Schema 文件。

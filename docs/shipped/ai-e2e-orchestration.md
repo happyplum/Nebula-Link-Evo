@@ -30,6 +30,7 @@ PRD 驱动的 E2E 自动化测试编排器。把"需求分析 → 页面探索 �
 - [designed] 首期权威脚本 Schema 为 `nebula.ai-e2e.functional-script/1.0`：纯 JSON、白名单动作/断言/值引用、无任意代码/固定 sleep/裸 URL/坐标；副作用必须声明应用检查与重试策略。机器契约见 `ai-e2e/docs/semantic-script-schema.md`。
 - [designed] 场景调用图首期为无环图；业务版本保存场景定义与 TODO 模板，每次测试流程冻结运行计划并产生运行 TODO 和独立执行尝试。重复调用预先展开，恢复和修复使用追加式计划修订；当前 `run-all` 仍只是项目脚本顺序遍历。目标契约见 `ai-e2e/docs/scenario-orchestration-contract.md`。
 - [designed] 业务版本由用户创建，可记录来源版本及部署/Git 标识；`copy` 原子复制当前有效资产、生成新身份并重建内部引用，复制后独立维护，不复制编辑历史、运行状态、证据、实际数据或秘密。目标契约见 `ai-e2e/docs/version-page-asset-contract.md`。
+- [shipped] semantic v1 业务版本与独立资产快照基座：migration 014 新增版本/部署引用/PRD/变量/页面→业务模块→功能模块→功能脚本→场景 current revision；create/list/get/copy API 使用 plugin options 注入，copy 以幂等 `BEGIN IMMEDIATE` 重建全部已实现内部 ID、保留来源审计、把执行资产置为 stale，并在校验失败时整体回滚。本单元不接 AI、浏览器、运行状态或操作动画。
 - [designed] 目标数据模型使用稳定资产 ID + 不可变 revision + 唯一 current；运行冻结精确 revision/hash。copy 通过幂等 `BEGIN IMMEDIATE` 事务重建 ID，大媒体使用内容寻址文件对象，状态与 run event 同事务提交。完整模型见 `ai-e2e/docs/target-data-model.md`。
 - [designed] 跨服务写调用先进入 `integration_outbox`，以原幂等键驱动/查询外部 Agent task 与 browser operation；`external_task_links` 保存 opaque 恢复引用，不在 SQLite 写事务内等待网络。
 - [designed] 主代理维护 PRD 流程、TODO 依赖、运行变量和决策，并负责派发、恢复、跳过、验收与汇总；页面子代理只执行获授权的页面场景片段，负责重新检查、执行、验证、职责内修复和结构化汇报。
