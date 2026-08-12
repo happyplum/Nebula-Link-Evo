@@ -1,6 +1,9 @@
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { up } from '../../migrations/014-semantic-asset-foundation.js';
+import { up as up014 } from '../../migrations/014-semantic-asset-foundation.js';
+import { up as up015 } from '../../migrations/015-semantic-asset-governance.js';
+import { up as up016 } from '../../migrations/016-semantic-workflow-foundation.js';
+import { up as up017 } from '../../migrations/017-semantic-evidence-integration-foundation.js';
 import {
   BusinessVersionRepository,
   BusinessVersionRepositoryError,
@@ -15,7 +18,10 @@ describe('BusinessVersionRepository', () => {
     db.exec('PRAGMA foreign_keys = ON');
     db.exec(`CREATE TABLE projects (id TEXT PRIMARY KEY, name TEXT NOT NULL)`);
     db.prepare("INSERT INTO projects (id, name) VALUES ('project-1', 'P')").run();
-    up(db);
+    up014(db);
+    up015(db);
+    up016(db);
+    up017(db);
     repository = new BusinessVersionRepository(db);
   });
 
@@ -185,6 +191,92 @@ describe('BusinessVersionRepository', () => {
         (id, business_version_id, name, type, sensitivity, constraints_json, created_at)
        VALUES ('variable-source', ?, 'createdUserId', 'string', 'public', ?, ?)`
     ).run(source.id, JSON.stringify({ sourceDocumentId: 'prd-source' }), new Date().toISOString());
+    db.prepare(
+      `INSERT INTO version_decisions
+        (id, business_version_id, decision_key, status, question, category, answer, reason,
+         evidence_refs_json, decided_by_type, decided_by_id, created_at)
+       VALUES ('decision-source', ?, 'login.scope', 'active', '覆盖登录吗', 'scope',
+         '覆盖', 'PRD 要求', ?, 'user', 'user-1', ?)`
+    ).run(source.id, JSON.stringify([page.id]), now);
+    db.prepare(
+      `INSERT INTO page_baseline_variants
+        (id, business_version_id, page_definition_id, variant_key, created_at)
+       VALUES ('baseline-source', ?, ?, 'default', ?)`
+    ).run(source.id, page.id, now);
+    db.prepare(
+      `INSERT INTO artifact_objects
+        (id, sha256, size_bytes, media_type, storage_backend, storage_key, sensitivity,
+         redaction_status, ref_count, created_at)
+       VALUES ('blob-1',
+         'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff', 100,
+         'image/png', 'local', 'baseline/blob-1.png', 'sensitive', 'redacted', 1, ?)`
+    ).run(now);
+    db.prepare(
+      `INSERT INTO page_baseline_revisions
+        (id, business_version_id, page_baseline_variant_id, revision_no, lifecycle, schema_id,
+         payload_json, content_sha256, validation_status, change_reason, created_by_type,
+         created_by_id, created_at, validated_at)
+       VALUES ('baseline-revision-source', ?, 'baseline-source', 1, 'current',
+         'nebula.ai-e2e.page-baseline/1.0', ?,
+         'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+         'valid', 'fixture', 'system', 'system', ?, ?)`
+    ).run(
+      source.id,
+      JSON.stringify({ pageDefinitionId: page.id, screenshotArtifactId: 'blob-1' }),
+      now,
+      now
+    );
+    db.prepare(
+      `INSERT INTO module_requirement_revisions
+        (id, business_version_id, functional_module_id, revision_no, lifecycle, schema_id,
+         payload_json, content_sha256, validation_status, change_reason, created_by_type,
+         created_by_id, created_at, validated_at)
+       VALUES ('requirement-source', ?, ?, 1, 'current',
+         'nebula.ai-e2e.module-requirement/1.0', ?,
+         'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
+         'valid', 'fixture', 'system', 'system', ?, ?)`
+    ).run(
+      source.id,
+      functionalModule.id,
+      JSON.stringify({
+        functionalModuleId: functionalModule.id,
+        sourceDecisionId: 'decision-source',
+      }),
+      now,
+      now
+    );
+    db.prepare(
+      `INSERT INTO functional_point_coverage
+        (id, business_version_id, functional_module_id, module_requirement_revision_id,
+         functional_point_key, required, disposition, functional_script_id,
+         functional_script_revision_id, decision_id, lifecycle, reason_json, created_at)
+       VALUES ('coverage-source', ?, ?, 'requirement-source', 'login.success', 1,
+         'covered_by_script', ?, ?, 'decision-source', 'current', ?, ?)`
+    ).run(
+      source.id,
+      functionalModule.id,
+      script.id,
+      script.currentRevision.id,
+      JSON.stringify({ sourceRevisionId: 'requirement-source' }),
+      now
+    );
+    db.prepare(
+      `INSERT INTO asset_revision_dependencies
+        (id, business_version_id, from_asset_type, from_asset_id, from_revision_id,
+         to_asset_type, to_asset_id, to_revision_id, relation, source_pointer, created_at)
+       VALUES ('dependency-source', ?, 'functional_script', ?, ?, 'module_requirement', ?,
+         'requirement-source', 'requirement_source', '/requirementRevisionId', ?)`
+    ).run(source.id, script.id, script.currentRevision.id, functionalModule.id, now);
+    db.prepare(
+      `INSERT INTO asset_revision_verifications
+        (id, business_version_id, asset_type, asset_id, asset_revision_id,
+         deployment_revision_id, verification_scope_sha256, verification_scope_json,
+         dependency_closure_sha256, status, is_current, verified_at, created_at)
+       VALUES ('verification-source', ?, 'functional_script', ?, ?, 'deployment-revision',
+         'dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd', '{}',
+         'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+         'verified', 1, ?, ?)`
+    ).run(source.id, script.id, script.currentRevision.id, now, now);
     repository.setValidationStatus(source.id, 'valid');
 
     const copied = repository.copy({
@@ -216,6 +308,44 @@ describe('BusinessVersionRepository', () => {
          WHERE business_version_id = ?`
       )
       .get(copied.version.id) as { id: string; constraints_json: string };
+    const copiedDecision = db
+      .prepare(
+        `SELECT id, evidence_refs_json FROM version_decisions
+         WHERE business_version_id = ? AND status = 'active'`
+      )
+      .get(copied.version.id) as { id: string; evidence_refs_json: string };
+    const copiedBaseline = db
+      .prepare(
+        `SELECT v.id AS variant_id, v.page_definition_id, r.id AS revision_id, r.payload_json
+         FROM page_baseline_variants v
+         JOIN page_baseline_revisions r ON r.page_baseline_variant_id = v.id
+         WHERE v.business_version_id = ? AND r.lifecycle = 'current'`
+      )
+      .get(copied.version.id) as {
+      variant_id: string;
+      page_definition_id: string;
+      revision_id: string;
+      payload_json: string;
+    };
+    const copiedRequirement = db
+      .prepare(
+        `SELECT id, functional_module_id, payload_json FROM module_requirement_revisions
+         WHERE business_version_id = ? AND lifecycle = 'current'`
+      )
+      .get(copied.version.id) as {
+      id: string;
+      functional_module_id: string;
+      payload_json: string;
+    };
+    const copiedCoverage = db
+      .prepare(
+        `SELECT * FROM functional_point_coverage
+         WHERE business_version_id = ? AND lifecycle = 'current'`
+      )
+      .get(copied.version.id) as Record<string, unknown>;
+    const copiedDependency = db
+      .prepare('SELECT * FROM asset_revision_dependencies WHERE business_version_id = ?')
+      .get(copied.version.id) as Record<string, unknown>;
 
     expect(copied.created).toBe(true);
     expect(replay).toMatchObject({ created: false, version: { id: copied.version.id } });
@@ -248,6 +378,43 @@ describe('BusinessVersionRepository', () => {
     expect(JSON.parse(copiedVariable.constraints_json)).toEqual({
       sourceDocumentId: copiedDocument.id,
     });
+    expect(copiedDecision.id).not.toBe('decision-source');
+    expect(JSON.parse(copiedDecision.evidence_refs_json)).toEqual([graph.pages[0]!.id]);
+    expect(copiedBaseline).toMatchObject({ page_definition_id: graph.pages[0]!.id });
+    expect(copiedBaseline.variant_id).not.toBe('baseline-source');
+    expect(copiedBaseline.revision_id).not.toBe('baseline-revision-source');
+    expect(JSON.parse(copiedBaseline.payload_json)).toEqual({
+      pageDefinitionId: graph.pages[0]!.id,
+      screenshotArtifactId: 'blob-1',
+    });
+    expect(copiedRequirement.functional_module_id).toBe(graph.functionalModules[0]!.id);
+    expect(JSON.parse(copiedRequirement.payload_json)).toEqual({
+      functionalModuleId: graph.functionalModules[0]!.id,
+      sourceDecisionId: copiedDecision.id,
+    });
+    expect(copiedCoverage).toMatchObject({
+      functional_module_id: graph.functionalModules[0]!.id,
+      module_requirement_revision_id: copiedRequirement.id,
+      functional_script_id: graph.functionalScripts[0]!.id,
+      functional_script_revision_id: graph.functionalScripts[0]!.currentRevision.id,
+      decision_id: copiedDecision.id,
+    });
+    expect(copiedDependency).toMatchObject({
+      from_asset_id: graph.functionalScripts[0]!.id,
+      from_revision_id: graph.functionalScripts[0]!.currentRevision.id,
+      to_asset_id: graph.functionalModules[0]!.id,
+      to_revision_id: copiedRequirement.id,
+    });
+    expect(db.prepare("SELECT ref_count FROM artifact_objects WHERE id = 'blob-1'").get()).toEqual({
+      ref_count: 2,
+    });
+    expect(
+      db
+        .prepare(
+          'SELECT COUNT(*) AS count FROM asset_revision_verifications WHERE business_version_id = ?'
+        )
+        .get(copied.version.id)
+    ).toEqual({ count: 0 });
   });
 
   it('rolls back copy when the source graph contains a dangling scenario reference', () => {

@@ -160,25 +160,25 @@ ai-e2e (:3002)
 
 - **页面锚点（pending）**：页面定义以不含 Origin 的规范化路由模板 + 身份参数约束识别逻辑页面；运行页面锚点再绑定部署与动态参数。弹窗/抽屉不是页面，模块只归属一个主要页面。当前 `urls.url` 只保存完整 URL，完整契约见 `docs/version-page-asset-contract.md`。
 - **功能模块（in-progress）**：一个页面可以包含多个有顺序的功能模块，一个功能模块目标上包含多个可复用、可独立执行/验证/修复的功能脚本。现有 `functional_modules.sort_order` 与 URL binding 是基础，但尚无显式 Page 或 FunctionalScript 实体。
-- **模块需求文档（pending）**：必须融合 PRD 片段、页面锚点、真实 DOM/截图证据、功能说明和有序场景，不能仅依赖 PRD 推断或裸 URL。
+- **模块需求文档（in-progress）**：已交付不可变 `module_requirement_revisions` 与逐功能点 coverage 数据基座；内容生成、Schema 校验和公开 authoring 接口仍 pending。需求必须融合 PRD 片段、页面锚点、真实 DOM/截图证据、功能说明和有序场景，不能仅依赖 PRD 推断或裸 URL。
 - **功能脚本与场景（pending）**：功能脚本是最小复用/修复单元；首期脚本使用显式输入、线性步骤、硬业务断言、成功后输出和声明副作用，不允许通用分支、业务循环或嵌套脚本调用。场景是业务验收单位，可跨模块、跨页面按顺序、依赖、重复和输入输出关系调用多个功能脚本。当前存储和版本仍以单个 scenario 对应 TypeScript script 为单位；产品语义见 `docs/functional-script-contract.md`，机器 Schema 见 `docs/semantic-script-schema.md`。
 - **场景运行层次（pending）**：业务版本保存场景定义与 TODO 模板；启动时冻结运行计划，展开为运行 TODO，每次派发形成独立执行尝试。调用图首期无环，有界重复预先展开，运行调整使用追加式计划修订。完整契约见 `docs/scenario-orchestration-contract.md`。
-- **业务版本（pending）**：由用户创建，记录来源版本及可选部署/Git 标识；`copy` 原子复制当前有效资产、生成新身份并重建内部引用，且不复制编辑历史、运行状态、实际数据、证据或秘密。完整契约见 `docs/version-page-asset-contract.md`。
-- **目标数据模型（pending）**：稳定资产 ID + 不可变修订 + 唯一 current；运行绑定精确 revision/hash。copy 使用幂等 `BEGIN IMMEDIATE` 事务重建 ID，运行状态/event 同事务提交，大媒体进入内容寻址文件存储；跨服务调用使用持久 outbox 与 opaque external task link 收敛。完整表与约束见 `docs/target-data-model.md`。
-- **资产 authoring（pending）**：bootstrap/recheck/repair/import_conversion 是独立耐久 job；candidate 生成、静态校验、真实浏览器验证和 current 激活必须分层。主代理进度从持久 task/attempt/coverage/event 恢复，不依赖长期模型对话；影响分析通过 revision dependency index 限定最小修复/重验范围。完整契约见 `docs/asset-authoring-repair-contract.md`。
-- **主代理（pending）**：由 `ai-e2e` 确定性状态机驱动，持有 PRD 流程、TODO 依赖、运行变量和决策，负责拆分、派发、恢复、跳过、验收与汇总；登录、造数等跨场景前置动作必须由主代理安排。
+- **业务版本（in-progress）**：create/list/get/copy 已交付；copy 已覆盖 current PRD、变量、决策、基线、模块需求、coverage、依赖和 semantic 资产，生成新身份并重建内部引用，复用内容寻址 blob 并增加引用计数，不复制验证、运行、证据 manifest、实际数据或秘密。公开 recheck/validate 与 UI 仍 pending。完整契约见 `docs/version-page-asset-contract.md`。
+- **目标数据模型（in-progress）**：migration 014–017 已交付稳定资产/修订、authoring/run/browser queue、decision/policy/evidence/outbox/external link/legacy import 目标表；015+ 使用 checksum migration 账本。仓储已覆盖修订验证/激活、业务版本 scoped validation、authoring task/attempt/event、正式 run 冻结、命令状态、FIFO browser job、证据封存与 outbox 收敛。001–014 baseline/preflight/backup、公开 API、runtime worker 和 legacy importer 仍 pending。完整表与约束见 `docs/target-data-model.md`。
+- **资产 authoring（in-progress）**：bootstrap/recheck/repair/import_conversion job/task/attempt/event、单版本写锁、candidate verification、dependency activation 的数据与事务基座已交付；实际 PRD/浏览器/Agent 协调器、coverage 生成和完整验证器仍 pending。完整契约见 `docs/asset-authoring-repair-contract.md`。
+- **主代理（in-progress）**：持久 authoring/run/command/event/browser queue 数据基座已交付；确定性协调器服务、派发/恢复/跳过/验收 runtime 仍 pending。登录、造数等跨场景前置动作必须由主代理安排。
 - **页面子代理（pending）**：只执行派发的页面场景片段及其中明确授权的功能脚本，负责重新检查、执行、验证、职责内修复和结构化汇报；不得自行登录、造数或调用场景外脚本。
 - **上下文（pending）**：大多数派发创建干净上下文；登出等可恢复中断可以由主代理在页面状态与副作用检查后续接原上下文，否则用检查点和授权变量重建干净上下文。
-- **串行调度与身份（pending）**：首期每个 `proxy-adapter` 进程全局最多一个活动 browser execution session；authoring verification 与 test run 共用 FIFO，一个主代理任一时刻只运行一个执行型子代理。每个 session 固定一个 BrowserContext 和一个活动 actor；跨账号/角色只通过主代理显式编排退出/登录脚本串行切换，子代理发现身份异常必须停止。只有子代理持有 control，主代理仅在安全边界 observe，UI live view 只读；并存身份、多 Context/Tab 并发仅作为后期扩展。
-- **环境与副作用策略（pending）**：deployment revision 固定 `local/test/staging/production`。local/test 自动允许已声明、有界副作用；staging 的删除、批量、不可逆和上传在 run/job 开始前做一次计划级审批；production 只允许显式登录/退出/会话刷新、导航、只读观测和断言，业务写入/上传硬拒绝且 v1 无绕过。风险投影、policy evaluation/grant 和逐 effectId 授权归 ai-e2e，完整契约见 `docs/environment-side-effect-policy-contract.md`。
+- **串行调度与身份（in-progress）**：`browser_jobs.queue_seq` 的持久 FIFO、全库单 active 槽和嵌套 authoring/verification 复用父 browser job 已交付；实际 session/lease 派发与身份检查 runtime 仍 pending。首期每个 session 固定一个 BrowserContext 和一个活动 actor，跨账号/角色只通过主代理显式编排认证脚本串行切换。
+- **环境与副作用策略（in-progress）**：policy evaluation/grant/decision 表、Run/Authoring 风险投影 hash 与 evaluation 幂等仓储已交付；确定性环境规则、审批/grant 原子应用和逐 effectId runtime 门禁仍 pending。完整契约见 `docs/environment-side-effect-policy-contract.md`。
 - **编排/执行分层（pending）**：页面任务图、页面/模块范围和验收标准由 ai-e2e 持有；模型、MCP 工具和未来 Skills 的执行必须通过 ai-chat-service。当前 `generateText()` 是纯文本调用，不能当作已具备 Agent tool loop。
-- **跨服务协议（pending）**：目标 `/api/v1` 业务版本/authoring/运行 API、`ai-chat-service` 受限 Agent task、`proxy-adapter` 浏览器 session/lease/operation、四类目标 snapshot-first SSE（Authoring/Run/Agent/Browser）、幂等与重启恢复见 `docs/service-api-event-contract.md`。这些路由和新 MCP 工具尚未实现。
+- **跨服务协议（in-progress）**：三服务数据账本与 opaque 引用边界、ai-e2e outbox/external link 已交付；ai-e2e authoring/run API、outbox worker、四类 snapshot-first SSE 和端到端重启协调仍 pending。完整契约见 `docs/service-api-event-contract.md`。
 - **双模型与 Skills（pending）**：目标 `vision.analyze_page`/`vision.resolve_target` 均只处理一次不可变快照；视觉结果只返回可序列化定位候选，首期 Skills 是固定版本/hash 的声明式指令包且默认拒绝扩权。完整契约见 `docs/ai-model-skill-contract.md`。
-- **迁移与切流（pending）**：先为 001–013 建立结构 preflight + checksum migration 账本，再增量创建新表；旧 TypeScript、登录录制和历史 run 只读保留并生成待复核候选，不自动成为 valid 语义资产。同一 run 不混用 legacy 与 `semantic_v1`。完整契约见 `docs/migration-compatibility-acceptance-contract.md`。
+- **迁移与切流（in-progress）**：015–017 已通过 checksum/状态账本增量创建目标表，失败 rollback、checksum 漂移拒绝且 legacy 表保持不动；001–014 结构 preflight/baseline、文件备份、legacy importer 与 capability cutover 仍 pending。同一 run 不混用 legacy 与 `semantic_v1`。完整契约见 `docs/migration-compatibility-acceptance-contract.md`。
 - **受限页面任务（pending）**：页面子代理必须接收不可变任务包和短期浏览器控制租约，只能操作指定 TODO、Tab、工具和输出槽；主代理持有共享浏览器生命周期。完整契约见 `docs/agent-browser-execution-contract.md`。
 - **可视语义执行（pending）**：权威资产是结构化语义功能脚本，一个语义步骤一次受控推进；所有浏览器动作通过 proxy-adapter 执行并关联实时画面、语义步骤和结果证据。每个原子操作必须有幂等 ID，状态无法确认时先检查副作用；当前 `npx tsx` 子进程执行器是待替换的现状，不是目标执行路径。
 - **失败/暂停/跳过（pending）**：失败先保存截图和现场，子代理评估后续阻碍；主代理按依赖决定跳过或继续。意外登出按可恢复中断上报，需要主代理决策时暂停并在决策写入版本文档后恢复。
-- **分层状态与证据（pending）**：流程、TODO、尝试、Agent 和浏览器操作状态必须分开；blocked/interrupted/waiting_decision 未收敛前不提前跳过下游。`ai-e2e` 持有不可变证据 manifest 与业务关联，UI 从持久化 snapshot + 单调事件序号恢复。完整契约见 `docs/run-state-decision-evidence-contract.md`。
+- **分层状态与证据（in-progress）**：Run/TODO/page task/attempt/decision/event、内容寻址 artifact、不可变 evidence item 与 sealed manifest 数据基座已交付；TODO 执行/依赖传播、截图/DOM 提升 worker、公开 snapshot/SSE 与 UI 仍 pending。完整契约见 `docs/run-state-decision-evidence-contract.md`。
 - **局部修复（in-progress）**：现有 run 级诊断/自动修复已交付；目标是在页面或 DOM 节点变化后只修复当前业务版本内受影响的功能脚本并重新验证。
 
 ## Anti-Patterns

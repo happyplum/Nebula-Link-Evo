@@ -1,6 +1,6 @@
 # AI E2E 资产生成、复核与局部修复契约
 
-> 状态：已确认目标设计，尚未实现。
+> 状态：`in-progress`。authoring job/task/attempt/command/event、单版本写锁、candidate verification、revision dependency 与 verified-scope 激活的数据/事务基座已交付；PRD/页面/Agent 协调器和真实浏览器 authoring runtime 尚未实现。
 > 更新时间：2026-08-12。
 > 本文把“PRD + 已完成网页从零生成模块级 E2E 资产”和“页面变化后定向修复”定义为可暂停、可恢复、可审计的持久工作流。它不改变功能脚本、场景、浏览器执行和安全审批的既有契约。
 

@@ -14,6 +14,22 @@ import { up as migrate011 } from './migrations/011-exploration-sessions.js';
 import { up as migrate012 } from './migrations/012-login-scripts.js';
 import { up as migrate013 } from './migrations/013-add-failure-type-to-intervention-logs.js';
 import { up as migrate014 } from './migrations/014-semantic-asset-foundation.js';
+import {
+  migrationId as migration015Id,
+  migrationName as migration015Name,
+  migrationSql as migration015Sql,
+} from './migrations/015-semantic-asset-governance.js';
+import {
+  migrationId as migration016Id,
+  migrationName as migration016Name,
+  migrationSql as migration016Sql,
+} from './migrations/016-semantic-workflow-foundation.js';
+import {
+  migrationId as migration017Id,
+  migrationName as migration017Name,
+  migrationSql as migration017Sql,
+} from './migrations/017-semantic-evidence-integration-foundation.js';
+import { runTrackedMigration } from './migration-runner.js';
 import { ProjectRepository } from './repositories/project-repository.js';
 import { PRDDocumentRepository } from './repositories/prd-document-repository.js';
 import { BusinessModuleRepository } from './repositories/business-module-repository.js';
@@ -27,6 +43,9 @@ import { AIInterventionLogRepository } from './repositories/ai-intervention-log-
 import { ExplorationSessionRepository } from './repositories/exploration-session-repository.js';
 import { LoginScriptRepository } from './repositories/login-script-repository.js';
 import { BusinessVersionRepository } from './repositories/business-version-repository.js';
+import { SemanticAssetRepository } from './repositories/semantic-asset-repository.js';
+import { SemanticEvidenceRepository } from './repositories/semantic-evidence-repository.js';
+import { SemanticWorkflowRepository } from './repositories/semantic-workflow-repository.js';
 
 export function generateId(): string {
   return randomBytes(8).toString('hex');
@@ -50,6 +69,9 @@ class DatabaseManager {
   private explorationSessionRepo: ExplorationSessionRepository | null = null;
   private loginScriptRepo: LoginScriptRepository | null = null;
   private businessVersionRepo: BusinessVersionRepository | null = null;
+  private semanticAssetRepo: SemanticAssetRepository | null = null;
+  private semanticWorkflowRepo: SemanticWorkflowRepository | null = null;
+  private semanticEvidenceRepo: SemanticEvidenceRepository | null = null;
 
   private constructor() {}
 
@@ -99,6 +121,13 @@ class DatabaseManager {
     migrate012(this.db);
     migrate013(this.db);
     migrate014(this.db);
+    for (const migration of [
+      { id: migration015Id, name: migration015Name, sql: migration015Sql },
+      { id: migration016Id, name: migration016Name, sql: migration016Sql },
+      { id: migration017Id, name: migration017Name, sql: migration017Sql },
+    ]) {
+      runTrackedMigration(this.db, migration, '1.0.0');
+    }
   }
 
   private initRepositories(): void {
@@ -116,6 +145,9 @@ class DatabaseManager {
     this.explorationSessionRepo = new ExplorationSessionRepository(this.db);
     this.loginScriptRepo = new LoginScriptRepository(this.db);
     this.businessVersionRepo = new BusinessVersionRepository(this.db);
+    this.semanticAssetRepo = new SemanticAssetRepository(this.db);
+    this.semanticWorkflowRepo = new SemanticWorkflowRepository(this.db);
+    this.semanticEvidenceRepo = new SemanticEvidenceRepository(this.db);
   }
 
   getDatabase(): Database.Database {
@@ -141,6 +173,9 @@ class DatabaseManager {
       this.explorationSessionRepo = null;
       this.loginScriptRepo = null;
       this.businessVersionRepo = null;
+      this.semanticAssetRepo = null;
+      this.semanticWorkflowRepo = null;
+      this.semanticEvidenceRepo = null;
     }
   }
 
@@ -157,6 +192,9 @@ class DatabaseManager {
   getExplorationSessionRepo(): ExplorationSessionRepository { if (!this.explorationSessionRepo) throw new Error('Database not initialized'); return this.explorationSessionRepo; }
   getLoginScriptRepo(): LoginScriptRepository { if (!this.loginScriptRepo) throw new Error('Database not initialized'); return this.loginScriptRepo; }
   getBusinessVersionRepo(): BusinessVersionRepository { if (!this.businessVersionRepo) throw new Error('Database not initialized'); return this.businessVersionRepo; }
+  getSemanticAssetRepo(): SemanticAssetRepository { if (!this.semanticAssetRepo) throw new Error('Database not initialized'); return this.semanticAssetRepo; }
+  getSemanticWorkflowRepo(): SemanticWorkflowRepository { if (!this.semanticWorkflowRepo) throw new Error('Database not initialized'); return this.semanticWorkflowRepo; }
+  getSemanticEvidenceRepo(): SemanticEvidenceRepository { if (!this.semanticEvidenceRepo) throw new Error('Database not initialized'); return this.semanticEvidenceRepo; }
 }
 
 export { DatabaseManager };

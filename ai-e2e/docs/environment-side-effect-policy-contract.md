@@ -1,8 +1,8 @@
 # AI E2E 环境与副作用策略契约
 
-> 状态：已确认目标设计，尚未实现。
+> 状态：`in-progress`。ai-e2e 已交付风险投影 hash、policy evaluation/grant/decision 物理模型与幂等 evaluation 仓储；确定性环境规则、审批/grant 原子应用和逐 effectId 跨服务门禁尚未实现。
 > 更新时间：2026-08-12。
-> 本文定义 semantic v1 正式运行与 authoring verification 的环境风险矩阵、副作用投影、计划级审批和跨服务执行门禁。它不授权旧 TypeScript 执行链或人工调试工具访问生产数据。ai-chat-service 当前只交付冻结 `stepId/kind/operation/effectId` 的预授权步骤包装，尚未实现本契约要求的 policy evaluation、风险投影、active grant 与参数级数量交集，因此本文整体状态仍为 pending。
+> 本文定义 semantic v1 正式运行与 authoring verification 的环境风险矩阵、副作用投影、计划级审批和跨服务执行门禁。它不授权旧 TypeScript 执行链或人工调试工具访问生产数据。数据表与部分仓储存在不等于安全门禁已启用；ai-chat-service 的预授权步骤包装及 ai-e2e 的 evaluation 账本尚未串成 active grant 与参数级数量交集执行链。
 
 ## 1. 目标与边界
 

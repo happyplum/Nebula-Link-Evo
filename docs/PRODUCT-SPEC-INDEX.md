@@ -178,24 +178,24 @@ debug-ui  ←──  （仅被用户消费）
 
 ### 3.9 ai-e2e 业务版本、脚本与代理编排契约
 
-- **页面锚点（in-progress）**：semantic 页面 current revision 已保存不含 Origin 的 route mode/template/identity query 和唯一签名；完整参数 Schema、运行匹配、动态参数和基线变体仍 pending。legacy `urls.url` 不是稳定身份，目标契约见 `ai-e2e/docs/version-page-asset-contract.md`。
-- **功能模块（in-progress）**：一个页面包含多个功能模块，一个功能模块目标上包含多个功能脚本。当前 `functional_modules.sort_order` 和 URL binding 已提供基础，但没有 FunctionalScript 实体。
-- **模块需求文档（pending）**：融合 PRD 片段、页面锚点、真实 DOM/截图证据、功能说明与有序场景，作为生成和修复的可追溯输入。
+- **页面锚点（in-progress）**：semantic 页面 current revision 已保存不含 Origin 的 route mode/template/identity query 和唯一签名，命名 baseline variant/revision 表已交付；完整参数 Schema、运行匹配、动态参数和基线采集仍 pending。legacy `urls.url` 不是稳定身份。
+- **功能模块（in-progress）**：semantic v1 已有页面→业务模块→功能模块→多个稳定 FunctionalScript 身份/修订关系；公开资产 authoring 与 semantic 执行仍 pending。
+- **模块需求文档（in-progress）**：不可变 requirement revision 与逐功能点 coverage 数据基座已交付；PRD/DOM/截图融合生成和公开 authoring 接口仍 pending。
 - **功能脚本与场景（in-progress）**：semantic v1 已有版本隔离的功能脚本/场景稳定身份、不可变 current revision、模块归属、场景调用引用与无环校验；copy 后执行资产 stale。完整机器 Schema、公开 authoring、TODO/尝试与语义执行仍 pending；legacy 持久化仍是 scenario 级 TypeScript script version。
-- **业务版本（in-progress）**：用户 create/list/get、来源版本、部署/Git 标识和幂等原子 `copy` 已交付；copy 为当前 PRD/变量/页面/模块/功能脚本/场景生成新身份、重写内部引用，不复制运行状态、证据、实际数据或秘密。目标版本保持 `needs_recheck`，recheck/真实重验和 UI 仍 pending。
-- **目标持久化（in-progress）**：migration 014 已交付业务版本、稳定资产 ID + 不可变 current revision + copy 事务；legacy 同名模块/场景表通过 `semantic_*` 物理表隔离。run/event/evidence、verification/dependency、content-addressed blob、outbox 与 external task link 仍 pending。
-- **主代理 / 页面子代理（pending）**：主代理是由持久 authoring/run job、task、attempt 和事件驱动的确定性工作流协调器，不依赖长期模型对话；它维护 PRD 流程、TODO 依赖、运行变量和决策，并负责派发、恢复、跳过、验收与汇总。子代理只执行获授权的页面场景片段，负责重新检查、执行、验证、职责内修复和汇报。
+- **业务版本（in-progress）**：用户 create/list/get、来源版本、部署/Git 标识和幂等原子 `copy` 已交付；copy 为 current PRD/变量/决策/基线/需求/coverage/dependency/semantic 资产生成新身份、重写内部引用并增加共享 blob ref count，不复制验证、运行、证据 manifest、实际数据或秘密。目标保持 `needs_recheck`。
+- **目标持久化（in-progress）**：migration 014–017 已交付资产治理、authoring/run/browser queue、decision/policy/evidence/outbox/external link/legacy import 表与核心原子仓储；015+ 使用 checksum migration 账本。公开 API、worker、001–014 preflight/baseline 和 legacy importer 仍 pending。
+- **主代理 / 页面子代理（in-progress）**：authoring/run job/task/attempt/command/event、计划/TODO/变量与 browser FIFO 数据基座已交付；主代理确定性协调器、页面子代理派发/恢复/跳过/验收 runtime 仍 pending。
 - **上下文（pending）**：大多数派发使用干净子代理上下文；登出等可恢复中断可由主代理在页面状态和副作用检查后续接原上下文，否则从检查点与授权变量重建。
-- **串行调度与身份（pending）**：首期 `ai-e2e` 维护 authoring verification/test run 公平 FIFO，proxy 以通用门禁保证每进程全局最多一个活动 session；每个 session 固定一个 BrowserContext 和一个活动 actor，会话期间 legacy 写工具返回 browser_busy。跨账号/角色只能由主代理显式编排认证脚本串行切换，子代理发现身份异常即停止。只有当前执行型子代理持有 control，主代理仅在原子操作安全边界 observe，UI live view 只读。子代理上下文可按任务重建；并存身份、多 Context/Tab 并发仅作为后期扩展。
-- **环境与副作用安全（pending）**：`ai-e2e` 从 deployment environment、精确脚本修订、展开 TODO 与有界输入生成风险投影并持有 policy evaluation/grant。local/test 自动、staging 高风险计划一次审批、production 业务写硬拒绝；amendment 扩大风险必须重新审批，locator-only 修复可复用同一投影授权。
+- **串行调度与身份（in-progress）**：ai-e2e 持久 `browser_jobs` FIFO、全库单 active 槽和嵌套 authoring/verification 复用父槽规则已交付；实际 proxy session/lease 派发与 actor 检查 runtime 仍 pending。
+- **环境与副作用安全（in-progress）**：风险投影 hash、policy evaluation/grant/decision 表与 evaluation 仓储已交付；local/test/staging/production 规则、审批/grant 应用和逐 effectId 执行门禁仍 pending。
 - **编排与执行分属两层（pending）**：页面任务图、模块范围与验收标准归 `ai-e2e`；模型调用、MCP 工具和未来 Skills 执行归 `ai-chat-service`。当前 `AiChatClient.generateText()` 只调用纯文本生成端点，尚不具备 Agent tool loop。
 - **页面任务与控制租约（pending）**：主代理派发不可变页面任务包并持有共享浏览器生命周期；子代理只取得指定 TODO、actor、Tab、工具、输出槽的短期控制租约。跨服务只传递稳定会话/Tab/操作/快照/目标引用和非秘密 actor 约束，不传 Playwright 对象或凭据值。
 - **可视语义执行（pending）**：系统内权威资产是结构化语义功能脚本；执行按单个语义步骤推进，每个 `proxy-adapter` 浏览器原子操作具有幂等 ID、结构化结果和通用生命周期事件，并关联实时画面、脚本步骤与证据。无法确认动作是否发生时进入结果不确定态并先检查副作用。当前 `npx tsx` 子进程执行器不满足该目标。完整契约见 `ai-e2e/docs/agent-browser-execution-contract.md`。
 - **跨服务 API/事件（in-progress）**：proxy capability/browser control、ai-chat-service Agent task POST/GET/capability，以及 ai-e2e 业务版本 create/list/get/copy 已交付；proxy browser event/artifact 与 ai-chat Agent command/event/checkpoint/Skill registry 的内部数据层已交付，但执行/采集与 HTTP/SSE 投影未接入。业务版本 validate/assets、Authoring/Run 和目标 snapshot-first SSE 仍 pending。
-- **资产生成/复核/修复（pending）**：bootstrap 从 PRD + URL 生成页面、模块需求、功能脚本与场景 candidate；static validation、真实 browser verification 和 activation 分阶段。recheck/repair 依据 revision dependency index 计算影响闭包并只修改当前业务版本。完整契约见 `ai-e2e/docs/asset-authoring-repair-contract.md`。
-- **迁移与切流（pending）**：先对 001–013 做结构 preflight 并建立 checksum migration 账本；旧 TypeScript、登录录制和历史 run 只读保留，导入只生成 `needs_recheck` 版本/候选。同一 run 固定为 legacy 或 `semantic_v1`，版本级 opt-in 后再逐步关闭旧写/执行。完整契约见 `ai-e2e/docs/migration-compatibility-acceptance-contract.md`。
-- **分层状态与传播（pending）**：测试流程、运行 TODO、执行尝试、Agent 会话和浏览器操作分别持有状态。blocked/interrupted/waiting_decision 未收敛前不提前跳过下游；终态失败只传播到真实依赖节点。
-- **决策与证据（pending）**：运行操作决定和业务版本长期决定分载体追加审计；`proxy-adapter` 生成短期浏览器原始产物，`ai-e2e` 持有不可变证据 manifest、长期业务关联、完整度、脱敏和保留策略。UI 通过持久 `run.snapshot` 与单调运行事件序号恢复。完整契约见 `ai-e2e/docs/run-state-decision-evidence-contract.md`。
+- **资产生成/复核/修复（in-progress）**：authoring job/task/attempt/event、candidate verification、dependency index 与 verified-scope activation 数据/事务基座已交付；PRD + URL、Agent/browser 协调器和影响分析 runtime 仍 pending。
+- **迁移与切流（in-progress）**：015–017 已进入 checksum migration 账本，失败 rollback/漂移拒绝且旧表不变；001–014 preflight/baseline、文件备份、legacy importer 与版本级 capability cutover 仍 pending。
+- **分层状态与传播（in-progress）**：Run/plan/TODO/dependency/page task/attempt/variable/decision/command/event 数据层与正式 run 原子冻结已交付；执行、依赖传播、决策应用和公开 snapshot/SSE 仍 pending。
+- **决策与证据（in-progress）**：版本/运行决策表、内容寻址 artifact、append-only evidence item、sealed manifest 与仓储已交付；proxy 产物提升、保留清理、决策/grant 应用和 UI 恢复仍 pending。
 - **DOM 变化局部修复（in-progress）**：当前只有 run 级诊断/自动修复；目标是只修复当前业务版本内受影响的功能脚本并重新验证。
 
 ---

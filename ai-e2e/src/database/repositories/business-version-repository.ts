@@ -15,6 +15,7 @@ import type {
   PageAsset,
   ScenarioAsset,
 } from '../../types/business-version.js';
+import { collectArtifactObjectIds } from './semantic-repository-utils.js';
 
 interface StatementLike {
   run(...params: unknown[]): { changes: number | bigint };
@@ -215,6 +216,8 @@ export class BusinessVersionRepository {
       this.validateGraph(lockedSource.id, sourceGraph, true);
       const maps = createCopyMaps(sourceGraph, this.readAuxiliaryAssetIds(lockedSource.id));
       const targetId = randomUUID();
+      maps.allIds.set(lockedSource.id, targetId);
+      maps.sourceIds.add(lockedSource.id);
       const now = new Date().toISOString();
       try {
         this.db
@@ -246,6 +249,7 @@ export class BusinessVersionRepository {
         this.copyVersionDocuments(lockedSource.id, targetId, maps.allIds, now);
         this.copyVariableDefinitions(lockedSource.id, targetId, maps.allIds, now);
         this.copyGraph(targetId, sourceGraph, maps, params.createdBy, now);
+        this.copySemanticAssetExtensions(lockedSource.id, targetId, maps, params.createdBy, now);
       } catch (error) {
         if (error instanceof BusinessVersionRepositoryError) throw error;
         throw translateSqliteConflict(error, 'Business version copy conflicted with existing data');
@@ -815,6 +819,214 @@ export class BusinessVersionRepository {
     }
   }
 
+  private copySemanticAssetExtensions(
+    sourceVersionId: string,
+    targetVersionId: string,
+    maps: CopyMaps,
+    createdBy: string,
+    now: string
+  ): void {
+    const decisions = this.db
+      .prepare(
+        `SELECT * FROM version_decisions
+         WHERE business_version_id = ? AND status = 'active' ORDER BY decision_key`
+      )
+      .all(sourceVersionId) as Array<Record<string, unknown>>;
+    const insertDecision = this.db.prepare(
+      `INSERT INTO version_decisions
+        (id, business_version_id, decision_key, status, question, category, answer, reason,
+         evidence_refs_json, supersedes_decision_id, decided_by_type, decided_by_id, created_at)
+       VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?, NULL, ?, ?, ?)`
+    );
+    for (const row of decisions) {
+      insertDecision.run(
+        requireMapped(maps.allIds, String(row.id)),
+        targetVersionId,
+        row.decision_key,
+        row.question,
+        row.category,
+        row.answer,
+        row.reason,
+        stableStringify(
+          rewriteIds(JSON.parse(String(row.evidence_refs_json)) as unknown, maps.allIds)
+        ),
+        row.decided_by_type,
+        row.decided_by_id,
+        now
+      );
+    }
+
+    const baselineRevisions = this.db
+      .prepare(
+        `SELECT v.id AS variant_id, v.page_definition_id, v.variant_key, r.*
+         FROM page_baseline_variants v
+         JOIN page_baseline_revisions r
+           ON r.page_baseline_variant_id = v.id AND r.lifecycle = 'current'
+         WHERE v.business_version_id = ? AND v.archived_at IS NULL
+         ORDER BY v.variant_key`
+      )
+      .all(sourceVersionId) as Array<Record<string, unknown>>;
+    const insertBaselineVariant = this.db.prepare(
+      `INSERT INTO page_baseline_variants
+        (id, business_version_id, page_definition_id, variant_key, created_at)
+       VALUES (?, ?, ?, ?, ?)`
+    );
+    const insertBaselineRevision = this.db.prepare(
+      `INSERT INTO page_baseline_revisions
+        (id, business_version_id, page_baseline_variant_id, revision_no, lifecycle, schema_id,
+         payload_json, content_sha256, validation_status, supersedes_revision_id,
+         source_asset_id, source_revision_id, change_reason, created_by_type, created_by_id,
+         created_at, validated_at)
+       VALUES (?, ?, ?, 1, 'current', ?, ?, ?, 'valid', NULL, ?, ?,
+         'business_version_copy', ?, ?, ?, ?)`
+    );
+    for (const row of baselineRevisions) {
+      const variantId = requireMapped(maps.allIds, String(row.variant_id));
+      const revisionId = requireMapped(maps.allIds, String(row.id));
+      const payloadJson = stableStringify(
+        rewriteIds(JSON.parse(String(row.payload_json)) as unknown, maps.allIds)
+      );
+      insertBaselineVariant.run(
+        variantId,
+        targetVersionId,
+        requireMapped(maps.allIds, String(row.page_definition_id)),
+        row.variant_key,
+        now
+      );
+      insertBaselineRevision.run(
+        revisionId,
+        targetVersionId,
+        variantId,
+        row.schema_id,
+        payloadJson,
+        sha256(payloadJson),
+        row.variant_id,
+        row.id,
+        actorType(createdBy),
+        createdBy,
+        now,
+        now
+      );
+      const incrementArtifact = this.db.prepare(
+        `UPDATE artifact_objects SET ref_count = ref_count + 1
+         WHERE id = ? AND deleted_at IS NULL`
+      );
+      for (const artifactId of collectArtifactObjectIds(JSON.parse(payloadJson) as unknown)) {
+        const result = incrementArtifact.run(artifactId);
+        if (Number(result.changes) !== 1) {
+          throw new BusinessVersionRepositoryError(
+            'validation_failed',
+            `Baseline artifact is unavailable: ${artifactId}`
+          );
+        }
+      }
+    }
+
+    const requirementRevisions = this.db
+      .prepare(
+        `SELECT * FROM module_requirement_revisions
+         WHERE business_version_id = ? AND lifecycle = 'current'
+         ORDER BY functional_module_id`
+      )
+      .all(sourceVersionId) as Array<Record<string, unknown>>;
+    const insertRequirementRevision = this.db.prepare(
+      `INSERT INTO module_requirement_revisions
+        (id, business_version_id, functional_module_id, revision_no, lifecycle, schema_id,
+         payload_json, content_sha256, validation_status, supersedes_revision_id,
+         source_asset_id, source_revision_id, change_reason, created_by_type, created_by_id,
+         created_at, validated_at)
+       VALUES (?, ?, ?, 1, 'current', ?, ?, ?, 'valid', NULL, ?, ?,
+         'business_version_copy', ?, ?, ?, ?)`
+    );
+    for (const row of requirementRevisions) {
+      const payloadJson = stableStringify(
+        rewriteIds(JSON.parse(String(row.payload_json)) as unknown, maps.allIds)
+      );
+      insertRequirementRevision.run(
+        requireMapped(maps.allIds, String(row.id)),
+        targetVersionId,
+        requireMapped(maps.allIds, String(row.functional_module_id)),
+        row.schema_id,
+        payloadJson,
+        sha256(payloadJson),
+        row.functional_module_id,
+        row.id,
+        actorType(createdBy),
+        createdBy,
+        now,
+        now
+      );
+    }
+
+    const coverageRows = this.db
+      .prepare(
+        `SELECT * FROM functional_point_coverage
+         WHERE business_version_id = ? AND lifecycle = 'current'
+         ORDER BY module_requirement_revision_id, functional_point_key`
+      )
+      .all(sourceVersionId) as Array<Record<string, unknown>>;
+    const insertCoverage = this.db.prepare(
+      `INSERT INTO functional_point_coverage
+        (id, business_version_id, functional_module_id, module_requirement_revision_id,
+         functional_point_key, required, disposition, functional_script_id,
+         functional_script_revision_id, decision_id, lifecycle, source_authoring_job_id,
+         reason_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'current', NULL, ?, ?)`
+    );
+    for (const row of coverageRows) {
+      insertCoverage.run(
+        requireMapped(maps.allIds, String(row.id)),
+        targetVersionId,
+        requireMapped(maps.allIds, String(row.functional_module_id)),
+        requireMapped(maps.allIds, String(row.module_requirement_revision_id)),
+        row.functional_point_key,
+        row.required,
+        row.disposition,
+        row.functional_script_id
+          ? requireMapped(maps.allIds, String(row.functional_script_id))
+          : null,
+        row.functional_script_revision_id
+          ? requireMapped(maps.allIds, String(row.functional_script_revision_id))
+          : null,
+        row.decision_id ? requireMapped(maps.allIds, String(row.decision_id)) : null,
+        stableStringify(rewriteIds(JSON.parse(String(row.reason_json)) as unknown, maps.allIds)),
+        now
+      );
+    }
+
+    const dependencies = this.db
+      .prepare(
+        `SELECT * FROM asset_revision_dependencies
+         WHERE business_version_id = ? ORDER BY from_revision_id, source_pointer`
+      )
+      .all(sourceVersionId) as Array<Record<string, unknown>>;
+    const insertDependency = this.db.prepare(
+      `INSERT INTO asset_revision_dependencies
+        (id, business_version_id, from_asset_type, from_asset_id, from_revision_id,
+         to_asset_type, to_asset_id, to_revision_id, relation, source_pointer, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    );
+    for (const row of dependencies) {
+      const fromRevisionId = maps.allIds.get(String(row.from_revision_id));
+      const fromAssetId = maps.allIds.get(String(row.from_asset_id));
+      const toAssetId = maps.allIds.get(String(row.to_asset_id));
+      if (!fromRevisionId || !fromAssetId || !toAssetId) continue;
+      insertDependency.run(
+        requireMapped(maps.allIds, String(row.id)),
+        targetVersionId,
+        row.from_asset_type,
+        fromAssetId,
+        fromRevisionId,
+        row.to_asset_type,
+        toAssetId,
+        row.to_revision_id ? (maps.allIds.get(String(row.to_revision_id)) ?? null) : null,
+        row.relation,
+        row.source_pointer,
+        now
+      );
+    }
+  }
+
   private insertRevision(
     table: string,
     input: {
@@ -1100,9 +1312,34 @@ export class BusinessVersionRepository {
         `SELECT id FROM version_prd_documents
            WHERE business_version_id = ? AND is_current = 1
          UNION ALL
-         SELECT id FROM version_variable_definitions WHERE business_version_id = ?`
+         SELECT id FROM version_variable_definitions WHERE business_version_id = ?
+         UNION ALL
+         SELECT id FROM version_decisions WHERE business_version_id = ? AND status = 'active'
+         UNION ALL
+         SELECT id FROM page_baseline_variants
+           WHERE business_version_id = ? AND archived_at IS NULL
+         UNION ALL
+         SELECT id FROM page_baseline_revisions
+           WHERE business_version_id = ? AND lifecycle = 'current'
+         UNION ALL
+         SELECT id FROM module_requirement_revisions
+           WHERE business_version_id = ? AND lifecycle = 'current'
+         UNION ALL
+         SELECT id FROM functional_point_coverage
+           WHERE business_version_id = ? AND lifecycle = 'current'
+         UNION ALL
+         SELECT id FROM asset_revision_dependencies WHERE business_version_id = ?`
       )
-      .all(versionId, versionId) as Array<{ id: string }>;
+      .all(
+        versionId,
+        versionId,
+        versionId,
+        versionId,
+        versionId,
+        versionId,
+        versionId,
+        versionId
+      ) as Array<{ id: string }>;
     return rows.map((row) => row.id);
   }
 
@@ -1122,6 +1359,23 @@ export class BusinessVersionRepository {
     const values = [
       ...documents.map((row) => row.parsed_json),
       ...variables.flatMap((row) => [row.constraints_json, row.default_json]),
+      ...(
+        this.db
+          .prepare(
+            `SELECT evidence_refs_json AS value FROM version_decisions
+             WHERE business_version_id = ? AND status = 'active'
+           UNION ALL
+           SELECT payload_json AS value FROM page_baseline_revisions
+             WHERE business_version_id = ? AND lifecycle = 'current'
+           UNION ALL
+           SELECT payload_json AS value FROM module_requirement_revisions
+             WHERE business_version_id = ? AND lifecycle = 'current'
+           UNION ALL
+           SELECT reason_json AS value FROM functional_point_coverage
+             WHERE business_version_id = ? AND lifecycle = 'current'`
+          )
+          .all(versionId, versionId, versionId, versionId) as Array<{ value: string }>
+      ).map((row) => row.value),
     ]
       .filter((value): value is string => value !== null)
       .map((value) => JSON.parse(value) as unknown);
@@ -1352,6 +1606,10 @@ function collectStaleAssetIds(graph: BusinessVersionAssetGraph): string[] {
     .map((asset) => asset.id);
 }
 
+function actorType(createdBy: string): 'system' | 'user' {
+  return createdBy === 'system' ? 'system' : 'user';
+}
+
 function validateVersionWrite(params: CreateBusinessVersionParams): void {
   requireKey(params.versionKey, 'versionKey');
   requireText(params.name, 'name');
@@ -1445,7 +1703,11 @@ function validateScenarioPayload(payload: JsonObject, scriptIds: ReadonlySet<str
     ) {
       throw new BusinessVersionRepositoryError('validation_failed', 'Scenario edge is invalid');
     }
-    adjacency.get(raw.fromCallKey)!.push(raw.toCallKey);
+    const nextCalls = adjacency.get(raw.fromCallKey);
+    if (!nextCalls) {
+      throw new BusinessVersionRepositoryError('validation_failed', 'Scenario edge is invalid');
+    }
+    nextCalls.push(raw.toCallKey);
     indegree.set(raw.toCallKey, (indegree.get(raw.toCallKey) ?? 0) + 1);
   }
   const queue = Array.from(indegree, ([key, degree]) => (degree === 0 ? key : null)).filter(
@@ -1453,7 +1715,8 @@ function validateScenarioPayload(payload: JsonObject, scriptIds: ReadonlySet<str
   );
   let visited = 0;
   while (queue.length > 0) {
-    const current = queue.shift()!;
+    const current = queue.shift();
+    if (current === undefined) break;
     visited += 1;
     for (const next of adjacency.get(current) ?? []) {
       const degree = (indegree.get(next) ?? 0) - 1;

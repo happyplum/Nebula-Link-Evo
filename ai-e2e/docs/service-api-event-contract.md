@@ -2,7 +2,7 @@
 
 > 状态：已确认目标设计，部分实现。
 > 更新时间：2026-08-12。
-> 本文固定 `ai-e2e`、`ai-chat-service` 与 `proxy-adapter` 的目标调用面、事件信封、幂等和恢复语义。`proxy-adapter` 已交付 `/api/v1/capabilities`、browser session/lease/operation query 和 `operation_execute/get/cancel` 核心；`ai-chat-service` 已交付 Agent task POST/GET、capability、持久任务状态与模型不可见 browser wrapper。browser event/artifact/capture/续租、Agent task 命令/事件/Skills/完整副作用授权和 ai-e2e v1 API/事件仍未实现。现有 `/api/ai/generate`、项目级 SSE 和 15 个兼容浏览器 MCP 工具继续存在；各节必须按实际状态描述。
+> 本文固定 `ai-e2e`、`ai-chat-service` 与 `proxy-adapter` 的目标调用面、事件信封、幂等和恢复语义。三服务已分别交付 browser capture/artifact/event、Agent command/event/checkpoint/Skill registry、ai-e2e authoring/run/evidence/outbox/external-link 内部数据基座；`proxy-adapter` browser control 与 `ai-chat-service` Agent task POST/GET 仍是现有公开核心。browser capture/event API、Agent task command/event/Skills runtime、ai-e2e authoring/run API/SSE 与 outbox worker 尚未实现。现有 `/api/ai/generate`、项目级 SSE 和兼容浏览器 MCP 工具继续存在；各节必须按实际状态描述。
 
 ## 1. 设计目标
 
