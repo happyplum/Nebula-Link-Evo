@@ -149,7 +149,7 @@ docs/               # Documentation
 - **`ai-chat-service`（in-progress）**：可复用 AI 基础能力层。分析/决策模型负责理解需求、文档和浏览器证据并规划下一步测试动作；主代理和子代理都可调用视觉模型，但视觉模型每次只完成一个具有完整输入的分析问题，不保存流程状态或连续执行。跨服务只传递 `snapshot_id`、`nebula_id`、`locator_bundle`、置信度等可序列化目标引用，不传递进程内 Playwright 对象。MCP client/ToolRegistry 已交付；Skills runtime 属于本层，但当前为 `pending`，尚无加载或执行实现。
 - **`ai-e2e`（in-progress）**：面向 E2E 的业务层，通过 PRD 与真实网页建立业务版本、页面、功能模块、功能脚本和测试场景。现有 PRD 分析、页面探索、URL binding、scenario 级 TypeScript 脚本和 run 级修复已交付；业务版本、结构化功能脚本、场景调用图和主/子代理编排仍需实现。
 
-**领域层级**：一个页面由规范化 URL（含 path/hash route）+ 路由/查询参数集合锚定；一个页面包含多个功能模块，一个功能模块包含多个可复用、可独立验证和修复的功能脚本。首期功能脚本采用显式输入、线性步骤、硬业务断言、成功后输出和声明副作用，不嵌套调用其他脚本；测试场景负责跨模块、跨页面的顺序、重复、分支、依赖和运行数据传递。PRD 负责形成场景流程、TODO 与依赖关系。
+**领域层级**：一个页面由规范化 URL（含 path/hash route）+ 路由/查询参数集合锚定；一个页面包含多个功能模块，一个功能模块包含多个可复用、可独立验证和修复的功能脚本。首期功能脚本采用显式输入、线性步骤、硬业务断言、成功后输出和声明副作用，不嵌套调用其他脚本；测试场景使用无环调用图负责跨模块、跨页面的顺序、重复、分支、依赖和运行数据传递。PRD 负责形成场景定义与 TODO 模板；每次执行冻结独立运行计划并产生运行 TODO 和执行尝试。
 
 **代理与执行目标（pending）**：主代理负责 PRD 流程、TODO、依赖、全局运行变量、决策和调度；子代理只执行被派发的页面场景片段，负责运行、验证、职责内脚本修复和结构化汇报。首期一个主代理在任一时刻只运行一个执行型子代理，复用 `proxy-adapter` 托管的同一浏览器会话并串行执行动作；子代理上下文可按任务重建，多 Tab 并发留作后期扩展。可恢复中断可以由主代理决定继续原上下文。主/子代理都可调用只完成单次分析的视觉模型。浏览器操作必须通过 `proxy-adapter` 的同一可视执行链完成，系统内权威脚本是可编排、可重放的结构化语义功能脚本，而不是独立启动 Chromium 的 `.spec.ts`。完整基线见 [`ai-e2e/docs/requirements-baseline.md`](ai-e2e/docs/requirements-baseline.md)。
 
@@ -166,6 +166,7 @@ docs/               # Documentation
 - 当前目标与历史资料见：
   - `ai-e2e/docs/requirements-baseline.md`
   - `ai-e2e/docs/functional-script-contract.md`
+  - `ai-e2e/docs/scenario-orchestration-contract.md`
   - `ai-e2e/docs/gap-analysis.md`（`deprecated`，旧需求对照）
   - `ai-e2e/docs/roadmap.md`（`deprecated`，旧路线，不用于制定新目标）
 

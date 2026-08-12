@@ -165,14 +165,14 @@ debug-ui  ←──  （仅被用户消费）
 - **页面锚点（pending）**：以规范化 URL（含 path/hash route）+ 路由/查询参数集合唯一标识页面。当前 `urls.url` 完整字符串不是最终稳定身份模型。
 - **功能模块（in-progress）**：一个页面包含多个功能模块，一个功能模块目标上包含多个功能脚本。当前 `functional_modules.sort_order` 和 URL binding 已提供基础，但没有 FunctionalScript 实体。
 - **模块需求文档（pending）**：融合 PRD 片段、页面锚点、真实 DOM/截图证据、功能说明与有序场景，作为生成和修复的可追溯输入。
-- **功能脚本与场景（pending）**：功能脚本是最小复用、独立验证和修复单元；首期脚本只包含显式输入、线性步骤、硬业务断言、成功后输出与声明副作用，不能调用其他脚本。测试场景负责跨模块/页面的顺序、依赖、重复、分支和输入输出映射。当前持久化仍是 scenario 级 TypeScript script version，目标契约见 `ai-e2e/docs/functional-script-contract.md`。
+- **功能脚本与场景（pending）**：功能脚本是最小复用、独立验证和修复单元；首期脚本只包含显式输入、线性步骤、硬业务断言、成功后输出与声明副作用，不能调用其他脚本。测试场景使用无环调用图；业务版本保存场景定义与 TODO 模板，运行时冻结计划并产生 TODO 和独立执行尝试。当前持久化仍是 scenario 级 TypeScript script version，目标契约见 `ai-e2e/docs/functional-script-contract.md` 与 `ai-e2e/docs/scenario-orchestration-contract.md`。
 - **业务版本（pending）**：用户显式创建，可记录来源版本及部署/Git 标识；`copy` 深复制 PRD、决策、页面、模块、脚本、场景、TODO、DOM/定位基线和参考截图，复制后不共享可变引用，也不复制运行历史、实际数据、凭据或临时变量。
 - **主代理 / 页面子代理（pending）**：主代理维护 PRD 流程、TODO 依赖、运行变量和决策，并负责派发、恢复、跳过、验收与汇总；子代理只执行获授权的页面场景片段，负责重新检查、执行、验证、职责内修复和汇报。
 - **上下文（pending）**：大多数派发使用干净子代理上下文；登出等可恢复中断可由主代理在页面状态和副作用检查后续接原上下文，否则从检查点与授权变量重建。
 - **串行调度（pending）**：首期一个主代理在任一时刻只运行一个执行型子代理，同一测试流程复用 `proxy-adapter` 托管的 Playwright/Chromium 实例和浏览器会话，所有浏览器动作进入单一串行队列。子代理上下文可按任务重建；多 Tab 并发仅作为后期扩展。
 - **编排与执行分属两层（pending）**：页面任务图、模块范围与验收标准归 `ai-e2e`；模型调用、MCP 工具和未来 Skills 执行归 `ai-chat-service`。当前 `AiChatClient.generateText()` 只调用纯文本生成端点，尚不具备 Agent tool loop。
 - **可视语义执行（pending）**：系统内权威资产是结构化语义功能脚本；所有浏览器动作经 `proxy-adapter` 执行，并关联实时画面、场景、脚本调用、步骤和结果。当前 `npx tsx` 子进程执行器不满足该目标。
-- **失败、暂停与跳过（pending）**：失败先保存截图和现场并评估后续阻碍；主代理按依赖跳过或继续。意外登出按可恢复中断上报，需要决策时暂停并在决策写入版本文档后恢复。
+- **失败、阻塞、暂停与跳过（pending）**：失败先保存截图和现场并评估后续阻碍；明确缺少前置条件与意外中断分开记录，主代理按依赖跳过或继续。需要决策时暂停并在决策写入版本文档后恢复。
 - **DOM 变化局部修复（in-progress）**：当前只有 run 级诊断/自动修复；目标是只修复当前业务版本内受影响的功能脚本并重新验证。
 
 ---
@@ -194,7 +194,7 @@ debug-ui  ←──  （仅被用户消费）
 | 修改 ai-e2e 后端消费契约 | 跨包契约（3.7） + `ai-e2e` PRODUCT-SPEC |
 | 修改 ai-e2e 客户端架构（facade 拆分、客户端增删、消费端点变更） | 跨包契约（3.7） + `ai-e2e` PRODUCT-SPEC §1 + 根 README "AI E2E 需求基线" |
 | 修改分析/决策模型、视觉模型、MCP 聚合或 Skills 职责 | 跨包契约（3.8） + `ai-chat-service` PRODUCT-SPEC + 根 README "核心产品架构" |
-| 修改业务版本、页面锚点、功能脚本、场景调用图、主/页面子代理、上下文、可视执行或失败证据 | 跨包契约（3.9） + `ai-e2e` PRODUCT-SPEC + `ai-e2e/AGENTS.md` + `ai-e2e/docs/requirements-baseline.md`；涉及功能脚本再同步 `ai-e2e/docs/functional-script-contract.md` + 根 README "核心产品架构" |
+| 修改业务版本、页面锚点、功能脚本、场景调用图、主/页面子代理、上下文、可视执行或失败证据 | 跨包契约（3.9） + `ai-e2e` PRODUCT-SPEC + `ai-e2e/AGENTS.md` + `ai-e2e/docs/requirements-baseline.md`；涉及功能脚本同步 `ai-e2e/docs/functional-script-contract.md`，涉及场景编排同步 `ai-e2e/docs/scenario-orchestration-contract.md` + 根 README "核心产品架构" |
 | 修改端口分配 | 跨包契约（3.1） + 全局索引 + 根 README Packages 表 + 根 README Architecture 拓扑 |
 | 修改依赖方向（如新包依赖、facade 拆分） | 依赖方向图 + 全局索引 |
 
