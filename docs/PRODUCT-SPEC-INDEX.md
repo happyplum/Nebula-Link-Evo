@@ -106,6 +106,7 @@ debug-ui  ←──  （仅被用户消费）
 | 业务版本资产（pending） | `ai-e2e` | `ai-e2e ui` | `/api/v1/projects/:projectId/business-versions`、`/api/v1/business-versions/*` | 业务版本、copy、校验和不可变 asset revision |
 | 资产 authoring（pending） | `ai-e2e` | `ai-e2e ui` | `/api/v1/business-versions/:versionId/authoring-jobs`、`/api/v1/authoring-jobs/:jobId/*` | bootstrap/recheck/repair/import_conversion、coverage、candidate 验证、决策与 snapshot-first SSE |
 | E2E Run（pending） | `ai-e2e` | `ai-e2e ui` | `/api/v1/projects/:projectId/runs`、`/api/v1/runs/:runId/*` | run 命令、决策、证据、snapshot-first SSE 与持久 event log |
+| 环境与副作用策略（pending） | `ai-e2e` | `ai-e2e ui` / `ai-chat-service` | Run/Authoring snapshot、decision、event 与 Agent task 输入 | `side-effect-policy/1.0` 风险投影/evaluation/grant；staging 高风险一次审批，production 业务写硬拒绝 |
 | 浏览器执行控制面（pending） | `proxy-adapter` | `ai-e2e` / `ai-chat-service` | `/api/v1/browser-execution/*` | application-level session/observe-control lease/operation/artifact；ai-e2e 排 authoring/run FIFO，proxy 通用独占门禁保证每进程最多一个活动 session，与 MCP transport session 解耦 |
 | 能力协商（pending） | 三个后端服务 | 其他服务/UI | `GET /api/v1/capabilities` | 协议 major、功能和限制；不含 secret，run preflight 不兼容时禁止静默回退 |
 
@@ -115,6 +116,7 @@ debug-ui  ←──  （仅被用户消费）
 - `ai-chat-service` 通过 MCP Client 自动拉取 browser-control 工具；状态机管理 server 生命周期，指数退避重连（最多 5 次），`toolsChanged` 事件通知工具变更。
 - 视觉分析由 `ai-chat-service` 内部 `VisionAnalyzer` + `VisionToolProvider` 提供，注册 `vision.find_element` 工具（`exposeTo: ['chat']`），不通过 MCP Server 暴露；工具本地缓存最近 5 个 DOM snapshot，`snapshot_id` 命中时复用缓存。
 - 目标新增 `browser-control.operation_execute/get/cancel` 作为 E2E 受限原子工具；session/Tab/lease 由模型不可见 wrapper 注入。现有 15 个工具继续作为兼容/调试面，目标协议未实现。
+- E2E 写调用还必须由 `ai-chat-service` wrapper 对调用方冻结的语义步骤、effectId/数量边界、policy evaluation/grant 与 lease 求交集；`proxy-adapter` 不解释 environment 或审批，只执行通用 operation 约束。
 - 目标新增内部 `vision.analyze_page` 和 `vision.resolve_target`；两者只读取一次不可变 snapshot，返回页面摘要或可序列化 locator candidates，不操作浏览器。`vision.find_element` 在迁移期保留兼容。
 - 同名工具命名规则：`<serverName>-<toolName>` 前缀。
 - 配置入口：`PROXY_ADAPTER_URL + /mcp`（默认 `http://127.0.0.1:3000/mcp`）。
@@ -161,6 +163,7 @@ debug-ui  ←──  （仅被用户消费）
 - 目标跨服务调用：`ai-e2e` 先写 integration outbox，再以原幂等键创建/查询 Agent task 与 browser operation；SQLite 写事务内不得等待网络。
 - v1 三服务新控制面只允许 loopback/local 单用户部署；capability、Origin 和 lease 不替代认证，远程/多用户启用前必须另行交付统一身份、授权与租户隔离。
 - browser lease 使用短期 32-byte opaque token，proxy 只持久化 hash/policy/expiry/process epoch；operation ledger 默认使用 proxy 自有 SQLite WAL。observe 默认最多 30 秒/一次指定观测，control 默认最多 5 分钟并只可在安全边界缩权限续租。
+- environment 来自 immutable deployment revision。local/test 自动允许已声明有界副作用；staging 单项非不可逆 create/update 自动，删除/批量/不可逆/上传在 browser job/control 前做一次当前 run/job 计划级审批；production 只允许显式认证会话变化和只读行为，业务写/上传硬拒绝且 v1 无绕过。权威契约见 `ai-e2e/docs/environment-side-effect-policy-contract.md`。
 
 ### 3.8 AI 双模型、MCP 与 Skills 契约
 
@@ -169,7 +172,7 @@ debug-ui  ←──  （仅被用户消费）
 - **目标引用**：跨服务只传递可序列化的 `snapshot_id` / `nebula_id` / `locator_bundle` / confidence / evidence；`Page` / `Locator` / `ElementHandle` 等真实 Playwright 对象只存在于 `proxy-adapter` 进程内。
 - **MCP**：`proxy-adapter` 只提供浏览器 MCP 服务；MCP client、工具聚合和 AI 工具调用归 `ai-chat-service`。
 - **Skills**：可复用 Skills 的发现、加载、注册、权限和执行隔离归 `ai-chat-service`；v1 是本地只读、固定 id/version/hash 的声明式指令包，不执行附带代码、不联网安装、不能扩权。当前 runtime 未实现。
-- **受限 Agent 任务（pending）**：`ai-chat-service` 的目标 `/api/v1/agent-tasks` 接收不可变输入、工具/Skills 白名单、预算、模型不可见 browser binding 与不透明关联信息，返回 Schema 校验结果并传播控制；调用方业务计划和 proxy 操作账本不进入本服务。
+- **受限 Agent 任务（pending）**：`ai-chat-service` 的目标 `/api/v1/agent-tasks` 接收不可变输入、工具/Skills 白名单、预算、模型不可见 browser binding、调用方冻结的 policy evaluation/风险投影/effectId/grant 与不透明关联信息，逐工具调用求权限交集后返回 Schema 校验结果并传播控制；环境矩阵、审批和调用方业务计划不进入本服务权威状态，proxy 操作账本仍归 proxy。
 - 完整双模型、Skill manifest、权限交集与 prompt injection 边界见 `ai-e2e/docs/ai-model-skill-contract.md`；精确 Agent task API/事件见 `ai-e2e/docs/service-api-event-contract.md`。
 - provider alias/model name 只是角色实现配置，不改变“分析/决策模型”和“视觉模型”的产品职责。
 
@@ -184,6 +187,7 @@ debug-ui  ←──  （仅被用户消费）
 - **主代理 / 页面子代理（pending）**：主代理是由持久 authoring/run job、task、attempt 和事件驱动的确定性工作流协调器，不依赖长期模型对话；它维护 PRD 流程、TODO 依赖、运行变量和决策，并负责派发、恢复、跳过、验收与汇总。子代理只执行获授权的页面场景片段，负责重新检查、执行、验证、职责内修复和汇报。
 - **上下文（pending）**：大多数派发使用干净子代理上下文；登出等可恢复中断可由主代理在页面状态和副作用检查后续接原上下文，否则从检查点与授权变量重建。
 - **串行调度与身份（pending）**：首期 `ai-e2e` 维护 authoring verification/test run 公平 FIFO，proxy 以通用门禁保证每进程全局最多一个活动 session；每个 session 固定一个 BrowserContext 和一个活动 actor，会话期间 legacy 写工具返回 browser_busy。跨账号/角色只能由主代理显式编排认证脚本串行切换，子代理发现身份异常即停止。只有当前执行型子代理持有 control，主代理仅在原子操作安全边界 observe，UI live view 只读。子代理上下文可按任务重建；并存身份、多 Context/Tab 并发仅作为后期扩展。
+- **环境与副作用安全（pending）**：`ai-e2e` 从 deployment environment、精确脚本修订、展开 TODO 与有界输入生成风险投影并持有 policy evaluation/grant。local/test 自动、staging 高风险计划一次审批、production 业务写硬拒绝；amendment 扩大风险必须重新审批，locator-only 修复可复用同一投影授权。
 - **编排与执行分属两层（pending）**：页面任务图、模块范围与验收标准归 `ai-e2e`；模型调用、MCP 工具和未来 Skills 执行归 `ai-chat-service`。当前 `AiChatClient.generateText()` 只调用纯文本生成端点，尚不具备 Agent tool loop。
 - **页面任务与控制租约（pending）**：主代理派发不可变页面任务包并持有共享浏览器生命周期；子代理只取得指定 TODO、actor、Tab、工具、输出槽的短期控制租约。跨服务只传递稳定会话/Tab/操作/快照/目标引用和非秘密 actor 约束，不传 Playwright 对象或凭据值。
 - **可视语义执行（pending）**：系统内权威资产是结构化语义功能脚本；执行按单个语义步骤推进，每个 `proxy-adapter` 浏览器原子操作具有幂等 ID、结构化结果和通用生命周期事件，并关联实时画面、脚本步骤与证据。无法确认动作是否发生时进入结果不确定态并先检查副作用。当前 `npx tsx` 子进程执行器不满足该目标。完整契约见 `ai-e2e/docs/agent-browser-execution-contract.md`。
@@ -215,6 +219,7 @@ debug-ui  ←──  （仅被用户消费）
 | 修改分析/决策模型、视觉模型、MCP 聚合或 Skills 职责 | 跨包契约（3.8） + `ai-chat-service` PRODUCT-SPEC + `ai-e2e/docs/ai-model-skill-contract.md` + 根 README "核心产品架构" |
 | 修改业务版本、页面锚点、功能脚本、场景调用图、主/页面子代理、上下文、可视执行或失败证据 | 跨包契约（3.9） + `ai-e2e` PRODUCT-SPEC + `ai-e2e/AGENTS.md` + `ai-e2e/docs/requirements-baseline.md`；涉及版本/页面同步 `ai-e2e/docs/version-page-asset-contract.md`，功能脚本同步 `ai-e2e/docs/functional-script-contract.md`，场景编排同步 `ai-e2e/docs/scenario-orchestration-contract.md`，代理/浏览器执行同步 `ai-e2e/docs/agent-browser-execution-contract.md` + 根 README "核心产品架构" |
 | 修改 Agent 任务输入/工具作用域或浏览器会话、Tab、控制租约、原子操作、结果账本与生命周期事件 | 跨包契约（3.2、3.3、3.8、3.9） + 三服务 PRODUCT-SPEC + `ai-e2e/docs/agent-browser-execution-contract.md` + `ai-e2e/docs/service-api-event-contract.md` |
+| 修改 environment、副作用分类/风险投影、计划级审批或逐工具 effectId/grant 门禁 | 跨包契约（3.2、3.3、3.7、3.8、3.9） + 三服务 PRODUCT-SPEC/AGENTS + `ai-e2e/docs/environment-side-effect-policy-contract.md` + 语义 Schema/数据/API/迁移契约 + 根 README |
 | 修改运行/TODO/尝试状态、决策、依赖传播、证据所有权/完整度/保留/脱敏或运行快照事件 | 跨包契约（3.9） + `ai-e2e` PRODUCT-SPEC/AGENTS/UI AGENTS + `proxy-adapter` PRODUCT-SPEC（涉及原始产物时） + `ai-e2e/docs/run-state-decision-evidence-contract.md` |
 | 修改语义脚本 Schema、动作/断言/引用白名单或映射 | 跨包契约（3.6、3.9） + `ai-e2e`/`proxy-adapter` PRODUCT-SPEC + `ai-e2e/docs/functional-script-contract.md` + `ai-e2e/docs/semantic-script-schema.md` |
 | 修改业务版本/资产修订/运行/决策/事件/证据/outbox 表、copy 或状态事务 | 跨包契约（3.9） + `ai-e2e` PRODUCT-SPEC/AGENTS + `ai-e2e/docs/target-data-model.md` + `ai-e2e/docs/service-api-event-contract.md` + 相关产品契约 |

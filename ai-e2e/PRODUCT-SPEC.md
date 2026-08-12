@@ -64,6 +64,7 @@
 | 主代理 | pending | `ai-e2e` 确定性工作流协调器，状态来自持久 authoring/run job/task/attempt/event 而非长模型对话；持有 PRD 流程、TODO 依赖、运行变量和决策，负责拆分、派发、恢复、跳过、验收与汇总。 |
 | 页面子代理 | pending | 只执行派发的页面场景片段，负责固定重新检查、执行、验证、职责内修复和汇报；不得自行登录、造数或调用场景外脚本。 |
 | 上下文策略 | pending | 默认创建干净子代理上下文；登出等可恢复中断可由主代理在状态/副作用检查后续接原上下文，否则从检查点重建。v1 每个 browser session 固定一个 BrowserContext 和一个活动 actor；跨角色只允许主代理显式编排认证脚本串行切换。 |
+| 环境与副作用策略 | pending | deployment revision 固定 `local/test/staging/production`；local/test 自动允许已声明有界副作用，staging 的删除/批量/不可逆/上传做一次当前 run/job 计划级审批，production 只允许显式认证会话变化和只读行为且无 v1 绕过。`ai-e2e` 持有风险投影/evaluation/grant，完整契约见 `docs/environment-side-effect-policy-contract.md`。 |
 | Agent 执行路径 | pending | 页面任务图和验收归 ai-e2e，模型/MCP/未来 Skills 执行归 ai-chat-service；目标 Agent task、浏览器 operation 与事件协议见 `docs/service-api-event-contract.md`，当前 `AiChatClient.generateText()` 是纯文本生成，不执行 tool loop。 |
 | 页面任务与浏览器控制租约 | pending | 首期 proxy 进程全局最多一个活动 session，且每个 session 固定一个 BrowserContext；authoring/run 共用 FIFO。主代理派发不可变页面任务包并持有生命周期，只在安全边界 observe；子代理只取得指定 TODO、actor、Tab、工具和输出槽的短期 control；UI live view 只读。 |
 | 可视执行与证据 | in-progress | `proxy-adapter` 已有实时画面、marker/overlay、交互日志和失败样本基础；目标按单个语义步骤推进，每个浏览器原子操作使用幂等 ID，并关联场景、步骤、结果和失败证据；状态不确定时先检查副作用。 |
@@ -187,6 +188,7 @@
 | 功能脚本 + 场景调用图 | services/ScriptGeneratorService、database/scripts | pending | 当前仅验证 scenario 级 TypeScript 脚本 | 脚本语义与 v1 Schema 见 `docs/functional-script-contract.md`、`docs/semantic-script-schema.md`；无环调用图、运行计划快照、TODO、尝试、依赖传播及追加式修订见 `docs/scenario-orchestration-contract.md` |
 | 业务版本 + 深复制 | — | pending | 尚无验收面 | 目标使用幂等 `copy_request_id` + `BEGIN IMMEDIATE`，复制 current valid 修订并重建全图 ID；执行资产在目标标记 stale，完成 recheck 前不能正式运行；只可共享 immutable deployment revision/content-addressed blob |
 | 从零生成、复核与局部修复 | services、database（待新增） | pending | 当前无耐久 authoring 验收面 | 从 PRD + URL 生成 candidate，经静态校验和真实可视验证后激活；recheck/repair 依据 dependency index 最小化重验，不重写无关资产 |
+| 环境风险投影与计划级审批 | services、database、ui（待新增） | pending | 当前无验收面 | 冻结 deployment environment 与脚本/TODO 副作用投影；持久 policy evaluation/grant/决策/事件，逐 effectId 校验。production 写计划直接策略拒绝，staging 高风险在 browser control 前一次审批 |
 | 主代理 / 页面子代理调度与上下文策略 | — | pending | 尚无验收面 | 主代理由持久 authoring/run 状态驱动；首期 proxy 进程全局一个活动 browser session，authoring/run 共用 FIFO，只有子代理 control，主代理安全边界 observe；任务包、租约、暂停、检查点和恢复见两份执行/authoring 契约 |
 | ai-chat-service Agent task 消费 | infrastructure/ai-chat-client | pending | 当前仅有纯文本 generate 与基础 chat session 客户端 | 目标使用 `/api/v1/agent-tasks`，传入不可变任务、工具/Skill 白名单、预算和模型不可见浏览器 binding，见 `docs/service-api-event-contract.md` 与 `docs/ai-model-skill-contract.md` |
 | proxy-adapter 可视语义执行 | services/ExecutorService | pending | 当前仍由 `npx tsx` 子进程执行 | 需替换为 browser session/lease + `browser-control.operation_*` 的语义步骤执行；精确控制面见 `docs/service-api-event-contract.md` |
@@ -221,6 +223,7 @@
 > 16. 修改目标浏览器执行入口、可视步骤、重放或失败证据契约
 > 17. 修改测试流程/TODO/尝试状态、决策、依赖传播、证据完整度/保留/脱敏或运行事件快照契约
 > 18. 修改 authoring job、candidate 验证、coverage、影响分析、修订依赖或激活协议
+> 19. 修改 deployment environment、副作用分类/数量/可逆性、风险投影、计划级审批或 production 门禁
 
 ### 维护检查清单
 
@@ -238,6 +241,7 @@
 | 修改旧数据导入、双轨 API、切流、回滚或发布门禁 | 目标领域与代理编排 + 模块/路由/功能/缺口 + `docs/migration-compatibility-acceptance-contract.md` + `docs/target-data-model.md` + `docs/PRODUCT-SPEC-INDEX.md` |
 | 修改状态、决策、依赖传播、证据或运行控制 UI | 目标领域与代理编排 + 功能清单 + UI 模块清单 + `ui/AGENTS.md` + `docs/run-state-decision-evidence-contract.md` + `docs/requirements-baseline.md` + `docs/PRODUCT-SPEC-INDEX.md` |
 | 修改资产生成、复核、验证或局部修复 | 目标领域与代理编排 + 模块/路由/功能/缺口 + `docs/asset-authoring-repair-contract.md` + `docs/target-data-model.md` + `docs/service-api-event-contract.md` + UI AGENTS + `docs/PRODUCT-SPEC-INDEX.md` |
+| 修改环境与副作用策略 | 目标领域与代理编排 + 功能清单 + 缺口 + `docs/environment-side-effect-policy-contract.md` + `docs/semantic-script-schema.md` + `docs/target-data-model.md` + `docs/service-api-event-contract.md` + 三服务 PRODUCT-SPEC/AGENTS + `docs/PRODUCT-SPEC-INDEX.md` |
 | 修改 executor 约束 | 包级目标与边界 + 功能清单（脚本执行） + Runtime Gotchas |
 | 修改 facade 行为 | 模块清单 + 包级目标与边界 |
 | 跨包契约变更（端口、API 路径、SSE 事件、tool 命名） | 本文件 + 所有消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
@@ -266,6 +270,7 @@
 | DOM 变化影响定位未实现 | requirement-gap | pending | 当前自动修复由失败 run 触发，尚不能按当前业务版本的功能脚本定向维护 |
 | 正式 migration/import/cutover 未实现 | requirement-gap | pending | 当前启动重复执行 001–013 且无 migration 账本；旧 TypeScript/login/run 的候选导入、能力协商、版本级切流和回滚尚未实现 |
 | 持久 authoring/coverage/影响索引未实现 | requirement-gap | pending | 当前 PRDAnalyzer/Explorer/ScriptGenerator/自动修复直接围绕旧项目状态和短期调用；没有 job/task/attempt/event、candidate verified/current 分层、revision dependency index 或跨 authoring/run 的持久 browser job queue |
+| 环境与副作用执行门禁未实现 | requirement-gap | pending | `docs/environment-side-effect-policy-contract.md` 已锁定 environment、风险投影、policy evaluation/grant、staging 计划级审批、production 硬拒绝与逐 effectId 校验；当前旧链没有这些能力 |
 
 完整目标需求、已确认边界与尚待技术设计内容见 `docs/requirements-baseline.md`。
 
@@ -284,6 +289,7 @@
 - `ai-e2e/docs/ai-model-skill-contract.md` — 分析/决策模型、单次视觉模型、受限 Agent task 与 Skills runtime
 - `ai-e2e/docs/migration-compatibility-acceptance-contract.md` — 旧库/资产迁移、双轨兼容、切流、回滚和技术验收
 - `ai-e2e/docs/asset-authoring-repair-contract.md` — 从零生成、复核、真实验证、影响分析和局部修复
+- `ai-e2e/docs/environment-side-effect-policy-contract.md` — 环境矩阵、副作用风险投影、计划级审批与跨服务执行门禁
 - `ai-e2e/docs/gap-analysis.md` — `deprecated` 历史缺口对照
 - `ai-e2e/docs/roadmap.md` — `deprecated` 历史路线，不用于制定新目标
 - `ai-e2e/ui/AGENTS.md` — UI 子工作区约束

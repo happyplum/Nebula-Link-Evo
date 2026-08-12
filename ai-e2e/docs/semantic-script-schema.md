@@ -376,6 +376,11 @@ interface SideEffectDeclaration {
   kind: 'create' | 'update' | 'delete' | 'auth_change';
   resourceType: string;
   identityFrom: ValueExpression | { stepId: string; captureId: string };
+  affectedItems:
+    | { kind: 'single' }
+    | { kind: 'input_array'; inputId: string; maxItems: number }
+    | { kind: 'bounded'; maxItems: number };
+  reversibility: 'reversible' | 'compensatable' | 'irreversible';
   verifyApplied: Assertion[];
   retryPolicy: 'verify_before_retry' | 'never_retry';
   cleanupScriptKey?: string;
@@ -384,7 +389,11 @@ interface SideEffectDeclaration {
 
 - 只读脚本的 `sideEffects` 为空数组。
 - create/update/delete/auth 动作必须由步骤引用声明，并提供至少一项 `verifyApplied`。
+- `affectedItems.single` 固定影响 1 项；`input_array` 必须引用带 `maxItems` 约束的已声明数组输入；`bounded.maxItems` 必须为 2–1000。无法在计划阶段解析有限上限的副作用无效。
+- `reversible` 必须有能确定性验证的逆向/清理能力；只能补偿但无法恢复完全一致状态时用 `compensatable`；其余声明 `irreversible`。存在 `cleanupScriptKey` 不自动等于 reversible。
 - `auth_change` 的 `verifyApplied` 必须确定性证明登录后的身份/角色或退出后的匿名态；`identityFrom` 只能解析为非秘密 actor 别名或页面身份标记，不能使用密码、Token 或 secret reference 作为身份。
+- `auth_change` 只覆盖登录、退出和认证会话刷新；修改密码、MFA、权限或账号资料属于 `update`。
+- `set_files` 必须引用 create/update 副作用；会提交表单或改变服务端状态的 click/press/select/check 等步骤同样必须引用声明。无法判断是否写入时 candidate 不得激活。
 - `cleanupScriptKey` 只是向场景规划提供候选，原脚本不能直接调用它。
 - `never_retry` 仍允许主代理在用户/版本规则允许且人工确认后新建尝试，但不能由子代理自动重放。
 - `verify_before_retry` 遇到超时或断连时先执行只读检查；确认未发生才能创建新的动作 ID。
@@ -433,13 +442,13 @@ interface PageAnchorExpression {
 3. 输入默认值、约束、敏感级别和值表达式类型一致。
 4. 步骤 ID 唯一，所有 step output/capture 引用只指向之前步骤。
 5. 动作、断言和 comparator 在白名单内，参数范围合法。
-6. 有副作用步骤声明 identity、应用检查和重试策略；清理引用不能形成脚本调用。
+6. 有副作用步骤声明 identity、有限影响数量、可逆性、应用检查和重试策略；`set_files`/表单提交等潜在写动作不得漏声明，清理引用不能形成脚本调用。
 7. 所有输出来源存在，finalAssertions 非空且不能是模型自然语言判断。
 8. 页面转换和 Tab 操作在 `pageScope` 内。
 9. 定义中不存在秘密值、任意代码、裸 URL、坐标、固定 sleep 或 `networkidle`。
 10. 对规范化 JSON 计算 SHA-256 内容哈希并随修订保存。
 
-任一校验失败，该修订不能成为 current，也不能进入新运行计划。静态校验成功只得到 `valid`；正式 run 还要求执行型 current revision 在精确 deployment/build/角色/locale/viewport verification scope 上为 `verified`。copy 事务可以保留未带目标 scope 验证记录的 current 选择，但目标版本保持 `needs_recheck` 且不得启动正式 run。
+任一校验失败，该修订不能成为 current，也不能进入新运行计划。静态校验成功只得到 `valid`；正式 run 还要求执行型 current revision 在精确 deployment/build/角色/locale/viewport verification scope 上为 `verified`，并通过 `environment-side-effect-policy-contract.md` 的环境风险评估。copy 事务可以保留未带目标 scope 验证记录的 current 选择，但目标版本保持 `needs_recheck` 且不得启动正式 run。
 
 ## 14. 到浏览器原子操作的映射
 

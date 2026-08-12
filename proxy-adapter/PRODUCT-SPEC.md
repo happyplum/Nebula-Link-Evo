@@ -24,7 +24,7 @@
 | 浏览器调试 REST 端点（MJPEG、DOM 快照、debug stream） |  | 任何 `src/static/debug/` 静态前端目录 |
 | LiveKit 令牌发放、配置、健康检查 |  | 共享数据库（`ai-chat-service` 独立 DB） |
 | DB 备份（`utils/db-backup.ts`） |  |  |
-| 通用浏览器执行会话、Tab、原子操作、实时画面与短期浏览器侧原始产物 | 上层传入的不透明可序列化关联信息 | PRD、场景依赖、功能脚本、代理调度、业务版本或长期业务证据目录 |
+| 通用浏览器执行会话、Tab、原子操作、实时画面与短期浏览器侧原始产物 | 上层传入的不透明可序列化关联信息 | PRD、场景依赖、功能脚本、代理调度、业务版本、deployment environment、副作用审批或长期业务证据目录 |
 
 ### 硬约束
 
@@ -34,6 +34,7 @@
 - 目标原子操作以唯一操作 ID 去重并可查询结果；无法确认副作用动作是否发生时返回结果不确定态，不得自动重复执行。
 - 目标页面控制必须校验执行会话、稳定 Tab 引用和短期控制租约；上层不得跨服务传递 `Page`、`Locator` 或 `ElementHandle`。
 - v1 每个 proxy 进程全局最多一个活动 browser execution session，每个 session 固定一个 BrowserContext，不支持会话内切换 Context 或导入 storage state；上游负责任务 FIFO、actor 和认证编排，本包只做不解释业务类型/身份的通用独占门禁。最多一个 `control` lease，`observe` 只在原子操作安全边界读取，UI live view 无控制权；会话活动期间 legacy MCP/debug 写工具返回 `browser_busy`。
+- environment 风险矩阵、业务副作用投影和用户审批归 `ai-e2e`；本包不读取环境标签、不签发/解释 grant，只校验通用 lease/Tab/operation/target/args 与幂等账本。上游未授权的业务写不得取得可执行 control 请求。
 - 本包只生成并短期保留通用浏览器原始产物及内容校验信息；长期证据 manifest、业务关联、保留/pin 和决策归调用方，清理前必须提供可提升或明确过期的产物引用。
 - 不在 `src/` 下恢复 `static/debug/` 前端源码。
 - 不在 generic route handler 中写 provider-specific 逻辑。
@@ -82,7 +83,7 @@
 | `/mcp` | POST (StreamableHTTP) | shipped | MCP Server 入口（`browser-control.*`） | mcp-server/、tools/、browser-tools/ |
 | `/api/v1/browser-execution/sessions/*` | POST/GET/DELETE/SSE | pending | 浏览器执行会话、Tab/租约、snapshot-first 事件与短期产物 | 目标协议见 `ai-e2e/docs/service-api-event-contract.md` |
 | `/api/v1/browser-execution/operations/:operationId` | GET | pending | 原子操作账本查询与未知结果恢复 | 目标协议见 `ai-e2e/docs/service-api-event-contract.md` |
-| `/api/v1/capabilities` | GET | pending | 声明 browser-execution/operation 协议、动作/观测、持久账本、画面能力与 session/Context 限制 | v1 包含 `maxActiveBrowserSessions=1`、`maxBrowserContextsPerSession=1` 和不支持 storage-state 切换；不包含租约 token 或本地机密 |
+| `/api/v1/capabilities` | GET | pending | 声明 browser-execution/operation 协议、动作/观测、持久账本、画面能力与 session/Context 限制 | v1 包含 `maxActiveBrowserSessions=1`、`maxBrowserContextsPerSession=1` 和不支持 storage-state 切换；不声明 E2E 环境矩阵/审批，不包含租约 token 或本地机密 |
 
 ---
 
@@ -105,7 +106,7 @@
 | 配置加载与校验 | config/ | shipped | `__tests__/config/validator.test.ts`、unit/config/* | config |
 | DB 备份 | utils/db-backup | shipped | `__tests__/db-backup.test.ts` | utils |
 | 服务生命周期 | services/app-service | shipped | `__tests__/service-lifecycle.test.ts`、app-service-marker | services |
-| 通用浏览器执行会话与操作账本 | `src/browser-execution/`（待新增） | pending | 尚无验收面 | 目标 control plane、全局单 session、每 session 单 Context、observe/control lease、独占 admission gate、event/operation API 和恢复语义见 `ai-e2e/docs/service-api-event-contract.md`；不解释 E2E actor 或业务关联 |
+| 通用浏览器执行会话与操作账本 | `src/browser-execution/`（待新增） | pending | 尚无验收面 | 目标 control plane、全局单 session、每 session 单 Context、observe/control lease、独占 admission gate、event/operation API 和恢复语义见 `ai-e2e/docs/service-api-event-contract.md`；不解释 E2E actor、deployment environment、副作用审批或业务关联 |
 | E2E 受限 MCP 原子工具 | tools/providers/browser-tools-provider、browser-execution（待扩展） | pending | 当前 15 个工具继续作为兼容面 | 新增 `browser-control.operation_execute/get/cancel`；session/Tab/lease 由模型不可见包装层注入，禁止任意 JS、CDP 和隐式坐标回退 |
 | 语义脚本原子动作/观测覆盖 | browser-tools、browser-engine | pending | 当前 15 个工具只覆盖基础操作 | v1 目标补齐语义动作及 page_state/target_state/text/value/attribute/count/tabs 等观测；不得以 dom_script 代替，映射见两份脚本/API 契约 |
 | 错误分类 | errors/http-errors | shipped | `__tests__/errors.test.ts` | errors |
@@ -138,6 +139,7 @@
 | 修改启动顺序 | 包级目标与边界的"硬约束"列 + 启动序列说明 |
 | 修改 Playwright/CDP 拓扑 | 包级目标与边界 + 浏览器引擎模块 + 功能清单 + `docs/PRODUCT-SPEC-INDEX.md` |
 | 修改浏览器执行会话或原子操作协议 | 包级目标与边界 + 路由登记 + 功能清单 + `ai-e2e/docs/agent-browser-execution-contract.md` + `ai-e2e/docs/service-api-event-contract.md` + 所有消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
+| 修改 E2E 环境/副作用策略边界 | 包级目标与边界 + 功能清单 + `ai-e2e/docs/environment-side-effect-policy-contract.md` + `ai-e2e`/`ai-chat-service` PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md`；不得把环境矩阵或审批下沉本包 |
 | 修改浏览器原始产物与上层证据边界 | 包级目标与边界 + 功能清单 + `ai-e2e/docs/run-state-decision-evidence-contract.md` + 消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
 | 修改语义脚本动作映射 | 功能清单 + `ai-e2e/docs/semantic-script-schema.md` + `ai-e2e` PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
 | 跨包契约变更（端口、API 路径、SSE 事件） | 本文件 + 所有消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
@@ -167,5 +169,6 @@
 - `ai-e2e/docs/service-api-event-contract.md` — 浏览器执行 control plane、MCP 原子操作、事件、幂等与恢复
 - `ai-e2e/docs/migration-compatibility-acceptance-contract.md` — 服务升级顺序、重启语义、故障注入和发布门禁
 - `ai-e2e/docs/asset-authoring-repair-contract.md` — authoring verification 与正式 run 共享浏览器 FIFO 的消费边界
+- `ai-e2e/docs/environment-side-effect-policy-contract.md` — 上游环境/副作用门禁与本包通用执行边界
 - `docs/reference/debug-page-integration-api-reference.md` — Proxy Adapter API 参考
 - 根 `AGENTS.md` — 仓库范围约束

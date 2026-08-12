@@ -52,7 +52,7 @@
 - 同一套页面、模块、脚本和场景资产可以在明确选择的兼容部署上运行，不因主机名或端口变化复制整套页面资产。
 - 跳转到未授权 Origin 时停止当前任务并上报，不由子代理自行扩大访问范围。
 
-项目支持多套命名部署 profile，每次业务版本绑定和运行都引用精确 immutable deployment revision；环境风险审批属于当前唯一待确认产品策略，不影响“部署地址不属于页面逻辑身份”的原则。
+项目支持多套命名部署 profile，每次业务版本绑定和运行都引用精确 immutable deployment revision；environment 只能取 `local/test/staging/production`，参与副作用策略、验证 scope 和风险投影，但不参与页面逻辑身份。deployment environment/profile 变化必须产生新 revision，并使旧验证与审批授权失效。
 
 ## 5. 页面定义与页面锚点
 
@@ -162,7 +162,7 @@ URL 参数按对页面身份的影响分为三类：
 ## 13. 技术落点与剩余实现细节
 
 - `target-data-model.md` 已锁定稳定实体 + 不可变修订表、唯一 current、版本 copy 事务、多命名部署 revision、页面模板语法、参数类型、WHATWG URL 规范化、消歧评分、基线指纹/阈值与内容寻址存储。
-- 部署环境的数据风险审批规则仍需用户确认；v1 单 BrowserContext、单活动 actor 和显式串行认证切换已经锁定，秘密只以 provider reference 保存。
+- 环境与副作用策略已锁定：local/test 自动允许已声明有界副作用；staging 的删除、批量、不可逆和上传做一次当前 run/job 计划级审批；production 只允许显式认证会话变化与只读行为且无 v1 绕过。v1 单 BrowserContext、单活动 actor 和显式串行认证切换保持不变，秘密只以 provider reference 保存。
 - 旧 project/URL/binding/snapshot 数据的分批迁移、兼容读写和回滚步骤在迁移契约中单独定义。
 
 ## 14. 关联文档
@@ -174,4 +174,5 @@ URL 参数按对页面身份的影响分为三类：
 - `run-state-decision-evidence-contract.md`：版本长期决策与单次运行决定、证据和保留的边界。
 - `target-data-model.md`：目标表、修订、页面规范化、基线指纹和 copy 事务。
 - `asset-authoring-repair-contract.md`：copy 后 recheck、验证状态和版本重新激活。
+- `environment-side-effect-policy-contract.md`：immutable deployment environment、风险矩阵与审批失效条件。
 - `../PRODUCT-SPEC.md`：当前能力、目标能力与缺口状态。

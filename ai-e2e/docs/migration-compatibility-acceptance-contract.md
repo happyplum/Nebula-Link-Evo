@@ -1,6 +1,6 @@
 # AI E2E 迁移、兼容与技术验收契约
 
-> 状态：已确认目标设计；只剩环境与副作用审批策略需产品确认。
+> 状态：已确认目标设计，尚未实现。
 > 更新时间：2026-08-12。
 > 本文基于当前 001–013 SQLite 表、scenario 级 TypeScript 执行器、项目级登录录制、三服务现有 API/SSE 与目标协议，定义可回滚迁移、渐进切流和发布门槛。它不授权执行生产数据迁移或删除旧表。
 
@@ -126,7 +126,7 @@
 
 - `ai-chat-service` 支持 agent-task major 1、所需视觉/Skill 版本和结构化输出。
 - `proxy-adapter` 支持 browser-execution/operation major 1、所需动作/观测、持久 operation ledger 和可视画面。
-- ai-e2e 数据库目标 migration 已完成，且所选 deployment/build/角色/locale/viewport scope 的 `business_version_validation` 为 `valid`。
+- `ai-e2e` 支持 `side-effect-policy/1.0`，数据库目标 migration 已完成，且所选 deployment/build/角色/locale/viewport scope 的 `business_version_validation` 为 `valid`。
 
 不满足时新 run 返回明确 503/validation problem；不得半途切回旧执行器。
 
@@ -141,7 +141,7 @@
 | E. 新项目默认 | 新项目只创建 semantic assets；旧项目可继续 legacy 查看/执行 | 无关键回退且迁移率达到发布策略 |
 | F. Legacy 只读 | 关闭旧脚本生成/修复/执行，只保留历史和导出 | 用户确认保留期与导出能力 |
 
-阶段 D 前旧执行入口继续可用；阶段 E 后是否保留旧执行需显式发布决定。任一阶段都不能删除旧表。
+阶段 D 前旧执行入口继续可用；阶段 E 只允许尚未 opt-in 的既有项目在显式 feature flag 下继续 legacy 执行，不再生成新的 legacy 资产；阶段 F 关闭 legacy 生成、修复与执行，只保留历史查看和导出。任一阶段都不能删除旧表。
 
 ### 5.3 路由与 UI
 
@@ -225,6 +225,10 @@
 6. business version copy 后 ID 全量重映射，两个版本分别修复互不影响。
 7. 主代理待决策暂停、持久回答、重新检查再恢复；取消不记 timeout、不自动关闭浏览器。
 8. 同一场景以两个 actor 串行执行显式退出/登录；任一时刻只有一个活动身份，子代理在身份不符时停止，且 Agent/proxy 不通过 Context 或 storage-state 切换绕过认证脚本。
+9. local/test 中已声明、有界副作用自动执行，未声明或无界写入在 browser job/control 前拒绝。
+10. staging 单项非不可逆 create/update 自动执行；删除、批量、不可逆或上传只出现一次当前 run/job 的计划级审批，扩大投影后必须重新审批。
+11. production 可以登录、导航、只读观测和断言，但任何业务 create/update/delete、上传或业务提交都硬拒绝且不提供 v1 绕过。
+12. 相同副作用计划经过服务重启仍可恢复当前 context/grant；跨 run、deployment、policy 或扩大后的投影不能复用审批。
 
 ### 8.6 资源与稳定性默认门槛
 
@@ -243,20 +247,21 @@
 - 无未解释 `outcome_unknown` 自动重试、无秘密进入模型/事件/日志、无独立 Chromium 旁路。
 - 操作文档能明确停止新 run、等待安全边界、查询账本、恢复/取消和回滚应用版本。
 - 三个服务控制面保持 loopback/local 单用户边界；如发布拓扑需要远程或多用户访问，统一认证授权与租户隔离必须先单独验收。
-- v1 单 BrowserContext、单活动身份和显式串行认证切换已经进入长期契约；环境与副作用审批策略已由产品决定后方可发布。
+- v1 单 BrowserContext、单活动身份、显式串行认证切换和 `side-effect-policy/1.0` 环境矩阵已经进入长期契约；policy evaluation、plan-level grant 与逐 effectId 门禁实现并验收后方可发布。
 
-## 10. 已确认身份策略与唯一待确认问题
+## 10. 已确认首期产品策略
 
 已确认 v1 一个 browser execution session 只绑定一个 BrowserContext，同一时刻只有一个已确认活动 actor 或匿名态。跨账号/多角色场景通过显式退出/登录功能脚本串行切换；认证变化必须由硬断言确认，子代理发现意外登出或身份不符时停止上报，由主代理安排恢复。多 Context、并存登录态和并发多 Tab 不属于首期。
 
-当前唯一需要产品授权的问题：**环境与副作用审批**。建议 v1 对 local/test 自动执行已声明副作用；staging 对删除、批量和不可逆操作在 run 开始前做一次计划级审批；production 默认只读，变更动作全部禁用。是否接受该默认策略？
+环境与副作用策略同样已经确认：local/test 自动执行已声明、有界副作用；staging 的单项非不可逆 create/update 自动执行，删除、批量、不可逆和上传在开始前做一次当前 run/job 计划级审批；production 只允许显式登录/退出/会话刷新、导航、只读观测和断言，业务写入与上传硬拒绝，首期不设 break-glass。审批不跨 run/job、deployment 或风险投影复用。
 
 ## 11. 关联文档
 
-- `requirements-baseline.md`：总体产品需求与剩余策略。
+- `requirements-baseline.md`：总体产品需求与已确认策略。
 - `target-data-model.md`：目标表、修订、copy、run、outbox 与证据模型。
 - `service-api-event-contract.md`：三服务 API、能力协商、事件和恢复。
 - `ai-model-skill-contract.md`：模型、视觉、Skills 和注入防护。
 - `agent-browser-execution-contract.md`：浏览器控制与上下文边界。
 - `run-state-decision-evidence-contract.md`：状态、决策、证据和人工控制。
 - `asset-authoring-repair-contract.md`：legacy candidate 的重新生成、真实验证、激活和局部修复。
+- `environment-side-effect-policy-contract.md`：环境矩阵、风险投影、计划级审批和发布门禁。

@@ -1,6 +1,6 @@
 # AI E2E 运行状态、决策与证据契约
 
-> 状态：主体目标设计已确认，安全审批边界仍有一项关键策略待确认。
+> 状态：目标设计已确认，尚未实现。
 > 更新时间：2026-08-12。
 > 本文定义测试流程从调度到结果汇总的状态、失败传播、决策记录、证据包和人工控制语义。精确 Run API/SSE 见 `service-api-event-contract.md`；数据库物理字段和 UI 布局可以在实现设计中调整，但不同层级状态不得重新混为一个字段。
 
@@ -25,8 +25,9 @@
 生命周期用于回答“流程现在能否继续调度”：
 
 ```text
-created → planning → ready → running ↔ paused → completing → completed
-                                  └────→ cancelling → cancelled
+created → planning ─────────→ ready → running ↔ paused → completing → completed
+               └→ paused(approval_required) ┘          └→ cancelling → cancelled
+               └→ cancelled(side_effect_policy_denied)
 ```
 
 | 生命周期 | 语义 |
@@ -35,7 +36,7 @@ created → planning → ready → running ↔ paused → completing → complet
 | `planning` | 正在校验版本、部署、参数并展开调用图。 |
 | `ready` | 基础运行计划已冻结，可开始调度。 |
 | `running` | 主代理正在调度或等待一个活动页面任务结果。 |
-| `paused` | 不再派发新操作，保存暂停原因和检查点；可以恢复。 |
+| `paused` | 不再派发新操作，保存暂停原因和检查点；可由等待计划级审批、用户暂停或运行中决策触发。 |
 | `completing` | 不再执行普通 TODO，正在汇总结果或执行显式收尾。 |
 | `completed` | 运行已封存，不再变化。 |
 | `cancelling` | 正在取消未开始工作并等待活动原子操作到达安全边界。 |
@@ -99,7 +100,7 @@ created → planning → ready → running ↔ paused → completing → complet
 | `precondition_missing` | TODO 进入 blocked，由主代理安排登录、造数、权限或环境前置任务。 | 未解决时影响最终结果，但不伪装成断言失败 |
 | `recoverable_interruption` | TODO 进入 interrupted，主代理恢复环境并检查副作用后恢复或重派。 | 否，恢复失败后可转最终失败 |
 | `infrastructure` | 对只读或可证明未执行的操作按预算重试；否则暂停检查。 | 否，但耗尽后导致流程失败 |
-| `outcome_unknown` | 查询操作账本并检查页面/数据副作用；禁止盲重试。 | 待确认 |
+| `outcome_unknown` | 查询操作账本并检查页面/数据副作用；禁止盲重试。 | 尚未裁决 |
 | `decision_required` | 停止相关分支并创建决策请求。 | 否 |
 | `cancelled` | 停止未开始工作，记录已发生副作用和可选清理建议。 | 否 |
 
@@ -120,7 +121,7 @@ created → planning → ready → running ↔ paused → completing → complet
 
 - 子代理只能提出决策请求，不能自行改变业务断言、任务范围、数据安全边界或场景编排。
 - 主代理可以依据已经写入业务版本的规则处理普通运行决策，例如选择已声明的恢复分支、重派、跳过依赖节点或停止流程。
-- 超出既有规则、改变需求/验收或触及受保护环境的数据操作时必须请求用户决定。
+- 超出既有规则、改变需求/验收或 staging 计划包含删除、批量、不可逆、上传等高风险副作用时必须请求用户决定。production 业务写入属于策略硬拒绝，不创建审批请求。
 
 ### 5.2 决策请求内容
 
@@ -128,7 +129,7 @@ created → planning → ready → running ↔ paused → completing → complet
 
 - 决策 ID、请求者、创建时间和当前状态。
 - 业务版本、运行、页面任务、TODO、尝试和步骤关联。
-- 问题分类：需求歧义、预期结果、范围变化、数据安全、环境权限、恢复路径或其他。
+- 问题分类：需求歧义、预期结果、范围变化、数据安全、`side_effect_approval`、环境权限、恢复路径或其他。
 - 已知事实、证据引用、不能继续的原因和影响范围。
 - 互斥候选方案、每项影响、主代理推荐项和不决策的后果。
 - 需要的决策权限：主代理或用户。
@@ -150,12 +151,22 @@ open → answered → applied
 
 `answered` 只表示已有决定；只有决定已经写入正确载体并生成恢复/计划修订后才是 `applied`。恢复命令必须引用已 applied 的决策 ID。
 
+### 5.5 计划级副作用审批
+
+- local/test 自动通过已声明、有界副作用的策略评估，不伪造用户 decision/grant。
+- staging 高风险计划在任何 control lease 或写操作前创建一次 `side_effect_approval` 用户决策；批准后持久化仅属于当前 run/authoring job 的 active grant。
+- grant 绑定业务版本、deployment revision、策略版本和脱敏风险投影 hash；不写入版本长期决定、不随 copy、不用于下一次运行。
+- 纯 locator/证据修复且安全投影不变时沿用 grant；新增/扩大副作用、增加上传、降低可逆性或改变 deployment/policy 时 grant expired，流程在安全边界重新等待审批。
+- 用户拒绝时不派发尚未开始的写操作；formal run 记为 `cancelled` 且原因是 `approval_denied`，不伪装为业务断言失败。production 业务写入在 planning 阶段封存为 `cancelled(side_effect_policy_denied)`，没有审批越权路径。
+- 决策答案、grant、每次 effectId 使用、撤销/过期和实际副作用进入同一审计链；详细投影与环境矩阵见 `environment-side-effect-policy-contract.md`。
+
 ## 6. 暂停、恢复、取消与人工接管
 
 ### 6.1 暂停和恢复
 
 - 用户暂停或主代理等待决策时，停止派发新 TODO 和浏览器操作；活动原子操作到达明确结果或 `outcome_unknown` 后生成检查点。
 - 暂停页面必须展示原因、请求者、活动操作、可能副作用、等待对象和允许的下一步。
+- `approval_required` 暂停还必须展示 environment、deployment/Git、资源类型、数量上限、删除/不可逆/上传标记、清理能力和投影 hash；一次批准覆盖当前投影内全部高风险步骤。
 - 恢复前固定检查业务版本/部署仍有效、浏览器会话与 Tab 存在、页面身份和所需 actor 正确、未决操作已收敛、输入变量仍有效。
 - 意外登出或身份冲突使当前尝试成为 `recoverable_interruption` 并把认证上下文置为 `unknown`；主代理完成只读复检后，才可追加显式退出/登录 TODO 并恢复。子代理不能自行修正身份。
 - 检查失败时不得直接恢复原 Agent 对话；主代理创建恢复任务、计划修订或新上下文。
@@ -280,6 +291,7 @@ open → answered → applied
 - 集中展示 open 决策的事实、证据、候选方案、推荐项、影响范围和所需权限。
 - 用户提交决定后先看到持久化结果及将产生的计划修订，再允许恢复。
 - 运行级决定和业务版本长期决定明确区分。
+- staging 副作用审批单独展示 active/stale/revoked/expired grant；production 拒绝只展示禁止原因，不显示“仍然执行”按钮。
 
 ### 11.5 证据与报告
 
@@ -301,7 +313,7 @@ open → answered → applied
 - 各层实体表、状态 token、command 幂等记录与 run event 持久化已在 `target-data-model.md` 锁定；精确服务 API/SSE payload 与 snapshot 重连协议已在 `service-api-event-contract.md` 锁定，正式 Schema 和代码尚未实现。
 - 证据对象存储、内容哈希、提升事务、脱敏管线、访问权限和清理任务。
 - UI 组件层级、实时画面协议、依赖图表现和操作动画样式。
-- 不同环境与副作用风险等级下，哪些动作必须由用户审批；这是当前剩余的关键产品策略。
+- 环境风险与审批已锁定；仍需实现风险投影、policy evaluation/grant 持久化、审批 UI 与跨服务门禁。
 
 ## 14. 验收原则
 
@@ -315,6 +327,8 @@ open → answered → applied
 8. 用户可以从画面和时间线理解动作、验证、失败与恢复，不必读取脚本。
 9. 取消不会伪装成超时，也不会隐式关闭浏览器或回滚副作用。
 10. 证据中的秘密字段被移除，敏感截图/DOM 有明确权限与保留策略。
+11. staging 高风险计划只生成一次计划级审批；投影扩大使旧 grant 失效，纯 locator 修复不会重复询问。
+12. production 认证/只读流程可以运行，业务写入和上传在浏览器 control 前被硬拒绝且没有审批绕过。
 
 ## 15. 关联文档
 
@@ -328,3 +342,4 @@ open → answered → applied
 - `target-data-model.md`：运行、TODO、尝试、决策、事件、证据和产物表结构。
 - `service-api-event-contract.md`：运行命令、决策、snapshot、事件日志与跨服务恢复协议。
 - `asset-authoring-repair-contract.md`：运行前复检、嵌套 repair、验证 run 与计划修订的边界。
+- `environment-side-effect-policy-contract.md`：环境矩阵、风险投影、grant 生命周期与审批证据。

@@ -49,6 +49,7 @@ PRD 驱动的 E2E 自动化测试编排器。把"需求分析 → 页面探索 �
 - [designed] copy 后执行资产在目标版本保持 current 选择但标为 stale，目标版本 `needs_recheck`；目标 deployment 上真实重验前不能创建正式 semantic run。
 - [designed] 首期每个 proxy 进程全局最多一个活动 browser execution session，authoring verification 与 test run 共用 FIFO；主代理安全边界 observe、当前子代理 control、UI live view 只读。
 - [designed] v1 语义控制面只在 loopback/local 单用户边界启用；远程或多用户拓扑必须先交付统一认证、授权与租户隔离。
+- [designed] environment 固定在 immutable deployment revision。local/test 自动允许已声明、有界副作用；staging 单项非不可逆 create/update 自动，删除/批量/不可逆/上传做一次当前 run/job 计划级审批；production 只允许显式认证会话变化和只读行为且无 v1 绕过。ai-e2e 持有风险投影、policy evaluation/grant 与逐 effectId 授权，完整契约见 `ai-e2e/docs/environment-side-effect-policy-contract.md`。
 - [designed] 页面或 DOM 节点变化后只修复当前业务版本内受影响的功能脚本并重新验证；当前仅有 run 级失败诊断与自动修复。
 - [tech-debt] `page_snapshot_json` 缺失：手动 URL 不经过探索，该字段为 NULL，导致 AI 编造选择器，通过率从 60%+ 降到 4.6%。变通：手动注入 DOM 快照。
 - [tech-debt] AI 模板约束执行不足：AI 偶尔生成 `test()` / `expect()` / `waitForLoadState('networkidle')` / `typescript` 前缀。变通：批量后处理。
