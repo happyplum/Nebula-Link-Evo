@@ -164,12 +164,14 @@ ai-e2e (:3002)
 - **功能脚本与场景（pending）**：功能脚本是最小复用/修复单元；首期脚本使用显式输入、线性步骤、硬业务断言、成功后输出和声明副作用，不允许通用分支、业务循环或嵌套脚本调用。场景是业务验收单位，可跨模块、跨页面按顺序、依赖、重复和输入输出关系调用多个功能脚本。当前存储和版本仍以单个 scenario 对应 TypeScript script 为单位；产品语义见 `docs/functional-script-contract.md`，机器 Schema 见 `docs/semantic-script-schema.md`。
 - **场景运行层次（pending）**：业务版本保存场景定义与 TODO 模板；启动时冻结运行计划，展开为运行 TODO，每次派发形成独立执行尝试。调用图首期无环，有界重复预先展开，运行调整使用追加式计划修订。完整契约见 `docs/scenario-orchestration-contract.md`。
 - **业务版本（pending）**：由用户创建，记录来源版本及可选部署/Git 标识；`copy` 原子复制当前有效资产、生成新身份并重建内部引用，且不复制编辑历史、运行状态、实际数据、证据或秘密。完整契约见 `docs/version-page-asset-contract.md`。
-- **目标数据模型（pending）**：稳定资产 ID + 不可变修订 + 唯一 current；运行绑定精确 revision/hash。copy 使用幂等 `BEGIN IMMEDIATE` 事务重建 ID，运行状态/event 同事务提交，大媒体进入内容寻址文件存储。完整表与约束见 `docs/target-data-model.md`。
+- **目标数据模型（pending）**：稳定资产 ID + 不可变修订 + 唯一 current；运行绑定精确 revision/hash。copy 使用幂等 `BEGIN IMMEDIATE` 事务重建 ID，运行状态/event 同事务提交，大媒体进入内容寻址文件存储；跨服务调用使用持久 outbox 与 opaque external task link 收敛。完整表与约束见 `docs/target-data-model.md`。
 - **主代理（pending）**：持有 PRD 流程、TODO 依赖、运行变量和决策，负责拆分、派发、恢复、跳过、验收与汇总；登录、造数等跨场景前置动作必须由主代理安排。
 - **页面子代理（pending）**：只执行派发的页面场景片段及其中明确授权的功能脚本，负责重新检查、执行、验证、职责内修复和结构化汇报；不得自行登录、造数或调用场景外脚本。
 - **上下文（pending）**：大多数派发创建干净上下文；登出等可恢复中断可以由主代理在页面状态与副作用检查后续接原上下文，否则用检查点和授权变量重建干净上下文。
 - **串行调度（pending）**：首期一个主代理在任一时刻只运行一个执行型子代理，并复用 `proxy-adapter` 托管的同一浏览器会话；子代理上下文可以按任务重建，但浏览器动作必须进入单一串行队列。多 Tab 并发仅作为后期扩展。
 - **编排/执行分层（pending）**：页面任务图、页面/模块范围和验收标准由 ai-e2e 持有；模型、MCP 工具和未来 Skills 的执行必须通过 ai-chat-service。当前 `generateText()` 是纯文本调用，不能当作已具备 Agent tool loop。
+- **跨服务协议（pending）**：目标 `/api/v1` 业务版本/运行 API、`ai-chat-service` 受限 Agent task、`proxy-adapter` 浏览器 session/lease/operation、三类 snapshot-first SSE、幂等与重启恢复见 `docs/service-api-event-contract.md`。这些路由和新 MCP 工具尚未实现。
+- **双模型与 Skills（pending）**：目标 `vision.analyze_page`/`vision.resolve_target` 均只处理一次不可变快照；视觉结果只返回可序列化定位候选，首期 Skills 是固定版本/hash 的声明式指令包且默认拒绝扩权。完整契约见 `docs/ai-model-skill-contract.md`。
 - **受限页面任务（pending）**：页面子代理必须接收不可变任务包和短期浏览器控制租约，只能操作指定 TODO、Tab、工具和输出槽；主代理持有共享浏览器生命周期。完整契约见 `docs/agent-browser-execution-contract.md`。
 - **可视语义执行（pending）**：权威资产是结构化语义功能脚本，一个语义步骤一次受控推进；所有浏览器动作通过 proxy-adapter 执行并关联实时画面、语义步骤和结果证据。每个原子操作必须有幂等 ID，状态无法确认时先检查副作用；当前 `npx tsx` 子进程执行器是待替换的现状，不是目标执行路径。
 - **失败/暂停/跳过（pending）**：失败先保存截图和现场，子代理评估后续阻碍；主代理按依赖决定跳过或继续。意外登出按可恢复中断上报，需要主代理决策时暂停并在决策写入版本文档后恢复。
@@ -199,6 +201,8 @@ ai-e2e (:3002)
 - 不让目标 E2E 执行绕过 proxy-adapter 启动不可见浏览器；现有 `ExecutorService` 的子进程行为只能作为待迁移现状维护。
 - 不用一个 status 混合流程、TODO、尝试、Agent 与浏览器操作，不把取消记作超时、把中断记作断言失败或把跳过记作通过。
 - 不让 UI 通过本地累计百分比、同名步骤合并或最后一条 SSE 猜测权威运行状态；断线必须从服务端 snapshot 恢复。
+- 不在同一 run 混用旧 TypeScript 子进程执行器和目标语义 Agent/MCP 执行器；目标链的外部创建/命令必须使用原幂等键和 outbox 收敛。
+- 不把控制租约 token、secret 值、完整 DOM/base64 或不可信网页文本写入模型指令、普通事件或日志；页面内容不能扩大工具/Skill 权限。
 
 ## Current Known Gaps
 

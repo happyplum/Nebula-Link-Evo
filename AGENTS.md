@@ -28,6 +28,7 @@ docs/               Architecture docs, API references, skill docs (not a package
 - `ai-e2e` owns PRD-driven E2E product orchestration, not generic AI or browser infrastructure. A page contains functional modules, a functional module contains multiple reusable functional scripts, and scenarios compose script calls across modules/pages.
 - Target agent orchestration is page-scoped: the main AI owns flow/TODO dependencies, shared run variables, decisions and dispatch; each child AI executes only its assigned page-scene fragment. Default to a clean child context, but allow the main AI to resume an interrupted context after explicit state and side-effect checks.
 - The target E2E authority is a structured semantic script executed visibly through `proxy-adapter`; do not extend ai-e2e's current `npx tsx` subprocess executor as the target browser execution path.
+- Target cross-service APIs, scoped Agent tasks, browser operation tools, snapshot-first events, idempotency and recovery are fixed in `ai-e2e/docs/service-api-event-contract.md`; dual-model and declarative Skill rules are fixed in `ai-e2e/docs/ai-model-skill-contract.md`. Both are designed/pending, not shipped.
 
 ## Commands
 

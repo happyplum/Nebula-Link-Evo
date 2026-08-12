@@ -643,6 +643,34 @@ copy 后必须满足：
 
 分配 seq、更新实体和插入 event 在同一事务中；SSE 只读取此表/内存投影，不自行创造业务状态。
 
+### 11.4 `integration_outbox`
+
+跨服务 intent 使用持久 outbox：
+
+- `id` = 跨服务幂等键，PK。
+- `run_id/page_task_id/attempt_id nullable`。
+- `target_service(ai_chat_service/proxy_adapter)/command_type/endpoint_or_tool`。
+- `request_sha256/payload_json_redacted/secret_binding_ref nullable`；不保存租约 token 或 secret 值。
+- `status(pending/dispatching/confirmed/retryable_failed/terminal_failed/cancelled)`。
+- `attempt_count/next_attempt_at/last_error_json/result_ref/created_at/updated_at/confirmed_at`。
+- 同 id 同 request hash 返回已有结果；不同 hash 拒绝。
+
+业务事务只写 outbox intent，不等待网络。worker 通过相同幂等键派发；超时后先查询外部结果再决定重放。
+
+### 11.5 `external_task_links`
+
+跨服务 opaque ref 与最后核对状态：
+
+- `id/run_id/page_task_id/attempt_id nullable`。
+- `service(ai_chat_service/proxy_adapter)`。
+- `kind(agent_task/browser_session/control_lease/browser_operation/artifact)`。
+- `external_id/external_state/last_external_seq nullable`。
+- `request_sha256/result_sha256/result_ref nullable`。
+- `created_at/last_reconciled_at/terminal_at nullable`。
+- `UNIQUE(service, kind, external_id)`。
+
+控制租约只保存 `external_id` 和 token hash/secret ref；明文 capability 不进入数据库。`browser_operation_links` 继续提供 step 级业务关联，`external_task_links` 提供通用恢复索引。
+
 ## 12. 证据与产物
 
 ### 12.1 `artifact_objects`
@@ -708,6 +736,7 @@ manifest sealed 后不可修改；补充证据创建新的 manifest revision 或
 - 现有项目级表没有 business version；module、URL、scenario 和 script 均直接归项目链路。
 - 现有 `scripts` 把 scenario 级 TypeScript 文本与可变 status 放在同表，没有稳定功能脚本身份、不可变 revision payload 或 content hash。
 - 现有 `execution_runs` 只关联 script，无法表达 run plan、TODO、page task、attempt、变量、决策、事件或 evidence manifest。
+- 现有数据库没有持久 outbox 或外部 Agent/browser task 恢复索引，跨服务调用结果尚不能在服务重启后确定性收敛。
 - 现有截图路径和日志直接挂在 execution run，没有内容寻址、完整度、脱敏、保留和跨服务产物提升。
 - 现有 URL 表把实际 URL、单快照和逻辑页面混为一个实体。
 
@@ -722,7 +751,7 @@ manifest sealed 后不可修改；补充证据创建新的 manifest revision 或
 7. 状态更新、event seq 和输出发布原子一致，重复命令不产生重复效果。
 8. execution attempt 和 sealed evidence 不被重试覆盖。
 9. 大媒体不进入 SQLite，秘密值不进入资产、运行变量、事件或证据。
-10. 跨服务等待不占用 SQLite 写事务。
+10. 跨服务等待不占用 SQLite 写事务，outbox 可用原幂等键恢复，外部引用可查询收敛。
 
 ## 17. 关联文档
 
@@ -731,4 +760,5 @@ manifest sealed 后不可修改；补充证据创建新的 manifest revision 或
 - `scenario-orchestration-contract.md`：场景、运行计划、TODO 和尝试语义。
 - `run-state-decision-evidence-contract.md`：状态、决策、事件和证据语义。
 - `agent-browser-execution-contract.md`：浏览器会话、页面任务和操作关联。
+- `service-api-event-contract.md`：outbox、外部任务引用、API 与事件恢复协议。
 - `requirements-baseline.md`：总体需求基线。

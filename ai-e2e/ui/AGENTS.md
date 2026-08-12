@@ -45,5 +45,5 @@ pnpm test         # vitest run
 - Do not revive the old CSS Modules styling model; current UI styling uses Tailwind utilities, Atlas tokens, and shadcn-compatible primitives.
 - Do not change the `base: '/ai-e2e/'` path — it must match the static mount in `ai-e2e` server.
 - Do not add another routing library — react-router-dom v7 is already in use.
-- The target execution UI must render persisted run/TODO/attempt state and monotonic run events from the backend; do not infer authority from local progress increments or merge repeated steps by display label. Target contract: `../docs/run-state-decision-evidence-contract.md`.
+- The target execution UI must render persisted run/TODO/attempt state and monotonic run events from the backend; connect to `/api/v1/runs/:runId/events`, accept the initial `run.snapshot`, and refetch on a sequence gap. Do not infer authority from local progress increments or merge repeated steps by display label. Contracts: `../docs/run-state-decision-evidence-contract.md` and `../docs/service-api-event-contract.md`.
 - Keep the live browser view read-only during Agent control. Any future manual takeover must first obtain an exclusive lease and force a fresh checkpoint before Agent resume.

@@ -235,8 +235,9 @@
 - 场景调用图、运行计划、TODO、追加式修订和受控条件 payload 已锁定为 `nebula.ai-e2e.scenario/1.0` 与对应运行表；正式 JSON Schema 文件尚未生成。
 - 页面模板语法、参数类型、WHATWG URL 规范化、匹配评分、基线指纹/阈值和多部署 revision 已锁定；旧数据迁移仍待兼容契约。
 - 语义脚本 DSL v1 已在 `semantic-script-schema.md` 锁定；实现仍需按其中能力差距扩展 proxy 原子动作并生成正式 JSON Schema 文件。
-- 浏览器执行会话、Tab、控制租约、原子操作、去重账本、结果查询及事件流的精确 API/Schema；多账号隔离及后期多 Tab 并发的调度方式仍待设计。
-- 主代理与子代理运行时的具体会话复用时限和租约签发/回收实现。
+- 浏览器执行会话、Tab、控制租约、原子操作、去重账本、结果查询、Agent task 和三类事件流的目标 API/Schema 已在 `service-api-event-contract.md` 锁定；多账号隔离及后期多 Tab 并发的 BrowserContext 调度方式仍待设计。
+- 主代理与子代理运行时采用干净 Agent task、模型不可见租约 token、主代理签发/回收的协议已锁定；具体租约签名、持久介质和恢复时限仍待实现设计。
+- 双模型调用、`vision.analyze_page`、`vision.resolve_target`、声明式 Skill manifest、版本 pin 和工具权限交集已在 `ai-model-skill-contract.md` 锁定；代码与正式 JSON Schema 尚未实现。
 - 决策、证据 manifest、内容哈希和默认保留结构已锁定；脱敏管线、身份访问控制和清理任务仍待实现设计。
 - 不同环境与副作用风险等级下哪些动作必须用户审批；这是当前剩余的关键产品策略。
 - 可视操作动画的表现、节奏和重放协议。
@@ -281,6 +282,8 @@
 - `ai-e2e/docs/run-state-decision-evidence-contract.md`：分层状态、失败传播、决策、证据与人工控制契约。
 - `ai-e2e/docs/semantic-script-schema.md`：首期语义脚本 JSON Schema、动作/断言、目标与引用契约。
 - `ai-e2e/docs/target-data-model.md`：目标关系表、不可变修订、copy 事务、页面匹配、运行事件与证据存储。
+- `ai-e2e/docs/service-api-event-contract.md`：三服务目标 API、MCP 原子操作、事件信封、幂等与重启恢复。
+- `ai-e2e/docs/ai-model-skill-contract.md`：分析/决策模型、单次视觉模型、受限 Agent task 与 Skills runtime。
 - `ai-e2e/AGENTS.md`：开发边界与运行时事实。
 - `docs/PRODUCT-SPEC-INDEX.md`：跨包契约索引。
 - `docs/architecture.md`：系统分层与服务拓扑。

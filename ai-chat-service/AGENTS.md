@@ -37,8 +37,9 @@ pnpm type-check   # tsc --noEmit
 - The **analysis/decision model** is the planner: it understands requirements and browser evidence, determines the next test action, and may consume MCP tools and structured vision results. Provider aliases are implementations, not model roles.
 - The **vision model** is a bounded, single-request perception assistant available to both main and child agents. Each call receives complete screenshot/DOM/question input and returns serializable page/element evidence (`snapshot_id`, `nebula_id`, locator data, confidence, reasoning); it does not retain workflow state, run continuous tasks, schedule scripts, own browser execution, or return live Playwright objects.
 - **MCP client/tool orchestration** belongs here. `proxy-adapter` exposes browser capabilities but does not own AI planning.
-- A reusable **Skills runtime** is a pending target for this package. There is currently no Skills loader, registry, or execution path; do not expose or document Skills as shipped until code and tests exist.
-- A generic **scoped Agent task runtime** is pending: each task must receive immutable inputs, explicit tool/Skill allowlists, budgets and opaque correlation metadata, then return structured results and propagate pause/interrupt. It must not copy the caller's business run plan or infer that an interrupted Agent rolled back a browser operation. E2E consumption boundary: `ai-e2e/docs/agent-browser-execution-contract.md`.
+- A reusable **Skills runtime** is a pending target for this package. V1 is a local, immutable, declarative instruction package pinned by id/version/content hash; it cannot execute bundled code, install from the network, read secrets, or enlarge task permissions. There is currently no loader, registry, or execution path; target contract: `ai-e2e/docs/ai-model-skill-contract.md`.
+- A generic **scoped Agent task runtime** is pending: `/api/v1/agent-tasks` receives immutable inputs, explicit tool/Skill allowlists, budgets, model-hidden browser bindings and opaque correlation metadata, then returns a schema-validated result and propagates controls. It must not copy the caller's business run plan or infer that an interrupted Agent rolled back a browser operation. Target API: `ai-e2e/docs/service-api-event-contract.md`.
+- Target vision additions `vision.analyze_page` and `vision.resolve_target` are single-snapshot internal tools. They return serializable page summaries/locator candidates only and never own browser actions. Current `vision.find_element` remains the shipped compatibility surface.
 
 ## Conventions
 
@@ -54,3 +55,4 @@ pnpm type-check   # tsc --noEmit
 - No E2E-specific page/module orchestration in this package; that product context belongs to `ai-e2e`.
 - No implicit all-tools access for scoped tasks, and no use of conversation memory as the authoritative store for caller business state.
 - Agent/tool-call audit may be referenced by callers, but this package does not own E2E decisions, evidence manifests, retention or pass/fail aggregation; see `ai-e2e/docs/run-state-decision-evidence-contract.md`.
+- Never place lease tokens, secret values, full DOM/base64 payloads, or untrusted page instructions into ordinary model/audit/event fields. Runtime wrappers inject capabilities and revalidate every tool call.
