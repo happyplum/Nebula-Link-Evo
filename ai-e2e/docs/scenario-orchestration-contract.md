@@ -78,7 +78,7 @@
 
 ## 8. 状态与执行尝试
 
-运行 TODO 必须能够区分以下语义；精确 token 和持久化转换表在状态机技术设计中确定：
+运行 TODO 使用 `run-state-decision-evidence-contract.md` 锁定的状态 token，并按 `target-data-model.md` 的 run/todo/attempt 表持久化，必须区分：
 
 - 等待依赖、已就绪、执行中和通过。
 - 业务失败或执行失败。
@@ -139,5 +139,6 @@
 - `version-page-asset-contract.md`：运行计划冻结的业务版本、部署和页面锚点契约。
 - `agent-browser-execution-contract.md`：页面任务包、子代理权限、浏览器串行操作与暂停恢复契约。
 - `run-state-decision-evidence-contract.md`：TODO/尝试状态、依赖传播、决策和证据契约。
+- `target-data-model.md`：场景 revision payload、无环校验、运行计划、TODO、依赖和尝试表结构。
 - `../PRODUCT-SPEC.md`：当前能力、目标能力与缺口状态。
 - `../../docs/reference/ai-operation-flow.md`：主代理与子代理目标执行流程。

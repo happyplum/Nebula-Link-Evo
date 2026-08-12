@@ -296,7 +296,7 @@ open → answered → applied
 
 ## 13. 实现前仍需精确定义
 
-- 各层实体表、状态转移约束、事件 payload、command 幂等键和 SSE 快照/序号 Schema。
+- 各层实体表、状态 token、command 幂等记录与 run event 持久化已在 `target-data-model.md` 锁定；精确服务 API/SSE payload 仍由跨服务契约定义。
 - 证据对象存储、内容哈希、提升事务、脱敏管线、访问权限和清理任务。
 - UI 组件层级、实时画面协议、依赖图表现和操作动画样式。
 - 不同环境与副作用风险等级下，哪些动作必须由用户审批；这是当前剩余的关键产品策略。
@@ -323,3 +323,4 @@ open → answered → applied
 - `version-page-asset-contract.md`：业务版本、部署和页面资产。
 - `../PRODUCT-SPEC.md`：当前实现状态与目标缺口。
 - `../../docs/reference/ai-e2e-ui-architecture.md`：UI 架构事实与目标执行体验。
+- `target-data-model.md`：运行、TODO、尝试、决策、事件、证据和产物表结构。

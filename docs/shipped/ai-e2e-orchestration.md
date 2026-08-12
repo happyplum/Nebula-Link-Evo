@@ -30,6 +30,7 @@ PRD 驱动的 E2E 自动化测试编排器。把"需求分析 → 页面探索 �
 - [designed] 首期权威脚本 Schema 为 `nebula.ai-e2e.functional-script/1.0`：纯 JSON、白名单动作/断言/值引用、无任意代码/固定 sleep/裸 URL/坐标；副作用必须声明应用检查与重试策略。机器契约见 `ai-e2e/docs/semantic-script-schema.md`。
 - [designed] 场景调用图首期为无环图；业务版本保存场景定义与 TODO 模板，每次测试流程冻结运行计划并产生运行 TODO 和独立执行尝试。重复调用预先展开，恢复和修复使用追加式计划修订；当前 `run-all` 仍只是项目脚本顺序遍历。目标契约见 `ai-e2e/docs/scenario-orchestration-contract.md`。
 - [designed] 业务版本由用户创建，可记录来源版本及部署/Git 标识；`copy` 原子复制当前有效资产、生成新身份并重建内部引用，复制后独立维护，不复制编辑历史、运行状态、证据、实际数据或秘密。目标契约见 `ai-e2e/docs/version-page-asset-contract.md`。
+- [designed] 目标数据模型使用稳定资产 ID + 不可变 revision + 唯一 current；运行冻结精确 revision/hash。copy 通过幂等 `BEGIN IMMEDIATE` 事务重建 ID，大媒体使用内容寻址文件对象，状态与 run event 同事务提交。完整模型见 `ai-e2e/docs/target-data-model.md`。
 - [designed] 主代理维护 PRD 流程、TODO 依赖、运行变量和决策，并负责派发、恢复、跳过、验收与汇总；页面子代理只执行获授权的页面场景片段，负责重新检查、执行、验证、职责内修复和结构化汇报。
 - [designed] 默认创建干净子代理上下文；登出等可恢复中断可由主代理在页面状态和副作用检查后续接原上下文，否则从检查点和授权变量重建。
 - [designed] 首期一个主代理在任一时刻只运行一个执行型子代理，同一测试流程复用 proxy-adapter 托管的 Playwright/Chromium 实例和浏览器会话，所有动作串行；子代理上下文可按任务重建，多 Tab 并发仅作为后期扩展。

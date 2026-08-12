@@ -2,7 +2,7 @@
 
 > 状态：目标技术契约，尚未实现。
 > Schema ID：`nebula.ai-e2e.functional-script/1.0`。
-> 本文锁定首期可持久化脚本的字段、动作/断言白名单、引用规则和静态校验。数据库修订结构由目标数据模型契约另行定义；浏览器原子操作协议见 `agent-browser-execution-contract.md`。
+> 本文锁定首期可持久化脚本的字段、动作/断言白名单、引用规则和静态校验。数据库修订结构见 `target-data-model.md`；浏览器原子操作协议见 `agent-browser-execution-contract.md`。
 
 ## 1. 设计约束
 
@@ -132,12 +132,12 @@ type InputBinding =
   | { kind: 'literal'; value: JsonValue }
   | { kind: 'scenario_input'; name: string }
   | { kind: 'version_variable'; name: string }
-  | { kind: 'run_output'; todoId: string; outputId: string }
+  | { kind: 'call_output'; callKey: string; outputId: string }
   | { kind: 'secret'; secretRef: string }
   | { kind: 'generated'; generator: 'uuid' | 'unique_string'; prefix?: string; maxLength?: number };
 ```
 
-`generated` 值在浏览器动作开始前由主代理生成并写入冻结 TODO 输入；相同 TODO 重派沿用原值，避免重复造数。
+`call_output` 在运行计划展开时解析为具体上游 TODO；`generated` 值在浏览器动作开始前由主代理生成并写入冻结 TODO 输入，相同 TODO 重派沿用原值，避免重复造数。
 
 ## 5. 目标引用
 
@@ -526,3 +526,4 @@ interface PageAnchorExpression {
 - `agent-browser-execution-contract.md`：步骤到浏览器原子操作的运行边界。
 - `run-state-decision-evidence-contract.md`：尝试状态、证据和结果发布。
 - `requirements-baseline.md`：总体需求基线。
+- `target-data-model.md`：脚本稳定实体、不可变修订、场景 payload 和运行冻结结构。

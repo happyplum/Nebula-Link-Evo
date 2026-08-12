@@ -28,7 +28,7 @@
 | 副作用   | 影响类型、业务资源、资源身份、确认方式和重试约束             |
 | 恢复信息 | 已确认检查点、已执行步骤、页面状态和副作用状态               |
 
-每次运行必须绑定精确脚本修订，不能只记录一个会随修复变化的脚本标识。具体修订存储和激活规则仍待技术设计。
+每次运行必须绑定精确脚本修订，不能只记录一个会随修复变化的脚本标识。稳定实体、不可变 revision、current 激活与内容 hash 规则见 `target-data-model.md`。
 
 ## 3. 输入与变量绑定
 
@@ -127,6 +127,7 @@
 - `agent-browser-execution-contract.md`：语义步骤到浏览器原子操作、目标解析、幂等与证据的执行边界。
 - `run-state-decision-evidence-contract.md`：尝试结果、失败分类、断言证据和输出发布状态。
 - `semantic-script-schema.md`：首期机器可校验 JSON 字段、动作/断言白名单、引用与静态校验。
+- `target-data-model.md`：功能脚本/场景修订、运行计划、TODO、尝试和变量的持久化结构。
 - `../PRODUCT-SPEC.md`：当前能力、目标能力与缺口状态。
 - `../../docs/PRODUCT-SPEC-INDEX.md`：跨服务执行边界。
 - `../../docs/reference/ai-operation-flow.md`：目标代理执行流程。
