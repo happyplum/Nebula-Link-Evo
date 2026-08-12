@@ -38,6 +38,7 @@
 - **不直连** Playwright / browser engine —— 浏览器能力**只能**经 MCP Client 到 `proxy-adapter`。
 - **不共享** `proxy-adapter` 数据库 —— 独立 SQLite。
 - **v1 不引入** auth 层 —— 因此只允许 localhost-only 单用户绑定；非本机或多用户拓扑必须先单独设计统一认证、授权和租户隔离。
+- 普通 Chat 不得直接获得 `browser-control.operation_execute/get/cancel`；三项工具包含模型不可见 browser binding，只能由未来受限 Agent 工具包装层注入后调用。当前 MCP client 可发现它们，但 provider 必须过滤。
 - **不引入** frontend 代码。
 - **不引入** `proxy-adapter` 特有概念。
 - 本地 TS import 保留 `.js` 后缀。
@@ -50,7 +51,7 @@
 | 视觉模型（`defaults.vision`） | shipped | 当前通过 `vision.find_element` 解释标注截图 + DOM 快照并返回目标元素、`snapshot_id`、置信度与定位证据。跨服务目标必须可序列化，不得返回 `Page` / `Locator` / `ElementHandle` 等进程内 Playwright 对象。 |
 | 单次视觉分析契约 | in-progress | 目标同时服务主代理和子代理；每次调用必须是完整输入、单一问题、单次输出。视觉模型不保存流程状态、不连续执行、不调度脚本、不操作浏览器。当前元素查找符合单次调用形态，通用页面状态分析接口仍为 pending。 |
 | 通用页面状态理解 | pending | 在元素查找之外，向调用代理提供结构化的页面功能、视觉区域和 DOM 状态摘要；当前没有独立接口。 |
-| MCP client / ToolRegistry | shipped | 接入 `proxy-adapter` 的浏览器工具及其他外部 MCP 工具，并只向 Chat 能力面暴露。 |
+| MCP client / ToolRegistry | shipped | 接入 `proxy-adapter` 的浏览器工具及其他外部 MCP 工具；普通 Chat 只暴露兼容工具，显式过滤 `operation_execute/get/cancel`，防止模型接触 session/Tab/lease/token 注入字段。 |
 | Skills runtime | pending | 加载、注册并执行可复用 AI 工作流；当前仓库中没有 Skills loader、registry 或执行路径，不得视为已交付。 |
 | 受限 Agent 任务执行 | pending | 目标按每个任务显式限制工具、Skills、预算、不透明关联信息和调用方冻结的副作用授权，逐工具调用校验当前语义步骤/effectId/grant 并结构化报告结果；Agent 暂停/中断不推断已经下发的浏览器动作被回滚。 |
 | Agent/视觉/Skills 目标协议 | pending | `ai-e2e/docs/service-api-event-contract.md` 固定 Agent task API/事件；`ai-e2e/docs/ai-model-skill-contract.md` 固定单次视觉 Schema、Skill manifest、权限交集与审计。代码尚未实现。 |
@@ -121,7 +122,7 @@
 | Chat SSE（`session.snapshot` → live） | plugins/routes/api/chat/stream | shipped | SSE 测试 | conversation、stream-persist-worker |
 | Provider 编排（多模型、流式） | services/provider | shipped | `loader.test.ts`、`adapters/glm.test.ts` | clients/vercel-ai |
 | Provider preflight（异步探测） | services/provider/preflight | shipped | 集成测试 | services/provider |
-| MCP Client（崩溃恢复 + 指数退避） | clients/mcp、tools/providers/mcp-client-provider | shipped | `sdk-client.test.ts`、`mcp-client-provider.test.ts` | clients/mcp |
+| MCP Client（崩溃恢复 + 指数退避） | clients/mcp、tools/providers/mcp-client-provider | shipped | `sdk-client.test.ts`、`mcp-client-provider.test.ts` | clients/mcp；发现 proxy 的 18 个工具，普通 Chat provider 过滤 3 个受控 operation 工具 |
 | MCP 工具名解析（同名前缀 `<server>-<tool>`） | tools/providers/mcp-client-provider | shipped | 工具注册测试 | tools |
 | 上下文压缩（>20 条消息触发） | conversation/compressor | shipped | 单元测试 | conversation |
 | 后台任务队列（3 次重试 + 10min idle） | services/conversation-job-queue | shipped | 单元测试 | services |
@@ -181,10 +182,10 @@
 
 | 缺口 | 类型 | 状态 | 备注 |
 |------|------|------|------|
-| 当前已实现能力暂无活跃技术债 | — | — | 2026-08-12 本地验证 82/82 测试通过；下列为新增目标能力缺口 |
+| 当前已实现能力暂无活跃技术债 | — | — | 2026-08-12 本地验证 83/83 测试通过；下列为新增目标能力缺口 |
 | 通用页面状态理解接口未实现 | requirement-gap | pending | `vision.analyze_page`/`vision.resolve_target` 输入输出已设计；当前能力仍聚焦 `vision.find_element` |
 | Skills runtime 未实现 | requirement-gap | pending | manifest、版本/hash pin、权限交集和隔离已设计；当前无 loader、registry 或执行路径 |
-| 受限 Agent 任务执行面未实现 | requirement-gap | pending | `/api/v1/agent-tasks`、状态/事件、browser binding 和结构化结果已设计；当前 Chat tool loop 仍没有逐任务作用域 |
+| 受限 Agent 任务执行面未实现 | requirement-gap | pending | `/api/v1/agent-tasks`、状态/事件、browser binding 和结构化结果已设计；proxy 已提供受控 operation 工具，但当前普通 Chat 已过滤它们，尚无模型不可见 wrapper 可实际注入租约并调用 |
 | 逐工具副作用授权校验未实现 | requirement-gap | pending | 当前没有调用方 policy evaluation、风险投影/effectId/grant 输入及逐调用交集校验；环境矩阵与审批仍必须由 ai-e2e 持有 |
 
 ---

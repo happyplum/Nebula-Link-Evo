@@ -18,10 +18,7 @@ export function toSDKResult(data: unknown): string {
     return '';
   }
   const mcpResult = data as Partial<CallToolResult>;
-  if (
-    mcpResult.content?.[0]?.type === 'text' &&
-    typeof mcpResult.content[0].text === 'string'
-  ) {
+  if (mcpResult.content?.[0]?.type === 'text' && typeof mcpResult.content[0].text === 'string') {
     return mcpResult.content[0].text;
   }
 
@@ -38,5 +35,12 @@ export function toSDKResult(data: unknown): string {
  */
 export function toSDKError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
-  return `Error: ${message}`;
+  const code =
+    error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    typeof (error as { code?: unknown }).code === 'string'
+      ? (error as { code: string }).code
+      : undefined;
+  return code ? `Error [${code}]: ${message}` : `Error: ${message}`;
 }

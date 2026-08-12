@@ -17,6 +17,12 @@ import debugRoutes from './plugins/routes/debug/index.js';
 import { ToolRegistry } from './tools/registry.js';
 import { BrowserToolsProvider } from './tools/providers/browser-tools-provider.js';
 import mcpServerPlugin from './mcp-server/index.js';
+import { BrowserExecutionRepository } from './browser-execution/repository.js';
+import { BrowserExecutionService } from './browser-execution/service.js';
+import { PlaywrightBrowserExecutionBrowser } from './browser-execution/playwright-browser.js';
+import { BrowserExecutionToolsProvider } from './tools/providers/browser-execution-tools-provider.js';
+import capabilitiesRoutes from './plugins/routes/capabilities.js';
+import browserExecutionRoutes from './plugins/routes/browser-execution.js';
 
 const envLocal = path.join(process.cwd(), '.env');
 const envRoot = path.join(process.cwd(), '..', '.env');
@@ -38,6 +44,12 @@ const app = Fastify({
 
 const PORT = parseInt(process.env.PROXY_PORT || '3000');
 const DEBUG_DB_PATH = path.join(process.cwd(), 'data', 'proxy-adapter', 'debug.sqlite');
+const BROWSER_EXECUTION_DB_PATH = path.join(
+  process.cwd(),
+  'data',
+  'proxy-adapter',
+  'browser-execution.sqlite'
+);
 
 /**
  * CORS origin configuration.
@@ -53,7 +65,10 @@ function resolveCorsOrigin(): (string | RegExp)[] | boolean {
   if (envVal === '*') {
     return true;
   }
-  return envVal.split(',').map(o => o.trim()).filter(Boolean);
+  return envVal
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
 }
 
 /**
@@ -64,6 +79,7 @@ function resolveCorsOrigin(): (string | RegExp)[] | boolean {
 const HOST = process.env.HOST || '127.0.0.1';
 
 let toolRegistry: ToolRegistry;
+let browserExecutionService: BrowserExecutionService | undefined;
 
 async function start() {
   try {
@@ -95,8 +111,17 @@ async function start() {
     // Initialize ToolRegistry and register providers
     toolRegistry = new ToolRegistry();
 
+    browserExecutionService = new BrowserExecutionService({
+      repository: new BrowserExecutionRepository(BROWSER_EXECUTION_DB_PATH),
+      browser: new PlaywrightBrowserExecutionBrowser(),
+      controlPlaneEnabled: HOST === '127.0.0.1' || HOST === 'localhost' || HOST === '::1',
+    });
+    browserExecutionService.initialize();
+    browserClient.setAccessGate(browserExecutionService);
+
     const browserToolsProvider = new BrowserToolsProvider(browserClient);
     toolRegistry.registerProvider(browserToolsProvider);
+    toolRegistry.registerProvider(new BrowserExecutionToolsProvider(browserExecutionService));
 
     await toolRegistry.initializeAll();
 
@@ -108,6 +133,14 @@ async function start() {
     await app.register(healthRoutes, { prefix: '/api/v1/health' });
     await app.register(configRoutes, { prefix: '/api/v1/config' });
     await app.register(livekitTokenRoutes, { prefix: '/api/v1' });
+    await app.register(capabilitiesRoutes, {
+      prefix: '/api/v1',
+      browserExecutionService,
+    });
+    await app.register(browserExecutionRoutes, {
+      prefix: '/api/v1/browser-execution',
+      browserExecutionService,
+    });
 
     // Legacy unversioned routes (backward compatibility, will be deprecated)
     await app.register(healthRoutes, { prefix: '/api/health' });
@@ -115,7 +148,10 @@ async function start() {
     await app.register(livekitTokenRoutes, { prefix: '/api' });
 
     // Register Debug routes
-    await app.register(debugRoutes, { prefix: '/debug' });
+    await app.register(debugRoutes, {
+      prefix: '/debug',
+      browserExecutionService,
+    });
     app.log.info({ prefix: '/debug' }, 'Debug routes registered');
     app.log.info({ subscribers: debugEventHub.getSubscriberCount() }, 'Debug event hub ready');
 
@@ -125,7 +161,10 @@ async function start() {
     const mcpStatus = appService.getMCPStatus();
     app.log.info({ configPath: appService.getConfigPath() }, 'Configuration loaded');
     app.log.info(
-      { browser: mcpStatus.enabled ? 'OK' : 'Disabled', file: mcpStatus.enabled ? 'OK' : 'Disabled' },
+      {
+        browser: mcpStatus.enabled ? 'OK' : 'Disabled',
+        file: mcpStatus.enabled ? 'OK' : 'Disabled',
+      },
       'MCP Systems status'
     );
 
@@ -150,19 +189,21 @@ async function start() {
       },
       async () => {
         return {
-              service: 'Proxy Adapter',
-              version: '2.0.0',
-              mode: 'multi-model',
-              endpoints: {
-                'GET /api/v1/health': 'Health check',
-                'GET /api/v1/config': 'Show current configuration',
-                'POST /mcp': 'MCP StreamableHTTP endpoint exposing browser-control tools',
-                'GET /debug/api/*': 'Debug API endpoints',
-              },
-              deprecation: {
-                note: 'Unversioned /api/* routes are deprecated. Use /api/v1/* instead.',
-              },
-            };
+          service: 'Proxy Adapter',
+          version: '2.0.0',
+          mode: 'multi-model',
+          endpoints: {
+            'GET /api/v1/health': 'Health check',
+            'GET /api/v1/config': 'Show current configuration',
+            'GET /api/v1/capabilities': 'Browser execution capabilities',
+            'POST /api/v1/browser-execution/sessions': 'Create a controlled browser session',
+            'POST /mcp': 'MCP StreamableHTTP endpoint exposing browser-control tools',
+            'GET /debug/api/*': 'Debug API endpoints',
+          },
+          deprecation: {
+            note: 'Unversioned /api/* routes are deprecated. Use /api/v1/* instead.',
+          },
+        };
       }
     );
 
@@ -171,6 +212,8 @@ async function start() {
     app.log.info('Available endpoints:');
     app.log.info({ endpoint: 'GET  /api/v1/health' });
     app.log.info({ endpoint: 'GET  /api/v1/config' });
+    app.log.info({ endpoint: 'GET  /api/v1/capabilities' });
+    app.log.info({ endpoint: 'POST /api/v1/browser-execution/sessions' });
     app.log.info({ endpoint: 'POST /mcp              - MCP StreamableHTTP' });
     app.log.info({ endpoint: 'GET  /debug/api/*       - Debug API' });
     app.log.info({ endpoint: '(deprecated) /api/*     - Use /api/v1/* instead' });
@@ -185,6 +228,9 @@ async function shutdown(signal: 'SIGINT' | 'SIGTERM'): Promise<void> {
   await interactionLogger.destroy();
   if (toolRegistry) {
     await toolRegistry.shutdownAll();
+  }
+  if (browserExecutionService) {
+    await browserExecutionService.shutdown();
   }
   await shutdownBrowserEngine();
   await appService.shutdown();

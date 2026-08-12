@@ -246,7 +246,7 @@
 - 当前 `ExecutorService` 把 TypeScript 写入临时文件并用 `npx tsx` 子进程执行；这与目标唯一可视浏览器执行链冲突，后续必须替换而不是继续扩展为目标执行器。
 - 当前运行记录主要关联单个脚本，只支持 pass/fail/error/timeout，尚不能表达依赖跳过、等待决策、可恢复中断、检查点和跨脚本运行变量。
 - 当前失败记录支持日志和截图路径，`proxy-adapter` 也有失败截图/DOM 样本基础，但尚无贯通版本、场景、脚本调用和步骤的统一证据包。
-- 当前 `proxy-adapter` 已有 MCP 浏览器工具、实时 MJPEG 画面、DOM marker、高亮事件、动作执行器和交互日志，但尚无执行会话租约、稳定 Tab 归属、原子操作去重/结果账本、结果不确定态及面向 E2E 语义步骤的正式事件契约。
+- 当前 `proxy-adapter` 已交付 MCP 浏览器工具、实时 MJPEG 画面、DOM marker、高亮事件，以及 application-level 单 session/单 Context、稳定 Tab、observe/control lease、原子操作去重/结果账本和重启结果不确定态；面向 E2E 的 browser event/artifact/capture、失败截图、受控 DOM 快照和剩余 set_files/动画仍未交付。
 - 当前 `ai-chat-service` 已有 Agent 工具循环、MCP client/ToolRegistry、会话控制和 `vision.find_element`，但尚无 E2E 页面任务包、工具作用域租约和结构化任务结果；通用单次页面状态分析与 Skills runtime 也尚未实现。
 - 当前 `ai-e2e` 主要使用纯文本生成接口，尚未实现主代理/页面子代理的任务图、上下文隔离、暂停决策和恢复运行时。
 - 当前没有持久 authoring job/task/attempt/event、coverage disposition、candidate verified/current 分层或 revision dependency index；生成和修复仍围绕旧项目状态与短期调用。

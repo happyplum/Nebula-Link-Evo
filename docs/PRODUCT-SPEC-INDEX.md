@@ -92,7 +92,7 @@ debug-ui  ←──  （仅被用户消费）
 
 | 契约 | 提供方 | 消费方 | 路径 | 备注 |
 |------|--------|--------|------|------|
-| MCP Server (StreamableHTTP) | `proxy-adapter` | `ai-chat-service` (MCP Client) | `POST /mcp` | 暴露 `browser-control.*`（15 个工具） |
+| MCP Server (StreamableHTTP) | `proxy-adapter` | `ai-chat-service` (MCP Client) | `POST /mcp` | 暴露 `browser-control.*`（15 个兼容工具 + 3 个受控 operation 工具）；普通 Chat 过滤受控工具 |
 | LiveKit token | `proxy-adapter` | `debug-ui` | `GET /api/livekit-token` | 用于 LiveView 升级 |
 | Health | `proxy-adapter` / `ai-chat-service` | 任意 | `GET /api/health` 或 `/health` | 健康检查 |
 | Config | `proxy-adapter` / `ai-chat-service` | `debug-ui` | `GET /api/config` 或 `/config` | 当前运行配置 |
@@ -107,15 +107,15 @@ debug-ui  ←──  （仅被用户消费）
 | 资产 authoring（pending） | `ai-e2e` | `ai-e2e ui` | `/api/v1/business-versions/:versionId/authoring-jobs`、`/api/v1/authoring-jobs/:jobId/*` | bootstrap/recheck/repair/import_conversion、coverage、candidate 验证、决策与 snapshot-first SSE |
 | E2E Run（pending） | `ai-e2e` | `ai-e2e ui` | `/api/v1/projects/:projectId/runs`、`/api/v1/runs/:runId/*` | run 命令、决策、证据、snapshot-first SSE 与持久 event log |
 | 环境与副作用策略（pending） | `ai-e2e` | `ai-e2e ui` / `ai-chat-service` | Run/Authoring snapshot、decision、event 与 Agent task 输入 | `side-effect-policy/1.0` 风险投影/evaluation/grant；staging 高风险一次审批，production 业务写硬拒绝 |
-| 浏览器执行控制面（pending） | `proxy-adapter` | `ai-e2e` / `ai-chat-service` | `/api/v1/browser-execution/*` | application-level session/observe-control lease/operation/artifact；ai-e2e 排 authoring/run FIFO，proxy 通用独占门禁保证每进程最多一个活动 session，与 MCP transport session 解耦 |
-| 能力协商（pending） | 三个后端服务 | 其他服务/UI | `GET /api/v1/capabilities` | 协议 major、功能和限制；不含 secret，run preflight 不兼容时禁止静默回退 |
+| 浏览器执行控制面（in-progress） | `proxy-adapter` | `ai-e2e` / `ai-chat-service` | `/api/v1/browser-execution/*` | session/lease/operation query 已交付；单活动 session/单 Context、opaque token hash、SQLite WAL、legacy 门禁和重启 `outcome_unknown` 已生效。session event/artifact/capture/续租仍 pending |
+| 能力协商（in-progress） | 三个后端服务 | 其他服务/UI | `GET /api/v1/capabilities` | proxy-adapter 已交付 browser-execution/operation capability；ai-chat-service/ai-e2e 仍 pending。协议 major、功能和限制不含 secret，run preflight 不兼容时禁止静默回退 |
 
 ### 3.3 MCP 工具契约
 
-- `proxy-adapter` 通过 MCP Server 暴露 `browser-control.*`（15 个工具）。Vision-agent 工具已移除。
+- `proxy-adapter` 通过 MCP Server 暴露 `browser-control.*`（15 个兼容工具 + `operation_execute/get/cancel`，共 18 个）。Vision-agent 工具已移除。
 - `ai-chat-service` 通过 MCP Client 自动拉取 browser-control 工具；状态机管理 server 生命周期，指数退避重连（最多 5 次），`toolsChanged` 事件通知工具变更。
 - 视觉分析由 `ai-chat-service` 内部 `VisionAnalyzer` + `VisionToolProvider` 提供，注册 `vision.find_element` 工具（`exposeTo: ['chat']`），不通过 MCP Server 暴露；工具本地缓存最近 5 个 DOM snapshot，`snapshot_id` 命中时复用缓存。
-- 目标新增 `browser-control.operation_execute/get/cancel` 作为 E2E 受限原子工具；session/Tab/lease 由模型不可见 wrapper 注入。现有 15 个工具继续作为兼容/调试面，目标协议未实现。
+- `browser-control.operation_execute/get/cancel` 已作为 E2E 受限原子工具交付；现有 15 个工具继续作为兼容/调试面。`ai-chat-service` 普通 Chat provider 明确过滤三项受控工具，session/Tab/lease/token 必须待受限 Agent wrapper 以模型不可见 binding 注入。
 - E2E 写调用还必须由 `ai-chat-service` wrapper 对调用方冻结的语义步骤、effectId/数量边界、policy evaluation/grant 与 lease 求交集；`proxy-adapter` 不解释 environment 或审批，只执行通用 operation 约束。
 - 目标新增内部 `vision.analyze_page` 和 `vision.resolve_target`；两者只读取一次不可变 snapshot，返回页面摘要或可序列化 locator candidates，不操作浏览器。`vision.find_element` 在迁移期保留兼容。
 - 同名工具命名规则：`<serverName>-<toolName>` 前缀。
@@ -191,7 +191,7 @@ debug-ui  ←──  （仅被用户消费）
 - **编排与执行分属两层（pending）**：页面任务图、模块范围与验收标准归 `ai-e2e`；模型调用、MCP 工具和未来 Skills 执行归 `ai-chat-service`。当前 `AiChatClient.generateText()` 只调用纯文本生成端点，尚不具备 Agent tool loop。
 - **页面任务与控制租约（pending）**：主代理派发不可变页面任务包并持有共享浏览器生命周期；子代理只取得指定 TODO、actor、Tab、工具、输出槽的短期控制租约。跨服务只传递稳定会话/Tab/操作/快照/目标引用和非秘密 actor 约束，不传 Playwright 对象或凭据值。
 - **可视语义执行（pending）**：系统内权威资产是结构化语义功能脚本；执行按单个语义步骤推进，每个 `proxy-adapter` 浏览器原子操作具有幂等 ID、结构化结果和通用生命周期事件，并关联实时画面、脚本步骤与证据。无法确认动作是否发生时进入结果不确定态并先检查副作用。当前 `npx tsx` 子进程执行器不满足该目标。完整契约见 `ai-e2e/docs/agent-browser-execution-contract.md`。
-- **跨服务 API/事件（pending）**：业务版本/Authoring/Run API、Agent task、browser execution control plane、MCP operation tools 和四类目标 snapshot-first SSE（Authoring/Run/Agent/Browser）已在 `ai-e2e/docs/service-api-event-contract.md` 锁定；现有 Chat/Debug/项目阶段 SSE 继续兼容且序号互不混用。
+- **跨服务 API/事件（in-progress）**：proxy capability、browser session/lease/operation query 与 MCP operation tools 已交付；业务版本/Authoring/Run API、Agent task、browser event/artifact 和四类目标 snapshot-first SSE 其余部分仍 pending，契约见 `ai-e2e/docs/service-api-event-contract.md`。现有 Chat/Debug/项目阶段 SSE 继续兼容且序号互不混用。
 - **资产生成/复核/修复（pending）**：bootstrap 从 PRD + URL 生成页面、模块需求、功能脚本与场景 candidate；static validation、真实 browser verification 和 activation 分阶段。recheck/repair 依据 revision dependency index 计算影响闭包并只修改当前业务版本。完整契约见 `ai-e2e/docs/asset-authoring-repair-contract.md`。
 - **迁移与切流（pending）**：先对 001–013 做结构 preflight 并建立 checksum migration 账本；旧 TypeScript、登录录制和历史 run 只读保留，导入只生成 `needs_recheck` 版本/候选。同一 run 固定为 legacy 或 `semantic_v1`，版本级 opt-in 后再逐步关闭旧写/执行。完整契约见 `ai-e2e/docs/migration-compatibility-acceptance-contract.md`。
 - **分层状态与传播（pending）**：测试流程、运行 TODO、执行尝试、Agent 会话和浏览器操作分别持有状态。blocked/interrupted/waiting_decision 未收敛前不提前跳过下游；终态失败只传播到真实依赖节点。

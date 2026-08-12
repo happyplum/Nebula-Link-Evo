@@ -7,6 +7,7 @@ import { AppService } from '../../../services/index.js';
 import { DebugDatabaseManager } from '../../../debug-db.js';
 import debugStreamRoutes from './stream.js';
 import { debugEventHub } from '../../../services/debug-event-hub.js';
+import type { BrowserExecutionService } from '../../../browser-execution/service.js';
 
 interface InteractionQuery {
   limit?: number;
@@ -17,8 +18,51 @@ interface InteractionQuery {
   start_time?: number;
 }
 
-const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
+interface DebugRoutesOptions {
+  browserExecutionService?: BrowserExecutionService;
+}
+
+const CONTROLLED_SESSION_BLOCKED_ROUTES = new Set([
+  'POST /api/playwright/open',
+  'POST /api/playwright/close',
+  'POST /api/playwright/tabs/switch',
+  'POST /api/playwright/navigate',
+  'GET /api/playwright/screenshot',
+  'GET /api/dom',
+  'GET /api/playwright/element-at',
+  'POST /api/playwright/click-by-selector',
+  'POST /api/playwright/click',
+  'POST /api/playwright/execute-script',
+  'GET /api/playwright/cookies',
+  'GET /api/playwright/local-storage',
+  'POST /api/playwright/type',
+  'POST /api/playwright/action',
+  'POST /api/playwright/click-by-marker',
+  'POST /api/playwright/execute-by-marker',
+  'POST /api/playwright/scroll',
+  'POST /api/mcp/call',
+]);
+
+const debugRoutes: FastifyPluginAsyncTypebox<DebugRoutesOptions> = async (fastify, options) => {
   const appService = AppService.getInstance();
+
+  fastify.addHook('preHandler', async (request, reply) => {
+    const routePath = (request.routeOptions.url ?? request.url.split('?')[0]).replace(
+      /^\/debug/,
+      ''
+    );
+    const routeKey = `${request.method} ${routePath}`;
+    if (
+      options.browserExecutionService?.hasActiveSession() &&
+      CONTROLLED_SESSION_BLOCKED_ROUTES.has(routeKey)
+    ) {
+      return reply.code(409).send({
+        success: false,
+        code: 'browser_busy',
+        error: '受控浏览器会话活动期间，兼容调试写入和直接页面采集已禁用',
+      });
+    }
+  });
 
   await fastify.register(debugStreamRoutes, { prefix: '/api' });
 
@@ -343,13 +387,16 @@ const debugRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       try {
         request.log.info('[Debug API] Fetching DOM from browserClient...');
         const dom = await browserClient.getSimplifiedDOM();
-        request.log.info({
-          hasSnapshotId: !!dom.snapshot_id,
-          hasAnnotatedScreenshot: !!dom.annotated_screenshot_base64,
-          elementsMapLength: dom.elements_map?.length,
-          hasSimplifiedDom: !!dom.simplified_dom,
-          version: dom.version,
-        }, '[Debug API] DOM data received');
+        request.log.info(
+          {
+            hasSnapshotId: !!dom.snapshot_id,
+            hasAnnotatedScreenshot: !!dom.annotated_screenshot_base64,
+            elementsMapLength: dom.elements_map?.length,
+            hasSimplifiedDom: !!dom.simplified_dom,
+            version: dom.version,
+          },
+          '[Debug API] DOM data received'
+        );
 
         return {
           success: true,

@@ -1,6 +1,6 @@
 # AI E2E 代理与浏览器执行契约
 
-> 状态：已确认目标设计，尚未实现。
+> 状态：已确认目标设计，部分实现（proxy 浏览器控制核心已交付，Agent/编排/证据链待实现）。
 > 更新时间：2026-08-12。
 > 本文定义主代理、页面子代理、`ai-chat-service` 与 `proxy-adapter` 之间的运行边界。精确 HTTP/MCP 路由和逻辑 JSON Schema 见 `service-api-event-contract.md`；鉴权与持久化实现可以调整，但所有权、幂等、串行、暂停和证据语义不得弱化。
 
@@ -210,17 +210,17 @@
 
 ## 14. 当前实现差距
 
-- `proxy-adapter` 当前 15 个 `browser-control.*` 工具以单步调用为主，浏览器实例和进程内互斥已存在，但尚无执行会话租约、稳定 Tab 归属、`operationId` 去重或 `outcome_unknown` 契约。
-- 当前 `ActionExecutor` 能记录交互与失败样本，但没有 run/TODO/attempt/step 关联，也没有可查询的原子操作结果账本。
+- `proxy-adapter` 已交付 application session、稳定 Tab、observe/control lease、`operationId` 去重、queued cancel、持久结果查询、重启 `outcome_unknown` 和 legacy 门禁；当前 MCP Server 共 15 个兼容工具 + 3 个受控 operation 工具。
+- proxy 尚无 browser session SSE/event-log、短期 artifact/capture、受控 dom_snapshot、set_files、失败截图、操作动画、control 原地续租与保留清理，因此浏览器证据链仍不完整。
 - 当前 debug event hub 只有进程内全局递增序号，尚无浏览器操作生命周期和跨服务关联事件。
-- `ai-chat-service` 已有 Agent tool loop、MCP client/ToolRegistry 和会话暂停/中断/取消基础，但没有 E2E 页面任务包、工具作用域租约和结构化任务结果协议。
+- `ai-chat-service` 已有 Chat Agent tool loop、MCP client/ToolRegistry 和会话暂停/中断/取消基础，并已从普通 Chat 过滤 3 个受控 operation 工具，但没有 E2E 页面任务包、模型不可见 browser binding、工具作用域租约和结构化任务结果协议。
 - `ai-e2e` 当前主要调用 `/api/ai/generate`，旧 `ExecutorService` 仍通过 `npx tsx` 执行脚本，尚未进入上述 Agent + MCP 可视执行链。
 - 三服务当前均未实现风险投影、policy evaluation/grant 传递和逐语义步骤/effectId 的工具调用门禁。
 
 ## 15. 仍待实现设计
 
-- 执行会话、租约、Agent task、原子操作、结果查询、事件流与动作/观测白名单已在 `service-api-event-contract.md` 锁定；正式 OpenAPI/JSON Schema 文件和代码尚未生成。
-- 租约已锁定为短期 opaque token + hash/process epoch，操作账本默认 proxy 自有 SQLite WAL，保留与清理门禁见 `service-api-event-contract.md`；正式表 migration、JSON Schema 和代码尚未实现。
+- Agent task、browser event/artifact、剩余动作/观测和跨服务证据关联已在 `service-api-event-contract.md` 锁定；proxy 的 session/lease/operation 核心已实现，正式 OpenAPI 文件和其余服务代码尚未生成。
+- proxy 已实现短期 opaque token + SHA-256 hash/process epoch 和自有 SQLite WAL operation ledger；不扩权续租、7 天保留、pin/引用保护和清理任务仍待实现。
 - 动画媒体协议、播放速度和重放索引格式。
 - 同时多身份、多 BrowserContext 与多 Tab 并发需要的隔离和调度模型；v1 单 Context、单活动身份不依赖该扩展。
 

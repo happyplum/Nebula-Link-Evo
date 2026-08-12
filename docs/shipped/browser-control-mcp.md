@@ -6,15 +6,17 @@ proxy-adapter 通过 MCP Server (StreamableHTTP) 对外暴露 `browser-control.*
 - [shipped] ToolRegistry + browser-control provider：`proxy-adapter/src/tools/`（registry / types / index / providers/browser-tools-provider / adapters/mcp-server / adapters/json-schema-to-zod）。外部 MCP client/provider 归 `ai-chat-service`，proxy-adapter 不再包含该 provider。
 - [tech-debt] `GatewayTool.exposeTo` / `BrowserToolsProvider` 仍保留未使用的 legacy `chat` consumer 标记；本包当前没有 Chat 路由或 Chat 工具消费方。
 - [shipped] browser-control.* 工具定义与参数/结果适配：`proxy-adapter/src/browser-tools/`（definitions / tool-map / param-adapter / result-adapter / types / index）。
-- [shipped] 工具集含 15 个 browser-control 工具（含 screenshot、click、type、dom_snapshot 等）；区别于 `Action` 联合类型（12 种，不含 screenshot）。
+- [shipped] MCP 工具集共 18 个：15 个兼容 browser-control 工具（含 screenshot、click、type、dom_snapshot 等）+ 3 个受控原子工具 `browser-control.operation_execute/get/cancel`；区别于 `Action` 联合类型（12 种，不含 screenshot）。
 - [shipped] 12 种 action 类型（对应 `shared/types/action.ts` 的 `Action` 联合）：click / type / focus / blur / hover / value / dispatch / scroll / navigate / wait / mcp_call / finish。
 - [shipped] action 执行入口：`proxy-adapter/src/services/action-executor.ts`。
-- [designed] ai-e2e 的目标功能脚本按单个结构化语义步骤经本 MCP 网关执行；网关保持通用，只处理浏览器会话、稳定 Tab、短期控制租约、FIFO 原子操作、幂等去重、结果查询/不确定态和浏览器侧事件/证据，不解释场景或脚本业务语义。当前没有该完整协议。
-- [designed] 目标新增 `browser-control.operation_execute/get/cancel`；E2E task 的 session/Tab/lease 由模型不可见 wrapper 注入，动作/观测白名单、请求/结果 Schema 与 HTTP control plane 见 `ai-e2e/docs/service-api-event-contract.md`。现有 15 个工具保留兼容。
-- [designed] 目标 `/api/v1/capabilities` 声明 operation 协议、动作/观测、持久账本和画面能力；proxy 重启使内存 session/lease 失效，running operation 收敛为 `outcome_unknown`，v1 不恢复原 BrowserContext/Cookie。
-- [designed] v1 capability 固定 `maxActiveBrowserSessions=1`、`maxBrowserContextsPerSession=1`，不支持 session 内切换 Context 或导入 storage state；业务 actor 与认证编排仍由 ai-e2e 持有，proxy 不解释身份。业务 FIFO 由 ai-e2e 持有，proxy 只做不解释业务类型的通用独占门禁。最多一个 control lease，observe 只在操作安全边界，live view 无控制权；受控 session 期间 legacy MCP/debug 写工具返回 `browser_busy`。
+- [shipped] 结构化语义步骤可通过 application-level session/稳定 Tab/短期 lease 进入 FIFO 原子操作链；网关只处理通用浏览器约束，不解释场景或脚本业务语义。session event/artifact 仍是后续缺口。
+- [shipped] `browser-control.operation_execute/get/cancel` 已注册到 MCP Server；完整输入由调用包装层注入 session/Tab/lease/token/operation ID。`ai-chat-service` 普通 Chat provider 显式过滤这三项，待受限 Agent wrapper 实现后再通过模型不可见 binding 调用。
+- [shipped] `GET /api/v1/capabilities` 已声明 browser-execution/operation `1.0`、支持动作/观测、持久账本、可视画面和当前限制；proxy 重启递增 process epoch、使旧租约失效，并将 running operation 收敛为 `outcome_unknown`。
+- [shipped] v1 固定 `maxActiveBrowserSessions=1`、`maxBrowserContextsPerSession=1`，不支持运行中 Context/storage-state 切换；最多一个 control lease，observe 只在安全边界签发且单次使用，live view 无控制权。受控 session 期间 legacy MCP/debug 写入及直接 DOM/截图读取返回 `browser_busy`。
 - [designed] deployment environment、副作用风险投影和计划级审批归 ai-e2e，逐工具授权交集归 ai-chat-service wrapper；proxy 不读取环境标签、不签发/解释 grant，只校验通用 lease/Tab/operation/target/args 与幂等账本。
-- [designed] browser lease 使用 32-byte opaque token，proxy 仅保存 hash/policy/expiry/process epoch；observe 默认最长 30 秒、control 最长 5 分钟且只在安全边界续租。operation ledger 默认使用 proxy 自有 SQLite WAL，重启后未决 started 操作收敛为 `outcome_unknown`。
+- [shipped] browser lease 使用 32-byte opaque token，proxy 仅保存 SHA-256 hash/policy/expiry/process epoch；observe 最长 30 秒、control 最长 5 分钟。operation ledger 使用 `data/proxy-adapter/browser-execution.sqlite` SQLite WAL，动作前写 queued，支持 operation ID 去重、queued cancel 和重启恢复；请求 payload 脱敏保存。
+- [shipped] 受控执行已覆盖 page_state/target_state/url/title/text/value/attribute/count/tabs 观测，以及 navigate/click/fill/type_text/press/select_option/check/uncheck/focus/blur/hover/scroll/switch_tab/close_tab 动作；重新解析 locator candidates 并拒绝歧义，不开放 JS/CDP/坐标。
+- [pending] dom_snapshot、set_files、before/after screenshot、video、失败截图、短期 artifact API、session SSE/event-log、control 续租、操作动画和保留清理尚未交付；capability 明确 `operationCaptureArtifacts=false`、`operationPresentationAnimation=false`。
 - [designed] 浏览器截图、DOM 和媒体属于带完整性信息的短期原始产物；长期证据 manifest、业务关联、保留与 pin 由 ai-e2e 持有，原始产物清理前需可被提升或明确过期。
 - [shipped] 配置入口：消费方通过 `PROXY_ADAPTER_URL + /mcp`（默认 `http://127.0.0.1:3000/mcp`）接入。
-- [shipped] 验收面：`proxy-adapter/src/__tests__/adapters/mcp-server-adapter.test.ts`、`proxy-adapter/src/__tests__/browser-tools-provider.test.ts`。
+- [shipped] 验收面：既有 MCP/provider 测试 + `browser-execution-service.test.ts`、`browser-execution-routes.test.ts`、`browser-execution-tools-provider.test.ts`、`playwright-browser-execution.test.ts`；2026-08-12 proxy-adapter 全量测试通过。
