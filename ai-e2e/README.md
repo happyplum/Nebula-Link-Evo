@@ -44,6 +44,7 @@ PRD / 业务描述
 - **可选自动修复**：对选择器漂移、等待时序等明确问题做受限自动修复
 - **SSE 实时推送**：向前端推送分析 / 探索 / 生成 / 执行阶段的实时事件
 - **SPA UI**：通过 `/ai-e2e/` 提供 React 前端
+- **业务版本快照基座**：创建/查询业务版本，记录来源、Git 和精确部署 revision；原子 copy 当前 PRD/变量/页面/模块/功能脚本/场景并重建内部引用，复制后执行资产标记 stale
 
 ### 已实现的增强功能
 
@@ -107,6 +108,7 @@ ai-e2e
 | `ExecutorService` | 运行脚本并收集产物 |
 | `AIDiagnosisService` | 单次运行失败诊断、自动修复、人工审核升级、项目级诊断聚合 |
 | `StateMachineService` | 项目状态流转与阶段门禁 |
+| `BusinessVersionService` | semantic 业务版本创建、查询与独立 copy |
 
 ### 4. 用状态机约束交付物边界
 
@@ -167,6 +169,7 @@ pnpm dev
 
 - API：`http://localhost:3002`
 - UI：`http://localhost:3002/ai-e2e/`
+- 首期仅监听 `127.0.0.1`，不提供远程/多用户认证边界
 
 ### 环境变量
 
@@ -218,6 +221,11 @@ pnpm type-check   # tsc --noEmit
 - `/api/projects/:id/scripts`
 - `/api/projects/:id/execution`
 - `/api/projects/:id/diagnosis`
+- `POST/GET /api/v1/projects/:projectId/business-versions`
+- `GET /api/v1/business-versions/:versionId`
+- `POST /api/v1/business-versions/:versionId/copy`
+
+业务版本写请求必须携带 `Idempotency-Key`。公开资产 authoring、recheck、semantic run 与对应 UI 尚未交付。
 - `/api/projects/:id/state`
 - `/api/projects/:id/events`
 

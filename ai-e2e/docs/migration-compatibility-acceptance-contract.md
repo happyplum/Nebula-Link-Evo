@@ -1,15 +1,16 @@
 # AI E2E 迁移、兼容与技术验收契约
 
-> 状态：已确认目标设计，尚未实现。
+> 状态：`in-progress`。add-only migration 014 已交付 semantic 业务版本/current 资产与 copy 基座；checksum runner、旧库 preflight/import、双轨 capability/cutover 和回滚流程仍未实现。
 > 更新时间：2026-08-12。
-> 本文基于当前 001–013 SQLite 表、scenario 级 TypeScript 执行器、项目级登录录制、三服务现有 API/SSE 与目标协议，定义可回滚迁移、渐进切流和发布门槛。它不授权执行生产数据迁移或删除旧表。
+> 本文基于 legacy 001–013 表、add-only 014 semantic foundation、scenario 级 TypeScript 执行器、项目级登录录制、三服务现有 API/SSE 与目标协议，定义可回滚迁移、渐进切流和发布门槛。它不授权执行生产数据导入、cutover 或删除旧表。
 
 ## 1. 当前迁移事实
 
 代码核对确认：
 
-- `ai-e2e/src/database/db.ts` 启动时顺序直接执行 migration 001–013，没有 `schema_migrations` 账本；001–012 主要依赖 `CREATE IF NOT EXISTS`，013 通过捕获通用 `SQLITE_ERROR` 忽略重复加列。
-- 旧关系是 project → business module → functional module → test scenario → TypeScript/JavaScript script；没有 business version、page definition、functional script、scenario graph 或 immutable revision。
+- `ai-e2e/src/database/db.ts` 启动时顺序直接执行 migration 001–014，没有 `schema_migrations` 账本；001–012/014 主要依赖 `CREATE IF NOT EXISTS`，013 通过捕获通用 `SQLITE_ERROR` 忽略重复加列。
+- legacy 关系仍是 project → business module → functional module → test scenario → TypeScript/JavaScript script；014 已新增隔离的 business version、page definition、functional script、scenario current graph 和 immutable payload revision，但尚未导入或切换旧资产。
+- 由于 legacy 已占用不兼容的 `business_modules`、`functional_modules`、`test_scenarios`，014 使用 `semantic_business_modules`、`semantic_functional_modules`、`semantic_test_scenarios` 物理表；正式 importer/cutover 不得混用两套 ID。
 - `urls` 保存完整 URL、可选单份 `page_snapshot_json` 和 auth flag；没有部署 revision、Origin 无关页面模板、参数分类、截图基线或内容 hash。
 - `execution_runs` 只关联 script/version，状态仅 `running/pass/fail/error/timeout`；旧取消会被执行器写成 timeout，无法反推 TODO、attempt、decision 或浏览器 operation。
 - `login_scripts` 保存 navigate/fill/click/wait/screenshot 步骤。fill value 可能包含秘密，wait 是固定时长，selector 是旧 CSS，登录验证配置没有和脚本一起持久化。
@@ -48,9 +49,9 @@
 升级步骤：
 
 1. 在任何业务 DDL 前创建 migration 账本。
-2. 对现有库读取 `sqlite_master` 和 `PRAGMA table_info`，按 001–013 的结构断言建立 baseline；结构不符则停止并输出差异，不伪造 applied。
-3. 新库先应用 001–013 再写 baseline；现有库只在结构断言通过后补记。
-4. 从下一编号开始，每个 migration 使用 `BEGIN IMMEDIATE`、checksum 和单次事务；失败 rollback 并阻止不兼容服务启动。
+2. 对现有库读取 `sqlite_master` 和 `PRAGMA table_info`，按 001–014 的结构断言建立 baseline；结构不符则停止并输出差异，不伪造 applied。
+3. 新库先应用 001–014 再写 baseline；现有库只在结构断言通过后补记。只有 001–013 的旧库先备份、preflight，再以事务应用 014。
+4. 从 015 开始，每个 migration 使用 `BEGIN IMMEDIATE`、checksum 和单次事务；失败 rollback 并阻止不兼容服务启动。
 5. 013 的宽泛错误吞并在 runner 落地时改为先查列再决定 ALTER；不能继续忽略所有 `SQLITE_ERROR`。
 
 生产数据不执行 `down()`。开发/测试的 down 只用于临时数据库，不作为回滚策略。

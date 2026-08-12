@@ -126,6 +126,22 @@ export type {
   LoginScriptDTO,
 } from './api.js';
 
+export type {
+  AssetReadinessStatus,
+  AssetRevision,
+  BusinessModuleAsset,
+  BusinessVersion,
+  BusinessVersionAssetGraph,
+  BusinessVersionAssetSummary,
+  BusinessVersionDetail,
+  BusinessVersionValidationStatus,
+  FunctionalModuleAsset,
+  FunctionalScriptAsset,
+  GitMetadata,
+  PageAsset,
+  ScenarioAsset,
+} from './business-version.js';
+
 // ========== ENUM VALUES (CONST OBJECTS) ==========
 export {
   ProjectStatus as ProjectStatusValues,

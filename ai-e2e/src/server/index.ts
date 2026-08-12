@@ -25,6 +25,8 @@ import projectAnalysisRoutes from './routes/project-analysis.js';
 import eventsRoutes from './routes/events.js';
 import scenarioRoutes from './routes/scenario.js';
 import diagnosisReportRoutes from './routes/diagnosis-report.js';
+import businessVersionRoutes from './routes/business-versions.js';
+import { BusinessVersionService } from '../services/business-version-service.js';
 
 const envLocalPath = path.join(process.cwd(), '.env.local');
 const envRootPath = path.join(process.cwd(), '..', '.env');
@@ -61,6 +63,7 @@ export interface ServerOptions {
   scenarioService?: TestScenarioService;
   diagnosisService?: AIDiagnosisService;
   executorService?: ExecutorService;
+  businessVersionService?: BusinessVersionService;
 }
 
 export function createServer(options: Partial<ServerOptions> = {}) {
@@ -99,6 +102,10 @@ export function createServer(options: Partial<ServerOptions> = {}) {
   app.register(eventsRoutes, { prefix: '/api/projects/:id/events' });
   app.register(scenarioRoutes, { prefix: '/api/projects/:id', scenarioService: options.scenarioService });
   app.register(diagnosisReportRoutes, { prefix: '/api/projects/:id/diagnosis', diagnosisService: options.diagnosisService });
+  app.register(businessVersionRoutes, {
+    prefix: '/api/v1',
+    service: options.businessVersionService,
+  });
 
   // Serve built frontend (ui/dist/) at /ai-e2e/ prefix
   const uiDistPath = path.join(import.meta.dirname, '..', '..', 'ui', 'dist');
@@ -203,6 +210,10 @@ export async function start() {
     databaseManager.getExecutionRunRepo(),
   );
 
+  const businessVersionService = new BusinessVersionService(
+    databaseManager.getBusinessVersionRepo()
+  );
+
   // Create server with all dependencies
   const app = createServer({
     proxyClient,
@@ -213,6 +224,7 @@ export async function start() {
     scenarioService: testScenarioService,
     diagnosisService: aiDiagnosisService,
     executorService,
+    businessVersionService,
   });
 
   try {
@@ -220,7 +232,7 @@ export async function start() {
 
     await app.listen({
       port,
-      host: '0.0.0.0',
+      host: '127.0.0.1',
     });
 
     app.log.info({ port, dbPath }, 'AI E2E server listening');

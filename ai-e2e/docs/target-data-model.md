@@ -1,8 +1,12 @@
 # AI E2E 目标数据模型
 
-> 状态：目标技术契约，尚未实现。
+> 状态：`in-progress`。migration 014 已交付业务版本与 current 资产快照/copy 基座；authoring、scoped verification、run、证据、outbox 和正式 migration runner 仍未实现。
 > 更新时间：2026-08-12。
 > 本文定义 `ai-e2e` 首期最终关系模型、不可变修订、版本复制事务、页面规范化、运行数据与证据存储。迁移编号和物理 SQL 在实施时按现有 SQLite migration 链追加，但不得改变本文的所有权和唯一性约束。
+
+### 当前物理映射
+
+migration 014 只增不改。legacy migration 已占用且仍被旧 repository 使用的 `business_modules`、`functional_modules`、`test_scenarios` 与本文语义不兼容，因此 semantic v1 暂时映射为 `semantic_business_modules`、`semantic_functional_modules`、`semantic_test_scenarios` 及对应 revision 表；API 与领域名称仍使用 business/functional module 和 scenario。切流完成前不得把两套表混读或让 semantic run 引用 legacy ID。
 
 ## 1. 存储原则
 
@@ -140,7 +144,9 @@ interface DeploymentProfileV1 {
 | `version_key` | TEXT | 项目内稳定 key，唯一 |
 | `name` | TEXT | 用户可读名称 |
 | `source_version_id` | TEXT NULL | 来源版本审计，不形成可变共享 |
+| `create_request_id` | TEXT NULL | 空白创建幂等键，项目内唯一 |
 | `copy_request_id` | TEXT NULL | copy 幂等键，项目内唯一 |
+| `request_hash` | TEXT | 幂等请求的规范化 SHA-256；同键不同请求拒绝 |
 | `validation_status` | TEXT | `draft/validating/needs_recheck/valid/invalid/archived` |
 | `schema_version` | INTEGER | 初始为 1 |
 | `git_metadata_json` | TEXT NULL | 版本声明的可选 Git/部署备注，不替代运行冻结值 |
@@ -160,6 +166,8 @@ interface DeploymentProfileV1 {
 | `deployment_revision_id` | TEXT | 精确 immutable revision FK |
 | `binding_key` | TEXT | `default` 或命名运行目标 |
 | `is_default` | INTEGER | 每版本最多一个 true |
+| `is_current` | INTEGER | 同版本 + document key 最多一个 current |
+| `source_document_id` | TEXT NULL | copy 来源审计 |
 | `created_at` | TEXT |  |
 
 同一版本可以绑定多个兼容环境；运行必须显式解析到其中一个精确 revision。copy 复制 binding row，不复制秘密，也不依赖部署 profile 的可变 current。
@@ -212,7 +220,7 @@ PRD 变更不覆盖旧记录；新的文档/解析记录成为版本当前输入
 
 只保存变量 Schema 和 secret reference 定义，不保存运行值：
 
-- `id/business_version_id/name/type/sensitivity/constraints_json/default_json/secret_ref/created_at`
+- `id/business_version_id/name/type/sensitivity/constraints_json/default_json/secret_ref/source_variable_id/created_at`
 - `UNIQUE(business_version_id, name)`。
 - secret 类型只能设置 `secret_ref`，`default_json` 必须为空。
 
@@ -549,6 +557,13 @@ copy 使用 `copy_request_id` 幂等并执行 `BEGIN IMMEDIATE`：
 9. 校验失败整体 rollback；成功 commit 并返回目标版本/资产数量、stale 执行资产与需要重新检查的页面清单。目标版本只有完成 recheck 并在目标 deployment revision 上重新验证后才能转为 `valid`。
 
 SQLite `BEGIN IMMEDIATE` 防止 copy 期间来源 current 指针变化。重复相同 `copy_request_id` 返回第一次结果，不产生第二份版本。
+
+### 9.1.1 当前已实现范围
+
+- `BusinessVersionRepository` 已实现空白创建和 copy 幂等 hash、来源 `valid/archived` 门禁、事务回滚、全图 hash/引用/场景 DAG 校验和目标 `needs_recheck`。
+- 已复制并重建当前 PRD/解析结果、变量定义、页面、业务模块、功能模块、功能脚本、场景及其 current revision ID；部署 binding 引用项目级 immutable deployment revision，Git 元数据可继承或覆盖。
+- 当前尚无 decision、coverage、baseline、verification/dependency、authoring 与 run 表，所以这些步骤仍 pending；copy 不会读取 legacy run/script/evidence 表。
+- 在 scoped `asset_revision_verifications` 落地前，migration 014 暂以功能脚本/场景 revision 上的 `readiness_status=stale` 保存 copy 后待复核事实。这是过渡字段，不能被解释为某 deployment scope 的真实验证结果，也不能据此创建 semantic formal run。
 
 ### 9.2 独立性判定
 
@@ -905,13 +920,13 @@ manifest sealed 后不可修改；补充证据创建新的 manifest revision 或
 
 ## 16. 当前实现差距
 
-- 现有项目级表没有 business version；module、URL、scenario 和 script 均直接归项目链路。
-- 现有 `scripts` 把 scenario 级 TypeScript 文本与可变 status 放在同表，没有稳定功能脚本身份、不可变 revision payload 或 content hash。
+- semantic v1 已有 business version 与独立 current asset graph；legacy module、URL、scenario 和 script 仍直接归项目链路，尚未导入或切流。
+- semantic v1 已有稳定功能脚本身份、不可变 revision payload/hash 和场景引用；公开 authoring/修订激活、完整 Schema 校验及语义执行尚未实现。legacy `scripts` 仍保存 scenario 级 TypeScript 文本与可变 status。
 - 现有 `execution_runs` 只关联 script，无法表达 run plan、TODO、page task、attempt、变量、决策、事件或 evidence manifest。
 - 现有数据库没有持久 outbox 或外部 Agent/browser task 恢复索引，跨服务调用结果尚不能在服务重启后确定性收敛。
 - 现有截图路径和日志直接挂在 execution run，没有内容寻址、完整度、脱敏、保留和跨服务产物提升。
-- 现有 URL 表把实际 URL、单快照和逻辑页面混为一个实体。
-- 当前启动直接重复调用 migration 001–013，没有 schema migration checksum/状态账本、旧库结构 preflight 或 legacy import 映射。
+- semantic 页面 revision 已保存 Origin 无关签名；legacy URL 表仍把实际 URL、单快照和逻辑页面混为一个实体，尚无运行匹配器、完整参数 Schema 或基线变体。
+- 当前启动直接重复调用 migration 001–014，没有 schema migration checksum/状态账本、旧库结构 preflight 或 legacy import 映射。
 - 当前没有持久 authoring job/task/attempt/event、candidate 验证层、coverage disposition、revision dependency index 或跨 authoring/run 的 browser job queue；PRD/探索/生成/修复依赖项目状态和短期调用。
 - 当前没有环境风险投影、policy evaluation、计划级 approval grant 或 production 写门禁。
 

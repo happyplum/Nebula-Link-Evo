@@ -152,7 +152,7 @@ docs/               # Documentation
 
 - **`proxy-adapter`（shipped）**：Playwright/CDP 集成的唯一所有者，负责页面分析、DOM/截图证据和浏览器动作，并通过 `browser-control.*` MCP 工具及调试 API 对外提供服务。当前实现由进程内 Playwright 启动 Chromium，可选开放 remote-debugging-port，并通过页面 `CDPSession` 获取屏播帧；没有外部 `playwright-server` 或 `connectOverCDP` 链路。
 - **`ai-chat-service`（in-progress）**：可复用 AI 基础能力层。分析/决策模型负责理解需求、文档和浏览器证据并规划下一步测试动作；主代理和子代理都可调用视觉模型，但视觉模型每次只完成一个具有完整输入的分析问题，不保存流程状态或连续执行。跨服务只传递 `snapshot_id`、`nebula_id`、`locator_bundle`、置信度等可序列化目标引用，不传递进程内 Playwright 对象。MCP client/ToolRegistry 已交付；Skills runtime 属于本层，但当前为 `pending`，尚无加载或执行实现。
-- **`ai-e2e`（in-progress）**：面向 E2E 的业务层，通过 PRD 与真实网页建立业务版本、页面、功能模块、功能脚本和测试场景。现有 PRD 分析、页面探索、URL binding、scenario 级 TypeScript 脚本和 run 级修复已交付；业务版本、结构化功能脚本、场景调用图和主/子代理编排仍需实现。
+- **`ai-e2e`（in-progress）**：面向 E2E 的业务层，通过 PRD 与真实网页建立业务版本、页面、功能模块、功能脚本和测试场景。现有 PRD 分析、页面探索、legacy TypeScript 链，以及 semantic 业务版本/current 资产图/独立 copy 基座已交付；完整资产 authoring/recheck、语义执行和主/子代理编排仍需实现。
 
 **领域层级**：逻辑页面由不含部署 Origin 的规范化路由模板与身份参数约束标识；实际运行再绑定部署、动态参数和参考基线。一个页面包含多个功能模块，一个模块包含多个可复用、可独立验证和修复的功能脚本。首期脚本采用显式输入、线性步骤、硬业务断言、成功后输出和声明副作用；场景使用无环调用图负责跨模块/页面的顺序、重复、分支、依赖和数据传递。PRD 形成场景定义与 TODO 模板，每次执行冻结独立运行计划并产生运行 TODO 和执行尝试。
 
@@ -162,7 +162,7 @@ docs/               # Documentation
 
 **环境与副作用安全目标（pending）**：运行冻结 immutable deployment environment 和精确副作用投影。local/test 自动执行已声明、有界副作用；staging 的单项非不可逆 create/update 自动，删除、批量、不可逆和上传在 browser job/control 前做一次当前 run/job 计划级审批；production 只允许显式登录/退出/会话刷新、导航、只读观测和断言，业务写入与上传硬拒绝，首期不设绕过。`ai-e2e` 持有策略/审批，`ai-chat-service` 逐工具校验授权交集，`proxy-adapter` 保持通用浏览器网关。完整契约见 [`ai-e2e/docs/environment-side-effect-policy-contract.md`](ai-e2e/docs/environment-side-effect-policy-contract.md)。
 
-**迁移与发布目标（pending）**：现有 001–013 数据库、scenario 级 TypeScript、项目登录录制和历史 run 不直接改写为已验证语义资产。目标先备份并建立 checksum migration 账本，再以可重入 import 生成 `needs_recheck` 业务版本和候选；旧历史只读保留，同一 run 固定使用 legacy 或 `semantic_v1`。三服务通过 capability preflight 后按业务版本 opt-in，完整门禁见 [`ai-e2e/docs/migration-compatibility-acceptance-contract.md`](ai-e2e/docs/migration-compatibility-acceptance-contract.md)。
+**迁移与发布目标（in-progress）**：add-only migration 014 已建立隔离的 semantic 业务版本/current 资产基座；legacy 001–013 的 scenario 级 TypeScript、项目登录录制和历史 run 不直接改写为已验证语义资产。checksum migration 账本、备份/preflight、可重入 import、双轨 capability 与版本级 cutover 仍 pending。完整门禁见 [`ai-e2e/docs/migration-compatibility-acceptance-contract.md`](ai-e2e/docs/migration-compatibility-acceptance-contract.md)。
 
 ### AI E2E 需求基线
 

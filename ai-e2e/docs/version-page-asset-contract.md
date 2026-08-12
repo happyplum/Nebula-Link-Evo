@@ -1,6 +1,6 @@
 # 业务版本与页面资产契约
 
-> 状态：`pending`。本文定义已经确认的目标语义；当前 ai-e2e 只有 project、完整 URL、URL↔模块绑定和单份页面快照，尚无业务版本、逻辑页面、参数 Schema 或独立复制模型。
+> 状态：`in-progress`。业务版本、逻辑页面 current revision、来源/Git/部署引用和独立 copy 基座已交付；完整参数 Schema/页面匹配、基线、authoring/recheck、UI 与运行门禁仍 pending。
 
 ## 1. 目标层级
 
@@ -153,11 +153,12 @@ URL 参数按对页面身份的影响分为三类：
 
 ## 12. 当前实现差距
 
-- 当前 `projects.target_base_url` 同时承担项目和部署地址，没有业务版本或运行时部署快照。
-- 当前 `urls` 保存完整 URL、单份 `page_snapshot_json` 和项目归属，没有逻辑页面、路由模板、参数 Schema、基线变体或版本归属。
+- legacy `projects.target_base_url` 仍同时承担项目和部署地址；semantic 版本可绑定精确 deployment revision，但运行时部署快照尚未实现。
+- semantic v1 已新增业务版本、精确 deployment revision binding 与 Git 元数据；deployment profile 的公开管理 API 尚未实现。
+- semantic 页面 revision 已保存版本归属、Origin 无关 route template/identity query 和唯一签名；legacy `urls` 仍保存完整 URL/单份 `page_snapshot_json`，完整参数 Schema、运行匹配器和基线变体尚未实现。
 - 当前 `url_module_bindings` 直接把完整 URL 记录绑定到功能模块，无法稳定复用动态参数页面或跨部署资产。
 - 当前手工添加 URL 只用 `new URL(record.url).pathname` 生成展示 path；Explorer 只做同源检查和 URL 解析，没有规范页面签名或歧义检测。
-- 当前没有业务版本 copy、独立资产身份重映射、来源追溯或复制事务。
+- `BusinessVersionRepository` 已使用幂等 `BEGIN IMMEDIATE` 复制当前 PRD/变量/页面/模块/功能脚本/场景，生成新身份、重写内部引用、保留来源审计并把执行资产置为 stale；decision、coverage、baseline、scoped verification 和 recheck 尚未落地。
 
 ## 13. 技术落点与剩余实现细节
 
