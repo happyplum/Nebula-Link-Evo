@@ -507,9 +507,7 @@ function validateCapture(value: unknown, stepId: string): void {
   );
   if (Object.values(capture).some((entry) => typeof entry !== 'boolean'))
     fail(`Browser step ${stepId}.capture values must be boolean`);
-  if (Object.values(capture).some((entry) => entry === true)) {
-    fail('Browser operation capture artifacts are not available in semantic v1 phase 2');
-  }
+  if (capture.videoSegment === true) fail('Browser operation video capture is not available');
 }
 
 function validateNoInlineSecrets(value: unknown, path: string, depth = 0): void {
