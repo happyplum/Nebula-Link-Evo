@@ -58,14 +58,14 @@
 | 功能模块 | in-progress | 一个页面内可包含多个有顺序的功能模块，一个模块目标上包含多个功能脚本。当前 `functional_modules.sort_order` 与多模块绑定同一 URL 已提供基础。 |
 | 模块需求文档 | pending | 融合 PRD 片段、真实页面 DOM/截图、页面锚点、功能说明和有序测试场景，作为脚本生成与修复的可追溯输入；当前信息分散在多个表和 prompt 上下文中。 |
 | 功能脚本 | pending | 模块下最小复用、执行、验证、修复和重复调用单元；目标为结构化语义脚本。当前 `scripts` 以 `test_scenario_id` 为归属，内容是 TypeScript。 |
-| 测试场景 | in-progress | 业务验收单位，目标跨模块/页面编排多个功能脚本，支持顺序、依赖、重复、输入输出绑定。当前 scenario 只能直接拥有一组测试数据和脚本版本。 |
+| 测试场景 | in-progress | 业务验收单位，目标以无环调用图跨模块/页面编排多个功能脚本；业务版本保存场景定义与 TODO 模板，运行时冻结计划并产生 TODO 与独立执行尝试。当前 scenario 只能直接拥有一组测试数据和脚本版本。 |
 | 业务版本 | pending | 用户创建，可记录来源、部署和 Git 标识；`copy` 深复制需求与测试资产，复制后不共享可变引用，也不复制运行数据、证据或凭据。 |
 | 主代理 | pending | 持有 PRD 流程、TODO 依赖、运行变量和决策，负责拆分、派发、恢复、跳过、验收与汇总。 |
 | 页面子代理 | pending | 只执行派发的页面场景片段，负责固定重新检查、执行、验证、职责内修复和汇报；不得自行登录、造数或调用场景外脚本。 |
 | 上下文策略 | pending | 默认创建干净子代理上下文；登出等可恢复中断可由主代理在状态/副作用检查后续接原上下文，否则从检查点重建。 |
 | Agent 执行路径 | pending | 页面任务图和验收归 ai-e2e，模型/MCP/未来 Skills 执行归 ai-chat-service；当前 `AiChatClient.generateText()` 是纯文本生成，不执行 tool loop。 |
 | 可视执行与证据 | in-progress | `proxy-adapter` 已有实时画面、marker/overlay、交互日志和失败样本基础；目标是所有功能脚本步骤通过该链路执行并关联场景、步骤、结果和失败证据。 |
-| 失败/暂停/跳过 | pending | 失败先保存截图和现场并评估后续阻碍；主代理按依赖跳过或继续。意外登出按可恢复中断上报，需要决策时暂停并持久化决策后恢复。 |
+| 失败/阻塞/暂停/跳过 | pending | 失败先保存截图和现场并评估后续阻碍；明确缺少前置条件与意外中断分开记录，主代理按依赖跳过或继续。需要决策时暂停并持久化决策后恢复。 |
 | DOM 变化局部修复 | in-progress | 当前已支持 run 级诊断与可选自动修复；目标是只修复当前业务版本内受影响的功能脚本并重新验证。 |
 
 ---
@@ -172,7 +172,7 @@
 | HTML 报告生成 | utils/report-html、html-escape | shipped | `utils/__tests__/report-html.test.ts` | utils |
 | 页面 URL + 参数锚点 | — | pending | 尚无验收面 | 需新增规范化页面身份模型，避免把易变完整 URL 当作唯一身份 |
 | 模块需求文档 | — | pending | 尚无验收面 | 需把 PRD 与真实页面证据收敛为持久化、可追溯输入 |
-| 功能脚本 + 场景调用图 | services/ScriptGeneratorService、database/scripts | pending | 当前仅验证 scenario 级 TypeScript 脚本 | 首期功能脚本采用显式输入、线性步骤、硬业务断言、成功后输出和声明副作用；重复、分支及跨脚本依赖由场景编排，详见 `docs/functional-script-contract.md` |
+| 功能脚本 + 场景调用图 | services/ScriptGeneratorService、database/scripts | pending | 当前仅验证 scenario 级 TypeScript 脚本 | 脚本契约见 `docs/functional-script-contract.md`；无环调用图、运行计划快照、TODO、尝试、依赖传播及追加式修订见 `docs/scenario-orchestration-contract.md` |
 | 业务版本 + 深复制 | — | pending | 尚无验收面 | 需独立资产快照、来源追溯及 DOM/定位/截图基线复制 |
 | 主代理 / 页面子代理调度与上下文策略 | — | pending | 尚无验收面 | 首期同一时刻一个主代理只运行一个执行型子代理，共享 proxy-adapter 浏览器会话并串行动作；仍需任务、变量、暂停、检查点、恢复和依赖跳过协议 |
 | ai-chat-service Agent 会话消费 | infrastructure/ai-chat-client | pending | 当前仅有纯文本 generate 与基础 chat session 客户端 | 需面向页面任务的 tool/skill loop 调用与状态契约 |
@@ -211,7 +211,7 @@
 | 修改状态机 | 包级目标与边界 + 状态机条目 + README "AI E2E 需求基线" |
 | 新增 DB migration | 模块清单（database/migrations） + 功能清单 |
 | 新增业务服务 | 模块清单（services/） + 功能清单 + Dependency Injection Rule 条目 |
-| 修改业务版本、页面、模块、功能脚本或场景调用 | 目标领域与代理编排 + 功能清单 + DB schema + `docs/PRODUCT-SPEC-INDEX.md` + `docs/requirements-baseline.md` + `docs/functional-script-contract.md` |
+| 修改业务版本、页面、模块、功能脚本或场景调用 | 目标领域与代理编排 + 功能清单 + DB schema + `docs/PRODUCT-SPEC-INDEX.md` + `docs/requirements-baseline.md`；功能脚本同步 `docs/functional-script-contract.md`，场景编排同步 `docs/scenario-orchestration-contract.md` |
 | 实现或修改主/页面子代理 | 目标领域与代理编排 + 功能清单 + `ai-e2e/AGENTS.md` + ai-chat-service 消费契约 + `docs/PRODUCT-SPEC-INDEX.md` |
 | 修改可视执行、证据或重放契约 | 目标领域与代理编排 + 功能清单 + proxy-adapter PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
 | 修改 executor 约束 | 包级目标与边界 + 功能清单（脚本执行） + Runtime Gotchas |
@@ -232,7 +232,7 @@
 | 缺少规范化页面与 URL 参数模型 | requirement-gap | pending | 当前 `urls.url` 保存完整字符串，无法稳定表达 path/hash route 与参数模板 |
 | 缺少持久化模块需求文档 | requirement-gap | pending | PRD、页面快照、URL binding、scenario 仍是分散输入 |
 | 缺少业务版本与独立 copy | requirement-gap | pending | 当前没有来源版本、部署/Git 标识或深复制测试资产的模型 |
-| 缺少模块下多功能脚本与场景调用图 | requirement-gap | pending | 当前 script version 归属 scenario，无法表达重复调用、依赖和跨脚本输入输出 |
+| 缺少模块下多功能脚本与场景调用图 | requirement-gap | pending | 当前 script version 归属 scenario，`run-all` 只是顺序遍历，无法表达运行计划、TODO、重复、依赖、跨脚本输入输出和追加式修订 |
 | 主代理 / 页面子代理编排未实现 | requirement-gap | pending | 当前没有页面任务、运行变量、暂停决策、检查点、恢复与依赖跳过运行时 |
 | ai-e2e 尚未消费 Agent tool loop | requirement-gap | pending | 当前业务服务调用 `POST /api/ai/generate`，无法在同一页面任务中执行 MCP/Skills |
 | 目标执行链仍绕过 proxy-adapter | requirement-gap | pending | 当前 `ExecutorService` 用 `npx tsx` 执行独立脚本，不满足统一可视、可复现执行要求 |
