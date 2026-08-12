@@ -27,6 +27,7 @@ PRD 驱动的 E2E 自动化测试编排器。把"需求分析 → 页面探索 �
 - [designed] 页面定义以不含 Origin 的规范化路由模板 + 身份参数约束标识，运行锚点再绑定部署、动态参数和命名基线变体；当前仅保存完整 `urls.url`，目标契约见 `ai-e2e/docs/version-page-asset-contract.md`。
 - [designed] 模块需求文档融合 PRD 片段、真实 DOM/截图、页面锚点、功能说明与有序场景；当前这些信息仍分散存储。
 - [designed] 一个页面包含多个功能模块，一个功能模块包含多个功能脚本；功能脚本是最小复用、执行、验证和修复单元。首期脚本采用显式输入、线性步骤、硬业务断言、成功后输出和声明副作用，不嵌套调用其他脚本；场景负责跨模块/页面的顺序、依赖、重复、分支和输入输出映射。当前脚本版本仍以 scenario 为归属，目标契约见 `ai-e2e/docs/functional-script-contract.md`。
+- [designed] 首期权威脚本 Schema 为 `nebula.ai-e2e.functional-script/1.0`：纯 JSON、白名单动作/断言/值引用、无任意代码/固定 sleep/裸 URL/坐标；副作用必须声明应用检查与重试策略。机器契约见 `ai-e2e/docs/semantic-script-schema.md`。
 - [designed] 场景调用图首期为无环图；业务版本保存场景定义与 TODO 模板，每次测试流程冻结运行计划并产生运行 TODO 和独立执行尝试。重复调用预先展开，恢复和修复使用追加式计划修订；当前 `run-all` 仍只是项目脚本顺序遍历。目标契约见 `ai-e2e/docs/scenario-orchestration-contract.md`。
 - [designed] 业务版本由用户创建，可记录来源版本及部署/Git 标识；`copy` 原子复制当前有效资产、生成新身份并重建内部引用，复制后独立维护，不复制编辑历史、运行状态、证据、实际数据或秘密。目标契约见 `ai-e2e/docs/version-page-asset-contract.md`。
 - [designed] 主代理维护 PRD 流程、TODO 依赖、运行变量和决策，并负责派发、恢复、跳过、验收与汇总；页面子代理只执行获授权的页面场景片段，负责重新检查、执行、验证、职责内修复和结构化汇报。

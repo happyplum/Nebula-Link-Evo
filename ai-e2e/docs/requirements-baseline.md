@@ -120,7 +120,7 @@
 - 创建、更新、删除和认证变化等副作用必须声明并在重试前检查；传输失败或超时不代表动作没有生效。
 - 直接导出并运行 `npx playwright test` 不是当前验收目标；未来可以作为派生产物，不得取代系统内的权威语义脚本。
 
-功能脚本的确认契约见 `functional-script-contract.md`。DSL 的精确字段名、序列化 Schema、动作与断言白名单及校验规则尚待技术设计。
+功能脚本的产品契约见 `functional-script-contract.md`；首期 DSL 字段、序列化 Schema、动作/断言白名单、引用与静态校验见 `semantic-script-schema.md`。
 
 ### 5.2 唯一浏览器执行链
 
@@ -234,7 +234,7 @@
 - 数据表、命令 API、SSE/MCP 事件、幂等键和跨服务关联字段的精确结构。
 - 场景调用图、运行计划、TODO、执行尝试、追加式计划修订和受控分支表达式的精确 Schema。
 - 业务版本、部署配置、页面定义、页面锚点、参数分类和基线变体的精确 Schema、规范化算法及旧数据迁移。
-- 语义脚本 DSL 的精确字段名、版本化 Schema、动作/断言白名单及其到 MCP 工具的映射；首期不设计通用条件分支和业务循环。
+- 语义脚本 DSL v1 已在 `semantic-script-schema.md` 锁定；实现仍需按其中能力差距扩展 proxy 原子动作并生成正式 JSON Schema 文件。
 - 浏览器执行会话、Tab、控制租约、原子操作、去重账本、结果查询及事件流的精确 API/Schema；多账号隔离及后期多 Tab 并发的调度方式仍待设计。
 - 主代理与子代理运行时的具体会话复用时限和租约签发/回收实现。
 - 决策、证据 manifest、内容哈希、脱敏、访问控制和清理任务的精确 Schema/实现。
@@ -279,6 +279,7 @@
 - `ai-e2e/docs/version-page-asset-contract.md`：业务版本 copy、部署、页面锚点、参数和基线变体契约。
 - `ai-e2e/docs/agent-browser-execution-contract.md`：页面任务包、浏览器控制租约、原子操作、可视事件与恢复契约。
 - `ai-e2e/docs/run-state-decision-evidence-contract.md`：分层状态、失败传播、决策、证据与人工控制契约。
+- `ai-e2e/docs/semantic-script-schema.md`：首期语义脚本 JSON Schema、动作/断言、目标与引用契约。
 - `ai-e2e/AGENTS.md`：开发边界与运行时事实。
 - `docs/PRODUCT-SPEC-INDEX.md`：跨包契约索引。
 - `docs/architecture.md`：系统分层与服务拓扑。

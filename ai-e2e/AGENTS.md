@@ -161,7 +161,7 @@ ai-e2e (:3002)
 - **页面锚点（pending）**：页面定义以不含 Origin 的规范化路由模板 + 身份参数约束识别逻辑页面；运行页面锚点再绑定部署与动态参数。弹窗/抽屉不是页面，模块只归属一个主要页面。当前 `urls.url` 只保存完整 URL，完整契约见 `docs/version-page-asset-contract.md`。
 - **功能模块（in-progress）**：一个页面可以包含多个有顺序的功能模块，一个功能模块目标上包含多个可复用、可独立执行/验证/修复的功能脚本。现有 `functional_modules.sort_order` 与 URL binding 是基础，但尚无显式 Page 或 FunctionalScript 实体。
 - **模块需求文档（pending）**：必须融合 PRD 片段、页面锚点、真实 DOM/截图证据、功能说明和有序场景，不能仅依赖 PRD 推断或裸 URL。
-- **功能脚本与场景（pending）**：功能脚本是最小复用/修复单元；首期脚本使用显式输入、线性步骤、硬业务断言、成功后输出和声明副作用，不允许通用分支、业务循环或嵌套脚本调用。场景是业务验收单位，可跨模块、跨页面按顺序、依赖、重复和输入输出关系调用多个功能脚本。当前存储和版本仍以单个 scenario 对应 TypeScript script 为单位，完整契约见 `docs/functional-script-contract.md`。
+- **功能脚本与场景（pending）**：功能脚本是最小复用/修复单元；首期脚本使用显式输入、线性步骤、硬业务断言、成功后输出和声明副作用，不允许通用分支、业务循环或嵌套脚本调用。场景是业务验收单位，可跨模块、跨页面按顺序、依赖、重复和输入输出关系调用多个功能脚本。当前存储和版本仍以单个 scenario 对应 TypeScript script 为单位；产品语义见 `docs/functional-script-contract.md`，机器 Schema 见 `docs/semantic-script-schema.md`。
 - **场景运行层次（pending）**：业务版本保存场景定义与 TODO 模板；启动时冻结运行计划，展开为运行 TODO，每次派发形成独立执行尝试。调用图首期无环，有界重复预先展开，运行调整使用追加式计划修订。完整契约见 `docs/scenario-orchestration-contract.md`。
 - **业务版本（pending）**：由用户创建，记录来源版本及可选部署/Git 标识；`copy` 原子复制当前有效资产、生成新身份并重建内部引用，且不复制编辑历史、运行状态、实际数据、证据或秘密。完整契约见 `docs/version-page-asset-contract.md`。
 - **主代理（pending）**：持有 PRD 流程、TODO 依赖、运行变量和决策，负责拆分、派发、恢复、跳过、验收与汇总；登录、造数等跨场景前置动作必须由主代理安排。
@@ -181,6 +181,7 @@ ai-e2e (:3002)
 - 不在 ai-e2e 内新增直连外部模型或浏览器服务的代码
 - 不让功能脚本调用其他脚本、隐式补做登录/造数，或在副作用未知时盲目重试
 - 不把任意 JavaScript / `dom_script` 作为权威功能脚本的业务动作
+- 不给 v1 语义脚本增加固定 sleep、`networkidle`、裸 URL、坐标、任意正则/表达式或未列入 `docs/semantic-script-schema.md` 的动作/断言
 - 不让子代理持有共享浏览器生命周期、操作未授权 Tab，或把 Agent 会话中断当成浏览器动作回滚
 - 不把超时或断连直接当作动作未执行；原子操作状态不确定时不得更换操作 ID 后盲目重放
 - 不把运行 TODO、执行尝试、实际数据或运行修订写回场景定义和业务版本资产

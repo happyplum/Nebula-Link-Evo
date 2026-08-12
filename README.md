@@ -172,6 +172,7 @@ docs/               # Documentation
   - `ai-e2e/docs/version-page-asset-contract.md`
   - `ai-e2e/docs/agent-browser-execution-contract.md`
   - `ai-e2e/docs/run-state-decision-evidence-contract.md`
+  - `ai-e2e/docs/semantic-script-schema.md`
   - `ai-e2e/docs/gap-analysis.md`（`deprecated`，旧需求对照）
   - `ai-e2e/docs/roadmap.md`（`deprecated`，旧路线，不用于制定新目标）
 

@@ -14,7 +14,7 @@
 
 ## 2. 首期结构
 
-每个功能脚本至少表达以下逻辑信息；字段名和数据库结构在技术设计阶段确定：
+每个功能脚本至少表达以下逻辑信息；字段、动作、断言与引用的机器可校验格式已由 `semantic-script-schema.md` 锁定，数据库修订结构另见目标数据模型：
 
 | 组成     | 目标语义                                                     |
 | -------- | ------------------------------------------------------------ |
@@ -58,7 +58,7 @@
 - 目标定义保存业务语义和可序列化定位依据；`Page`、`Locator`、`ElementHandle` 等 Playwright 进程内对象不进入脚本或跨服务传输。
 - 任意 JavaScript / `dom_script` 不作为首期功能脚本的业务动作。必要的只读诊断可由系统单独调用并保存证据，但不能绕过可视语义执行链改变页面或业务状态。
 
-具体动作白名单、断言算子、目标引用结构及其到 `browser-control.*` 工具的映射仍待技术设计。
+首期动作白名单、断言算子、目标引用结构及浏览器能力差距见 `semantic-script-schema.md`；缺失动作不得临时映射为 `dom_script`。
 
 ## 6. 断言
 
@@ -103,7 +103,7 @@
 - 对后续任务的阻碍判断和建议恢复条件。
 - 截图、DOM、操作记录等证据引用。
 
-结果状态的最终 token、字段名和传输结构在状态机及 API 技术设计中统一确定。
+结果状态 token 遵循 `run-state-decision-evidence-contract.md`；传输信封由跨服务 API 契约统一定义。
 
 ## 10. 编排示例
 
@@ -126,6 +126,7 @@
 - `version-page-asset-contract.md`：脚本所属页面、入口锚点、参数和基线资产契约。
 - `agent-browser-execution-contract.md`：语义步骤到浏览器原子操作、目标解析、幂等与证据的执行边界。
 - `run-state-decision-evidence-contract.md`：尝试结果、失败分类、断言证据和输出发布状态。
+- `semantic-script-schema.md`：首期机器可校验 JSON 字段、动作/断言白名单、引用与静态校验。
 - `../PRODUCT-SPEC.md`：当前能力、目标能力与缺口状态。
 - `../../docs/PRODUCT-SPEC-INDEX.md`：跨服务执行边界。
 - `../../docs/reference/ai-operation-flow.md`：目标代理执行流程。

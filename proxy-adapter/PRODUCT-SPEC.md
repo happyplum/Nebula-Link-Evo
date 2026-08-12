@@ -101,6 +101,7 @@
 | DB 备份 | utils/db-backup | shipped | `__tests__/db-backup.test.ts` | utils |
 | 服务生命周期 | services/app-service | shipped | `__tests__/service-lifecycle.test.ts`、app-service-marker | services |
 | 通用浏览器执行会话与操作账本 | — | pending | 尚无验收面 | 目标提供会话/Tab/控制租约、FIFO 原子操作、幂等去重、结果查询、结果不确定态、通用生命周期事件和带内容校验的短期原始产物；不解释 E2E 业务关联 |
+| 语义脚本原子动作/观测覆盖 | browser-tools、browser-engine | pending | 当前 15 个工具只覆盖基础操作 | v1 目标补齐 fill/type、press、select_option、set_checked、set_files、Tab close、确定性断言和结构化 target/result；不得以 dom_script 代替，映射见 `ai-e2e/docs/semantic-script-schema.md` |
 | 错误分类 | errors/http-errors | shipped | `__tests__/errors.test.ts` | errors |
 
 ---
@@ -118,6 +119,7 @@
 > 8. 修改 Playwright/CDP 所有权、浏览器启动/连接方式或跨服务目标引用边界
 > 9. 修改浏览器执行会话、Tab、控制租约、原子操作幂等、结果账本或通用可视事件契约
 > 10. 修改截图/DOM/媒体等原始产物的引用、完整性、提升或短期清理契约
+> 11. 修改语义脚本动作/断言白名单到通用浏览器原子操作的映射
 
 ### 维护检查清单
 
@@ -130,6 +132,7 @@
 | 修改 Playwright/CDP 拓扑 | 包级目标与边界 + 浏览器引擎模块 + 功能清单 + `docs/PRODUCT-SPEC-INDEX.md` |
 | 修改浏览器执行会话或原子操作协议 | 包级目标与边界 + 功能清单 + `ai-e2e/docs/agent-browser-execution-contract.md` + 所有消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
 | 修改浏览器原始产物与上层证据边界 | 包级目标与边界 + 功能清单 + `ai-e2e/docs/run-state-decision-evidence-contract.md` + 消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
+| 修改语义脚本动作映射 | 功能清单 + `ai-e2e/docs/semantic-script-schema.md` + `ai-e2e` PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
 | 跨包契约变更（端口、API 路径、SSE 事件） | 本文件 + 所有消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
 
 ---
@@ -152,5 +155,6 @@
 - `docs/reference/ai-operation-flow.md` — AI 操作执行模型
 - `ai-e2e/docs/agent-browser-execution-contract.md` — 上层页面任务与本包通用浏览器执行协议的边界
 - `ai-e2e/docs/run-state-decision-evidence-contract.md` — 浏览器原始产物与上层长期业务证据的所有权边界
+- `ai-e2e/docs/semantic-script-schema.md` — 首期语义脚本动作/断言白名单与本包通用操作映射
 - `docs/reference/debug-page-integration-api-reference.md` — Proxy Adapter API 参考
 - 根 `AGENTS.md` — 仓库范围约束

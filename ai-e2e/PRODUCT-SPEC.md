@@ -57,7 +57,7 @@
 | 页面目标 | pending | 页面定义由不含 Origin 的规范化路由模板 + 身份参数约束标识；运行锚点再绑定部署和动态参数，并可选择命名基线变体。当前仅有 `urls.url` 完整字符串和 URL binding，完整契约见 `docs/version-page-asset-contract.md`。 |
 | 功能模块 | in-progress | 一个页面内可包含多个有顺序的功能模块，一个模块目标上包含多个功能脚本。当前 `functional_modules.sort_order` 与多模块绑定同一 URL 已提供基础。 |
 | 模块需求文档 | pending | 融合 PRD 片段、真实页面 DOM/截图、页面锚点、功能说明和有序测试场景，作为脚本生成与修复的可追溯输入；当前信息分散在多个表和 prompt 上下文中。 |
-| 功能脚本 | pending | 模块下最小复用、执行、验证、修复和重复调用单元；目标为结构化语义脚本。当前 `scripts` 以 `test_scenario_id` 为归属，内容是 TypeScript。 |
+| 功能脚本 | pending | 模块下最小复用、执行、验证、修复和重复调用单元；目标为 `nebula.ai-e2e.functional-script/1.0` 结构化 JSON，动作/断言/引用均受白名单约束。当前 `scripts` 以 `test_scenario_id` 为归属，内容是 TypeScript。 |
 | 测试场景 | in-progress | 业务验收单位，目标以无环调用图跨模块/页面编排多个功能脚本；业务版本保存场景定义与 TODO 模板，运行时冻结计划并产生 TODO 与独立执行尝试。当前 scenario 只能直接拥有一组测试数据和脚本版本。 |
 | 业务版本 | pending | 用户创建，可记录来源、部署和 Git 标识；`copy` 原子复制当前有效资产、生成新身份并重建内部引用，不复制编辑历史、运行状态、实际数据、证据或秘密。 |
 | 主代理 | pending | 持有 PRD 流程、TODO 依赖、运行变量和决策，负责拆分、派发、恢复、跳过、验收与汇总。 |
@@ -175,7 +175,7 @@
 | HTML 报告生成 | utils/report-html、html-escape | shipped | `utils/__tests__/report-html.test.ts` | utils |
 | 页面 URL + 参数锚点 | — | pending | 尚无验收面 | 需新增 Origin 无关路由模板、身份/运行/忽略参数分类、运行锚点与命名基线变体，详见 `docs/version-page-asset-contract.md` |
 | 模块需求文档 | — | pending | 尚无验收面 | 需把 PRD 与真实页面证据收敛为持久化、可追溯输入 |
-| 功能脚本 + 场景调用图 | services/ScriptGeneratorService、database/scripts | pending | 当前仅验证 scenario 级 TypeScript 脚本 | 脚本契约见 `docs/functional-script-contract.md`；无环调用图、运行计划快照、TODO、尝试、依赖传播及追加式修订见 `docs/scenario-orchestration-contract.md` |
+| 功能脚本 + 场景调用图 | services/ScriptGeneratorService、database/scripts | pending | 当前仅验证 scenario 级 TypeScript 脚本 | 脚本语义与 v1 Schema 见 `docs/functional-script-contract.md`、`docs/semantic-script-schema.md`；无环调用图、运行计划快照、TODO、尝试、依赖传播及追加式修订见 `docs/scenario-orchestration-contract.md` |
 | 业务版本 + 深复制 | — | pending | 尚无验收面 | 需原子复制当前有效资产、生成新身份并重建引用，排除编辑历史、运行状态、证据、实际数据和秘密 |
 | 主代理 / 页面子代理调度与上下文策略 | — | pending | 尚无验收面 | 首期同一时刻一个主代理只运行一个执行型子代理，共享 proxy-adapter 浏览器会话并串行动作；任务包、租约、暂停、检查点和恢复契约见 `docs/agent-browser-execution-contract.md` |
 | ai-chat-service Agent 会话消费 | infrastructure/ai-chat-client | pending | 当前仅有纯文本 generate 与基础 chat session 客户端 | 需面向页面任务的 tool/skill loop、工具白名单、结构化结果和控制传播契约 |
@@ -217,7 +217,7 @@
 | 修改状态机 | 包级目标与边界 + 状态机条目 + README "AI E2E 需求基线" |
 | 新增 DB migration | 模块清单（database/migrations） + 功能清单 |
 | 新增业务服务 | 模块清单（services/） + 功能清单 + Dependency Injection Rule 条目 |
-| 修改业务版本、页面、模块、功能脚本或场景调用 | 目标领域与代理编排 + 功能清单 + DB schema + `docs/PRODUCT-SPEC-INDEX.md` + `docs/requirements-baseline.md`；版本/页面同步 `docs/version-page-asset-contract.md`，功能脚本同步 `docs/functional-script-contract.md`，场景编排同步 `docs/scenario-orchestration-contract.md` |
+| 修改业务版本、页面、模块、功能脚本或场景调用 | 目标领域与代理编排 + 功能清单 + DB schema + `docs/PRODUCT-SPEC-INDEX.md` + `docs/requirements-baseline.md`；版本/页面同步 `docs/version-page-asset-contract.md`，功能脚本同步 `docs/functional-script-contract.md` 与 `docs/semantic-script-schema.md`，场景编排同步 `docs/scenario-orchestration-contract.md` |
 | 实现或修改主/页面子代理 | 目标领域与代理编排 + 功能清单 + `ai-e2e/AGENTS.md` + ai-chat-service 消费契约 + `docs/PRODUCT-SPEC-INDEX.md` + `docs/agent-browser-execution-contract.md` |
 | 修改浏览器控制租约、原子操作、可视执行、证据或重放契约 | 目标领域与代理编排 + 功能清单 + proxy-adapter/ai-chat-service PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` + `docs/agent-browser-execution-contract.md` |
 | 修改状态、决策、依赖传播、证据或运行控制 UI | 目标领域与代理编排 + 功能清单 + UI 模块清单 + `ui/AGENTS.md` + `docs/run-state-decision-evidence-contract.md` + `docs/requirements-baseline.md` + `docs/PRODUCT-SPEC-INDEX.md` |
@@ -258,6 +258,7 @@
 - `ai-e2e/docs/requirements-baseline.md` — 需求基线
 - `ai-e2e/docs/agent-browser-execution-contract.md` — 页面任务包、Agent 边界、浏览器控制租约、原子操作与可视执行契约
 - `ai-e2e/docs/run-state-decision-evidence-contract.md` — 分层状态、失败传播、决策、证据和人工控制契约
+- `ai-e2e/docs/semantic-script-schema.md` — 首期功能脚本 JSON Schema、动作/断言白名单与静态校验
 - `ai-e2e/docs/gap-analysis.md` — `deprecated` 历史缺口对照
 - `ai-e2e/docs/roadmap.md` — `deprecated` 历史路线，不用于制定新目标
 - `ai-e2e/ui/AGENTS.md` — UI 子工作区约束
