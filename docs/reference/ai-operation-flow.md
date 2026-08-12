@@ -20,7 +20,7 @@
 │  ┌────▼──────────────▼──────────────▼──────────────────────────┐ │
 │  │                   Services Layer                          │ │
 │  │ ChatHandler │ ConversationManager │ SessionEventHub          │ │
-│  │ ChatSessionController │ MCPSDKClient │ ActionExecutor        │ │
+│  │ ChatSessionController │ MCPSDKClient │ ToolRegistry/Vision    │ │
 │  └─────────────────────┬─────────────────────────────────────┘ │
 │                        │                                       │
 │  ┌─────────────────────▼─────────────────────────────────────┐ │
@@ -36,6 +36,51 @@
 
 AI 能力经 MCP-over-HTTP 路由到 proxy-adapter (:3000)，后者内进程运行 Playwright 引擎控制 Chromium。
 ```
+
+---
+
+## Target AI E2E Flow（pending）
+
+> 这是已确认的目标需求，不是当前 shipped 运行时。当前 ai-e2e 仍以纯文本生成和 `npx tsx` 子进程脚本执行为主。
+
+```text
+PRD + 目标链接 / 已有业务版本
+        │
+        ▼
+ai-e2e 主代理
+  ├─ 生成或加载流程、TODO、依赖和运行变量
+  ├─ 按页面场景片段派发任务
+  ├─ 处理登录/造数等跨场景前置任务
+  └─ 处理暂停决策、恢复、依赖跳过与汇总
+        │
+        ▼
+ai-chat-service 子代理运行
+  ├─ 加载当前页面资产、授权变量和功能脚本调用
+  ├─ 固定重新检查页面/DOM/登录态/前置条件
+  ├─ 可按需调用一次视觉分析
+  ├─ 通过 MCP 执行结构化语义步骤
+  ├─ 验证结果并修复职责内脚本
+  └─ 返回结果、输出变量、影响评估和证据
+        │
+        ▼ MCP-over-HTTP
+proxy-adapter
+  ├─ 唯一 Playwright/Chromium 执行入口
+  ├─ DOM/截图与目标解析
+  ├─ 实时画面、marker/overlay 与后续操作动画
+  └─ 动作结果、交互记录和失败现场
+```
+
+目标运行规则：
+
+- 一个页面包含多个功能模块，一个功能模块包含多个功能脚本；测试场景可跨模块/页面编排脚本调用。
+- 系统内权威脚本是结构化语义功能脚本，不是要求独立启动浏览器的 `.spec.ts`。
+- 主代理与子代理均可调用视觉模型；每次调用只处理一个完整输入的分析问题，视觉模型不持有连续任务状态。
+- 子代理发现意外登出或外部前置条件缺失时停止并上报，不自行解决；主代理安排前置任务后决定恢复或重派。
+- 大多数派发创建干净上下文；可恢复中断在重新检查页面状态和副作用后可以续接原上下文。
+- 失败先保存截图与现场并评估后续阻碍；依赖失败输出的后续任务可跳过，不受影响的任务可继续。
+- 需要主代理决策时暂停，影响需求或验收的决定写入业务版本文档后再恢复。
+
+完整需求见 `ai-e2e/docs/requirements-baseline.md`。
 
 ---
 
@@ -222,6 +267,6 @@ SessionEventHub (SSE streaming)
 |---|---|---|
 | Sessions | SQLite | Session metadata, config, state |
 | Messages | SQLite | User + assistant + tool messages |
-| Events | SQLite | Session events for replay |
+| Events | SQLite | `session.snapshot` 恢复所需的 thinking / tool 历史；不用于 cursor replay |
 | Failure Samples | Filesystem | Interaction failure logs |
-| Stream Buffer | Memory + Filesystem | SSE replay buffer |
+| Live Event Hub | Memory | 只转发给在线 subscriber，不缓存、不重放 |

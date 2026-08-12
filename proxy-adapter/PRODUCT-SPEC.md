@@ -9,24 +9,28 @@
 
 ### 目标
 
-- 提供统一的浏览器控制能力，支持 12 种操作类型（click / type / focus / blur / hover / value / dispatch / scroll / navigate / wait / mcp_call / finish，对应 `shared/types/action.ts` 的 `Action` 联合类型）。
+- 统一封装进程内 Playwright 与页面级 CDP 会话，提供浏览器分析、观测和操作能力；支持 12 种操作类型（click / type / focus / blur / hover / value / dispatch / scroll / navigate / wait / mcp_call / finish，对应 `shared/types/action.ts` 的 `Action` 联合类型）。
 - 提供实时调试观测面（MJPEG、DOM 快照、debug event stream）供 `debug-ui` 消费。
 - 通过 MCP 协议成为任意 AI 客户端（Claude Desktop / Cursor / aichat / `ai-chat-service`）的浏览器能力底座。
+- 目标承载 ai-e2e 结构化语义功能脚本的唯一可视执行链，使动作、实时画面、步骤结果、交互记录和失败证据可关联、可理解、可复现；当前正式 MCP 工具仍以单步浏览器操作为主。
 
 ### 边界
 
 | Owns | Consumes | Does NOT own |
 |------|----------|--------------|
-| Playwright Chromium 生命周期与浏览器锁 | `@nebula-link-evo/shared` 的类型与工具 | AI 对话、会话、provider 编排（迁移到 `ai-chat-service`） |
+| Playwright Chromium 生命周期、浏览器锁与 CDP 会话 | `@nebula-link-evo/shared` 的类型与工具 | AI 对话、会话、provider 编排（迁移到 `ai-chat-service`） |
 | MCP Server (StreamableHTTP) 与工具注册 | LiveKit 服务（外部） | Chat SSE、conversation/session |
 | browser-control 工具集 |  | 前端代码（前端在 `debug-ui`） |
 | 浏览器调试 REST 端点（MJPEG、DOM 快照、debug stream） |  | 任何 `src/static/debug/` 静态前端目录 |
 | LiveKit 令牌发放、配置、健康检查 |  | 共享数据库（`ai-chat-service` 独立 DB） |
 | DB 备份（`utils/db-backup.ts`） |  |  |
+| 目标语义步骤的 Playwright 执行、实时画面与浏览器侧证据 | `ai-e2e` 传入的可序列化关联信息 | PRD、场景依赖、代理调度或业务版本 |
 
 ### 硬约束
 
 - 不引入 AI provider 编排、conversation、Chat SSE、视觉分析（这些已迁移至 `ai-chat-service`）。
+- `proxy-adapter` 是 Playwright/CDP 集成的唯一所有者；上层服务不得直接导入浏览器引擎或绕过 MCP/调试 API。
+- 目标 E2E 执行不得存在上层独立启动 Playwright/Chromium 的不可视旁路；本包不因此持有 ai-e2e 的 PRD、业务版本、场景或代理概念。
 - 不在 `src/` 下恢复 `static/debug/` 前端源码。
 - 不在 generic route handler 中写 provider-specific 逻辑。
 - 不与其他服务共享数据库。
@@ -47,10 +51,10 @@
 | 失败样本收集 | `src/services/failure-sample-collector.ts` | shipped | 收集失败交互样本 | 用于诊断与改进 |
 | 日志 | `src/services/logger.ts` | shipped | 结构化日志 |  |
 | 配置 | `src/config/`（schema / loader / resolver / validator） | shipped | env + `config.json` 驱动的配置 | `defaults` 可选；缺 provider key 仅 warning，并保留 provider 记录（`apiKey: ""`） |
-| 工具注册 | `src/tools/`（registry / types / index / providers/* / adapters/*） | shipped | ToolRegistry + providers + 适配器 | providers: browser-tools-provider、mcp-client-provider；adapters: mcp-server、json-schema-to-zod |
+| 工具注册 | `src/tools/`（registry / types / index / providers/browser-tools-provider / adapters/*） | shipped | ToolRegistry + 本地 browser-control provider + MCP Server 适配器 | 外部 MCP client/provider 已归 `ai-chat-service`；本包不存在 mcp-client-provider |
 | 浏览器工具适配 | `src/browser-tools/`（definitions / tool-map / param-adapter / result-adapter / types / index） | shipped | browser-control.* 工具定义与参数/结果适配 | 工具集含 screenshot、click、type 等；区别于 `Action` 联合类型（12 种） |
 | MCP Server | `src/mcp-server/`（index / transport） | shipped | StreamableHTTP 传输层 + MCP Server 入口 | 路径 `/mcp`；`ai-chat-service` 通过 `PROXY_ADAPTER_URL + /mcp` 接入 |
-| 浏览器引擎 | `src/browser-engine/`（services/{browser-lifecycle,browser-service,dom-extractor,page-actions,click-resolution,snapshot-cache,browser-lock} / screencast / locator-generator / marker-injector / dom-utils / index） | shipped | Playwright Chromium 控制、DOM 提取、点击解析、快照缓存、视觉标记注入、屏播 | 7 级目标链：nebula-id → role → testid → aria → text → css → xpath |
+| 浏览器引擎 | `src/browser-engine/`（services/{browser-lifecycle,browser-service,dom-extractor,page-actions,click-resolution,snapshot-cache,browser-lock} / screencast / locator-generator / marker-injector / dom-utils / index） | shipped | 进程内 Playwright Chromium 控制、可选远程调试端口、页面 CDP 会话、DOM 提取、点击解析、快照缓存、视觉标记注入、屏播 | 当前自行启动 Chromium，不存在外部 `playwright-server` 或 `connectOverCDP` 连接链；7 级目标链：nebula-id → role → testid → aria → text → css → xpath |
 | 插件 | `src/plugins/`（01-cors / 02-swagger / 03-error-handler / 10-routes-autoload / routes/{api/livekit-token, debug/index, debug/stream, config, health}） | shipped | Fastify 插件与路由 | 路由按编号约定加载顺序 |
 | Schemas | `src/schemas/`（health / config） | shipped | 健康检查与配置响应 schema |  |
 | Errors | `src/errors/`（http-errors / index） | shipped | HTTP 错误分类 |  |
@@ -79,6 +83,7 @@
 | 功能 | 入口 | 状态 | 验收面 | 关联模块 |
 |------|------|------|--------|----------|
 | 浏览器控制（12 种 action：click / type / focus / blur / hover / value / dispatch / scroll / navigate / wait / mcp_call / finish） | browser-tools/definitions + browser-engine/services/page-actions | shipped | 单元测试 + 集成测试 | browser-tools、browser-engine、action-executor |
+| Playwright/CDP 浏览器通道 | browser-engine/services/browser-lifecycle + browser-engine/screencast | shipped | browser-service 单元测试 + screencast 集成面 | 生命周期可按需开放 remote-debugging-port；屏播通过页面 `CDPSession` 获取帧 |
 | MCP Server (StreamableHTTP) | mcp-server/ | shipped | `__tests__/adapters/mcp-server-adapter.test.ts` | tools/、mcp-server/ |
 | browser-control.* 工具暴露 | tools/providers/browser-tools-provider | shipped | `__tests__/browser-tools-provider.test.ts` | browser-tools、tools/registry |
 | 视觉标记系统（Vision Marker） | browser-engine/marker-injector、locator-generator | shipped | marker-mode-e2e + 集成测试 | browser-engine、shared/types/vision-marker |
@@ -106,6 +111,7 @@
 > 5. 修改 action 类型集合（当前 12 种）
 > 6. 修改 7 级目标定位链顺序
 > 7. 与 `ai-chat-service` / `debug-ui` / `ai-e2e` 之间的契约变更
+> 8. 修改 Playwright/CDP 所有权、浏览器启动/连接方式或跨服务目标引用边界
 
 ### 维护检查清单
 
@@ -115,6 +121,7 @@
 | 新增 HTTP 路由 | 路由登记 + 功能清单 |
 | 新增 action 类型 | 模块清单（browser-tools/definitions） + 功能清单 + shared 类型 |
 | 修改启动顺序 | 包级目标与边界的"硬约束"列 + 启动序列说明 |
+| 修改 Playwright/CDP 拓扑 | 包级目标与边界 + 浏览器引擎模块 + 功能清单 + `docs/PRODUCT-SPEC-INDEX.md` |
 | 跨包契约变更（端口、API 路径、SSE 事件） | 本文件 + 所有消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
 
 ---
@@ -123,7 +130,8 @@
 
 | 缺口 | 类型 | 状态 | 备注 |
 |------|------|------|------|
-| 暂无活跃技术债（刚完成 split-cleanup） | — | — | 4 个孤儿目录、2 个损坏 legacy 脚本、1 个死 skill 已清理（commit 8b5446a） |
+| ToolConsumer 仍保留 legacy `chat` 值 | tech-debt | pending | `BrowserToolsProvider.exposeTo` 与 `GatewayTool` 类型仍含 `chat`，但本包已无 Chat 消费面；后续应在不影响 MCP Server 的前提下清理 |
+| E2E 可视语义执行契约未实现 | requirement-gap | pending | 当前已有单步 MCP 工具、MJPEG、marker/overlay、交互日志和失败样本，但尚未贯通场景/脚本调用/语义步骤关联、执行结果与可复现记录 |
 
 ---
 

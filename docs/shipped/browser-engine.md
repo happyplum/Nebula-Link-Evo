@@ -3,6 +3,7 @@
 proxy-adapter 内联 Playwright Chromium 控制层：浏览器生命周期、DOM 提取、点击解析、快照缓存、视觉标记注入、MJPEG 屏播。`playwright-server` 已移除，proxy-adapter 直接控制 Chromium。
 
 - [shipped] Playwright Chromium 生命周期与浏览器锁：`proxy-adapter/src/browser-engine/services/browser-lifecycle.ts`、`browser-lock.ts`。
+- [shipped] Playwright/CDP 集成由 proxy-adapter 独占：当前在进程内启动 Chromium，可选通过 `cdpPort` 开放 remote-debugging-port，并由 `screencast.ts` 创建页面 `CDPSession`；不存在外部 `playwright-server` 或 `connectOverCDP` 连接链。
 - [shipped] 7 级目标定位链（依次尝试）：nebula-id → role → testid → aria → text → css → xpath。入口：`proxy-adapter/src/browser-engine/locator-generator.ts`、`click-resolution.ts`。
 - [shipped] DOM 快照 v2.0（含 `data-nebula-id` 属性）：`proxy-adapter/src/browser-engine/dom-extractor.ts`、`dom-utils.ts`。element 归一化字段 `id` + `locator_bundle`。
 - [shipped] 视觉标记系统（Vision Marker）：通过 `data-nebula-id` 关联操作坐标与 DOM 元素。入口：`proxy-adapter/src/browser-engine/marker-injector.ts`。

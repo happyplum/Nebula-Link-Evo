@@ -22,8 +22,18 @@ PRD 驱动的 E2E 自动化测试编排器。把"需求分析 → 页面探索 �
 - [shipped] 双后端 HTTP 客户端：`AiChatClient`（→ ai-chat-service :3001 `POST /api/ai/generate`）、`BrowserGatewayClient`（→ proxy-adapter :3000 `/debug/api/*`）。`ProxyAdapterClient` 为 facade。
 - [shipped] 独立 SQLite（项目 / scenario / script / run / diagnosis）：`ai-e2e/src/database/`。不与 proxy-adapter / ai-chat-service 共享。
 - [shipped] Prompt 模板（稳定资产）：`ai-e2e/prompts/*.md`。必须保留。
-- [shipped] SPA UI 挂载前缀 `/ai-e2e/`：HomePage（`/`）+ ProjectPage（`/projects/:id`）。
+- [shipped] SPA UI 挂载前缀 `/ai-e2e/`：HomePage（`/`）+ ProjectPage（`/project/:projectId`），项目页为四步向导。
 - [shipped] 验收面：`ai-e2e/src/__tests__/`（ai、database 等）单元 + 集成测试。
+- [designed] 页面身份改为规范化 URL（含 path/hash route）+ 路由/查询参数集合；当前仅保存完整 `urls.url`，尚无独立参数模型。
+- [designed] 模块需求文档融合 PRD 片段、真实 DOM/截图、页面锚点、功能说明与有序场景；当前这些信息仍分散存储。
+- [designed] 一个页面包含多个功能模块，一个功能模块包含多个功能脚本；功能脚本是最小复用、执行、验证和修复单元。测试场景可跨模块/页面按顺序、依赖、重复和输入输出关系编排脚本调用；当前脚本版本仍以 scenario 为归属。
+- [designed] 业务版本由用户创建，可记录来源版本及部署/Git 标识；`copy` 深复制 PRD、决策、页面、模块、脚本、场景、TODO、DOM/定位基线和参考截图，复制后独立维护，不复制运行历史、实际数据、凭据或临时变量。
+- [designed] 主代理维护 PRD 流程、TODO 依赖、运行变量和决策，并负责派发、恢复、跳过、验收与汇总；页面子代理只执行获授权的页面场景片段，负责重新检查、执行、验证、职责内修复和结构化汇报。
+- [designed] 默认创建干净子代理上下文；登出等可恢复中断可由主代理在页面状态和副作用检查后续接原上下文，否则从检查点和授权变量重建。
+- [designed] 页面任务图、页面/模块范围与验收归 ai-e2e；模型、MCP 工具和未来 Skills 的执行归 ai-chat-service。当前 `AiChatClient.generateText()` 仅调用纯文本生成端点，尚无 Agent tool loop。
+- [designed] 系统内权威脚本是结构化语义功能脚本；所有浏览器动作通过 proxy-adapter 可视执行，并关联实时画面、场景、脚本调用、步骤结果和失败证据。当前 `npx tsx` 子进程执行器不是目标执行路径。
+- [designed] 失败先保存截图和现场并评估后续阻碍；主代理按依赖跳过或继续。意外登出按可恢复中断上报，需要决策时暂停并在决策写入版本文档后恢复。
+- [designed] 页面或 DOM 节点变化后只修复当前业务版本内受影响的功能脚本并重新验证；当前仅有 run 级失败诊断与自动修复。
 - [tech-debt] `page_snapshot_json` 缺失：手动 URL 不经过探索，该字段为 NULL，导致 AI 编造选择器，通过率从 60%+ 降到 4.6%。变通：手动注入 DOM 快照。
 - [tech-debt] AI 模板约束执行不足：AI 偶尔生成 `test()` / `expect()` / `waitForLoadState('networkidle')` / `typescript` 前缀。变通：批量后处理。
 - [tech-debt] AI 超时预算未按操作细分：当前默认 `settings.timeout=180s`，`DEFAULT_AI_TIMEOUT_MS=300s`。

@@ -1,6 +1,6 @@
 # ai-chat-service — 产品规格 (PRODUCT-SPEC)
 
-> 一句话目标：承载平台所有 **AI 对话、会话管理、provider 编排、Chat SSE 流式**能力，并通过 MCP-over-HTTP 消费 `proxy-adapter` 的浏览器工具，视觉分析由内部 `VisionAnalyzer` 提供。
+> 一句话目标：作为可复用的 **AI 基础能力层**，承载分析/决策模型、视觉模型、MCP 工具编排、AI 对话、会话管理、provider 编排与 Chat SSE；通过 MCP-over-HTTP 消费 `proxy-adapter` 的浏览器工具。
 > 端口：`:3001` ｜ 角色：AI 对话服务 ｜ 默认绑定 `127.0.0.1`（localhost-only，无 auth 层）
 
 ---
@@ -15,6 +15,7 @@
 - 通过内部 `VisionAnalyzer` 提供视觉分析工具 `vision.find_element`（`exposeTo: ['chat']`，不通过 MCP 暴露）。
 - 向 `debug-ui` 提供 Chat SSE 流（每次建连先发完整 `session.snapshot` 再续 live stream）。
 - 提供 provider preflight（`/test-ai`、`/verify-keys`）、loop-guard（防止 AI 重复陷入同一种失败）、数据库备份。
+- 为后续可复用 Skills 提供统一归属；Skills loader / registry / execution path 当前为设计目标，尚未实现。
 
 ### 边界
 
@@ -38,6 +39,17 @@
 - **不引入** `proxy-adapter` 特有概念。
 - 本地 TS import 保留 `.js` 后缀。
 
+### 双模型与扩展能力契约
+
+| 能力 | 状态 | 职责与边界 |
+|------|------|------------|
+| 分析/决策模型（`defaults.decision`） | shipped | 理解需求、文档与浏览器证据，规划下一步测试动作；在 Chat agent loop 中消费 MCP 工具与结构化视觉结果。provider/model 只是该角色的实现配置。 |
+| 视觉模型（`defaults.vision`） | shipped | 当前通过 `vision.find_element` 解释标注截图 + DOM 快照并返回目标元素、`snapshot_id`、置信度与定位证据。跨服务目标必须可序列化，不得返回 `Page` / `Locator` / `ElementHandle` 等进程内 Playwright 对象。 |
+| 单次视觉分析契约 | in-progress | 目标同时服务主代理和子代理；每次调用必须是完整输入、单一问题、单次输出。视觉模型不保存流程状态、不连续执行、不调度脚本、不操作浏览器。当前元素查找符合单次调用形态，通用页面状态分析接口仍为 pending。 |
+| 通用页面状态理解 | pending | 在元素查找之外，向调用代理提供结构化的页面功能、视觉区域和 DOM 状态摘要；当前没有独立接口。 |
+| MCP client / ToolRegistry | shipped | 接入 `proxy-adapter` 的浏览器工具及其他外部 MCP 工具，并只向 Chat 能力面暴露。 |
+| Skills runtime | pending | 加载、注册并执行可复用 AI 工作流；当前仓库中没有 Skills loader、registry 或执行路径，不得视为已交付。 |
+
 ---
 
 ## 2. 模块清单
@@ -60,12 +72,13 @@
 | 数据库 | `src/db/`（ConversationDatabase / SessionStateDAO / SessionEventsDAO / SessionEventsCleanup / types / index） | shipped | 独立 SQLite 数据库与 DAO | 不与 `proxy-adapter` 共享 |
 | 视觉分析 | `src/vision/`（vision-analyzer / prompts / types / index） | shipped | Vision 分析引擎，通过 AI 模型识别 DOM 元素 | 构造函数接收 `LanguageModelV3` + `VisionConfig`；提供 `findElement()` 方法 |
 | 工具注册 | `src/tools/`（registry / types / index / providers/{mcp-client-provider,vision-tool-provider} / adapters/{vercel-ai,json-schema-to-zod}） | shipped | ToolRegistry + providers（MCP client + VisionToolProvider） | MCP 客户端：状态机管理 server 生命周期、指数退避重连（最多 5 次）、`toolsChanged` 事件 |
+| Skills runtime | — | pending | 可复用 Skills 的发现、装载、注册与执行 | 尚无代码落点；实现前需先定义隔离、版本与工具授权契约 |
 | 客户端 | `src/clients/`（vercel-ai/provider / mcp/sdk-client / mcp/fetch / compression / types） | shipped | Vercel AI Provider 与 MCP SDK 客户端（含 fetch MCP server） |  |
 | 插件与路由 | `src/plugins/routes/api/`（chat/{stream,sessions,control,connectivity-test,runtime-state,index} / ai-service / debug-ai） | shipped | Fastify 路由 | Chat SSE 每次建连发完整 `session.snapshot` |
 | 错误 | `src/errors/`（http-errors / index） | shipped | HTTP 错误分类 | API 边界：未知 provider → 400；不可用 provider → 503 |
 | DB 备份 | `src/utils/db-backup.ts` | shipped | SQLite 备份 |  |
 | 类型 | `src/types.ts`、`src/types/fastify.d.ts` | shipped | 包内共享类型 |  |
-| 测试 | `src/**/*.test.ts` | shipped | unit / 集成 | 当前 68/68 PASS |
+| 测试 | `src/**/*.test.ts` | shipped | unit / 集成 | 2026-08-12 本地验证 82/82 PASS |
 
 ---
 
@@ -113,6 +126,7 @@
 | Vision model 列（007 迁移） | conversation/migrations/007 | shipped | `007-add-vision-model-columns.test.ts`、`session-vision-config.test.ts` | conversation |
 | Vision 分析引擎（VisionAnalyzer） | src/vision/ | shipped | 通过 `vision-tool-provider.test.ts` 覆盖调用与错误映射 | src/vision/ |
 | 视觉元素查找工具（`vision.find_element`） | tools/providers/vision-tool-provider | shipped | `vision-tool-provider.test.ts` | tools/providers、src/vision/、clients/mcp；支持 `snapshot_id` 复用最近 5 个本地快照 |
+| Skills 加载与执行 | — | pending | 尚无验收面 | 目标归属 ai-chat-service，不得下沉到 proxy-adapter 或复制到 ai-e2e |
 
 ---
 
@@ -129,6 +143,8 @@
 > 8. 修改上下文压缩阈值（当前 > 20 条触发）
 > 9. 修改 DB schema（新增 migration 必须更新文件清单）
 > 10. 与 `proxy-adapter` / `debug-ui` / `ai-e2e` 之间的契约变更
+> 11. 修改分析/决策模型与视觉模型的职责边界
+> 12. 新增 / 删除 / 修改 Skills runtime、Skill 权限或执行隔离规则
 
 ### 维护检查清单
 
@@ -137,6 +153,8 @@
 | 新增 HTTP 路由 | 路由登记 + 功能清单 |
 | 新增 DB migration | 模块清单（按编号登记） + 功能清单 |
 | 新增 provider adapter | 模块清单（services/provider/adapters） + 功能清单 + Provider 错误分类说明 |
+| 修改双模型职责或视觉输出边界 | 双模型与扩展能力契约 + 功能清单 + `docs/PRODUCT-SPEC-INDEX.md` + 根 README |
+| 新增或修改 Skills runtime | 双模型与扩展能力契约 + 模块清单 + 功能清单 + 已知缺口 + `docs/PRODUCT-SPEC-INDEX.md` |
 | 修改 Chat SSE 行为 | 包级目标与边界 + 功能清单（Chat SSE 条目） + `debug-ui` 的 PRODUCT-SPEC |
 | 跨包契约变更（端口、MCP 路径、SSE 事件） | 本文件 + 所有消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
 
@@ -146,7 +164,9 @@
 
 | 缺口 | 类型 | 状态 | 备注 |
 |------|------|------|------|
-| 暂无活跃技术债（拆分后稳定） | — | — | 当前 68/68 测试通过 |
+| 当前已实现能力暂无活跃技术债 | — | — | 2026-08-12 本地验证 82/82 测试通过；下列为新增目标能力缺口 |
+| 通用页面状态理解接口未实现 | requirement-gap | pending | 当前视觉能力聚焦 `vision.find_element`，尚不能独立输出完整页面功能与 DOM 状态摘要 |
+| Skills runtime 未实现 | requirement-gap | pending | 当前无 Skills loader、registry、版本与执行隔离机制 |
 
 ---
 
