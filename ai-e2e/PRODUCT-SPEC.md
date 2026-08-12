@@ -66,9 +66,9 @@
 | 页面子代理 | pending | 只执行派发的页面场景片段，负责固定重新检查、执行、验证、职责内修复和汇报；不得自行登录、造数或调用场景外脚本。 |
 | 上下文策略 | pending | 默认创建干净子代理上下文；登出等可恢复中断可由主代理在状态/副作用检查后续接原上下文，否则从检查点重建。v1 每个 browser session 固定一个 BrowserContext 和一个活动 actor；跨角色只允许主代理显式编排认证脚本串行切换。 |
 | 环境与副作用策略 | pending | deployment revision 固定 `local/test/staging/production`；local/test 自动允许已声明有界副作用，staging 的删除/批量/不可逆/上传做一次当前 run/job 计划级审批，production 只允许显式认证会话变化和只读行为且无 v1 绕过。`ai-e2e` 持有风险投影/evaluation/grant，完整契约见 `docs/environment-side-effect-policy-contract.md`。 |
-| Agent 执行路径 | pending | 页面任务图和验收归 ai-e2e，模型/MCP/未来 Skills 执行归 ai-chat-service；目标 Agent task、浏览器 operation 与事件协议见 `docs/service-api-event-contract.md`，当前 `AiChatClient.generateText()` 是纯文本生成，不执行 tool loop。 |
+| Agent 执行路径 | pending | 页面任务图和验收归 ai-e2e，模型/MCP/未来 Skills 执行归 ai-chat-service；上游已具备 Agent task POST/GET、command/event/checkpoint 与 Skill registry/pin 内部数据层，但公开控制/事件和 Skills runtime 未接入。本包当前 `AiChatClient.generateText()` 仍是纯文本生成，不执行 tool loop。 |
 | 页面任务与浏览器控制租约 | in-progress | proxy 已交付全局单活动 session/单 BrowserContext、observe/control lease、operation ledger 与 legacy 门禁；ai-e2e 的 authoring/run 公平 FIFO、browser job/session link 和页面任务派发仍未实现。主代理只在安全边界 observe，子代理只取得范围内 control，UI live view 只读。 |
-| 可视执行与证据 | in-progress | `proxy-adapter` 已有实时画面、marker/overlay、持久幂等 operation ledger 和重启未知态；目标仍需由 ai-e2e 按单个语义步骤调用并关联场景、步骤、结果和失败证据。browser artifact/capture 与统一证据 manifest 尚未交付，状态不确定时必须先检查副作用。 |
+| 可视执行与证据 | in-progress | `proxy-adapter` 已有实时画面、marker/overlay、持久幂等 operation ledger、重启未知态及 browser capture/artifact/hold/session event 内部数据层；真实采集/API 尚未接入。目标仍需由 ai-e2e 按单个语义步骤调用并关联场景、步骤、结果和失败证据；统一证据 manifest 尚未交付，状态不确定时必须先检查副作用。 |
 | 分层运行状态 | pending | 测试流程、运行 TODO、执行尝试、Agent 会话和浏览器操作分别持有状态；取消、登出中断、待决策、依赖跳过和业务失败不混用。 |
 | 失败/阻塞/暂停/跳过 | pending | blocked/interrupted/waiting_decision 在主代理收敛前不提前跳过下游；终态失败只传播到真实依赖节点，独立节点可重新检查后继续。 |
 | 决策与证据 | pending | 运行决定与业务版本长期决定分载体追加保存；ai-e2e 持有不可变证据 manifest、业务关联、完整度、脱敏与保留策略。 |
@@ -193,7 +193,7 @@
 | 从零生成、复核与局部修复 | services、database（待新增） | pending | 当前无耐久 authoring 验收面 | 从 PRD + URL 生成 candidate，经静态校验和真实可视验证后激活；recheck/repair 依据 dependency index 最小化重验，不重写无关资产 |
 | 环境风险投影与计划级审批 | services、database、ui（待新增） | pending | 当前无验收面 | 冻结 deployment environment 与脚本/TODO 副作用投影；持久 policy evaluation/grant/决策/事件，逐 effectId 校验。production 写计划直接策略拒绝，staging 高风险在 browser control 前一次审批 |
 | 主代理 / 页面子代理调度与上下文策略 | — | pending | 尚无验收面 | 主代理由持久 authoring/run 状态驱动；首期 proxy 进程全局一个活动 browser session，authoring/run 共用 FIFO，只有子代理 control，主代理安全边界 observe；任务包、租约、暂停、检查点和恢复见两份执行/authoring 契约 |
-| ai-chat-service Agent task 消费 | infrastructure/ai-chat-client | pending | ai-chat-service 已交付 Agent task POST/GET 与 capability；本包当前仍仅消费纯文本 generate 与基础 chat session 客户端 | 待接入不可变输入、tool policy、预算、模型不可见 browser binding 和结构化结果；Skills/commands/events 尚无上游能力，不把 task completed 直接当 TODO passed |
+| ai-chat-service Agent task 消费 | infrastructure/ai-chat-client | pending | ai-chat-service 已交付 Agent task POST/GET、capability，以及 command/event/checkpoint 与 Skill registry/pin 内部数据层；本包当前仍仅消费纯文本 generate 与基础 chat session 客户端 | 待接入不可变输入、tool policy、预算、模型不可见 browser binding 和结构化结果；上游公开 Skills/commands/events 仍不可用，不把 task completed 直接当 TODO passed |
 | proxy-adapter 可视语义执行 | services/ExecutorService | pending | 当前仍由 `npx tsx` 子进程执行 | 需替换为 browser session/lease + `browser-control.operation_*` 的语义步骤执行；精确控制面见 `docs/service-api-event-contract.md` |
 | 跨服务 outbox 与恢复 | database、后台 worker（待新增） | pending | 当前无验收面 | 外部创建/命令先持久化 intent，使用原幂等键派发并查询 Agent/operation ledger 收敛；不得在 SQLite 写事务中等待网络 |
 | 旧资产导入与版本级切流 | database、services、ui（待新增） | pending | 当前无验收面 | 旧表只读保留；生成 needs_recheck 业务版本/候选，不自动转换任意 TypeScript；run 固定 legacy 或 semantic_v1 |
@@ -266,8 +266,8 @@
 | 目标 revision/run/evidence/outbox 仅部分实现 | requirement-gap | pending | migration 014 已落地页面/模块/功能脚本/场景不可变 current revision；run plan/TODO/attempt/decision/event/evidence、verification/dependency、integration outbox 和外部任务引用仍未实现 |
 | 模块下多功能脚本与场景调用图仅有持久化基座 | requirement-gap | pending | semantic stable identity/current revision 与无环引用校验已交付；authoring、重复/条件、运行计划、TODO、跨脚本输入输出和追加式修订仍未实现，legacy `run-all` 仍只是顺序遍历 |
 | 主代理 / 页面子代理编排未实现 | requirement-gap | pending | 当前没有页面任务、运行变量、暂停决策、检查点、恢复与依赖跳过运行时 |
-| ai-e2e 尚未消费 Agent task | requirement-gap | pending | ai-chat-service 已交付 `POST /api/v1/agent-tasks`、`GET /api/v1/agent-tasks/:taskId`、browser binding 与结构化结果；本包仍调用 `POST /api/ai/generate`，尚未实现 task client/outbox/polling，控制/事件上游也仍 pending |
-| ai-e2e 尚未切入 proxy 受控执行链 | requirement-gap | pending | proxy 已交付 session/lease/operation ledger、幂等/未知态和受控 MCP 工具；当前 `ExecutorService` 仍用 `npx tsx` 执行独立脚本，ai-e2e 尚无 browser job/session link、语义步骤调用或浏览器事件/证据消费 |
+| ai-e2e 尚未消费 Agent task | requirement-gap | pending | ai-chat-service 已交付 `POST /api/v1/agent-tasks`、`GET /api/v1/agent-tasks/:taskId`、browser binding、结构化结果及内部 command/event/checkpoint 数据层；本包仍调用 `POST /api/ai/generate`，尚未实现 task client/outbox/polling，公开控制/事件上游也仍 pending |
+| ai-e2e 尚未切入 proxy 受控执行链 | requirement-gap | pending | proxy 已交付 session/lease/operation ledger、幂等/未知态、受控 MCP 工具及 artifact/event 数据层；当前 `ExecutorService` 仍用 `npx tsx` 执行独立脚本，ai-e2e 尚无 browser job/session link、语义步骤调用或浏览器事件/证据消费 |
 | 统一失败证据与影响评估未实现 | requirement-gap | pending | 当前证据未贯通业务版本、场景、功能脚本调用和语义步骤，也没有后续阻碍/依赖跳过模型 |
 | 分层运行状态、决策与权威事件未实现 | requirement-gap | pending | 当前项目阶段和 script run 状态不能表达 TODO/尝试/中断/待决策/取消；SSE 无持久事件序号与运行 snapshot，UI 仍本地推断进度 |
 | DOM 变化影响定位未实现 | requirement-gap | pending | 当前自动修复由失败 run 触发，尚不能按当前业务版本的功能脚本定向维护 |
