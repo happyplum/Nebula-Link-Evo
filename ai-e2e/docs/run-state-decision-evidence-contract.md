@@ -88,6 +88,7 @@ created → planning → ready → running ↔ paused → completing → complet
 - Agent 任务会话沿用 AI 服务自身的 running/paused/interrupted/cancelled/completed 等状态，只说明模型/工具循环，不作为 TODO 结果。
 - 浏览器原子操作使用 accepted/queued/running/succeeded/failed/cancelled/outcome_unknown，只说明该浏览器操作。
 - Agent 被中断时，已经下发的浏览器操作可以仍在完成；TODO 必须先查询操作结果，再决定尝试结果。
+- 运行另行维护 `anonymous/authenticated/unknown` 认证上下文和可选 `activeActorKey`。它是最近一次页面复检/认证脚本硬断言形成的业务投影，不等于浏览器 Cookie 自身，也不能用 Agent 状态或“调用过登录脚本”推断。
 
 ## 3. 失败与中断分类
 
@@ -155,7 +156,8 @@ open → answered → applied
 
 - 用户暂停或主代理等待决策时，停止派发新 TODO 和浏览器操作；活动原子操作到达明确结果或 `outcome_unknown` 后生成检查点。
 - 暂停页面必须展示原因、请求者、活动操作、可能副作用、等待对象和允许的下一步。
-- 恢复前固定检查业务版本/部署仍有效、浏览器会话与 Tab 存在、页面身份和登录态正确、未决操作已收敛、输入变量仍有效。
+- 恢复前固定检查业务版本/部署仍有效、浏览器会话与 Tab 存在、页面身份和所需 actor 正确、未决操作已收敛、输入变量仍有效。
+- 意外登出或身份冲突使当前尝试成为 `recoverable_interruption` 并把认证上下文置为 `unknown`；主代理完成只读复检后，才可追加显式退出/登录 TODO 并恢复。子代理不能自行修正身份。
 - 检查失败时不得直接恢复原 Agent 对话；主代理创建恢复任务、计划修订或新上下文。
 
 ### 6.2 取消

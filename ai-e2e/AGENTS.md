@@ -169,7 +169,7 @@ ai-e2e (:3002)
 - **主代理（pending）**：由 `ai-e2e` 确定性状态机驱动，持有 PRD 流程、TODO 依赖、运行变量和决策，负责拆分、派发、恢复、跳过、验收与汇总；登录、造数等跨场景前置动作必须由主代理安排。
 - **页面子代理（pending）**：只执行派发的页面场景片段及其中明确授权的功能脚本，负责重新检查、执行、验证、职责内修复和结构化汇报；不得自行登录、造数或调用场景外脚本。
 - **上下文（pending）**：大多数派发创建干净上下文；登出等可恢复中断可以由主代理在页面状态与副作用检查后续接原上下文，否则用检查点和授权变量重建干净上下文。
-- **串行调度（pending）**：首期每个 `proxy-adapter` 进程全局最多一个活动 browser execution session；authoring verification 与 test run 共用 FIFO，一个主代理任一时刻只运行一个执行型子代理。只有子代理持有 control，主代理仅在安全边界 observe，UI live view 只读；多 Context/Tab 并发仅作为后期扩展。
+- **串行调度与身份（pending）**：首期每个 `proxy-adapter` 进程全局最多一个活动 browser execution session；authoring verification 与 test run 共用 FIFO，一个主代理任一时刻只运行一个执行型子代理。每个 session 固定一个 BrowserContext 和一个活动 actor；跨账号/角色只通过主代理显式编排退出/登录脚本串行切换，子代理发现身份异常必须停止。只有子代理持有 control，主代理仅在安全边界 observe，UI live view 只读；并存身份、多 Context/Tab 并发仅作为后期扩展。
 - **编排/执行分层（pending）**：页面任务图、页面/模块范围和验收标准由 ai-e2e 持有；模型、MCP 工具和未来 Skills 的执行必须通过 ai-chat-service。当前 `generateText()` 是纯文本调用，不能当作已具备 Agent tool loop。
 - **跨服务协议（pending）**：目标 `/api/v1` 业务版本/authoring/运行 API、`ai-chat-service` 受限 Agent task、`proxy-adapter` 浏览器 session/lease/operation、四类目标 snapshot-first SSE（Authoring/Run/Agent/Browser）、幂等与重启恢复见 `docs/service-api-event-contract.md`。这些路由和新 MCP 工具尚未实现。
 - **双模型与 Skills（pending）**：目标 `vision.analyze_page`/`vision.resolve_target` 均只处理一次不可变快照；视觉结果只返回可序列化定位候选，首期 Skills 是固定版本/hash 的声明式指令包且默认拒绝扩权。完整契约见 `docs/ai-model-skill-contract.md`。

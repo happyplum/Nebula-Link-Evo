@@ -54,7 +54,7 @@
 | 受限 Agent 任务执行 | pending | 目标按每个任务显式限制工具、Skills、预算和不透明关联信息，结构化报告调用结果；Agent 暂停/中断不推断已经下发的浏览器动作被回滚。 |
 | Agent/视觉/Skills 目标协议 | pending | `ai-e2e/docs/service-api-event-contract.md` 固定 Agent task API/事件；`ai-e2e/docs/ai-model-skill-contract.md` 固定单次视觉 Schema、Skill manifest、权限交集与审计。代码尚未实现。 |
 
-受限 Agent task 是一次有界执行，不是 ai-e2e 的持久主代理。bootstrap/recheck/repair 的阶段、candidate、coverage、decision、dependency index 与激活仍由 ai-e2e 保存和推进；browser binding 只声明模型不可见的 `observe/control` 权限，主代理分析只使用安全边界 observe，执行型页面子代理才可使用 control。
+受限 Agent task 是一次有界执行，不是 ai-e2e 的持久主代理。bootstrap/recheck/repair 的阶段、candidate、coverage、decision、dependency index 与激活仍由 ai-e2e 保存和推进；browser binding 只声明模型不可见的 `observe/control` 权限，主代理分析只使用安全边界 observe，执行型页面子代理才可使用 control。actor/角色只是调用方提供的不可变任务约束，本服务不维护认证状态、不切换 BrowserContext/storage state，也不授权子代理自行登录。
 
 ---
 

@@ -384,6 +384,7 @@ interface SideEffectDeclaration {
 
 - 只读脚本的 `sideEffects` 为空数组。
 - create/update/delete/auth 动作必须由步骤引用声明，并提供至少一项 `verifyApplied`。
+- `auth_change` 的 `verifyApplied` 必须确定性证明登录后的身份/角色或退出后的匿名态；`identityFrom` 只能解析为非秘密 actor 别名或页面身份标记，不能使用密码、Token 或 secret reference 作为身份。
 - `cleanupScriptKey` 只是向场景规划提供候选，原脚本不能直接调用它。
 - `never_retry` 仍允许主代理在用户/版本规则允许且人工确认后新建尝试，但不能由子代理自动重放。
 - `verify_before_retry` 遇到超时或断连时先执行只读检查；确认未发生才能创建新的动作 ID。

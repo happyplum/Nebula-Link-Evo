@@ -431,11 +431,29 @@ interface ScenarioDefinitionV1 {
   name: string;
   purpose: string;
   prdSourceRefs: string[];
+  actors: ScenarioActorDefinition[];
+  initialAuth: AuthActorRef;
   inputs: ScenarioInputDefinition[];
   finalAcceptance: ScenarioAssertion[];
   calls: ScenarioCallNode[];
   edges: ScenarioEdge[];
   exports: ScenarioExport[];
+}
+
+interface ScenarioActorDefinition {
+  actorKey: string;
+  name: string;
+  requiredRoles: string[];
+  description: string;
+}
+
+type AuthActorRef =
+  | { kind: 'anonymous' }
+  | { kind: 'actor'; actorKey: string };
+
+interface AuthContextContract {
+  before: AuthActorRef;
+  after: AuthActorRef | { kind: 'unchanged' };
 }
 
 interface ScenarioInputDefinition {
@@ -476,6 +494,7 @@ type InputBinding =
 interface ScenarioCallNode {
   callKey: string;
   functionalScriptId: string;
+  authContext: AuthContextContract;
   inputBindings: Record<string, InputBinding>;
   outputAliases: Record<string, string>;
   repeat?:
@@ -507,6 +526,9 @@ type JsonValue = JsonScalar | JsonValue[] | { [key: string]: JsonValue };
 - condition 只能读取场景输入、已确认上游输出或上游终态，不能读取 DOM、模型文本或任意代码。
 - `requires_completion` 只允许 cleanup/汇总节点；普通节点必须 `requires_success`。
 - 静态校验用 Kahn 拓扑排序确认无环；`sortOrder` 只稳定同层顺序。
+- `actorKey` 在场景内唯一，`initialAuth` 和每个 `authContext` 引用必须存在；actor 只描述非秘密别名与角色，凭据继续通过受控输入/secret reference 绑定。
+- `authContext.after` 与 `before` 不同的调用必须引用声明 `auth_change` 的脚本；声明 `auth_change` 的调用不得把结果写成 `unchanged`。
+- 全部认证变化调用必须由依赖边形成单一顺序；展开计划时沿该顺序模拟唯一活动身份，任何 TODO 的 `before` 无法由 `initialAuth` 或已验证前序变化到达时拒绝计划。
 - scenario revision 引用脚本稳定 ID；run plan 冻结时解析到 current valid script revision。
 
 ## 9. 业务版本 copy 事务
@@ -644,11 +666,13 @@ scope 至少冻结 deployment revision、Git/build 标识、角色、locale、vi
 | `next_event_seq` | INTEGER | 下一 run event 序号 |
 | `browser_session_id` | TEXT NULL | proxy opaque ref |
 | `active_page_task_id` | TEXT NULL | 首期最多一个 |
+| `auth_context_state` | TEXT | `anonymous/authenticated/unknown`；浏览器事实复检后的业务投影 |
+| `active_actor_key` | TEXT NULL | 仅 `authenticated` 时指向冻结计划 actor；不保存账号凭据 |
 | `pause_reason_json` | TEXT NULL | 结构化暂停原因 |
 | `summary_json` | TEXT NULL | 终态统计，不是状态源 |
 | `started_at/completed_at/created_at` | TEXT |  |
 
-约束：首期同一 run 最多一个 active page task；同一 browser session 全局最多一个 control lease/持有者，由服务和 proxy 双重校验。formal run 只能冻结当前 asset graph 中、目标 scope 已验证的 current revision；authoring_verification run 只能由 authoring coordinator 创建，可以冻结同版本 static-valid candidate revision，但其输出不发布为正式业务结果。
+约束：首期同一 run 最多一个 active page task；同一 browser session 全局最多一个 control lease/持有者，由服务和 proxy 双重校验。run 创建时认证状态固定为 `unknown`，启动后先通过只读页面检查与场景 `initialAuth` 收敛；不匹配时只能由主代理追加显式认证任务或停止，客户端不能直接写 `active_actor_key`。formal run 只能冻结当前 asset graph 中、目标 scope 已验证的 current revision；authoring_verification run 只能由 authoring coordinator 创建，可以冻结同版本 static-valid candidate revision，但其输出不发布为正式业务结果。
 
 ### 11.2 `run_plans`
 
@@ -656,7 +680,7 @@ scope 至少冻结 deployment revision、Git/build 标识、角色、locale、vi
 
 - `id/run_id/schema_id/payload_json/content_sha256/created_at`
 - `UNIQUE(run_id)`。
-- payload 冻结版本、deployment/Git、场景/脚本/页面/需求精确修订、展开 TODO、输入定义和最终验收。
+- payload 冻结版本、deployment/Git、场景/脚本/页面/需求精确修订、actor 定义与初始认证态、展开 TODO、输入/secret reference 绑定和最终验收。
 
 `run_plan_amendments`：
 
@@ -677,6 +701,7 @@ scope 至少冻结 deployment revision、Git/build 标识、角色、locale、vi
 | `state_version` | INTEGER | optimistic concurrency |
 | `input_json_redacted` | TEXT | 非秘密冻结输入 |
 | `input_secret_refs_json` | TEXT | 引用，不含值 |
+| `auth_context_json` | TEXT | 冻结的执行前/成功后 actor 契约，不含凭据 |
 | `published_outputs_json` | TEXT NULL | 仅成功或主代理显式确认 |
 | `partial_outputs_json` | TEXT NULL | 只供证据/恢复，标记未确认 |
 | `side_effect_summary_json` | TEXT NULL |  |
@@ -691,6 +716,7 @@ scope 至少冻结 deployment revision、Git/build 标识、角色、locale、vi
 - `id/run_id/task_no/state(created/running/paused/completed/failed/interrupted/cancelled)`
 - `todo_ids_json`（固定有序、至少一个）
 - `page_definition_revision_id/browser_session_id/tab_id`
+- `required_auth_context_json`（所需 actor 与派发前已确认状态，不含凭据）
 - `browser_lease_ref_hash`（不存 capability 明文）
 - `ai_task_id/ai_session_id nullable`
 - `tool_policy_hash/task_payload_sha256/budget_json/checkpoint_json/result_json`
@@ -700,7 +726,7 @@ scope 至少冻结 deployment revision、Git/build 标识、角色、locale、vi
 
 - `id/run_id/todo_id/page_task_id/attempt_no`
 - `script_revision_id/result(succeeded/assertion_failed/execution_failed/precondition_blocked/recoverable_interruption/decision_required/outcome_unknown/cancelled)`
-- `reason_class/last_checkpoint_json/actual_page_json`
+- `reason_class/last_checkpoint_json/actual_page_json/actual_auth_before_json/actual_auth_after_json`
 - `confirmed_outputs_json/partial_outputs_json/side_effects_json/downstream_impact_json`
 - `evidence_manifest_id/agent_task_id`
 - `started_at/completed_at`
