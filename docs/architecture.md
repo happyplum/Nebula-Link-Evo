@@ -30,6 +30,8 @@ Browser ←→ Debug UI (:5173 dev)
 
 目标跨服务链使用 `ai-e2e /api/v1/runs` → `ai-chat-service /api/v1/agent-tasks` → `proxy-adapter /mcp` 与 `/api/v1/browser-execution/*`。所有外部写操作使用幂等键，`ai-e2e` 以 outbox 驱动并查询外部账本收敛；Run、Agent task、Browser session 各自使用 snapshot-first SSE 和独立单调序号。当前这些目标接口尚未实现，现有 Chat/Debug/项目 SSE 保持兼容。
 
+目标迁移不原地改写旧执行资产：001–013 先结构校验并纳入正式 migration 账本，旧 TypeScript/login/run 只读保留，导入生成待复核业务版本/候选。新链按 business version opt-in，run 固定 `semantic_v1`，不与 legacy 子进程混合；三服务先通过 `/api/v1/capabilities` preflight。
+
 ### 端口映射
 
 | 服务              | 端口     | 职责                                |
@@ -152,6 +154,7 @@ AI Providers                            Chromium
 - [AI E2E Target Data Model](../ai-e2e/docs/target-data-model.md) — 业务版本、不可变资产修订、页面规范化、运行与证据关系模型
 - [AI E2E Service API & Events](../ai-e2e/docs/service-api-event-contract.md) — 三服务目标 API、MCP 原子操作、事件、outbox 与恢复
 - [AI Model & Skills Contract](../ai-e2e/docs/ai-model-skill-contract.md) — 双模型、单次视觉分析、Agent task 与声明式 Skills
+- [AI E2E Migration & Acceptance](../ai-e2e/docs/migration-compatibility-acceptance-contract.md) — migration runner、旧资产导入、切流、回滚与发布门禁
 - [Proxy Adapter Observability Design](reference/observability-design.md) — proxy-adapter 可观测性设计参考
 - [Technical Debt Backlog](reference/technical-debt-backlog.md) — 已从大型清理计划提炼出的剩余维护项
 - [Debug Page Integration API Reference](reference/debug-page-integration-api-reference.md) — 完整的 API 端点、SSE 事件参考

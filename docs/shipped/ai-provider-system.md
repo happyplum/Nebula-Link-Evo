@@ -22,4 +22,5 @@
 - [designed] ai-chat-service 目标提供通用受限 Agent 任务执行面，按任务约束工具、Skills、预算和不透明关联信息并返回结构化结果；当前 Chat tool loop 尚无该任务作用域契约。
 - [designed] 受限任务 API 使用 `/api/v1/agent-tasks`，browser binding 对模型不可见，任务事件以 snapshot 启动；当前尚未实现，完整契约见 `ai-e2e/docs/service-api-event-contract.md`。
 - [designed] Skills runtime 归属 ai-chat-service；v1 是本地只读、按 id/version/hash 固定的声明式指令包，不能执行附带代码、联网安装或扩大 task 权限。当前没有 loader、registry 或执行路径，不得描述为 shipped。
+- [designed] 目标 `/api/v1/capabilities` 声明 Agent/vision/Skill 协议与限制；模型只可在尚无输出/工具调用前按显式候选切换，工具调用后故障必须结束 task 并由上层重建。
 - [shipped] 验收面：`loader.test.ts`、`adapters/glm.test.ts`、`errors.test.ts`、集成测试。

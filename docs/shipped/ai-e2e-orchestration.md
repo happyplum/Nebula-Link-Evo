@@ -43,6 +43,7 @@ PRD 驱动的 E2E 自动化测试编排器。把"需求分析 → 页面探索 �
 - [designed] ai-e2e 持有不可变证据 manifest、业务关联、完整度、脱敏与保留策略；UI 从持久 `run.snapshot` + 单调运行事件恢复，并展示实时浏览器、依赖传播、决策与证据。目标契约见 `ai-e2e/docs/run-state-decision-evidence-contract.md`。
 - [designed] 目标业务版本/Run API、`ai-chat-service /api/v1/agent-tasks`、`proxy-adapter /api/v1/browser-execution/*` 与 `browser-control.operation_*`、三类 snapshot-first SSE 和重启恢复协议见 `ai-e2e/docs/service-api-event-contract.md`；当前路由均未实现，同一 run 禁止混用新旧执行器。
 - [designed] 双模型、`vision.analyze_page`/`vision.resolve_target`、声明式 Skill manifest、版本/hash pin、工具权限交集和 prompt injection 边界见 `ai-e2e/docs/ai-model-skill-contract.md`。
+- [designed] 目标 migration 对 001–013 做结构 preflight/checksum baseline，旧 TypeScript/login/run 只读保留，legacy import 只生成 needs_recheck 版本/候选；新链按业务版本 opt-in 且 run 固定 `semantic_v1`。切流、回滚和验收见 `ai-e2e/docs/migration-compatibility-acceptance-contract.md`。
 - [designed] 页面或 DOM 节点变化后只修复当前业务版本内受影响的功能脚本并重新验证；当前仅有 run 级失败诊断与自动修复。
 - [tech-debt] `page_snapshot_json` 缺失：手动 URL 不经过探索，该字段为 NULL，导致 AI 编造选择器，通过率从 60%+ 降到 4.6%。变通：手动注入 DOM 快照。
 - [tech-debt] AI 模板约束执行不足：AI 偶尔生成 `test()` / `expect()` / `waitForLoadState('networkidle')` / `typescript` 前缀。变通：批量后处理。

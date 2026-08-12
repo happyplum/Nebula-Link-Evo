@@ -81,6 +81,7 @@
 | `/mcp` | POST (StreamableHTTP) | shipped | MCP Server 入口（`browser-control.*`） | mcp-server/、tools/、browser-tools/ |
 | `/api/v1/browser-execution/sessions/*` | POST/GET/DELETE/SSE | pending | 浏览器执行会话、Tab/租约、snapshot-first 事件与短期产物 | 目标协议见 `ai-e2e/docs/service-api-event-contract.md` |
 | `/api/v1/browser-execution/operations/:operationId` | GET | pending | 原子操作账本查询与未知结果恢复 | 目标协议见 `ai-e2e/docs/service-api-event-contract.md` |
+| `/api/v1/capabilities` | GET | pending | 声明 browser-execution/operation 协议、动作/观测、持久账本与画面能力 | 不包含租约 token 或本地机密 |
 
 ---
 
@@ -161,5 +162,6 @@
 - `ai-e2e/docs/run-state-decision-evidence-contract.md` — 浏览器原始产物与上层长期业务证据的所有权边界
 - `ai-e2e/docs/semantic-script-schema.md` — 首期语义脚本动作/断言白名单与本包通用操作映射
 - `ai-e2e/docs/service-api-event-contract.md` — 浏览器执行 control plane、MCP 原子操作、事件、幂等与恢复
+- `ai-e2e/docs/migration-compatibility-acceptance-contract.md` — 服务升级顺序、重启语义、故障注入和发布门禁
 - `docs/reference/debug-page-integration-api-reference.md` — Proxy Adapter API 参考
 - 根 `AGENTS.md` — 仓库范围约束

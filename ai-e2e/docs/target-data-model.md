@@ -40,6 +40,10 @@ projects
    ├─ run_commands
    ├─ run_events
    └─ evidence_manifests ── evidence_items ── artifact_objects
+
+schema_migrations
+legacy_import_batches ── legacy_entity_links
+integration_outbox ── external_task_links
 ```
 
 ## 3. 通用资产修订规则
@@ -524,6 +528,7 @@ copy 后必须满足：
 |---|---|---|
 | `id` | TEXT | UUID PK |
 | `project_id/business_version_id` | TEXT | FK |
+| `engine` | TEXT | 固定 `semantic_v1`；旧运行保留在 `execution_runs` 并标记 legacy，不混链 |
 | `scenario_revision_id` | TEXT | 精确修订 |
 | `deployment_revision_id` | TEXT | 精确修订 |
 | `lifecycle` | TEXT | created/planning/ready/running/paused/completing/completed/cancelling/cancelled |
@@ -731,6 +736,8 @@ manifest sealed 后不可修改；补充证据创建新的 manifest revision 或
 
 跨服务调用不能纳入 SQLite 事务，采用 outbox/状态机：先记录 intent/command，再调用外部服务，最后以幂等回调/查询收敛。不得在持有 SQLite write transaction 时等待模型或浏览器网络调用。
 
+正式 migration runner、001–013 结构 baseline、备份、legacy import 账本和旧资产映射规则见 `migration-compatibility-acceptance-contract.md`。目标表通过增量 migration 新增；首轮不删除、重命名或反向改写旧表。
+
 ## 15. 当前实现差距
 
 - 现有项目级表没有 business version；module、URL、scenario 和 script 均直接归项目链路。
@@ -739,6 +746,7 @@ manifest sealed 后不可修改；补充证据创建新的 manifest revision 或
 - 现有数据库没有持久 outbox 或外部 Agent/browser task 恢复索引，跨服务调用结果尚不能在服务重启后确定性收敛。
 - 现有截图路径和日志直接挂在 execution run，没有内容寻址、完整度、脱敏、保留和跨服务产物提升。
 - 现有 URL 表把实际 URL、单快照和逻辑页面混为一个实体。
+- 当前启动直接重复调用 migration 001–013，没有 schema migration checksum/状态账本、旧库结构 preflight 或 legacy import 映射。
 
 ## 16. 验收原则
 
@@ -752,6 +760,7 @@ manifest sealed 后不可修改；补充证据创建新的 manifest revision 或
 8. execution attempt 和 sealed evidence 不被重试覆盖。
 9. 大媒体不进入 SQLite，秘密值不进入资产、运行变量、事件或证据。
 10. 跨服务等待不占用 SQLite 写事务，outbox 可用原幂等键恢复，外部引用可查询收敛。
+11. 旧库先通过结构 preflight 和可重入 import；legacy run 不伪装成 semantic run，迁移失败不改写源表。
 
 ## 17. 关联文档
 
@@ -761,4 +770,5 @@ manifest sealed 后不可修改；补充证据创建新的 manifest revision 或
 - `run-state-decision-evidence-contract.md`：状态、决策、事件和证据语义。
 - `agent-browser-execution-contract.md`：浏览器会话、页面任务和操作关联。
 - `service-api-event-contract.md`：outbox、外部任务引用、API 与事件恢复协议。
+- `migration-compatibility-acceptance-contract.md`：正式 migration runner、旧资产映射、切流、回滚与发布验收。
 - `requirements-baseline.md`：总体需求基线。

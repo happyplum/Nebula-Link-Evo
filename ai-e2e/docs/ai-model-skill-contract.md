@@ -64,6 +64,13 @@ interface PageAgentResultV1 {
 
 `proposedOutputs` 只有经 `ai-e2e` 对照脚本断言和证据验收后才发布为 confirmed run variables。
 
+### 2.3 模型选择与故障
+
+- Agent/视觉调用开始前解析并记录实际 role、provider、model 和配置版本；provider alias 不能代替角色。
+- 可以配置有序候选模型，但只允许在**任务尚未产生模型输出或工具调用前**切换，并把选择原因写入 task audit。
+- 一旦任务产生任何工具调用，不得在同一 task 静默切换模型；模型不可用时结束为 blocked/interrupted，由调用方基于 checkpoint 创建新 task。
+- live provider 响应不作为唯一自动化验收；策略、权限、状态和恢复必须能用 deterministic mock 验证。
+
 ## 3. 单次视觉模型
 
 ### 3.1 强约束
@@ -279,4 +286,5 @@ provider/runtime 可用工具
 - `agent-browser-execution-contract.md`：主/子代理和页面任务授权。
 - `semantic-script-schema.md`：动作、断言和目标引用 Schema。
 - `run-state-decision-evidence-contract.md`：运行裁决、证据和人工控制。
+- `migration-compatibility-acceptance-contract.md`：能力门禁、服务升级、故障注入和发布验收。
 - `../../ai-chat-service/PRODUCT-SPEC.md`：AI 能力当前实现与缺口。

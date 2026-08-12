@@ -40,6 +40,7 @@ pnpm type-check   # tsc --noEmit
 - A reusable **Skills runtime** is a pending target for this package. V1 is a local, immutable, declarative instruction package pinned by id/version/content hash; it cannot execute bundled code, install from the network, read secrets, or enlarge task permissions. There is currently no loader, registry, or execution path; target contract: `ai-e2e/docs/ai-model-skill-contract.md`.
 - A generic **scoped Agent task runtime** is pending: `/api/v1/agent-tasks` receives immutable inputs, explicit tool/Skill allowlists, budgets, model-hidden browser bindings and opaque correlation metadata, then returns a schema-validated result and propagates controls. It must not copy the caller's business run plan or infer that an interrupted Agent rolled back a browser operation. Target API: `ai-e2e/docs/service-api-event-contract.md`.
 - Target vision additions `vision.analyze_page` and `vision.resolve_target` are single-snapshot internal tools. They return serializable page summaries/locator candidates only and never own browser actions. Current `vision.find_element` remains the shipped compatibility surface.
+- Target `/api/v1/capabilities` advertises agent-task/vision/skill protocol majors and limits without secrets. A run must fail preflight rather than silently fall back to legacy or swap models after tool execution; rollout contract: `ai-e2e/docs/migration-compatibility-acceptance-contract.md`.
 
 ## Conventions
 
