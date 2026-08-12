@@ -2,7 +2,7 @@
 
 > 状态：已确认目标设计，尚未实现。
 > 更新时间：2026-08-12。
-> 本文定义主代理、页面子代理、`ai-chat-service` 与 `proxy-adapter` 之间的运行边界。字段名、HTTP/MCP 路由和鉴权实现可以在详细设计中调整，但所有权、幂等、串行、暂停和证据语义不得弱化。
+> 本文定义主代理、页面子代理、`ai-chat-service` 与 `proxy-adapter` 之间的运行边界。精确 HTTP/MCP 路由和逻辑 JSON Schema 见 `service-api-event-contract.md`；鉴权与持久化实现可以调整，但所有权、幂等、串行、暂停和证据语义不得弱化。
 
 ## 1. 设计目标
 
@@ -100,7 +100,7 @@
 结果至少表达：
 
 - 接收、开始和结束时间。
-- `success`、`failed`、`cancelled` 或 `outcome_unknown` 结果。
+- `succeeded`、`failed`、`cancelled` 或 `outcome_unknown` 结果。
 - 操作前后的 URL、标题、Tab 和必要页面状态摘要。
 - 最终解析的目标与采用的定位依据。
 - 结构化实际值、错误分类及截图/DOM/视频片段等产物引用。
@@ -199,11 +199,10 @@
 - `ai-chat-service` 已有 Agent tool loop、MCP client/ToolRegistry 和会话暂停/中断/取消基础，但没有 E2E 页面任务包、工具作用域租约和结构化任务结果协议。
 - `ai-e2e` 当前主要调用 `/api/ai/generate`，旧 `ExecutorService` 仍通过 `npx tsx` 执行脚本，尚未进入上述 Agent + MCP 可视执行链。
 
-## 15. 实现前仍需精确定义
+## 15. 仍待实现设计
 
-- 执行会话、租约、原子操作、结果查询和事件流的 HTTP/MCP API 与 JSON Schema。
-- 首期允许的原子动作、只读观测和确定性断言白名单。
-- 租约签发与校验方式、操作去重账本的持久化介质和保留窗口。
+- 执行会话、租约、Agent task、原子操作、结果查询、事件流与动作/观测白名单已在 `service-api-event-contract.md` 锁定；正式 OpenAPI/JSON Schema 文件和代码尚未生成。
+- 租约签名与服务鉴权方式、操作账本的具体持久化介质和清理任务。
 - 动画媒体协议、播放速度和重放索引格式。
 - 多账号隔离与后期多 Tab 并发需要的 BrowserContext/Tab 调度模型。
 
@@ -229,5 +228,7 @@
 - `run-state-decision-evidence-contract.md`：运行/TODO/尝试状态、决策、证据与人工控制。
 - `semantic-script-schema.md`：语义步骤、动作/断言白名单和目标引用机器格式。
 - `target-data-model.md`：页面任务、执行尝试、操作关联、事件和证据引用的持久化结构。
+- `service-api-event-contract.md`：三服务 API、Agent task、MCP 原子操作、事件与恢复协议。
+- `ai-model-skill-contract.md`：双模型、视觉定位包和 Skills 权限协议。
 - `../PRODUCT-SPEC.md`：当前实现状态和目标缺口。
 - `../../docs/PRODUCT-SPEC-INDEX.md`：跨包契约索引。

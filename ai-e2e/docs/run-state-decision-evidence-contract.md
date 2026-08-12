@@ -2,7 +2,7 @@
 
 > 状态：主体目标设计已确认，安全审批边界仍有一项关键策略待确认。
 > 更新时间：2026-08-12。
-> 本文定义测试流程从调度到结果汇总的状态、失败传播、决策记录、证据包和人工控制语义。数据库字段、API 路径和 UI 布局可以在详细设计中调整，但不同层级状态不得重新混为一个字段。
+> 本文定义测试流程从调度到结果汇总的状态、失败传播、决策记录、证据包和人工控制语义。精确 Run API/SSE 见 `service-api-event-contract.md`；数据库物理字段和 UI 布局可以在实现设计中调整，但不同层级状态不得重新混为一个字段。
 
 ## 1. 核心原则
 
@@ -86,7 +86,7 @@ created → planning → ready → running ↔ paused → completing → complet
 ### 2.5 Agent 与浏览器操作状态
 
 - Agent 任务会话沿用 AI 服务自身的 running/paused/interrupted/cancelled/completed 等状态，只说明模型/工具循环，不作为 TODO 结果。
-- 浏览器原子操作使用 accepted/queued/running/success/failed/cancelled/outcome_unknown，只说明该浏览器操作。
+- 浏览器原子操作使用 accepted/queued/running/succeeded/failed/cancelled/outcome_unknown，只说明该浏览器操作。
 - Agent 被中断时，已经下发的浏览器操作可以仍在完成；TODO 必须先查询操作结果，再决定尝试结果。
 
 ## 3. 失败与中断分类
@@ -296,7 +296,7 @@ open → answered → applied
 
 ## 13. 实现前仍需精确定义
 
-- 各层实体表、状态 token、command 幂等记录与 run event 持久化已在 `target-data-model.md` 锁定；精确服务 API/SSE payload 仍由跨服务契约定义。
+- 各层实体表、状态 token、command 幂等记录与 run event 持久化已在 `target-data-model.md` 锁定；精确服务 API/SSE payload 与 snapshot 重连协议已在 `service-api-event-contract.md` 锁定，正式 Schema 和代码尚未实现。
 - 证据对象存储、内容哈希、提升事务、脱敏管线、访问权限和清理任务。
 - UI 组件层级、实时画面协议、依赖图表现和操作动画样式。
 - 不同环境与副作用风险等级下，哪些动作必须由用户审批；这是当前剩余的关键产品策略。
@@ -324,3 +324,4 @@ open → answered → applied
 - `../PRODUCT-SPEC.md`：当前实现状态与目标缺口。
 - `../../docs/reference/ai-e2e-ui-architecture.md`：UI 架构事实与目标执行体验。
 - `target-data-model.md`：运行、TODO、尝试、决策、事件、证据和产物表结构。
+- `service-api-event-contract.md`：运行命令、决策、snapshot、事件日志与跨服务恢复协议。

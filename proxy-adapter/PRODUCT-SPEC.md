@@ -57,6 +57,7 @@
 | 工具注册 | `src/tools/`（registry / types / index / providers/browser-tools-provider / adapters/*） | shipped | ToolRegistry + 本地 browser-control provider + MCP Server 适配器 | 外部 MCP client/provider 已归 `ai-chat-service`；本包不存在 mcp-client-provider |
 | 浏览器工具适配 | `src/browser-tools/`（definitions / tool-map / param-adapter / result-adapter / types / index） | shipped | browser-control.* 工具定义与参数/结果适配 | 工具集含 screenshot、click、type 等；区别于 `Action` 联合类型（12 种） |
 | MCP Server | `src/mcp-server/`（index / transport） | shipped | StreamableHTTP 传输层 + MCP Server 入口 | 路径 `/mcp`；`ai-chat-service` 通过 `PROXY_ADAPTER_URL + /mcp` 接入 |
+| 目标浏览器执行控制面 | `src/browser-execution/`（待新增） | pending | application-level session/Tab/lease、FIFO queue、operation ledger、短期 artifact 与 session event | 与 stateless MCP transport session 解耦；目标协议见 `ai-e2e/docs/service-api-event-contract.md` |
 | 浏览器引擎 | `src/browser-engine/`（services/{browser-lifecycle,browser-service,dom-extractor,page-actions,click-resolution,snapshot-cache,browser-lock} / screencast / locator-generator / marker-injector / dom-utils / index） | shipped | 进程内 Playwright Chromium 控制、可选远程调试端口、页面 CDP 会话、DOM 提取、点击解析、快照缓存、视觉标记注入、屏播 | 当前自行启动 Chromium，不存在外部 `playwright-server` 或 `connectOverCDP` 连接链；7 级目标链：nebula-id → role → testid → aria → text → css → xpath |
 | 插件 | `src/plugins/`（01-cors / 02-swagger / 03-error-handler / 10-routes-autoload / routes/{api/livekit-token, debug/index, debug/stream, config, health}） | shipped | Fastify 插件与路由 | 路由按编号约定加载顺序 |
 | Schemas | `src/schemas/`（health / config） | shipped | 健康检查与配置响应 schema |  |
@@ -78,6 +79,8 @@
 | `/debug/stream` | GET (SSE) | shipped | Debug 事件流（MJPEG 元数据 + 交互事件） | plugins/routes/debug/stream、services/debug-event-hub |
 | `/debug/*` | * | shipped | 浏览器调试 REST 端点（MJPEG、DOM 快照） | plugins/routes/debug/index、browser-engine |
 | `/mcp` | POST (StreamableHTTP) | shipped | MCP Server 入口（`browser-control.*`） | mcp-server/、tools/、browser-tools/ |
+| `/api/v1/browser-execution/sessions/*` | POST/GET/DELETE/SSE | pending | 浏览器执行会话、Tab/租约、snapshot-first 事件与短期产物 | 目标协议见 `ai-e2e/docs/service-api-event-contract.md` |
+| `/api/v1/browser-execution/operations/:operationId` | GET | pending | 原子操作账本查询与未知结果恢复 | 目标协议见 `ai-e2e/docs/service-api-event-contract.md` |
 
 ---
 
@@ -100,8 +103,9 @@
 | 配置加载与校验 | config/ | shipped | `__tests__/config/validator.test.ts`、unit/config/* | config |
 | DB 备份 | utils/db-backup | shipped | `__tests__/db-backup.test.ts` | utils |
 | 服务生命周期 | services/app-service | shipped | `__tests__/service-lifecycle.test.ts`、app-service-marker | services |
-| 通用浏览器执行会话与操作账本 | — | pending | 尚无验收面 | 目标提供会话/Tab/控制租约、FIFO 原子操作、幂等去重、结果查询、结果不确定态、通用生命周期事件和带内容校验的短期原始产物；不解释 E2E 业务关联 |
-| 语义脚本原子动作/观测覆盖 | browser-tools、browser-engine | pending | 当前 15 个工具只覆盖基础操作 | v1 目标补齐 fill/type、press、select_option、set_checked、set_files、Tab close、确定性断言和结构化 target/result；不得以 dom_script 代替，映射见 `ai-e2e/docs/semantic-script-schema.md` |
+| 通用浏览器执行会话与操作账本 | `src/browser-execution/`（待新增） | pending | 尚无验收面 | 目标 control plane、session/lease/event/operation API 和恢复语义见 `ai-e2e/docs/service-api-event-contract.md`；不解释 E2E 业务关联 |
+| E2E 受限 MCP 原子工具 | tools/providers/browser-tools-provider、browser-execution（待扩展） | pending | 当前 15 个工具继续作为兼容面 | 新增 `browser-control.operation_execute/get/cancel`；session/Tab/lease 由模型不可见包装层注入，禁止任意 JS、CDP 和隐式坐标回退 |
+| 语义脚本原子动作/观测覆盖 | browser-tools、browser-engine | pending | 当前 15 个工具只覆盖基础操作 | v1 目标补齐语义动作及 page_state/target_state/text/value/attribute/count/tabs 等观测；不得以 dom_script 代替，映射见两份脚本/API 契约 |
 | 错误分类 | errors/http-errors | shipped | `__tests__/errors.test.ts` | errors |
 
 ---
@@ -130,7 +134,7 @@
 | 新增 action 类型 | 模块清单（browser-tools/definitions） + 功能清单 + shared 类型 |
 | 修改启动顺序 | 包级目标与边界的"硬约束"列 + 启动序列说明 |
 | 修改 Playwright/CDP 拓扑 | 包级目标与边界 + 浏览器引擎模块 + 功能清单 + `docs/PRODUCT-SPEC-INDEX.md` |
-| 修改浏览器执行会话或原子操作协议 | 包级目标与边界 + 功能清单 + `ai-e2e/docs/agent-browser-execution-contract.md` + 所有消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
+| 修改浏览器执行会话或原子操作协议 | 包级目标与边界 + 路由登记 + 功能清单 + `ai-e2e/docs/agent-browser-execution-contract.md` + `ai-e2e/docs/service-api-event-contract.md` + 所有消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
 | 修改浏览器原始产物与上层证据边界 | 包级目标与边界 + 功能清单 + `ai-e2e/docs/run-state-decision-evidence-contract.md` + 消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
 | 修改语义脚本动作映射 | 功能清单 + `ai-e2e/docs/semantic-script-schema.md` + `ai-e2e` PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
 | 跨包契约变更（端口、API 路径、SSE 事件） | 本文件 + 所有消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
@@ -142,7 +146,7 @@
 | 缺口 | 类型 | 状态 | 备注 |
 |------|------|------|------|
 | ToolConsumer 仍保留 legacy `chat` 值 | tech-debt | pending | `BrowserToolsProvider.exposeTo` 与 `GatewayTool` 类型仍含 `chat`，但本包已无 Chat 消费面；后续应在不影响 MCP Server 的前提下清理 |
-| E2E 可视执行所需通用协议未实现 | requirement-gap | pending | 当前已有 15 个单步 MCP 工具、进程内浏览器锁、MJPEG、marker/overlay、交互日志和失败样本；尚无执行会话租约、稳定 Tab 归属、操作 ID 去重/结果账本、结果不确定态和可关联的操作生命周期事件 |
+| E2E 可视执行所需通用协议未实现 | requirement-gap | pending | session/lease/operation/event/API 已设计；当前仍只有 15 个单步 MCP 工具、进程内浏览器锁、MJPEG、marker/overlay、交互日志和失败样本 |
 
 ---
 
@@ -156,5 +160,6 @@
 - `ai-e2e/docs/agent-browser-execution-contract.md` — 上层页面任务与本包通用浏览器执行协议的边界
 - `ai-e2e/docs/run-state-decision-evidence-contract.md` — 浏览器原始产物与上层长期业务证据的所有权边界
 - `ai-e2e/docs/semantic-script-schema.md` — 首期语义脚本动作/断言白名单与本包通用操作映射
+- `ai-e2e/docs/service-api-event-contract.md` — 浏览器执行 control plane、MCP 原子操作、事件、幂等与恢复
 - `docs/reference/debug-page-integration-api-reference.md` — Proxy Adapter API 参考
 - 根 `AGENTS.md` — 仓库范围约束

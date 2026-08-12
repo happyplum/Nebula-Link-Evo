@@ -10,6 +10,7 @@ proxy-adapter 通过 MCP Server (StreamableHTTP) 对外暴露 `browser-control.*
 - [shipped] 12 种 action 类型（对应 `shared/types/action.ts` 的 `Action` 联合）：click / type / focus / blur / hover / value / dispatch / scroll / navigate / wait / mcp_call / finish。
 - [shipped] action 执行入口：`proxy-adapter/src/services/action-executor.ts`。
 - [designed] ai-e2e 的目标功能脚本按单个结构化语义步骤经本 MCP 网关执行；网关保持通用，只处理浏览器会话、稳定 Tab、短期控制租约、FIFO 原子操作、幂等去重、结果查询/不确定态和浏览器侧事件/证据，不解释场景或脚本业务语义。当前没有该完整协议。
+- [designed] 目标新增 `browser-control.operation_execute/get/cancel`；E2E task 的 session/Tab/lease 由模型不可见 wrapper 注入，动作/观测白名单、请求/结果 Schema 与 HTTP control plane 见 `ai-e2e/docs/service-api-event-contract.md`。现有 15 个工具保留兼容。
 - [designed] 浏览器截图、DOM 和媒体属于带完整性信息的短期原始产物；长期证据 manifest、业务关联、保留与 pin 由 ai-e2e 持有，原始产物清理前需可被提升或明确过期。
 - [shipped] 配置入口：消费方通过 `PROXY_ADAPTER_URL + /mcp`（默认 `http://127.0.0.1:3000/mcp`）接入。
 - [shipped] 验收面：`proxy-adapter/src/__tests__/adapters/mcp-server-adapter.test.ts`、`proxy-adapter/src/__tests__/browser-tools-provider.test.ts`。

@@ -49,13 +49,14 @@ PRD + 目标链接 / 已有业务版本
         ▼
 ai-e2e 主代理
   ├─ 加载场景定义并冻结运行计划、TODO、依赖和运行变量
+  ├─ 持久化 outbox，以幂等键驱动外部任务并在重启后收敛
   ├─ 按页面场景片段串行派发不可变任务包（同一时刻一个子代理）
   ├─ 持有浏览器生命周期并签发受限页面控制租约
   ├─ 处理登录/造数等跨场景前置任务
   └─ 处理暂停决策、恢复、依赖跳过与汇总
         │
         ▼
-ai-chat-service 子代理运行
+ai-chat-service /api/v1/agent-tasks 子代理运行
   ├─ 加载当前页面资产、授权变量、功能脚本调用和工具白名单
   ├─ 固定重新检查页面/DOM/登录态/前置条件
   ├─ 可按需调用一次视觉分析
@@ -90,8 +91,10 @@ proxy-adapter
 - 需要主代理决策时暂停，影响需求或验收的决定写入业务版本文档后再恢复。
 - 流程、TODO、尝试、Agent 和浏览器操作分别持有状态；blocked/interrupted/waiting_decision 未收敛前不提前把下游标为跳过。
 - `ai-e2e` 通过持久 `run.snapshot`、单调事件序号和不可变证据 manifest 向 UI 提供权威状态；浏览器视频用于实时观察，默认不等于永久录像。
+- Run、Agent task 和 Browser session 各自使用 snapshot-first SSE 与独立序号；现有 Chat SSE、Debug SSE 和项目阶段 SSE 是兼容面，不能混用序号或替代业务状态。
+- 跨服务不使用分布式事务：`ai-e2e` 先写 intent/outbox，再用同一幂等键创建/查询 Agent task 和浏览器 operation；超时后先查账本。
 
-完整需求见 `ai-e2e/docs/requirements-baseline.md`；功能脚本、场景编排、代理浏览器执行和运行状态/证据分别见 `ai-e2e/docs/functional-script-contract.md`、`ai-e2e/docs/scenario-orchestration-contract.md`、`ai-e2e/docs/agent-browser-execution-contract.md`、`ai-e2e/docs/run-state-decision-evidence-contract.md`。
+完整需求见 `ai-e2e/docs/requirements-baseline.md`；功能脚本、场景编排、代理浏览器执行、运行状态/证据、跨服务 API/事件和双模型/Skills 分别见 `ai-e2e/docs/functional-script-contract.md`、`ai-e2e/docs/scenario-orchestration-contract.md`、`ai-e2e/docs/agent-browser-execution-contract.md`、`ai-e2e/docs/run-state-decision-evidence-contract.md`、`ai-e2e/docs/service-api-event-contract.md`、`ai-e2e/docs/ai-model-skill-contract.md`。
 
 ---
 
