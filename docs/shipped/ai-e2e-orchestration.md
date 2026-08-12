@@ -30,6 +30,7 @@ PRD 驱动的 E2E 自动化测试编排器。把"需求分析 → 页面探索 �
 - [designed] 业务版本由用户创建，可记录来源版本及部署/Git 标识；`copy` 深复制 PRD、决策、页面、模块、脚本、场景、TODO、DOM/定位基线和参考截图，复制后独立维护，不复制运行历史、实际数据、凭据或临时变量。
 - [designed] 主代理维护 PRD 流程、TODO 依赖、运行变量和决策，并负责派发、恢复、跳过、验收与汇总；页面子代理只执行获授权的页面场景片段，负责重新检查、执行、验证、职责内修复和结构化汇报。
 - [designed] 默认创建干净子代理上下文；登出等可恢复中断可由主代理在页面状态和副作用检查后续接原上下文，否则从检查点和授权变量重建。
+- [designed] 首期一个主代理在任一时刻只运行一个执行型子代理，同一测试流程复用 proxy-adapter 托管的 Playwright/Chromium 实例和浏览器会话，所有动作串行；子代理上下文可按任务重建，多 Tab 并发仅作为后期扩展。
 - [designed] 页面任务图、页面/模块范围与验收归 ai-e2e；模型、MCP 工具和未来 Skills 的执行归 ai-chat-service。当前 `AiChatClient.generateText()` 仅调用纯文本生成端点，尚无 Agent tool loop。
 - [designed] 系统内权威脚本是结构化语义功能脚本；所有浏览器动作通过 proxy-adapter 可视执行，并关联实时画面、场景、脚本调用、步骤结果和失败证据。当前 `npx tsx` 子进程执行器不是目标执行路径。
 - [designed] 失败先保存截图和现场并评估后续阻碍；主代理按依赖跳过或继续。意外登出按可恢复中断上报，需要决策时暂停并在决策写入版本文档后恢复。
@@ -37,4 +38,4 @@ PRD 驱动的 E2E 自动化测试编排器。把"需求分析 → 页面探索 �
 - [tech-debt] `page_snapshot_json` 缺失：手动 URL 不经过探索，该字段为 NULL，导致 AI 编造选择器，通过率从 60%+ 降到 4.6%。变通：手动注入 DOM 快照。
 - [tech-debt] AI 模板约束执行不足：AI 偶尔生成 `test()` / `expect()` / `waitForLoadState('networkidle')` / `typescript` 前缀。变通：批量后处理。
 - [tech-debt] AI 超时预算未按操作细分：当前默认 `settings.timeout=180s`，`DEFAULT_AI_TIMEOUT_MS=300s`。
-- [tech-debt] 并发执行不支持：`POST /execution/run/:scriptId` 不支持并发；批量必须串行或 `run-all`。
+- [tech-debt] 旧执行链只有基础串行：`POST /execution/run/:scriptId` 不支持并发；首期目标也采用串行，但必须替换为主代理逐项派发、子代理执行并共享 proxy-adapter 浏览器会话的受控串行链。

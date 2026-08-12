@@ -174,7 +174,7 @@
 | 模块需求文档 | — | pending | 尚无验收面 | 需把 PRD 与真实页面证据收敛为持久化、可追溯输入 |
 | 功能脚本 + 场景调用图 | services/ScriptGeneratorService、database/scripts | pending | 当前仅验证 scenario 级 TypeScript 脚本 | 需模块下多脚本实体及跨模块/页面调用、重复、依赖、输入输出契约 |
 | 业务版本 + 深复制 | — | pending | 尚无验收面 | 需独立资产快照、来源追溯及 DOM/定位/截图基线复制 |
-| 主代理 / 页面子代理调度与上下文策略 | — | pending | 尚无验收面 | 需任务模型、运行变量、暂停决策、检查点、恢复和依赖跳过协议 |
+| 主代理 / 页面子代理调度与上下文策略 | — | pending | 尚无验收面 | 首期同一时刻一个主代理只运行一个执行型子代理，共享 proxy-adapter 浏览器会话并串行动作；仍需任务、变量、暂停、检查点、恢复和依赖跳过协议 |
 | ai-chat-service Agent 会话消费 | infrastructure/ai-chat-client | pending | 当前仅有纯文本 generate 与基础 chat session 客户端 | 需面向页面任务的 tool/skill loop 调用与状态契约 |
 | proxy-adapter 可视语义执行 | services/ExecutorService | pending | 当前仍由 `npx tsx` 子进程执行 | 需替换为经 MCP 的语义步骤执行、实时画面关联和可复现操作记录 |
 | 失败证据、影响评估与依赖跳过 | database/execution_runs、services/AIDiagnosisService | in-progress | 当前有日志/截图路径和 run 级诊断 | 需场景/调用/步骤证据包、后续阻碍评估与依赖跳过 |
@@ -227,7 +227,7 @@
 | `page_snapshot_json` 缺失 | tech-debt | known | 手动 URL 不经过探索，`page_snapshot_json` 为 NULL，导致 AI 编造选择器，通过率从 60%+ 降到 4.6%；变通：手动注入 DOM 快照到该字段 |
 | AI 模板约束执行不足 | tech-debt | known | AI 偶尔生成 `test()`/`expect()`/`waitForLoadState('networkidle')`/`typescript` 前缀；变通：批量后处理 |
 | AI 超时预算未按操作细分 | tech-debt | known | 当前默认：`config.json settings.timeout=180s`，`proxy-adapter-client.ts DEFAULT_AI_TIMEOUT_MS=300s` |
-| 并发执行不支持 | tech-debt | known | `POST /execution/run/:scriptId` 不支持并发；批量必须串行或 `run-all` |
+| 旧执行链只有基础串行 | tech-debt | known | `POST /execution/run/:scriptId` 不支持并发；首期目标也采用串行，但必须替换为主代理逐项派发、子代理执行并共享 proxy-adapter 浏览器会话的受控串行链 |
 | PowerShell JSON 序列化陷阱 | tech-debt | known | 上传 PRD 应用 `curl --data-binary @file.json`；中文 stderr 可能 GBK 乱码但不影响逻辑 |
 | 缺少规范化页面与 URL 参数模型 | requirement-gap | pending | 当前 `urls.url` 保存完整字符串，无法稳定表达 path/hash route 与参数模板 |
 | 缺少持久化模块需求文档 | requirement-gap | pending | PRD、页面快照、URL binding、scenario 仍是分散输入 |
