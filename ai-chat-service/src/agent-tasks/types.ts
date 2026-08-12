@@ -99,6 +99,9 @@ export interface AgentTaskView {
   taskId: string;
   clientTaskId: string;
   status: AgentTaskStatus;
+  stateVersion: number;
+  eventSeq: number;
+  lastCheckpointId?: string;
   modelRole: 'decision';
   request: PersistedAgentTaskRequest;
   output?: unknown;
@@ -124,6 +127,8 @@ export interface AgentTaskExecutionContext {
   request: CreateAgentTaskRequest;
   deadlineAt: number;
   signal: AbortSignal;
+  beforeToolCall(): void;
+  emitEvent(type: string, payload: Record<string, unknown>): void;
 }
 
 export interface AgentTaskExecutor {

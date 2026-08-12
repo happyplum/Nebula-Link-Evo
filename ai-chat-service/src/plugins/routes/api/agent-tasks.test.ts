@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AgentTaskRepository } from '../../../agent-tasks/repository.js';
 import { AgentTaskService } from '../../../agent-tasks/service.js';
+import type { AgentTaskExecutor } from '../../../agent-tasks/types.js';
 import agentTaskRoutes from './agent-tasks.js';
 
 const cleanups: Array<() => Promise<void>> = [];
@@ -24,21 +25,23 @@ function body() {
   };
 }
 
-async function setup(localControlPlane = true) {
+const completedExecutor: AgentTaskExecutor = {
+  execute: async () => ({
+    output: { ok: true },
+    terminationReason: 'stop',
+    usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, modelTurns: 1, toolCalls: 0 },
+    toolCalls: [],
+  }),
+};
+
+async function setup(localControlPlane = true, executor: AgentTaskExecutor = completedExecutor) {
   const app = Fastify();
   const repository = new AgentTaskRepository(':memory:');
-  const service = new AgentTaskService(
-    repository,
-    {
-      execute: async () => ({
-        output: { ok: true },
-        terminationReason: 'stop',
-        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, modelTurns: 1, toolCalls: 0 },
-        toolCalls: [],
-      }),
-    },
-    { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
-  );
+  const service = new AgentTaskService(repository, executor, {
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  });
   await app.register(agentTaskRoutes, {
     prefix: '/api/v1',
     service,
@@ -75,7 +78,8 @@ describe('Agent task routes', () => {
     expect(capabilities.json()).toMatchObject({
       features: {
         agentTasks: true,
-        taskEvents: false,
+        taskEvents: true,
+        taskCommands: true,
         skillsRuntime: false,
         operationPresentationAnimation: false,
       },
@@ -113,5 +117,129 @@ describe('Agent task routes', () => {
     });
     expect(denied.statusCode).toBe(403);
     expect(denied.json()).toMatchObject({ error: { code: 'tool_not_allowed' } });
+  });
+
+  it('executes optimistic commands and exposes the durable event log', async () => {
+    const app = await setup(true, {
+      execute: async (context) => {
+        await new Promise<void>((_resolve, reject) => {
+          context.signal.addEventListener(
+            'abort',
+            () => reject(new DOMException('Cancelled', 'AbortError')),
+            { once: true }
+          );
+        });
+        throw new Error('unreachable');
+      },
+    });
+    const create = await app.inject({
+      method: 'POST',
+      url: '/api/v1/agent-tasks',
+      payload: body(),
+    });
+    const taskId = create.json().taskId as string;
+    let current = create.json();
+    await vi.waitFor(async () => {
+      current = (await app.inject({ method: 'GET', url: `/api/v1/agent-tasks/${taskId}` })).json();
+      expect(current.status).toBe('running');
+    });
+
+    const command = await app.inject({
+      method: 'POST',
+      url: `/api/v1/agent-tasks/${taskId}/commands`,
+      payload: {
+        commandId: 'cancel-route-1',
+        type: 'cancel',
+        expectedStateVersion: current.stateVersion,
+      },
+    });
+    expect(command.statusCode).toBe(200);
+    expect(command.json()).toMatchObject({
+      command: { status: 'completed' },
+      task: { status: 'cancelled' },
+    });
+
+    const events = await app.inject({
+      method: 'GET',
+      url: `/api/v1/agent-tasks/${taskId}/event-log?afterSeq=0&limit=100`,
+    });
+    expect(events.statusCode).toBe(200);
+    expect(events.json().map((event: { type: string }) => event.type)).toEqual(
+      expect.arrayContaining([
+        'agent_task.command.accepted',
+        'agent_task.state_changed',
+        'agent_task.command.completed',
+      ])
+    );
+  });
+
+  it('streams committed events and recovers a disconnected client from a fresh snapshot', async () => {
+    const app = await setup(true, {
+      execute: async (context) => {
+        await new Promise<void>((_resolve, reject) => {
+          context.signal.addEventListener(
+            'abort',
+            () => reject(new DOMException('Cancelled', 'AbortError')),
+            { once: true }
+          );
+        });
+        throw new Error('unreachable');
+      },
+    });
+    const create = await app.inject({
+      method: 'POST',
+      url: '/api/v1/agent-tasks',
+      payload: { ...body(), clientTaskId: 'stream-client' },
+    });
+    const taskId = create.json().taskId as string;
+    await vi.waitFor(async () => {
+      const task = await app.inject({ method: 'GET', url: `/api/v1/agent-tasks/${taskId}` });
+      expect(task.json().status).toBe('running');
+    });
+    const address = await app.listen({ host: '127.0.0.1', port: 0 });
+    const controller = new AbortController();
+    const response = await fetch(`${address}/api/v1/agent-tasks/${taskId}/events`, {
+      signal: controller.signal,
+    });
+    const reader = response.body!.getReader();
+    const firstChunk = await reader.read();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('text/event-stream');
+    expect(new TextDecoder().decode(firstChunk.value)).toContain('event: agent_task.snapshot');
+
+    const running = await app.inject({ method: 'GET', url: `/api/v1/agent-tasks/${taskId}` });
+    const command = await app.inject({
+      method: 'POST',
+      url: `/api/v1/agent-tasks/${taskId}/commands`,
+      payload: {
+        commandId: 'cancel-stream-1',
+        type: 'cancel',
+        expectedStateVersion: running.json().stateVersion,
+      },
+    });
+    expect(command.statusCode).toBe(200);
+    let liveText = '';
+    while (!liveText.includes('agent_task.command.completed')) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      liveText += new TextDecoder().decode(chunk.value);
+    }
+    expect(liveText).toContain('event: agent_task.command.completed');
+    await reader.cancel();
+    controller.abort();
+
+    const reconnectController = new AbortController();
+    const reconnect = await fetch(`${address}/api/v1/agent-tasks/${taskId}/events`, {
+      signal: reconnectController.signal,
+    });
+    const reconnectReader = reconnect.body!.getReader();
+    const reconnectChunk = await reconnectReader.read();
+    const reconnectText = new TextDecoder().decode(reconnectChunk.value);
+    await reconnectReader.cancel();
+    reconnectController.abort();
+
+    expect(reconnectText).toContain('event: agent_task.snapshot');
+    expect(reconnectText).toContain('"status":"cancelled"');
   });
 });

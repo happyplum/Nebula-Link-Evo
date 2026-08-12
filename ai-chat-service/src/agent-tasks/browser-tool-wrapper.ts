@@ -30,6 +30,7 @@ export interface BrowserToolWrapperOptions {
   steps: ReadonlyMap<string, AgentTaskBrowserStep>;
   deadlineAt: number;
   maxToolCalls: number;
+  beforeToolCall?: () => void;
   consumeToolCall?: () => void;
   mcpClient: Pick<MCPSDKClient, 'callTool'>;
 }
@@ -76,6 +77,7 @@ export class BrowserToolWrapper {
   }
 
   async execute(rawInput: unknown, toolCallId: string): Promise<BrowserOperationRecord> {
+    this.options.beforeToolCall?.();
     this.consumeBudget();
     const input = requireObject(rawInput, 'Browser tool input');
     assertAllowedKeys(input, ['stepId', 'target', 'args'], 'Browser tool input');

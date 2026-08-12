@@ -198,16 +198,38 @@ describe('Agent task command, event and Skill data foundation', () => {
     const path = join(directory, 'agent.sqlite');
     const repository = createRepository(path);
     createTask(repository);
+    repository.markRunning('task-1');
+    repository.createCommand({
+      id: 'pause-before-restart',
+      taskId: 'task-1',
+      type: 'pause',
+      expectedStateVersion: 2,
+      requestHash: 'e'.repeat(64),
+      createdBy: 'test',
+      createdAt: now,
+    });
+    repository.pause('task-1', {
+      id: 'pause:pause-before-restart',
+      taskId: 'task-1',
+      payload: { kind: 'safe_pause', toolCallsStarted: 0 },
+      createdAt: now,
+    });
     repository.close();
     repositories.splice(repositories.indexOf(repository), 1);
 
     const reopened = createRepository(path);
-    expect(reopened.getPersistenceState('task-1')).toMatchObject({ stateVersion: 1 });
+    expect(reopened.getPersistenceState('task-1')).toMatchObject({ stateVersion: 3 });
     expect(reopened.recoverUnfinished()).toBe(1);
     expect(reopened.get('task-1')).toMatchObject({
       status: 'interrupted',
       terminationReason: 'service_restarted',
     });
-    expect(reopened.listEvents('task-1').map((event) => event.seq)).toEqual([1, 2]);
+    expect(reopened.getCommand('pause-before-restart')).toMatchObject({
+      status: 'rejected',
+      error: { code: 'service_restarted' },
+    });
+    expect(reopened.listEvents('task-1').map((event) => event.seq)).toEqual([
+      1, 2, 3, 4, 5, 6, 7,
+    ]);
   });
 });

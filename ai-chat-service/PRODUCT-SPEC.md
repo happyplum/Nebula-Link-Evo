@@ -16,7 +16,7 @@
 - 向 `debug-ui` 提供 Chat SSE 流（每次建连先发完整 `session.snapshot` 再续 live stream）。
 - 提供 provider preflight（`/test-ai`、`/verify-keys`）、loop-guard（防止 AI 重复陷入同一种失败）、数据库备份。
 - 为后续可复用 Skills 提供统一归属；v1 固定 id/version/hash 的本地声明式指令包已经具备不可变 registry/version 与 task pin 持久化，loader、任务校验和 execution path 尚未实现。
-- 提供 `/api/v1/agent-tasks` 通用受限任务执行核心：调用方传入不可变任务输入、工具白名单、预算和模型不可见浏览器 binding，服务异步执行决策模型并返回 Schema 校验后的结构化结果；内部 command/event/checkpoint 数据层已交付，对外命令、SSE/event-log 和 Skills 执行仍待后续阶段，不持有调用方业务运行计划。
+- 提供 `/api/v1/agent-tasks` 通用受限任务执行核心：调用方传入不可变任务输入、工具白名单、预算和模型不可见浏览器 binding，服务异步执行决策模型并返回 Schema 校验后的结构化结果；命令、snapshot-first SSE、event-log 与 checkpoint 安全暂停/恢复已交付，Skills 执行仍待后续阶段，不持有调用方业务运行计划。
 - 目标 Agent 工具包装层接收调用方冻结的 policy evaluation、风险投影 hash、当前语义步骤/effectId/数量边界和可选 grant 引用，并逐次求权限交集；本服务不决定环境矩阵、不签发审批，也不能让模型/Skill 扩大副作用授权。
 
 ### 边界
@@ -53,8 +53,8 @@
 | 通用页面状态理解 | pending | 在元素查找之外，向调用代理提供结构化的页面功能、视觉区域和 DOM 状态摘要；当前没有独立接口。 |
 | MCP client / ToolRegistry | shipped | 接入 `proxy-adapter` 的浏览器工具及其他外部 MCP 工具；普通 Chat 只暴露兼容工具，显式过滤 `operation_execute/get/cancel`，防止模型接触 session/Tab/lease/token 注入字段。 |
 | Skills runtime | in-progress | 不可变 Skill registry/version/hash 与 task-local exact pin/policy hash 数据层已交付；本地目录 loader、任务输入放行、指令装载、权限交集与执行路径仍未实现，不得视为 runtime 已交付。 |
-| 受限 Agent 任务执行 | in-progress | 已交付不可变输入、严格 response Schema、工具白名单、预算、独立持久状态、结构化结果、模型不可见 browser wrapper，以及 stateVersion、task-scoped event seq、command 幂等和 checkpoint 恢复索引；当前语义步骤 `stepId/kind/operation/effectId/单项数量边界` 由调用方冻结。命令执行/API、事件 SSE/event-log、Skills 执行与完整 policy/grant 权限交集仍 pending。 |
-| Agent/视觉/Skills 目标协议 | in-progress | `nebula.ai.agent-task/1.0` 的创建/查询与 capability 已实现；Agent command/event/checkpoint 和 Skill manifest/pin 内部持久化已实现，公开命令/事件、通用视觉 Schema 和 Skills runtime 仍是目标协议。 |
+| 受限 Agent 任务执行 | in-progress | 已交付不可变输入、严格 response Schema、工具白名单、预算、独立持久状态、结构化结果、模型不可见 browser wrapper，以及 stateVersion、task-scoped event seq、command 幂等、checkpoint 安全暂停/恢复、snapshot-first SSE 与 event-log；当前语义步骤 `stepId/kind/operation/effectId/单项数量边界` 由调用方冻结。Skills 执行与完整 policy/grant 权限交集仍 pending。 |
+| Agent/视觉/Skills 目标协议 | in-progress | `nebula.ai.agent-task/1.0` 的创建/查询/命令/事件与 capability 已实现；通用视觉 Schema 和 Skills runtime 仍是目标协议。 |
 
 受限 Agent task 是一次有界执行，不是 ai-e2e 的持久主代理。bootstrap/recheck/repair 的阶段、candidate、coverage、decision、dependency index、environment policy evaluation/grant 与激活仍由 ai-e2e 保存和推进；browser binding 只声明模型不可见的 `observe/control` 权限，主代理分析只使用安全边界 observe，执行型页面子代理才可使用 control。actor/角色与副作用授权只是调用方提供的不可变任务约束，本服务不维护认证状态、不切换 BrowserContext/storage state、不签发审批，也不授权子代理自行登录或新增写操作。
 
@@ -81,7 +81,7 @@
 | 视觉分析 | `src/vision/`（vision-analyzer / prompts / types / index） | shipped | Vision 分析引擎，通过 AI 模型识别 DOM 元素 | 构造函数接收 `LanguageModelV3` + `VisionConfig`；提供 `findElement()` 方法 |
 | 工具注册 | `src/tools/`（registry / types / index / providers/{mcp-client-provider,vision-tool-provider} / adapters/{vercel-ai,json-schema-to-zod}） | shipped | ToolRegistry + providers（MCP client + VisionToolProvider） | MCP 客户端：状态机管理 server 生命周期、指数退避重连（最多 5 次）、`toolsChanged` 事件 |
 | Skills runtime | `src/agent-tasks/repository.ts`；`src/skills/`（待新增） | in-progress | 已有本地声明式 Skill registry/version/hash 与 task pin/policy hash 数据层；发现、目录加载、完整 manifest Schema 校验、指令装载和执行待新增 | 不执行 Skill 附带代码、不联网安装、不扩展 task 权限；契约见 `ai-e2e/docs/ai-model-skill-contract.md` |
-| 受限 Agent tasks | `src/agent-tasks/` | in-progress | 独立 SQLite 状态、严格输入/response Schema、task tool allowlist、预算、决策模型结构化执行、模型不可见 browser wrapper、stateVersion/event/command/checkpoint 数据层与 capabilities | 与交互 Chat session 分离；凭证不明文持久化；重启将 created/running 收敛为 interrupted；公开事件/命令、Skills 执行和完整副作用授权仍 pending |
+| 受限 Agent tasks | `src/agent-tasks/` | in-progress | 独立 SQLite 状态、严格输入/response Schema、task tool allowlist、预算、决策模型结构化执行、模型不可见 browser wrapper、乐观命令、snapshot-first SSE/event-log、checkpoint 与 capabilities | 与交互 Chat session 分离；凭证不明文持久化；重启将 created/running/paused 收敛为 interrupted，并拒绝遗留 accepted 命令；Skills 执行和完整副作用授权仍 pending |
 | 客户端 | `src/clients/`（vercel-ai/provider / mcp/sdk-client / mcp/fetch / compression / types） | shipped | Vercel AI Provider 与 MCP SDK 客户端（含 fetch MCP server） |  |
 | 插件与路由 | `src/plugins/routes/api/`（chat/{stream,sessions,control,connectivity-test,runtime-state,index} / ai-service / debug-ai / agent-tasks） | shipped | Fastify 路由 | Chat SSE 每次建连发完整 `session.snapshot`；Agent task 控制面要求服务绑定 loopback |
 | 错误 | `src/errors/`（http-errors / index） | shipped | HTTP 错误分类 | API 边界：未知 provider → 400；不可用 provider → 503 |
@@ -110,8 +110,10 @@
 | `MCP Client → proxy-adapter /mcp` | out | shipped | 拉取 `browser-control.*` 工具 | clients/mcp、tools/providers/mcp-client-provider |
 | `/api/v1/agent-tasks` | POST | shipped | 幂等创建并异步启动一次受限决策模型任务；返回 202，新旧请求冲突返回 409 | 仅 loopback；`Idempotency-Key` 可选；不接受 inline secret 或非空 Skill allowlist |
 | `/api/v1/agent-tasks/:taskId` | GET | shipped | 查询持久任务状态、脱敏请求、结构化结果、预算与工具摘要 | 仅 loopback；`completed` 不代表 E2E TODO 通过 |
-| `/api/v1/agent-tasks/:taskId/{commands,events,event-log}` | POST/GET/SSE | pending | 暂停/恢复/中断/取消、snapshot-first 事件与持久审计 | 本阶段未实现 |
-| `/api/v1/capabilities` | GET | shipped | 声明 agent-task/browser-operation 协议、已实现功能和限制 | 可读取；不包含 provider key、lease token、环境审批策略或其他机密，明确 events/commands/Skills/动画为 false |
+| `/api/v1/agent-tasks/:taskId/commands` | POST | shipped | 以 command ID/hash 幂等和 `expectedStateVersion` 乐观并发执行 pause/resume/interrupt/cancel | pause 只允许首个工具调用前的安全边界并原子写 checkpoint；工具开始后拒绝 pause；interrupt/cancel 不推断副作用回滚 |
+| `/api/v1/agent-tasks/:taskId/events` | GET (SSE) | shipped | 每次连接先发当前 `agent_task.snapshot`，再发 task-scoped 单调 live events | heartbeat 不占 seq；忽略 `Last-Event-ID` 不影响正确性 |
+| `/api/v1/agent-tasks/:taskId/event-log` | GET | shipped | 按 `afterSeq/limit` 读取持久 Agent 审计事件 | 用于诊断和受控补洞，不替代 snapshot bootstrap |
+| `/api/v1/capabilities` | GET | shipped | 声明 agent-task/browser-operation 协议、已实现功能和限制 | 可读取；不包含 provider key、lease token、环境审批策略或其他机密；`taskEvents/taskCommands=true`，Skills/动画仍为 false |
 
 ---
 
@@ -145,8 +147,8 @@
 | Skills registry 与 task pin 数据层 | `src/agent-tasks/repository.ts` | shipped | `repository.foundation.test.ts` | 同 id/version 不同 hash 拒绝，版本内容不可更新，task 精确 pin + policy hash 不可变；不等于 loader/runtime 已可用 |
 | Skills 加载与执行 | `src/skills/`（待新增） | pending | 尚无验收面 | 本地只读目录发现、完整 manifest 校验、权限交集、指令装载与审计执行见 `ai-e2e/docs/ai-model-skill-contract.md` |
 | 受限 Agent 任务执行核心 | `src/agent-tasks/`、tools、plugins/routes/api/agent-tasks | shipped | unit + Fastify inject | POST/GET/capability、独立 `agent-tasks.sqlite`、幂等、预算、严格 response Schema、模型不可见 binding、预授权步骤、operation ledger 恢复与结构化结果；普通 Chat 行为不变 |
-| Agent task command/event/checkpoint 数据层 | `src/agent-tasks/repository.ts` | shipped | `repository.foundation.test.ts` | task 状态更新、stateVersion 与事件同事务；command ID/hash 幂等 + expected stateVersion；task-scoped seq；append-only checkpoint 恢复索引；尚未接命令执行与 HTTP/SSE |
-| Agent task 控制/API/Skills runtime/完整副作用授权 | `src/agent-tasks/`（待扩展） | pending | 尚无端到端验收面 | pause/resume/interrupt/cancel 执行器、snapshot-first SSE/event-log、Skill loader/runtime、policy evaluation/projection/grant 逐调用交集仍按跨服务契约实现 |
+| Agent task command/event/checkpoint 控制面 | `src/agent-tasks/`、`plugins/routes/api/agent-tasks.ts` | shipped | repository/service/Fastify/SSE 测试 | task 状态更新、stateVersion 与事件同事务；command ID/hash 幂等 + expected stateVersion；pause 与安全 checkpoint 同事务；snapshot-first SSE/event-log；重启将遗留任务中断并拒绝 accepted 命令 |
+| Skills runtime/完整副作用授权 | `src/skills/`（待新增）、`src/agent-tasks/`（待扩展） | pending | 尚无端到端验收面 | Skill loader/runtime、policy evaluation/projection/grant 逐调用交集仍按跨服务契约实现 |
 
 ---
 
@@ -188,9 +190,8 @@
 
 | 缺口 | 类型 | 状态 | 备注 |
 |------|------|------|------|
-| 当前已实现能力暂无活跃技术债 | — | — | 2026-08-12 本地验证 109/109 测试通过；下列为新增目标能力缺口 |
+| 当前已实现能力暂无活跃技术债 | — | — | 2026-08-13 本地验证 114/114 测试通过；下列为新增目标能力缺口 |
 | 通用页面状态理解接口未实现 | requirement-gap | pending | `vision.analyze_page`/`vision.resolve_target` 输入输出已设计；当前能力仍聚焦 `vision.find_element` |
-| Agent task 控制与事件读取面未实现 | requirement-gap | pending | command 幂等、stateVersion、任务级持久事件和 checkpoint 恢复索引已交付；命令状态机执行、`commands/events/event-log` HTTP/SSE 与 snapshot 投影仍未实现 |
 | Skills runtime 未实现/未接入 Agent task | requirement-gap | pending | immutable registry/version/hash 与 task pin/policy hash 数据层已交付；当前请求验证仍严格拒绝非空 `skillPolicy.allow`，本地 loader、完整 manifest 校验、权限交集和执行隔离仍未实现 |
 | 完整逐工具副作用授权校验未实现 | requirement-gap | pending | 当前只执行调用方冻结的浏览器 `stepId/kind/operation/effectId`，若声明数量边界仅接受 `maxAffectedItems=1`；尚未接收/验证 policy evaluation、风险投影 hash、active grant 与参数级数量交集，环境矩阵与审批仍由 ai-e2e 持有 |
 
