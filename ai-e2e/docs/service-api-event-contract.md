@@ -190,6 +190,8 @@ interface RunCommandRequestV1 {
 | GET | `/api/v1/agent-tasks/:taskId/events` | pending：Agent 任务 SSE；先发 `agent_task.snapshot`。 |
 | GET | `/api/v1/agent-tasks/:taskId/event-log?afterSeq=N&limit=M` | pending：读取持久 Agent 审计事件。 |
 
+当前内部数据状态：Agent task 状态更新已与 `stateVersion`、task-scoped 单调 event seq 同事务持久化，command ID/hash/expected state version 与 append-only checkpoint 恢复索引也已落库；上述命令执行、HTTP/SSE 和 snapshot 投影仍未接入，因此 capability 继续声明 `taskCommands=false/taskEvents=false`。
+
 ```ts
 interface CreateAgentTaskRequestV1 {
   schema: 'nebula.ai.agent-task/1.0';
@@ -231,7 +233,7 @@ interface CreateAgentTaskRequestV1 {
 - `responseSchema` 必须受平台大小、深度和关键字白名单约束，防止任意递归 Schema。
 - `browserBinding` 是模型不可见的执行能力；`observe` 只能读取 snapshot/页面状态，`control` 才能提交 act。租约 token 只存在于受限任务运行态或 secret store，不进入模型消息、普通日志、事件 payload 或数据库明文字段。
 - `browserLeaseSequence` 是 proxy 防重放所需的模型不可见租约序号；与 session/lease/token/tab 一并由 wrapper 注入，模型不能提交或覆盖。
-- 当前 shipped wrapper 只执行 `toolPolicy.constraints['browser-control.operation_execute'].steps` 冻结的 `stepId/kind/operation/effectId`，写步骤只接受单项数量边界；普通工具按精确 allowlist 求交集。Skills、policy evaluation/风险投影/active grant 与参数级数量交集仍未实现，相关输入在实现前不得被宣称已校验。
+- 当前 shipped wrapper 只执行 `toolPolicy.constraints['browser-control.operation_execute'].steps` 冻结的 `stepId/kind/operation/effectId`，写步骤只接受单项数量边界；普通工具按精确 allowlist 求交集。Skill registry/pin 只有内部持久化，任务验证仍拒绝非空 allowlist；Skills runtime、policy evaluation/风险投影/active grant 与参数级数量交集仍未实现，相关输入在实现前不得被宣称已校验。
 - 工具包装层注入 session、Tab、租约、operation/correlation 元数据，并在每次调用前校验“task allowlist ∩ 当前语义步骤 ∩ effectId/数量边界 ∩ active grant ∩ browser lease”；模型不能覆盖、替换 effectId 或把只读步骤改为写步骤。
 - 默认每个页面任务创建新 Agent task。恢复只接受调用方提供的显式 checkpoint，不依赖旧对话隐式记忆。
 

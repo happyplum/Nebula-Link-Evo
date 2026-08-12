@@ -2,7 +2,7 @@
 
 > 状态：已确认目标设计，Agent task 核心部分实现。
 > 更新时间：2026-08-12。
-> 本文定义 `ai-chat-service` 的分析/决策模型、单次视觉模型、受限 Agent task 与 Skills runtime。当前已交付 provider 角色配置、Chat tool loop、MCP client/ToolRegistry、`vision.find_element`，以及受限 Agent task 的 POST/GET、持久状态、结构化输出、精确工具白名单和模型不可见 browser wrapper；页面分析、目标解析 v2、Skills、任务命令/事件与完整副作用授权仍是目标协议。
+> 本文定义 `ai-chat-service` 的分析/决策模型、单次视觉模型、受限 Agent task 与 Skills runtime。当前已交付 provider 角色配置、Chat tool loop、MCP client/ToolRegistry、`vision.find_element`，以及受限 Agent task 的 POST/GET、持久状态、结构化输出、精确工具白名单、模型不可见 browser wrapper、command/event/checkpoint 与 Skill registry/pin 数据层；页面分析、目标解析 v2、Skills runtime、任务命令/事件公开接口与完整副作用授权仍是目标协议。
 
 ## 1. 服务边界
 
@@ -267,8 +267,8 @@ provider/runtime 可用工具
 
 - 受限 Agent task 已独立于 ChatSessionController，具备逐任务精确 tool allowlist、Tab/lease binding、预算和结构化结果；普通 Chat 仍使用原有 tool loop 并过滤三项受控 operation 工具。
 - 当前 `/api/ai/generate` 只调用 `generateText()`，不执行工具。
-- 当前只有 `vision.find_element`，内部临时缓存最近 5 份 DOM snapshot；尚无通用页面状态分析、目标候选 v2、持久 snapshot 授权或 Agent task 事件。
-- 当前仓库没有 Skills loader、registry、manifest 校验、版本 pin 或执行隔离。
+- 当前只有 `vision.find_element`，内部临时缓存最近 5 份 DOM snapshot；尚无通用页面状态分析、目标候选 v2、持久 snapshot 授权或 Agent task 事件 SSE/event-log。
+- 当前已有 immutable Skill registry/version/hash 与 task pin/policy hash 数据层；没有本地目录 loader、完整 manifest 引用/权限校验、任务输入放行、指令装载或执行隔离。
 - 当前 Agent browser wrapper 已冻结 `stepId/kind/operation/effectId` 并限制 observe/control，模糊失败先查询 operation ledger；仍没有 policy evaluation、风险投影 hash、active grant 与参数级数量的完整逐调用交集校验。
 - 当前 `ai-e2e` prompts 是业务侧模板，可继续作为迁移输入；不得把它们直接等同于可复用 Skill。
 
