@@ -136,7 +136,7 @@
 | `/api/projects` | shipped | 项目 CRUD | services/ProjectService |
 | `/api/projects/:id/config` | shipped | 项目基础配置 | services/ProjectService |
 | `/api/projects/:id/analysis` | shipped | PRD 分析、模块编辑 | services/PRDAnalyzerService |
-| `/api/projects/:id/exploration` | shipped | 站点探索、URL 绑定 | services/ExplorerService |
+| `/api/projects/:id/exploration` | shipped | 站点探索、URL 绑定；绑定响应统一为前端 DTO：`module_id`、`confidence`、`proposed/confirmed/rejected` | services/ExplorerService |
 | `/api/projects/:id/scenarios` | shipped | 测试场景 CRUD | services/TestScenarioService |
 | `/api/projects/:id/scripts` | shipped | 脚本生成/编辑/版本 | services/ScriptGeneratorService |
 | `/api/projects/:id/execution` | shipped | 脚本执行、run 详情 | services/ExecutorService |

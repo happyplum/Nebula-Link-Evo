@@ -266,7 +266,14 @@ describe('PUT /bindings/:bindingId', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual(confirmedBinding);
+    expect(res.json()).toEqual({
+      id: confirmedBinding.id,
+      url_id: confirmedBinding.url_id,
+      module_id: confirmedBinding.functional_module_id,
+      status: 'confirmed',
+      confidence: confirmedBinding.confidence_score,
+      created_at: confirmedBinding.created_at,
+    });
     expect(mockExplorerService.confirmBinding).toHaveBeenCalledWith('bind-001');
   });
 
@@ -290,7 +297,14 @@ describe('PUT /bindings/:bindingId', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual(rejectedBinding);
+    expect(res.json()).toEqual({
+      id: rejectedBinding.id,
+      url_id: rejectedBinding.url_id,
+      module_id: rejectedBinding.functional_module_id,
+      status: 'rejected',
+      confidence: rejectedBinding.confidence_score,
+      created_at: rejectedBinding.created_at,
+    });
     expect(mockExplorerService.rejectBinding).toHaveBeenCalledWith('bind-001');
   });
 });
@@ -341,8 +355,10 @@ describe('POST /bind', () => {
     expect(res.statusCode).toBe(201);
     const body = res.json();
     expect(body.url_id).toBe(url.id);
-    expect(body.functional_module_id).toBe(fm.id);
-    expect(body.status).toBe('human_confirmed');
+    expect(body.module_id).toBe(fm.id);
+    expect(body.status).toBe('confirmed');
+    expect(body).not.toHaveProperty('functional_module_id');
+    expect(body).not.toHaveProperty('confidence_score');
   });
 });
 

@@ -14,6 +14,7 @@ import { ServiceError } from '../../services/service-error.js';
 import type { ProxyAdapterClient } from '../../infrastructure/proxy-adapter-client.js';
 import type { PromptTemplateManager } from '../../ai/prompt-manager.js';
 import type { BindingStatus } from '../../types/url.js';
+import type { URLModuleBinding as URLModuleBindingRecord } from '../../database/repositories/url-module-binding-repository.js';
 
 // ---------- Options ----------
 
@@ -111,6 +112,22 @@ type ExplorationOptions = Static<typeof ExplorationOptionsSchema>;
 type AddURLRequest = Static<typeof AddURLRequestSchema>;
 type CreateBindingRequest = Static<typeof CreateBindingRequestSchema>;
 type UpdateBindingRequest = Static<typeof UpdateBindingRequestSchema>;
+type BindingResponse = Static<typeof BindingSchema>;
+
+function toBindingResponse(binding: URLModuleBindingRecord): BindingResponse {
+  let status = binding.status;
+  if (status === 'ai_proposed') status = 'proposed';
+  else if (status === 'human_confirmed') status = 'confirmed';
+
+  return {
+    id: binding.id,
+    url_id: binding.url_id,
+    module_id: binding.functional_module_id,
+    confidence: binding.confidence_score ?? undefined,
+    status,
+    created_at: binding.created_at,
+  };
+}
 
 // ---------- Route Plugin ----------
 
@@ -255,18 +272,10 @@ const explorationRoutes: FastifyPluginAsyncTypebox<ExplorationRouteOptions> = as
       const url = db.getURLRepo().findById(b.url_id);
       const fm = db.getFunctionalModuleRepo().findById(b.functional_module_id);
 
-      // Map status: ai_proposed → proposed, human_confirmed → confirmed, rejected → rejected
-      let mappedStatus = b.status;
-      if (b.status === 'ai_proposed') mappedStatus = 'proposed';
-      else if (b.status === 'human_confirmed') mappedStatus = 'confirmed';
+      const response = toBindingResponse(b);
 
       return {
-        id: b.id,
-        url_id: b.url_id,
-        module_id: b.functional_module_id,
-        confidence: b.confidence_score,
-        status: mappedStatus,
-        created_at: b.created_at,
+        ...response,
         url: url ? { id: url.id, url: url.url, title: url.title ?? undefined, status: 'explored' as const, created_at: url.created_at } : undefined,
         module: fm ? { id: fm.id, name: fm.name } : undefined,
       };
@@ -290,9 +299,9 @@ const explorationRoutes: FastifyPluginAsyncTypebox<ExplorationRouteOptions> = as
     const service = getExplorerService();
 
     if (action === 'confirm') {
-      return service.confirmBinding(bindingId);
+      return toBindingResponse(service.confirmBinding(bindingId));
     }
-    return service.rejectBinding(bindingId);
+    return toBindingResponse(service.rejectBinding(bindingId));
   });
 
   // PUT /urls/:urlId — update a URL's page snapshot
@@ -435,7 +444,7 @@ const explorationRoutes: FastifyPluginAsyncTypebox<ExplorationRouteOptions> = as
       },
     });
 
-    return reply.status(201).send(binding);
+    return reply.status(201).send(toBindingResponse(binding));
   });
 
   // DELETE /bindings/:bindingId — delete a binding
