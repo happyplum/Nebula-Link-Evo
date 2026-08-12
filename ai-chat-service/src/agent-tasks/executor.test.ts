@@ -91,4 +91,104 @@ describe('AgentTaskModelExecutor', () => {
       })
     ).rejects.toThrow("Allowed tool 'vision.missing' is unavailable");
   });
+
+  it('injects one pinned Skill with narrowed budgets and auditable lifecycle events', async () => {
+    const generate = vi.fn(async () => ({
+      output: { status: 'ok' },
+      finishReason: 'stop',
+      totalUsage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+      steps: [{}],
+    }));
+    const executor = new AgentTaskModelExecutor({
+      config: config as never,
+      providerRegistry: { isAvailable: () => true, resolve: async () => ({}) } as never,
+      toolRegistry: new ToolRegistry(),
+      generate,
+    });
+    const emitEvent = vi.fn();
+    const taskRequest = request();
+    taskRequest.skillPolicy.allow = [
+      {
+        skillId: 'document.requirements_extract',
+        version: '1.0.0',
+        contentHash: 'a'.repeat(64),
+      },
+    ];
+
+    await executor.execute({
+      taskId: 'task-skill-1',
+      request: taskRequest,
+      deadlineAt: Date.now() + 10_000,
+      signal: new AbortController().signal,
+      skill: {
+        skillId: 'document.requirements_extract',
+        version: '1.0.0',
+        contentHash: 'a'.repeat(64),
+        description: '提取需求',
+        instructions: '只返回输入明确支持的结论。',
+        requiredToolPatterns: [],
+        effectiveToolAllow: [],
+        effectiveBudgets: { maxModelTurns: 1, maxToolCalls: 0, maxTokens: 50 },
+        policySha256: 'b'.repeat(64),
+      },
+      beforeToolCall: vi.fn(),
+      emitEvent,
+    });
+
+    expect(generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        maxOutputTokens: 50,
+        tools: {},
+        system: expect.stringContaining('只返回输入明确支持的结论'),
+      })
+    );
+    expect(emitEvent.mock.calls.map(([type]) => type)).toEqual(
+      expect.arrayContaining([
+        'agent_task.skill_loaded',
+        'agent_task.skill_execute',
+        'agent_task.skill_result',
+      ])
+    );
+  });
+
+  it('emits a structured Skill failure without persisting instruction content', async () => {
+    const executor = new AgentTaskModelExecutor({
+      config: config as never,
+      providerRegistry: { isAvailable: () => true, resolve: async () => ({}) } as never,
+      toolRegistry: new ToolRegistry(),
+      generate: async () => {
+        throw new Error('provider failed');
+      },
+    });
+    const emitEvent = vi.fn();
+    await expect(
+      executor.execute({
+        taskId: 'task-skill-failure',
+        request: request(),
+        deadlineAt: Date.now() + 10_000,
+        signal: new AbortController().signal,
+        skill: {
+          skillId: 'test.failure_classify',
+          version: '1.0.0',
+          contentHash: 'a'.repeat(64),
+          description: '分类失败',
+          instructions: '不要写入事件的固定指令正文。',
+          requiredToolPatterns: [],
+          effectiveToolAllow: [],
+          effectiveBudgets: { maxModelTurns: 1, maxToolCalls: 0 },
+          policySha256: 'b'.repeat(64),
+        },
+        beforeToolCall: vi.fn(),
+        emitEvent,
+      })
+    ).rejects.toThrow();
+
+    const failure = emitEvent.mock.calls.find(([type]) => type === 'agent_task.skill_failure');
+    expect(failure?.[1]).toMatchObject({
+      skillId: 'test.failure_classify',
+      version: '1.0.0',
+      errorCode: expect.any(String),
+    });
+    expect(JSON.stringify(emitEvent.mock.calls)).not.toContain('不要写入事件的固定指令正文');
+  });
 });

@@ -13,6 +13,7 @@ import type {
   AgentTaskView,
   PersistedAgentTaskRequest,
 } from './types.js';
+import { AGENT_TASK_LIMITS, validateBoundedObjectSchema } from './validation.js';
 
 interface TaskRow {
   task_id: string;
@@ -108,6 +109,12 @@ export interface CreateStoredAgentTask {
 export interface CreateStoredAgentTaskResult {
   task: AgentTaskView;
   created: boolean;
+}
+
+export interface CreateStoredAgentTaskSkills {
+  pins: Array<{ skillId: string; version: string; contentHash: string }>;
+  policySha256: string;
+  boundAt: string;
 }
 
 export interface AgentTaskPersistenceState {
@@ -353,18 +360,12 @@ export class AgentTaskRepository {
   }
 
   createOrGet(input: CreateStoredAgentTask): CreateStoredAgentTaskResult {
-    const existing = input.idempotencyKey
-      ? this.getByIdempotencyKey(input.idempotencyKey)
-      : this.getByClientTaskId(input.request.clientTaskId);
-    if (existing) {
-      this.assertSameRequest(existing.taskId, input.requestHash);
-      return { task: existing, created: false };
-    }
-    const sameClient = this.getByClientTaskId(input.request.clientTaskId);
-    if (sameClient) {
-      this.assertSameRequest(sameClient.taskId, input.requestHash);
-      return { task: sameClient, created: false };
-    }
+    const existing = this.findExisting(
+      input.request.clientTaskId,
+      input.requestHash,
+      input.idempotencyKey
+    );
+    if (existing) return { task: existing, created: false };
 
     const now = new Date().toISOString();
     try {
@@ -416,6 +417,37 @@ export class AgentTaskRepository {
       }
       throw error;
     }
+  }
+
+  findExisting(
+    clientTaskId: string,
+    requestHash: string,
+    idempotencyKey?: string
+  ): AgentTaskView | null {
+    const byIdentity = idempotencyKey
+      ? this.getByIdempotencyKey(idempotencyKey)
+      : this.getByClientTaskId(clientTaskId);
+    if (byIdentity) {
+      this.assertSameRequest(byIdentity.taskId, requestHash);
+      return byIdentity;
+    }
+    const sameClient = this.getByClientTaskId(clientTaskId);
+    if (!sameClient) return null;
+    this.assertSameRequest(sameClient.taskId, requestHash);
+    return sameClient;
+  }
+
+  createOrGetWithSkills(
+    input: CreateStoredAgentTask,
+    skills?: CreateStoredAgentTaskSkills
+  ): CreateStoredAgentTaskResult {
+    return this.transaction(() => {
+      const stored = this.createOrGet(input);
+      if (skills && skills.pins.length > 0) {
+        this.bindTaskSkills(stored.task.taskId, skills.pins, skills.policySha256, skills.boundAt);
+      }
+      return { ...stored, task: this.requireTask(stored.task.taskId) };
+    });
   }
 
   get(taskId: string): AgentTaskView | null {
@@ -639,10 +671,14 @@ export class AgentTaskRepository {
   appendEvent(
     taskId: string,
     type: string,
-    payload: Record<string, unknown>
+    payload: Record<string, unknown>,
+    entity?: { type: AgentTaskEventRecord['entityType']; id: string }
   ): AgentTaskEventRecord {
     if (!type || type.length > 200) {
       throw new AgentTaskError('validation_failed', 'Agent event type is invalid');
+    }
+    if (entity && (!entity.id || entity.id.length > 256)) {
+      throw new AgentTaskError('validation_failed', 'Agent event entity id is invalid');
     }
     return this.transaction(() => {
       const state = this.getPersistenceState(taskId);
@@ -650,8 +686,8 @@ export class AgentTaskRepository {
         id: `runtime:${taskId}:${randomUUID()}`,
         taskId,
         type,
-        entityType: 'task',
-        entityId: taskId,
+        entityType: entity?.type ?? 'task',
+        entityId: entity?.id ?? taskId,
         stateVersion: state.stateVersion,
         payload,
         occurredAt: new Date().toISOString(),
@@ -1271,6 +1307,24 @@ export function computeSkillContentHash(manifest: SkillManifestV1, instructions:
 
 function validateSkillVersion(input: SkillVersionRecord): void {
   const { manifest, instructions, sourceRef } = input;
+  const manifestKeys = [
+    'schema',
+    'id',
+    'version',
+    'description',
+    'contentHash',
+    'requiredModelRole',
+    'inputSchema',
+    'outputSchema',
+    'requiredToolPatterns',
+    'limits',
+  ];
+  const unknownManifestKeys = Object.keys(manifest).filter((key) => !manifestKeys.includes(key));
+  if (unknownManifestKeys.length > 0) {
+    throw new AgentTaskError('validation_failed', 'Skill manifest contains unknown fields', false, {
+      unknownFields: unknownManifestKeys,
+    });
+  }
   if (manifest.schema !== 'nebula.ai.skill/1.0') {
     throw new AgentTaskError('validation_failed', 'Skill schema is unsupported');
   }
@@ -1305,16 +1359,59 @@ function validateSkillVersion(input: SkillVersionRecord): void {
   ) {
     throw new AgentTaskError('validation_failed', 'Skill requiredToolPatterns are invalid');
   }
+  if (new Set(manifest.requiredToolPatterns).size !== manifest.requiredToolPatterns.length) {
+    throw new AgentTaskError('validation_failed', 'Skill requiredToolPatterns contain duplicates');
+  }
+  if (
+    manifest.requiredToolPatterns.some(
+      (pattern) =>
+        !/^[a-z0-9][a-z0-9._-]*(?:\.\*)?$/.test(pattern) ||
+        pattern === '*' ||
+        pattern.includes('..')
+    )
+  ) {
+    throw new AgentTaskError('validation_failed', 'Skill tool patterns are unsafe');
+  }
+  if (
+    manifest.requiredToolPatterns.some(
+      (pattern) =>
+        pattern !== 'browser-control.operation_execute' &&
+        pattern !== 'vision.*' &&
+        !/^vision\.[a-z0-9][a-z0-9._-]*$/.test(pattern)
+    )
+  ) {
+    throw new AgentTaskError(
+      'tool_not_allowed',
+      'Skill tool patterns are outside the v1 server policy'
+    );
+  }
+  if (!manifest.limits || typeof manifest.limits !== 'object' || Array.isArray(manifest.limits)) {
+    throw new AgentTaskError('validation_failed', 'Skill limits must be an object');
+  }
+  const unknownLimitKeys = Object.keys(manifest.limits).filter(
+    (key) => !['maxToolCalls', 'maxModelTurns', 'maxTokens'].includes(key)
+  );
+  if (unknownLimitKeys.length > 0) {
+    throw new AgentTaskError('validation_failed', 'Skill limits contain unknown fields', false, {
+      unknownFields: unknownLimitKeys,
+    });
+  }
   if (
     !Number.isSafeInteger(manifest.limits.maxToolCalls) ||
     manifest.limits.maxToolCalls < 0 ||
+    manifest.limits.maxToolCalls > AGENT_TASK_LIMITS.maxToolCalls ||
     !Number.isSafeInteger(manifest.limits.maxModelTurns) ||
     manifest.limits.maxModelTurns < 1 ||
+    manifest.limits.maxModelTurns > AGENT_TASK_LIMITS.maxModelTurns ||
     (manifest.limits.maxTokens !== undefined &&
-      (!Number.isSafeInteger(manifest.limits.maxTokens) || manifest.limits.maxTokens < 1))
+      (!Number.isSafeInteger(manifest.limits.maxTokens) ||
+        manifest.limits.maxTokens < 1 ||
+        manifest.limits.maxTokens > AGENT_TASK_LIMITS.maxTokens))
   ) {
     throw new AgentTaskError('validation_failed', 'Skill limits are invalid');
   }
+  validateBoundedObjectSchema(manifest.inputSchema);
+  validateBoundedObjectSchema(manifest.outputSchema);
   const packageBytes = Buffer.byteLength(stableStringify({ manifest, instructions }), 'utf8');
   if (packageBytes > 256 * 1024) {
     throw new AgentTaskError('validation_failed', 'Skill package exceeds 256 KiB');

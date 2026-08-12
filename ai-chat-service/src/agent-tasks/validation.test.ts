@@ -28,6 +28,24 @@ describe('Agent task validation', () => {
     expect(first.request.responseSchema.additionalProperties).toBe(false);
   });
 
+  it('accepts one exact Skill pin and rejects ambiguous multi-Skill composition', () => {
+    const request = validRequest();
+    request.skillPolicy.allow = [
+      {
+        skillId: 'document.requirements_extract',
+        version: '1.0.0',
+        contentHash: 'a'.repeat(64),
+      },
+    ] as never;
+    expect(validateCreateAgentTaskRequest(request).request.skillPolicy.allow).toHaveLength(1);
+    request.skillPolicy.allow.push({
+      skillId: 'test.failure_classify',
+      version: '1.0.0',
+      contentHash: 'b'.repeat(64),
+    } as never);
+    expect(() => validateCreateAgentTaskRequest(request)).toThrow('at most 1 Skill');
+  });
+
   it('rejects inline secrets but permits secret references', () => {
     const request = validRequest();
     request.input = { password: 'plaintext' } as typeof request.input;

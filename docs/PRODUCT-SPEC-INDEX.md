@@ -70,7 +70,7 @@ debug-ui  ←──  （仅被用户消费）
 | 层 | 状态 | 产品职责 |
 |----|------|----------|
 | 浏览器能力层：`proxy-adapter` | shipped | Playwright/CDP 集成的唯一所有者；分析页面、生成 DOM/截图证据、执行浏览器动作，并以 `browser-control.*` MCP 工具和调试 API 对外服务。 |
-| AI 基础能力层：`ai-chat-service` | in-progress | 分析/决策模型、视觉模型、MCP client/ToolRegistry、会话能力与 Agent task 命令/事件控制面已交付；可复用 Skills runtime 为 `pending`，尚无实现。 |
+| AI 基础能力层：`ai-chat-service` | in-progress | 分析/决策模型、视觉模型、MCP client/ToolRegistry、会话能力、Agent task 命令/事件控制面与本地只读声明式 Skills Runtime 已交付；通用视觉 v2 与完整副作用授权仍 pending。 |
 | E2E 业务层：`ai-e2e` | in-progress | PRD 分析、页面探索、legacy scenario 级 TypeScript 链，以及 semantic 业务版本/current 资产图/独立 copy 基座已交付；完整页面匹配、authoring/recheck、主/页面子代理编排和可视语义执行仍为目标能力。 |
 
 跨层原则：浏览器执行证据只能来自 `proxy-adapter`；通用 AI/MCP/Skills 能力只能归属 `ai-chat-service`；E2E 的页面、模块、脚本和修复语义只能归属 `ai-e2e`。
@@ -102,7 +102,7 @@ debug-ui  ←──  （仅被用户消费）
 | Chat control | `ai-chat-service` | `debug-ui` | `POST /api/chat/control/:sessionId` | 暂停/恢复/中断/取消 |
 | Provider preflight | `ai-chat-service` | 任意 | `POST /test-ai`、`POST /verify-keys` | provider 探测；`visionAgent` 同时反映 gateway MCP server 状态 |
 | AI 生成 | `ai-chat-service` | `ai-e2e` | `POST /api/ai/generate` | 文本生成 |
-| 受限 Agent task（in-progress） | `ai-chat-service` | `ai-e2e` | `POST/GET /api/v1/agent-tasks*`、`POST /:taskId/commands`、`GET /:taskId/{events,event-log}` 已交付 | 已交付不可变输入、工具白名单、预算、模型不可见 browser binding、结构化结果、乐观命令、安全 checkpoint、snapshot-first SSE 与持久 event-log；Skills runtime 未交付 |
+| 受限 Agent task（in-progress） | `ai-chat-service` | `ai-e2e` | `POST/GET /api/v1/agent-tasks*`、`POST /:taskId/commands`、`GET /:taskId/{events,event-log}`、`GET /api/v1/skills` 已交付 | 已交付不可变输入、工具白名单、预算、模型不可见 browser binding、结构化结果、乐观命令、安全 checkpoint、snapshot-first SSE/event-log 与单 Skill 精确 pin/执行；完整 policy/grant 交集未交付 |
 | 业务版本资产（in-progress） | `ai-e2e` | `ai-e2e ui` | create/list/get/copy 已交付：`/api/v1/projects/:projectId/business-versions`、`/api/v1/business-versions/:versionId[/copy]`；validate/assets pending | 业务版本、独立 copy 和不可变 current asset revision 基座；UI/recheck/修订 API 尚未交付 |
 | 资产 authoring（pending） | `ai-e2e` | `ai-e2e ui` | `/api/v1/business-versions/:versionId/authoring-jobs`、`/api/v1/authoring-jobs/:jobId/*` | bootstrap/recheck/repair/import_conversion、coverage、candidate 验证、决策与 snapshot-first SSE |
 | E2E Run（pending） | `ai-e2e` | `ai-e2e ui` | `/api/v1/projects/:projectId/runs`、`/api/v1/runs/:runId/*` | run 命令、决策、证据、snapshot-first SSE 与持久 event log |
@@ -171,8 +171,8 @@ debug-ui  ←──  （仅被用户消费）
 - **视觉模型**（`ai-chat-service` `defaults.vision`）：主代理和子代理均可调用，每次只处理一个具有完整输入的不可变 snapshot，不保存流程状态、不连续执行、不调度脚本、不操作浏览器。当前 shipped 能力是 `vision.find_element`；目标 `vision.analyze_page`/`vision.resolve_target` 已设计但未实现。
 - **目标引用**：跨服务只传递可序列化的 `snapshot_id` / `nebula_id` / `locator_bundle` / confidence / evidence；`Page` / `Locator` / `ElementHandle` 等真实 Playwright 对象只存在于 `proxy-adapter` 进程内。
 - **MCP**：`proxy-adapter` 只提供浏览器 MCP 服务；MCP client、工具聚合和 AI 工具调用归 `ai-chat-service`。
-- **Skills**：可复用 Skills 的发现、加载、注册、权限和执行隔离归 `ai-chat-service`；v1 是本地只读、固定 id/version/hash 的声明式指令包，不执行附带代码、不联网安装、不能扩权。immutable registry/version 与 task exact pin/policy hash 数据层已交付，loader/runtime 仍未实现。
-- **受限 Agent 任务（in-progress）**：`ai-chat-service` 的 `/api/v1/agent-tasks` 已接收不可变输入、工具白名单、预算、模型不可见 browser binding、调用方冻结的语义步骤与不透明关联信息，并返回 Schema 校验结果；stateVersion、command 幂等、安全 checkpoint、task event-log 与 snapshot-first SSE 已公开交付。Skills 执行和完整 policy/grant 权限交集仍 pending。环境矩阵、审批和调用方业务计划不进入本服务权威状态，proxy 操作账本仍归 proxy。
+- **Skills**：可复用 Skills 的发现、加载、注册、权限和执行隔离归 `ai-chat-service`；v1 从 `AI_SKILLS_DIRS` 加载本地只读、固定 id/version/hash 的声明式指令包，不执行附带代码、不联网安装、不能扩权。每个 Agent task 最多固定一个当前 Skill，工具与预算只能在 task 和既有浏览器授权内继续收缩。
+- **受限 Agent 任务（in-progress）**：`ai-chat-service` 的 `/api/v1/agent-tasks` 已接收不可变输入、工具白名单、可选单 Skill 精确 pin、预算、模型不可见 browser binding、调用方冻结的语义步骤与不透明关联信息，并返回 Schema 校验结果；stateVersion、command 幂等、安全 checkpoint、task event-log、snapshot-first SSE 与 Skill 审计已公开交付。完整 policy/grant 权限交集仍 pending。环境矩阵、审批和调用方业务计划不进入本服务权威状态，proxy 操作账本仍归 proxy。
 - 完整双模型、Skill manifest、权限交集与 prompt injection 边界见 `ai-e2e/docs/ai-model-skill-contract.md`；精确 Agent task API/事件见 `ai-e2e/docs/service-api-event-contract.md`。
 - provider alias/model name 只是角色实现配置，不改变“分析/决策模型”和“视觉模型”的产品职责。
 
@@ -188,10 +188,10 @@ debug-ui  ←──  （仅被用户消费）
 - **上下文（pending）**：大多数派发使用干净子代理上下文；登出等可恢复中断可由主代理在页面状态和副作用检查后续接原上下文，否则从检查点与授权变量重建。
 - **串行调度与身份（in-progress）**：ai-e2e 持久 `browser_jobs` FIFO、全库单 active 槽和嵌套 authoring/verification 复用父槽规则已交付；实际 proxy session/lease 派发与 actor 检查 runtime 仍 pending。
 - **环境与副作用安全（in-progress）**：风险投影 hash、policy evaluation/grant/decision 表与 evaluation 仓储已交付；local/test/staging/production 规则、审批/grant 应用和逐 effectId 执行门禁仍 pending。
-- **编排与执行分属两层（pending）**：页面任务图、模块范围与验收标准归 `ai-e2e`；模型调用、MCP 工具和未来 Skills 执行归 `ai-chat-service`。当前 `AiChatClient.generateText()` 只调用纯文本生成端点，尚不具备 Agent tool loop。
+- **编排与执行分属两层（pending）**：页面任务图、模块范围与验收标准归 `ai-e2e`；模型调用、MCP 工具和 Skills 执行归 `ai-chat-service`。当前 `AiChatClient.generateText()` 只调用纯文本生成端点，尚未接入已交付的 Agent task/Skill tool loop。
 - **页面任务与控制租约（pending）**：主代理派发不可变页面任务包并持有共享浏览器生命周期；子代理只取得指定 TODO、actor、Tab、工具、输出槽的短期控制租约。跨服务只传递稳定会话/Tab/操作/快照/目标引用和非秘密 actor 约束，不传 Playwright 对象或凭据值。
 - **可视语义执行（pending）**：系统内权威资产是结构化语义功能脚本；执行按单个语义步骤推进，每个 `proxy-adapter` 浏览器原子操作具有幂等 ID、结构化结果和通用生命周期事件，并关联实时画面、脚本步骤与证据。无法确认动作是否发生时进入结果不确定态并先检查副作用。当前 `npx tsx` 子进程执行器不满足该目标。完整契约见 `ai-e2e/docs/agent-browser-execution-contract.md`。
-- **跨服务 API/事件（in-progress）**：proxy capability/browser control、真实截图/DOM artifact、browser session event-log/snapshot-first SSE，ai-chat-service Agent task create/get/commands/events/event-log/capability，以及 ai-e2e 业务版本 create/list/get/copy 已交付；Skill registry/pin 仍只有内部数据层。业务版本 validate/assets、Authoring/Run 和 Skills runtime 仍 pending。
+- **跨服务 API/事件（in-progress）**：proxy capability/browser control、真实截图/DOM artifact、browser session event-log/snapshot-first SSE，ai-chat-service Agent task create/get/commands/events/event-log/capability/Skill catalog/runtime，以及 ai-e2e 业务版本 create/list/get/copy 已交付。业务版本 validate/assets、Authoring/Run、通用视觉 v2 与完整副作用授权仍 pending。
 - **资产生成/复核/修复（in-progress）**：authoring job/task/attempt/event、candidate verification、dependency index 与 verified-scope activation 数据/事务基座已交付；PRD + URL、Agent/browser 协调器和影响分析 runtime 仍 pending。
 - **迁移与切流（in-progress）**：015–017 已进入 checksum migration 账本，失败 rollback/漂移拒绝且旧表不变；001–014 preflight/baseline、文件备份、legacy importer 与版本级 capability cutover 仍 pending。
 - **分层状态与传播（in-progress）**：Run/plan/TODO/dependency/page task/attempt/variable/decision/command/event 数据层与正式 run 原子冻结已交付；执行、依赖传播、决策应用和公开 snapshot/SSE 仍 pending。

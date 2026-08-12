@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AgentTaskError } from './errors.js';
 import { AgentTaskRepository } from './repository.js';
+import { computeSkillContentHash, type SkillManifestV1 } from './repository.js';
 import { AgentTaskService } from './service.js';
 import type { AgentTaskExecutionContext } from './types.js';
+import { SkillRuntime } from '../skills/runtime.js';
 
 const services: AgentTaskService[] = [];
 
@@ -233,5 +235,110 @@ describe('AgentTaskService', () => {
       })
     ).toThrowError(/already in use/);
     await first;
+  });
+
+  it('binds an exact Skill policy before scheduling and passes its immutable execution view', async () => {
+    const repository = new AgentTaskRepository(':memory:');
+    const runtime = new SkillRuntime(repository);
+    const instructions = '只返回输入明确支持的结果。';
+    const manifest: SkillManifestV1 = {
+      schema: 'nebula.ai.skill/1.0',
+      id: 'document.requirements_extract',
+      version: '1.0.0',
+      description: '提取需求',
+      contentHash: '0'.repeat(64),
+      requiredModelRole: 'decision',
+      inputSchema: {
+        type: 'object',
+        properties: { objective: { type: 'string' } },
+        required: ['objective'],
+        additionalProperties: false,
+      },
+      outputSchema: {
+        type: 'object',
+        properties: { result: { type: 'string' } },
+        required: ['result'],
+        additionalProperties: false,
+      },
+      requiredToolPatterns: [],
+      limits: { maxToolCalls: 0, maxModelTurns: 1, maxTokens: 100 },
+    };
+    manifest.contentHash = computeSkillContentHash(manifest, instructions);
+    runtime.register({
+      manifest,
+      instructions,
+      sourceRef: `local:${manifest.id}/${manifest.version}`,
+      registeredAt: '2026-08-13T00:00:00.000Z',
+    });
+    let receivedSkill: AgentTaskExecutionContext['skill'];
+    const service = new AgentTaskService(
+      repository,
+      {
+        execute: async (context) => {
+          receivedSkill = context.skill;
+          context.emitEvent('agent_task.skill_loaded', {
+            skillId: manifest.id,
+            version: manifest.version,
+            contentHash: manifest.contentHash,
+          });
+          return {
+            output: { result: 'ok' },
+            terminationReason: 'stop',
+            usage: {
+              inputTokens: 1,
+              outputTokens: 1,
+              totalTokens: 2,
+              modelTurns: 1,
+              toolCalls: 0,
+            },
+            toolCalls: [],
+          };
+        },
+      },
+      { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      runtime
+    );
+    services.push(service);
+    const skillRequest = request();
+    skillRequest.skillPolicy.allow = [
+      {
+        skillId: manifest.id,
+        version: manifest.version,
+        contentHash: manifest.contentHash,
+      },
+    ];
+
+    const created = service.create(skillRequest, { idempotencyKey: 'skill-idempotency-1' });
+    await vi.waitFor(() => expect(service.get(created.task.taskId).status).toBe('completed'));
+    expect(receivedSkill).toMatchObject({
+      skillId: manifest.id,
+      version: manifest.version,
+      contentHash: manifest.contentHash,
+      effectiveToolAllow: [],
+    });
+    expect(repository.listTaskSkillBindings(created.task.taskId)).toEqual([
+      expect.objectContaining({ skillId: manifest.id, contentHash: manifest.contentHash }),
+    ]);
+    expect(repository.listEvents(created.task.taskId).map((event) => event.type)).toContain(
+      'agent_task.skills_bound'
+    );
+    expect(
+      repository
+        .listEvents(created.task.taskId)
+        .find((event) => event.type === 'agent_task.skill_loaded')
+    ).toMatchObject({ entityType: 'skill', entityId: `${manifest.id}@${manifest.version}` });
+
+    const replayWithoutRuntime = new AgentTaskService(
+      repository,
+      {
+        execute: async () => {
+          throw new Error('must not execute an idempotent replay');
+        },
+      },
+      { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+    );
+    expect(
+      replayWithoutRuntime.create(skillRequest, { idempotencyKey: 'skill-idempotency-1' })
+    ).toMatchObject({ created: false, task: { taskId: created.task.taskId, status: 'completed' } });
   });
 });

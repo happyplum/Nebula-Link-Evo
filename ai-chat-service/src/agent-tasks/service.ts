@@ -1,7 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { Logger } from 'pino';
 import { AgentTaskError, toAgentTaskError } from './errors.js';
-import type { AgentTaskExecutor, AgentTaskStatus, AgentTaskView } from './types.js';
+import type {
+  AgentTaskExecutor,
+  AgentTaskSkillExecution,
+  AgentTaskStatus,
+  AgentTaskView,
+} from './types.js';
 import { validateCreateAgentTaskRequest } from './validation.js';
 import type { AgentTaskRepository } from './repository.js';
 import type {
@@ -9,6 +14,7 @@ import type {
   AgentTaskEventRecord,
   AgentTaskCheckpointRecord,
 } from './repository.js';
+import type { SkillRuntime } from '../skills/runtime.js';
 
 export interface CreateAgentTaskOptions {
   idempotencyKey?: string;
@@ -35,7 +41,10 @@ export interface AgentTaskCommandResult {
 export class AgentTaskService {
   private readonly activeRequests = new Map<
     string,
-    ReturnType<typeof validateCreateAgentTaskRequest>['request']
+    {
+      request: ReturnType<typeof validateCreateAgentTaskRequest>['request'];
+      skill?: AgentTaskSkillExecution;
+    }
   >();
   private readonly controllers = new Map<string, AbortController>();
   private readonly runs = new Set<Promise<void>>();
@@ -51,7 +60,8 @@ export class AgentTaskService {
   constructor(
     private readonly repository: AgentTaskRepository,
     private readonly executor: AgentTaskExecutor,
-    private readonly logger: Pick<Logger, 'info' | 'warn' | 'error'>
+    private readonly logger: Pick<Logger, 'info' | 'warn' | 'error'>,
+    private readonly skillRuntime?: SkillRuntime
   ) {}
 
   recoverUnfinished(): number {
@@ -75,15 +85,37 @@ export class AgentTaskService {
       );
     }
     const validated = validateCreateAgentTaskRequest(rawRequest);
+    const existing = this.repository.findExisting(
+      validated.request.clientTaskId,
+      validated.requestHash,
+      options.idempotencyKey
+    );
+    if (existing) return { task: existing, created: false };
+    if (validated.request.skillPolicy.allow.length > 0 && !this.skillRuntime) {
+      throw new AgentTaskError('dependency_unavailable', 'Skills runtime is unavailable', true);
+    }
+    const preparedSkill = this.skillRuntime?.prepareTask(validated.request);
     const taskId = randomUUID();
-    const stored = this.repository.createOrGet({
-      taskId,
-      request: validated.persistedRequest,
-      requestHash: validated.requestHash,
-      ...(options.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : {}),
-    });
+    const stored = this.repository.createOrGetWithSkills(
+      {
+        taskId,
+        request: validated.persistedRequest,
+        requestHash: validated.requestHash,
+        ...(options.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : {}),
+      },
+      preparedSkill
+        ? {
+            pins: preparedSkill.pins,
+            policySha256: preparedSkill.policySha256,
+            boundAt: new Date().toISOString(),
+          }
+        : undefined
+    );
     if (stored.created) {
-      this.activeRequests.set(taskId, validated.request);
+      this.activeRequests.set(taskId, {
+        request: validated.request,
+        ...(preparedSkill ? { skill: preparedSkill.execution } : {}),
+      });
       this.toolCallsStarted.set(taskId, 0);
       this.schedule(taskId);
     }
@@ -171,8 +203,9 @@ export class AgentTaskService {
   }
 
   private async run(taskId: string): Promise<void> {
-    const request = this.activeRequests.get(taskId);
-    if (!request) return;
+    const activeRequest = this.activeRequests.get(taskId);
+    if (!activeRequest) return;
+    const { request, skill } = activeRequest;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), request.budgets.maxDurationMs);
     timeout.unref();
@@ -186,6 +219,7 @@ export class AgentTaskService {
         request,
         deadlineAt: Date.now() + request.budgets.maxDurationMs,
         signal: controller.signal,
+        ...(skill ? { skill } : {}),
         beforeToolCall: () => {
           if (controller.signal.aborted || this.repository.get(taskId)?.status !== 'running') {
             throw new AgentTaskError('conflict', 'Agent task is not at a runnable tool boundary');
@@ -193,7 +227,14 @@ export class AgentTaskService {
           this.toolCallsStarted.set(taskId, (this.toolCallsStarted.get(taskId) ?? 0) + 1);
         },
         emitEvent: (type, payload) => {
-          this.repository.appendEvent(taskId, type, payload);
+          this.repository.appendEvent(
+            taskId,
+            type,
+            payload,
+            type.startsWith('agent_task.skill_') && skill
+              ? { type: 'skill', id: `${skill.skillId}@${skill.version}` }
+              : undefined
+          );
         },
       });
       if (this.controlActions.has(taskId) || this.repository.get(taskId)?.status !== 'running') {

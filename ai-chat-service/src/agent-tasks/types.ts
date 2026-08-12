@@ -122,11 +122,28 @@ export interface AgentTaskExecutionResult {
   terminationReason: string;
 }
 
+export interface AgentTaskSkillExecution {
+  skillId: string;
+  version: string;
+  contentHash: string;
+  description: string;
+  instructions: string;
+  requiredToolPatterns: string[];
+  effectiveToolAllow: string[];
+  effectiveBudgets: {
+    maxModelTurns: number;
+    maxToolCalls: number;
+    maxTokens?: number;
+  };
+  policySha256: string;
+}
+
 export interface AgentTaskExecutionContext {
   taskId: string;
   request: CreateAgentTaskRequest;
   deadlineAt: number;
   signal: AbortSignal;
+  skill?: AgentTaskSkillExecution;
   beforeToolCall(): void;
   emitEvent(type: string, payload: Record<string, unknown>): void;
 }
