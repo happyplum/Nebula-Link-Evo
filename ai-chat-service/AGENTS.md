@@ -2,7 +2,7 @@
 
 ## Overview
 
-`ai-chat-service` is the AI conversation/chat backend (port `3001`). It owns conversation/session management, AI provider orchestration, Chat SSE streaming, provider preflight, db-backup, loop-guard, and vision analysis via the internal `vision.find_element` tool. It consumes the browser MCP gateway (`proxy-adapter` :3000) via MCP-over-HTTP for browser-control tools.
+`ai-chat-service` is the reusable AI capability and conversation backend (port `3001`). It owns the analysis/decision and vision model roles, conversation/session management, AI provider orchestration, MCP client/tool orchestration, Chat SSE streaming, provider preflight, db-backup, loop-guard, and vision analysis via the internal `vision.find_element` tool. It consumes the browser MCP gateway (`proxy-adapter` :3000) via MCP-over-HTTP for browser-control tools.
 
 This package is the migration target for the AI chat stack split (M2) and the vision-ai-extraction (M3). Proxy-adapter keeps only browser-control tools; chat/provider/conversation/vision ownership moves here.
 
@@ -25,12 +25,19 @@ pnpm type-check   # tsc --noEmit
 
 ## Boundaries
 
-- **Owns**: conversation/session, AI provider orchestration, Chat SSE, provider preflight, db-backup, loop-guard.
+- **Owns**: analysis/decision and vision model roles, conversation/session, AI provider orchestration, MCP client/tool registry, Chat SSE, provider preflight, db-backup, loop-guard.
 - **Consumes (not owns)**: browser-control tools via MCP-over-HTTP to `proxy-adapter`. **Owns**: vision analysis via internal `VisionAnalyzer` + `VisionToolProvider` (`vision.find_element`).
 - **Does NOT own**: browser engine, Playwright, MCP Server (StreamableHTTP) — those stay in `proxy-adapter`.
 - No auth (localhost-only binding constraint).
 - Independent SQLite DB — no cross-DB FK to proxy-adapter.
 - CORS enabled for debug-ui.
+
+## Capability Model
+
+- The **analysis/decision model** is the planner: it understands requirements and browser evidence, determines the next test action, and may consume MCP tools and structured vision results. Provider aliases are implementations, not model roles.
+- The **vision model** is a bounded, single-request perception assistant available to both main and child agents. Each call receives complete screenshot/DOM/question input and returns serializable page/element evidence (`snapshot_id`, `nebula_id`, locator data, confidence, reasoning); it does not retain workflow state, run continuous tasks, schedule scripts, own browser execution, or return live Playwright objects.
+- **MCP client/tool orchestration** belongs here. `proxy-adapter` exposes browser capabilities but does not own AI planning.
+- A reusable **Skills runtime** is a pending target for this package. There is currently no Skills loader, registry, or execution path; do not expose or document Skills as shipped until code and tests exist.
 
 ## Conventions
 
@@ -43,3 +50,4 @@ pnpm type-check   # tsc --noEmit
 - No direct Playwright/browser imports — browser access only via the gateway MCP client.
 - No sharing of proxy-adapter's database.
 - No auth layer (binding constraint: localhost-only).
+- No E2E-specific page/module orchestration in this package; that product context belongs to `ai-e2e`.

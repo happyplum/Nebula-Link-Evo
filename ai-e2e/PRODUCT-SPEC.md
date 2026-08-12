@@ -1,6 +1,6 @@
 # ai-e2e — 产品规格 (PRODUCT-SPEC)
 
-> 一句话目标：作为平台的 **PRD 驱动 E2E 自动化测试编排器**，把"需求分析 → 页面探索 → URL 绑定 → 脚本生成 → 执行 → 单次失败诊断 → 可选自动修复"串成闭环，自身**不直连 AI provider 或 Playwright**。
+> 一句话目标：作为平台的 **PRD + 已完成网页驱动的 E2E 自动化测试编排器**，把“业务版本 → 页面 → 功能模块 → 功能脚本 → 跨模块场景 → 可视执行 → 局部修复”串成闭环，自身**不直连 AI provider 或 Playwright**。
 > 端口：`:3002` ｜ 角色：E2E 测试编排器 ｜ UI 挂载前缀：`/ai-e2e/` ｜ 数据库：`./data/ai-e2e.sqlite`
 
 ---
@@ -11,10 +11,14 @@
 
 - 把 PRD / 业务描述拆解成 L1 业务模块 → L2 功能模块 → 测试场景。
 - 探索目标站点（含 SPA-aware BFS）并提出 URL 绑定建议。
-- 为测试场景生成 Playwright 脚本（Library API，非 Test API）。
-- 支持脚本人工编辑、版本历史、串行执行、单次 run 失败诊断、可选自动修复。
+- 当前为测试场景生成 Playwright Library API 脚本；目标权威资产改为可编排、可复用、可重放的结构化语义功能脚本。
+- 当前支持脚本人工编辑、版本历史、串行执行、单次 run 失败诊断、可选自动修复。
 - 项目级诊断汇总（根因分布统计、JSON/HTML 导出）。
 - 通过双后端 HTTP 客户端（`AiChatClient` / `BrowserGatewayClient`）消费能力。
+- 目标通过规范化 URL + 参数锚定页面；一个页面包含多个功能模块，一个模块包含多个功能脚本，测试场景跨模块/页面编排脚本调用。
+- 目标由主代理维护 PRD 流程、TODO 依赖、运行变量和决策，页面子代理只执行获授权的页面场景片段。
+- 目标业务版本由用户创建并支持深复制，复制后独立维护，不覆盖来源版本。
+- 目标所有浏览器执行都经过 `proxy-adapter` 并在实时画面、语义步骤和证据中可观察。
 
 ### 边界
 
@@ -23,7 +27,8 @@
 | PRD 分析、模块拆解、测试场景生成 | `AiChatClient` → `ai-chat-service` :3001（`POST /api/ai/generate`） | AI provider / SDK（已零 `@ai-sdk/*` 依赖） |
 | 站点探索与 URL 绑定建议 | `BrowserGatewayClient` → `proxy-adapter` :3000（`/debug/api/playwright/*`） | 浏览器引擎、Playwright 内部 API |
 | 脚本生成、编辑、版本管理 | `ProxyAdapterClient`（**facade**，组合上述两者） | proxy-adapter 数据库 |
-| 脚本执行（`npx tsx` 子进程，非 Playwright Test） |  | `ai-chat-service` 数据库 |
+| 当前脚本执行（`npx tsx` 子进程，非 Playwright Test） |  | `ai-chat-service` 数据库 |
+| 目标业务版本、功能脚本、场景调用图、运行变量与代理调度 | `ai-chat-service` Agent/MCP → `proxy-adapter` | Playwright/Chromium 与视觉模型内部实现 |
 | 单次 run 诊断、自动修复审批 | `@nebula-link-evo/shared` 类型 |  |
 | 项目级诊断报告（聚合 + 导出） |  |  |
 | 状态机门禁（draft → ... → completed） |  |  |
@@ -32,17 +37,36 @@
 
 ### 硬约束
 
-- **不直连** AI provider —— 所有 AI 调用必须经 `AiChatClient.generateText()`（或 facade `ProxyAdapterClient.generateText()`），最终到 `ai-chat-service` `POST /api/ai/generate`。
-- **不直连** `proxy-adapter` 内部浏览器引擎 —— 所有浏览器操作必须经 `BrowserGatewayClient`（或 facade），最终到 `proxy-adapter` `/debug/api/*`。
+- **不直连** AI provider —— 所有 AI 调用必须经 `ai-chat-service`；当前文本生成使用 `AiChatClient.generateText()`（或 facade），目标代理运行使用其 Agent/MCP 能力。
+- **不直连** `proxy-adapter` 内部浏览器引擎 —— 当前直接浏览器调用经 `BrowserGatewayClient`（或 facade）到 `/debug/api/*`；目标代理动作经 `ai-chat-service` MCP client 到 `proxy-adapter /mcp`，两者都不得绕过网关。
+- **目标执行链不启动独立浏览器** —— 功能脚本、探索和修复验证必须统一通过 `proxy-adapter` 可视执行；当前 `npx tsx` 子进程执行器属于待替换现状。
 - **不引入** `@ai-sdk/*` —— 已重构为零 AI SDK 依赖。
 - **不共享** `proxy-adapter` / `ai-chat-service` 数据库 —— 维护独立 SQLite。
 - **不在** `proxy-adapter` / `ai-chat-service` 中引入 ai-e2e 特有概念。
 - **不重新引入** `AIProvider` / `PlaywrightClient` 旧架构。
 - **不把** 历史 `.sisyphus/plans/ai-e2e-redesign.md` 当成当前活文档。
-- **不在** README / AGENTS / PRODUCT-SPEC 中写没有代码支撑的能力。
+- **不在** README / AGENTS / PRODUCT-SPEC 中把没有代码支撑的能力写成 shipped；目标能力必须显式标记为 `pending` 或 requirement gap。
 - 路由依赖统一通过 **plugin options** 注入（不通过 Fastify decorators）。
 - 任一基址（`AI_CHAT_SERVICE_URL` / `PROXY_ADAPTER_URL`）为空时，DB-only 路由继续工作，AI / Playwright 路由返回 `503`。
 - 本地 TS import 保留 `.js` 后缀。
+
+### 目标领域与代理编排
+
+| 概念 | 状态 | 定义与当前差距 |
+|------|------|----------------|
+| 页面目标 | pending | 由规范化 URL（含 path/hash route）+ 路由/查询参数集合唯一锚定。当前仅有 `urls.url` 完整字符串和 URL binding，没有独立 Page/参数模型。 |
+| 功能模块 | in-progress | 一个页面内可包含多个有顺序的功能模块，一个模块目标上包含多个功能脚本。当前 `functional_modules.sort_order` 与多模块绑定同一 URL 已提供基础。 |
+| 模块需求文档 | pending | 融合 PRD 片段、真实页面 DOM/截图、页面锚点、功能说明和有序测试场景，作为脚本生成与修复的可追溯输入；当前信息分散在多个表和 prompt 上下文中。 |
+| 功能脚本 | pending | 模块下最小复用、执行、验证、修复和重复调用单元；目标为结构化语义脚本。当前 `scripts` 以 `test_scenario_id` 为归属，内容是 TypeScript。 |
+| 测试场景 | in-progress | 业务验收单位，目标跨模块/页面编排多个功能脚本，支持顺序、依赖、重复、输入输出绑定。当前 scenario 只能直接拥有一组测试数据和脚本版本。 |
+| 业务版本 | pending | 用户创建，可记录来源、部署和 Git 标识；`copy` 深复制需求与测试资产，复制后不共享可变引用，也不复制运行数据、证据或凭据。 |
+| 主代理 | pending | 持有 PRD 流程、TODO 依赖、运行变量和决策，负责拆分、派发、恢复、跳过、验收与汇总。 |
+| 页面子代理 | pending | 只执行派发的页面场景片段，负责固定重新检查、执行、验证、职责内修复和汇报；不得自行登录、造数或调用场景外脚本。 |
+| 上下文策略 | pending | 默认创建干净子代理上下文；登出等可恢复中断可由主代理在状态/副作用检查后续接原上下文，否则从检查点重建。 |
+| Agent 执行路径 | pending | 页面任务图和验收归 ai-e2e，模型/MCP/未来 Skills 执行归 ai-chat-service；当前 `AiChatClient.generateText()` 是纯文本生成，不执行 tool loop。 |
+| 可视执行与证据 | in-progress | `proxy-adapter` 已有实时画面、marker/overlay、交互日志和失败样本基础；目标是所有功能脚本步骤通过该链路执行并关联场景、步骤、结果和失败证据。 |
+| 失败/暂停/跳过 | pending | 失败先保存截图和现场并评估后续阻碍；主代理按依赖跳过或继续。意外登出按可恢复中断上报，需要决策时暂停并持久化决策后恢复。 |
+| DOM 变化局部修复 | in-progress | 当前已支持 run 级诊断与可选自动修复；目标是只修复当前业务版本内受影响的功能脚本并重新验证。 |
 
 ---
 
@@ -115,7 +139,7 @@
 | 路由 | 页面 | 状态 | 主要数据源 | 说明 |
 |------|------|------|------|------|
 | `/`（HomePage） | HomePage | shipped | projectApi | 项目列表、创建对话、快捷操作、最近 run |
-| `/projects/:id`（ProjectPage） | ProjectPage | shipped | 全部 feature apis | 含 Config / Analysis / Exploration / Scenario / Scripts / Execution / Report 多面板 |
+| `/project/:projectId`（ProjectPage） | ProjectPage | shipped | 全部 feature APIs | 四步向导：准备目标站点 → 理解测试意图 → 探索与绑定 → 生成与执行 |
 
 ---
 
@@ -146,6 +170,15 @@
 | 登录步骤录制与回放 | services/LoginRecorderService | shipped | 集成 | services |
 | 重试工具 | utils/retry | shipped | `utils/__tests__/retry.test.ts` | utils |
 | HTML 报告生成 | utils/report-html、html-escape | shipped | `utils/__tests__/report-html.test.ts` | utils |
+| 页面 URL + 参数锚点 | — | pending | 尚无验收面 | 需新增规范化页面身份模型，避免把易变完整 URL 当作唯一身份 |
+| 模块需求文档 | — | pending | 尚无验收面 | 需把 PRD 与真实页面证据收敛为持久化、可追溯输入 |
+| 功能脚本 + 场景调用图 | services/ScriptGeneratorService、database/scripts | pending | 当前仅验证 scenario 级 TypeScript 脚本 | 需模块下多脚本实体及跨模块/页面调用、重复、依赖、输入输出契约 |
+| 业务版本 + 深复制 | — | pending | 尚无验收面 | 需独立资产快照、来源追溯及 DOM/定位/截图基线复制 |
+| 主代理 / 页面子代理调度与上下文策略 | — | pending | 尚无验收面 | 需任务模型、运行变量、暂停决策、检查点、恢复和依赖跳过协议 |
+| ai-chat-service Agent 会话消费 | infrastructure/ai-chat-client | pending | 当前仅有纯文本 generate 与基础 chat session 客户端 | 需面向页面任务的 tool/skill loop 调用与状态契约 |
+| proxy-adapter 可视语义执行 | services/ExecutorService | pending | 当前仍由 `npx tsx` 子进程执行 | 需替换为经 MCP 的语义步骤执行、实时画面关联和可复现操作记录 |
+| 失败证据、影响评估与依赖跳过 | database/execution_runs、services/AIDiagnosisService | in-progress | 当前有日志/截图路径和 run 级诊断 | 需场景/调用/步骤证据包、后续阻碍评估与依赖跳过 |
+| DOM 变化后的功能脚本局部修复 | services/AIDiagnosisService | in-progress | 当前仅有 run 级诊断/自动修复 | 需当前业务版本内的页面/模块/功能脚本影响定位与定向修复 |
 
 ---
 
@@ -165,6 +198,9 @@
 > 11. 新增 / 删除 / 修改 `ui/src/components/ui/` 下的 shadcn 基础组件
 > 12. 新增 / 删除 `src/types/` 下的领域类型文件
 > 13. 与 `proxy-adapter` / `ai-chat-service` 之间的契约变更
+> 14. 修改业务版本、页面锚点、功能模块、功能脚本或测试场景调用关系
+> 15. 修改主代理 / 页面子代理的任务边界、上下文、决策、恢复、失败或跳过协议
+> 16. 修改目标浏览器执行入口、可视步骤、重放或失败证据契约
 
 ### 维护检查清单
 
@@ -175,6 +211,9 @@
 | 修改状态机 | 包级目标与边界 + 状态机条目 + README "AI E2E 需求基线" |
 | 新增 DB migration | 模块清单（database/migrations） + 功能清单 |
 | 新增业务服务 | 模块清单（services/） + 功能清单 + Dependency Injection Rule 条目 |
+| 修改业务版本、页面、模块、功能脚本或场景调用 | 目标领域与代理编排 + 功能清单 + DB schema + `docs/PRODUCT-SPEC-INDEX.md` + `docs/requirements-baseline.md` |
+| 实现或修改主/页面子代理 | 目标领域与代理编排 + 功能清单 + `ai-e2e/AGENTS.md` + ai-chat-service 消费契约 + `docs/PRODUCT-SPEC-INDEX.md` |
+| 修改可视执行、证据或重放契约 | 目标领域与代理编排 + 功能清单 + proxy-adapter PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
 | 修改 executor 约束 | 包级目标与边界 + 功能清单（脚本执行） + Runtime Gotchas |
 | 修改 facade 行为 | 模块清单 + 包级目标与边界 |
 | 跨包契约变更（端口、API 路径、SSE 事件、tool 命名） | 本文件 + 所有消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
@@ -190,8 +229,17 @@
 | AI 超时预算未按操作细分 | tech-debt | known | 当前默认：`config.json settings.timeout=180s`，`proxy-adapter-client.ts DEFAULT_AI_TIMEOUT_MS=300s` |
 | 并发执行不支持 | tech-debt | known | `POST /execution/run/:scriptId` 不支持并发；批量必须串行或 `run-all` |
 | PowerShell JSON 序列化陷阱 | tech-debt | known | 上传 PRD 应用 `curl --data-binary @file.json`；中文 stderr 可能 GBK 乱码但不影响逻辑 |
+| 缺少规范化页面与 URL 参数模型 | requirement-gap | pending | 当前 `urls.url` 保存完整字符串，无法稳定表达 path/hash route 与参数模板 |
+| 缺少持久化模块需求文档 | requirement-gap | pending | PRD、页面快照、URL binding、scenario 仍是分散输入 |
+| 缺少业务版本与独立 copy | requirement-gap | pending | 当前没有来源版本、部署/Git 标识或深复制测试资产的模型 |
+| 缺少模块下多功能脚本与场景调用图 | requirement-gap | pending | 当前 script version 归属 scenario，无法表达重复调用、依赖和跨脚本输入输出 |
+| 主代理 / 页面子代理编排未实现 | requirement-gap | pending | 当前没有页面任务、运行变量、暂停决策、检查点、恢复与依赖跳过运行时 |
+| ai-e2e 尚未消费 Agent tool loop | requirement-gap | pending | 当前业务服务调用 `POST /api/ai/generate`，无法在同一页面任务中执行 MCP/Skills |
+| 目标执行链仍绕过 proxy-adapter | requirement-gap | pending | 当前 `ExecutorService` 用 `npx tsx` 执行独立脚本，不满足统一可视、可复现执行要求 |
+| 统一失败证据与影响评估未实现 | requirement-gap | pending | 当前证据未贯通业务版本、场景、功能脚本调用和语义步骤，也没有后续阻碍/依赖跳过模型 |
+| DOM 变化影响定位未实现 | requirement-gap | pending | 当前自动修复由失败 run 触发，尚不能按当前业务版本的功能脚本定向维护 |
 
-详见 `docs/requirements-baseline.md` Gap D/E/F/G。
+完整目标需求、已确认边界与尚待技术设计内容见 `docs/requirements-baseline.md`。
 
 ---
 
@@ -200,8 +248,8 @@
 - `ai-e2e/AGENTS.md` — 开发约束、硬边界、运行时真相
 - `ai-e2e/README.md` — 包内产品文档
 - `ai-e2e/docs/requirements-baseline.md` — 需求基线
-- `ai-e2e/docs/gap-analysis.md` — 缺口分析
-- `ai-e2e/docs/roadmap.md` — 路线图
+- `ai-e2e/docs/gap-analysis.md` — `deprecated` 历史缺口对照
+- `ai-e2e/docs/roadmap.md` — `deprecated` 历史路线，不用于制定新目标
 - `ai-e2e/ui/AGENTS.md` — UI 子工作区约束
 - `docs/reference/ai-e2e-ui-architecture.md` — UI 架构参考
 - `docs/PRODUCT-SPEC-INDEX.md` — 跨包契约与全局索引

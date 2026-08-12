@@ -2,7 +2,7 @@
 
 ## Overview
 
-AI-assisted browser automation platform. `proxy-adapter` is the browser MCP gateway (browser-control.* MCP tools via StreamableHTTP). `ai-chat-service` is the AI conversation backend (session management, provider orchestration, Chat SSE, vision analysis via internal `vision.find_element` tool). `debug-ui` provides the primary web UI. `ai-e2e` is an AI-driven E2E test orchestration subsystem with its own React SPA at `/ai-e2e/`.
+AI-assisted browser automation platform. `proxy-adapter` is the browser MCP gateway and the sole owner of Playwright/CDP integration. `ai-chat-service` is the reusable AI capability layer (analysis/decision model, vision model, MCP client/tool orchestration, Chat SSE; Skills runtime is pending and not implemented). `debug-ui` provides the primary web UI. `ai-e2e` is the E2E business layer with its own React SPA at `/ai-e2e/`.
 
 ## Structure
 
@@ -10,7 +10,7 @@ AI-assisted browser automation platform. `proxy-adapter` is the browser MCP gate
 shared/             Shared types and utilities (no src/ dir — source at package root)
 proxy-adapter/      Browser MCP gateway — MCP Server, Playwright control, debug streams (:3000)
   src/mcps/         Built-in MCP modules (not stdio)
-  src/tools/        ToolRegistry + providers (browser-control, MCP client)
+  src/tools/        ToolRegistry + browser-control provider + MCP Server adapter
 ai-chat-service/    AI chat backend — conversation, provider orchestration, Chat SSE (:3001)
 debug-ui/           Primary web UI — React SPA, Vite (:5173 dev)
 ai-e2e/             AI E2E test orchestration (:3002)
@@ -19,6 +19,15 @@ config/             Shared config templates (not a package)
 tools/              Utility scripts (not a package)
 docs/               Architecture docs, API references, skill docs (not a package)
 ```
+
+## Core product boundaries
+
+- `proxy-adapter` owns browser analysis and actions through in-process Playwright plus CDP sessions, and exposes those capabilities as `browser-control.*` over MCP. No upstream package may import or bypass its browser engine.
+- `ai-chat-service` owns reusable AI capabilities. The analysis/decision model understands requirements and browser evidence, plans the next test action, and consumes MCP/vision tools; the vision model interprets screenshots together with DOM evidence for text-only analysis models.
+- MCP client/tool orchestration belongs in `ai-chat-service`. A reusable Skills runtime is a pending target of this layer but is not shipped yet; do not describe Skills as available until implementation and verification exist.
+- `ai-e2e` owns PRD-driven E2E product orchestration, not generic AI or browser infrastructure. A page contains functional modules, a functional module contains multiple reusable functional scripts, and scenarios compose script calls across modules/pages.
+- Target agent orchestration is page-scoped: the main AI owns flow/TODO dependencies, shared run variables, decisions and dispatch; each child AI executes only its assigned page-scene fragment. Default to a clean child context, but allow the main AI to resume an interrupted context after explicit state and side-effect checks.
+- The target E2E authority is a structured semantic script executed visibly through `proxy-adapter`; do not extend ai-e2e's current `npx tsx` subprocess executor as the target browser execution path.
 
 ## Commands
 
@@ -40,7 +49,7 @@ pnpm format         # prettier --write debug-ui/src proxy-adapter/src ai-chat-se
 
 - Build order is strict: `shared` → `debug-ui` → `proxy-adapter` → `ai-chat-service` → `ai-e2e`.
 - `start.bat` is not a thin wrapper around `pnpm build`: it builds `shared`, starts LiveKit, verifies ports, then builds/starts `proxy-adapter` and `ai-chat-service` (if applicable).
-- `proxy-adapter` startup order matters: env/config load → DB backup init outside tests → plugin registration → `AppService.initialize()` → provider preflight → conversation/session/chat surfaces.
+- `proxy-adapter` startup order matters: env/config load → DB backup init outside tests → plugin registration → `AppService.initialize()` → browser-control provider → MCP/debug surfaces.
 - Chat reconnect always reboots from a fresh `session.snapshot`; there is no `Last-Event-ID` replay contract to preserve.
 
 ## Repository-wide constraints

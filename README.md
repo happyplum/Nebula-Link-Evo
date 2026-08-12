@@ -141,20 +141,32 @@ docs/               # Documentation
 
 ## Product Spec
 
+### 核心产品架构
+
+系统按“浏览器能力 → AI 基础能力 → E2E 业务”三层演进，层间职责不得倒置：
+
+- **`proxy-adapter`（shipped）**：Playwright/CDP 集成的唯一所有者，负责页面分析、DOM/截图证据和浏览器动作，并通过 `browser-control.*` MCP 工具及调试 API 对外提供服务。当前实现由进程内 Playwright 启动 Chromium，可选开放 remote-debugging-port，并通过页面 `CDPSession` 获取屏播帧；没有外部 `playwright-server` 或 `connectOverCDP` 链路。
+- **`ai-chat-service`（in-progress）**：可复用 AI 基础能力层。分析/决策模型负责理解需求、文档和浏览器证据并规划下一步测试动作；主代理和子代理都可调用视觉模型，但视觉模型每次只完成一个具有完整输入的分析问题，不保存流程状态或连续执行。跨服务只传递 `snapshot_id`、`nebula_id`、`locator_bundle`、置信度等可序列化目标引用，不传递进程内 Playwright 对象。MCP client/ToolRegistry 已交付；Skills runtime 属于本层，但当前为 `pending`，尚无加载或执行实现。
+- **`ai-e2e`（in-progress）**：面向 E2E 的业务层，通过 PRD 与真实网页建立业务版本、页面、功能模块、功能脚本和测试场景。现有 PRD 分析、页面探索、URL binding、scenario 级 TypeScript 脚本和 run 级修复已交付；业务版本、结构化功能脚本、场景调用图和主/子代理编排仍需实现。
+
+**领域层级**：一个页面由规范化 URL（含 path/hash route）+ 路由/查询参数集合锚定；一个页面包含多个功能模块，一个功能模块包含多个可复用、可独立验证和修复的功能脚本。测试场景可以跨模块、跨页面编排多个功能脚本，并通过运行上下文传递数据。PRD 负责形成场景流程、TODO 与依赖关系。
+
+**代理与执行目标（pending）**：主代理负责 PRD 流程、TODO、依赖、全局运行变量、决策和调度；子代理只执行被派发的页面场景片段，负责运行、验证、职责内脚本修复和结构化汇报。大多数派发使用干净上下文，可恢复中断可以由主代理决定继续原上下文。主/子代理都可调用只完成单次分析的视觉模型。浏览器操作必须通过 `proxy-adapter` 的同一可视执行链完成，系统内权威脚本是可编排、可重放的结构化语义功能脚本，而不是独立启动 Chromium 的 `.spec.ts`。完整基线见 [`ai-e2e/docs/requirements-baseline.md`](ai-e2e/docs/requirements-baseline.md)。
+
 ### AI E2E 需求基线
 
 - `ai-e2e` 当前定位是 **PRD 驱动的 E2E 自动化测试编排器**，不是新的浏览器底座；它负责把 **需求分析 → 页面探索 → URL 绑定 → 脚本生成 → 执行 → 单次失败诊断 → 可选自动修复** 串成闭环。
-- `ai-e2e` 必须继续作为 `proxy-adapter` 与 `ai-chat-service` 的纯消费者：AI 能力经 `AiChatClient` → `ai-chat-service` :3001（`POST /api/ai/generate`），浏览器能力经 `BrowserGatewayClient` → `proxy-adapter` :3000（`/debug/api/*`）；`ProxyAdapterClient` 仅作为组合 facade 保留，不得重新引入直连 provider 或 browser engine 的实现。
+- `ai-e2e` 必须继续作为 `proxy-adapter` 与 `ai-chat-service` 的纯消费者：当前 AI 文本能力经 `AiChatClient` → `ai-chat-service` :3001（`POST /api/ai/generate`），当前浏览器能力经 `BrowserGatewayClient` → `proxy-adapter` :3000（`/debug/api/*`）；目标代理执行仍经 `ai-chat-service` 的 Agent/MCP 能力到 `proxy-adapter`。`ProxyAdapterClient` 仅作为组合 facade 保留，不得重新引入直连 provider 或 browser engine 的实现。
 - 当前已实现主链路：L1/L2 模块分析、测试场景生成、URL 绑定建议与人工调整、脚本生成、脚本人工编辑与版本历史、脚本执行、run 级失败诊断、自动修复审批/拒绝、`/ai-e2e/` 包级 UI。
 - 探索阶段已支持 SPA-aware URL 发现：在原有 AI/BFS 基础上，补充使用渲染后 DOM、HashRouter、History API 观察器和可访问 router 配置发现客户端路由；非 SPA 站点保持原有 BFS 行为。
 - 上述 3 个已知缺口现已全部实现：
   1. **项目级诊断报告 ✅ 已实现** — 项目级失败聚合、根因分类分布、JSON/HTML 导出报告
   2. **每个功能模块必须绑定 URL 的强校验 ✅ 已实现** — 状态机检查每个功能模块的绑定状态，前端显示未绑定模块提示
   3. **Scenario 编辑能力 ✅ 已实现** — 完整的测试场景查看、编辑、保存 API 及 UI（ScenarioPanel + ScenarioEditor）
-- 需求对照、实施细节与历史路线见：
+- 当前目标与历史资料见：
   - `ai-e2e/docs/requirements-baseline.md`
-  - `ai-e2e/docs/gap-analysis.md`
-  - `ai-e2e/docs/roadmap.md`
+  - `ai-e2e/docs/gap-analysis.md`（`deprecated`，旧需求对照）
+  - `ai-e2e/docs/roadmap.md`（`deprecated`，旧路线，不用于制定新目标）
 
 ### Debug Chat Rendering
 

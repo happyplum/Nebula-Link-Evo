@@ -1,6 +1,6 @@
 # AI E2E UI Architecture
 
-> Source: distilled from the approved Atlas UI design spec and verified against `ai-e2e/ui` code reality on 2026-06-12.
+> Source: distilled from the approved Atlas UI design spec and verified against `ai-e2e/ui` code reality on 2026-08-12.
 
 ## Purpose
 
@@ -35,21 +35,18 @@ This document preserves the durable UI architecture facts that should survive cl
 - bottom status bar with current project and status
 - project status refresh through the typed SSE hook
 
-## Project Workspace Tabs
+## Project Workspace Wizard
 
-`src/app/pages/ProjectPage.tsx` uses shadcn `Tabs` and keeps tab state local rather than writing tab selection into the URL.
+`src/app/pages/ProjectPage.tsx` uses a four-step `Stepper`. The active step is stored in the `step` query parameter so workflow position is linkable and restorable.
 
-Current workflow tabs:
+Current workflow steps:
 
-1. 配置 (`ConfigPanel`)
-2. PRD 分析 (`AnalysisPanel`)
-3. 场景 (`ScenarioPanel`)
-4. 探索 (`ExplorationPanel`)
-5. 脚本 (`ScriptPanel`)
-6. 执行 (`ExecutionPanel`)
-7. 报告 (`ReportPanel`)
+1. 准备目标站点 (`ConfigPanel`)
+2. 理解测试意图 (`UnderstandStep`，包含 PRD 分析与场景设计)
+3. 探索与绑定 (`ExplorationPanel`)
+4. 生成与执行 (`GenerateRunStep`，聚合脚本生成、执行与结果入口)
 
-The workflow order is intentional: configuration, PRD decomposition, scenario creation, site exploration, script management, execution, and reporting.
+The workflow order is intentional: establish the target, turn PRD intent into modules/scenarios, bind those modules to observed pages, then generate and run tests.
 
 ## Visual System
 
@@ -112,3 +109,16 @@ Each tab should subscribe only to events it needs, rather than relying on one gl
 - Keep local TypeScript imports using `.js` extensions where required by the repo convention.
 - Do not add direct AI provider or Playwright service calls in the UI; `ai-e2e` backend remains the integration boundary.
 - Do not store one-off implementation plans, screenshots, or approval transcripts as UI architecture docs.
+
+## Target Execution Experience（pending）
+
+The current execution workspace does not yet provide the confirmed target experience. Future execution UI must:
+
+- Display the live browser session driven by `proxy-adapter`; it must not launch or present a separate hidden test browser.
+- Show the active business version, scenario, page fragment, functional script call, semantic step and verification result alongside the live view.
+- Let users understand the operation from the picture and step description without reading TypeScript source.
+- Surface failure screenshots, page/DOM evidence, downstream-blocking assessment and skipped dependency reasons.
+- Preserve pause/interruption context so a main-agent decision or recovery task can resume from a verified checkpoint.
+- Support later visual action animation and replay without mutating the tested page DOM.
+
+Exact layout, transport, event payloads and replay controls remain technical-design work and must not be inferred from the current four-step wizard.

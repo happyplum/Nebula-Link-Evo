@@ -15,4 +15,8 @@
 - [shipped] Provider preflight 路由：`POST /api/test-ai`（同样存在于 `/api/v1/test-ai`）、`GET /api/verify-keys`（同样存在于 `/api/v1/verify-keys`）。`visionAgent` 同时检查 `vision.*` 工具与 gateway MCP server 运行状态。
 - [shipped] Vercel AI Provider 客户端：`ai-chat-service/src/clients/vercel-ai/provider.ts`。
 - [shipped] Token 估算：`ai-chat-service/src/services/provider/token-estimator.ts`。
+- [shipped] 双模型角色配置：`defaults.decision` 是分析/决策模型，负责理解需求与浏览器证据并规划动作；`defaults.vision` 是视觉模型，为无原生视觉能力的分析模型提供视觉/DOM 定位证据。provider/model 名仅是角色实现配置。
+- [designed] 主代理与子代理均可调用视觉模型；视觉模型只处理单次、完整输入的分析请求，不持有连续任务状态、不调度脚本、不操作浏览器。
+- [shipped] MCP client 与 ToolRegistry 位于 ai-chat-service，通过 Chat agent loop 向分析/决策模型提供浏览器及外部工具。
+- [designed] Skills runtime 归属 ai-chat-service；当前没有 Skills loader、registry、权限或执行路径，不得描述为 shipped。
 - [shipped] 验收面：`loader.test.ts`、`adapters/glm.test.ts`、`errors.test.ts`、集成测试。

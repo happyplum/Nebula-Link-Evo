@@ -1,6 +1,6 @@
 # Nebula-Link Evo — 架构文档
 
-> Generated: 2026-03-28 | Source: proxy-adapter, ai-chat-service, debug-ui, shared
+> Generated: 2026-03-28 | Updated: 2026-08-12 | Source: proxy-adapter, ai-chat-service, debug-ui, ai-e2e, shared
 
 ## 系统架构
 
@@ -17,6 +17,14 @@ Browser ←→ Debug UI (:5173 dev)
          AI E2E (:3002) — 自动化测试编排
     AiChatClient(:3001) + BrowserGatewayClient(:3000)
 ```
+
+### 核心产品分层
+
+- **浏览器能力层（proxy-adapter，shipped）**：Playwright/CDP 集成的唯一所有者；负责页面分析、DOM/截图证据和动作执行，并通过 MCP/调试 API 对外服务。
+- **AI 基础能力层（ai-chat-service，in-progress）**：分析/决策模型、视觉模型、MCP client/ToolRegistry 与会话能力已交付；Skills runtime 为 pending，尚未实现。
+- **E2E 业务层（ai-e2e，in-progress）**：现有 PRD 分析、页面探索、URL binding、scenario 级 TypeScript 脚本和 run 级修复；目标是业务版本、URL+参数页面锚点、模块下多个功能脚本、跨模块场景调用图，以及主代理派发页面子代理的编排。
+
+目标上下文边界以页面场景片段为单位：主代理维护 PRD 流程、TODO 依赖、运行变量和决策；子代理只执行派发范围内的模块与功能脚本。默认使用干净上下文，可恢复中断在重新检查页面状态和副作用后可由主代理决定续接。所有目标浏览器操作经 `proxy-adapter` 可视执行，并关联实时画面、语义步骤与结果证据。
 
 ### 端口映射
 
@@ -114,7 +122,7 @@ AI Providers                            Chromium
 **使用场景:**
 
 - 会话历史查询
-- SSE 事件持久化（支持断点续传）
+- SSE 事件持久化（用于 `session.snapshot` 恢复 thinking / tool 历史；不提供 `Last-Event-ID` 断点重放）
 - 失败会话恢复
 
 ### Filesystem
