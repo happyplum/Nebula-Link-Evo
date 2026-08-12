@@ -149,6 +149,17 @@
 
 恢复单位是经过状态确认的语义步骤，不是脚本代码行。状态不确定时不得盲目重复可能产生副作用的操作。
 
+### 5.4 环境与副作用策略
+
+- 环境由冻结 deployment revision 的 `environment` 决定，客户端、模型和脚本不能覆盖。
+- 功能脚本的副作用必须声明资源、可验证身份、有限最大数量、可逆性、应用检查和重试策略；未声明、无界或无法分类的潜在写动作在所有环境拒绝。
+- local/test 自动执行已声明且有界的副作用。
+- staging 的单项、非不可逆 create/update 和认证会话变化自动执行；删除、批量、不可逆或文件上传在运行/验证开始前做一次计划级用户审批。
+- production 只允许显式登录/退出/会话刷新、导航、只读观测和断言；create/update/delete、上传或会提交业务数据的动作硬拒绝，不提供 v1 审批越权。
+- staging grant 只绑定一个精确 run/authoring job、deployment revision、策略版本和安全相关投影。纯 locator 修复可沿用；新增/扩大副作用必须重新审批，下一次运行不得复用。
+
+完整策略见 `environment-side-effect-policy-contract.md`。
+
 ## 6. 运行上下文、失败与恢复
 
 ### 6.1 运行上下文
@@ -254,7 +265,7 @@
 - 主代理与子代理运行时采用干净 Agent task、模型不可见短期 opaque 租约 token、hash/process epoch、主代理签发/回收和 proxy SQLite WAL 操作账本的协议已锁定；正式 Schema、migration 和代码尚未实现。
 - 双模型调用、`vision.analyze_page`、`vision.resolve_target`、声明式 Skill manifest、版本 pin 和工具权限交集已在 `ai-model-skill-contract.md` 锁定；代码与正式 JSON Schema 尚未实现。
 - 决策、证据 manifest、内容哈希和默认保留结构已锁定；脱敏管线、身份访问控制和清理任务仍待实现设计。
-- 不同环境与副作用风险等级下哪些动作必须用户审批；这是当前剩余的关键产品策略。
+- 环境风险矩阵、计划级风险投影、staging grant、production 硬拒绝和修订后重新审批已在 `environment-side-effect-policy-contract.md` 锁定；正式 Schema、migration、策略引擎和 UI 尚未实现。
 - 首期非本机/多用户部署不在当前信任边界内；若未来开放，必须先设计统一身份、授权和租户隔离，不以 capability/lease 代替认证。
 - 可视操作动画的表现、节奏和重放协议。
 - 现有 TypeScript、登录录制、历史项目/run 的保守导入、双轨 API、版本级切流、回滚和技术验收已在 `migration-compatibility-acceptance-contract.md` 锁定；正式 migrations/importer 和 fixtures 尚未实现。
@@ -291,6 +302,8 @@
 25. candidate 只有静态 valid + 真实浏览器 verified 后才能进入可运行版本；copy 后 stale 资产不能直接运行。
 26. locator-only 变化不重写同页面无关脚本；修复范围可由 revision dependency index 和 change kind 解释。
 27. 首期一个 proxy 进程全局只有一个活动浏览器执行会话，authoring 与 run 不并发控制 singleton Context。
+28. local/test 的已声明有界副作用可自动运行；staging 高风险计划只审批一次，安全投影扩大后必须重新审批。
+29. production 可以执行显式认证和只读验证，但任何业务写入/上传在浏览器 control 操作前被硬拒绝且不可用审批绕过。
 
 ## 12. 关联文档
 
@@ -304,6 +317,7 @@
 - `ai-e2e/docs/target-data-model.md`：目标关系表、不可变修订、copy 事务、页面匹配、运行事件与证据存储。
 - `ai-e2e/docs/service-api-event-contract.md`：三服务目标 API、MCP 原子操作、事件信封、幂等与重启恢复。
 - `ai-e2e/docs/ai-model-skill-contract.md`：分析/决策模型、单次视觉模型、受限 Agent task 与 Skills runtime。
+- `ai-e2e/docs/environment-side-effect-policy-contract.md`：环境矩阵、风险投影、计划级审批与跨服务门禁。
 - `ai-e2e/docs/migration-compatibility-acceptance-contract.md`：旧库/旧资产迁移、双轨切流、故障恢复、回滚和发布门禁。
 - `ai-e2e/docs/asset-authoring-repair-contract.md`：从零生成、复核、真实验证、影响分析和局部修复。
 - `ai-e2e/AGENTS.md`：开发边界与运行时事实。

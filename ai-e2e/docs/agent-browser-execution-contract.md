@@ -18,7 +18,7 @@
 
 | 层 | 权威状态 | 负责 | 不负责 |
 |---|---|---|---|
-| `ai-e2e` | 业务版本、场景修订、不可变基础运行计划、运行 TODO、执行尝试、运行变量、业务断言、决策与证据索引 | 主代理调度、任务授权、依赖传播、结果验收、恢复与修复落版 | 模型 provider、MCP 工具执行、Playwright 对象 |
+| `ai-e2e` | 业务版本、场景修订、不可变基础运行计划、运行 TODO、执行尝试、运行变量、业务断言、环境/副作用策略、决策与证据索引 | 主代理调度、风险投影、计划级审批、任务授权、依赖传播、结果验收、恢复与修复落版 | 模型 provider、MCP 工具执行、Playwright 对象 |
 | `ai-chat-service` | Agent 会话、模型消息、工具调用过程、Skills 与工具授权的运行态 | 分析/决策模型与单次视觉模型调用、页面子代理 tool loop、工具/Skill 白名单、暂停/中断传播 | 业务运行计划、业务断言最终裁决、浏览器生命周期 |
 | `proxy-adapter` | 浏览器进程、Context/Page、Tab、原子浏览器操作、原始观测、实时画面和浏览器侧产物 | 通用会话/Tab 控制、目标解析、Playwright 动作、操作结果、浏览器事件与原始证据 | PRD、场景依赖、脚本修复、登录编排、业务通过/失败裁决 |
 
@@ -30,10 +30,11 @@
 
 1. 子代理读取当前 TODO 和当前语义步骤。
 2. 获取最新页面状态，检查页面身份、登录状态和步骤前置条件。
-3. 解析目标；必要时发起一次视觉分析，但视觉模型只返回本次分析结果。
-4. 向 `proxy-adapter` 提交一个原子动作或观测操作。
-5. 消费结构化结果并执行操作后验证。
-6. 将步骤结果和证据写入执行尝试；通过后才推进下一步。
+3. `ai-e2e`/工具包装层核对当前 policy evaluation、风险投影、语义步骤、effectId/数量边界和所需 active grant；不匹配时不提交浏览器操作。
+4. 解析目标；必要时发起一次视觉分析，但视觉模型只返回本次分析结果。
+5. 向 `proxy-adapter` 提交一个原子动作或观测操作。
+6. 消费结构化结果并执行操作后验证。
+7. 将步骤结果和证据写入执行尝试；通过后才推进下一步。
 
 一个语义步骤可以包含零个或多个只读观测以及最多一个主要副作用动作；所有操作仍按序独立编号。需要多个副作用动作才能完成的业务过程应拆成多个可检查步骤。不得使用 `dom_script`、任意 `page.evaluate` 或脚本批处理绕开步骤级控制。
 
@@ -85,6 +86,7 @@
 - 页面运行锚点、允许 Tab、输入变量与可写输出槽。
 - 运行计划冻结的所需 actor、当前已确认认证状态和允许的认证状态转换；不含凭据明文。
 - 业务前置检查、硬断言、副作用和重试策略。
+- 冻结的 environment、policy evaluation、风险投影 hash，以及每个获授权写步骤的 effectId、数量上限和可逆性；staging 高风险任务还包含 active grant 的不透明引用。
 - 浏览器会话、`control` 租约及允许的 MCP 工具/Skills 白名单。
 - 证据要求、时间/步骤/Token 预算和最近检查点。
 
@@ -96,6 +98,7 @@
 - 调用任务包外的功能脚本、登录流程、造数流程或清理流程。
 - 操作未授权 Tab、创建额外浏览器会话或关闭共享浏览器。
 - 扩大工具/Skill 权限，或把模型生成的任意代码当作浏览器动作执行。
+- 新增、替换或扩大副作用声明/effectId，使用缺失、过期、撤销或投影不匹配的 grant，或把只读任务改成写任务。
 
 ## 6. 原子操作信封
 
@@ -119,6 +122,8 @@
 
 `proxy-adapter` 不解释 correlation tags 的业务含义，以此保持浏览器网关通用性。
 
+`ai-chat-service` 的工具包装层必须在 proxy 调用前验证当前语义步骤与副作用授权交集；`proxy-adapter` 仍只接收通用 lease/Tab/operation/args 约束，不解释 environment、审批、actor 或业务资源。production 业务写计划和缺少 staging grant 的高风险计划不得取得 control lease。
+
 ## 7. 幂等、超时与结果不确定
 
 - `operationId` 同时是去重键。调用方因传输失败重试时必须复用同一 ID；`proxy-adapter` 返回已记录结果，不得再次执行动作。
@@ -126,7 +131,7 @@
 - 只读观测可以用新 ID 重新执行；可能产生副作用的动作只能在已确认未执行或完成副作用检查后生成新 ID。
 - 如果服务崩溃、连接中断或 Playwright 返回状态不足以证明动作是否发生，结果必须是 `outcome_unknown`，不能自动归为失败。
 - `outcome_unknown` 由主代理安排页面、DOM 和业务数据检查。确认已生效则补做后置验证；确认未生效才允许创建新操作；仍无法确认则暂停或失败。
-- 去重记录至少覆盖一次测试流程的最长运行和恢复窗口；精确保留时长与存储实现待详细设计。
+- 去重记录至少覆盖所属测试流程全部非终态生命周期，终态后默认保留 7 天；被未解决决定、`outcome_unknown` 或 evidence manifest 引用时继续保留。具体账本与清理门禁以 `service-api-event-contract.md` 为准。
 
 这一区分用于阻止“请求超时后重复创建用户、重复提交、重复删除”等隐性数据破坏。
 
@@ -210,6 +215,7 @@
 - 当前 debug event hub 只有进程内全局递增序号，尚无浏览器操作生命周期和跨服务关联事件。
 - `ai-chat-service` 已有 Agent tool loop、MCP client/ToolRegistry 和会话暂停/中断/取消基础，但没有 E2E 页面任务包、工具作用域租约和结构化任务结果协议。
 - `ai-e2e` 当前主要调用 `/api/ai/generate`，旧 `ExecutorService` 仍通过 `npx tsx` 执行脚本，尚未进入上述 Agent + MCP 可视执行链。
+- 三服务当前均未实现风险投影、policy evaluation/grant 传递和逐语义步骤/effectId 的工具调用门禁。
 
 ## 15. 仍待实现设计
 
@@ -232,6 +238,8 @@
 10. 修复产生新脚本修订和追加式运行计划修订，不覆盖既有尝试及其证据。
 11. 首期同一 proxy 进程最多一个活动浏览器执行会话；observe 不与写操作竞争快照，UI live view 无控制权。
 12. 首期一个会话只绑定一个 BrowserContext 和一个活动身份；跨角色切换必须由主代理显式编排认证脚本，子代理发现身份异常时停止上报。
+13. 缺失、过期、撤销或投影不匹配的副作用授权不能获得 control 或发出写 operation；模型、Skill 与页面内容无法替换 effectId。
+14. production 业务写在 proxy operation 前硬拒绝；staging 高风险计划只有当前 context/projection 的 active grant 才能执行，proxy 本身不持有环境策略。
 
 ## 17. 关联文档
 
@@ -245,5 +253,6 @@
 - `service-api-event-contract.md`：三服务 API、Agent task、MCP 原子操作、事件与恢复协议。
 - `ai-model-skill-contract.md`：双模型、视觉定位包和 Skills 权限协议。
 - `asset-authoring-repair-contract.md`：authoring verification、运行前复核、影响分析和局部修复。
+- `environment-side-effect-policy-contract.md`：环境矩阵、风险投影、计划级审批和跨服务门禁。
 - `../PRODUCT-SPEC.md`：当前实现状态和目标缺口。
 - `../../docs/PRODUCT-SPEC-INDEX.md`：跨包契约索引。

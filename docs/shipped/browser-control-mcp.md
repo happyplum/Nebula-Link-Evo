@@ -13,6 +13,7 @@ proxy-adapter 通过 MCP Server (StreamableHTTP) 对外暴露 `browser-control.*
 - [designed] 目标新增 `browser-control.operation_execute/get/cancel`；E2E task 的 session/Tab/lease 由模型不可见 wrapper 注入，动作/观测白名单、请求/结果 Schema 与 HTTP control plane 见 `ai-e2e/docs/service-api-event-contract.md`。现有 15 个工具保留兼容。
 - [designed] 目标 `/api/v1/capabilities` 声明 operation 协议、动作/观测、持久账本和画面能力；proxy 重启使内存 session/lease 失效，running operation 收敛为 `outcome_unknown`，v1 不恢复原 BrowserContext/Cookie。
 - [designed] v1 capability 固定 `maxActiveBrowserSessions=1`、`maxBrowserContextsPerSession=1`，不支持 session 内切换 Context 或导入 storage state；业务 actor 与认证编排仍由 ai-e2e 持有，proxy 不解释身份。业务 FIFO 由 ai-e2e 持有，proxy 只做不解释业务类型的通用独占门禁。最多一个 control lease，observe 只在操作安全边界，live view 无控制权；受控 session 期间 legacy MCP/debug 写工具返回 `browser_busy`。
+- [designed] deployment environment、副作用风险投影和计划级审批归 ai-e2e，逐工具授权交集归 ai-chat-service wrapper；proxy 不读取环境标签、不签发/解释 grant，只校验通用 lease/Tab/operation/target/args 与幂等账本。
 - [designed] browser lease 使用 32-byte opaque token，proxy 仅保存 hash/policy/expiry/process epoch；observe 默认最长 30 秒、control 最长 5 分钟且只在安全边界续租。operation ledger 默认使用 proxy 自有 SQLite WAL，重启后未决 started 操作收敛为 `outcome_unknown`。
 - [designed] 浏览器截图、DOM 和媒体属于带完整性信息的短期原始产物；长期证据 manifest、业务关联、保留与 pin 由 ai-e2e 持有，原始产物清理前需可被提升或明确过期。
 - [shipped] 配置入口：消费方通过 `PROXY_ADAPTER_URL + /mcp`（默认 `http://127.0.0.1:3000/mcp`）接入。

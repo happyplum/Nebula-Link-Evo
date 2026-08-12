@@ -142,6 +142,7 @@ docs/               # Documentation
 - [AI Models & Skills](ai-e2e/docs/ai-model-skill-contract.md) — 双模型、单次视觉分析、受限 Agent task 与声明式 Skills
 - [AI E2E Migration & Acceptance](ai-e2e/docs/migration-compatibility-acceptance-contract.md) — 旧数据/脚本迁移、版本级切流、回滚与发布门禁
 - [AI E2E Asset Authoring & Repair](ai-e2e/docs/asset-authoring-repair-contract.md) — 从零生成、复核、真实验证、影响分析与局部修复
+- [AI E2E Environment & Side Effects](ai-e2e/docs/environment-side-effect-policy-contract.md) — 环境矩阵、副作用风险投影、计划级审批与执行门禁
 
 ## Product Spec
 
@@ -158,6 +159,8 @@ docs/               # Documentation
 **代理、资产生成与执行目标（pending）**：主代理是 `ai-e2e` 内可暂停、可恢复的持久工作流协调器，负责 PRD/页面资产生成、TODO、依赖、全局运行变量、决策和调度；模型对话不是状态源。bootstrap/recheck/repair 先生成 candidate，再经静态校验、真实可视浏览器验证和原子激活。子代理只执行不可变页面任务包授权的 TODO、actor、Tab 和工具。首期每个 `proxy-adapter` 进程全局最多一个活动浏览器执行会话，authoring 与正式 run 共用 FIFO；每个会话固定一个 BrowserContext 和一个活动 actor，跨账号/角色只由主代理显式编排退出/登录脚本串行切换。只有当前执行型子代理持有 control，主代理只在安全边界 observe，UI 实时画面只读。子代理上下文可按任务重建，多 Tab 并发和并存身份留作后期扩展。可恢复中断可以由主代理决定继续原上下文。主/子代理都可调用只完成单次 snapshot 分析的视觉模型。浏览器操作必须按语义步骤通过 `proxy-adapter` 的同一可视执行链完成，每个原子操作具备幂等身份；状态不确定时先检查副作用。系统内权威脚本是可编排、可重放的结构化语义功能脚本，而不是独立启动 Chromium 的 `.spec.ts`。目标协议见 [`ai-e2e/docs/asset-authoring-repair-contract.md`](ai-e2e/docs/asset-authoring-repair-contract.md)、[`ai-e2e/docs/service-api-event-contract.md`](ai-e2e/docs/service-api-event-contract.md) 与 [`ai-e2e/docs/ai-model-skill-contract.md`](ai-e2e/docs/ai-model-skill-contract.md)。
 
 **状态、决策与证据目标（pending）**：测试流程、运行 TODO、执行尝试、Agent 和浏览器操作分别持有状态；登出中断、前置阻塞、待决策、依赖跳过、用户取消和业务失败不会混为一个 fail。运行级决定与业务版本长期决定追加审计，失败证据缺失只降低证据完整度。执行 UI 从持久化运行快照和单调事件序号恢复，并同时展示实时浏览器、当前语义步骤、依赖影响、决策与证据。完整契约见 [`ai-e2e/docs/run-state-decision-evidence-contract.md`](ai-e2e/docs/run-state-decision-evidence-contract.md)。
+
+**环境与副作用安全目标（pending）**：运行冻结 immutable deployment environment 和精确副作用投影。local/test 自动执行已声明、有界副作用；staging 的单项非不可逆 create/update 自动，删除、批量、不可逆和上传在 browser job/control 前做一次当前 run/job 计划级审批；production 只允许显式登录/退出/会话刷新、导航、只读观测和断言，业务写入与上传硬拒绝，首期不设绕过。`ai-e2e` 持有策略/审批，`ai-chat-service` 逐工具校验授权交集，`proxy-adapter` 保持通用浏览器网关。完整契约见 [`ai-e2e/docs/environment-side-effect-policy-contract.md`](ai-e2e/docs/environment-side-effect-policy-contract.md)。
 
 **迁移与发布目标（pending）**：现有 001–013 数据库、scenario 级 TypeScript、项目登录录制和历史 run 不直接改写为已验证语义资产。目标先备份并建立 checksum migration 账本，再以可重入 import 生成 `needs_recheck` 业务版本和候选；旧历史只读保留，同一 run 固定使用 legacy 或 `semantic_v1`。三服务通过 capability preflight 后按业务版本 opt-in，完整门禁见 [`ai-e2e/docs/migration-compatibility-acceptance-contract.md`](ai-e2e/docs/migration-compatibility-acceptance-contract.md)。
 
@@ -184,6 +187,7 @@ docs/               # Documentation
   - `ai-e2e/docs/ai-model-skill-contract.md`
   - `ai-e2e/docs/migration-compatibility-acceptance-contract.md`
   - `ai-e2e/docs/asset-authoring-repair-contract.md`
+  - `ai-e2e/docs/environment-side-effect-policy-contract.md`
   - `ai-e2e/docs/gap-analysis.md`（`deprecated`，旧需求对照）
   - `ai-e2e/docs/roadmap.md`（`deprecated`，旧路线，不用于制定新目标）
 

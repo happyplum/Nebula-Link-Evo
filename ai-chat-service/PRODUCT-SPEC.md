@@ -17,6 +17,7 @@
 - 提供 provider preflight（`/test-ai`、`/verify-keys`）、loop-guard（防止 AI 重复陷入同一种失败）、数据库备份。
 - 为后续可复用 Skills 提供统一归属；v1 已设计为固定 id/version/hash 的本地声明式指令包，Skills loader / registry / execution path 尚未实现。
 - 目标提供 `/api/v1/agent-tasks` 通用受限任务执行面：调用方传入不可变任务输入、工具/Skills 白名单、预算和模型不可见浏览器 binding，服务返回 Schema 校验后的结构化结果并传播暂停/中断；不持有调用方业务运行计划。
+- 目标 Agent 工具包装层接收调用方冻结的 policy evaluation、风险投影 hash、当前语义步骤/effectId/数量边界和可选 grant 引用，并逐次求权限交集；本服务不决定环境矩阵、不签发审批，也不能让模型/Skill 扩大副作用授权。
 
 ### 边界
 
@@ -51,10 +52,10 @@
 | 通用页面状态理解 | pending | 在元素查找之外，向调用代理提供结构化的页面功能、视觉区域和 DOM 状态摘要；当前没有独立接口。 |
 | MCP client / ToolRegistry | shipped | 接入 `proxy-adapter` 的浏览器工具及其他外部 MCP 工具，并只向 Chat 能力面暴露。 |
 | Skills runtime | pending | 加载、注册并执行可复用 AI 工作流；当前仓库中没有 Skills loader、registry 或执行路径，不得视为已交付。 |
-| 受限 Agent 任务执行 | pending | 目标按每个任务显式限制工具、Skills、预算和不透明关联信息，结构化报告调用结果；Agent 暂停/中断不推断已经下发的浏览器动作被回滚。 |
+| 受限 Agent 任务执行 | pending | 目标按每个任务显式限制工具、Skills、预算、不透明关联信息和调用方冻结的副作用授权，逐工具调用校验当前语义步骤/effectId/grant 并结构化报告结果；Agent 暂停/中断不推断已经下发的浏览器动作被回滚。 |
 | Agent/视觉/Skills 目标协议 | pending | `ai-e2e/docs/service-api-event-contract.md` 固定 Agent task API/事件；`ai-e2e/docs/ai-model-skill-contract.md` 固定单次视觉 Schema、Skill manifest、权限交集与审计。代码尚未实现。 |
 
-受限 Agent task 是一次有界执行，不是 ai-e2e 的持久主代理。bootstrap/recheck/repair 的阶段、candidate、coverage、decision、dependency index 与激活仍由 ai-e2e 保存和推进；browser binding 只声明模型不可见的 `observe/control` 权限，主代理分析只使用安全边界 observe，执行型页面子代理才可使用 control。actor/角色只是调用方提供的不可变任务约束，本服务不维护认证状态、不切换 BrowserContext/storage state，也不授权子代理自行登录。
+受限 Agent task 是一次有界执行，不是 ai-e2e 的持久主代理。bootstrap/recheck/repair 的阶段、candidate、coverage、decision、dependency index、environment policy evaluation/grant 与激活仍由 ai-e2e 保存和推进；browser binding 只声明模型不可见的 `observe/control` 权限，主代理分析只使用安全边界 observe，执行型页面子代理才可使用 control。actor/角色与副作用授权只是调用方提供的不可变任务约束，本服务不维护认证状态、不切换 BrowserContext/storage state、不签发审批，也不授权子代理自行登录或新增写操作。
 
 ---
 
@@ -79,7 +80,7 @@
 | 视觉分析 | `src/vision/`（vision-analyzer / prompts / types / index） | shipped | Vision 分析引擎，通过 AI 模型识别 DOM 元素 | 构造函数接收 `LanguageModelV3` + `VisionConfig`；提供 `findElement()` 方法 |
 | 工具注册 | `src/tools/`（registry / types / index / providers/{mcp-client-provider,vision-tool-provider} / adapters/{vercel-ai,json-schema-to-zod}） | shipped | ToolRegistry + providers（MCP client + VisionToolProvider） | MCP 客户端：状态机管理 server 生命周期、指数退避重连（最多 5 次）、`toolsChanged` 事件 |
 | Skills runtime | `src/skills/`（待新增） | pending | 本地声明式 Skills 的发现、校验、版本 pin、注册与指令装载 | 不执行 Skill 附带代码、不联网安装、不扩展 task 权限；契约见 `ai-e2e/docs/ai-model-skill-contract.md` |
-| 受限 Agent tasks | `src/agent-tasks/`（待新增） | pending | 独立任务状态、tool/Skill policy、预算、结构化结果、事件与控制 | 与交互 Chat session 分离；浏览器 binding 对模型不可见 |
+| 受限 Agent tasks | `src/agent-tasks/`（待新增） | pending | 独立任务状态、tool/Skill policy、副作用授权交集、预算、结构化结果、事件与控制 | 与交互 Chat session 分离；浏览器 binding/grant 引用对模型不可见，环境与审批权威留在调用方 |
 | 客户端 | `src/clients/`（vercel-ai/provider / mcp/sdk-client / mcp/fetch / compression / types） | shipped | Vercel AI Provider 与 MCP SDK 客户端（含 fetch MCP server） |  |
 | 插件与路由 | `src/plugins/routes/api/`（chat/{stream,sessions,control,connectivity-test,runtime-state,index} / ai-service / debug-ai） | shipped | Fastify 路由 | Chat SSE 每次建连发完整 `session.snapshot` |
 | 错误 | `src/errors/`（http-errors / index） | shipped | HTTP 错误分类 | API 边界：未知 provider → 400；不可用 provider → 503 |
@@ -107,7 +108,7 @@
 | `/debug-ai` | * | shipped | 调试用 AI 接口 | plugins/routes/api/debug-ai |
 | `MCP Client → proxy-adapter /mcp` | out | shipped | 拉取 `browser-control.*` 工具 | clients/mcp、tools/providers/mcp-client-provider |
 | `/api/v1/agent-tasks`、`/api/v1/agent-tasks/:taskId/*` | POST/GET/SSE | pending | 创建/查询/控制受限 Agent task、snapshot-first 事件和持久审计 | 目标契约见 `ai-e2e/docs/service-api-event-contract.md` |
-| `/api/v1/capabilities` | GET | pending | 声明 agent-task/vision/skill 协议、模型角色和限制 | 不包含 provider key 或其他机密 |
+| `/api/v1/capabilities` | GET | pending | 声明 agent-task/vision/skill 协议、模型角色、逐工具副作用授权校验和限制 | 不包含 provider key、环境审批策略或其他机密 |
 
 ---
 
@@ -138,7 +139,7 @@
 | 结构化页面分析（`vision.analyze_page`） | vision、tools/providers/vision-tool-provider（待扩展） | pending | 当前仅有元素查找 | 单次 snapshot 输入，输出页面/区域/dialog/form/table/异常状态和证据，不操作浏览器 |
 | 可序列化目标解析（`vision.resolve_target`） | vision、tools/providers/vision-tool-provider（待扩展） | pending | 当前 `vision.find_element` 兼容面 | 返回有序 locator candidates、约束和显式视觉兜底；由 proxy 在当前 DOM 重解析 |
 | Skills 加载与执行 | `src/skills/`（待新增） | pending | 尚无验收面 | 声明式 manifest、id/version/hash pin、权限交集与审计见 `ai-e2e/docs/ai-model-skill-contract.md` |
-| 受限 Agent 任务执行面 | `src/agent-tasks/`（待新增）、tools、conversation 基础 | pending | 当前只有面向 Chat 的 tool loop 与会话控制 | `/api/v1/agent-tasks`、不可变输入、tool/Skill policy、预算、模型不可见 binding、结构化结果与 snapshot-first 事件见跨服务契约 |
+| 受限 Agent 任务执行面 | `src/agent-tasks/`（待新增）、tools、conversation 基础 | pending | 当前只有面向 Chat 的 tool loop 与会话控制 | `/api/v1/agent-tasks`、不可变输入、tool/Skill policy、副作用 evaluation/projection/effectId/grant 交集、预算、模型不可见 binding、结构化结果与 snapshot-first 事件见跨服务契约 |
 
 ---
 
@@ -158,6 +159,7 @@
 > 11. 修改分析/决策模型与视觉模型的职责边界
 > 12. 新增 / 删除 / 修改 Skills runtime、Skill 权限或执行隔离规则
 > 13. 新增 / 删除 / 修改通用 Agent 任务输入、工具作用域、结构化结果或控制传播契约
+> 14. 修改调用方副作用授权输入、逐工具 effectId/grant 校验或环境策略所有权边界
 
 ### 维护检查清单
 
@@ -169,6 +171,7 @@
 | 修改双模型职责或视觉输出边界 | 双模型与扩展能力契约 + 功能清单 + `ai-e2e/docs/ai-model-skill-contract.md` + `docs/PRODUCT-SPEC-INDEX.md` + 根 README |
 | 新增或修改 Skills runtime | 双模型与扩展能力契约 + 模块清单 + 功能清单 + 已知缺口 + `ai-e2e/docs/ai-model-skill-contract.md` + `docs/PRODUCT-SPEC-INDEX.md` |
 | 新增或修改受限 Agent 任务执行 | 包级目标与边界 + 双模型与扩展能力契约 + 功能清单 + `ai-e2e/docs/agent-browser-execution-contract.md` + `ai-e2e/docs/service-api-event-contract.md` + 消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
+| 修改副作用授权包装层 | 包级目标与边界 + 双模型与扩展能力契约 + 功能清单 + 已知缺口 + `ai-e2e/docs/environment-side-effect-policy-contract.md` + `ai-e2e/docs/ai-model-skill-contract.md` + `ai-e2e/docs/service-api-event-contract.md` + `docs/PRODUCT-SPEC-INDEX.md` |
 | 修改 Chat SSE 行为 | 包级目标与边界 + 功能清单（Chat SSE 条目） + `debug-ui` 的 PRODUCT-SPEC |
 | 跨包契约变更（端口、MCP 路径、SSE 事件） | 本文件 + 所有消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
 
@@ -182,6 +185,7 @@
 | 通用页面状态理解接口未实现 | requirement-gap | pending | `vision.analyze_page`/`vision.resolve_target` 输入输出已设计；当前能力仍聚焦 `vision.find_element` |
 | Skills runtime 未实现 | requirement-gap | pending | manifest、版本/hash pin、权限交集和隔离已设计；当前无 loader、registry 或执行路径 |
 | 受限 Agent 任务执行面未实现 | requirement-gap | pending | `/api/v1/agent-tasks`、状态/事件、browser binding 和结构化结果已设计；当前 Chat tool loop 仍没有逐任务作用域 |
+| 逐工具副作用授权校验未实现 | requirement-gap | pending | 当前没有调用方 policy evaluation、风险投影/effectId/grant 输入及逐调用交集校验；环境矩阵与审批仍必须由 ai-e2e 持有 |
 
 ---
 
@@ -196,5 +200,6 @@
 - `ai-e2e/docs/ai-model-skill-contract.md` — 双模型、单次视觉 Schema、Skill manifest 与权限隔离
 - `ai-e2e/docs/migration-compatibility-acceptance-contract.md` — 服务升级顺序、能力门禁、故障注入与发布验收
 - `ai-e2e/docs/asset-authoring-repair-contract.md` — ai-e2e 持久 authoring 主代理与本包有界 Agent task 的边界
+- `ai-e2e/docs/environment-side-effect-policy-contract.md` — 调用方环境策略、计划级审批与本包逐工具授权边界
 - 根 `AGENTS.md` — 仓库范围约束
 - 根 `README.md` 的 "AI Provider System" 与 "Agent Chat 会话" 章节 — provider 加载契约与会话行为

@@ -48,7 +48,7 @@ interface ApiProblem {
 }
 ```
 
-错误码至少区分：`validation_failed`、`not_found`、`state_conflict`、`idempotency_conflict`、`permission_denied`、`browser_busy`、`lease_expired`、`budget_exceeded`、`dependency_unavailable`、`outcome_unknown` 和 `internal_error`。响应不得包含 secret、控制租约 token、完整 DOM 或模型原始机密输入。
+错误码至少区分：`validation_failed`、`not_found`、`state_conflict`、`idempotency_conflict`、`permission_denied`、`browser_busy`、`lease_expired`、`budget_exceeded`、`dependency_unavailable`、`outcome_unknown`、`side_effect_declaration_required`、`side_effect_bound_invalid`、`side_effect_policy_denied`、`side_effect_approval_required`、`side_effect_approval_stale`、`side_effect_approval_revoked` 和 `internal_error`。响应不得包含 secret、控制租约 token、完整 DOM 或模型原始机密输入。
 
 ### 2.3 请求头与并发控制
 
@@ -76,9 +76,9 @@ interface ServiceCapabilitiesV1 {
 }
 ```
 
-- `ai-chat-service` 至少声明 agent-task、vision、skill-manifest 协议版本和可用模型角色。
-- `proxy-adapter` 至少声明 browser-execution/operation 协议、受支持动作/观测、持久账本和可视画面能力；v1 还必须声明 `maxActiveBrowserSessions=1`、`maxBrowserContextsPerSession=1` 且不支持运行中 storage-state 切换。
-- `ai-e2e` 在创建 run 前执行并缓存短期 preflight，确认 major 兼容、所需功能/Skill/hash 可用；不兼容时返回 `503 dependency_unavailable`，不得在同一 run 静默回退旧执行器。
+- `ai-chat-service` 至少声明 agent-task、vision、skill-manifest 协议版本、可用模型角色和逐工具调用的副作用授权校验能力；它不声明环境矩阵，也不签发审批。
+- `proxy-adapter` 至少声明 browser-execution/operation 协议、受支持动作/观测、持久账本和可视画面能力；v1 还必须声明 `maxActiveBrowserSessions=1`、`maxBrowserContextsPerSession=1` 且不支持运行中 storage-state 切换。它只执行通用 lease/operation 约束，不解释环境或审批。
+- `ai-e2e` 至少声明 `side-effect-policy/1.0`、四类环境矩阵和审批协议；在创建 run 前执行并缓存短期依赖 preflight，确认 major 兼容、所需功能/Skill/hash 可用。不兼容时返回 `503 dependency_unavailable`，不得在同一 run 静默回退旧执行器。
 - capability 只说明能力，不包含 provider key、lease token、文件路径或其他机密。
 
 ### 2.5 首期信任边界
@@ -142,6 +142,8 @@ interface CreateRunRequestV1 {
 
 公开 CreateRun 只创建 `purpose=formal`：必须确认所选 deployment revision + 当前 asset graph + Git/build/角色/locale/viewport scope 存在 `business_version_validations.status=valid`，所引用 current 脚本/场景均 static valid 且有匹配的 `asset_revision_verifications.status=verified`，并冻结精确 revision/hash。`needs_recheck`、stale 或 candidate 资产只能由 authoring coordinator 创建内部 `purpose=authoring_verification` run，不能经正式 Run API 绕过门禁。
 
+创建事务还必须冻结 `side-effect-policy/1.0` 风险投影并持久化 evaluation：local/test 与 staging 低风险计划进入 `ready`；staging 高风险计划创建一次 `side_effect_approval` 决策并进入 `paused(approval_required)`，且不申请 browser job/control；production 业务写计划直接封存为 `cancelled(side_effect_policy_denied)`，不创建审批、不申请 browser job/control。策略拒绝是可审计的运行终止原因，不是业务断言失败。
+
 verification scope 由服务端从精确 deployment revision、冻结的 Git/build、场景/角色要求、locale、viewport、baseline 与策略 major 确定性生成；客户端不能直接提交 scope hash 冒充已验证环境。
 
 场景 actor、初始认证态和每个调用的认证前置/结果状态来自精确场景修订；`secretRefs` 只解析显式登录脚本所需的凭据输入。创建计划时必须证明认证变化节点形成单一依赖链并可从初始态到达，不能由客户端传一个“当前已登录”标志绕过页面复检。
@@ -170,7 +172,7 @@ interface RunCommandRequestV1 {
 }
 ```
 
-`cancel` 不隐式关闭浏览器；`close_browser` 是独立破坏性命令。`resume` 必须先重新检查浏览器会话、页面、登录状态和未决副作用。
+`cancel` 不隐式关闭浏览器；`close_browser` 是独立破坏性命令。`start/resume` 必须先重新检查浏览器会话、页面、登录状态、未决副作用、当前 policy evaluation 和所需 active grant；审批缺失、过期、撤销或投影不匹配时拒绝命令并停在安全边界。
 
 ## 4. `ai-chat-service` 受限 Agent 任务 API
 
@@ -221,10 +223,11 @@ interface CreateAgentTaskRequestV1 {
 
 - `input` 在任务开始后不可变；业务输入和页面任务包由 `ai-e2e` 生成。
 - 页面任务 `input` 必须包含所需 actor、派发时已确认认证态和本任务允许的认证状态变化；只包含 actorKey/角色和 secret reference，不包含凭据值。子代理不得据此自行扩展登录或切换身份。
+- 任何可能写浏览器的页面任务 `input` 还必须包含策略版本、policy evaluation 引用、风险投影 hash、当前脚本步骤对应的 effectId/数量边界，以及 staging 高风险时的 active grant 引用；这些字段不可由模型生成或覆盖。
 - `correlation` 对 `ai-chat-service` 不透明，只允许受限字符串；不能决定业务流程。
 - `responseSchema` 必须受平台大小、深度和关键字白名单约束，防止任意递归 Schema。
 - `browserBinding` 是模型不可见的执行能力；`observe` 只能读取 snapshot/页面状态，`control` 才能提交 act。租约 token 只存在于受限任务运行态或 secret store，不进入模型消息、普通日志、事件 payload 或数据库明文字段。
-- 工具包装层注入 session、Tab、租约、operation/correlation 元数据；模型不能覆盖。
+- 工具包装层注入 session、Tab、租约、operation/correlation 元数据，并在每次调用前校验“task allowlist ∩ 当前语义步骤 ∩ effectId/数量边界 ∩ active grant ∩ browser lease”；模型不能覆盖、替换 effectId 或把只读步骤改为写步骤。
 - 默认每个页面任务创建新 Agent task。恢复只接受调用方提供的显式 checkpoint，不依赖旧对话隐式记忆。
 
 任务状态为 `created/running/paused/completed/failed/interrupted/cancelled/blocked`。终态结果至少包含 `status`、`terminationReason`、符合 `responseSchema` 的 `output`、工具调用摘要、Skill 版本/hash 和预算消耗。Agent task 的 `completed` 只表示结构化任务完成，不等于 E2E TODO 通过。
@@ -348,7 +351,7 @@ interface RunEventV1 {
 }
 ```
 
-最低事件集：`run.snapshot/run.lifecycle_changed/run.completed`、`todo.state_changed`、`attempt.started/attempt.completed`、`page_task.started/page_task.completed`、`decision.requested/decision.answered/decision.applied`、`browser.operation_linked`、`evidence.manifest_sealed` 和 `run.command_rejected`。
+最低事件集：`run.snapshot/run.lifecycle_changed/run.completed`、`todo.state_changed`、`attempt.started/attempt.completed`、`page_task.started/page_task.completed`、`decision.requested/decision.answered/decision.applied`、`side_effect_policy.evaluated`、`side_effect_approval.requested/granted/revoked/expired`、`browser.operation_linked`、`evidence.manifest_sealed` 和 `run.command_rejected`。
 
 ### 6.2 Agent 与浏览器事件
 
@@ -358,7 +361,7 @@ interface RunEventV1 {
 
 ### 6.3 Authoring 事件
 
-`AuthoringEventV1` 使用 authoring-job-scoped `seq/stateVersion` 和同一通用因果字段。最低事件集：`authoring.snapshot/lifecycle_changed/stage_changed/completed`、`authoring_task.state_changed`、`authoring_attempt.completed`、`asset.candidate_created/validated/verified/activated/rejected`、`coverage.changed` 和 `decision.requested/applied`。
+`AuthoringEventV1` 使用 authoring-job-scoped `seq/stateVersion` 和同一通用因果字段。最低事件集：`authoring.snapshot/lifecycle_changed/stage_changed/completed`、`authoring_task.state_changed`、`authoring_attempt.completed`、`asset.candidate_created/validated/verified/activated/rejected`、`coverage.changed`、`decision.requested/applied`、`side_effect_policy.evaluated` 和 `side_effect_approval.requested/granted/revoked/expired`。
 
 ### 6.4 SSE 重连
 
@@ -393,10 +396,11 @@ ai-e2e 持久化 intent/outbox
 重启恢复：
 
 1. `ai-e2e` 扫描非终态 run/authoring job、未确认 outbox 和活动 page/authoring task。
-2. 查询 `ai-chat-service` task 状态与 `proxy-adapter` operation ledger。
-3. 已完成事实按原 correlation 写回；执行中任务重新订阅事件；丢失的 Agent task 进入 `interrupted/blocked`，由主代理重建。
-4. 所有 `outcome_unknown` 先生成副作用检查 TODO；没有检查结果不得重试。
-5. 控制租约失效后由主代理重新签发；子代理不能自行扩大授权。
+2. 先重算/核对当前 policy evaluation、风险投影 hash 与所需 grant；不满足时在安全边界暂停或按硬策略终止，不派发新 outbox/browser control。
+3. 查询 `ai-chat-service` task 状态与 `proxy-adapter` operation ledger。
+4. 已完成事实按原 correlation 写回；执行中任务重新订阅事件；丢失的 Agent task 进入 `interrupted/blocked`，由主代理重建。
+5. 所有 `outcome_unknown` 先生成副作用检查 TODO；没有检查结果不得重试。
+6. 控制租约失效后由主代理重新签发；子代理不能自行扩大授权。
 
 ## 8. 兼容与迁移边界
 
@@ -418,6 +422,9 @@ ai-e2e 持久化 intent/outbox
 8. 跨服务超时、重启和事件缺号均有可重复的查询与收敛路径。
 9. 首期控制面保持 loopback/local 单用户边界；非本机或多用户部署在统一认证授权协议落地前不能启动 semantic authoring/run。
 10. v1 browser session 只绑定一个 BrowserContext；跨账号/角色只能通过场景内显式认证脚本串行切换，Agent task 或 proxy API 不能暗换 storage state。
+11. local/test 已声明有界副作用和 staging 低风险写入无需人工审批；staging 删除、批量、不可逆或上传在 browser job/control 前只产生一次计划级审批。
+12. production 只允许显式认证会话变化与只读行为；业务 create/update/delete、上传及业务提交在租约/操作前硬拒绝，且没有 v1 审批绕过。
+13. Agent、Skill、页面内容或视觉结果无法改变风险投影、effectId 或 grant；proxy 保持通用浏览器网关，不持有环境策略。
 
 ## 10. 关联文档
 
@@ -428,3 +435,4 @@ ai-e2e 持久化 intent/outbox
 - `semantic-script-schema.md`：原子动作与目标引用白名单。
 - `asset-authoring-repair-contract.md`：从零生成、复核、candidate 验证、影响分析和局部修复。
 - `migration-compatibility-acceptance-contract.md`：旧资产导入、版本级切流、回滚与发布验收。
+- `environment-side-effect-policy-contract.md`：环境风险矩阵、计划级审批和逐调用副作用门禁。

@@ -42,6 +42,7 @@ projects
    ├─ page_tasks ── execution_attempts
    ├─ run_variables
    ├─ decision_requests ── decision_answers
+   ├─ side_effect_policy_evaluations ── side_effect_approval_grants
    ├─ run_commands
    ├─ run_events
    └─ evidence_manifests ── evidence_items ── artifact_objects
@@ -570,6 +571,7 @@ copy 后必须满足：
 - `outcome(succeeded/partial/failed/cancelled) nullable`。
 - `stage/strategy_version/source_fingerprint/input_sha256/state_version/next_event_seq`。
 - `active_task_id/coverage_summary_json/result_json/pause_reason_json`。
+- `current_policy_evaluation_id/active_approval_grant_id nullable`；只保存当前 job 的引用，grant 不进入资产或版本 copy。
 - `created_by/started_at/completed_at/created_at`。
 - partial unique index：每个 business version 最多一个非终态写 authoring job。
 
@@ -668,7 +670,12 @@ scope 至少冻结 deployment revision、Git/build 标识、角色、locale、vi
 | `active_page_task_id` | TEXT NULL | 首期最多一个 |
 | `auth_context_state` | TEXT | `anonymous/authenticated/unknown`；浏览器事实复检后的业务投影 |
 | `active_actor_key` | TEXT NULL | 仅 `authenticated` 时指向冻结计划 actor；不保存账号凭据 |
+| `side_effect_policy_version` | TEXT | 固定运行使用的策略版本 |
+| `side_effect_projection_sha256` | TEXT | 当前安全相关风险投影 hash |
+| `current_policy_evaluation_id` | TEXT | 最近一次策略评估 |
+| `active_approval_grant_id` | TEXT NULL | 仅 staging 高风险且 grant active 时存在 |
 | `pause_reason_json` | TEXT NULL | 结构化暂停原因 |
+| `termination_reason_json` | TEXT NULL | 取消/终态原因；区分用户取消、approval_denied 与 side_effect_policy_denied |
 | `summary_json` | TEXT NULL | 终态统计，不是状态源 |
 | `started_at/completed_at/created_at` | TEXT |  |
 
@@ -680,7 +687,7 @@ scope 至少冻结 deployment revision、Git/build 标识、角色、locale、vi
 
 - `id/run_id/schema_id/payload_json/content_sha256/created_at`
 - `UNIQUE(run_id)`。
-- payload 冻结版本、deployment/Git、场景/脚本/页面/需求精确修订、actor 定义与初始认证态、展开 TODO、输入/secret reference 绑定和最终验收。
+- payload 冻结版本、deployment/Git、场景/脚本/页面/需求精确修订、actor 定义与初始认证态、展开 TODO、输入/secret reference 绑定、最终验收、策略版本和 `SideEffectRiskProjectionV1`。
 
 `run_plan_amendments`：
 
@@ -688,6 +695,7 @@ scope 至少冻结 deployment revision、Git/build 标识、角色、locale、vi
 - `UNIQUE(run_id, sequence)`。
 - category：`script_repair/recovery/login/cleanup/operator_decision`。
 - amendment 只追加替换/新增指令，不改写 base payload 或旧 amendment。
+- 每个 amendment 写入新的安全投影 hash；纯非安全字段变化可以保持原投影，扩大副作用时旧 grant 立即 expired。
 
 ### 11.3 `run_todos`
 
@@ -704,7 +712,7 @@ scope 至少冻结 deployment revision、Git/build 标识、角色、locale、vi
 | `auth_context_json` | TEXT | 冻结的执行前/成功后 actor 契约，不含凭据 |
 | `published_outputs_json` | TEXT NULL | 仅成功或主代理显式确认 |
 | `partial_outputs_json` | TEXT NULL | 只供证据/恢复，标记未确认 |
-| `side_effect_summary_json` | TEXT NULL |  |
+| `side_effect_summary_json` | TEXT NULL | effectId/kind/resource/最大影响数/可逆性/上传标记与策略判定，不含秘密 |
 | `block_reason_json/skip_reason_json` | TEXT NULL | 含传播链 |
 | `current_attempt_id` | TEXT NULL |  |
 | `started_at/completed_at` | TEXT NULL |  |
@@ -717,6 +725,7 @@ scope 至少冻结 deployment revision、Git/build 标识、角色、locale、vi
 - `todo_ids_json`（固定有序、至少一个）
 - `page_definition_revision_id/browser_session_id/tab_id`
 - `required_auth_context_json`（所需 actor 与派发前已确认状态，不含凭据）
+- `side_effect_authorization_json`（当前 TODO 允许的 effectId、policy evaluation、可选 grant 引用与投影 hash）
 - `browser_lease_ref_hash`（不存 capability 明文）
 - `ai_task_id/ai_session_id nullable`
 - `tool_policy_hash/task_payload_sha256/budget_json/checkpoint_json/result_json`
@@ -727,7 +736,7 @@ scope 至少冻结 deployment revision、Git/build 标识、角色、locale、vi
 - `id/run_id/todo_id/page_task_id/attempt_no`
 - `script_revision_id/result(succeeded/assertion_failed/execution_failed/precondition_blocked/recoverable_interruption/decision_required/outcome_unknown/cancelled)`
 - `reason_class/last_checkpoint_json/actual_page_json/actual_auth_before_json/actual_auth_after_json`
-- `confirmed_outputs_json/partial_outputs_json/side_effects_json/downstream_impact_json`
+- `confirmed_outputs_json/partial_outputs_json/side_effects_json/downstream_impact_json/policy_evaluation_id/approval_grant_id nullable`
 - `evidence_manifest_id/agent_task_id`
 - `started_at/completed_at`
 - `UNIQUE(todo_id, attempt_no)`。
@@ -747,7 +756,7 @@ scope 至少冻结 deployment revision、Git/build 标识、角色、locale、vi
 ### 12.1 `decision_requests`
 
 - `id/context_type(run/authoring)/context_id/run_id/authoring_job_id/todo_id/attempt_id nullable/status(open/answered/applied/withdrawn/expired)`；run_id 与 authoring_job_id 恰有一个非空。
-- `category/required_authority/question/facts_json/evidence_refs_json/options_json/recommendation_key/impact_json`
+- `category/required_authority/question/facts_json/evidence_refs_json/options_json/recommendation_key/impact_json`；staging 高风险使用 `category=side_effect_approval,required_authority=user`，production 拒绝不创建可批准 decision。
 - `state_version/created_by/created_at/answered_at/applied_at`。
 
 `decision_answers`：
@@ -755,7 +764,27 @@ scope 至少冻结 deployment revision、Git/build 标识、角色、locale、vi
 - `id/decision_request_id/answer_key/custom_answer/reason/answered_by_type/id/created_at`
 - 每个 request 最多一个有效 answer；变更决定创建 superseding request，不覆盖答案。
 
-### 12.2 `run_commands`
+### 12.2 `side_effect_policy_evaluations` 与 `side_effect_approval_grants`
+
+`side_effect_policy_evaluations` 是 append-only 策略事实：
+
+- `id/context_type(run/authoring)/context_id/run_id/authoring_job_id`；两类上下文恰有一个有效。
+- `business_version_id/deployment_revision_id/environment/policy_version/source_plan_sha256`。
+- `projection_json_redacted/projection_sha256/result(auto_allowed/approval_required/denied)/reason_codes_json`。
+- `supersedes_evaluation_id nullable/decision_request_id nullable/created_at`。
+- 同一 source plan + projection + policy 重算返回既有 evaluation；安全投影变化创建新 row，不覆盖旧结论。
+
+`side_effect_approval_grants` 只由已 applied 的 staging 用户决策生成：
+
+- `id/evaluation_id/context_type/context_id/business_version_id/deployment_revision_id/policy_version`。
+- `approved_projection_json_redacted/approved_projection_sha256/decision_request_id/decision_answer_id`。
+- `status(active/revoked/expired)/approved_by/approved_at/revoked_at/expired_at/reason_json`。
+- partial unique 保证每个 context 最多一个 active grant；run/authoring 终态、用户撤销、deployment/policy 改变或投影扩大时失效。
+- 只删减高风险 effect/数量时当前投影可以按确定性“子集”规则使用原 grant；任一资源、actor、数量或可逆性扩大都不能使用。grant 永不跨 context、copy 或下一次运行复用。
+
+policy evaluation、decision answer、grant 状态变化和对应 Run/Authoring event 必须同事务提交。浏览器 outbox intent 只有在 evaluation 允许且所需 grant active 时才能写入。
+
+### 12.3 `run_commands`
 
 所有 create/start/pause/resume/cancel/answer/apply 命令记录：
 
@@ -763,7 +792,7 @@ scope 至少冻结 deployment revision、Git/build 标识、角色、locale、vi
 - `run_id/type/request_sha256/status(accepted/completed/rejected)/result_json/error_json/created_at/completed_at`。
 - 同 ID 同 hash 返回原结果；同 ID 不同 hash 拒绝冲突。
 
-### 12.3 `run_events`
+### 12.4 `run_events`
 
 | 字段 | 类型 | 约束 |
 |---|---|---|
@@ -772,7 +801,7 @@ scope 至少冻结 deployment revision、Git/build 标识、角色、locale、vi
 | `seq` | INTEGER | `UNIQUE(run_id, seq)`，从 1 递增 |
 | `schema_version` | INTEGER | 初始 1 |
 | `type` | TEXT | 领域事件 token |
-| `entity_type/entity_id` | TEXT | run/todo/attempt/page_task/decision/evidence/browser_operation |
+| `entity_type/entity_id` | TEXT | run/todo/attempt/page_task/decision/side_effect_approval/evidence/browser_operation |
 | `state_version` | INTEGER NULL | 实体更新后版本 |
 | `correlation_id/causation_id` | TEXT NULL | 链路因果 |
 | `payload_json` | TEXT | 脱敏结构化数据 |
@@ -781,7 +810,7 @@ scope 至少冻结 deployment revision、Git/build 标识、角色、locale、vi
 
 分配 seq、更新实体和插入 event 在同一事务中；SSE 只读取此表/内存投影，不自行创造业务状态。
 
-### 12.4 `integration_outbox`
+### 12.5 `integration_outbox`
 
 跨服务 intent 使用持久 outbox：
 
@@ -795,7 +824,7 @@ scope 至少冻结 deployment revision、Git/build 标识、角色、locale、vi
 
 业务事务只写 outbox intent，不等待网络。worker 通过相同幂等键派发；超时后先查询外部结果再决定重放。
 
-### 12.5 `external_task_links`
+### 12.6 `external_task_links`
 
 跨服务 opaque ref 与最后核对状态：
 
@@ -865,6 +894,7 @@ manifest sealed 后不可修改；补充证据创建新的 manifest revision 或
 - 冻结 run plan、展开 TODO/依赖和初始化 run variables。
 - TODO/attempt 状态转换、输出发布、依赖传播和 run event。
 - 接受/应用决策与追加 plan amendment。
+- 写入 side-effect policy evaluation、应用审批并生成/revoke/expire grant、更新上下文状态和事件。
 - seal evidence manifest 与写 completeness/hash。
 - 记录一次已完成的 authoring 静态校验或外部验证结果、证据引用和 authoring event。
 - current 激活、dependency index、coverage、business version validation 和 authoring event；浏览器/模型验证本身已在事务外完成。
@@ -883,6 +913,7 @@ manifest sealed 后不可修改；补充证据创建新的 manifest revision 或
 - 现有 URL 表把实际 URL、单快照和逻辑页面混为一个实体。
 - 当前启动直接重复调用 migration 001–013，没有 schema migration checksum/状态账本、旧库结构 preflight 或 legacy import 映射。
 - 当前没有持久 authoring job/task/attempt/event、candidate 验证层、coverage disposition、revision dependency index 或跨 authoring/run 的 browser job queue；PRD/探索/生成/修复依赖项目状态和短期调用。
+- 当前没有环境风险投影、policy evaluation、计划级 approval grant 或 production 写门禁。
 
 ## 17. 验收原则
 
@@ -899,6 +930,7 @@ manifest sealed 后不可修改；补充证据创建新的 manifest revision 或
 11. 旧库先通过结构 preflight 和可重入 import；legacy run 不伪装成 semantic run，迁移失败不改写源表。
 12. required 脚本/场景未真实验证时版本不能宣称 authoring succeeded；局部修复依赖索引可解释且不重写无关资产。
 13. authoring/run 公平队列在 ai-e2e 重启后保持 queue_seq，proxy 只允许队首取得唯一活动 session；嵌套 repair 不产生自等待。
+14. 策略评估与 grant 可在重启后恢复，不能跨 context/deployment/policy 复用；production 写计划和缺少有效 staging grant 的高风险计划不能产生浏览器 outbox intent。
 
 ## 18. 关联文档
 
@@ -911,3 +943,4 @@ manifest sealed 后不可修改；补充证据创建新的 manifest revision 或
 - `migration-compatibility-acceptance-contract.md`：正式 migration runner、旧资产映射、切流、回滚与发布验收。
 - `asset-authoring-repair-contract.md`：authoring job、coverage、candidate 验证、影响分析与局部激活。
 - `requirements-baseline.md`：总体需求基线。
+- `environment-side-effect-policy-contract.md`：风险投影、环境矩阵、policy evaluation 与 approval grant 语义。

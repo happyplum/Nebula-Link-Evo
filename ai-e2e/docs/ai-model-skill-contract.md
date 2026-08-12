@@ -33,6 +33,7 @@
 - 伪造 DOM、截图、工具结果或断言通过。
 - 把模型自然语言判断当作硬业务断言。
 - 自行调用登录、造数、删除或任务包外脚本。
+- 新增、替换或扩大调用方冻结的副作用/effectId，或把只读步骤解释为已获写权限。
 - 在 E2E 任务中生成/执行任意 JavaScript、TypeScript 或 shell 作为浏览器旁路。
 
 ### 2.2 结构化终止
@@ -209,16 +210,17 @@ interface SkillManifestV1 {
 
 ### 4.2 权限计算
 
-对一次普通 Agent turn，实际允许工具是 runtime 可用工具、task allowlist 与 browser lease 的交集。对一次 Skill 调用，再与**当前被调用 Skill**的 required tool patterns 求交集：
+对一次普通 Agent turn，实际允许工具是 runtime 可用工具、task allowlist、当前语义步骤/副作用授权与 browser lease 的交集。对一次 Skill 调用，再与**当前被调用 Skill**的 required tool patterns 求交集：
 
 ```text
 provider/runtime 可用工具
 ∩ Agent task toolPolicy.allow
 ∩ 当前 Skill.requiredToolPatterns（未调用 Skill 时省略）
+∩ 当前语义步骤、effectId、数量边界与 active grant（只读/无副作用时按相应约束）
 ∩ browser lease 允许的 Tab/操作/参数约束（无浏览器时省略）
 ```
 
-默认拒绝。多个 Skill 不互相授予权限，也不对彼此工具集合求全集；每次调用只按当前 Skill 重新计算。Skill 只能缩小或声明所需权限，不能扩大任务权限；工具包装层在每次调用时重新校验 operation、target、args、租约期限和预算。
+默认拒绝。多个 Skill 不互相授予权限，也不对彼此工具集合求全集；每次调用只按当前 Skill 重新计算。Skill 只能缩小或声明所需权限，不能扩大任务权限；工具包装层在每次调用时重新校验 operation、target、args、租约期限、预算、policy evaluation、风险投影 hash、effectId/数量边界和 grant 状态。模型提出的未声明副作用、不同 effectId 或扩大数量必须拒绝并上报调用方，不能即时补授权。
 
 - Skill 默认无环境变量、文件系统、网络、secret store 和浏览器生命周期权限。
 - secret 值仅在确定性的输入/工具边界按 secret ref 注入；模型和 Skill 指令只看到引用或脱敏替代值。
@@ -243,9 +245,9 @@ provider/runtime 可用工具
 
 每个受限任务按以下顺序执行：
 
-1. 验证 task、Skill、response Schema、预算和可选 browser binding。
+1. 验证 task、Skill、response Schema、预算、可选 browser binding 和不可变副作用授权投影。
 2. 构建干净模型上下文，注入不可变任务输入、Skill 指令、已授权证据和显式 checkpoint。
-3. 每次模型 turn 前检查 pause/cancel/预算；每次工具调用前再次检查权限和租约。
+3. 每次模型 turn 前检查 pause/cancel/预算；每次工具调用前再次检查权限、当前语义步骤/effectId、grant 和租约。
 4. 浏览器工具调用由包装层生成/校验 `operationId`，注入 scope 并记录 request hash。
 5. 工具超时后先查询 operation ledger；不能证明未执行时上报 `outcome_unknown`。
 6. 输出必须通过调用方 response Schema；格式修复不得调用新浏览器动作。
@@ -267,6 +269,7 @@ provider/runtime 可用工具
 - 当前 `/api/ai/generate` 只调用 `generateText()`，不执行工具。
 - 当前只有 `vision.find_element`，内部临时缓存最近 5 份 DOM snapshot；尚无通用页面状态分析、目标候选 v2、持久 snapshot 授权或 Agent task 事件。
 - 当前仓库没有 Skills loader、registry、manifest 校验、版本 pin 或执行隔离。
+- 当前 Agent tool loop 没有调用方冻结的 policy evaluation、风险投影/effectId/grant 输入，也没有逐调用副作用授权校验。
 - 当前 `ai-e2e` prompts 是业务侧模板，可继续作为迁移输入；不得把它们直接等同于可复用 Skill。
 
 ## 8. 验收原则
@@ -279,6 +282,7 @@ provider/runtime 可用工具
 6. secret、租约 token 和未脱敏敏感输入不进入模型消息、事件或普通日志。
 7. Agent 结构化完成不自动等于 E2E TODO 通过；输出须由 `ai-e2e` 验收。
 8. Agent 中断或工具超时不会触发未知副作用操作的盲目重试。
+9. 模型、Skill、视觉结果和不可信页面内容无法新增/替换 effectId、扩大数量或绕过 production/staging 门禁；授权不匹配在 proxy operation 前被拒绝。
 
 ## 9. 关联文档
 
@@ -288,4 +292,5 @@ provider/runtime 可用工具
 - `run-state-decision-evidence-contract.md`：运行裁决、证据和人工控制。
 - `migration-compatibility-acceptance-contract.md`：能力门禁、服务升级、故障注入和发布验收。
 - `asset-authoring-repair-contract.md`：主代理耐久工作流、资产生成、验证和局部修复。
+- `environment-side-effect-policy-contract.md`：调用方风险投影、计划级审批与 Agent 工具授权交集。
 - `../../ai-chat-service/PRODUCT-SPEC.md`：AI 能力当前实现与缺口。

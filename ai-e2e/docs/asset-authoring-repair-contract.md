@@ -61,7 +61,7 @@ created → planning → running ↔ paused/waiting_decision → completing → 
 
 ### 4.1 Ingest
 
-1. 创建 draft business version，冻结本次 PRD document IDs、deployment revision、入口 URL、用户参数和策略版本。
+1. 创建 draft business version，冻结本次 PRD document IDs、deployment revision（含 environment）、入口 URL、用户参数和策略版本。
 2. 校验 URL 属于 deployment `allowedOrigins`，secret 只保存 ref；任何浏览器动作前完成输入检查。
 3. 记录 source fingerprint 和 authoring idempotency key；重复请求返回同一个 job。
 
@@ -91,7 +91,7 @@ created → planning → running ↔ paused/waiting_decision → completing → 
 - 每次观察保存 URL redacted、title、snapshot/artifact、页面摘要、角色/locale/viewport/state tags 和发现来源。
 - 弹窗、抽屉、Tab panel 是页面区域/状态，不因视觉差异自动创建 Page。
 
-探索不自动点击未知写操作。发现按钮无法判断副作用时只观测并提出决策。
+探索不自动点击未知写操作。发现按钮无法判断副作用时只观测并提出决策；production 只允许只读探索和显式认证会话变化，不为业务写候选申请例外。
 
 ### 4.4 Page modeling
 
@@ -118,7 +118,7 @@ created → planning → running ↔ paused/waiting_decision → completing → 
 
 1. 只投影当前 module requirement、page/baseline、显式输入/输出、相关 decisions 和允许的动作/断言。
 2. 生成新的 draft `nebula.ai-e2e.functional-script/1.0` revision。
-3. 依次执行 Schema、引用、secret、动作、断言、副作用、pageScope 和 hash 静态校验。
+3. 依次执行 Schema、引用、secret、动作、断言、副作用数量/可逆性、pageScope 和 hash 静态校验；未声明、无界或动作与副作用不一致的 candidate 直接失效。
 4. 静态失败可以在同一 task 预算内只修格式/引用；改变需求、断言或副作用必须 waiting decision。
 5. 静态 valid 后进入 `unverified`，不得直接成为可用于正式 run 的 current revision。copy 可由系统事务保留 `current + stale` 的目标版本选择，但版本仍为 `needs_recheck` 且不能创建正式 run。
 
@@ -138,10 +138,12 @@ created → planning → running ↔ paused/waiting_decision → completing → 
 
 - 每个脚本先做职责内验证，再运行 required scenarios 验证跨脚本数据和最终验收。
 - 验证 run 只能由 authoring coordinator 创建，必须关联 authoring job、精确 deployment revision、Git/build、角色、locale、viewport、baseline、candidate revision 和其依赖闭包 hash；不得通过公开正式 Run API 绕过门禁。
-- 运行前固定页面/登录/输入/副作用重新检查；所有动作可视且带 operation ID。
+- 运行前固定页面/登录/输入/副作用重新检查，并从 candidate、验证调用和有界输入冻结 job 级风险投影；所有动作可视且带 operation ID。
 - 验证失败产生新 attempt。定位/交互问题可生成新 candidate revision；业务预期冲突必须决策。
 - 只有 candidate 的硬断言全部通过，且输出/副作用与声明一致，才能写入该精确 verification scope 的 `asset_revision_verifications.status=verified`。
-- 安全策略未授权的副作用使 job 等待审批，不允许用 mock pass 代替真实验证；可保留结构化资产但 job 不能声称 succeeded。
+- local/test 自动验证已声明、有界副作用；staging 单项非不可逆 create/update 自动验证，删除、批量、不可逆或上传在取得 browser job/control 前只请求一次 job 级审批。
+- production 只允许静态校验、只读探索/断言和显式认证会话变化；业务写 candidate 可以保留为静态 valid/unverified，但不能获得 production verification，也不能使该 scope 的版本变为可运行。
+- 未授权或被硬策略拒绝的副作用不允许用 mock/shadow pass 代替真实验证；job 必须等待审批、取消或以未验证结果封存。
 
 模型自然语言、只读 shadow plan、其他 deployment/scope 或旧 run 的 pass 都不能授予当前 scope verified。
 
@@ -226,6 +228,7 @@ revision 激活事务同步维护 `asset_revision_dependencies`，关系至少�
 - 已冻结 test run 可以继续引用旧 revision；authoring 激活新 current 不改写该 run。页面已显著漂移时主代理仍可按运行安全规则中断旧 run。
 - v1 由 `ai-e2e` 以持久 `browser_jobs.queue_seq` 维护 authoring verification/test run 的公平 FIFO，只把队首交给 proxy；重启不改变已排顺序。`proxy-adapter` 用通用独占门禁保证每进程全局最多一个活动 browser execution session，不解释两类业务 job，也不允许 legacy 写工具在会话期间旁路控制。
 - formal run 在 preflight/失败后触发的 repair 是该 run 的嵌套 authoring job：关联 `parentRunId`，在原子操作安全边界复用父 run 已占用的 browser job/session 槽位，不排到自己后面，也不允许无关 authoring/run 插队。父 run 先暂停并释放 control lease，内部 verification run 才取得 control；repair 完成后释放子租约，再通过精确 revision 的 run plan amendment 恢复父 run。
+- run-triggered repair 只修改 locator/等待/证据且副作用投影不变时可沿用父 run grant；新增或扩大副作用、资源/actor/数量、上传、不可逆性或 deployment/policy 时，旧 grant 失效，父 run 在安全边界重新审批。production 业务写修复仍硬拒绝。
 - session 暂停且保留页面时仍占用全局浏览器；只有显式结束/关闭或主代理接受丢失 Context 的释放，下一 job 才可进入。
 - UI live view 是只读旁路；主代理视觉观测只能在原子操作安全边界使用 observe lease，不能与 child 写操作竞争 snapshot。
 - v1 新控制面只允许 loopback/local 单用户部署；非本机或多用户拓扑在统一身份、授权与租户隔离协议验收前拒绝 authoring/run。
@@ -256,6 +259,7 @@ revision 激活事务同步维护 `asset_revision_dependencies`，关系至少�
 - 当前脚本生成后即可进入旧执行器，没有 candidate static-valid/verified/current 分层。
 - 当前自动修复按旧 run 修改 scenario 级 TypeScript，不能分类 locator/interaction/contract/requirement 或计算 revision 影响集。
 - 当前浏览器 singleton 有进程内 mutex，但没有跨 authoring/run 的全局 application session 调度。
+- 当前没有 environment 固定、风险投影、policy evaluation、job 级审批或逐 effectId 授权门禁。
 
 ## 12. 验收原则
 
@@ -271,6 +275,9 @@ revision 激活事务同步维护 `asset_revision_dependencies`，关系至少�
 10. copy 后 repair 只改变目标版本，来源版本 current/hash 保持不变。
 11. 同一资产在不同 deployment/build/角色/locale/viewport 下分别验证；任一范围的 pass 不会误授权其他范围。
 12. run-triggered repair 复用父 run 槽位且不形成自等待，无关 browser job 不能在中间取得 control。
+13. local/test 与 staging 低风险验证无需人工审批；staging 高风险验证在 browser job/control 前只审批一次，纯定位修复不会重复审批。
+14. production 写 candidate 只能保留为 static valid/unverified，不能取得 verified 或让对应 scope 变为可运行，也不存在审批绕过。
+15. repair 扩大副作用投影时父 grant 失效并暂停重新审批；缩小范围或不改变投影时审计可证明授权仍匹配。
 
 ## 13. 关联文档
 
@@ -284,3 +291,4 @@ revision 激活事务同步维护 `asset_revision_dependencies`，关系至少�
 - `service-api-event-contract.md`：API、Agent/browser 调用、事件和 outbox。
 - `ai-model-skill-contract.md`：模型、视觉和 Skills 边界。
 - `migration-compatibility-acceptance-contract.md`：legacy import 和发布验收。
+- `environment-side-effect-policy-contract.md`：authoring 环境矩阵、job 级审批和修复投影规则。
