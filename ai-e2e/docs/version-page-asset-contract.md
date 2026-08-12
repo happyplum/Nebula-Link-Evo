@@ -171,4 +171,5 @@ URL 参数按对页面身份的影响分为三类：
 - `requirements-baseline.md`：完整产品需求与运行边界。
 - `functional-script-contract.md`：脚本入口页面、目标和转换边界。
 - `scenario-orchestration-contract.md`：运行计划中的页面锚点和 TODO。
+- `agent-browser-execution-contract.md`：运行锚点、Tab、目标引用和浏览器会话的执行边界。
 - `../PRODUCT-SPEC.md`：当前能力、目标能力与缺口状态。

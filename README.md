@@ -151,7 +151,7 @@ docs/               # Documentation
 
 **领域层级**：逻辑页面由不含部署 Origin 的规范化路由模板与身份参数约束标识；实际运行再绑定部署、动态参数和参考基线。一个页面包含多个功能模块，一个模块包含多个可复用、可独立验证和修复的功能脚本。首期脚本采用显式输入、线性步骤、硬业务断言、成功后输出和声明副作用；场景使用无环调用图负责跨模块/页面的顺序、重复、分支、依赖和数据传递。PRD 形成场景定义与 TODO 模板，每次执行冻结独立运行计划并产生运行 TODO 和执行尝试。
 
-**代理与执行目标（pending）**：主代理负责 PRD 流程、TODO、依赖、全局运行变量、决策和调度；子代理只执行被派发的页面场景片段，负责运行、验证、职责内脚本修复和结构化汇报。首期一个主代理在任一时刻只运行一个执行型子代理，复用 `proxy-adapter` 托管的同一浏览器会话并串行执行动作；子代理上下文可按任务重建，多 Tab 并发留作后期扩展。可恢复中断可以由主代理决定继续原上下文。主/子代理都可调用只完成单次分析的视觉模型。浏览器操作必须通过 `proxy-adapter` 的同一可视执行链完成，系统内权威脚本是可编排、可重放的结构化语义功能脚本，而不是独立启动 Chromium 的 `.spec.ts`。完整基线见 [`ai-e2e/docs/requirements-baseline.md`](ai-e2e/docs/requirements-baseline.md)。
+**代理与执行目标（pending）**：主代理负责 PRD 流程、TODO、依赖、全局运行变量、决策和调度，并持有共享浏览器生命周期；子代理只执行不可变页面任务包授权的 TODO、Tab 和工具。首期一个主代理在任一时刻只运行一个执行型子代理，复用 `proxy-adapter` 托管的同一浏览器会话并串行执行动作；子代理上下文可按任务重建，多 Tab 并发留作后期扩展。可恢复中断可以由主代理决定继续原上下文。主/子代理都可调用只完成单次分析的视觉模型。浏览器操作必须按语义步骤通过 `proxy-adapter` 的同一可视执行链完成，每个原子操作具备幂等身份；状态不确定时先检查副作用。系统内权威脚本是可编排、可重放的结构化语义功能脚本，而不是独立启动 Chromium 的 `.spec.ts`。完整基线见 [`ai-e2e/docs/requirements-baseline.md`](ai-e2e/docs/requirements-baseline.md)，执行细节见 [`ai-e2e/docs/agent-browser-execution-contract.md`](ai-e2e/docs/agent-browser-execution-contract.md)。
 
 ### AI E2E 需求基线
 
@@ -168,6 +168,7 @@ docs/               # Documentation
   - `ai-e2e/docs/functional-script-contract.md`
   - `ai-e2e/docs/scenario-orchestration-contract.md`
   - `ai-e2e/docs/version-page-asset-contract.md`
+  - `ai-e2e/docs/agent-browser-execution-contract.md`
   - `ai-e2e/docs/gap-analysis.md`（`deprecated`，旧需求对照）
   - `ai-e2e/docs/roadmap.md`（`deprecated`，旧路线，不用于制定新目标）
 
