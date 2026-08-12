@@ -66,8 +66,8 @@
 | 上下文策略 | pending | 默认创建干净子代理上下文；登出等可恢复中断可由主代理在状态/副作用检查后续接原上下文，否则从检查点重建。v1 每个 browser session 固定一个 BrowserContext 和一个活动 actor；跨角色只允许主代理显式编排认证脚本串行切换。 |
 | 环境与副作用策略 | pending | deployment revision 固定 `local/test/staging/production`；local/test 自动允许已声明有界副作用，staging 的删除/批量/不可逆/上传做一次当前 run/job 计划级审批，production 只允许显式认证会话变化和只读行为且无 v1 绕过。`ai-e2e` 持有风险投影/evaluation/grant，完整契约见 `docs/environment-side-effect-policy-contract.md`。 |
 | Agent 执行路径 | pending | 页面任务图和验收归 ai-e2e，模型/MCP/未来 Skills 执行归 ai-chat-service；目标 Agent task、浏览器 operation 与事件协议见 `docs/service-api-event-contract.md`，当前 `AiChatClient.generateText()` 是纯文本生成，不执行 tool loop。 |
-| 页面任务与浏览器控制租约 | pending | 首期 proxy 进程全局最多一个活动 session，且每个 session 固定一个 BrowserContext；authoring/run 共用 FIFO。主代理派发不可变页面任务包并持有生命周期，只在安全边界 observe；子代理只取得指定 TODO、actor、Tab、工具和输出槽的短期 control；UI live view 只读。 |
-| 可视执行与证据 | in-progress | `proxy-adapter` 已有实时画面、marker/overlay、交互日志和失败样本基础；目标按单个语义步骤推进，每个浏览器原子操作使用幂等 ID，并关联场景、步骤、结果和失败证据；状态不确定时先检查副作用。 |
+| 页面任务与浏览器控制租约 | in-progress | proxy 已交付全局单活动 session/单 BrowserContext、observe/control lease、operation ledger 与 legacy 门禁；ai-e2e 的 authoring/run 公平 FIFO、browser job/session link 和页面任务派发仍未实现。主代理只在安全边界 observe，子代理只取得范围内 control，UI live view 只读。 |
+| 可视执行与证据 | in-progress | `proxy-adapter` 已有实时画面、marker/overlay、持久幂等 operation ledger 和重启未知态；目标仍需由 ai-e2e 按单个语义步骤调用并关联场景、步骤、结果和失败证据。browser artifact/capture 与统一证据 manifest 尚未交付，状态不确定时必须先检查副作用。 |
 | 分层运行状态 | pending | 测试流程、运行 TODO、执行尝试、Agent 会话和浏览器操作分别持有状态；取消、登出中断、待决策、依赖跳过和业务失败不混用。 |
 | 失败/阻塞/暂停/跳过 | pending | blocked/interrupted/waiting_decision 在主代理收敛前不提前跳过下游；终态失败只传播到真实依赖节点，独立节点可重新检查后继续。 |
 | 决策与证据 | pending | 运行决定与业务版本长期决定分载体追加保存；ai-e2e 持有不可变证据 manifest、业务关联、完整度、脱敏与保留策略。 |
@@ -264,7 +264,7 @@
 | 缺少模块下多功能脚本与场景调用图 | requirement-gap | pending | 当前 script version 归属 scenario，`run-all` 只是顺序遍历，无法表达运行计划、TODO、重复、依赖、跨脚本输入输出和追加式修订 |
 | 主代理 / 页面子代理编排未实现 | requirement-gap | pending | 当前没有页面任务、运行变量、暂停决策、检查点、恢复与依赖跳过运行时 |
 | ai-e2e 尚未消费 Agent task | requirement-gap | pending | 当前业务服务调用 `POST /api/ai/generate`；目标 `/api/v1/agent-tasks`、browser binding、结构化结果和控制/事件协议已设计但未实现 |
-| 目标执行链仍绕过 proxy-adapter | requirement-gap | pending | 当前 `ExecutorService` 用 `npx tsx` 执行独立脚本；尚无浏览器控制租约、原子操作幂等/结果账本、结果不确定态和语义步骤事件 |
+| ai-e2e 尚未切入 proxy 受控执行链 | requirement-gap | pending | proxy 已交付 session/lease/operation ledger、幂等/未知态和受控 MCP 工具；当前 `ExecutorService` 仍用 `npx tsx` 执行独立脚本，ai-e2e 尚无 browser job/session link、语义步骤调用或浏览器事件/证据消费 |
 | 统一失败证据与影响评估未实现 | requirement-gap | pending | 当前证据未贯通业务版本、场景、功能脚本调用和语义步骤，也没有后续阻碍/依赖跳过模型 |
 | 分层运行状态、决策与权威事件未实现 | requirement-gap | pending | 当前项目阶段和 script run 状态不能表达 TODO/尝试/中断/待决策/取消；SSE 无持久事件序号与运行 snapshot，UI 仍本地推断进度 |
 | DOM 变化影响定位未实现 | requirement-gap | pending | 当前自动修复由失败 run 触发，尚不能按当前业务版本的功能脚本定向维护 |

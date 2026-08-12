@@ -2,6 +2,12 @@ import { EventEmitter } from 'node:events';
 import type { MCPSDKClient, MCPTool } from '../../clients/mcp/sdk-client.js';
 import type { GatewayTool, ToolProvider, ToolProviderStatus } from '../types.js';
 
+const SCOPED_BROWSER_OPERATION_TOOLS = new Set([
+  'browser-control.operation_execute',
+  'browser-control.operation_get',
+  'browser-control.operation_cancel',
+]);
+
 /**
  * MCPClientProvider 将外部 MCP Client 工具通过 ToolProvider 接入 Registry
  *
@@ -44,7 +50,14 @@ export class MCPClientProvider extends EventEmitter implements ToolProvider {
   private _refreshTools(): void {
     const mcpTools = this.mcpClient.getAvailableTools();
 
-    this._tools = mcpTools.map((mcpTool) => this._toGatewayTool(mcpTool));
+    this._tools = mcpTools
+      .filter((mcpTool) => !this._isScopedBrowserOperationTool(mcpTool))
+      .map((mcpTool) => this._toGatewayTool(mcpTool));
+  }
+
+  private _isScopedBrowserOperationTool(mcpTool: MCPTool): boolean {
+    const metadata = this._resolveToolMetadata(mcpTool);
+    return SCOPED_BROWSER_OPERATION_TOOLS.has(metadata.toolName);
   }
 
   private _toGatewayTool(mcpTool: MCPTool): GatewayTool {
@@ -68,7 +81,7 @@ export class MCPClientProvider extends EventEmitter implements ToolProvider {
           const result = await this.mcpClient.callTool(
             metadata.serverName,
             metadata.toolName,
-            args as Record<string, unknown>,
+            args as Record<string, unknown>
           );
           if (result && typeof result === 'object' && 'text' in result) {
             return (result as { text: string }).text;
@@ -81,7 +94,10 @@ export class MCPClientProvider extends EventEmitter implements ToolProvider {
     };
   }
 
-  private _resolveToolMetadata(mcpTool: MCPTool): { readonly serverName: string; readonly toolName: string } {
+  private _resolveToolMetadata(mcpTool: MCPTool): {
+    readonly serverName: string;
+    readonly toolName: string;
+  } {
     if (mcpTool.serverName && mcpTool.originalName) {
       return { serverName: mcpTool.serverName, toolName: mcpTool.originalName };
     }

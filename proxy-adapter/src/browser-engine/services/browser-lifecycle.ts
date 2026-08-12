@@ -181,6 +181,49 @@ export class BrowserLifecycle {
     return targetPage;
   }
 
+  async closeActiveTab(returnToId?: string): Promise<Page> {
+    if (!this.state.context || !this.state.page) {
+      throw new Error('Browser not opened');
+    }
+
+    const activePage = this.state.page;
+    const remainingPages = this.state.context.pages().filter((page) => page !== activePage);
+    if (remainingPages.length === 0) {
+      throw new Error('Cannot close the only browser tab');
+    }
+
+    const returnPage = returnToId
+      ? remainingPages.find((page) => this.pageIds.get(page) === returnToId)
+      : remainingPages[0];
+    if (!returnPage) {
+      throw new Error(`Return tab with id ${returnToId} not found`);
+    }
+
+    const currentVersion = ++this.switchVersion;
+    const wasScreencastActive = screencastManager.isActive();
+    const previousViewport = this.state.lastViewport;
+    activePage.off('close', this.handlePageClose);
+    await activePage.close();
+
+    this.state.page = returnPage;
+    if (!this.pageIds.has(returnPage)) {
+      this.pageIds.set(returnPage, crypto.randomUUID());
+    }
+    returnPage.off('close', this.handlePageClose);
+    returnPage.on('close', this.handlePageClose);
+    await returnPage.bringToFront();
+
+    this.restartTransportsForPage(
+      returnPage,
+      wasScreencastActive,
+      previousViewport,
+      currentVersion
+    ).catch((error) => {
+      this.logger.warn({ err: error }, 'Background transport restart failed after tab close');
+    });
+    return returnPage;
+  }
+
   private async restartTransportsForPage(
     targetPage: Page,
     wasScreencastActive: boolean,
@@ -213,9 +256,11 @@ export class BrowserLifecycle {
         return;
       }
 
-      await withTimeout(startPublisher(targetPage, viewport), 10000, 'startPublisher').catch((error) => {
-        this.logger.warn({ err: error }, 'Publisher failed to restart for new tab');
-      });
+      await withTimeout(startPublisher(targetPage, viewport), 10000, 'startPublisher').catch(
+        (error) => {
+          this.logger.warn({ err: error }, 'Publisher failed to restart for new tab');
+        }
+      );
     }
 
     if (wasScreencastActive) {
@@ -224,9 +269,11 @@ export class BrowserLifecycle {
         return;
       }
 
-      await withTimeout(screencastManager.start(targetPage), 5000, 'screencastManager.start').catch((error) => {
-        this.logger.warn({ err: error }, 'Screencast failed to restart for new tab');
-      });
+      await withTimeout(screencastManager.start(targetPage), 5000, 'screencastManager.start').catch(
+        (error) => {
+          this.logger.warn({ err: error }, 'Screencast failed to restart for new tab');
+        }
+      );
     }
   }
 

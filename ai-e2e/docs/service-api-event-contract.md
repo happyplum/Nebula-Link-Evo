@@ -1,8 +1,8 @@
 # AI E2E 跨服务 API 与事件契约
 
-> 状态：已确认目标设计，尚未实现。
+> 状态：已确认目标设计，部分实现。
 > 更新时间：2026-08-12。
-> 本文固定 `ai-e2e`、`ai-chat-service` 与 `proxy-adapter` 的目标调用面、事件信封、幂等和恢复语义。现有 `/api/ai/generate`、项目级 SSE、15 个浏览器 MCP 工具继续作为兼容面；不得把本文的 `/api/v1` 路由描述为已交付。
+> 本文固定 `ai-e2e`、`ai-chat-service` 与 `proxy-adapter` 的目标调用面、事件信封、幂等和恢复语义。`proxy-adapter` 已交付 `/api/v1/capabilities`、browser session/lease/operation query 和 `operation_execute/get/cancel` 核心；browser event/artifact/capture/续租、ai-chat Agent task/capability 与 ai-e2e v1 API/事件仍未实现。现有 `/api/ai/generate`、项目级 SSE 和 15 个兼容浏览器 MCP 工具继续存在；各节必须按实际状态描述。
 
 ## 1. 设计目标
 
@@ -250,6 +250,8 @@ interface CreateAgentTaskRequestV1 {
 | GET | `/api/v1/browser-execution/operations/:operationId` | 查询原子操作账本和最终/不确定结果。 |
 | GET | `/api/v1/browser-execution/artifacts/:artifactId` | 读取受授权的短期原始产物或下载链接。 |
 
+当前实现状态：session 创建/读取/关闭、lease 签发/撤销和 operation 查询已交付；session SSE、event-log 与 artifact GET 仍为 pending。当前 observe/control 创建、opaque token hash/process epoch、单 session 门禁和 SQLite operation ledger 已生效，control 原地续租与账本保留清理尚未实现。
+
 浏览器执行会话是应用层身份，与当前 stateless StreamableHTTP MCP transport session 无关。MCP 传输可以每个请求新建 server，仍必须依据 application-level session、lease 和 operation ledger 执行。
 
 首期 `ai-e2e` 通过持久 `browser_jobs.queue_seq` 持有 authoring/test browser job 的公平 FIFO，只把队首提交给 proxy；重启后从队列状态和外部 session link 收敛，不靠内存重新排序。`proxy-adapter` 不解释业务 job 类型，只用通用独占门禁保证每进程全局最多一个活动 browser execution session，并在 capability 声明 `maxActiveBrowserSessions=1`。其他创建请求返回 `browser_busy`，不能创建逻辑多 session 共享 singleton Context。observe lease 只能在原子操作安全边界供主代理分析；UI 实时画面是无控制权的只读流。
@@ -268,9 +270,9 @@ v1 每个 application session 从创建到释放只能绑定一个 `BrowserConte
 - operation ledger 使用 proxy 自有 SQLite WAL（不与其他服务共享）：动作前事务写入 operation ID、request hash、lease/session/Tab、queued 状态和 sequence，状态/结果/产物引用追加更新。崩溃后 started 且无充分完成证据的记录收敛为 `outcome_unknown`。
 - 清理遵循第 2.3 节保留规则；任何被非终态流程、未知结果、决策或 evidence manifest 引用的记录不得提前删除。
 
-### 5.2 目标 MCP 工具
+### 5.2 MCP 工具
 
-现有 15 个 `browser-control.*` 工具继续服务调试/兼容调用。E2E 受限任务首期只暴露以下新工具：
+现有 15 个 `browser-control.*` 工具继续服务调试/兼容调用。以下 3 个受控工具已在 proxy MCP Server 交付；`ai-chat-service` 普通 Chat 明确过滤它们，E2E 受限任务必须等待模型不可见 wrapper 注入 browser binding 后才能调用：
 
 | MCP tool | 语义 |
 |---|---|
@@ -309,6 +311,8 @@ interface BrowserOperationRequestV1 {
 - 动作：语义脚本 `1.0` 的 `navigate/click/fill/type_text/press/select_option/check/uncheck/focus/blur/hover/scroll/set_files/switch_tab/close_tab`。
 
 禁止 `evaluate/dom_script/任意 JavaScript/裸坐标/任意 CDP 命令`。目标、参数和文件引用必须再通过租约策略及 JSON Schema 校验。
+
+当前 proxy capability 已开放除 `dom_snapshot` 外的其余 9 种观测，以及除 `set_files` 外的 14 种动作；`dom_snapshot`、`set_files`、capture/artifact 和 presentation animation 在短期产物协议实现前保持关闭，调用方必须按 capability 协商，不能把目标全集当作当前全集。
 
 结果：
 

@@ -1,7 +1,4 @@
-import type {
-  DebugPlaywrightState,
-  DebugStatusReason,
-} from '@nebula-link-evo/shared';
+import type { DebugPlaywrightState, DebugStatusReason } from '@nebula-link-evo/shared';
 import type { Page } from 'playwright';
 import type { DOMSnapshotResponse } from '@nebula-link-evo/shared';
 import { BrowserLifecycle, type StateChangeReason } from './browser-lifecycle.js';
@@ -9,7 +6,7 @@ import { BrowserLifecycle, type StateChangeReason } from './browser-lifecycle.js
 import { PageActions, MarkerActionResult } from './page-actions.js';
 import { DOMExtractor } from './dom-extractor.js';
 import { createWorkerLogger, type Logger } from '../../services/logger.js';
-import { acquireLock, browserMutex, getCurrentOwner } from './browser-lock.js';
+import { acquireLock, browserMutex } from './browser-lock.js';
 
 export type { MarkerActionResult, StateChangeReason };
 
@@ -50,7 +47,9 @@ export class BrowserService {
     return this.lifecycle.getViewport();
   }
 
-  async getTabs(owner?: string): Promise<Array<{ id: string; url: string; title: string; isActive: boolean }>> {
+  async getTabs(
+    owner?: string
+  ): Promise<Array<{ id: string; url: string; title: string; isActive: boolean }>> {
     const release = await acquireLock(owner ?? 'BrowserService.getTabs');
     try {
       return await this.lifecycle.getTabs();
@@ -63,6 +62,17 @@ export class BrowserService {
     const release = await acquireLock(owner ?? 'BrowserService.switchTab');
     try {
       const page = await this.lifecycle.switchTab(id);
+      this.pageActions.setPage(page);
+      this.domExtractor.setPage(page);
+    } finally {
+      release();
+    }
+  }
+
+  async closeActiveTab(returnToId?: string, owner?: string): Promise<void> {
+    const release = await acquireLock(owner ?? 'BrowserService.closeActiveTab');
+    try {
+      const page = await this.lifecycle.closeActiveTab(returnToId);
       this.pageActions.setPage(page);
       this.domExtractor.setPage(page);
     } finally {
@@ -150,7 +160,11 @@ export class BrowserService {
     }
   }
 
-  async clickByMarker(snapshotId: string, nebulaId: number, owner?: string): Promise<MarkerActionResult> {
+  async clickByMarker(
+    snapshotId: string,
+    nebulaId: number,
+    owner?: string
+  ): Promise<MarkerActionResult> {
     const release = await acquireLock(owner ?? 'BrowserService.clickByMarker');
     try {
       return await this.pageActions.clickByMarker(snapshotId, nebulaId);
@@ -250,7 +264,11 @@ export class BrowserService {
     }
   }
 
-  async focusByMarker(snapshotId: string, nebulaId: number, owner?: string): Promise<MarkerActionResult> {
+  async focusByMarker(
+    snapshotId: string,
+    nebulaId: number,
+    owner?: string
+  ): Promise<MarkerActionResult> {
     const release = await acquireLock(owner ?? 'BrowserService.focusByMarker');
     try {
       return await this.pageActions.focusByMarker(snapshotId, nebulaId);
@@ -259,7 +277,11 @@ export class BrowserService {
     }
   }
 
-  async blurByMarker(snapshotId: string, nebulaId: number, owner?: string): Promise<MarkerActionResult> {
+  async blurByMarker(
+    snapshotId: string,
+    nebulaId: number,
+    owner?: string
+  ): Promise<MarkerActionResult> {
     const release = await acquireLock(owner ?? 'BrowserService.blurByMarker');
     try {
       return await this.pageActions.blurByMarker(snapshotId, nebulaId);
@@ -268,7 +290,11 @@ export class BrowserService {
     }
   }
 
-  async hoverByMarker(snapshotId: string, nebulaId: number, owner?: string): Promise<MarkerActionResult> {
+  async hoverByMarker(
+    snapshotId: string,
+    nebulaId: number,
+    owner?: string
+  ): Promise<MarkerActionResult> {
     const release = await acquireLock(owner ?? 'BrowserService.hoverByMarker');
     try {
       return await this.pageActions.hoverByMarker(snapshotId, nebulaId);
@@ -336,6 +362,18 @@ export class BrowserService {
     return this.lifecycle.getPage();
   }
 
+  async withPage<T>(owner: string, callback: (page: Page) => Promise<T>): Promise<T> {
+    const release = await acquireLock(owner);
+    try {
+      const page = this.lifecycle.getPage();
+      if (!page || page.isClosed()) {
+        throw new Error('Browser not opened');
+      }
+      return await callback(page);
+    } finally {
+      release();
+    }
+  }
 
   async executeScript(script: string, _args: unknown[] = [], owner?: string): Promise<unknown> {
     const release = await acquireLock(owner ?? 'BrowserService.executeScript');

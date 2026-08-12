@@ -13,7 +13,7 @@
 - `urls` 保存完整 URL、可选单份 `page_snapshot_json` 和 auth flag；没有部署 revision、Origin 无关页面模板、参数分类、截图基线或内容 hash。
 - `execution_runs` 只关联 script/version，状态仅 `running/pass/fail/error/timeout`；旧取消会被执行器写成 timeout，无法反推 TODO、attempt、decision 或浏览器 operation。
 - `login_scripts` 保存 navigate/fill/click/wait/screenshot 步骤。fill value 可能包含秘密，wait 是固定时长，selector 是旧 CSS，登录验证配置没有和脚本一起持久化。
-- `proxy-adapter` 当前是单进程 Browser/Context 和稳定 Page ID 基础，没有 application-level session/lease/operation ledger；浏览器进程重启会丢失内存 Context。
+- `proxy-adapter` 当前仍是单进程 Browser/Context 和稳定 Page ID 基础，但已新增 application-level 单 session/单 Context、observe/control lease、SQLite operation ledger 与重启 `outcome_unknown`；浏览器进程重启仍不会恢复内存 Context/Cookie，browser event/artifact/capture 尚未实现。
 - `ai-chat-service` 当前只有交互 Chat 会话和纯文本 `/api/ai/generate`，没有独立 Agent task/Skill 数据模型。
 
 因此，旧 TypeScript、登录录制和历史 run 不能直接声明为目标语义资产或目标运行历史。
