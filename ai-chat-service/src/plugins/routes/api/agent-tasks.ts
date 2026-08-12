@@ -2,6 +2,7 @@ import type { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import { Type } from '@sinclair/typebox';
 import { AgentTaskError } from '../../../agent-tasks/errors.js';
 import type { AgentTaskService } from '../../../agent-tasks/service.js';
+import type { AgentTaskEventRecord } from '../../../agent-tasks/repository.js';
 import { buildAgentTaskCapabilities } from '../../../agent-tasks/capabilities.js';
 
 const ProblemSchema = Type.Object(
@@ -47,6 +48,9 @@ const TaskSchema = Type.Object(
       Type.Literal('cancelled'),
       Type.Literal('blocked'),
     ]),
+    stateVersion: Type.Integer({ minimum: 1 }),
+    eventSeq: Type.Integer({ minimum: 0 }),
+    lastCheckpointId: Type.Optional(Type.String()),
     modelRole: Type.Literal('decision'),
     request: Type.Unknown(),
     output: Type.Optional(Type.Unknown()),
@@ -74,6 +78,68 @@ const TaskSchema = Type.Object(
 );
 
 const ErrorSchema = Type.Object({ error: ProblemSchema }, { additionalProperties: false });
+const CommandSchema = Type.Object(
+  {
+    id: Type.String(),
+    taskId: Type.String(),
+    type: Type.Union([
+      Type.Literal('pause'),
+      Type.Literal('resume'),
+      Type.Literal('interrupt'),
+      Type.Literal('cancel'),
+    ]),
+    expectedStateVersion: Type.Integer({ minimum: 1 }),
+    requestHash: Type.String(),
+    status: Type.Union([
+      Type.Literal('accepted'),
+      Type.Literal('completed'),
+      Type.Literal('rejected'),
+    ]),
+    result: Type.Optional(Type.Unknown()),
+    error: Type.Optional(ProblemSchema),
+    createdBy: Type.String(),
+    createdAt: Type.String(),
+    completedAt: Type.Optional(Type.String()),
+  },
+  { additionalProperties: false }
+);
+const EventSchema = Type.Object(
+  {
+    id: Type.String(),
+    taskId: Type.String(),
+    seq: Type.Integer({ minimum: 1 }),
+    type: Type.String(),
+    entityType: Type.Union([
+      Type.Literal('task'),
+      Type.Literal('command'),
+      Type.Literal('checkpoint'),
+      Type.Literal('skill'),
+    ]),
+    entityId: Type.String(),
+    stateVersion: Type.Integer({ minimum: 1 }),
+    correlationId: Type.Optional(Type.String()),
+    causationId: Type.Optional(Type.String()),
+    payload: Type.Record(Type.String(), Type.Unknown()),
+    occurredAt: Type.String(),
+    createdAt: Type.String(),
+  },
+  { additionalProperties: false }
+);
+const CommandResultSchema = Type.Object(
+  { command: CommandSchema, task: TaskSchema },
+  { additionalProperties: false }
+);
+const TaskIdParamsSchema = Type.Object(
+  { taskId: Type.String({ minLength: 1, maxLength: 128 }) },
+  { additionalProperties: false }
+);
+const EventLogQuerySchema = Type.Object(
+  {
+    afterSeq: Type.Optional(Type.Integer({ minimum: 0 })),
+    limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 1000 })),
+  },
+  { additionalProperties: false }
+);
 const CapabilitiesSchema = Type.Object(
   {
     schema: Type.Literal('nebula.service-capabilities/1.0'),
@@ -221,6 +287,153 @@ const agentTaskRoutes: FastifyPluginAsyncTypebox<AgentTaskRoutesOptions> = async
     },
     async (request) => options.service.get(request.params.taskId)
   );
+
+  fastify.post<{
+    Params: { taskId: string };
+    Body: {
+      commandId: string;
+      type: 'pause' | 'resume' | 'interrupt' | 'cancel';
+      expectedStateVersion: number;
+      reason?: string;
+      createdBy?: string;
+    };
+  }>(
+    '/agent-tasks/:taskId/commands',
+    {
+      preHandler: requireLocalControlPlane,
+      schema: {
+        description: 'Apply an idempotent optimistic command to an Agent task',
+        tags: ['Agent Tasks'],
+        params: TaskIdParamsSchema,
+        body: Type.Object(
+          {
+            commandId: Type.String({ minLength: 1, maxLength: 128 }),
+            type: Type.Union([
+              Type.Literal('pause'),
+              Type.Literal('resume'),
+              Type.Literal('interrupt'),
+              Type.Literal('cancel'),
+            ]),
+            expectedStateVersion: Type.Integer({ minimum: 1 }),
+            reason: Type.Optional(Type.String({ maxLength: 1000 })),
+            createdBy: Type.Optional(Type.String({ minLength: 1, maxLength: 200 })),
+          },
+          { additionalProperties: false }
+        ),
+        response: {
+          200: CommandResultSchema,
+          400: ErrorSchema,
+          403: ErrorSchema,
+          404: ErrorSchema,
+          409: ErrorSchema,
+          500: ErrorSchema,
+        },
+      },
+    },
+    async (request) => options.service.command(request.params.taskId, request.body)
+  );
+
+  fastify.get<{
+    Params: { taskId: string };
+    Querystring: { afterSeq?: number; limit?: number };
+  }>(
+    '/agent-tasks/:taskId/event-log',
+    {
+      preHandler: requireLocalControlPlane,
+      schema: {
+        description: 'Read durable Agent task events after a sequence cursor',
+        tags: ['Agent Tasks'],
+        params: TaskIdParamsSchema,
+        querystring: EventLogQuerySchema,
+        response: {
+          200: Type.Array(EventSchema),
+          400: ErrorSchema,
+          403: ErrorSchema,
+          404: ErrorSchema,
+          500: ErrorSchema,
+        },
+      },
+    },
+    async (request) =>
+      options.service.listEvents(
+        request.params.taskId,
+        request.query.afterSeq ?? 0,
+        request.query.limit ?? 100
+      )
+  );
+
+  fastify.get<{ Params: { taskId: string } }>(
+    '/agent-tasks/:taskId/events',
+    {
+      preHandler: requireLocalControlPlane,
+      schema: {
+        description: 'Stream an Agent task snapshot followed by ordered durable events',
+        tags: ['Agent Tasks', 'SSE'],
+        params: TaskIdParamsSchema,
+      },
+    },
+    async (request, reply) => {
+      const bufferedEvents: AgentTaskEventRecord[] = [];
+      let bootstrapComplete = false;
+      let lastSeq = 0;
+      const unsubscribe = options.service.subscribeEvents(request.params.taskId, (event) => {
+        try {
+          if (!bootstrapComplete) {
+            bufferedEvents.push(event);
+            return;
+          }
+          if (event.seq <= lastSeq) return;
+          writeSse(reply, event.type, event.seq, event);
+          lastSeq = event.seq;
+        } catch {
+          // The close handler releases the subscription.
+        }
+      });
+      try {
+        reply.raw.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          Connection: 'keep-alive',
+          'X-Accel-Buffering': 'no',
+        });
+        const snapshot = options.service.getSnapshot(request.params.taskId);
+        writeSse(reply, snapshot.type, snapshot.seq, snapshot);
+        lastSeq = snapshot.seq;
+        bootstrapComplete = true;
+        for (const event of bufferedEvents) {
+          if (event.seq <= lastSeq) continue;
+          writeSse(reply, event.type, event.seq, event);
+          lastSeq = event.seq;
+        }
+      } catch (error) {
+        unsubscribe();
+        throw error;
+      }
+      const heartbeat = setInterval(() => {
+        try {
+          reply.raw.write(': keepalive\n\n');
+        } catch {
+          clearInterval(heartbeat);
+        }
+      }, 15_000);
+      return new Promise<void>((resolve) => {
+        request.raw.on('close', () => {
+          clearInterval(heartbeat);
+          unsubscribe();
+          resolve();
+        });
+      });
+    }
+  );
 };
 
 export default agentTaskRoutes;
+
+function writeSse(
+  reply: { raw: { write: (chunk: string) => void } },
+  type: string,
+  seq: number,
+  data: unknown
+): void {
+  reply.raw.write(`event: ${type}\nid: ${seq}\ndata: ${JSON.stringify(data)}\n\n`);
+}

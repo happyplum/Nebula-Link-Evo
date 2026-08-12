@@ -1,4 +1,5 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { EventEmitter } from 'node:events';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -192,6 +193,7 @@ export interface CreateAgentTaskCommand {
   expectedStateVersion: number;
   requestHash: string;
   createdBy: string;
+  reason?: string;
   createdAt: string;
 }
 
@@ -204,6 +206,9 @@ export interface SaveAgentTaskCheckpoint {
 
 export class AgentTaskRepository {
   private readonly db: DatabaseSync;
+  private readonly events = new EventEmitter();
+  private readonly pendingEvents: AgentTaskEventRecord[] = [];
+  private transactionDepth = 0;
 
   constructor(dbPath: string) {
     if (dbPath !== ':memory:') mkdirSync(dirname(dbPath), { recursive: true });
@@ -449,6 +454,21 @@ export class AgentTaskRepository {
     });
   }
 
+  pause(taskId: string, checkpoint: SaveAgentTaskCheckpoint): AgentTaskView {
+    if (checkpoint.taskId !== taskId) {
+      throw new AgentTaskError('validation_failed', 'Pause checkpoint task does not match');
+    }
+    return this.transaction(() => {
+      const task = this.transitionStatus(taskId, ['running'], 'paused');
+      this.saveCheckpoint(checkpoint);
+      return this.requireTask(task.taskId);
+    });
+  }
+
+  resume(taskId: string): AgentTaskView {
+    return this.transitionStatus(taskId, ['paused'], 'running');
+  }
+
   complete(taskId: string, result: AgentTaskExecutionResult): AgentTaskView {
     const now = new Date().toISOString();
     return this.transaction(() => {
@@ -544,7 +564,9 @@ export class AgentTaskRepository {
     };
     return this.transaction(() => {
       const rows = this.db
-        .prepare("SELECT task_id, status FROM agent_tasks WHERE status IN ('created', 'running')")
+        .prepare(
+          "SELECT task_id, status FROM agent_tasks WHERE status IN ('created', 'running', 'paused')"
+        )
         .all() as unknown as Array<{ task_id: string; status: AgentTaskStatus }>;
       for (const row of rows) {
         this.db
@@ -563,6 +585,29 @@ export class AgentTaskRepository {
           entityId: row.task_id,
           stateVersion,
           payload: { from: row.status, to: 'interrupted', errorCode: problem.code },
+          occurredAt: now,
+        });
+      }
+      const commands = this.db
+        .prepare("SELECT * FROM agent_task_commands WHERE status = 'accepted'")
+        .all() as unknown as TaskCommandRow[];
+      for (const row of commands) {
+        this.db
+          .prepare(
+            `UPDATE agent_task_commands
+             SET status = 'rejected', error_json = ?, completed_at = ?
+             WHERE id = ? AND status = 'accepted'`
+          )
+          .run(JSON.stringify(problem), now, row.id);
+        const state = this.getPersistenceState(row.task_id);
+        this.appendEventInTransaction({
+          id: `command-recovered:${row.id}`,
+          taskId: row.task_id,
+          type: 'agent_task.command.rejected',
+          entityType: 'command',
+          entityId: row.id,
+          stateVersion: state.stateVersion,
+          payload: { commandType: row.type, errorCode: problem.code },
           occurredAt: now,
         });
       }
@@ -589,6 +634,36 @@ export class AgentTaskRepository {
       )
       .all(taskId, afterSeq, boundedLimit) as unknown as TaskEventRow[];
     return rows.map(mapTaskEvent);
+  }
+
+  appendEvent(
+    taskId: string,
+    type: string,
+    payload: Record<string, unknown>
+  ): AgentTaskEventRecord {
+    if (!type || type.length > 200) {
+      throw new AgentTaskError('validation_failed', 'Agent event type is invalid');
+    }
+    return this.transaction(() => {
+      const state = this.getPersistenceState(taskId);
+      return this.appendEventInTransaction({
+        id: `runtime:${taskId}:${randomUUID()}`,
+        taskId,
+        type,
+        entityType: 'task',
+        entityId: taskId,
+        stateVersion: state.stateVersion,
+        payload,
+        occurredAt: new Date().toISOString(),
+      });
+    });
+  }
+
+  subscribeEvents(taskId: string, listener: (event: AgentTaskEventRecord) => void): () => void {
+    this.requireTask(taskId);
+    const eventName = taskEventName(taskId);
+    this.events.on(eventName, listener);
+    return () => this.events.off(eventName, listener);
   }
 
   createCommand(input: CreateAgentTaskCommand): AgentTaskCommandRecord {
@@ -640,7 +715,11 @@ export class AgentTaskRepository {
         entityType: 'command',
         entityId: input.id,
         stateVersion: state.stateVersion,
-        payload: { commandType: input.type },
+        payload: {
+          commandType: input.type,
+          createdBy: input.createdBy,
+          ...(input.reason ? { reason: input.reason } : {}),
+        },
         occurredAt: input.createdAt,
       });
       return this.getCommand(input.id)!;
@@ -683,7 +762,11 @@ export class AgentTaskRepository {
         entityType: 'command',
         entityId: id,
         stateVersion: state.stateVersion,
-        payload: { commandType: command.type },
+        payload: {
+          commandType: command.type,
+          commandStatus: input.status,
+          ...(input.error ? { errorCode: input.error.code } : {}),
+        },
         occurredAt: input.completedAt,
       });
       return this.getCommand(id)!;
@@ -890,7 +973,45 @@ export class AgentTaskRepository {
   }
 
   close(): void {
+    this.events.removeAllListeners();
     this.db.close();
+  }
+
+  private transitionStatus(
+    taskId: string,
+    allowedFrom: AgentTaskStatus[],
+    to: Extract<AgentTaskStatus, 'running' | 'paused'>
+  ): AgentTaskView {
+    const now = new Date().toISOString();
+    return this.transaction(() => {
+      const current = this.requireTask(taskId);
+      if (!allowedFrom.includes(current.status)) {
+        throw new AgentTaskError(
+          'conflict',
+          `Agent task cannot transition from ${current.status} to ${to}`
+        );
+      }
+      const updated = this.db
+        .prepare(
+          'UPDATE agent_tasks SET status = ?, updated_at = ? WHERE task_id = ? AND status = ?'
+        )
+        .run(to, now, taskId, current.status);
+      if (updated.changes !== 1) {
+        throw new AgentTaskError('conflict', 'Agent task state changed concurrently');
+      }
+      const stateVersion = this.incrementStateVersion(taskId);
+      this.appendEventInTransaction({
+        id: `task-${to}:${taskId}:${stateVersion}`,
+        taskId,
+        type: 'agent_task.state_changed',
+        entityType: 'task',
+        entityId: taskId,
+        stateVersion,
+        payload: { from: current.status, to },
+        occurredAt: now,
+      });
+      return this.requireTask(taskId);
+    });
   }
 
   private incrementStateVersion(taskId: string): number {
@@ -942,7 +1063,9 @@ export class AgentTaskRepository {
     const row = this.db
       .prepare('SELECT * FROM agent_task_events WHERE task_id = ? AND seq = ?')
       .get(input.taskId, sequence.seq) as unknown as TaskEventRow;
-    return mapTaskEvent(row);
+    const event = mapTaskEvent(row);
+    this.pendingEvents.push(event);
+    return event;
   }
 
   private applyMigration(version: number, name: string, sql: string): void {
@@ -968,18 +1091,39 @@ export class AgentTaskRepository {
   }
 
   private transaction<T>(work: () => T): T {
-    this.db.exec('BEGIN IMMEDIATE');
-    try {
-      const result = work();
-      this.db.exec('COMMIT');
-      return result;
-    } catch (error) {
+    if (this.transactionDepth > 0) return work();
+    const pendingStart = this.pendingEvents.length;
+    const result = (() => {
+      this.db.exec('BEGIN IMMEDIATE');
+      this.transactionDepth += 1;
       try {
-        this.db.exec('ROLLBACK');
-      } catch {
-        // Preserve the original persistence failure.
+        const value = work();
+        this.db.exec('COMMIT');
+        return value;
+      } catch (error) {
+        try {
+          this.db.exec('ROLLBACK');
+        } catch {
+          // Preserve the original persistence failure.
+        }
+        this.pendingEvents.splice(pendingStart);
+        throw error;
+      } finally {
+        this.transactionDepth -= 1;
       }
-      throw error;
+    })();
+    const committedEvents = this.pendingEvents.splice(pendingStart);
+    for (const event of committedEvents) this.publishEvent(event);
+    return result;
+  }
+
+  private publishEvent(event: AgentTaskEventRecord): void {
+    for (const listener of this.events.listeners(taskEventName(event.taskId))) {
+      try {
+        (listener as (value: AgentTaskEventRecord) => void)(event);
+      } catch {
+        // Event consumers cannot affect durable task state.
+      }
     }
   }
 
@@ -1017,11 +1161,19 @@ export class AgentTaskRepository {
 
   private toView(row: TaskRow): AgentTaskView {
     const request = JSON.parse(row.request_json) as PersistedAgentTaskRequest;
+    const state = this.db
+      .prepare('SELECT * FROM agent_task_state WHERE task_id = ?')
+      .get(row.task_id) as TaskStateRow | undefined;
+    if (!state)
+      throw new AgentTaskError('not_found', `Agent task state ${row.task_id} was not found`);
     return {
       schema: request.schema,
       taskId: row.task_id,
       clientTaskId: row.client_task_id,
       status: row.status,
+      stateVersion: state.state_version,
+      eventSeq: state.next_event_seq - 1,
+      ...(state.last_checkpoint_id ? { lastCheckpointId: state.last_checkpoint_id } : {}),
       modelRole: request.modelRole,
       request,
       ...(row.output_json ? { output: JSON.parse(row.output_json) as unknown } : {}),
@@ -1226,4 +1378,8 @@ function canonicalize(value: unknown): unknown {
 
 function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex');
+}
+
+function taskEventName(taskId: string): string {
+  return `agent-task:${taskId}`;
 }

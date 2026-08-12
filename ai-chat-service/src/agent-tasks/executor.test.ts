@@ -58,6 +58,8 @@ describe('AgentTaskModelExecutor', () => {
       request: request(),
       deadlineAt: Date.now() + 10_000,
       signal: new AbortController().signal,
+      beforeToolCall: vi.fn(),
+      emitEvent: vi.fn(),
     });
 
     expect(resolve).toHaveBeenCalledWith('test', 'decision');
@@ -84,6 +86,8 @@ describe('AgentTaskModelExecutor', () => {
         request: taskRequest,
         deadlineAt: Date.now() + 10_000,
         signal: new AbortController().signal,
+        beforeToolCall: vi.fn(),
+        emitEvent: vi.fn(),
       })
     ).rejects.toThrow("Allowed tool 'vision.missing' is unavailable");
   });

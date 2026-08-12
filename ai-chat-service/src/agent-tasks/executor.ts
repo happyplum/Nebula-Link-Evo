@@ -72,6 +72,7 @@ export class AgentTaskModelExecutor {
     });
 
     try {
+      context.emitEvent('agent_task.model_turn', { phase: 'started', modelTurn: 1 });
       const result = await this.generate({
         model,
         system: [
@@ -97,6 +98,18 @@ export class AgentTaskModelExecutor {
       if (request.budgets.maxTokens !== undefined && totalTokens > request.budgets.maxTokens) {
         throw new AgentTaskError('budget_exceeded', 'Agent task token budget was exceeded');
       }
+      context.emitEvent('agent_task.model_turn', {
+        phase: 'completed',
+        modelTurns: result.steps.length,
+        finishReason: result.finishReason,
+      });
+      context.emitEvent('agent_task.budget_updated', {
+        inputTokens,
+        outputTokens,
+        totalTokens,
+        modelTurns: result.steps.length,
+        toolCalls: toolCallCount,
+      });
       return {
         output: result.output,
         terminationReason: result.finishReason,
@@ -164,6 +177,7 @@ export class AgentTaskModelExecutor {
       selected.push({
         ...tool,
         execute: async (args, executionContext) => {
+          context.beforeToolCall();
           consumeToolCall();
           const toolCallId = executionContext?.toolCallId ?? 'unknown';
           const summary: AgentTaskToolCallSummary = {
@@ -172,13 +186,25 @@ export class AgentTaskModelExecutor {
             status: 'failed',
           };
           summaries.push(summary);
+          context.emitEvent('agent_task.tool_call', { toolCallId, toolName: name });
           try {
             const output = await tool.execute(args, executionContext);
             summary.status = 'succeeded';
+            context.emitEvent('agent_task.tool_result', {
+              toolCallId,
+              toolName: name,
+              status: summary.status,
+            });
             return output;
           } catch (error) {
             summary.errorCode =
               error instanceof AgentTaskError ? error.code : 'tool_execution_failed';
+            context.emitEvent('agent_task.tool_result', {
+              toolCallId,
+              toolName: name,
+              status: summary.status,
+              errorCode: summary.errorCode,
+            });
             throw error;
           }
         },
@@ -198,6 +224,7 @@ export class AgentTaskModelExecutor {
         steps: browserSteps,
         deadlineAt: context.deadlineAt,
         maxToolCalls: context.request.budgets.maxToolCalls,
+        beforeToolCall: context.beforeToolCall,
         consumeToolCall,
         mcpClient: this.options.mcpClient,
       });
@@ -211,8 +238,31 @@ export class AgentTaskModelExecutor {
       selected[selected.length - 1] = {
         ...browserTool,
         execute: async (args, executionContext) => {
+          const toolCallId = executionContext?.toolCallId ?? 'unknown';
+          context.emitEvent('agent_task.tool_call', {
+            toolCallId,
+            toolName: browserTool.name,
+          });
           try {
-            return await originalExecute(args, executionContext);
+            const output = await originalExecute(args, executionContext);
+            const summary = wrapper.summaries.at(-1);
+            context.emitEvent('agent_task.tool_result', {
+              toolCallId,
+              toolName: browserTool.name,
+              status: summary?.status ?? 'succeeded',
+              ...(summary?.operationId ? { operationId: summary.operationId } : {}),
+            });
+            return output;
+          } catch (error) {
+            const summary = wrapper.summaries.at(-1);
+            context.emitEvent('agent_task.tool_result', {
+              toolCallId,
+              toolName: browserTool.name,
+              status: summary?.status ?? 'failed',
+              ...(summary?.operationId ? { operationId: summary.operationId } : {}),
+              ...(summary?.errorCode ? { errorCode: summary.errorCode } : {}),
+            });
+            throw error;
           } finally {
             summaries.splice(summaries.length, 0, ...wrapper.summaries.splice(0));
           }
