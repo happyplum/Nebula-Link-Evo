@@ -36,7 +36,7 @@
 
 - **不直连** Playwright / browser engine —— 浏览器能力**只能**经 MCP Client 到 `proxy-adapter`。
 - **不共享** `proxy-adapter` 数据库 —— 独立 SQLite。
-- **不引入** auth 层 —— 通过 localhost-only 绑定约束。
+- **v1 不引入** auth 层 —— 因此只允许 localhost-only 单用户绑定；非本机或多用户拓扑必须先单独设计统一认证、授权和租户隔离。
 - **不引入** frontend 代码。
 - **不引入** `proxy-adapter` 特有概念。
 - 本地 TS import 保留 `.js` 后缀。
@@ -53,6 +53,8 @@
 | Skills runtime | pending | 加载、注册并执行可复用 AI 工作流；当前仓库中没有 Skills loader、registry 或执行路径，不得视为已交付。 |
 | 受限 Agent 任务执行 | pending | 目标按每个任务显式限制工具、Skills、预算和不透明关联信息，结构化报告调用结果；Agent 暂停/中断不推断已经下发的浏览器动作被回滚。 |
 | Agent/视觉/Skills 目标协议 | pending | `ai-e2e/docs/service-api-event-contract.md` 固定 Agent task API/事件；`ai-e2e/docs/ai-model-skill-contract.md` 固定单次视觉 Schema、Skill manifest、权限交集与审计。代码尚未实现。 |
+
+受限 Agent task 是一次有界执行，不是 ai-e2e 的持久主代理。bootstrap/recheck/repair 的阶段、candidate、coverage、decision、dependency index 与激活仍由 ai-e2e 保存和推进；browser binding 只声明模型不可见的 `observe/control` 权限，主代理分析只使用安全边界 observe，执行型页面子代理才可使用 control。
 
 ---
 
@@ -193,5 +195,6 @@
 - `ai-e2e/docs/service-api-event-contract.md` — Agent task API、事件、浏览器 binding 与跨服务恢复
 - `ai-e2e/docs/ai-model-skill-contract.md` — 双模型、单次视觉 Schema、Skill manifest 与权限隔离
 - `ai-e2e/docs/migration-compatibility-acceptance-contract.md` — 服务升级顺序、能力门禁、故障注入与发布验收
+- `ai-e2e/docs/asset-authoring-repair-contract.md` — ai-e2e 持久 authoring 主代理与本包有界 Agent task 的边界
 - 根 `AGENTS.md` — 仓库范围约束
 - 根 `README.md` 的 "AI Provider System" 与 "Agent Chat 会话" 章节 — provider 加载契约与会话行为

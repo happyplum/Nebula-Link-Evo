@@ -425,7 +425,7 @@ interface PageAnchorExpression {
 
 ## 13. 静态校验顺序
 
-业务版本进入 valid、脚本成为 current revision 或运行计划冻结前，按以下顺序校验：
+业务版本进入 valid、脚本通过普通激活成为 current revision 或运行计划冻结前，按以下顺序校验：
 
 1. JSON Schema、大小、ID 格式和未知字段。
 2. 页面、模块、脚本、清理脚本和基线引用存在且属于同一业务版本。
@@ -438,11 +438,11 @@ interface PageAnchorExpression {
 9. 定义中不存在秘密值、任意代码、裸 URL、坐标、固定 sleep 或 `networkidle`。
 10. 对规范化 JSON 计算 SHA-256 内容哈希并随修订保存。
 
-任一校验失败，该修订不能成为 current，也不能进入新运行计划。
+任一校验失败，该修订不能成为 current，也不能进入新运行计划。静态校验成功只得到 `valid`；正式 run 还要求执行型 current revision 在精确 deployment/build/角色/locale/viewport verification scope 上为 `verified`。copy 事务可以保留未带目标 scope 验证记录的 current 选择，但目标版本保持 `needs_recheck` 且不得启动正式 run。
 
 ## 14. 到浏览器原子操作的映射
 
-| DSL 动作 | 目标 proxy 通用操作 | 当前 MCP 能力差距 |
+| DSL 动作 | proxy 内部执行映射 | 当前 MCP 能力差距 |
 |---|---|---|
 | navigate | `page.navigate` | 现有 browser_navigate 可基础执行，但需会话/Tab/操作信封和页面锚点解析 |
 | click | `element.click` | 现有 selector/marker click 可基础执行，需统一 target bundle 与 stale/歧义结果 |
@@ -456,6 +456,8 @@ interface PageAnchorExpression {
 | switch_tab/close_tab | `tab.activate` / `tab.close` | 当前仅 list/switch，无租约和 close |
 
 不得把缺失动作临时映射为 `dom_script`。
+
+该表是 `proxy-adapter` 内部引擎映射，不是模型可写 MCP 枚举。模型侧 `browser-control.operation_execute.operation` 仍使用左列 DSL token，由受限包装层注入 session/Tab/lease/operation ID，proxy 再映射到中列实现。
 
 ## 15. 示例
 

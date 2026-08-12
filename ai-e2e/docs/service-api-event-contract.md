@@ -10,7 +10,7 @@
 - `ai-chat-service` 只执行受限 Agent 任务、模型调用、单次视觉分析和 Skills，不解释 E2E 业务状态。
 - `proxy-adapter` 只托管浏览器执行会话、Tab、控制租约、原子操作、实时画面和短期原始产物。
 - 所有跨服务写操作可幂等重放，服务重启后可查询事实并收敛，不依赖一次 HTTP/SSE 连接持续存活。
-- Chat SSE、Debug SSE 和 E2E Run SSE 是三套独立协议，不共享事件序号或恢复规则。
+- 现有 Chat SSE、Debug SSE 与项目阶段 SSE 保持兼容；目标 Authoring、Run、Agent task 和 Browser session 四类 SSE 各自 snapshot-first、各自单调序号，不共享业务状态或恢复游标。
 
 ## 2. 通用传输规范
 
@@ -48,7 +48,7 @@ interface ApiProblem {
 }
 ```
 
-错误码至少区分：`validation_failed`、`not_found`、`state_conflict`、`idempotency_conflict`、`permission_denied`、`lease_expired`、`budget_exceeded`、`dependency_unavailable`、`outcome_unknown` 和 `internal_error`。响应不得包含 secret、控制租约 token、完整 DOM 或模型原始机密输入。
+错误码至少区分：`validation_failed`、`not_found`、`state_conflict`、`idempotency_conflict`、`permission_denied`、`browser_busy`、`lease_expired`、`budget_exceeded`、`dependency_unavailable`、`outcome_unknown` 和 `internal_error`。响应不得包含 secret、控制租约 token、完整 DOM 或模型原始机密输入。
 
 ### 2.3 请求头与并发控制
 
@@ -81,6 +81,12 @@ interface ServiceCapabilitiesV1 {
 - `ai-e2e` 在创建 run 前执行并缓存短期 preflight，确认 major 兼容、所需功能/Skill/hash 可用；不兼容时返回 `503 dependency_unavailable`，不得在同一 run 静默回退旧执行器。
 - capability 只说明能力，不包含 provider key、lease token、文件路径或其他机密。
 
+### 2.5 首期信任边界
+
+- v1 控制面按当前产品形态只允许 loopback/local 单用户部署；`ai-e2e`、`ai-chat-service` 与 `proxy-adapter` 的控制路由不得直接暴露到非受信网络。
+- capability、Origin 检查、lease 和幂等键都不等同于身份认证。只要需要非 loopback、远程访问或多用户共享，就必须先新增统一身份、项目/版本授权、租户隔离、审计主体和 secret 访问控制协议；在该协议验收前 semantic authoring/run 默认拒绝启动。
+- 反向代理若存在，只能位于受信本机边界内，并保持 SSE、请求体限制和不可伪造调用方身份；本文不把“有反向代理”视为已经具备 auth。
+
 ## 3. `ai-e2e` 对外业务 API
 
 ### 3.1 业务资产
@@ -93,15 +99,32 @@ interface ServiceCapabilitiesV1 {
 | GET | `/api/v1/projects/:projectId/business-versions` | 查询业务版本列表。 |
 | GET | `/api/v1/business-versions/:versionId` | 读取版本、来源、部署/Git 标识、有效性和 current asset 摘要。 |
 | POST | `/api/v1/business-versions/:versionId/copy` | 原子深复制当前有效资产并重建内部 ID。 |
-| POST | `/api/v1/business-versions/:versionId/validate` | 执行 Schema、引用、页面签名、调用图和待重检校验，不启动浏览器运行。 |
+| POST | `/api/v1/business-versions/:versionId/validate` | 执行 Schema、引用、页面签名、调用图和待重检校验，不启动浏览器运行，也不能单独授予可运行 valid。 |
 | GET/POST | `/api/v1/business-versions/:versionId/pages` | 列表或创建页面定义。 |
 | GET/POST | `/api/v1/business-versions/:versionId/modules` | 列表或创建业务/功能模块。 |
 | GET/POST | `/api/v1/business-versions/:versionId/functional-scripts` | 列表或创建稳定脚本身份。 |
 | GET/POST | `/api/v1/business-versions/:versionId/scenarios` | 列表或创建稳定场景身份。 |
+| GET | `/api/v1/assets/:assetType/:assetId/revisions` | 查询不可变修订历史、current、静态校验和按 scope 派生的验证摘要。 |
+| GET | `/api/v1/assets/:assetType/:assetId/revisions/:revisionId` | 读取精确 payload/hash、来源、依赖闭包、验证记录与引用摘要。 |
 | POST | `/api/v1/assets/:assetType/:assetId/revisions` | 创建不可变修订；`assetType` 只允许登记的资产类型。 |
-| POST | `/api/v1/assets/:assetType/:assetId/revisions/:revisionId/activate` | 校验后切换唯一 current；要求 `If-Match`。 |
+| POST | `/api/v1/assets/:assetType/:assetId/revisions/:revisionId/activate` | 校验后切换唯一 current；功能脚本/场景还要求真实验证，copy 的 stale current 只能由系统事务创建；要求 `If-Match`。 |
 
 部署 profile 是 project-scoped 稳定资产，通过 `/api/v1/projects/:projectId/deployment-profiles` 及其 revision 路由管理；业务版本只绑定精确 deployment revision，不复制 secret 值。
+
+资产生成/复核/修复使用独立耐久工作流：
+
+| Method | Path | 语义 |
+|---|---|---|
+| POST | `/api/v1/business-versions/:versionId/authoring-jobs` | 创建 bootstrap/recheck/repair/import_conversion job。 |
+| GET | `/api/v1/authoring-jobs/:jobId` | 读取 authoring snapshot、coverage 和 active task。 |
+| POST | `/api/v1/authoring-jobs/:jobId/commands` | `start/pause/resume/cancel`。 |
+| GET | `/api/v1/authoring-jobs/:jobId/events` | snapshot-first authoring SSE。 |
+| GET | `/api/v1/authoring-jobs/:jobId/event-log?afterSeq=N&limit=M` | 持久 authoring event log。 |
+| POST | `/api/v1/authoring-jobs/:jobId/decisions/:decisionId/answer` | 回答 authoring decision；长期影响同步 version decision。 |
+
+完整阶段、coverage、candidate 验证和激活规则见 `asset-authoring-repair-contract.md`。
+
+`parentRunId` 只允许 `mode=repair` 且必须引用同业务版本的非终态 formal run。普通 UI/API 请求不能把任意 run 伪装成嵌套修复；run-triggered repair 由服务端根据 preflight/失败事实创建或签发一次性关联授权。
 
 ### 3.2 测试流程
 
@@ -116,6 +139,10 @@ interface CreateRunRequestV1 {
   evidencePolicy?: 'default' | 'extended' | 'minimal';
 }
 ```
+
+公开 CreateRun 只创建 `purpose=formal`：必须确认所选 deployment revision + 当前 asset graph + Git/build/角色/locale/viewport scope 存在 `business_version_validations.status=valid`，所引用 current 脚本/场景均 static valid 且有匹配的 `asset_revision_verifications.status=verified`，并冻结精确 revision/hash。`needs_recheck`、stale 或 candidate 资产只能由 authoring coordinator 创建内部 `purpose=authoring_verification` run，不能经正式 Run API 绕过门禁。
+
+verification scope 由服务端从精确 deployment revision、冻结的 Git/build、场景/角色要求、locale、viewport、baseline 与策略 major 确定性生成；客户端不能直接提交 scope hash 冒充已验证环境。
 
 | Method | Path | 语义 |
 |---|---|---|
@@ -180,8 +207,9 @@ interface CreateAgentTaskRequestV1 {
   browserBinding?: {
     browserSessionId: string;
     tabId: string;
-    controlLeaseId: string;
-    controlLeaseToken: string;
+    browserLeaseId: string;
+    browserLeaseToken: string;
+    access: 'observe' | 'control';
   };
   correlation?: Record<string, string>;
 }
@@ -192,7 +220,7 @@ interface CreateAgentTaskRequestV1 {
 - `input` 在任务开始后不可变；业务输入和页面任务包由 `ai-e2e` 生成。
 - `correlation` 对 `ai-chat-service` 不透明，只允许受限字符串；不能决定业务流程。
 - `responseSchema` 必须受平台大小、深度和关键字白名单约束，防止任意递归 Schema。
-- `browserBinding` 是模型不可见的执行能力；租约 token 只存在于受限任务运行态或 secret store，不进入模型消息、普通日志、事件 payload 或数据库明文字段。
+- `browserBinding` 是模型不可见的执行能力；`observe` 只能读取 snapshot/页面状态，`control` 才能提交 act。租约 token 只存在于受限任务运行态或 secret store，不进入模型消息、普通日志、事件 payload 或数据库明文字段。
 - 工具包装层注入 session、Tab、租约、operation/correlation 元数据；模型不能覆盖。
 - 默认每个页面任务创建新 Agent task。恢复只接受调用方提供的显式 checkpoint，不依赖旧对话隐式记忆。
 
@@ -207,9 +235,9 @@ interface CreateAgentTaskRequestV1 {
 | Method | Path | 语义 |
 |---|---|---|
 | POST | `/api/v1/browser-execution/sessions` | 创建或绑定一个可视浏览器执行会话。 |
-| GET | `/api/v1/browser-execution/sessions/:sessionId` | 读取会话、Tab、写租约和画面能力摘要。 |
+| GET | `/api/v1/browser-execution/sessions/:sessionId` | 读取会话、Tab、active observe/control lease 和画面能力摘要。 |
 | DELETE | `/api/v1/browser-execution/sessions/:sessionId` | 显式关闭；需要生命周期权限与幂等键。 |
-| POST | `/api/v1/browser-execution/sessions/:sessionId/leases` | 为允许的 Tab、操作与期限签发唯一写控制租约。 |
+| POST | `/api/v1/browser-execution/sessions/:sessionId/leases` | 签发 `observe/control` 租约，限制 Tab、操作与期限；首期最多一个 control。 |
 | DELETE | `/api/v1/browser-execution/sessions/:sessionId/leases/:leaseId` | 撤销租约；已开始操作继续到安全边界。 |
 | GET | `/api/v1/browser-execution/sessions/:sessionId/events` | 浏览器会话 SSE；先发 `browser_session.snapshot`。 |
 | GET | `/api/v1/browser-execution/sessions/:sessionId/event-log?afterSeq=N&limit=M` | 查询持久操作事件。 |
@@ -217,6 +245,20 @@ interface CreateAgentTaskRequestV1 {
 | GET | `/api/v1/browser-execution/artifacts/:artifactId` | 读取受授权的短期原始产物或下载链接。 |
 
 浏览器执行会话是应用层身份，与当前 stateless StreamableHTTP MCP transport session 无关。MCP 传输可以每个请求新建 server，仍必须依据 application-level session、lease 和 operation ledger 执行。
+
+首期 `ai-e2e` 通过持久 `browser_jobs.queue_seq` 持有 authoring/test browser job 的公平 FIFO，只把队首提交给 proxy；重启后从队列状态和外部 session link 收敛，不靠内存重新排序。`proxy-adapter` 不解释业务 job 类型，只用通用独占门禁保证每进程全局最多一个活动 browser execution session，并在 capability 声明 `maxActiveBrowserSessions=1`。其他创建请求返回 `browser_busy`，不能创建逻辑多 session 共享 singleton Context。observe lease 只能在原子操作安全边界供主代理分析；UI 实时画面是无控制权的只读流。
+
+活动 application session 期间，现有兼容 MCP/debug 写工具必须返回 `browser_busy`，不能绕过 lease 操作同一 Context。MJPEG/LiveKit/事件等只读实时流继续可用；直接 DOM/截图观测只能走受控 observe operation，或返回最近一次已封存的安全快照。session 释放后 legacy 工具恢复原行为。
+
+正式 run 触发的 repair 作为关联 `parentRunId` 的嵌套 authoring job，在安全边界沿用父 run 当前 browser job/session，不创建第二个活动 session，也不排入父 run 自己后方；无关 job 仍留在 FIFO。父 run 暂停并释放 control 后，内部 verification run 才可取得 control；repair 验证成功并释放子租约后，由 `ai-e2e` 追加精确 revision 的 run plan amendment。
+
+租约与账本首期固定实现：
+
+- 租约使用 32-byte CSPRNG opaque bearer token，不使用自包含 JWT。响应只返回一次明文 token；proxy 仅持久化 SHA-256 hash、policy、expiry 和 process epoch，其他服务只保存 secret binding/ref 或受限任务内存。
+- `observe` 默认最长 30 秒，限定一次指定 snapshot/观测集合；`control` 单次最长 5 分钟，由 `ai-e2e` 在原子操作安全边界续租。续租不能扩大 Tab、operation 或参数策略，扩大授权必须撤销后重发并记录决策。
+- proxy 重启递增 process epoch，使全部旧租约失效；持久 session/operation 事实仍可查询，但不能凭旧 token 恢复 Context/Cookie。
+- operation ledger 使用 proxy 自有 SQLite WAL（不与其他服务共享）：动作前事务写入 operation ID、request hash、lease/session/Tab、queued 状态和 sequence，状态/结果/产物引用追加更新。崩溃后 started 且无充分完成证据的记录收敛为 `outcome_unknown`。
+- 清理遵循第 2.3 节保留规则；任何被非终态流程、未知结果、决策或 evidence manifest 引用的记录不得提前删除。
 
 ### 5.2 目标 MCP 工具
 
@@ -253,7 +295,7 @@ interface BrowserOperationRequestV1 {
 }
 ```
 
-上述是 proxy 接收的完整逻辑输入。E2E 模型可写投影还要移除 `operationId`：session、Tab、lease token、operation ID 和关联标签均由 `ai-chat-service` 的受限工具包装层注入；operation ID 由稳定 task/tool-call identity 派生或生成，并与原 tool call 绑定，模型不能覆盖。`operation` 只允许：
+上述是 proxy 接收的完整逻辑输入。E2E 模型可写投影还要移除 `operationId`：session、Tab、lease mode/token、operation ID 和关联标签均由 `ai-chat-service` 的受限工具包装层注入；operation ID 由稳定 task/tool-call identity 派生或生成，并与原 tool call 绑定，模型不能覆盖。`observe` 租约只能使用观测集合，`control` 才能使用动作集合。`operation` 只允许：
 
 - 观测：`page_state/dom_snapshot/target_state/url/title/text/value/attribute/count/tabs`。
 - 动作：语义脚本 `1.0` 的 `navigate/click/fill/type_text/press/select_option/check/uncheck/focus/blur/hover/scroll/set_files/switch_tab/close_tab`。
@@ -309,7 +351,11 @@ interface RunEventV1 {
 - `BrowserEventV1` 使用 browser-session-scoped `seq`，最低事件集：`browser_session.snapshot`、`tab.created/selected/closed`、`lease.issued/revoked/expired`、`operation.queued/started/completed`、`target.resolved/stale/ambiguous`、`artifact.created`、`animation.started/completed`。
 - Agent/浏览器事件只有过程事实；`ai-e2e` 写入自己的关联事件后才成为业务时间线的一部分。
 
-### 6.3 SSE 重连
+### 6.3 Authoring 事件
+
+`AuthoringEventV1` 使用 authoring-job-scoped `seq/stateVersion` 和同一通用因果字段。最低事件集：`authoring.snapshot/lifecycle_changed/stage_changed/completed`、`authoring_task.state_changed`、`authoring_attempt.completed`、`asset.candidate_created/validated/verified/activated/rejected`、`coverage.changed` 和 `decision.requested/applied`。
+
+### 6.4 SSE 重连
 
 - 每次连接第一条非 heartbeat 事件必须是当前完整 snapshot，snapshot 带当前 `seq` 和 `stateVersion`。
 - 后续事件严格递增；发现缺号、旧 seq 或客户端状态版本倒退时，客户端丢弃本地投影并重新获取 snapshot。
@@ -335,13 +381,13 @@ ai-e2e 持久化 intent/outbox
 不使用跨服务数据库事务。`ai-e2e` 必须维护 `integration_outbox` 和 `external_task_links`：
 
 - outbox 记录目标服务、命令类型、幂等键、脱敏 payload hash、状态、尝试次数、下次重试时间和结果引用。
-- external link 记录 run/page-task/attempt 与 agent task、browser session、lease、operation 的 opaque ref 和最后核对状态。
+- external link 按 run 或 authoring 上下文记录 page-task/attempt 或 authoring-task/attempt 与 agent task、browser session、lease、operation 的 opaque ref 和最后核对状态。
 - 外部调用完成但本地确认丢失时，以相同幂等键查询/重放；禁止生成新任务或新副作用操作掩盖未知结果。
 - outbox worker 不能在 SQLite write transaction 内等待网络。
 
 重启恢复：
 
-1. `ai-e2e` 扫描非终态 run、未确认 outbox 和活动 page task。
+1. `ai-e2e` 扫描非终态 run/authoring job、未确认 outbox 和活动 page/authoring task。
 2. 查询 `ai-chat-service` task 状态与 `proxy-adapter` operation ledger。
 3. 已完成事实按原 correlation 写回；执行中任务重新订阅事件；丢失的 Agent task 进入 `interrupted/blocked`，由主代理重建。
 4. 所有 `outcome_unknown` 先生成副作用检查 TODO；没有检查结果不得重试。
@@ -361,10 +407,11 @@ ai-e2e 持久化 intent/outbox
 2. `ai-e2e` 无需依赖 Agent 对话历史或 SSE 内存即可恢复 run 权威状态。
 3. 模型无法读取或覆盖控制租约 token、browser session/Tab 注入值和业务 correlation 映射。
 4. 相同 `operationId` 不会产生第二次浏览器副作用，未知结果必须先检查。
-5. 三套 SSE 均能从 snapshot 恢复；Run 的持久 seq 与状态更新同事务。
-6. 一个 run 任一时刻最多一个活动写租约和一个执行型页面任务。
+5. 四类目标 SSE 均能从各自 snapshot 恢复；Authoring/Run 的持久 seq 与业务状态更新同事务。
+6. 一个 browser session 任一时刻最多一个活动 control lease；一个 run 任一时刻最多一个执行型页面任务。
 7. 旧执行面不会与新执行面在同一 run 中交叉调用。
 8. 跨服务超时、重启和事件缺号均有可重复的查询与收敛路径。
+9. 首期控制面保持 loopback/local 单用户边界；非本机或多用户部署在统一认证授权协议落地前不能启动 semantic authoring/run。
 
 ## 10. 关联文档
 
@@ -373,3 +420,5 @@ ai-e2e 持久化 intent/outbox
 - `target-data-model.md`：run、outbox、外部引用和事件持久化。
 - `ai-model-skill-contract.md`：双模型、视觉输出和 Skills 执行隔离。
 - `semantic-script-schema.md`：原子动作与目标引用白名单。
+- `asset-authoring-repair-contract.md`：从零生成、复核、candidate 验证、影响分析和局部修复。
+- `migration-compatibility-acceptance-contract.md`：旧资产导入、版本级切流、回滚与发布验收。

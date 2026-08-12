@@ -14,7 +14,7 @@
 | 视觉模型 | 一次完整问题 + 一份不可变页面快照 | 页面状态摘要或可序列化目标候选 | 连续任务、流程状态、浏览器动作、脚本调度 |
 | Skills runtime | 固定版本 Skill manifest + 受限任务上下文 | 可审计的指令包和结构化结果 | 任意代码执行、秘密读取、浏览器所有权 |
 
-主代理和页面子代理都可以调用视觉模型。主代理默认只有只读浏览器观测能力；只有当前执行型页面子代理可以持有写控制租约。
+主代理和页面子代理都可以调用视觉模型。主代理只在原子操作安全边界持有 `observe` lease；只有当前执行型页面子代理可以持有 `control` lease。UI live view 不构成租约，也不能操作页面。
 
 ## 2. 分析/决策模型
 
@@ -287,4 +287,5 @@ provider/runtime 可用工具
 - `semantic-script-schema.md`：动作、断言和目标引用 Schema。
 - `run-state-decision-evidence-contract.md`：运行裁决、证据和人工控制。
 - `migration-compatibility-acceptance-contract.md`：能力门禁、服务升级、故障注入和发布验收。
+- `asset-authoring-repair-contract.md`：主代理耐久工作流、资产生成、验证和局部修复。
 - `../../ai-chat-service/PRODUCT-SPEC.md`：AI 能力当前实现与缺口。

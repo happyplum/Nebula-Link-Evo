@@ -23,14 +23,19 @@ projects
 │  ├─ version_deployment_bindings
 │  ├─ version_prd_documents
 │  ├─ version_decisions
+│  ├─ business_version_validations
+│  ├─ authoring_jobs ── authoring_tasks ── authoring_attempts / authoring_commands / authoring_events
 │  ├─ page_definitions ── page_definition_revisions
 │  │  └─ page_baseline_variants ── page_baseline_revisions
 │  ├─ business_modules ── business_module_revisions
 │  │  └─ functional_modules ── functional_module_revisions
 │  │     ├─ module_requirement_revisions
+│  │     ├─ functional_point_coverage
 │  │     └─ functional_scripts ── functional_script_revisions
 │  ├─ test_scenarios ── test_scenario_revisions
-│  └─ version_variable_definitions
+│  ├─ version_variable_definitions
+│  ├─ asset_revision_verifications
+│  └─ asset_revision_dependencies
 └─ test_runs
    ├─ run_plans ── run_plan_amendments
    ├─ run_todos ── run_todo_dependencies
@@ -44,6 +49,7 @@ projects
 schema_migrations
 legacy_import_batches ── legacy_entity_links
 integration_outbox ── external_task_links
+browser_jobs
 ```
 
 ## 3. 通用资产修订规则
@@ -74,8 +80,9 @@ integration_outbox ── external_task_links
 
 - 每个资产最多一个 `lifecycle='current'`，通过 partial unique index 保证。
 - `payload_json` 和 `content_sha256` 创建后不可更新；校验状态与 lifecycle 可以在受控事务内变化。
-- 激活新修订时，同一事务内校验 `valid`、把旧 current 改为 superseded、把新修订改为 current，并把业务版本状态改为 `needs_recheck`。
+- 激活新修订时，同一事务内校验 `valid`、把旧 current 改为 superseded、把新修订改为 current，并使所有引用旧 asset graph 的业务版本验证失效。功能脚本/场景的普通激活还必须存在与本次 authoring scope 匹配的 `asset_revision_verifications.status='verified'`。
 - rejected 修订永不成为 current；需要再次修改时创建新修订。
+- 功能脚本/场景的 `current` 表示版本选中的内容；是否 verified 必须结合精确 deployment/build/角色/locale/viewport 验证范围查询独立验证表，不能由 revision 上的单一布尔值表示。copy 是唯一允许在没有目标范围验证记录时创建 current 执行型修订的系统事务，目标版本必须保持 `needs_recheck` 且禁止正式运行。
 
 ## 4. 项目、部署与业务版本
 
@@ -142,6 +149,8 @@ interface DeploymentProfileV1 {
 
 `version_key` 格式与 script key 相同；归档版本只读，可查看、复制和读取历史运行，不能产生新资产修订。
 
+`business_versions.validation_status` 表示默认 deployment binding 的聚合就绪状态；多部署的真实就绪状态以 `business_version_validations` 为准，不能因默认环境 valid 推断其他环境可运行。
+
 ### 4.4 `version_deployment_bindings`
 
 | 字段 | 类型 | 约束 |
@@ -153,6 +162,14 @@ interface DeploymentProfileV1 {
 | `created_at` | TEXT |  |
 
 同一版本可以绑定多个兼容环境；运行必须显式解析到其中一个精确 revision。copy 复制 binding row，不复制秘密，也不依赖部署 profile 的可变 current。
+
+### 4.5 `business_version_validations`
+
+- `id/business_version_id/deployment_revision_id/asset_graph_sha256/verification_scope_sha256`。
+- `status(validating/valid/needs_recheck/invalid)`、`authoring_job_id`、`validated_at/invalidated_at/reason_json`。
+- `verification_scope_json` 只保存脱敏的 Git/build 标识、required roles/locales/viewports/baseline keys 和策略版本；secret 值不进入 scope。
+- 每个 version + deployment binding 最多一个 current validation；资产 current、部署绑定、Git/build 声明或 required matrix 改变时使旧记录 `needs_recheck`，但保留历史审计。
+- 正式 run 必须命中所选 deployment revision、当前 asset graph 和请求运行矩阵的 `valid` 记录；默认环境的版本聚合状态不能替代该检查。
 
 ## 5. PRD、长期决策与变量定义
 
@@ -501,12 +518,12 @@ copy 使用 `copy_request_id` 幂等并执行 `BEGIN IMMEDIATE`：
 1. 读取并锁定来源业务版本；archived 来源允许只读复制，invalid、结构不完整或缺少可选中 current valid 修订的来源拒绝复制。
 2. 固化来源 current revision ID、hash 和版本 deployment bindings 清单。
 3. 创建目标 business_version，状态 `needs_recheck`，记录 source version 和 copy request。
-4. 为页面、模块、脚本、场景、基线、变量定义和版本决策生成新稳定 ID，建立事务内 old→new map。
-5. 为每项资产创建 revision_no=1 的目标修订，payload 中所有版本内部 ID 使用 map 重写，并记录 source asset/revision。
-6. 复制 PRD、deployment binding、current decisions 和基线 manifest；不复制运行、事件、证据 manifest、实际变量、会话或密钥值。
+4. 为页面、模块、脚本、场景、基线、变量定义、版本决策和 coverage row 生成新 ID，建立事务内 old→new map。
+5. 为每项资产创建 revision_no=1 的目标修订，payload 中所有版本内部 ID 使用 map 重写，并记录 source asset/revision。复制的功能脚本/场景保持目标版本 current 选择，但不复制 `asset_revision_verifications` 或 `business_version_validations`；UI/API 由此派生为 stale。
+6. 复制 PRD、deployment binding、current decisions、current functional-point coverage 和基线 manifest；coverage 内 requirement/script/decision 引用使用目标 ID 重写。不复制运行、事件、验证记录、证据 manifest、实际变量、会话或密钥值。
 7. 对内容寻址 artifact 只新增独立 evidence/baseline item 引用并增加 ref count；blob 不物理复制，但不可变内容和生命周期不能受来源版本编辑影响。
 8. 执行全图引用校验、Schema 校验、hash 校验、无环检查和唯一页面签名检查。
-9. 校验失败整体 rollback；成功 commit 并返回目标版本/资产数量与需要重新检查的页面清单。
+9. 校验失败整体 rollback；成功 commit 并返回目标版本/资产数量、stale 执行资产与需要重新检查的页面清单。目标版本只有完成 recheck 并在目标 deployment revision 上重新验证后才能转为 `valid`。
 
 SQLite `BEGIN IMMEDIATE` 防止 copy 期间来源 current 指针变化。重复相同 `copy_request_id` 返回第一次结果，不产生第二份版本。
 
@@ -520,15 +537,105 @@ copy 后必须满足：
 - 共享只允许项目级 immutable deployment revision 和 content-addressed immutable blob。
 - 来源审计字段不参与运行解析。
 
-## 10. 运行与编排表
+## 10. 资产生成、复核与依赖索引
 
-### 10.1 `test_runs`
+### 10.1 `authoring_jobs`
+
+- `id/project_id/business_version_id/mode(bootstrap/recheck/repair/import_conversion)`。
+- `parent_run_id nullable`；仅 run-triggered repair 使用，并复用父 run 的 browser job/session 槽位。
+- `browser_job_id nullable`；需要真实页面时绑定一个 root browser job，嵌套 repair 必须与 parent run 相同。
+- `lifecycle(created/planning/running/paused/waiting_decision/completing/completed/cancelling/cancelled/failed)`。
+- `outcome(succeeded/partial/failed/cancelled) nullable`。
+- `stage/strategy_version/source_fingerprint/input_sha256/state_version/next_event_seq`。
+- `active_task_id/coverage_summary_json/result_json/pause_reason_json`。
+- `created_by/started_at/completed_at/created_at`。
+- partial unique index：每个 business version 最多一个非终态写 authoring job。
+
+`lifecycle=failed` 仅用于协调器/持久化/协议完整性故障；正常封存但 required coverage 或验证不通过使用 `lifecycle=completed,outcome=failed`。
+
+### 10.2 `authoring_tasks` 与 `authoring_attempts`
+
+`authoring_tasks`：
+
+- `id/job_id/task_key/type/state/dependencies_json/target_type/target_id nullable`。
+- `type(ingest_prd/extract_requirements/discover_page/model_page/specify_module/generate_script/generate_scenario/verify_script/verify_scenario/analyze_impact/validate_version/activate_assets)`。
+- `state(pending/ready/running/waiting_decision/blocked/succeeded/failed/skipped/cancelled)`。
+- `input_sha256/input_json_redacted/tool_policy_hash/skill_policy_hash/budget_json`。
+- `current_attempt_id/decision_id nullable/started_at/completed_at/created_at`。
+- `UNIQUE(job_id, task_key)`；依赖必须无环；partial unique 保证每个 job 最多一个 running task/外部 Agent task。
+
+`authoring_attempts`：
+
+- `id/job_id/task_id/attempt_no/agent_task_id/page_task_ref nullable`。
+- `status(succeeded/failed/blocked/interrupted/decision_required/cancelled)`。
+- `candidate_asset_type/candidate_asset_id/candidate_revision_id nullable`。
+- `input_sha256/result_json/evidence_manifest_id/error_json/started_at/completed_at`。
+- `UNIQUE(task_id, attempt_no)`；终态不可更新。
+
+### 10.3 `authoring_commands`
+
+- `id` = 命令幂等键，PK；`job_id/type(start/pause/resume/cancel/answer_decision)`。
+- `expected_state_version/request_sha256/status(accepted/completed/rejected)`。
+- `result_json/error_json/created_by/created_at/completed_at`。
+- 同 ID 同 hash 返回原结果；同 ID 不同 hash 拒绝。命令状态改变和 authoring event 在同一事务。
+
+### 10.4 `authoring_events`
+
+与 run event 同样使用 job-scoped 单调 seq、stateVersion、entity、correlation/causation 和脱敏 payload。job 状态更新、seq 分配和 event 插入同事务；SSE 只投影持久事件。
+
+### 10.5 `functional_point_coverage`
+
+- `id/business_version_id/functional_module_id/module_requirement_revision_id/functional_point_key`。
+- `required`、`disposition(covered_by_script/manual/out_of_scope/blocked)`。
+- `functional_script_id/functional_script_revision_id nullable`；只有 `covered_by_script` 时必填，且引用同版本 static-valid revision。
+- `decision_id nullable`；required point 使用 manual/out_of_scope 时必须引用已 applied 的版本长期决策，blocked 不得计入完成。
+- `lifecycle(current/superseded)`、`source_authoring_job_id/reason_json/created_at`；partial unique 保证同版本 + requirement revision + point key 最多一个 current。
+
+coverage row 是逐功能点的可审计投影，summary 只能由 current rows 聚合。requirement revision、script current 或适用 decision 变化时，相关 coverage 失效并由 authoring 生成新 row；不能原地把 blocked 改成 covered。required coverage 全部 `covered_by_script`，或经用户决策明确降级为 optional，版本才可通过验证。
+
+### 10.6 `asset_revision_verifications`
+
+- `id/business_version_id/asset_type(functional_script/test_scenario)/asset_id/asset_revision_id`。
+- `deployment_revision_id/verification_scope_sha256/verification_scope_json/dependency_closure_sha256`。
+- `status(verified/stale/revoked)`、`verification_run_id/authoring_job_id/evidence_manifest_id`。
+- `verified_at/stale_at/stale_reason_json/created_at`；同 revision + scope 最多一个 current 状态记录，状态变化受控且尝试历史由 run/authoring attempt 保留。
+
+scope 至少冻结 deployment revision、Git/build 标识、角色、locale、viewport、baseline keys 和会影响动作/断言的策略 major；`dependency_closure_sha256` 冻结该资产实际引用的页面/需求/脚本/决策修订闭包。脚本/场景“verified/stale”均是相对于 scope + 依赖闭包的派生结果；不能把环境 A 的验证用于环境 B，也不能因无关资产变更让本记录失效。场景引用的脚本修订改变时，其闭包 hash 必然改变并需重验。
+
+### 10.7 `asset_revision_dependencies`
+
+- `id/business_version_id/from_asset_type/from_asset_id/from_revision_id`。
+- `to_asset_type/to_asset_id/to_revision_id nullable`。
+- `relation(page_scope/requirement_source/scenario_call/output_binding/assertion_input/baseline_target/decision_source)`。
+- `source_pointer` 指向已校验 payload 内字段，`created_at`。
+- 复合唯一覆盖 from revision + relation + to identity + source pointer。
+
+依赖边只能由 valid payload 确定性生成，并在 revision 激活事务中更新；模型不能直接写边。impact analyzer 使用该索引计算受影响闭包，具体重验范围仍按 change kind 裁剪。
+
+### 10.8 `browser_jobs`
+
+- `id/root_context_type(run/authoring)/root_context_id/queue_seq`；`queue_seq` 由 ai-e2e 全局单调分配。
+- `state(queued/acquiring/active/releasing/completed/cancelled/failed)`。
+- `browser_session_id nullable/capability_snapshot_sha256/created_at/acquired_at/released_at/error_json`。
+- partial unique 保证全库最多一个 `state in (acquiring,active,releasing)`；队首按 queue_seq，取消只影响尚未 active 的 job。
+- standalone authoring 和 formal run 各创建一个 root browser job；run-triggered nested repair 复用 parent run 的 `browser_job_id`，不创建新的 queue_seq。
+
+队列及业务状态在同一 ai-e2e SQLite 中恢复；proxy 只接收队首的 opaque session request 并实施 `maxActiveBrowserSessions=1` 独占门禁，不存储或解释 run/authoring 类型。
+
+完整 authoring 阶段、coverage、验证与局部修复规则见 `asset-authoring-repair-contract.md`。
+
+## 11. 运行与编排表
+
+### 11.1 `test_runs`
 
 | 字段 | 类型 | 约束/语义 |
 |---|---|---|
 | `id` | TEXT | UUID PK |
 | `project_id/business_version_id` | TEXT | FK |
 | `engine` | TEXT | 固定 `semantic_v1`；旧运行保留在 `execution_runs` 并标记 legacy，不混链 |
+| `purpose` | TEXT | `formal/authoring_verification`；验证 run 不计作正式业务通过 |
+| `authoring_job_id` | TEXT NULL | purpose=authoring_verification 时必填，formal 时为空 |
+| `browser_job_id` | TEXT | standalone verification/formal run 的 root job，嵌套 verification 与 parent run 相同 |
 | `scenario_revision_id` | TEXT | 精确修订 |
 | `deployment_revision_id` | TEXT | 精确修订 |
 | `lifecycle` | TEXT | created/planning/ready/running/paused/completing/completed/cancelling/cancelled |
@@ -541,9 +648,9 @@ copy 后必须满足：
 | `summary_json` | TEXT NULL | 终态统计，不是状态源 |
 | `started_at/completed_at/created_at` | TEXT |  |
 
-约束：首期同一 run 最多一个 active page task；同一 browser session 最多一个 active run 写租约，由服务和 proxy 双重校验。
+约束：首期同一 run 最多一个 active page task；同一 browser session 全局最多一个 control lease/持有者，由服务和 proxy 双重校验。formal run 只能冻结当前 asset graph 中、目标 scope 已验证的 current revision；authoring_verification run 只能由 authoring coordinator 创建，可以冻结同版本 static-valid candidate revision，但其输出不发布为正式业务结果。
 
-### 10.2 `run_plans`
+### 11.2 `run_plans`
 
 每个 run 恰好一个不可变基础计划：
 
@@ -558,7 +665,7 @@ copy 后必须满足：
 - category：`script_repair/recovery/login/cleanup/operator_decision`。
 - amendment 只追加替换/新增指令，不改写 base payload 或旧 amendment。
 
-### 10.3 `run_todos`
+### 11.3 `run_todos`
 
 | 字段 | 类型 | 语义 |
 |---|---|---|
@@ -579,17 +686,17 @@ copy 后必须满足：
 
 `run_todo_dependencies`：`run_id/from_todo_id/to_todo_id/mode/requires_outputs_json`，复合唯一；写入前无环校验。
 
-### 10.4 `page_tasks`
+### 11.4 `page_tasks`
 
 - `id/run_id/task_no/state(created/running/paused/completed/failed/interrupted/cancelled)`
 - `todo_ids_json`（固定有序、至少一个）
 - `page_definition_revision_id/browser_session_id/tab_id`
-- `control_lease_ref_hash`（不存 capability 明文）
+- `browser_lease_ref_hash`（不存 capability 明文）
 - `ai_task_id/ai_session_id nullable`
 - `tool_policy_hash/task_payload_sha256/budget_json/checkpoint_json/result_json`
 - `started_at/completed_at/created_at`。
 
-### 10.5 `execution_attempts`
+### 11.5 `execution_attempts`
 
 - `id/run_id/todo_id/page_task_id/attempt_no`
 - `script_revision_id/result(succeeded/assertion_failed/execution_failed/precondition_blocked/recoverable_interruption/decision_required/outcome_unknown/cancelled)`
@@ -601,7 +708,7 @@ copy 后必须满足：
 
 尝试终态字段不可更新；后续恢复创建新的 attempt_no。
 
-### 10.6 `run_variables`
+### 11.6 `run_variables`
 
 - `id/run_id/namespace/name/type/sensitivity/status(confirmed/unconfirmed/revoked)`
 - `value_json` 仅 public/sensitive 脱敏值；secret 保存 `secret_ref`
@@ -609,11 +716,11 @@ copy 后必须满足：
 - `created_at/revoked_at`
 - confirmed 变量 `UNIQUE(run_id, namespace, name)`；不可原地覆盖，变更用新 namespace 或 revoke + 新记录。
 
-## 11. 决策、命令与事件
+## 12. 决策、命令与事件
 
-### 11.1 `decision_requests`
+### 12.1 `decision_requests`
 
-- `id/run_id/todo_id/attempt_id nullable/status(open/answered/applied/withdrawn/expired)`
+- `id/context_type(run/authoring)/context_id/run_id/authoring_job_id/todo_id/attempt_id nullable/status(open/answered/applied/withdrawn/expired)`；run_id 与 authoring_job_id 恰有一个非空。
 - `category/required_authority/question/facts_json/evidence_refs_json/options_json/recommendation_key/impact_json`
 - `state_version/created_by/created_at/answered_at/applied_at`。
 
@@ -622,7 +729,7 @@ copy 后必须满足：
 - `id/decision_request_id/answer_key/custom_answer/reason/answered_by_type/id/created_at`
 - 每个 request 最多一个有效 answer；变更决定创建 superseding request，不覆盖答案。
 
-### 11.2 `run_commands`
+### 12.2 `run_commands`
 
 所有 create/start/pause/resume/cancel/answer/apply 命令记录：
 
@@ -630,7 +737,7 @@ copy 后必须满足：
 - `run_id/type/request_sha256/status(accepted/completed/rejected)/result_json/error_json/created_at/completed_at`。
 - 同 ID 同 hash 返回原结果；同 ID 不同 hash 拒绝冲突。
 
-### 11.3 `run_events`
+### 12.3 `run_events`
 
 | 字段 | 类型 | 约束 |
 |---|---|---|
@@ -648,12 +755,12 @@ copy 后必须满足：
 
 分配 seq、更新实体和插入 event 在同一事务中；SSE 只读取此表/内存投影，不自行创造业务状态。
 
-### 11.4 `integration_outbox`
+### 12.4 `integration_outbox`
 
 跨服务 intent 使用持久 outbox：
 
 - `id` = 跨服务幂等键，PK。
-- `run_id/page_task_id/attempt_id nullable`。
+- `context_type(run/authoring)/context_id`，以及 `run_id/page_task_id/attempt_id` 或 `authoring_job_id/authoring_task_id/authoring_attempt_id` nullable；两类上下文恰有一组有效。
 - `target_service(ai_chat_service/proxy_adapter)/command_type/endpoint_or_tool`。
 - `request_sha256/payload_json_redacted/secret_binding_ref nullable`；不保存租约 token 或 secret 值。
 - `status(pending/dispatching/confirmed/retryable_failed/terminal_failed/cancelled)`。
@@ -662,23 +769,23 @@ copy 后必须满足：
 
 业务事务只写 outbox intent，不等待网络。worker 通过相同幂等键派发；超时后先查询外部结果再决定重放。
 
-### 11.5 `external_task_links`
+### 12.5 `external_task_links`
 
 跨服务 opaque ref 与最后核对状态：
 
-- `id/run_id/page_task_id/attempt_id nullable`。
+- `id/context_type(run/authoring)/context_id`，以及 `run_id/page_task_id/attempt_id` 或 `authoring_job_id/authoring_task_id/authoring_attempt_id` nullable；两类上下文恰有一组有效。
 - `service(ai_chat_service/proxy_adapter)`。
-- `kind(agent_task/browser_session/control_lease/browser_operation/artifact)`。
+- `kind(agent_task/browser_session/browser_lease/browser_operation/artifact)`。
 - `external_id/external_state/last_external_seq nullable`。
 - `request_sha256/result_sha256/result_ref nullable`。
 - `created_at/last_reconciled_at/terminal_at nullable`。
 - `UNIQUE(service, kind, external_id)`。
 
-控制租约只保存 `external_id` 和 token hash/secret ref；明文 capability 不进入数据库。`browser_operation_links` 继续提供 step 级业务关联，`external_task_links` 提供通用恢复索引。
+浏览器租约只保存 `external_id` 和 token hash/secret ref；明文 capability 不进入数据库。`browser_operation_links` 继续提供 step 级业务关联，`external_task_links` 提供通用恢复索引。
 
-## 12. 证据与产物
+## 13. 证据与产物
 
-### 12.1 `artifact_objects`
+### 13.1 `artifact_objects`
 
 内容寻址对象：
 
@@ -689,16 +796,16 @@ copy 后必须满足：
 
 默认本地 backend 使用 `artifacts/objects/<sha256[0..1]>/<sha256>`；DB 不保存大截图、DOM、video 或 trace base64。
 
-### 12.2 `evidence_manifests`
+### 13.2 `evidence_manifests`
 
-- `id/run_id/todo_id/attempt_id nullable/schema_id/status(open/sealed)/supersedes_manifest_id nullable`
+- `id/context_type(run/authoring)/context_id/run_id/authoring_job_id/todo_id/attempt_id nullable/schema_id/status(open/sealed)/supersedes_manifest_id nullable`；run_id 与 authoring_job_id 恰有一个非空。
 - `completeness(complete/partial/failed)/manifest_json/manifest_sha256`
 - `retention_class(success_7d/failure_30d/pinned/custom)`
 - `sealed_at/created_at`。
 
 manifest sealed 后不可修改；补充证据创建新的 manifest revision 或追加 manifest item set，并显式引用前 manifest。
 
-### 12.3 `evidence_items`
+### 13.3 `evidence_items`
 
 - `id/manifest_id/item_type(screenshot/annotated_screenshot/dom_snapshot/operation_result/assertion_result/console_meta/network_meta/video_segment/trace/agent_audit/decision)`
 - `artifact_object_id nullable/inline_json nullable`
@@ -706,7 +813,7 @@ manifest sealed 后不可修改；补充证据创建新的 manifest revision 或
 - `redaction_status/integrity_sha256/metadata_json`
 - 每项必须二选一引用 artifact 或小型 inline JSON。
 
-### 12.4 `browser_operation_links`
+### 13.4 `browser_operation_links`
 
 - `operation_id` PK（proxy operation ID）
 - `run_id/page_task_id/todo_id/attempt_id/step_id`
@@ -715,7 +822,7 @@ manifest sealed 后不可修改；补充证据创建新的 manifest revision 或
 
 此表只做业务关联；幂等操作账本权威仍在 `proxy-adapter`。
 
-## 13. 删除、归档与保留
+## 14. 删除、归档与保留
 
 - business version 有 run 引用时只能 archive；不能通过删除版本级联删除历史运行。
 - asset current 修订不可删除；可 archive 稳定资产并保留 revision。
@@ -723,7 +830,7 @@ manifest sealed 后不可修改；补充证据创建新的 manifest revision 或
 - artifact ref_count 归零且超过 retention 后才物理删除；pin 优先于 TTL。
 - secret reference 的撤销由密钥提供方负责，数据库只记录引用已 revoked。
 
-## 14. 一致性与事务边界
+## 15. 一致性与事务边界
 
 以下操作必须单事务：
 
@@ -733,12 +840,14 @@ manifest sealed 后不可修改；补充证据创建新的 manifest revision 或
 - TODO/attempt 状态转换、输出发布、依赖传播和 run event。
 - 接受/应用决策与追加 plan amendment。
 - seal evidence manifest 与写 completeness/hash。
+- 记录一次已完成的 authoring 静态校验或外部验证结果、证据引用和 authoring event。
+- current 激活、dependency index、coverage、business version validation 和 authoring event；浏览器/模型验证本身已在事务外完成。
 
 跨服务调用不能纳入 SQLite 事务，采用 outbox/状态机：先记录 intent/command，再调用外部服务，最后以幂等回调/查询收敛。不得在持有 SQLite write transaction 时等待模型或浏览器网络调用。
 
 正式 migration runner、001–013 结构 baseline、备份、legacy import 账本和旧资产映射规则见 `migration-compatibility-acceptance-contract.md`。目标表通过增量 migration 新增；首轮不删除、重命名或反向改写旧表。
 
-## 15. 当前实现差距
+## 16. 当前实现差距
 
 - 现有项目级表没有 business version；module、URL、scenario 和 script 均直接归项目链路。
 - 现有 `scripts` 把 scenario 级 TypeScript 文本与可变 status 放在同表，没有稳定功能脚本身份、不可变 revision payload 或 content hash。
@@ -747,8 +856,9 @@ manifest sealed 后不可修改；补充证据创建新的 manifest revision 或
 - 现有截图路径和日志直接挂在 execution run，没有内容寻址、完整度、脱敏、保留和跨服务产物提升。
 - 现有 URL 表把实际 URL、单快照和逻辑页面混为一个实体。
 - 当前启动直接重复调用 migration 001–013，没有 schema migration checksum/状态账本、旧库结构 preflight 或 legacy import 映射。
+- 当前没有持久 authoring job/task/attempt/event、candidate 验证层、coverage disposition、revision dependency index 或跨 authoring/run 的 browser job queue；PRD/探索/生成/修复依赖项目状态和短期调用。
 
-## 16. 验收原则
+## 17. 验收原则
 
 1. 任一运行能解析到精确 version/deployment/page/requirement/script/scenario revision 与 hash。
 2. current asset revision 唯一，payload 不可原地修改；修复产生新 revision。
@@ -761,8 +871,10 @@ manifest sealed 后不可修改；补充证据创建新的 manifest revision 或
 9. 大媒体不进入 SQLite，秘密值不进入资产、运行变量、事件或证据。
 10. 跨服务等待不占用 SQLite 写事务，outbox 可用原幂等键恢复，外部引用可查询收敛。
 11. 旧库先通过结构 preflight 和可重入 import；legacy run 不伪装成 semantic run，迁移失败不改写源表。
+12. required 脚本/场景未真实验证时版本不能宣称 authoring succeeded；局部修复依赖索引可解释且不重写无关资产。
+13. authoring/run 公平队列在 ai-e2e 重启后保持 queue_seq，proxy 只允许队首取得唯一活动 session；嵌套 repair 不产生自等待。
 
-## 17. 关联文档
+## 18. 关联文档
 
 - `version-page-asset-contract.md`：业务版本、页面和 copy 产品语义。
 - `semantic-script-schema.md`：功能脚本 revision payload。
@@ -771,4 +883,5 @@ manifest sealed 后不可修改；补充证据创建新的 manifest revision 或
 - `agent-browser-execution-contract.md`：浏览器会话、页面任务和操作关联。
 - `service-api-event-contract.md`：outbox、外部任务引用、API 与事件恢复协议。
 - `migration-compatibility-acceptance-contract.md`：正式 migration runner、旧资产映射、切流、回滚与发布验收。
+- `asset-authoring-repair-contract.md`：authoring job、coverage、candidate 验证、影响分析与局部激活。
 - `requirements-baseline.md`：总体需求基线。

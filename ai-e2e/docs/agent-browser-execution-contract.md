@@ -44,7 +44,8 @@
 ### 4.1 首期会话模型
 
 - 测试流程开始时，由 `ai-e2e` 控制面申请或绑定一个 `proxy-adapter` 浏览器执行会话；主代理持有生命周期控制权。
-- 页面子代理只获得当前页面任务所需的短期控制租约，不获得 `browser_open`、`browser_close` 或任意 Tab 的全局控制权。
+- v1 每个 `proxy-adapter` 进程全局最多一个活动浏览器执行会话；authoring verification 和 test run 进入同一个 browser job FIFO，不把 singleton Context 包装成可并行的多个逻辑 session。
+- 页面子代理只获得当前页面任务所需的短期 `control` 租约，不获得 `browser_open`、`browser_close` 或任意 Tab 的全局控制权。主代理需要视觉/页面分析时只在操作安全边界获得 `observe` 租约。
 - 首期一个浏览器执行会话只有一个有效写控制租约和一条 FIFO 动作队列。一个操作结束后才接收下一个副作用动作。
 - 同一流程可切换多个 Tab，但任一时刻只有一个活动 Tab 操作流；Tab 必须先显式选择再执行，不依赖“当前最后焦点页面”。
 - 主代理结束、取消或回收流程时才决定是否释放会话；子代理结束不隐式关闭浏览器。
@@ -57,7 +58,7 @@
 
 - `browserSessionId`：`proxy-adapter` 托管的浏览器执行会话。
 - `tabId`：稳定 Tab 身份，不以数组下标代替。
-- `controlLeaseId`：限制有效期、允许 Tab 和操作集合的控制租约。
+- `browserLeaseId`：限制 mode（`observe/control`）、有效期、允许 Tab 和操作集合的租约；首期同一会话最多一个 control。
 - `operationId`：一次原子浏览器操作的全局唯一身份兼幂等键。
 - `snapshotId`：不可变页面观测快照引用。
 - `targetRef`：可重解析的目标描述。
@@ -73,7 +74,7 @@
 - 允许调用的 TODO 集合、固定顺序和停止条件。
 - 页面运行锚点、允许 Tab、输入变量与可写输出槽。
 - 业务前置检查、硬断言、副作用和重试策略。
-- 浏览器会话、控制租约及允许的 MCP 工具/Skills 白名单。
+- 浏览器会话、`control` 租约及允许的 MCP 工具/Skills 白名单。
 - 证据要求、时间/步骤/Token 预算和最近检查点。
 
 子代理可以在一个页面任务中串行完成多个已就绪 TODO，但每个 TODO 必须独立记录开始、步骤、结果、输出、副作用和证据。遇到失败、登出、前置阻塞、待决策或授权范围外需求时，页面任务立即停止并结构化上报。
@@ -87,11 +88,11 @@
 
 ## 6. 原子操作信封
 
-每次通用浏览器操作应具有以下逻辑字段组；具体 JSON Schema 在实现前确定：
+每次通用浏览器操作应具有以下逻辑字段组；精确请求、结果与工具投影见 `service-api-event-contract.md`：
 
 | 字段组 | 最低语义 |
 |---|---|
-| 路由 | `browserSessionId`、`tabId`、`controlLeaseId` |
+| 路由 | `browserSessionId`、`tabId`、`browserLeaseId`（mode 为 `observe/control`） |
 | 身份与顺序 | `operationId`、租约内单调序号、提交时间、截止时间 |
 | 动作 | 通用动作/观测类型、参数、`targetRef`、是否可能产生副作用 |
 | 展示 | 人类可读步骤名称、动画/采集策略；不得包含业务机密 |
@@ -202,7 +203,7 @@
 ## 15. 仍待实现设计
 
 - 执行会话、租约、Agent task、原子操作、结果查询、事件流与动作/观测白名单已在 `service-api-event-contract.md` 锁定；正式 OpenAPI/JSON Schema 文件和代码尚未生成。
-- 租约签名与服务鉴权方式、操作账本的具体持久化介质和清理任务。
+- 租约已锁定为短期 opaque token + hash/process epoch，操作账本默认 proxy 自有 SQLite WAL，保留与清理门禁见 `service-api-event-contract.md`；正式表 migration、JSON Schema 和代码尚未实现。
 - 动画媒体协议、播放速度和重放索引格式。
 - 多账号隔离与后期多 Tab 并发需要的 BrowserContext/Tab 调度模型。
 
@@ -218,6 +219,7 @@
 8. 动画开关不改变动作、断言和输出结果。
 9. Agent 会话丢失后能从任务包、运行变量、检查点和操作账本重建，不依赖对话记忆恢复业务真相。
 10. 修复产生新脚本修订和追加式运行计划修订，不覆盖既有尝试及其证据。
+11. 首期同一 proxy 进程最多一个活动浏览器执行会话；observe 不与写操作竞争快照，UI live view 无控制权。
 
 ## 17. 关联文档
 
@@ -230,5 +232,6 @@
 - `target-data-model.md`：页面任务、执行尝试、操作关联、事件和证据引用的持久化结构。
 - `service-api-event-contract.md`：三服务 API、Agent task、MCP 原子操作、事件与恢复协议。
 - `ai-model-skill-contract.md`：双模型、视觉定位包和 Skills 权限协议。
+- `asset-authoring-repair-contract.md`：authoring verification、运行前复核、影响分析和局部修复。
 - `../PRODUCT-SPEC.md`：当前实现状态和目标缺口。
 - `../../docs/PRODUCT-SPEC-INDEX.md`：跨包契约索引。

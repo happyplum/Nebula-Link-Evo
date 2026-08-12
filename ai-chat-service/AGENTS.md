@@ -57,3 +57,5 @@ pnpm type-check   # tsc --noEmit
 - No implicit all-tools access for scoped tasks, and no use of conversation memory as the authoritative store for caller business state.
 - Agent/tool-call audit may be referenced by callers, but this package does not own E2E decisions, evidence manifests, retention or pass/fail aggregation; see `ai-e2e/docs/run-state-decision-evidence-contract.md`.
 - Never place lease tokens, secret values, full DOM/base64 payloads, or untrusted page instructions into ordinary model/audit/event fields. Runtime wrappers inject capabilities and revalidate every tool call.
+- Agent tasks are bounded executions, never the durable ai-e2e main workflow. Bootstrap/recheck/repair progress, asset candidates, coverage, decisions and activation remain in ai-e2e; this service returns one task result and opaque audit references.
+- A browser binding declares `observe` or `control`; the model never sees lease credentials. Main-agent analysis uses observe only at proxy safe boundaries, while an execution child may receive control.

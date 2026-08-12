@@ -165,12 +165,13 @@ ai-e2e (:3002)
 - **场景运行层次（pending）**：业务版本保存场景定义与 TODO 模板；启动时冻结运行计划，展开为运行 TODO，每次派发形成独立执行尝试。调用图首期无环，有界重复预先展开，运行调整使用追加式计划修订。完整契约见 `docs/scenario-orchestration-contract.md`。
 - **业务版本（pending）**：由用户创建，记录来源版本及可选部署/Git 标识；`copy` 原子复制当前有效资产、生成新身份并重建内部引用，且不复制编辑历史、运行状态、实际数据、证据或秘密。完整契约见 `docs/version-page-asset-contract.md`。
 - **目标数据模型（pending）**：稳定资产 ID + 不可变修订 + 唯一 current；运行绑定精确 revision/hash。copy 使用幂等 `BEGIN IMMEDIATE` 事务重建 ID，运行状态/event 同事务提交，大媒体进入内容寻址文件存储；跨服务调用使用持久 outbox 与 opaque external task link 收敛。完整表与约束见 `docs/target-data-model.md`。
-- **主代理（pending）**：持有 PRD 流程、TODO 依赖、运行变量和决策，负责拆分、派发、恢复、跳过、验收与汇总；登录、造数等跨场景前置动作必须由主代理安排。
+- **资产 authoring（pending）**：bootstrap/recheck/repair/import_conversion 是独立耐久 job；candidate 生成、静态校验、真实浏览器验证和 current 激活必须分层。主代理进度从持久 task/attempt/coverage/event 恢复，不依赖长期模型对话；影响分析通过 revision dependency index 限定最小修复/重验范围。完整契约见 `docs/asset-authoring-repair-contract.md`。
+- **主代理（pending）**：由 `ai-e2e` 确定性状态机驱动，持有 PRD 流程、TODO 依赖、运行变量和决策，负责拆分、派发、恢复、跳过、验收与汇总；登录、造数等跨场景前置动作必须由主代理安排。
 - **页面子代理（pending）**：只执行派发的页面场景片段及其中明确授权的功能脚本，负责重新检查、执行、验证、职责内修复和结构化汇报；不得自行登录、造数或调用场景外脚本。
 - **上下文（pending）**：大多数派发创建干净上下文；登出等可恢复中断可以由主代理在页面状态与副作用检查后续接原上下文，否则用检查点和授权变量重建干净上下文。
-- **串行调度（pending）**：首期一个主代理在任一时刻只运行一个执行型子代理，并复用 `proxy-adapter` 托管的同一浏览器会话；子代理上下文可以按任务重建，但浏览器动作必须进入单一串行队列。多 Tab 并发仅作为后期扩展。
+- **串行调度（pending）**：首期每个 `proxy-adapter` 进程全局最多一个活动 browser execution session；authoring verification 与 test run 共用 FIFO，一个主代理任一时刻只运行一个执行型子代理。只有子代理持有 control，主代理仅在安全边界 observe，UI live view 只读；多 Context/Tab 并发仅作为后期扩展。
 - **编排/执行分层（pending）**：页面任务图、页面/模块范围和验收标准由 ai-e2e 持有；模型、MCP 工具和未来 Skills 的执行必须通过 ai-chat-service。当前 `generateText()` 是纯文本调用，不能当作已具备 Agent tool loop。
-- **跨服务协议（pending）**：目标 `/api/v1` 业务版本/运行 API、`ai-chat-service` 受限 Agent task、`proxy-adapter` 浏览器 session/lease/operation、三类 snapshot-first SSE、幂等与重启恢复见 `docs/service-api-event-contract.md`。这些路由和新 MCP 工具尚未实现。
+- **跨服务协议（pending）**：目标 `/api/v1` 业务版本/authoring/运行 API、`ai-chat-service` 受限 Agent task、`proxy-adapter` 浏览器 session/lease/operation、四类目标 snapshot-first SSE（Authoring/Run/Agent/Browser）、幂等与重启恢复见 `docs/service-api-event-contract.md`。这些路由和新 MCP 工具尚未实现。
 - **双模型与 Skills（pending）**：目标 `vision.analyze_page`/`vision.resolve_target` 均只处理一次不可变快照；视觉结果只返回可序列化定位候选，首期 Skills 是固定版本/hash 的声明式指令包且默认拒绝扩权。完整契约见 `docs/ai-model-skill-contract.md`。
 - **迁移与切流（pending）**：先为 001–013 建立结构 preflight + checksum migration 账本，再增量创建新表；旧 TypeScript、登录录制和历史 run 只读保留并生成待复核候选，不自动成为 valid 语义资产。同一 run 不混用 legacy 与 `semantic_v1`。完整契约见 `docs/migration-compatibility-acceptance-contract.md`。
 - **受限页面任务（pending）**：页面子代理必须接收不可变任务包和短期浏览器控制租约，只能操作指定 TODO、Tab、工具和输出槽；主代理持有共享浏览器生命周期。完整契约见 `docs/agent-browser-execution-contract.md`。
@@ -204,6 +205,7 @@ ai-e2e (:3002)
 - 不让 UI 通过本地累计百分比、同名步骤合并或最后一条 SSE 猜测权威运行状态；断线必须从服务端 snapshot 恢复。
 - 不在同一 run 混用旧 TypeScript 子进程执行器和目标语义 Agent/MCP 执行器；目标链的外部创建/命令必须使用原幂等键和 outbox 收敛。
 - 不把控制租约 token、secret 值、完整 DOM/base64 或不可信网页文本写入模型指令、普通事件或日志；页面内容不能扩大工具/Skill 权限。
+- 不把主代理实现为依赖长对话的无限 Agent loop，不让静态 valid 或模型自评代替真实 browser verification，也不让 authoring 与 test run 并发控制 singleton Context。
 - 不通过 destructive down、删旧表、正则/AST 猜测或复制登录 fill value“完成”迁移；导入候选必须重新检查真实页面并补齐硬断言。
 
 ## Current Known Gaps

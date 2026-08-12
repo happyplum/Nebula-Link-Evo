@@ -24,13 +24,17 @@ Browser ←→ Debug UI (:5173 dev)
 - **AI 基础能力层（ai-chat-service，in-progress）**：分析/决策模型、视觉模型、MCP client/ToolRegistry 与会话能力已交付；Skills runtime 为 pending，尚未实现。
 - **E2E 业务层（ai-e2e，in-progress）**：现有 PRD 分析、页面探索、URL binding、scenario 级 TypeScript 脚本和 run 级修复；目标是业务版本、URL+参数页面锚点、模块下多个功能脚本、跨模块场景调用图，以及主代理派发页面子代理的编排。
 
-目标上下文边界以页面场景片段为单位：主代理维护 PRD 流程、TODO 依赖、运行变量和决策并持有浏览器生命周期；子代理只执行不可变任务包授权的模块、功能脚本、Tab 与工具。默认使用干净子代理上下文，可恢复中断在重新检查页面状态和副作用后可由主代理决定续接。首期一个主代理在任一时刻只运行一个执行型子代理，同一测试流程复用 `proxy-adapter` 托管的浏览器会话并串行动作；后期再以多 Tab 为单位扩展并发。所有目标浏览器操作按语义步骤经 `proxy-adapter` 可视执行，使用可去重、可查询的原子操作身份，并关联实时画面与结果证据；结果不确定时先检查副作用。
+目标主代理是 `ai-e2e` 内由 authoring/run 状态机驱动的持久工作流协调器，不依赖一个长期模型会话。首次 PRD + URL 依次完成需求抽取、页面发现/建模、模块需求、脚本/场景 candidate、静态校验、真实浏览器验证和原子激活；后续 recheck/repair 通过 revision dependency index 只重验和修复受影响闭包。
+
+目标上下文边界以页面场景片段为单位：主代理维护 PRD 流程、TODO 依赖、运行变量和决策并持有浏览器生命周期；子代理只执行不可变任务包授权的模块、功能脚本、Tab 与工具。默认使用干净子代理上下文，可恢复中断在重新检查页面状态和副作用后可由主代理决定续接。首期每个 `proxy-adapter` 进程全局最多一个活动 browser execution session，authoring verification 与 test run 共用一个 FIFO；只有当前子代理持有 control，主代理只在原子操作安全边界 observe，UI live view 只读。后期再以明确版本化的多 Context/Tab capability 扩展并发。所有目标浏览器操作按语义步骤经 `proxy-adapter` 可视执行，使用可去重、可查询的原子操作身份，并关联实时画面与结果证据；结果不确定时先检查副作用。
 
 目标运行状态按测试流程、TODO、执行尝试、Agent 与浏览器操作分层；`ai-e2e` 以持久 snapshot、单调运行事件和不可变证据 manifest 作为业务真相。`proxy-adapter` 只保留可提升的短期浏览器原始产物，`ai-chat-service` 只保留 Agent/工具审计；运行决策、失败传播、长期证据和汇总仍归 `ai-e2e`。
 
 目标跨服务链使用 `ai-e2e /api/v1/runs` → `ai-chat-service /api/v1/agent-tasks` → `proxy-adapter /mcp` 与 `/api/v1/browser-execution/*`。所有外部写操作使用幂等键，`ai-e2e` 以 outbox 驱动并查询外部账本收敛；Run、Agent task、Browser session 各自使用 snapshot-first SSE 和独立单调序号。当前这些目标接口尚未实现，现有 Chat/Debug/项目 SSE 保持兼容。
 
 目标迁移不原地改写旧执行资产：001–013 先结构校验并纳入正式 migration 账本，旧 TypeScript/login/run 只读保留，导入生成待复核业务版本/候选。新链按 business version opt-in，run 固定 `semantic_v1`，不与 legacy 子进程混合；三服务先通过 `/api/v1/capabilities` preflight。
+
+首期新控制面只支持 loopback/local 单用户部署。capability、Origin 与 lease 不代替认证；远程或多用户拓扑必须先增加统一身份、授权和租户隔离，再开放 semantic authoring/run。
 
 ### 端口映射
 

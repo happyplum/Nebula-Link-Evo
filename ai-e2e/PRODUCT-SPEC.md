@@ -19,6 +19,7 @@
 - 目标由主代理维护 PRD 流程、TODO 依赖、运行变量和决策，页面子代理只执行获授权的页面场景片段。
 - 目标业务版本由用户创建并支持深复制，复制后独立维护，不覆盖来源版本。
 - 目标所有浏览器执行都经过 `proxy-adapter` 并在实时画面、语义步骤和证据中可观察。
+- 目标以持久 authoring job 从 PRD + URL 从零生成、复核和局部修复资产；candidate 必须经过静态校验、真实浏览器验证和原子激活。
 
 ### 边界
 
@@ -59,17 +60,18 @@
 | 模块需求文档 | pending | 融合 PRD 片段、真实页面 DOM/截图、页面锚点、功能说明和有序测试场景，作为脚本生成与修复的可追溯输入；当前信息分散在多个表和 prompt 上下文中。 |
 | 功能脚本 | pending | 模块下最小复用、执行、验证、修复和重复调用单元；目标为 `nebula.ai-e2e.functional-script/1.0` 结构化 JSON，动作/断言/引用均受白名单约束。当前 `scripts` 以 `test_scenario_id` 为归属，内容是 TypeScript。 |
 | 测试场景 | in-progress | 业务验收单位，目标以无环调用图跨模块/页面编排多个功能脚本；业务版本保存场景定义与 TODO 模板，运行时冻结计划并产生 TODO 与独立执行尝试。当前 scenario 只能直接拥有一组测试数据和脚本版本。 |
-| 业务版本 | pending | 用户创建，可记录来源、部署和 Git 标识；目标采用稳定资产 + 不可变修订，`copy` 以幂等事务生成新身份并重建引用，不复制运行状态、实际数据、证据或秘密。数据模型见 `docs/target-data-model.md`。 |
-| 主代理 | pending | 持有 PRD 流程、TODO 依赖、运行变量和决策，负责拆分、派发、恢复、跳过、验收与汇总。 |
+| 业务版本 | pending | 用户创建，可记录来源、部署和 Git 标识；目标采用稳定资产 + 不可变修订，`copy` 以幂等事务生成新身份并重建引用，不复制运行状态、实际数据、证据或秘密；复制的执行资产 stale，recheck 前不能正式运行。数据模型见 `docs/target-data-model.md`。 |
+| 主代理 | pending | `ai-e2e` 确定性工作流协调器，状态来自持久 authoring/run job/task/attempt/event 而非长模型对话；持有 PRD 流程、TODO 依赖、运行变量和决策，负责拆分、派发、恢复、跳过、验收与汇总。 |
 | 页面子代理 | pending | 只执行派发的页面场景片段，负责固定重新检查、执行、验证、职责内修复和汇报；不得自行登录、造数或调用场景外脚本。 |
 | 上下文策略 | pending | 默认创建干净子代理上下文；登出等可恢复中断可由主代理在状态/副作用检查后续接原上下文，否则从检查点重建。 |
 | Agent 执行路径 | pending | 页面任务图和验收归 ai-e2e，模型/MCP/未来 Skills 执行归 ai-chat-service；目标 Agent task、浏览器 operation 与事件协议见 `docs/service-api-event-contract.md`，当前 `AiChatClient.generateText()` 是纯文本生成，不执行 tool loop。 |
-| 页面任务与浏览器控制租约 | pending | 主代理派发不可变页面任务包并持有浏览器生命周期；子代理只取得指定 TODO、Tab、工具和输出槽的短期控制租约。 |
+| 页面任务与浏览器控制租约 | pending | 首期 proxy 进程全局最多一个活动 session；authoring/run 共用 FIFO。主代理派发不可变页面任务包并持有生命周期，只在安全边界 observe；子代理只取得指定 TODO、Tab、工具和输出槽的短期 control；UI live view 只读。 |
 | 可视执行与证据 | in-progress | `proxy-adapter` 已有实时画面、marker/overlay、交互日志和失败样本基础；目标按单个语义步骤推进，每个浏览器原子操作使用幂等 ID，并关联场景、步骤、结果和失败证据；状态不确定时先检查副作用。 |
 | 分层运行状态 | pending | 测试流程、运行 TODO、执行尝试、Agent 会话和浏览器操作分别持有状态；取消、登出中断、待决策、依赖跳过和业务失败不混用。 |
 | 失败/阻塞/暂停/跳过 | pending | blocked/interrupted/waiting_decision 在主代理收敛前不提前跳过下游；终态失败只传播到真实依赖节点，独立节点可重新检查后继续。 |
 | 决策与证据 | pending | 运行决定与业务版本长期决定分载体追加保存；ai-e2e 持有不可变证据 manifest、业务关联、完整度、脱敏与保留策略。 |
 | DOM 变化局部修复 | in-progress | 当前已支持 run 级诊断与可选自动修复；目标是只修复当前业务版本内受影响的功能脚本并重新验证。 |
+| 资产 authoring 工作流 | pending | `ai-e2e` 持久化 bootstrap/recheck/repair/import_conversion job/task/attempt/event；主代理是确定性协调器，不依赖长模型对话。candidate、coverage、revision dependency index、真实验证与原子激活见 `docs/asset-authoring-repair-contract.md`。 |
 
 ---
 
@@ -88,8 +90,9 @@
 | 业务服务 | `src/services/` | shipped | PRDAnalyzerService、ExplorerService、ScriptGeneratorService、TestScenarioService、ProjectService、ExecutorService、AIDiagnosisService、StateMachineService、LoginRecorderService | 工作流核心 |
 | AI 提示与 token | `src/ai/`（PromptTemplateManager、TokenBudgetTracker） | shipped | prompts 加载 + token 预算统计 |  |
 | 数据库 | `src/database/`（DatabaseManager、migrations、repos） | shipped | 独立 SQLite | 不与 proxy-adapter / ai-chat-service 共享 |
-| 目标领域数据模型 | `src/database/`（待新增 migrations/repos） | pending | 业务版本与不可变资产修订、部署/页面/模块需求/功能脚本/场景、run plan/TODO/attempt/decision/event/evidence/outbox | 目标表、索引、copy/状态事务见 `docs/target-data-model.md`；外部服务只保存 opaque refs |
+| 目标领域数据模型 | `src/database/`（待新增 migrations/repos） | pending | 业务版本与不可变资产修订、部署/页面/模块需求/功能脚本/场景、authoring/coverage/scoped verification/browser queue、run plan/TODO/attempt/decision/event/evidence/outbox | 目标表、索引、copy/状态事务见 `docs/target-data-model.md`；外部服务只保存 opaque refs |
 | 目标 migration/import | `src/database/`（待新增 runner/importer） | pending | 001–013 结构 baseline、checksum migration、备份、legacy import batch/entity link | 只增不毁；旧脚本/登录/run 生成候选或只读历史，见 `docs/migration-compatibility-acceptance-contract.md` |
+| 目标 authoring 协调器 | `src/services/`、`src/database/`（待新增） | pending | bootstrap/recheck/repair/import_conversion job、task/attempt、coverage、candidate 验证、影响分析与激活 | 外部 Agent/browser 调用走 outbox；同一版本一个写 job，完整契约见 `docs/asset-authoring-repair-contract.md` |
 | 类型 | `src/types/`（project / test-scenario / state-machine / sse-events / script / url） | shipped | 后端领域类型 / API schema |  |
 | 工具 | `src/utils/`（retry、report-html、html-escape） | shipped | 通用工具 |  |
 | Prompts（稳定资产） | `prompts/*.md` | shipped | AI 提示词模板 | **必须保留**，属于稳定资产 |
@@ -139,6 +142,7 @@
 | `/api/projects/:id/state` | shipped | 状态机查询与流转 | services/StateMachineService |
 | `/api/projects/:id/events` | GET (SSE) | 阶段实时事件推送 | server/plugins (SSE) |
 | `/api/v1/projects/:projectId/business-versions`、`/api/v1/business-versions/*` | pending | 业务版本、页面/模块/脚本/场景资产与不可变 revision | 目标契约见 `docs/service-api-event-contract.md` |
+| `/api/v1/business-versions/:versionId/authoring-jobs`、`/api/v1/authoring-jobs/:jobId/*` | pending | 资产 bootstrap/recheck/repair/import_conversion、控制、决策、coverage、snapshot-first SSE 与 event log | 目标契约见 `docs/asset-authoring-repair-contract.md`、`docs/service-api-event-contract.md` |
 | `/api/v1/projects/:projectId/runs`、`/api/v1/runs/:runId/*` | pending | 创建/控制 run、决策、snapshot-first SSE、持久事件与证据查询 | 目标契约见 `docs/service-api-event-contract.md` |
 | `/api/v1/capabilities` | GET (pending) | 声明 semantic run/API/schema/limits 支持，供 UI 和依赖 preflight | 目标契约见 `docs/service-api-event-contract.md` |
 
@@ -181,8 +185,9 @@
 | 页面 URL + 参数锚点 | — | pending | 尚无验收面 | 需新增 Origin 无关路由模板、身份/运行/忽略参数分类、运行锚点与命名基线变体，详见 `docs/version-page-asset-contract.md` |
 | 模块需求文档 | — | pending | 尚无验收面 | 需把 PRD 与真实页面证据收敛为持久化、可追溯输入 |
 | 功能脚本 + 场景调用图 | services/ScriptGeneratorService、database/scripts | pending | 当前仅验证 scenario 级 TypeScript 脚本 | 脚本语义与 v1 Schema 见 `docs/functional-script-contract.md`、`docs/semantic-script-schema.md`；无环调用图、运行计划快照、TODO、尝试、依赖传播及追加式修订见 `docs/scenario-orchestration-contract.md` |
-| 业务版本 + 深复制 | — | pending | 尚无验收面 | 目标使用幂等 `copy_request_id` + `BEGIN IMMEDIATE`，复制 current valid 修订并重建全图 ID；只可共享 immutable deployment revision/content-addressed blob |
-| 主代理 / 页面子代理调度与上下文策略 | — | pending | 尚无验收面 | 首期同一时刻一个主代理只运行一个执行型子代理，共享 proxy-adapter 浏览器会话并串行动作；任务包、租约、暂停、检查点和恢复契约见 `docs/agent-browser-execution-contract.md` |
+| 业务版本 + 深复制 | — | pending | 尚无验收面 | 目标使用幂等 `copy_request_id` + `BEGIN IMMEDIATE`，复制 current valid 修订并重建全图 ID；执行资产在目标标记 stale，完成 recheck 前不能正式运行；只可共享 immutable deployment revision/content-addressed blob |
+| 从零生成、复核与局部修复 | services、database（待新增） | pending | 当前无耐久 authoring 验收面 | 从 PRD + URL 生成 candidate，经静态校验和真实可视验证后激活；recheck/repair 依据 dependency index 最小化重验，不重写无关资产 |
+| 主代理 / 页面子代理调度与上下文策略 | — | pending | 尚无验收面 | 主代理由持久 authoring/run 状态驱动；首期 proxy 进程全局一个活动 browser session，authoring/run 共用 FIFO，只有子代理 control，主代理安全边界 observe；任务包、租约、暂停、检查点和恢复见两份执行/authoring 契约 |
 | ai-chat-service Agent task 消费 | infrastructure/ai-chat-client | pending | 当前仅有纯文本 generate 与基础 chat session 客户端 | 目标使用 `/api/v1/agent-tasks`，传入不可变任务、工具/Skill 白名单、预算和模型不可见浏览器 binding，见 `docs/service-api-event-contract.md` 与 `docs/ai-model-skill-contract.md` |
 | proxy-adapter 可视语义执行 | services/ExecutorService | pending | 当前仍由 `npx tsx` 子进程执行 | 需替换为 browser session/lease + `browser-control.operation_*` 的语义步骤执行；精确控制面见 `docs/service-api-event-contract.md` |
 | 跨服务 outbox 与恢复 | database、后台 worker（待新增） | pending | 当前无验收面 | 外部创建/命令先持久化 intent，使用原幂等键派发并查询 Agent/operation ledger 收敛；不得在 SQLite 写事务中等待网络 |
@@ -215,6 +220,7 @@
 > 15. 修改主代理 / 页面子代理的任务边界、上下文、决策、恢复、失败或跳过协议
 > 16. 修改目标浏览器执行入口、可视步骤、重放或失败证据契约
 > 17. 修改测试流程/TODO/尝试状态、决策、依赖传播、证据完整度/保留/脱敏或运行事件快照契约
+> 18. 修改 authoring job、candidate 验证、coverage、影响分析、修订依赖或激活协议
 
 ### 维护检查清单
 
@@ -231,6 +237,7 @@
 | 修改模型角色、视觉调用或 Skills | 目标领域与代理编排 + ai-chat-service PRODUCT-SPEC + `docs/ai-model-skill-contract.md` + `docs/service-api-event-contract.md` + `docs/PRODUCT-SPEC-INDEX.md` |
 | 修改旧数据导入、双轨 API、切流、回滚或发布门禁 | 目标领域与代理编排 + 模块/路由/功能/缺口 + `docs/migration-compatibility-acceptance-contract.md` + `docs/target-data-model.md` + `docs/PRODUCT-SPEC-INDEX.md` |
 | 修改状态、决策、依赖传播、证据或运行控制 UI | 目标领域与代理编排 + 功能清单 + UI 模块清单 + `ui/AGENTS.md` + `docs/run-state-decision-evidence-contract.md` + `docs/requirements-baseline.md` + `docs/PRODUCT-SPEC-INDEX.md` |
+| 修改资产生成、复核、验证或局部修复 | 目标领域与代理编排 + 模块/路由/功能/缺口 + `docs/asset-authoring-repair-contract.md` + `docs/target-data-model.md` + `docs/service-api-event-contract.md` + UI AGENTS + `docs/PRODUCT-SPEC-INDEX.md` |
 | 修改 executor 约束 | 包级目标与边界 + 功能清单（脚本执行） + Runtime Gotchas |
 | 修改 facade 行为 | 模块清单 + 包级目标与边界 |
 | 跨包契约变更（端口、API 路径、SSE 事件、tool 命名） | 本文件 + 所有消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
@@ -258,6 +265,7 @@
 | 分层运行状态、决策与权威事件未实现 | requirement-gap | pending | 当前项目阶段和 script run 状态不能表达 TODO/尝试/中断/待决策/取消；SSE 无持久事件序号与运行 snapshot，UI 仍本地推断进度 |
 | DOM 变化影响定位未实现 | requirement-gap | pending | 当前自动修复由失败 run 触发，尚不能按当前业务版本的功能脚本定向维护 |
 | 正式 migration/import/cutover 未实现 | requirement-gap | pending | 当前启动重复执行 001–013 且无 migration 账本；旧 TypeScript/login/run 的候选导入、能力协商、版本级切流和回滚尚未实现 |
+| 持久 authoring/coverage/影响索引未实现 | requirement-gap | pending | 当前 PRDAnalyzer/Explorer/ScriptGenerator/自动修复直接围绕旧项目状态和短期调用；没有 job/task/attempt/event、candidate verified/current 分层、revision dependency index 或跨 authoring/run 的持久 browser job queue |
 
 完整目标需求、已确认边界与尚待技术设计内容见 `docs/requirements-baseline.md`。
 
@@ -275,6 +283,7 @@
 - `ai-e2e/docs/service-api-event-contract.md` — 三服务目标 API、MCP 原子操作、事件、幂等、outbox 与恢复
 - `ai-e2e/docs/ai-model-skill-contract.md` — 分析/决策模型、单次视觉模型、受限 Agent task 与 Skills runtime
 - `ai-e2e/docs/migration-compatibility-acceptance-contract.md` — 旧库/资产迁移、双轨兼容、切流、回滚和技术验收
+- `ai-e2e/docs/asset-authoring-repair-contract.md` — 从零生成、复核、真实验证、影响分析和局部修复
 - `ai-e2e/docs/gap-analysis.md` — `deprecated` 历史缺口对照
 - `ai-e2e/docs/roadmap.md` — `deprecated` 历史路线，不用于制定新目标
 - `ai-e2e/ui/AGENTS.md` — UI 子工作区约束
