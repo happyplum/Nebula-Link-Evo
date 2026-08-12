@@ -38,6 +38,7 @@
 | chat-sse-stream | ai-chat-service | [chat-sse-stream.md](chat-sse-stream.md) |
 | session-state-machine | ai-chat-service | [session-state-machine.md](session-state-machine.md) |
 | ai-provider-system | ai-chat-service | [ai-provider-system.md](ai-provider-system.md) |
+| agent-tasks | ai-chat-service + proxy-adapter | [agent-tasks.md](agent-tasks.md) |
 | vision-analysis | ai-chat-service | [vision-analysis.md](vision-analysis.md) |
 | chat-rendering | debug-ui | [chat-rendering.md](chat-rendering.md) |
 | debug-ui-panels | debug-ui | [debug-ui-panels.md](debug-ui-panels.md) |

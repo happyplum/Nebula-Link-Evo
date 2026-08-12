@@ -310,7 +310,7 @@ open → answered → applied
 
 ## 13. 实现前仍需精确定义
 
-- 各层实体表、状态 token、command 幂等记录与 run event 持久化已在 `target-data-model.md` 锁定；精确服务 API/SSE payload 与 snapshot 重连协议已在 `service-api-event-contract.md` 锁定，正式 Schema 和代码尚未实现。
+- 各层实体表、状态 token、command 幂等记录与 run event 持久化已在 `target-data-model.md` 锁定；精确服务 API/SSE payload 与 snapshot 重连协议已在 `service-api-event-contract.md` 锁定。ai-chat-service Agent task POST/GET 已实现，command、事件及其余服务正式 Schema/代码尚未实现。
 - 证据对象存储、内容哈希、提升事务、脱敏管线、访问权限和清理任务。
 - UI 组件层级、实时画面协议、依赖图表现和操作动画样式。
 - 环境风险与审批已锁定；仍需实现风险投影、policy evaluation/grant 持久化、审批 UI 与跨服务门禁。
