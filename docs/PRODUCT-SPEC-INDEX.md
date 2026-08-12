@@ -166,7 +166,7 @@ debug-ui  ←──  （仅被用户消费）
 - **页面锚点（pending）**：页面定义以不含 Origin 的规范化路由模板 + 身份参数约束标识；运行锚点再绑定部署、动态参数和基线变体。弹窗/抽屉不是页面，模块只归属一个主要页面。当前完整 `urls.url` 不是稳定身份，目标契约见 `ai-e2e/docs/version-page-asset-contract.md`。
 - **功能模块（in-progress）**：一个页面包含多个功能模块，一个功能模块目标上包含多个功能脚本。当前 `functional_modules.sort_order` 和 URL binding 已提供基础，但没有 FunctionalScript 实体。
 - **模块需求文档（pending）**：融合 PRD 片段、页面锚点、真实 DOM/截图证据、功能说明与有序场景，作为生成和修复的可追溯输入。
-- **功能脚本与场景（pending）**：功能脚本是最小复用、独立验证和修复单元；首期脚本只包含显式输入、线性步骤、硬业务断言、成功后输出与声明副作用，不能调用其他脚本。测试场景使用无环调用图；业务版本保存场景定义与 TODO 模板，运行时冻结计划并产生 TODO 和独立执行尝试。当前持久化仍是 scenario 级 TypeScript script version，目标契约见 `ai-e2e/docs/functional-script-contract.md` 与 `ai-e2e/docs/scenario-orchestration-contract.md`。
+- **功能脚本与场景（pending）**：功能脚本是最小复用、独立验证和修复单元；首期 `nebula.ai-e2e.functional-script/1.0` 只包含显式输入、线性步骤、白名单浏览器动作、硬业务断言、成功后输出与声明副作用，不能调用其他脚本或执行任意代码。测试场景使用无环调用图；业务版本保存场景定义与 TODO 模板，运行时冻结计划并产生 TODO 和独立执行尝试。当前持久化仍是 scenario 级 TypeScript script version，目标契约见 `ai-e2e/docs/functional-script-contract.md`、`ai-e2e/docs/semantic-script-schema.md` 与 `ai-e2e/docs/scenario-orchestration-contract.md`。
 - **业务版本（pending）**：用户显式创建，可记录来源版本及部署/Git 标识；`copy` 原子复制当前有效资产、生成新身份并重建内部引用，复制后不共享可变引用，也不复制编辑历史、运行状态、证据、实际数据或秘密。
 - **主代理 / 页面子代理（pending）**：主代理维护 PRD 流程、TODO 依赖、运行变量和决策，并负责派发、恢复、跳过、验收与汇总；子代理只执行获授权的页面场景片段，负责重新检查、执行、验证、职责内修复和汇报。
 - **上下文（pending）**：大多数派发使用干净子代理上下文；登出等可恢复中断可由主代理在页面状态和副作用检查后续接原上下文，否则从检查点与授权变量重建。
@@ -200,6 +200,7 @@ debug-ui  ←──  （仅被用户消费）
 | 修改业务版本、页面锚点、功能脚本、场景调用图、主/页面子代理、上下文、可视执行或失败证据 | 跨包契约（3.9） + `ai-e2e` PRODUCT-SPEC + `ai-e2e/AGENTS.md` + `ai-e2e/docs/requirements-baseline.md`；涉及版本/页面同步 `ai-e2e/docs/version-page-asset-contract.md`，功能脚本同步 `ai-e2e/docs/functional-script-contract.md`，场景编排同步 `ai-e2e/docs/scenario-orchestration-contract.md`，代理/浏览器执行同步 `ai-e2e/docs/agent-browser-execution-contract.md` + 根 README "核心产品架构" |
 | 修改 Agent 任务输入/工具作用域或浏览器会话、Tab、控制租约、原子操作、结果账本与生命周期事件 | 跨包契约（3.8、3.9） + `ai-chat-service`、`proxy-adapter`、`ai-e2e` PRODUCT-SPEC + `ai-e2e/docs/agent-browser-execution-contract.md` |
 | 修改运行/TODO/尝试状态、决策、依赖传播、证据所有权/完整度/保留/脱敏或运行快照事件 | 跨包契约（3.9） + `ai-e2e` PRODUCT-SPEC/AGENTS/UI AGENTS + `proxy-adapter` PRODUCT-SPEC（涉及原始产物时） + `ai-e2e/docs/run-state-decision-evidence-contract.md` |
+| 修改语义脚本 Schema、动作/断言/引用白名单或映射 | 跨包契约（3.6、3.9） + `ai-e2e`/`proxy-adapter` PRODUCT-SPEC + `ai-e2e/docs/functional-script-contract.md` + `ai-e2e/docs/semantic-script-schema.md` |
 | 修改端口分配 | 跨包契约（3.1） + 全局索引 + 根 README Packages 表 + 根 README Architecture 拓扑 |
 | 修改依赖方向（如新包依赖、facade 拆分） | 依赖方向图 + 全局索引 |
 
@@ -242,3 +243,4 @@ debug-ui  ←──  （仅被用户消费）
 - `docs/reference/ai-e2e-ui-architecture.md` — ai-e2e UI 架构
 - `ai-e2e/docs/agent-browser-execution-contract.md` — 页面任务、Agent 作用域、浏览器控制租约、原子操作与可视事件契约
 - `ai-e2e/docs/run-state-decision-evidence-contract.md` — 分层状态、失败传播、决策、证据与人工控制契约
+- `ai-e2e/docs/semantic-script-schema.md` — 首期语义功能脚本机器 Schema 与浏览器动作映射
