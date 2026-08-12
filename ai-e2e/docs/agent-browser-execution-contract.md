@@ -228,5 +228,6 @@
 - `version-page-asset-contract.md`：业务版本、页面运行锚点和基线资产。
 - `run-state-decision-evidence-contract.md`：运行/TODO/尝试状态、决策、证据与人工控制。
 - `semantic-script-schema.md`：语义步骤、动作/断言白名单和目标引用机器格式。
+- `target-data-model.md`：页面任务、执行尝试、操作关联、事件和证据引用的持久化结构。
 - `../PRODUCT-SPEC.md`：当前实现状态和目标缺口。
 - `../../docs/PRODUCT-SPEC-INDEX.md`：跨包契约索引。

@@ -168,6 +168,7 @@ debug-ui  ←──  （仅被用户消费）
 - **模块需求文档（pending）**：融合 PRD 片段、页面锚点、真实 DOM/截图证据、功能说明与有序场景，作为生成和修复的可追溯输入。
 - **功能脚本与场景（pending）**：功能脚本是最小复用、独立验证和修复单元；首期 `nebula.ai-e2e.functional-script/1.0` 只包含显式输入、线性步骤、白名单浏览器动作、硬业务断言、成功后输出与声明副作用，不能调用其他脚本或执行任意代码。测试场景使用无环调用图；业务版本保存场景定义与 TODO 模板，运行时冻结计划并产生 TODO 和独立执行尝试。当前持久化仍是 scenario 级 TypeScript script version，目标契约见 `ai-e2e/docs/functional-script-contract.md`、`ai-e2e/docs/semantic-script-schema.md` 与 `ai-e2e/docs/scenario-orchestration-contract.md`。
 - **业务版本（pending）**：用户显式创建，可记录来源版本及部署/Git 标识；`copy` 原子复制当前有效资产、生成新身份并重建内部引用，复制后不共享可变引用，也不复制编辑历史、运行状态、证据、实际数据或秘密。
+- **目标持久化（pending）**：`ai-e2e` 使用稳定资产 ID + 不可变 revision + 唯一 current；运行冻结精确 revision/hash。copy 通过幂等 SQLite 事务重建引用，状态/event 同事务提交，大媒体使用内容寻址对象。完整表与约束见 `ai-e2e/docs/target-data-model.md`。
 - **主代理 / 页面子代理（pending）**：主代理维护 PRD 流程、TODO 依赖、运行变量和决策，并负责派发、恢复、跳过、验收与汇总；子代理只执行获授权的页面场景片段，负责重新检查、执行、验证、职责内修复和汇报。
 - **上下文（pending）**：大多数派发使用干净子代理上下文；登出等可恢复中断可由主代理在页面状态和副作用检查后续接原上下文，否则从检查点与授权变量重建。
 - **串行调度（pending）**：首期一个主代理在任一时刻只运行一个执行型子代理，同一测试流程复用 `proxy-adapter` 托管的 Playwright/Chromium 实例和浏览器会话，所有浏览器动作进入单一串行队列。子代理上下文可按任务重建；多 Tab 并发仅作为后期扩展。
@@ -201,6 +202,7 @@ debug-ui  ←──  （仅被用户消费）
 | 修改 Agent 任务输入/工具作用域或浏览器会话、Tab、控制租约、原子操作、结果账本与生命周期事件 | 跨包契约（3.8、3.9） + `ai-chat-service`、`proxy-adapter`、`ai-e2e` PRODUCT-SPEC + `ai-e2e/docs/agent-browser-execution-contract.md` |
 | 修改运行/TODO/尝试状态、决策、依赖传播、证据所有权/完整度/保留/脱敏或运行快照事件 | 跨包契约（3.9） + `ai-e2e` PRODUCT-SPEC/AGENTS/UI AGENTS + `proxy-adapter` PRODUCT-SPEC（涉及原始产物时） + `ai-e2e/docs/run-state-decision-evidence-contract.md` |
 | 修改语义脚本 Schema、动作/断言/引用白名单或映射 | 跨包契约（3.6、3.9） + `ai-e2e`/`proxy-adapter` PRODUCT-SPEC + `ai-e2e/docs/functional-script-contract.md` + `ai-e2e/docs/semantic-script-schema.md` |
+| 修改业务版本/资产修订/运行/决策/事件/证据表、copy 或状态事务 | 跨包契约（3.9） + `ai-e2e` PRODUCT-SPEC/AGENTS + `ai-e2e/docs/target-data-model.md` + 相关产品契约 |
 | 修改端口分配 | 跨包契约（3.1） + 全局索引 + 根 README Packages 表 + 根 README Architecture 拓扑 |
 | 修改依赖方向（如新包依赖、facade 拆分） | 依赖方向图 + 全局索引 |
 
@@ -244,3 +246,4 @@ debug-ui  ←──  （仅被用户消费）
 - `ai-e2e/docs/agent-browser-execution-contract.md` — 页面任务、Agent 作用域、浏览器控制租约、原子操作与可视事件契约
 - `ai-e2e/docs/run-state-decision-evidence-contract.md` — 分层状态、失败传播、决策、证据与人工控制契约
 - `ai-e2e/docs/semantic-script-schema.md` — 首期语义功能脚本机器 Schema 与浏览器动作映射
+- `ai-e2e/docs/target-data-model.md` — 目标关系表、不可变修订、copy/运行事务和内容寻址证据存储
