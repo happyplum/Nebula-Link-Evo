@@ -140,6 +140,7 @@ ai-e2e (:3002)
 - 任一基址为空时，DB-only 路由继续工作，AI / Playwright 路由返回 `503`
 - `ServiceError.unavailable()` 用于服务缺失 / 降级场景
 - UI 通过 `/ai-e2e/` 前缀挂载，404 处理要兼顾 SPA 与 JSON API
+- 项目 SSE 在 `GET /api/projects/:id/events` 订阅处按 `event.data.projectId` 过滤：匹配当前项目或未声明 `projectId` 的事件才会写入该连接；项目级事件生产者必须携带 `projectId`，隔离测试需并行连接至少两个项目流。
 
 ## Workflow Truths
 
