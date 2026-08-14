@@ -62,6 +62,7 @@ pnpm type-check   # tsc --noEmit
 - Data fetching via TanStack Query (useQuery, useMutation)
 - Centralized testids in `src/shared/testing/testids.ts`
 - Feature directory structure: components/, hooks/, store.ts, index.ts
+- Zustand selector 返回数组、对象或集合时，空值回退必须使用模块级稳定常量（如 `EMPTY_MESSAGES`），不得在 selector 内用 `?? []` / `?? {}` 创建新引用，以免触发 `useSyncExternalStore` 重渲染循环。
 - No external UI component libraries (custom components with Radix primitives where needed)
 
 ## Anti-Patterns
