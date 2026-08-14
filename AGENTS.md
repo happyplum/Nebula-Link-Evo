@@ -55,6 +55,7 @@ pnpm format         # prettier --write debug-ui/src proxy-adapter/src ai-chat-se
 - `start.bat` is not a thin wrapper around `pnpm build`: it builds `shared`, starts LiveKit, verifies ports, then builds/starts `proxy-adapter` and `ai-chat-service` (if applicable).
 - `proxy-adapter` startup order matters: env/config load → DB backup init outside tests → plugin registration → `AppService.initialize()` → browser-control provider → MCP/debug surfaces.
 - Chat reconnect always reboots from a fresh `session.snapshot`; there is no `Last-Event-ID` replay contract to preserve.
+- `proxy-adapter` 与 `ai-chat-service` 的配置加载器只按工作目录依次搜索 `config/config.json`、`../config/config.json`、`../../config/config.json`、`nebula-link-evo/config/config.json`（显式 `configPath` 优先）；不会自动搜索包内 `proxy-adapter/config/` 或 `ai-chat-service/config/`。
 
 ## Repository-wide constraints
 
