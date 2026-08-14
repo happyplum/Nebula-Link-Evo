@@ -76,7 +76,6 @@ nul
 proxy-adapter/tests/output/
 $null
 .sisyphus
-.serena
 .worktrees/
 **/*.sqlite-shm
 **/*.sqlite-wal
