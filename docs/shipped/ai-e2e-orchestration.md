@@ -60,3 +60,6 @@ PRD 驱动的 E2E 自动化测试编排器。把"需求分析 → 页面探索 �
 - [tech-debt] AI 模板约束执行不足：AI 偶尔生成 `test()` / `expect()` / `waitForLoadState('networkidle')` / `typescript` 前缀。变通：批量后处理。
 - [tech-debt] AI 超时预算未按操作细分：当前默认 `settings.timeout=180s`，`DEFAULT_AI_TIMEOUT_MS=300s`。
 - [tech-debt] 旧执行链只有基础串行：`POST /execution/run/:scriptId` 不支持并发；首期目标也采用串行，但必须替换为主代理逐项派发、子代理执行并共享 proxy-adapter 浏览器会话的受控串行链。
+- [shipped] Legacy 批量分析可靠性：`POST /analysis/decompose-all` 与 `POST /analysis/generate-all-scenarios` 对单项 AI 调用使用 `withRetry({ maxRetries: 2, baseDelayMs: 1000 })`，单项失败写入对应 `results[*].error` 而不中断整批；响应与完成 SSE 均携带 `succeeded` / `failed` 计数。
+- [shipped] Legacy `POST /execution/run-all` 按脚本串行调用 `ExecutorService.executeScript()`；仅 `error` / `timeout` 基础设施状态重试一次，断言 `fail` 不重试，响应统一为 `{ total, succeeded, failed, results }`。
+- [shipped] 项目事件 SSE 在 `ai-e2e/src/server/routes/events.ts` 的订阅连接处过滤：声明 `data.projectId` 的事件只投递到匹配项目，未声明项目的事件保持广播兼容。
