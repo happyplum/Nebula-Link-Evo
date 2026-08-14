@@ -115,8 +115,9 @@ curl http://localhost:3000/api/health
 ```
 debug-ui/           # Frontend (React 19 + TypeScript + Vite)
 proxy-adapter/      # Browser MCP gateway (Fastify, MCP Server, Playwright control)
-  src/mcps/         #   Built-in MCP modules
+  src/mcp-server/   #   MCP Server transport (StreamableHTTP)
   src/tools/        #   ToolRegistry + providers (browser-control, MCP client)
+  src/browser-tools/#   browser-control tool definitions
 ai-chat-service/    # AI chat backend (Fastify, conversation, chat SSE, provider orchestration)
 ai-e2e/             # E2E automation orchestrator (consumes proxy-adapter and ai-chat-service HTTP APIs)
 shared/             # Shared types & utils (@nebula-link-evo/shared)

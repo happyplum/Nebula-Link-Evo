@@ -9,8 +9,9 @@ AI-assisted browser automation platform. `proxy-adapter` is the browser MCP gate
 ```text
 shared/             Shared types and utilities (no src/ dir — source at package root)
 proxy-adapter/      Browser MCP gateway — MCP Server, Playwright control, debug streams (:3000)
-  src/mcps/         Built-in MCP modules (not stdio)
-  src/tools/        ToolRegistry + browser-control provider + MCP Server adapter
+  src/mcp-server/   MCP Server transport (StreamableHTTP)
+  src/tools/        ToolRegistry + providers + MCP Server adapter
+  src/browser-tools/ browser-control tool definitions
 ai-chat-service/    AI chat backend — conversation, provider orchestration, Chat SSE (:3001)
 debug-ui/           Primary web UI — React SPA, Vite (:5173 dev)
 ai-e2e/             AI E2E test orchestration (:3002)
