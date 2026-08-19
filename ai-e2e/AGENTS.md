@@ -172,9 +172,9 @@ ai-e2e (:3002)
 - **上下文（pending）**：大多数派发创建干净上下文；登出等可恢复中断可以由主代理在页面状态与副作用检查后续接原上下文，否则用检查点和授权变量重建干净上下文。
 - **串行调度与身份（in-progress）**：`browser_jobs.queue_seq` 的持久 FIFO、全库单 active 槽和嵌套 authoring/verification 复用父 browser job 已交付；实际 session/lease 派发与身份检查 runtime 仍 pending。首期每个 session 固定一个 BrowserContext 和一个活动 actor，跨账号/角色只通过主代理显式编排认证脚本串行切换。
 - **环境与副作用策略（in-progress）**：policy evaluation/grant/decision 表、Run/Authoring 风险投影 hash 与 evaluation 幂等仓储已交付；确定性环境规则、审批/grant 原子应用和逐 effectId runtime 门禁仍 pending。完整契约见 `docs/environment-side-effect-policy-contract.md`。
-- **编排/执行分层（pending）**：页面任务图、页面/模块范围和验收标准由 ai-e2e 持有；模型、MCP 工具和未来 Skills 的执行必须通过 ai-chat-service。当前 `generateText()` 是纯文本调用，不能当作已具备 Agent tool loop。
+- **编排/执行分层（pending）**：页面任务图、页面/模块范围和验收标准由 ai-e2e 持有；模型、MCP 工具和 Skills 的执行必须通过 ai-chat-service。上游 Agent task/单 Skill tool loop 已交付，但本包当前 `generateText()` 仍是纯文本调用，尚未接入该执行链。
 - **跨服务协议（in-progress）**：三服务数据账本与 opaque 引用边界、ai-e2e outbox/external link 已交付；ai-e2e authoring/run API、outbox worker、四类 snapshot-first SSE 和端到端重启协调仍 pending。完整契约见 `docs/service-api-event-contract.md`。
-- **双模型与 Skills（pending）**：目标 `vision.analyze_page`/`vision.resolve_target` 均只处理一次不可变快照；视觉结果只返回可序列化定位候选，首期 Skills 是固定版本/hash 的声明式指令包且默认拒绝扩权。完整契约见 `docs/ai-model-skill-contract.md`。
+- **双模型与 Skills（in-progress）**：`ai-chat-service` 已交付本地只读、固定版本/hash、默认拒绝扩权的单 Skill runtime；目标 `vision.analyze_page`/`vision.resolve_target` 和本包消费链仍 pending。视觉结果只返回一次不可变快照的可序列化定位候选。完整契约见 `docs/ai-model-skill-contract.md`。
 - **迁移与切流（in-progress）**：015–017 已通过 checksum/状态账本增量创建目标表，失败 rollback、checksum 漂移拒绝且 legacy 表保持不动；001–014 结构 preflight/baseline、文件备份、legacy importer 与 capability cutover 仍 pending。同一 run 不混用 legacy 与 `semantic_v1`。完整契约见 `docs/migration-compatibility-acceptance-contract.md`。
 - **受限页面任务（pending）**：页面子代理必须接收不可变任务包和短期浏览器控制租约，只能操作指定 TODO、Tab、工具和输出槽；主代理持有共享浏览器生命周期。完整契约见 `docs/agent-browser-execution-contract.md`。
 - **可视语义执行（pending）**：权威资产是结构化语义功能脚本，一个语义步骤一次受控推进；所有浏览器动作通过 proxy-adapter 执行并关联实时画面、语义步骤和结果证据。每个原子操作必须有幂等 ID，状态无法确认时先检查副作用；当前 `npx tsx` 子进程执行器是待替换的现状，不是目标执行路径。

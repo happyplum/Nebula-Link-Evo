@@ -12,10 +12,10 @@
 - [shipped] 声明式 Skills Runtime 已交付：`nebula.ai.skill/1.0` 按 id/version/hash 保存不可变版本，task 原子绑定精确 pin + policy hash；v1 每 task 一个当前 Skill，输入/输出 Schema 必须匹配，预算取更小值，工具取 task allowlist ∩ Skill patterns ∩ 既有 browser step/lease 约束。
 - [shipped] Skill v1 服务端默认只允许 `vision.*` 与 `browser-control.operation_execute` 工具命名空间；文件系统、shell、网络、环境变量与 secret 工具默认拒绝。Skill 指令作为固定 system context 装载但不能覆盖 task/tool/schema 安全规则，也不会写入事件。
 - [shipped] Skill 执行记录 `skill_loaded/skill_execute/skill_result/skill_failure` task events；已有任务的幂等重放先返回持久事实，不依赖当前目录仍加载该版本，新任务必须使用当前 catalog 的精确 hash。
-- [shipped] 任务工具默认拒绝，实际可用集合是精确 `toolPolicy.allow` 与运行时 ToolRegistry 的交集；当前严格拒绝 wildcard、legacy `browser-control.*`、模型可见 `operation_get/cancel`、非空 Skill allowlist 和尚不能执行的普通工具 constraints。
+- [shipped] 任务工具默认拒绝，实际可用集合是精确 `toolPolicy.allow` 与运行时 ToolRegistry 的交集；当前严格拒绝 wildcard、legacy `browser-control.*`、模型可见 `operation_get/cancel`、超过一个或未精确匹配 catalog id/version/hash 的 Skill pin，以及尚不能执行的普通工具 constraints。
 - [shipped] 受控浏览器 wrapper 只向模型暴露调用方冻结的 `stepId` 以及模型建议的 `target/args`；session/Tab/lease/token/leaseSequence、稳定 operationId、kind/operation/effectId 和 `presentation.animation=off` 由服务端注入。observe binding 不能执行 act；若声明数量边界，当前只接受 `maxAffectedItems=1`。
 - [shipped] Agent browser step 可预授权 `beforeScreenshot/afterScreenshot/domSnapshot`，wrapper 原样注入受控 operation，由 proxy 生成真实 artifact；`videoSegment=true` 在 ai-chat-service 请求边界拒绝，不能绕过 proxy capability。
-- [shipped] `operation_execute` 传输失败或超时后先以同一 operationId 调用 `operation_get`；无法证明终态时返回 `outcome_unknown`，禁止盲重试。`operation_cancel` 已作为服务端内部包装能力接通，不暴露给模型；任务命令 API 尚未交付。
+- [shipped] `operation_execute` 传输失败或超时后先以同一 operationId 调用 `operation_get`；无法证明终态时返回 `outcome_unknown`，禁止盲重试。`operation_cancel` 已作为服务端内部包装能力接通，不暴露给模型。
 - [shipped] MCP 调试日志只记录脱敏、截断后的参数摘要，覆盖驼峰 `leaseToken` 等敏感字段；Agent task 模型输入、持久请求和 HTTP 响应不包含 token 值。
 - [shipped] Vercel AI SDK 使用配置的 decision model、受限工具集、turn/tool/time/token 预算与调用方 response Schema；`completed` 只表示结构化任务完成，不等于 ai-e2e TODO 通过。
 - [pending] 通用视觉 v2 与完整 policy evaluation/风险投影/active grant/参数级数量交集仍未实现；多 Skill 组合/嵌套调用也不在 v1，必须由调用方拆为独立 task。
