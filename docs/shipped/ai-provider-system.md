@@ -20,9 +20,9 @@
 - [designed] 目标内部视觉工具为 `vision.analyze_page` 与 `vision.resolve_target`：输入一个授权 snapshot，输出页面/DOM 摘要或可序列化 locator candidates；当前 `vision.find_element` 保留兼容，完整 Schema 见 `ai-e2e/docs/ai-model-skill-contract.md`。
 - [shipped] MCP client 与 ToolRegistry 位于 ai-chat-service，通过 Chat agent loop 向分析/决策模型提供浏览器及外部工具。
 - [shipped] ai-chat-service 已提供通用受限 Agent 任务核心，按任务约束精确工具白名单、预算和不透明关联信息，并以 decision model 返回调用方 Schema 校验后的结构化结果；与 Chat tool loop 隔离。
-- [shipped] `POST /api/v1/agent-tasks`、`GET /api/v1/agent-tasks/:taskId` 和 `GET /api/v1/capabilities` 已实现；browser binding 对模型、普通日志、持久请求和 HTTP 响应不可见。任务 commands/snapshot-first events/event-log 仍 pending，完整契约见 `ai-e2e/docs/service-api-event-contract.md`。
+- [shipped] `POST/GET /api/v1/agent-tasks*`、乐观 commands、安全 checkpoint、snapshot-first events/event-log 和 `GET /api/v1/capabilities` 已实现；browser binding 对模型、普通日志、持久请求和 HTTP 响应不可见。完整契约见 `ai-e2e/docs/service-api-event-contract.md`。
 - [designed] Agent task 是一次有界执行，不是 ai-e2e 的持久主代理；authoring 阶段、candidate、coverage、decision、actor/认证状态和激活留在 ai-e2e。browser binding 区分 `observe/control`，主代理分析只在 proxy 安全边界 observe，执行型页面子代理才可 control；ai-chat-service 不切换 BrowserContext/storage state，也不授权子代理自行登录。
 - [designed] E2E Agent task 接收 ai-e2e 冻结的 policy evaluation、风险投影 hash、当前语义步骤/effectId/数量边界和可选 grant 引用；工具 wrapper 每次调用求权限交集。ai-chat-service 不决定 environment、不签发审批，模型/Skill/页面内容不能扩大授权。
-- [designed] Skills runtime 归属 ai-chat-service；v1 是本地只读、按 id/version/hash 固定的声明式指令包，不能执行附带代码、联网安装或扩大 task 权限。当前没有 loader、registry 或执行路径，不得描述为 shipped。
-- [shipped] `/api/v1/capabilities` 已声明 Agent task/browser operation 协议、已实现功能与限制，并明确 vision v2、Skills、任务命令/事件和操作动画未实现；模型候选切换与完整 vision/Skill capability 仍待后续。
+- [shipped] Skills runtime 归属 ai-chat-service；v1 从 `AI_SKILLS_DIRS` 加载本地只读、按 id/version/hash 固定的声明式指令包，每个 Agent task 最多精确 pin 一个当前 Skill，并对工具和预算继续缩权；不执行附带代码、不联网安装、不扩大 task 权限。
+- [shipped] `/api/v1/capabilities` 已声明 Agent task/Skill/browser operation 协议、任务命令/事件、Skill runtime、已实现功能与限制；`GET /api/v1/skills` 提供不含指令和路径的安全 catalog。通用 vision v2、完整 policy/grant 授权交集、模型候选切换与操作动画仍待后续。
 - [shipped] 验收面：`loader.test.ts`、`adapters/glm.test.ts`、`errors.test.ts`、集成测试。

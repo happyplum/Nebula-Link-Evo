@@ -1,7 +1,7 @@
 # AI E2E 产品需求基线
 
 > 状态：已确认目标需求，尚未全部实现。
-> 更新时间：2026-08-12。
+> 更新时间：2026-08-20。
 > 本文记录产品边界与验收语义，不规定数据库表、接口字段、脚本 DSL 语法或实施顺序。当前实现状态以代码和 `ai-e2e/PRODUCT-SPEC.md` 为准。
 
 ## 1. 产品定位
@@ -11,7 +11,7 @@
 系统分为三层：
 
 - `proxy-adapter`：浏览器与 Playwright/CDP 能力的唯一所有者，通过 MCP 提供页面分析、操作、实时画面和执行证据。
-- `ai-chat-service`：AI 基础能力层，提供分析/决策模型、单次视觉分析、MCP 工具编排和未来 Skills runtime。
+- `ai-chat-service`：AI 基础能力层，提供分析/决策模型、单次视觉分析、MCP 工具编排、受限 Agent task 命令/事件控制面和本地只读声明式 Skills runtime；通用视觉 v2 与完整授权仍待实现。
 - `ai-e2e`：E2E 业务层，持有 PRD、业务版本、页面、功能模块、功能脚本、测试场景、任务依赖、运行上下文和结果报告。
 
 首次提供 PRD 与目标链接时，系统从零分析并生成测试资产；后续运行优先加载已有资产，由子代理验证并在职责范围内修正。
@@ -246,8 +246,8 @@
 - 当前 `ExecutorService` 把 TypeScript 写入临时文件并用 `npx tsx` 子进程执行；这与目标唯一可视浏览器执行链冲突，后续必须替换而不是继续扩展为目标执行器。
 - legacy 运行记录仍只关联单个脚本并支持 pass/fail/error/timeout；semantic run/plan/TODO/page-task/attempt/variable/decision/event 数据层已交付，但依赖跳过、等待决策、可恢复中断和执行协调尚未接入。
 - legacy 失败记录仍只保存日志和截图路径；ai-e2e 内容寻址 artifact/evidence manifest 数据层与 proxy capture/artifact 数据层已交付，但跨服务产物提升和贯通版本/场景/调用/步骤的统一证据 runtime 尚未实现。
-- 当前 `proxy-adapter` 已交付 MCP 浏览器工具、实时画面、application-level session/lease/operation ledger，以及 capture/artifact/hold/session event 内部数据层；真实采集/API/SSE、失败截图与动画仍未交付。
-- 当前 `ai-chat-service` 已有 Agent 工具循环、任务 POST/GET、MCP client/ToolRegistry、结构化任务结果，以及 command/event/checkpoint/Skill registry/pin 内部数据层；公开命令/事件与 Skills loader/runtime 尚未实现。
+- 当前 `proxy-adapter` 已交付 MCP 浏览器工具、实时画面、application-level session/lease/operation ledger、真实 screenshot/DOM capture、失败截图、短期 artifact、完整性校验、artifact GET 与 snapshot-first browser events/event-log；video、动画、自动脱敏与保留清理 worker 仍未交付。
+- 当前 `ai-chat-service` 已交付 Agent 工具循环、任务 POST/GET/commands、MCP client/ToolRegistry、结构化任务结果、安全 checkpoint、snapshot-first events/event-log 与本地只读单 Skill loader/catalog/runtime；通用视觉 v2 与完整 policy/grant 授权交集尚未实现。
 - 当前 `ai-e2e` 主要使用纯文本生成接口，尚未实现主代理/页面子代理的任务图、上下文隔离、暂停决策和恢复运行时。
 - 持久 authoring job/task/attempt/event、coverage disposition、candidate verification/activation、revision dependency index 和 browser FIFO 数据基座已交付；生成和修复服务仍围绕旧项目状态与短期调用，尚未切入新协调器。
 - 当前 `ai-e2e` UI 尚未集成测试浏览器的实时画面、语义步骤时间线和统一证据浏览。
@@ -261,9 +261,9 @@
 - 场景调用图、运行计划、TODO、追加式修订和受控条件 payload 已锁定为 `nebula.ai-e2e.scenario/1.0` 与对应运行表；正式 JSON Schema 文件尚未生成。
 - 页面模板语法、参数类型、WHATWG URL 规范化、匹配评分、基线指纹/阈值和多部署 revision 已锁定；旧数据迁移仍待兼容契约。
 - 语义脚本 DSL v1 已在 `semantic-script-schema.md` 锁定；实现仍需按其中能力差距扩展 proxy 原子动作并生成正式 JSON Schema 文件。
-- 浏览器执行会话、Tab、observe/control 租约、原子操作、去重账本、结果查询、Agent task 和四类目标事件流（Authoring/Run/Agent/Browser）的 API/Schema 已在 `service-api-event-contract.md` 锁定；v1 单 BrowserContext、单活动身份与显式串行切换已锁定，同时多身份/多 Context 及后期多 Tab 并发仍需在启用前另行设计。
+- 浏览器执行会话、Tab、observe/control 租约、原子操作、去重账本、结果查询、Agent task 和四类目标事件流（Authoring/Run/Agent/Browser）的 API/Schema 已在 `service-api-event-contract.md` 锁定；Agent/Browser 控制与 snapshot-first 事件面已交付，Authoring/Run API/SSE 仍 pending。v1 单 BrowserContext、单活动身份与显式串行切换已锁定，同时多身份/多 Context 及后期多 Tab 并发仍需在启用前另行设计。
 - 主代理与子代理运行时采用干净 Agent task、模型不可见短期 opaque 租约 token、hash/process epoch、主代理签发/回收和 proxy SQLite WAL 操作账本的协议已锁定；三服务数据账本已落地，正式任务包 Schema、派发/回收 runtime 与跨服务协调仍未实现。
-- 双模型调用、`vision.analyze_page`、`vision.resolve_target`、声明式 Skill manifest、版本 pin 和工具权限交集已在 `ai-model-skill-contract.md` 锁定；代码与正式 JSON Schema 尚未实现。
+- 双模型调用、`vision.analyze_page`、`vision.resolve_target`、声明式 Skill manifest、版本 pin 和工具权限交集已在 `ai-model-skill-contract.md` 锁定；本地只读单 Skill loader/catalog/runtime、精确版本/hash pin 与工具/预算缩权已实现，通用视觉 v2、完整 policy/grant 授权交集和独立正式 JSON Schema 仍待实现。
 - 决策、内容寻址 artifact、evidence manifest/item 和默认保留结构已落库，证据追加/封存仓储已实现；跨服务脱敏提升、身份访问控制和清理任务仍待实现。
 - 环境风险矩阵、计划级风险投影、staging grant、production 硬拒绝和修订后重新审批已锁定；evaluation/grant/decision migration 与 evaluation 仓储已实现，策略引擎、grant 应用和 UI 尚未实现。
 - 首期非本机/多用户部署不在当前信任边界内；若未来开放，必须先设计统一身份、授权和租户隔离，不以 capability/lease 代替认证。

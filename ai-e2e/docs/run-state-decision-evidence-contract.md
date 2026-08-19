@@ -1,7 +1,7 @@
 # AI E2E 运行状态、决策与证据契约
 
 > 状态：`in-progress`。Run/plan/TODO/dependency/page-task/attempt/variable/decision/command/event 与 artifact/evidence manifest/item 数据模型已交付；正式 run 原子冻结、optimistic command/event、证据追加/封存仓储已实现。执行协调、依赖传播、决策应用、公开 API/SSE 与 UI 尚未实现。
-> 更新时间：2026-08-12。
+> 更新时间：2026-08-20。
 > 本文定义测试流程从调度到结果汇总的状态、失败传播、决策记录、证据包和人工控制语义。精确 Run API/SSE 见 `service-api-event-contract.md`；数据库物理字段和 UI 布局可以在实现设计中调整，但不同层级状态不得重新混为一个字段。
 
 ## 1. 核心原则
@@ -310,7 +310,7 @@ open → answered → applied
 
 ## 13. 实现前仍需精确定义
 
-- 各层实体表、状态 token、command 幂等记录与 run event 持久化已在 `target-data-model.md` 锁定；精确服务 API/SSE payload 与 snapshot 重连协议已在 `service-api-event-contract.md` 锁定。ai-chat-service Agent task POST/GET 已实现，command、事件及其余服务正式 Schema/代码尚未实现。
+- 各层实体表、状态 token、command 幂等记录与 run event 持久化已在 `target-data-model.md` 锁定；精确服务 API/SSE payload 与 snapshot 重连协议已在 `service-api-event-contract.md` 锁定。ai-chat-service Agent task POST/GET/commands、snapshot-first events/event-log 与 proxy Browser session 事件面已实现；ai-e2e Run/Authoring API/SSE、执行协调和跨服务业务事件关联仍未实现。
 - 证据对象存储、内容哈希、提升事务、脱敏管线、访问权限和清理任务。
 - UI 组件层级、实时画面协议、依赖图表现和操作动画样式。
 - 环境风险与审批已锁定；仍需实现风险投影、policy evaluation/grant 持久化、审批 UI 与跨服务门禁。

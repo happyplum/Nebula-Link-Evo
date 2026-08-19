@@ -49,7 +49,7 @@ proxy-adapter  ←──  ai-chat-service（MCP Client → /mcp）
                ←──  debug-ui（REST + SSE + MJPEG）
 
 ai-chat-service  ←──  debug-ui（Chat SSE）
-                 ←──  ai-e2e（当前消费 /api/ai/generate；Agent task POST/GET 已可用，消费接入 pending）
+                 ←──  ai-e2e（当前消费 /api/ai/generate；Agent task 命令/事件与单 Skill runtime 已可用，消费接入 pending）
 
 ai-e2e  ←──  （仅被用户/UI 消费）
 

@@ -40,13 +40,13 @@ PRD 驱动的 E2E 自动化测试编排器。把"需求分析 → 页面探索 �
 - [designed] 主代理维护 PRD 流程、TODO 依赖、运行变量和决策，并负责派发、恢复、跳过、验收与汇总；页面子代理只执行获授权的页面场景片段，负责重新检查、执行、验证、职责内修复和结构化汇报。
 - [designed] 默认创建干净子代理上下文；登出等可恢复中断可由主代理在页面状态和副作用检查后续接原上下文，否则从检查点和授权变量重建。
 - [designed] 首期一个主代理在任一时刻只运行一个执行型子代理，同一测试流程复用 proxy-adapter 托管的 Playwright/Chromium 实例和浏览器会话，所有动作串行；每个会话固定一个 BrowserContext 和一个活动 actor，跨角色由主代理显式编排退出/登录脚本，子代理发现身份异常即停止。子代理上下文可按任务重建，并存身份、多 Context/Tab 并发仅作为后期扩展。
-- [designed] 页面任务图、页面/模块范围与验收归 ai-e2e；模型、MCP 工具和未来 Skills 的执行归 ai-chat-service。当前 `AiChatClient.generateText()` 仅调用纯文本生成端点，尚无 Agent tool loop。
+- [designed] 页面任务图、页面/模块范围与验收归 ai-e2e；模型、MCP 工具和 Skills 的执行归 ai-chat-service。上游 Agent task/单 Skill tool loop 已交付，当前 `AiChatClient.generateText()` 仍仅调用纯文本生成端点，ai-e2e 尚未接入。
 - [designed] 主代理派发不可变页面任务包并持有共享浏览器生命周期；子代理只取得指定 TODO、actor、Tab、工具和输出槽的短期控制租约，不获得凭据明文或自行登录权限。
 - [designed] 系统内权威脚本是结构化语义功能脚本；所有浏览器动作按语义步骤通过 proxy-adapter 可视执行。原子操作使用幂等 ID 和结果账本，状态不确定时先检查副作用；当前 `npx tsx` 子进程执行器不是目标执行路径。完整契约见 `ai-e2e/docs/agent-browser-execution-contract.md`。
 - [designed] 失败先保存截图和现场并评估后续阻碍；主代理按依赖跳过或继续。意外登出按可恢复中断上报，需要决策时暂停并在决策写入版本文档后恢复。
 - [designed] 测试流程、运行 TODO、执行尝试、Agent 和浏览器操作分别持有状态；blocked/interrupted/waiting_decision 未收敛前不提前跳过下游，取消不再记作超时。
 - [designed] ai-e2e 的不可变证据 manifest/item 与持久 run event 数据层已交付；后续 UI 从 `run.snapshot` + 单调事件恢复，并展示实时浏览器、依赖传播、决策与证据。
-- [designed] 目标业务版本/Authoring/Run API、`ai-chat-service /api/v1/agent-tasks`、`proxy-adapter /api/v1/browser-execution/*` 与 `browser-control.operation_*`、四类目标 snapshot-first SSE（Authoring/Run/Agent/Browser）和重启恢复协议见 `ai-e2e/docs/service-api-event-contract.md`；当前路由均未实现，同一 run 禁止混用新旧执行器。
+- [designed] 目标业务版本/Authoring/Run API、`ai-chat-service /api/v1/agent-tasks`、`proxy-adapter /api/v1/browser-execution/*` 与 `browser-control.operation_*`、四类目标 snapshot-first SSE（Authoring/Run/Agent/Browser）和重启恢复协议见 `ai-e2e/docs/service-api-event-contract.md`；业务版本 create/list/get/copy、Agent task 命令/事件/Skill catalog/runtime 和 Browser session 控制/取证/事件路由已交付，ai-e2e Authoring/Run API/SSE 与跨服务协调仍未实现。同一 run 禁止混用新旧执行器。
 - [designed] 双模型、`vision.analyze_page`/`vision.resolve_target`、声明式 Skill manifest、版本/hash pin、工具权限交集和 prompt injection 边界见 `ai-e2e/docs/ai-model-skill-contract.md`。
 - [designed] 目标 migration 后续对 001–014 做结构 preflight/checksum baseline 和文件备份，旧 TypeScript/login/run 只读保留，legacy importer 只生成 needs_recheck 版本/候选；新链按业务版本 opt-in 且 run 固定 `semantic_v1`。
 - [designed] 主代理 runtime 由已交付的持久 authoring/run 数据驱动，不依赖长模型对话；后续仍需把 PRD/页面/Agent/browser 调用接入阶段协调、coverage 生成、真实验证和局部修复闭环。

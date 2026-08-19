@@ -1,7 +1,7 @@
 # AI E2E 迁移、兼容与技术验收契约
 
 > 状态：`in-progress`。add-only migration 014–017 已交付 semantic 资产、authoring/run/evidence/outbox 目标表；015+ checksum runner 已落地。001–014 结构 preflight/baseline、文件备份、legacy importer、双轨 capability/cutover 和回滚流程仍未实现。
-> 更新时间：2026-08-12。
+> 更新时间：2026-08-20。
 > 本文基于 legacy 001–013 表、add-only 014–017 semantic foundation、scenario 级 TypeScript 执行器、项目级登录录制、三服务现有 API/SSE 与目标协议，定义可回滚迁移、渐进切流和发布门槛。它不授权执行生产数据导入、cutover 或删除旧表。
 
 ## 1. 当前迁移事实
@@ -14,8 +14,8 @@
 - `urls` 保存完整 URL、可选单份 `page_snapshot_json` 和 auth flag；没有部署 revision、Origin 无关页面模板、参数分类、截图基线或内容 hash。
 - `execution_runs` 只关联 script/version，状态仅 `running/pass/fail/error/timeout`；旧取消会被执行器写成 timeout，无法反推 TODO、attempt、decision 或浏览器 operation。
 - `login_scripts` 保存 navigate/fill/click/wait/screenshot 步骤。fill value 可能包含秘密，wait 是固定时长，selector 是旧 CSS，登录验证配置没有和脚本一起持久化。
-- `proxy-adapter` 当前仍是单进程 Browser/Context 和稳定 Page ID 基础，但已新增 application-level 单 session/单 Context、observe/control lease、SQLite operation ledger 与重启 `outcome_unknown`；浏览器进程重启仍不会恢复内存 Context/Cookie，browser event/artifact/capture 尚未实现。
-- `ai-chat-service` 已有独立 Agent task POST/GET、结构化执行和 SQLite 状态，并已补齐 command/event/checkpoint、Skill registry/version/hash 与 task pin 数据模型；公开命令/事件、Skill loader/runtime 和完整授权交集仍未实现。
+- `proxy-adapter` 当前仍是单进程 Browser/Context 和稳定 Page ID 基础，已交付 application-level 单 session/单 Context、observe/control lease、SQLite operation ledger、真实 screenshot/DOM capture、失败截图、短期 artifact、snapshot-first browser events/event-log 与重启 `outcome_unknown`；浏览器进程重启仍不会恢复内存 Context/Cookie，video、动画、自动脱敏与保留清理 worker 尚未实现。
+- `ai-chat-service` 已交付独立 Agent task POST/GET/commands、结构化执行、SQLite 状态、安全 checkpoint、snapshot-first events/event-log、Skill catalog/loader/runtime 与精确 task pin；通用视觉 v2 和完整 policy/grant 授权交集仍未实现。
 
 因此，旧 TypeScript、登录录制和历史 run 不能直接声明为目标语义资产或目标运行历史。
 
