@@ -277,6 +277,14 @@ export class BrowserLifecycle {
     }
   }
 
+  private async startScreencastForPage(page: Page): Promise<void> {
+    await withTimeout(screencastManager.start(page), 5000, 'screencastManager.start').catch(
+      (error) => {
+        this.logger.warn({ err: error }, 'Screencast failed to start');
+      }
+    );
+  }
+
   async open(options: OpenBrowserOptions = {}): Promise<void> {
     const { headless = false, viewport = { width: 1920, height: 1080 }, cdpPort } = options;
     const nextCdpPort = cdpPort ?? 0;
@@ -326,6 +334,7 @@ export class BrowserLifecycle {
         this.pageIds.set(this.state.page, crypto.randomUUID());
         this.state.page.on('close', this.handlePageClose);
         this.state.lastViewport = { ...viewport };
+        await this.startScreencastForPage(this.state.page);
         // Fire-and-forget: publisher connects to LiveKit and may block
         // if the server is unavailable. Don't delay open() response.
         startPublisher(this.state.page, viewport).catch((err) => {
@@ -367,6 +376,7 @@ export class BrowserLifecycle {
     this.state.lastHeadless = headless;
     this.state.lastViewport = { ...viewport };
     this.state.lastCdpPort = nextCdpPort;
+    await this.startScreencastForPage(this.state.page);
     // Fire-and-forget: publisher connects to LiveKit and may block
     // if the server is unavailable. Don't delay open() response.
     startPublisher(this.state.page, viewport).catch((err) => {
@@ -376,6 +386,7 @@ export class BrowserLifecycle {
 
   async close(): Promise<void> {
     await stopPublisher().catch(() => {});
+    await screencastManager.stop().catch(() => {});
     if (this.state.browser) {
       this.state.browser.off('disconnected', this.handleDisconnect);
       if (this.state.page) {

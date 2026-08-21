@@ -8,7 +8,7 @@ proxy-adapter 内联 Playwright Chromium 控制层：浏览器生命周期、DOM
 - [shipped] DOM 快照 v2.0（含 `data-nebula-id` 属性）：`proxy-adapter/src/browser-engine/dom-extractor.ts`、`dom-utils.ts`。element 归一化字段 `id` + `locator_bundle`。
 - [shipped] 视觉标记系统（Vision Marker）：通过 `data-nebula-id` 关联操作坐标与 DOM 元素。入口：`proxy-adapter/src/browser-engine/marker-injector.ts`。
 - [shipped] 快照缓存：`proxy-adapter/src/browser-engine/services/snapshot-cache.ts`。
-- [shipped] MJPEG 屏播：`proxy-adapter/src/browser-engine/screencast.ts`。配合 `/debug/*` 路由供应 30FPS 视频流。
+- [shipped] MJPEG 屏播：`proxy-adapter/src/browser-engine/screencast.ts`。浏览器生命周期在 open/close 时启动/停止页面 `CDPSession`，配合 `/debug/*` 路由供应 30FPS 视频流。
 - [shipped] 页面操作执行：`proxy-adapter/src/browser-engine/services/page-actions.ts`。
 - [shipped] DOM 提取器：`proxy-adapter/src/browser-engine/services/dom-extractor.ts`。
 - [shipped] 受控执行通过同一活动 Page 采集 raw PNG 与 DOM 快照 v2 JSON，由 browser-execution 运行时关联 operation/capture/artifact；真实 Playwright 集成测试验证 PNG bytes 与可序列化 DOM。
