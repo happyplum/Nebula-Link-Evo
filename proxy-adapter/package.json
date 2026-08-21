@@ -22,7 +22,7 @@
     "@fastify/swagger-ui": "catalog:",
     "@fastify/type-provider-typebox": "catalog:",
     "@livekit/rtc-node": "catalog:",
-    "@modelcontextprotocol/sdk": "^1.26.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@nebula-link-evo/shared": "workspace:*",
     "@sinclair/typebox": "catalog:",
     "async-mutex": "^0.5.0",
