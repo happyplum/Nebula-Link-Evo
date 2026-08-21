@@ -152,7 +152,7 @@ ai-e2e 是 `proxy-adapter` 的下游消费者：
 
 ### 前置条件
 
-- Node.js >= 22.5.0
+- Node.js >= 22.13.0
 - pnpm >= 8
 - `proxy-adapter` 已启动（默认 `http://localhost:3000`）
 - `proxy-adapter` 内进程 Playwright 引擎

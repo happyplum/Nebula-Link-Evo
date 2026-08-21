@@ -76,7 +76,7 @@ Browser ←→ Debug UI (:5173 dev)
 
 **环境要求**：
 
-- Node.js >= 22.5.0
+- Node.js >= 22.13.0
 - pnpm >= 8
 
 **安装依赖**：
