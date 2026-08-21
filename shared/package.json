@@ -2,6 +2,7 @@
   "name": "@nebula-link-evo/shared",
   "version": "0.0.1",
   "private": true,
+  "license": "AGPL-3.0-only",
   "description": "Shared types and utilities for Nebula-Link Evo",
   "type": "module",
   "main": "./dist/index.js",

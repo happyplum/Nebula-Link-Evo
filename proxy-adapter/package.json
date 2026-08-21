@@ -1,6 +1,7 @@
 {
   "name": "proxy-adapter",
   "version": "1.0.0",
+  "license": "AGPL-3.0-only",
   "engines": {
     "node": ">=22.5.0"
   },
