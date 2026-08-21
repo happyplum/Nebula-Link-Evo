@@ -28,12 +28,15 @@ const mockUseControlStore = vi.hoisted(() => ({
 // Mock runtime store to prevent MJPEG stream
 vi.mock('@/features/runtime/store/index.js', () => ({
   selectPlaywrightIsOpen: () => false,
+  selectPlaywrightStatusHydrated: () => true,
   selectLiveviewRefreshKey: () => 0,
-  useRuntimeStore: (selector: (s: any) => any) => selector({
-    playwrightIsOpen: false,
-    liveviewRefreshKey: 0,
-    setLastScreenshotDataUrl: vi.fn(),
-  }),
+  useRuntimeStore: (selector: (s: any) => any) =>
+    selector({
+      playwrightIsOpen: false,
+      playwrightStatusHydrated: true,
+      liveviewRefreshKey: 0,
+      setLastScreenshotDataUrl: vi.fn(),
+    }),
 }));
 
 // Mock control store
@@ -161,5 +164,4 @@ describe('LiveViewCanvas - picker & DOM highlight integration parity', () => {
     expect(overlayCanvas).toBeInTheDocument();
     expect(onCoordinateCapture).toBeDefined();
   });
-
 });

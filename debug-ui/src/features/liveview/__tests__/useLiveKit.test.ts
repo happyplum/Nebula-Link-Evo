@@ -25,6 +25,7 @@ vi.mock('livekit-client', () => ({
     Object.assign(this, mockRoom);
   }),
   RoomEvent: roomEvents,
+  setLogLevel: vi.fn(),
 }));
 
 describe('useLiveKit', () => {

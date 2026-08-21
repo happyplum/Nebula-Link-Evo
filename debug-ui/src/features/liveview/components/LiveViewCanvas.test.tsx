@@ -5,6 +5,7 @@ import { useControlStore } from '@/features/playwright-control/store/control.sto
 
 const runtimeState = {
   playwrightIsOpen: true,
+  playwrightStatusHydrated: true,
   liveviewRefreshKey: 0,
   setLastScreenshotDataUrl: vi.fn(),
 };
@@ -12,6 +13,7 @@ const runtimeState = {
 vi.mock('@/features/runtime/store/index.js', () => ({
   useRuntimeStore: (selector: (state: typeof runtimeState) => unknown) => selector(runtimeState),
   selectPlaywrightIsOpen: (state: typeof runtimeState) => state.playwrightIsOpen,
+  selectPlaywrightStatusHydrated: (state: typeof runtimeState) => state.playwrightStatusHydrated,
   selectLiveviewRefreshKey: (state: typeof runtimeState) => state.liveviewRefreshKey,
 }));
 
