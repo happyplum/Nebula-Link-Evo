@@ -9,6 +9,7 @@ const setOnTrackSubscribedMock = vi.fn();
 
 const runtimeState = {
   playwrightIsOpen: false,
+  playwrightStatusHydrated: true,
   setLastScreenshotDataUrl: vi.fn(),
 };
 
@@ -27,6 +28,7 @@ vi.mock('../hooks/useLiveKit.js', () => ({
 vi.mock('@/features/runtime/store/index.js', () => ({
   useRuntimeStore: (selector: (state: typeof runtimeState) => unknown) => selector(runtimeState),
   selectPlaywrightIsOpen: (state: typeof runtimeState) => state.playwrightIsOpen,
+  selectPlaywrightStatusHydrated: (state: typeof runtimeState) => state.playwrightStatusHydrated,
 }));
 
 vi.mock('../components/LiveViewCanvas.js', () => ({
