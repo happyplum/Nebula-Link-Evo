@@ -65,6 +65,12 @@ pnpm format         # prettier --write debug-ui/src proxy-adapter/src ai-chat-se
 - Do not broad-kill processes; target exact PID or listening port.
 - Do not commit secrets or replace checked-in config placeholders with local credentials.
 
+## Licensing
+
+- Original project code and documentation are licensed under `AGPL-3.0-only` unless a file carries an explicit different notice; do not change this boundary without the copyright holder's approval.
+- Third-party code, dependencies, assets and external contributions retain their own terms. Preserve required notices and verify compatibility before adding or redistributing them.
+- Separate commercial licensing applies only to material for which the commercial licensor has the necessary rights; never assume an external contribution can be relicensed without a written grant.
+
 ## Windows batch landmines
 
 - Use CRLF line endings in `.bat` files. LF-only files break parenthesized CMD blocks.

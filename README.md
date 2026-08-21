@@ -1,5 +1,8 @@
 # Nebula-Link Evo
 
+[![CI](https://github.com/happyplum/Nebula-Link-Evo/actions/workflows/ci.yml/badge.svg)](https://github.com/happyplum/Nebula-Link-Evo/actions/workflows/ci.yml)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
+
 AI 驱动的浏览器自动化系统 — 手眼协调、自主执行、实时观测
 
 Nebula-Link Evo 是一个基于 AI 的浏览器自动化平台，通过浏览器快照能力、内置视觉分析和智能决策实现网页交互自动化。系统采用模块化架构，能够理解页面内容、规划操作步骤并执行复杂任务，同时提供实时监控和调试能力。
@@ -145,6 +148,22 @@ docs/               # Documentation
 - [AI E2E Asset Authoring & Repair](ai-e2e/docs/asset-authoring-repair-contract.md) — 从零生成、复核、真实验证、影响分析与局部修复
 - [AI E2E Environment & Side Effects](ai-e2e/docs/environment-side-effect-policy-contract.md) — 环境矩阵、副作用风险投影、计划级审批与执行门禁
 
+## Contributing and Security
+
+- 贡献代码前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 和目标包的 `AGENTS.md`。
+- 安全漏洞请按 [SECURITY.md](SECURITY.md) 私密报告，不要创建公开 Issue。
+- 社区参与适用 [Contributor Covenant](CODE_OF_CONDUCT.md)。
+
+## License
+
+除文件中另有明确声明外，Nebula-Link Evo 的原创代码和文档按
+[GNU Affero General Public License v3.0 only](LICENSE) 授权。
+
+AGPL 允许个人和企业使用、修改与分发软件，但必须遵守其开源和网络交互
+源码提供义务。需要闭源集成、OEM、白标或其他不同条款时，请参阅
+[商业授权说明](COMMERCIAL-LICENSE.md)。第三方组件和外部贡献保留各自的
+许可证与版权声明。
+
 ## Product Spec
 
 ### 核心产品架构
@@ -262,6 +281,7 @@ ai-chat-service (:3001) — AI 对话服务
 ### Tech Debt
 
 - [tech-debt] Root `pnpm lint` reports ~345 ESLint problems (155 errors, 190 warnings). ~139 errors are test-file parsing issues (tests excluded from tsconfig). ~12 source errors are React Compiler warnings in debug-ui (purity/memoization rules, not dead code). Remaining ~4 are style issues in non-test source.
+- [tech-debt] Root `pnpm format:check` reports 184 pre-existing source files that do not match the current Prettier configuration; repository governance files are checked separately in CI until that baseline is repaired.
 - [tech-debt] Root `pnpm test` occasionally flakes due to resource contention on Windows (LiveKit canvas timeout, marker-injector hook timeout). Individual package runs are stable.
 
 ### Known Behaviors
