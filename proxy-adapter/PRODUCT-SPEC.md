@@ -94,7 +94,7 @@
 | 功能 | 入口 | 状态 | 验收面 | 关联模块 |
 |------|------|------|--------|----------|
 | 浏览器控制（12 种 action：click / type / focus / blur / hover / value / dispatch / scroll / navigate / wait / mcp_call / finish） | browser-tools/definitions + browser-engine/services/page-actions | shipped | 单元测试 + 集成测试 | browser-tools、browser-engine、action-executor |
-| Playwright/CDP 浏览器通道 | browser-engine/services/browser-lifecycle + browser-engine/screencast | shipped | browser-service 单元测试 + screencast 集成面 | 生命周期可按需开放 remote-debugging-port；屏播通过页面 `CDPSession` 获取帧 |
+| Playwright/CDP 浏览器通道 | browser-engine/services/browser-lifecycle + browser-engine/screencast | shipped | browser-service 单元测试 + screencast 生命周期测试 + 集成面 | 生命周期可按需开放 remote-debugging-port；浏览器打开/关闭同步启动/停止页面 `CDPSession` 屏播 |
 | MCP Server (StreamableHTTP) | mcp-server/ | shipped | `__tests__/adapters/mcp-server-adapter.test.ts` | tools/、mcp-server/ |
 | browser-control.* 工具暴露 | tools/providers/{browser-tools-provider,browser-execution-tools-provider} | shipped | `__tests__/browser-tools-provider.test.ts`、`browser-execution-tools-provider.test.ts` | 15 个兼容工具 + `operation_execute/get/cancel`；受控工具只向 MCP Server 暴露 |
 | 视觉标记系统（Vision Marker） | browser-engine/marker-injector、locator-generator | shipped | marker-mode-e2e + 集成测试 | browser-engine、shared/types/vision-marker |

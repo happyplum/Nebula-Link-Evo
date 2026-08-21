@@ -5,7 +5,7 @@ proxy-adapter 的调试观测面：Debug 事件 SSE 总线、LiveKit 令牌发�
 - [shipped] Debug 事件中枢（SSE 总线）：`proxy-adapter/src/services/debug-event-hub.ts`。供应 MJPEG 元数据 + 交互事件。
 - [shipped] Debug 事件流路由：`GET /debug/stream`（SSE）。路由入口：`proxy-adapter/src/plugins/routes/debug/stream.ts`。
 - [designed] 目标 `/api/v1/browser-execution/sessions/:sessionId/events` 是独立的持久 browser-session 事件流，每次先发 snapshot；它不替代或复用当前 `/debug/stream` 的序号。目标协议见 `ai-e2e/docs/service-api-event-contract.md`。
-- [shipped] 浏览器调试 REST 端点：`/debug/*`（MJPEG、DOM 快照）。路由入口：`proxy-adapter/src/plugins/routes/debug/index.ts`。
+- [shipped] 浏览器调试 REST 端点：`/debug/*`（MJPEG、DOM 快照）。路由入口：`proxy-adapter/src/plugins/routes/debug/index.ts`；浏览器 open/close 生命周期负责启动/停止 MJPEG 屏播。
 - [shipped] LiveKit 令牌发放：`GET /api/livekit-token`。路由入口：`proxy-adapter/src/plugins/routes/api/livekit-token.ts`。
 - [shipped] LiveKit 视频流发布：`proxy-adapter/src/services/livekit-publisher.ts`。
 - [shipped] 交互日志：`proxy-adapter/src/services/interaction-logger.ts`，写入本地 DB。
