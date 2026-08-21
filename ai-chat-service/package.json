@@ -17,7 +17,7 @@
     "format": "prettier --write \"src/**/*.ts\""
   },
   "dependencies": {
-    "@ai-sdk/openai-compatible": "^2.0.31",
+    "@ai-sdk/openai-compatible": "^3.0.31",
     "@ai-sdk/provider": "^3.0.8",
     "@fastify/cors": "catalog:",
     "@fastify/type-provider-typebox": "catalog:",
