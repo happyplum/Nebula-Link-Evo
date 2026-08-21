@@ -92,7 +92,7 @@ debug-ui  ←──  （仅被用户消费）
 
 | 契约 | 提供方 | 消费方 | 路径 | 备注 |
 |------|--------|--------|------|------|
-| MCP Server (StreamableHTTP) | `proxy-adapter` | `ai-chat-service` (MCP Client) | `POST /mcp` | 暴露 `browser-control.*`（15 个兼容工具 + 3 个受控 operation 工具）；普通 Chat 过滤受控工具 |
+| MCP Server (StreamableHTTP) | `proxy-adapter` | `ai-chat-service` (MCP Client) | `POST /mcp`；`GET /mcp` 返回 405 | 无状态 JSON 响应；GET SSE 不可用时以 405 允许标准客户端回退；暴露 `browser-control.*`（15 个兼容工具 + 3 个受控 operation 工具）；普通 Chat 过滤受控工具 |
 | LiveKit token | `proxy-adapter` | `debug-ui` | `GET /api/livekit-token` | 用于 LiveView 升级 |
 | Health | `proxy-adapter` / `ai-chat-service` | 任意 | `GET /api/health` 或 `/health` | 健康检查 |
 | Config | `proxy-adapter` / `ai-chat-service` | `debug-ui` | `GET /api/config` 或 `/config` | 当前运行配置 |
