@@ -21,7 +21,7 @@
     "@ai-sdk/provider": "^3.0.8",
     "@fastify/cors": "catalog:",
     "@fastify/type-provider-typebox": "catalog:",
-    "@modelcontextprotocol/sdk": "^1.26.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@nebula-link-evo/shared": "workspace:*",
     "@sinclair/typebox": "catalog:",
     "ai": "^6.0.105",
