@@ -80,7 +80,7 @@
 | `/api/livekit-token` | GET | shipped | LiveKit 令牌发放 | plugins/routes/api/livekit-token、services/livekit-publisher |
 | `/debug/stream` | GET (SSE) | shipped | Debug 事件流（MJPEG 元数据 + 交互事件） | plugins/routes/debug/stream、services/debug-event-hub |
 | `/debug/*` | * | shipped | 浏览器调试 REST 端点（MJPEG、DOM 快照） | plugins/routes/debug/index、browser-engine |
-| `/mcp` | POST (StreamableHTTP) | shipped | MCP Server 入口（15 个兼容工具 + 3 个受控 operation 工具） | mcp-server/、tools/、browser-tools/、browser-execution/ |
+| `/mcp` | POST (StreamableHTTP)；GET 返回 405 | shipped | 无状态 JSON MCP Server 入口（15 个兼容工具 + 3 个受控 operation 工具）；拒绝可选 GET SSE 通道并允许客户端回退到 POST | mcp-server/、tools/、browser-tools/、browser-execution/ |
 | `/api/v1/browser-execution/sessions`、`/:sessionId` | POST/GET/DELETE | shipped | 创建/读取/关闭全局单活动可视浏览器执行会话 | 创建/关闭要求 `Idempotency-Key`；活动会话关闭要求 control bearer token |
 | `/api/v1/browser-execution/sessions/:sessionId/leases`、`/:leaseId` | POST/DELETE | shipped | 签发/撤销 observe/control 租约 | observe 最长 30 秒且单次使用，control 最长 5 分钟；token 仅首次响应明文，SQLite 只存 SHA-256 hash |
 | `/api/v1/browser-execution/operations/:operationId` | GET | shipped | 原子操作账本查询与未知结果恢复 | 已开始但重启前无终态的操作收敛为 `outcome_unknown`；queued 重启后取消 |

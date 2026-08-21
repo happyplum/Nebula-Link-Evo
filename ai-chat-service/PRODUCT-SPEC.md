@@ -107,7 +107,7 @@
 | `/api/test-ai`（同样存在于 `/api/v1/test-ai`） | POST | shipped | provider preflight：实时探测；`visionAgent` 同时检查 `vision.*` 工具与 gateway MCP server 运行状态 | services/provider/preflight、plugins/routes/api/debug-ai |
 | `/api/verify-keys`（同样存在于 `/api/v1/verify-keys`） | GET | shipped | API key 验证 | services/provider/preflight、plugins/routes/api/debug-ai |
 | `/debug-ai` | * | shipped | 调试用 AI 接口 | plugins/routes/api/debug-ai |
-| `MCP Client → proxy-adapter /mcp` | out | shipped | 拉取 `browser-control.*` 工具 | clients/mcp、tools/providers/mcp-client-provider |
+| `MCP Client → proxy-adapter /mcp` | out | shipped | 通过无状态 POST JSON 拉取 `browser-control.*` 工具；proxy 对可选 GET SSE 返回 405 | clients/mcp、tools/providers/mcp-client-provider |
 | `/api/v1/agent-tasks` | POST | shipped | 幂等创建并异步启动一次受限决策模型任务；返回 202，新旧请求冲突返回 409 | 仅 loopback；`Idempotency-Key` 可选；不接受 inline secret；`skillPolicy.allow` 最多一个且必须精确匹配当前 catalog 的 id/version/hash |
 | `/api/v1/agent-tasks/:taskId` | GET | shipped | 查询持久任务状态、脱敏请求、结构化结果、预算与工具摘要 | 仅 loopback；`completed` 不代表 E2E TODO 通过 |
 | `/api/v1/agent-tasks/:taskId/commands` | POST | shipped | 以 command ID/hash 幂等和 `expectedStateVersion` 乐观并发执行 pause/resume/interrupt/cancel | pause 只允许首个工具调用前的安全边界并原子写 checkpoint；工具开始后拒绝 pause；interrupt/cancel 不推断副作用回滚 |

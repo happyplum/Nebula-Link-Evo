@@ -47,7 +47,7 @@ pnpm test:e2e     # Playwright e2e
 - DI and singleton facades over global ad-hoc state.
 - `ToolProvider` 的 `status-changed` 监听器按 EventEmitter 契约接收 `...args: unknown[]`，再将首项断言为 `ToolProviderStatus`；不要把监听器参数收窄成不兼容的具名类型。
 - `BrowserClient.screenshot(fullPage?: boolean)` 接收布尔值而非 options 对象，并返回 `{ screenshot, viewport }`。
-- `/mcp` 当前采用逐请求无状态模式：每个 POST 新建并在请求后关闭 `McpServer` 与 `StreamableHTTPServerTransport`，启用 JSON 响应，并将缺失或 `*/*` 的 `Accept` 标准化为 `application/json, text/event-stream`。
+- `/mcp` 当前采用逐请求无状态模式：每个 POST 新建并在请求后关闭 `McpServer` 与 `StreamableHTTPServerTransport`，启用 JSON 响应，并将缺失或 `*/*` 的 `Accept` 标准化为 `application/json, text/event-stream`；可选 GET SSE 通道明确返回 `405 Method Not Allowed`，供标准客户端回退到 POST JSON 响应。
 
 ## Anti-Patterns
 

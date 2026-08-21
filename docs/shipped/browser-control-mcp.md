@@ -2,7 +2,7 @@
 
 proxy-adapter 通过 MCP Server (StreamableHTTP) 对外暴露 `browser-control.*` 工具集，是所有 AI 客户端（ai-chat-service / Claude Desktop / Cursor / aichat）的浏览器能力底座。
 
-- [shipped] MCP Server 传输层：`proxy-adapter/src/mcp-server/`（index / transport），路径 `POST /mcp`，StreamableHTTP 协议。
+- [shipped] MCP Server 传输层：`proxy-adapter/src/mcp-server/`（index / transport），`POST /mcp` 提供无状态 JSON StreamableHTTP；可选 `GET /mcp` SSE 通道返回 405，使标准客户端回退到 POST 响应而不触发重连。
 - [shipped] ToolRegistry + browser-control provider：`proxy-adapter/src/tools/`（registry / types / index / providers/browser-tools-provider / adapters/mcp-server / adapters/json-schema-to-zod）。外部 MCP client/provider 归 `ai-chat-service`，proxy-adapter 不再包含该 provider。
 - [tech-debt] `GatewayTool.exposeTo` / `BrowserToolsProvider` 仍保留未使用的 legacy `chat` consumer 标记；本包当前没有 Chat 路由或 Chat 工具消费方。
 - [shipped] browser-control.\* 工具定义与参数/结果适配：`proxy-adapter/src/browser-tools/`（definitions / tool-map / param-adapter / result-adapter / types / index）。

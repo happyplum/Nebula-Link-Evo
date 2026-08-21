@@ -16,6 +16,10 @@ export async function registerStreamableHttpMcpRoute(
   createMcpServer: McpServerFactory,
   url = '/mcp'
 ): Promise<void> {
+  app.get(url, async (_request: FastifyRequest, reply: FastifyReply) => {
+    return reply.header('Allow', 'POST').code(405).send({ error: 'Method Not Allowed' });
+  });
+
   app.post(url, async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.raw.headers.accept || request.raw.headers.accept === '*/*') {
       request.raw.headers.accept = 'application/json, text/event-stream';
