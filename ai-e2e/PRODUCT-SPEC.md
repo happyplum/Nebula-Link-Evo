@@ -73,7 +73,7 @@
 | 失败/阻塞/暂停/跳过 | pending | blocked/interrupted/waiting_decision 在主代理收敛前不提前跳过下游；终态失败只传播到真实依赖节点，独立节点可重新检查后继续。 |
 | 决策与证据 | in-progress | 版本决策、运行/authoring decision、policy evaluation/grant、artifact/evidence manifest/item 表已交付；证据追加/封存、保留元数据与 inline secret 拒绝已有仓储测试。决策应用、grant 生命周期、产物提升和 UI 仍 pending。 |
 | DOM 变化局部修复 | in-progress | 当前已支持 run 级诊断与可选自动修复；目标是只修复当前业务版本内受影响的功能脚本并重新验证。 |
-| 资产 authoring 工作流 | in-progress | job/task/attempt/command/event、单版本写锁、candidate verification、dependency index、verified-scope 激活事务，以及聚合 task/attempt/decision/browser/policy 的权威 snapshot 与持久 event-log 读 API 已交付；PRD/页面/Agent 协调器、写命令、snapshot-first SSE、coverage 生成和完整版本 validator 仍 pending。完整契约见 `docs/asset-authoring-repair-contract.md`。 |
+| 资产 authoring 工作流 | in-progress | job/task/attempt/command/event、单版本写锁、candidate verification、dependency index、verified-scope 多资产原子激活、权威 snapshot/event-log，以及上下文线程、结构化 amendment、Chat 审计、同页跨模块/跨 URL 影响审批、安全边界排队和 stale/拒绝/失败状态已交付；PRD/页面 Agent 调用协调器、job 写命令、snapshot-first SSE、coverage 生成和完整版本 validator 仍 pending。完整契约见 `docs/asset-authoring-repair-contract.md`。 |
 
 ---
 
@@ -92,8 +92,8 @@
 | 业务服务 | `src/services/` | shipped | PRDAnalyzerService、ExplorerService、ScriptGeneratorService、TestScenarioService、ProjectService、ExecutorService、AIDiagnosisService、StateMachineService、LoginRecorderService、BusinessVersionService | 工作流核心 |
 | AI 提示与 token | `src/ai/`（PromptTemplateManager、TokenBudgetTracker） | shipped | prompts 加载 + token 预算统计 |  |
 | 数据库 | `src/database/`（DatabaseManager、migrations、repos） | shipped | 独立 SQLite | 不与 proxy-adapter / ai-chat-service 共享 |
-| 目标领域数据模型 | `src/database/migrations/014-semantic-asset-foundation.ts`–`017-semantic-evidence-integration-foundation.ts`、`src/database/repositories/{business-version,semantic-asset,semantic-workflow,semantic-evidence,semantic-query}-repository.ts` | in-progress | 已交付目标资产治理、authoring/run/browser queue、decision/policy/evidence/outbox/external link/legacy import 表、核心原子仓储和面向工作台的安全读投影；写控制 API、执行协调器和生产 UI 仍 pending | legacy 同名表保持不动，semantic 物理表映射见 `docs/target-data-model.md` |
-| 目标 migration/import | `src/database/migration-runner.ts`、`src/database/migrations/015-*`–`017-*` | in-progress | 015+ checksum/status migration、失败 rollback、checksum 漂移拒绝与 legacy import ledger 表已交付；001–014 baseline/preflight、文件备份和 importer 仍 pending | 只增不毁；旧脚本/登录/run 生成候选或只读历史，见 `docs/migration-compatibility-acceptance-contract.md` |
+| 目标领域数据模型 | `src/database/migrations/014-*`–`018-authoring-amendments.ts`、`src/database/repositories/{business-version,semantic-asset,semantic-workflow,semantic-evidence,semantic-query,authoring-amendment}-repository.ts` | in-progress | 已交付目标资产治理、authoring/run/browser queue、decision/policy/evidence/outbox/external link/legacy import、结构化 amendment/Chat scope 表、核心原子仓储和面向工作台的安全读写投影；跨服务执行协调器和生产 UI 仍 pending | legacy 同名表保持不动，semantic 物理表映射见 `docs/target-data-model.md` |
+| 目标 migration/import | `src/database/migration-runner.ts`、`src/database/migrations/015-*`–`018-*` | in-progress | 015+ checksum/status migration、失败 rollback、checksum 漂移拒绝、legacy import ledger 与 amendment scope 表已交付；001–014 baseline/preflight、文件备份和 importer 仍 pending | 只增不毁；旧脚本/登录/run 生成候选或只读历史，见 `docs/migration-compatibility-acceptance-contract.md` |
 | 目标 authoring 协调器 | `src/database/repositories/semantic-{asset,workflow,evidence}-repository.ts`、`src/services/`（runtime 待新增） | in-progress | authoring job/task/attempt/event、candidate verification/activation、coverage/dependency 物理模型已交付；外部 Agent/browser 调用 worker、影响分析与阶段协调器仍 pending | 外部调用只允许走 outbox；同一版本一个写 job，完整契约见 `docs/asset-authoring-repair-contract.md` |
 | 类型 | `src/types/`（project / test-scenario / state-machine / sse-events / script / url / business-version） | shipped | 后端领域类型 / API schema |  |
 | 工具 | `src/utils/`（retry、report-html、html-escape） | shipped | 通用工具 |  |
@@ -147,7 +147,7 @@
 | `POST/GET /api/v1/projects/:projectId/business-versions` | shipped | 创建空白版本或从来源 copy；查询项目版本列表；写请求要求 `Idempotency-Key` | `BusinessVersionService` |
 | `GET /api/v1/business-versions/:versionId`、`POST /api/v1/business-versions/:versionId/copy` | shipped | 查询版本/current 资产摘要；原子深复制并返回资产计数和 stale ID | `BusinessVersionService` |
 | `GET /api/v1/business-versions/:versionId/{workspace,pages,modules,functional-scripts,scenarios}`、`GET /api/v1/assets/:assetType/:assetId/revisions[/revisionId]` | shipped | 聚合 PRD/current 资产/验证的工作台投影、分类资产列表、不可变修订历史与精确 revision/verification/dependency 读取 | 写入、validate 与 activate 仍 pending；`workspace` 是 UI 聚合读模型 |
-| `/api/v1/business-versions/:versionId/authoring-jobs`、`/api/v1/authoring-jobs/:jobId/*` | in-progress | `GET /:jobId` 权威 snapshot 与 `GET /:jobId/event-log` 已交付；创建、控制、决策回答和 snapshot-first SSE pending | 目标契约见 `docs/asset-authoring-repair-contract.md`、`docs/service-api-event-contract.md` |
+| `/api/v1/business-versions/:versionId/authoring-jobs`、`/api/v1/authoring-jobs/:jobId/*`、`/api/v1/authoring-{context-threads,amendments}/*` | in-progress | 创建 job 时立即落 repair/引导 task；context thread、结构化 amendment、Chat message、影响审批、安全边界/验证/激活/拒绝/失败命令，以及 snapshot/event-log 已交付；job pause/resume/cancel 与 snapshot-first SSE pending | amendment 只接受精确 base/candidate revision；Chat 文本不直接改变资产 |
 | `/api/v1/projects/:projectId/runs`、`/api/v1/runs/:runId/*` | in-progress | `GET /:runId`、plan、TODO、decision、evidence 与 event-log 读 API 已交付；创建/控制/回答决策与 snapshot-first SSE pending | 目标契约见 `docs/service-api-event-contract.md` |
 | `/api/v1/capabilities` | shipped | 声明 semantic asset/authoring/run/side-effect-policy 协议、逐项 feature 和单浏览器限制；未交付写能力显式为 `false` | 目标契约见 `docs/service-api-event-contract.md` |
 
@@ -193,7 +193,7 @@
 | 模块需求文档 | database/module_requirement_revisions、functional_point_coverage | in-progress | migration + copy/repository 测试 | revision/coverage 数据基座已交付；内容生成、Schema 和公开 API 仍 pending |
 | 功能脚本 + 场景调用图 | database/semantic asset foundation | in-progress | repository 验证引用重写、无环校验与 stale 投影 | 稳定功能脚本与场景 current graph 已落库；完整 v1 Schema、重复/条件、运行计划/TODO/尝试与语义执行仍 pending |
 | 业务版本 + 深复制 | services/BusinessVersionService、database/BusinessVersionRepository | shipped | migration + repository + Fastify inject：创建/查询、幂等重放、全图 ID 重映射、artifact ref count、stale、失败回滚 | 复制 current PRD/变量/决策/基线/需求/coverage/dependency/semantic 资产与部署引用；不复制验证、运行、证据 manifest、实际数据或秘密，目标保持 `needs_recheck` |
-| 从零生成、复核与局部修复 | database/semantic asset/workflow repositories；services runtime 待新增 | in-progress | authoring job/task/attempt/event、verified-scope 激活与依赖事务测试 | 持久数据与原子激活已交付；PRD + URL 协调、实际 Agent/browser 验证与影响分析仍 pending |
+| 从零生成、复核与局部修复 | database/semantic asset/workflow/amendment repositories、SemanticAuthoringService | in-progress | authoring job/task/attempt/event、结构化候选、范围权限、stale、安全边界、verified-scope 多资产原子激活测试 | 手动重新编排与候选治理已交付；PRD + URL 自动协调、实际 Agent/browser 验证仍 pending |
 | 环境风险投影与计划级审批 | database/semantic evidence repository；services/ui 待新增 | in-progress | policy evaluation 幂等与 outbox 测试 | 风险 hash/evaluation/grant/decision 表已交付；环境规则、grant 应用和逐 effectId runtime 门禁仍 pending |
 | 主代理 / 页面子代理调度与上下文策略 | database/semantic workflow repository | in-progress | authoring/run command/event 与 browser FIFO 测试 | 持久状态和全局单 active 队列已交付；主代理协调器、页面任务派发、租约和恢复 runtime 仍 pending |
 | ai-chat-service Agent task 消费 | infrastructure/ai-chat-client | pending | ai-chat-service 已交付 Agent task POST/GET、capability、commands、snapshot-first events/event-log、安全 checkpoint、Skill catalog 与单 Skill runtime；本包当前仍仅消费纯文本 generate 与基础 chat session 客户端 | 待接入不可变输入、tool/skill policy、预算、模型不可见 browser binding、结构化结果和上游事件恢复；不把 task completed 直接当 TODO passed |
@@ -266,7 +266,7 @@
 | 缺少规范化页面与 URL 参数模型 | requirement-gap | pending | 当前 `urls.url` 保存完整字符串，无法区分部署 Origin、路由模板、身份/运行参数与基线变体 |
 | 模块需求内容生成与公开接口未实现 | requirement-gap | pending | `module_requirement_revisions`/coverage 已落库；PRD、页面证据和决策尚未由 authoring runtime 收敛为内容 |
 | 业务版本 recheck/校验与 UI 未实现 | requirement-gap | pending | 创建、查询和独立 copy 已交付；尚无公开资产 CRUD/修订激活、deployment-scoped 真实验证、recheck job、正式运行门禁或 UI |
-| semantic 数据层尚未接入公开运行时 | requirement-gap | pending | migration 014–017 与核心仓储已落地 revision/run/evidence/outbox；authoring/run API、worker、SSE、协调器和 UI 尚未接入 |
+| semantic 数据层尚未完整接入公开运行时 | requirement-gap | in-progress | migration 014–018、workspace/Authoring amendment/Run 读 API 已接入；run 写控制、跨服务 worker、SSE、执行协调器和生产 UI 尚未接入 |
 | 模块下多功能脚本与场景调用图仅有持久化基座 | requirement-gap | pending | semantic stable identity/current revision 与无环引用校验已交付；authoring、重复/条件、运行计划、TODO、跨脚本输入输出和追加式修订仍未实现，legacy `run-all` 仍只是顺序遍历 |
 | 主代理 / 页面子代理编排 runtime 未实现 | requirement-gap | pending | authoring/run/page task/变量/命令/event/browser FIFO 已有数据基座；尚无确定性协调器、Agent 派发、暂停恢复与依赖跳过执行逻辑 |
 | ai-e2e 尚未消费 Agent task | requirement-gap | pending | ai-chat-service 已交付 Agent task create/get/commands/events/event-log、browser binding、结构化结果与安全 checkpoint；本包仍调用 `POST /api/ai/generate`，尚未实现 task client/outbox/snapshot-first 消费与恢复 |

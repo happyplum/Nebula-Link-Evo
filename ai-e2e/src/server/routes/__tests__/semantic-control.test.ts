@@ -6,6 +6,7 @@ import { up as up014 } from '../../../database/migrations/014-semantic-asset-fou
 import { up as up015 } from '../../../database/migrations/015-semantic-asset-governance.js';
 import { up as up016 } from '../../../database/migrations/016-semantic-workflow-foundation.js';
 import { up as up017 } from '../../../database/migrations/017-semantic-evidence-integration-foundation.js';
+import { up as up018 } from '../../../database/migrations/018-authoring-amendments.js';
 import { BusinessVersionRepository } from '../../../database/repositories/business-version-repository.js';
 import { SemanticQueryRepository } from '../../../database/repositories/semantic-query-repository.js';
 import { SemanticWorkflowRepository } from '../../../database/repositories/semantic-workflow-repository.js';
@@ -32,6 +33,7 @@ describe('semantic control read routes', () => {
     up015(db);
     up016(db);
     up017(db);
+    up018(db);
     versions = new BusinessVersionRepository(db);
     workflows = new SemanticWorkflowRepository(db);
     fixture = createFixture(db, versions);

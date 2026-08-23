@@ -5,6 +5,7 @@ import { up as up014 } from '../014-semantic-asset-foundation.js';
 import { up as up015 } from '../015-semantic-asset-governance.js';
 import { up as up016 } from '../016-semantic-workflow-foundation.js';
 import { up as up017 } from '../017-semantic-evidence-integration-foundation.js';
+import { up as up018 } from '../018-authoring-amendments.js';
 
 const EXPECTED_TABLES = [
   'version_decisions',
@@ -44,9 +45,14 @@ const EXPECTED_TABLES = [
   'external_task_links',
   'legacy_import_batches',
   'legacy_entity_links',
+  'authoring_context_threads',
+  'authoring_amendments',
+  'authoring_amendment_decisions',
+  'authoring_amendment_changes',
+  'authoring_chat_messages',
 ];
 
-describe('semantic data foundation migrations 015-017', () => {
+describe('semantic data foundation migrations 015-018', () => {
   let db: DatabaseSync;
 
   beforeEach(() => {
@@ -64,7 +70,7 @@ describe('semantic data foundation migrations 015-017', () => {
       .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'execution_runs'")
       .get();
 
-    for (const migrate of [up015, up016, up017]) {
+    for (const migrate of [up015, up016, up017, up018]) {
       migrate(db);
       expect(() => migrate(db)).not.toThrow();
     }

@@ -1,6 +1,6 @@
 # AI E2E 目标数据模型
 
-> 状态：`in-progress`。migration 014–017 已交付资产治理、authoring/run/browser queue、decision/policy/evidence/outbox/external link 目标表与核心仓储；015+ checksum runner 已落地。公开 API、执行协调器、001–014 preflight/baseline、备份与 legacy importer 仍未实现。
+> 状态：`in-progress`。migration 014–018 已交付资产治理、authoring/run/browser queue、decision/policy/evidence/outbox/external link、结构化 amendment/Chat scope 目标表与核心仓储；015+ checksum runner 已落地。部分公开 API 已接入，执行协调器、001–014 preflight/baseline、备份与 legacy importer 仍未实现。
 > 更新时间：2026-08-12。
 > 本文定义 `ai-e2e` 首期最终关系模型、不可变修订、版本复制事务、页面规范化、运行数据与证据存储。迁移编号和物理 SQL 在实施时按现有 SQLite migration 链追加，但不得改变本文的所有权和唯一性约束。
 
@@ -562,7 +562,7 @@ SQLite `BEGIN IMMEDIATE` 防止 copy 期间来源 current 指针变化。重复�
 
 - `BusinessVersionRepository` 已实现空白创建和 copy 幂等 hash、来源 `valid/archived` 门禁、事务回滚、全图 hash/引用/场景 DAG 校验和目标 `needs_recheck`。
 - 已复制并重建当前 PRD/解析结果、变量定义、页面、业务模块、功能模块、功能脚本、场景及其 current revision ID；部署 binding 引用项目级 immutable deployment revision，Git 元数据可继承或覆盖。
-- migration 015–017 已交付 decision、coverage、baseline、scoped verification/dependency、authoring、run、evidence 与 outbox 表。copy 已重建 current decision/baseline/requirement/coverage/dependency 引用，内容寻址 artifact 只增加引用计数；仍不读取或复制 legacy run/script/evidence，也不复制 semantic verification、business version validation、run 或 evidence manifest。
+- migration 015–018 已交付 decision、coverage、baseline、scoped verification/dependency、authoring、run、evidence/outbox 与结构化 amendment/Chat scope 表。copy 已重建 current decision/baseline/requirement/coverage/dependency 引用，内容寻址 artifact 只增加引用计数；仍不读取或复制 legacy run/script/evidence，也不复制 semantic verification、business version validation、run、authoring thread/amendment 或 evidence manifest。
 - copy 后功能脚本/场景 revision 的 `readiness_status=stale` 仅是目标版本待复核投影；真实授权以 scoped `asset_revision_verifications` 与 `business_version_validations` 为准，不能据此创建 semantic formal run。
 
 ### 9.2 独立性判定
@@ -622,7 +622,16 @@ copy 后必须满足：
 
 与 run event 同样使用 job-scoped 单调 seq、stateVersion、entity、correlation/causation 和脱敏 payload。job 状态更新、seq 分配和 event 插入同事务；SSE 只投影持久事件。
 
-### 10.5 `functional_point_coverage`
+### 10.5 结构化 amendment 与 Chat scope
+
+- `authoring_context_threads` 冻结 job/version、当前 URL、页面、模块、base revision hash 与可见场景；每个 job 最多一个 active thread。创建不同 scope 时旧 thread 及其非终态候选原子标为 stale。
+- `authoring_amendments` 保存幂等 request hash、`draft → candidate_ready → waiting_decision/queued_at_safe_boundary → verifying → activated` 状态及 `rejected/failed/stale` 终态、原因、影响范围和验证计划。
+- `authoring_amendment_changes` 按 sequence 冻结 asset type/id、exact current base revision/hash、valid draft candidate revision、目标页面/模块/URL、结构化 diff、依赖边和可选 verification scope/dependency closure hash；资产归属从数据库反查，不信任 Agent 声明。
+- `authoring_amendment_decisions` 把同页其他模块或跨 URL 的 scope expansion 与 `decision_requests` 关联；所有关联 decision `applied` 前禁止进入安全边界。
+- `authoring_chat_messages` 只保存 thread-scoped user/assistant/system 审计文本及可选 amendment 引用；Chat 文本本身不改变候选或资产状态。
+- 浏览器 operation 仍非终态时 apply 进入 `queued_at_safe_boundary`；上下文或 base current 变化后禁止应用。多候选激活先校验全部 revision/verification，再在一个 `BEGIN IMMEDIATE` 内切换全部 current；任一校验失败不改变任一 current。
+
+### 10.6 `functional_point_coverage`
 
 - `id/business_version_id/functional_module_id/module_requirement_revision_id/functional_point_key`。
 - `required`、`disposition(covered_by_script/manual/out_of_scope/blocked)`。
@@ -632,7 +641,7 @@ copy 后必须满足：
 
 coverage row 是逐功能点的可审计投影，summary 只能由 current rows 聚合。requirement revision、script current 或适用 decision 变化时，相关 coverage 失效并由 authoring 生成新 row；不能原地把 blocked 改成 covered。required coverage 全部 `covered_by_script`，或经用户决策明确降级为 optional，版本才可通过验证。
 
-### 10.6 `asset_revision_verifications`
+### 10.7 `asset_revision_verifications`
 
 - `id/business_version_id/asset_type(functional_script/test_scenario)/asset_id/asset_revision_id`。
 - `deployment_revision_id/verification_scope_sha256/verification_scope_json/dependency_closure_sha256`。
@@ -641,7 +650,7 @@ coverage row 是逐功能点的可审计投影，summary 只能由 current rows 
 
 scope 至少冻结 deployment revision、Git/build 标识、角色、locale、viewport、baseline keys 和会影响动作/断言的策略 major；`dependency_closure_sha256` 冻结该资产实际引用的页面/需求/脚本/决策修订闭包。脚本/场景“verified/stale”均是相对于 scope + 依赖闭包的派生结果；不能把环境 A 的验证用于环境 B，也不能因无关资产变更让本记录失效。场景引用的脚本修订改变时，其闭包 hash 必然改变并需重验。
 
-### 10.7 `asset_revision_dependencies`
+### 10.8 `asset_revision_dependencies`
 
 - `id/business_version_id/from_asset_type/from_asset_id/from_revision_id`。
 - `to_asset_type/to_asset_id/to_revision_id nullable`。
@@ -651,7 +660,7 @@ scope 至少冻结 deployment revision、Git/build 标识、角色、locale、vi
 
 依赖边只能由 valid payload 确定性生成，并在 revision 激活事务中更新；模型不能直接写边。impact analyzer 使用该索引计算受影响闭包，具体重验范围仍按 change kind 裁剪。
 
-### 10.8 `browser_jobs`
+### 10.9 `browser_jobs`
 
 - `id/root_context_type(run/authoring)/root_context_id/queue_seq`；`queue_seq` 由 ai-e2e 全局单调分配。
 - `state(queued/acquiring/active/releasing/completed/cancelled/failed)`。
@@ -916,7 +925,7 @@ manifest sealed 后不可修改；补充证据创建新的 manifest revision 或
 
 跨服务调用不能纳入 SQLite 事务，采用 outbox/状态机：先记录 intent/command，再调用外部服务，最后以幂等回调/查询收敛。不得在持有 SQLite write transaction 时等待模型或浏览器网络调用。
 
-015+ checksum migration runner 与 legacy import 账本表已交付；001–014 结构 baseline/preflight、文件备份和旧资产 importer 仍按 `migration-compatibility-acceptance-contract.md` pending。目标表只通过增量 migration 新增；不删除、重命名或反向改写旧表。
+015+ checksum migration runner、legacy import 账本和 migration 018 amendment scope 表已交付；001–014 结构 baseline/preflight、文件备份和旧资产 importer 仍按 `migration-compatibility-acceptance-contract.md` pending。目标表只通过增量 migration 新增；不删除、重命名或反向改写旧表。
 
 ## 16. 当前实现差距
 
@@ -926,7 +935,7 @@ manifest sealed 后不可修改；补充证据创建新的 manifest revision 或
 - 数据库已有持久 outbox、opaque external task link 与 claim/settle/单调 reconciliation 仓储；网络派发 worker、重启扫描和跨服务查询收敛 loop 尚未实现。
 - 数据库已有内容寻址 artifact、append-only evidence item 和 sealed manifest 仓储；proxy 截图/DOM/operation 的自动提升、保留清理 worker 和 UI 证据时间线尚未实现。
 - semantic 页面 revision 已保存 Origin 无关签名；legacy URL 表仍把实际 URL、单快照和逻辑页面混为一个实体，尚无运行匹配器、完整参数 Schema 或基线变体。
-- 当前启动仍直接执行 legacy migration 001–014；015–017 已使用 checksum/状态账本并覆盖失败 rollback 与 checksum 漂移拒绝，但 001–014 结构 preflight/baseline、文件备份和 legacy importer 尚未实现。
+- 当前启动仍直接执行 legacy migration 001–014；015–018 已使用 checksum/状态账本并覆盖失败 rollback 与 checksum 漂移拒绝，但 001–014 结构 preflight/baseline、文件备份和 legacy importer 尚未实现。
 - 持久 authoring job/task/attempt/command/event、candidate verification/activation、coverage/dependency 和跨 authoring/run 的 browser FIFO 数据基座已交付；PRD/探索/生成/修复协调器仍围绕旧项目状态和短期调用。
 - 风险投影 hash、policy evaluation/grant/decision 表与 evaluation 仓储已交付；确定性环境规则、审批/grant 原子应用、逐 effectId 校验和 production 写门禁 runtime 尚未实现。
 

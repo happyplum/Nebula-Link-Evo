@@ -89,7 +89,7 @@ interface ServiceCapabilitiesV1 {
 
 ## 3. `ai-e2e` 对外业务 API
 
-实施状态：业务版本 create/list/get/copy、capability、workspace/分类资产列表、资产 revision 读、Authoring/Run 权威 snapshot 及持久 event-log 已 `shipped`；validate、资产 revision 写/激活、Authoring/Run 写控制与 snapshot-first SSE 仍为 `pending`。已交付写端点要求 `Idempotency-Key`；v1 成功响应统一 `{ data, meta }`，错误统一 `ApiProblem`。
+实施状态：业务版本 create/list/get/copy、capability、workspace/分类资产列表、资产 revision 读、Authoring job 创建/结构化 amendment/范围审批/安全边界命令、Authoring/Run 权威 snapshot 及持久 event-log 已 `shipped`；validate、通用资产 revision 写、Authoring job pause/resume/cancel、Run 写控制与 snapshot-first SSE 仍为 `pending`。幂等创建端点要求 `Idempotency-Key`；v1 成功响应统一 `{ data, meta }`，错误统一 `ApiProblem`。
 
 ### 3.1 业务资产
 
@@ -124,8 +124,14 @@ interface ServiceCapabilitiesV1 {
 | GET | `/api/v1/authoring-jobs/:jobId/events` | snapshot-first authoring SSE。 |
 | GET | `/api/v1/authoring-jobs/:jobId/event-log?afterSeq=N&limit=M` | 持久 authoring event log。 |
 | POST | `/api/v1/authoring-jobs/:jobId/decisions/:decisionId/answer` | 回答 authoring decision；长期影响同步 version decision。 |
+| POST | `/api/v1/authoring-jobs/:jobId/context-threads` | 绑定 URL/页面/当前模块/base revision scope；新 scope 自动使旧候选 stale。 |
+| GET/POST | `/api/v1/authoring-context-threads/:threadId/messages` | 读取/追加 Chat 审计消息；文本不直接改变资产状态。 |
+| GET/POST | `/api/v1/authoring-jobs/:jobId/amendments` | 列表/创建精确 base→candidate 的结构化修改；写要求幂等键。 |
+| GET | `/api/v1/authoring-amendments/:amendmentId` | 读取 diff、影响范围、审批、验证计划与候选状态。 |
+| POST | `/api/v1/authoring-amendments/:amendmentId/decisions/:decisionId/answer` | 批准或拒绝同页跨模块/跨 URL 范围扩展。 |
+| POST | `/api/v1/authoring-amendments/:amendmentId/commands` | 安全边界排队、开始验证、原子激活、拒绝或记录失败。 |
 
-当前实现：`GET /api/v1/authoring-jobs/:jobId` 与 `GET /event-log` 已交付；创建、命令、决策回答与 snapshot-first SSE 未交付。
+当前实现：job 创建会立即生成首个 task；snapshot/event-log、context thread、Chat 审计、结构化 amendment、范围审批与 amendment 命令已交付。job 自身 pause/resume/cancel、自动 Agent/browser coordinator 和 snapshot-first SSE 未交付。
 
 完整阶段、coverage、candidate 验证和激活规则见 `asset-authoring-repair-contract.md`。
 

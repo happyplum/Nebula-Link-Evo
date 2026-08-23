@@ -77,6 +77,11 @@ export interface ActivateSemanticRevisionParams {
   correlationId?: string;
 }
 
+export interface ActivateSemanticRevisionsResult {
+  activatedRevisionIds: string[];
+  unchangedRevisionIds: string[];
+}
+
 export interface RecordAssetVerificationParams {
   id?: string;
   businessVersionId: string;
@@ -377,115 +382,157 @@ export class SemanticAssetRepository {
   }
 
   activateRevision(params: ActivateSemanticRevisionParams): { activated: boolean } {
-    const spec = REVISION_SPECS[params.assetType];
-    if (spec.executable) {
-      if (!params.verificationScopeSha256 || !params.dependencyClosureSha256) {
-        throw new Error(
-          'Executable activation requires exact verification scope and dependency closure'
-        );
+    const result = this.activateRevisions([params]);
+    return { activated: result.activatedRevisionIds.includes(params.revisionId) };
+  }
+
+  activateRevisions(
+    paramsList: readonly ActivateSemanticRevisionParams[]
+  ): ActivateSemanticRevisionsResult {
+    if (paramsList.length === 0) throw new Error('At least one revision is required');
+    const targets = new Set<string>();
+    for (const params of paramsList) {
+      const targetKey = `${params.assetType}:${params.revisionId}`;
+      if (targets.has(targetKey)) throw new Error('Duplicate revision activation target');
+      targets.add(targetKey);
+      const spec = REVISION_SPECS[params.assetType];
+      if (spec.executable) {
+        if (!params.verificationScopeSha256 || !params.dependencyClosureSha256) {
+          throw new Error(
+            'Executable activation requires exact verification scope and dependency closure'
+          );
+        }
+        requireSha256(params.verificationScopeSha256, 'verificationScopeSha256');
+        requireSha256(params.dependencyClosureSha256, 'dependencyClosureSha256');
       }
-      requireSha256(params.verificationScopeSha256, 'verificationScopeSha256');
-      requireSha256(params.dependencyClosureSha256, 'dependencyClosureSha256');
     }
     return inImmediateTransaction(this.db, () => {
-      const revision = this.db
-        .prepare(
-          `SELECT id, business_version_id, ${spec.assetColumn} AS asset_id,
-                  lifecycle, validation_status
-           FROM ${spec.table} WHERE id = ?`
-        )
-        .get(params.revisionId) as
-        | {
-            id: string;
-            business_version_id: string;
-            asset_id: string;
-            lifecycle: string;
-            validation_status: string;
-          }
-        | undefined;
-      if (!revision) throw new Error('Revision not found');
-      if (revision.lifecycle === 'current') return { activated: false };
-      if (revision.lifecycle !== 'draft' || revision.validation_status !== 'valid') {
-        throw new Error('Only a valid draft revision can be activated');
-      }
-      this.requireWritableVersion(revision.business_version_id);
-      if (spec.executable) {
-        const verified = this.db
+      const prepared = paramsList.map((params) => {
+        const spec = REVISION_SPECS[params.assetType];
+        const revision = this.db
           .prepare(
-            `SELECT id FROM asset_revision_verifications
-             WHERE asset_revision_id = ? AND verification_scope_sha256 = ?
-               AND dependency_closure_sha256 = ? AND status = 'verified' AND is_current = 1`
+            `SELECT id, business_version_id, ${spec.assetColumn} AS asset_id,
+                    lifecycle, validation_status
+             FROM ${spec.table} WHERE id = ?`
           )
-          .get(revision.id, params.verificationScopeSha256, params.dependencyClosureSha256);
-        if (!verified) throw new Error('No verified record matches the activation scope');
+          .get(params.revisionId) as
+          | {
+              id: string;
+              business_version_id: string;
+              asset_id: string;
+              lifecycle: string;
+              validation_status: string;
+            }
+          | undefined;
+        if (!revision) throw new Error('Revision not found');
+        if (revision.lifecycle !== 'current') {
+          if (revision.lifecycle !== 'draft' || revision.validation_status !== 'valid') {
+            throw new Error('Only a valid draft revision can be activated');
+          }
+          this.requireWritableVersion(revision.business_version_id);
+          if (spec.executable) {
+            const verified = this.db
+              .prepare(
+                `SELECT id FROM asset_revision_verifications
+                 WHERE asset_revision_id = ? AND verification_scope_sha256 = ?
+                   AND dependency_closure_sha256 = ? AND status = 'verified' AND is_current = 1`
+              )
+              .get(revision.id, params.verificationScopeSha256, params.dependencyClosureSha256);
+            if (!verified) throw new Error('No verified record matches the activation scope');
+          }
+        }
+        return { params, revision, spec };
+      });
+      const versionIds = new Set(prepared.map(({ revision }) => revision.business_version_id));
+      if (versionIds.size !== 1) {
+        throw new Error('Atomic activation cannot span business versions');
       }
-      this.db
-        .prepare(
-          `UPDATE ${spec.table} SET lifecycle = 'superseded'
-           WHERE ${spec.assetColumn} = ? AND lifecycle = 'current'`
-        )
-        .run(revision.asset_id);
-      this.db
-        .prepare(
-          `UPDATE ${spec.table}
-           SET lifecycle = 'current'${spec.executable ? ", readiness_status = 'verified'" : ''}
-           WHERE id = ? AND lifecycle = 'draft'`
-        )
-        .run(revision.id);
+      const assetTargets = new Set<string>();
+      for (const { params, revision } of prepared) {
+        const assetKey = `${params.assetType}:${revision.asset_id}`;
+        if (assetTargets.has(assetKey)) {
+          throw new Error('Atomic activation cannot contain multiple revisions of one asset');
+        }
+        assetTargets.add(assetKey);
+      }
+
+      const now = new Date().toISOString();
+      const activatedRevisionIds: string[] = [];
+      const unchangedRevisionIds: string[] = [];
       const insertDependency = this.db.prepare(
         `INSERT INTO asset_revision_dependencies
           (id, business_version_id, from_asset_type, from_asset_id, from_revision_id,
            to_asset_type, to_asset_id, to_revision_id, relation, source_pointer, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       );
-      const now = new Date().toISOString();
-      for (const edge of params.dependencies) {
-        insertDependency.run(
-          randomUUID(),
-          revision.business_version_id,
-          params.assetType,
-          revision.asset_id,
-          revision.id,
-          edge.toAssetType,
-          edge.toAssetId,
-          edge.toRevisionId ?? null,
-          edge.relation,
-          edge.sourcePointer,
-          now
-        );
+      for (const { params, revision, spec } of prepared) {
+        if (revision.lifecycle === 'current') {
+          unchangedRevisionIds.push(revision.id);
+          continue;
+        }
+        this.db
+          .prepare(
+            `UPDATE ${spec.table} SET lifecycle = 'superseded'
+             WHERE ${spec.assetColumn} = ? AND lifecycle = 'current'`
+          )
+          .run(revision.asset_id);
+        this.db
+          .prepare(
+            `UPDATE ${spec.table}
+             SET lifecycle = 'current'${spec.executable ? ", readiness_status = 'verified'" : ''}
+             WHERE id = ? AND lifecycle = 'draft'`
+          )
+          .run(revision.id);
+        for (const edge of params.dependencies) {
+          insertDependency.run(
+            randomUUID(),
+            revision.business_version_id,
+            params.assetType,
+            revision.asset_id,
+            revision.id,
+            edge.toAssetType,
+            edge.toAssetId,
+            edge.toRevisionId ?? null,
+            edge.relation,
+            edge.sourcePointer,
+            now
+          );
+        }
+        if (params.authoringJobId) {
+          this.appendAuthoringEvent(
+            params.authoringJobId,
+            revision.business_version_id,
+            'asset.revision_activated',
+            params.assetType,
+            revision.asset_id,
+            { revisionId: revision.id },
+            params.correlationId,
+            now
+          );
+        }
+        activatedRevisionIds.push(revision.id);
       }
-      const reason = stableStringify({
-        reason: 'asset_revision_activated',
-        assetType: params.assetType,
-        assetId: revision.asset_id,
-        revisionId: revision.id,
-      });
-      this.db
-        .prepare(
-          `UPDATE business_version_validations
-           SET status = 'needs_recheck', invalidated_at = ?, reason_json = ?
-           WHERE business_version_id = ? AND is_current = 1`
-        )
-        .run(now, reason, revision.business_version_id);
-      this.db
-        .prepare(
-          `UPDATE business_versions SET validation_status = 'needs_recheck', updated_at = ?
-           WHERE id = ?`
-        )
-        .run(now, revision.business_version_id);
-      if (params.authoringJobId) {
-        this.appendAuthoringEvent(
-          params.authoringJobId,
-          revision.business_version_id,
-          'asset.revision_activated',
-          params.assetType,
-          revision.asset_id,
-          { revisionId: revision.id },
-          params.correlationId,
-          now
-        );
+      if (activatedRevisionIds.length > 0) {
+        const businessVersionId = prepared[0].revision.business_version_id;
+        const reason = stableStringify({
+          reason: 'asset_revisions_activated',
+          revisionIds: activatedRevisionIds,
+        });
+        this.db
+          .prepare(
+            `UPDATE business_version_validations
+             SET status = 'needs_recheck', invalidated_at = ?, reason_json = ?
+             WHERE business_version_id = ? AND is_current = 1`
+          )
+          .run(now, reason, businessVersionId);
+        this.db
+          .prepare(
+            `UPDATE business_versions SET validation_status = 'needs_recheck', updated_at = ?
+             WHERE id = ?`
+          )
+          .run(now, businessVersionId);
       }
-      return { activated: true };
+      return { activatedRevisionIds, unchangedRevisionIds };
     });
   }
 

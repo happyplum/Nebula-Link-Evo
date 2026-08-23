@@ -29,6 +29,8 @@ import businessVersionRoutes from './routes/business-versions.js';
 import { BusinessVersionService } from '../services/business-version-service.js';
 import semanticControlRoutes from './routes/semantic-control.js';
 import { SemanticQueryService } from '../services/semantic-query-service.js';
+import semanticAuthoringRoutes from './routes/semantic-authoring.js';
+import { SemanticAuthoringService } from '../services/semantic-authoring-service.js';
 
 const envLocalPath = path.join(process.cwd(), '.env.local');
 const envRootPath = path.join(process.cwd(), '..', '.env');
@@ -67,6 +69,7 @@ export interface ServerOptions {
   executorService?: ExecutorService;
   businessVersionService?: BusinessVersionService;
   semanticQueryService?: SemanticQueryService;
+  semanticAuthoringService?: SemanticAuthoringService;
 }
 
 export function createServer(options: Partial<ServerOptions> = {}) {
@@ -112,6 +115,10 @@ export function createServer(options: Partial<ServerOptions> = {}) {
   app.register(semanticControlRoutes, {
     prefix: '/api/v1',
     service: options.semanticQueryService,
+  });
+  app.register(semanticAuthoringRoutes, {
+    prefix: '/api/v1',
+    service: options.semanticAuthoringService,
   });
 
   // Serve built frontend (ui/dist/) at /ai-e2e/ prefix
@@ -221,6 +228,12 @@ export async function start() {
     databaseManager.getBusinessVersionRepo()
   );
   const semanticQueryService = new SemanticQueryService(databaseManager.getSemanticQueryRepo());
+  const semanticAuthoringService = new SemanticAuthoringService(
+    databaseManager.getSemanticWorkflowRepo(),
+    databaseManager.getSemanticAssetRepo(),
+    databaseManager.getAuthoringAmendmentRepo(),
+    databaseManager.getBusinessVersionRepo()
+  );
 
   // Create server with all dependencies
   const app = createServer({
@@ -234,6 +247,7 @@ export async function start() {
     executorService,
     businessVersionService,
     semanticQueryService,
+    semanticAuthoringService,
   });
 
   try {

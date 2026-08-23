@@ -29,6 +29,11 @@ import {
   migrationName as migration017Name,
   migrationSql as migration017Sql,
 } from './migrations/017-semantic-evidence-integration-foundation.js';
+import {
+  migrationId as migration018Id,
+  migrationName as migration018Name,
+  migrationSql as migration018Sql,
+} from './migrations/018-authoring-amendments.js';
 import { runTrackedMigration } from './migration-runner.js';
 import { ProjectRepository } from './repositories/project-repository.js';
 import { PRDDocumentRepository } from './repositories/prd-document-repository.js';
@@ -47,6 +52,7 @@ import { SemanticAssetRepository } from './repositories/semantic-asset-repositor
 import { SemanticEvidenceRepository } from './repositories/semantic-evidence-repository.js';
 import { SemanticWorkflowRepository } from './repositories/semantic-workflow-repository.js';
 import { SemanticQueryRepository } from './repositories/semantic-query-repository.js';
+import { AuthoringAmendmentRepository } from './repositories/authoring-amendment-repository.js';
 
 export function generateId(): string {
   return randomBytes(8).toString('hex');
@@ -74,6 +80,7 @@ class DatabaseManager {
   private semanticWorkflowRepo: SemanticWorkflowRepository | null = null;
   private semanticEvidenceRepo: SemanticEvidenceRepository | null = null;
   private semanticQueryRepo: SemanticQueryRepository | null = null;
+  private authoringAmendmentRepo: AuthoringAmendmentRepository | null = null;
 
   private constructor() {}
 
@@ -127,6 +134,7 @@ class DatabaseManager {
       { id: migration015Id, name: migration015Name, sql: migration015Sql },
       { id: migration016Id, name: migration016Name, sql: migration016Sql },
       { id: migration017Id, name: migration017Name, sql: migration017Sql },
+      { id: migration018Id, name: migration018Name, sql: migration018Sql },
     ]) {
       runTrackedMigration(this.db, migration, '1.0.0');
     }
@@ -151,6 +159,10 @@ class DatabaseManager {
     this.semanticWorkflowRepo = new SemanticWorkflowRepository(this.db);
     this.semanticEvidenceRepo = new SemanticEvidenceRepository(this.db);
     this.semanticQueryRepo = new SemanticQueryRepository(this.db, this.businessVersionRepo);
+    this.authoringAmendmentRepo = new AuthoringAmendmentRepository(
+      this.db,
+      this.semanticAssetRepo
+    );
   }
 
   getDatabase(): Database.Database {
@@ -180,6 +192,7 @@ class DatabaseManager {
       this.semanticWorkflowRepo = null;
       this.semanticEvidenceRepo = null;
       this.semanticQueryRepo = null;
+      this.authoringAmendmentRepo = null;
     }
   }
 
@@ -200,6 +213,7 @@ class DatabaseManager {
   getSemanticWorkflowRepo(): SemanticWorkflowRepository { if (!this.semanticWorkflowRepo) throw new Error('Database not initialized'); return this.semanticWorkflowRepo; }
   getSemanticEvidenceRepo(): SemanticEvidenceRepository { if (!this.semanticEvidenceRepo) throw new Error('Database not initialized'); return this.semanticEvidenceRepo; }
   getSemanticQueryRepo(): SemanticQueryRepository { if (!this.semanticQueryRepo) throw new Error('Database not initialized'); return this.semanticQueryRepo; }
+  getAuthoringAmendmentRepo(): AuthoringAmendmentRepository { if (!this.authoringAmendmentRepo) throw new Error('Database not initialized'); return this.authoringAmendmentRepo; }
 }
 
 export { DatabaseManager };
