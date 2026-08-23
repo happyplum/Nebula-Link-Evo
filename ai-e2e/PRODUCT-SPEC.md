@@ -108,6 +108,7 @@
 | 模块 | 路径 | 状态 | 职责 | 边界/契约 |
 |------|------|------|------|----------|
 | App Shell | `app/`（layout、routes、pages/{HomePage,ProjectPage}） | shipped | 应用壳 + 路由 | 路由表见下 |
+| 浏览器中心体验原型 | `ui/src/features/preview/`（PreviewApp、PreviewWorkbench、fixtures、types、独立主题样式） | shipped | 仅开发环境提供的目标信息架构、Authoring/Run 三栏工作台、结构化候选与范围审批模拟 | `/#/__preview/*`；不请求 `/api`，不接目标 runtime；生产构建通过 `import.meta.env.DEV` 剔除 |
 | 项目 | `features/project/`（components/{ProjectList,ProjectCard,CreateProjectDialog,ConfigPanel,DashboardMetricCard,QuickActions}、store/{projectApi,configApi}） | shipped | 项目管理 + 配置 |  |
 | 分析 | `features/analysis/`（components/{AnalysisPanel,ModuleTree,ModuleDetail,UnderstandStep,PRDUpload}、store/analysisApi） | shipped | PRD 分析、L1/L2 模块 |  |
 | 探索 | `features/exploration/`（components/{ExplorationPanel,ExplorationControls,URLList,BindingEditor,PagePreview,UnboundModuleIndicator}、store/explorationApi） | shipped | 站点探索、URL 绑定、未绑定模块提示 |  |
@@ -156,6 +157,7 @@
 |------|------|------|------|------|
 | `/`（HomePage） | HomePage | shipped | projectApi | 项目列表、创建对话、快捷操作、最近 run |
 | `/project/:projectId`（ProjectPage） | ProjectPage | shipped | 全部 feature APIs | 四步向导：准备目标站点 → 理解测试意图 → 探索与绑定 → 生成与执行 |
+| `/__preview/*`（开发环境） | PreviewApp | shipped | 本地 fixtures | 目标体验原型：总览、版本、资产、Authoring、运行、决策、证据和设置；生产构建不注册且不打包 |
 
 ---
 
@@ -180,6 +182,7 @@
 | 项目级诊断汇总（根因分布、JSON/HTML 导出） | services/AIDiagnosisService、ui/features/report | shipped | 集成 + UI | services |
 | 项目状态机（draft → ... → completed） | services/StateMachineService | shipped | 单元 | services |
 | SSE 阶段事件推送 | server/plugins (SSE)、hooks/use-sse | shipped | 集成 | server、ui |
+| 浏览器中心目标体验原型 | ui/features/preview | shipped | 类型检查、Vitest、开发构建视觉与 Lighthouse | 1440px 主设计、1920px 扩展；明暗主题；三栏拖拽/键盘调整/持久化；模块切换不隐式导航；Chat 只生成结构化候选；同页其他模块资产与跨 URL 修改需审批；纯 fixtures、无生产 API |
 | Token 预算追踪 | ai/TokenBudgetTracker | shipped | `__tests__/ai/token-tracker.test.ts` | ai |
 | Prompt 模板管理 | ai/PromptTemplateManager | shipped | `__tests__/ai/prompt-template.test.ts` | ai |
 | DB 迁移与 repo | database/ | shipped | `__tests__/database/{repositories,migration}.test.ts` | database |
@@ -199,7 +202,7 @@
 | 旧资产导入与版本级切流 | database、services、ui（待新增） | pending | 当前无验收面 | 旧表只读保留；生成 needs_recheck 业务版本/候选，不自动转换任意 TypeScript；run 固定 legacy 或 semantic_v1 |
 | 分层运行状态、决策与依赖传播 | database/semantic workflow foundation | in-progress | formal run 原子冻结、optimistic command、单调 event 测试 | 物理模型与核心仓储已交付；TODO/attempt 执行、决策应用、依赖传播和公开 snapshot/SSE 仍 pending |
 | 失败证据、影响评估与依赖跳过 | database/semantic evidence foundation、services/AIDiagnosisService | in-progress | artifact/item/sealed manifest 与 secret 拒绝测试 | 证据数据层已交付；proxy 产物提升、步骤关联 runtime、影响评估和依赖跳过仍 pending |
-| 可视运行控制台 | ui/features/execution | pending | 当前有运行列表、简单时间线、诊断和修复审批 | 需实时浏览器、服务端进度、分层状态、依赖图、决策中心、证据浏览及安全暂停/恢复/取消控制 |
+| 可视运行控制台 | ui/features/execution | pending | 当前有运行列表、简单时间线、诊断和修复审批；`features/preview` 已提供 dev-only fixtures 体验原型 | 仍需把原型接入真实浏览器、服务端 snapshot/event、分层状态、依赖图、决策、证据及安全暂停/恢复/取消控制后才能视为生产能力 |
 | Legacy/semantic 双轨工作区 | ui、v1 capabilities（待新增） | pending | 当前只有 legacy 项目/run | 同页可汇总但显著标记 executionKind；legacy 只读/旧控制，semantic 只用 v1 snapshot/events，禁止跨链 resume |
 | DOM 变化后的功能脚本局部修复 | services/AIDiagnosisService | in-progress | 当前仅有 run 级诊断/自动修复 | 需当前业务版本内的页面/模块/功能脚本影响定位与定向修复 |
 

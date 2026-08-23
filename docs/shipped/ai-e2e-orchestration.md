@@ -23,6 +23,7 @@ PRD 驱动的 E2E 自动化测试编排器。把"需求分析 → 页面探索 �
 - [shipped] 独立 SQLite（项目 / scenario / script / run / diagnosis）：`ai-e2e/src/database/`。不与 proxy-adapter / ai-chat-service 共享。
 - [shipped] Prompt 模板（稳定资产）：`ai-e2e/prompts/*.md`。脚本生成模板按 DOM 快照 v2 的 `elements_map[*].locator_bundle` 读取定位候选，优先使用真实 `testid`，不会把元素 ID 当作 testid。必须保留。
 - [shipped] SPA UI 挂载前缀 `/ai-e2e/`：HomePage（`/`）+ ProjectPage（`/project/:projectId`），项目页为四步向导。
+- [shipped] dev-only 浏览器中心体验原型：`ai-e2e/ui/src/features/preview/` 在 `/#/__preview/*` 提供总览、业务版本、资产、Authoring、Run、决策、证据和设置页面；Authoring/Run 使用可拖拽且可键盘调整的三栏布局，中间浏览器持续挂载，模块切换不隐式导航，Chat 生成结构化候选，同页其他模块资产与跨 URL 修改进入人工审批。原型只使用本地 fixtures、不请求 `/api`，并由 `import.meta.env.DEV` 保证生产构建不注册且不打包；不得据此把目标 authoring/run API、SSE 或协调器描述为 shipped。
 - [shipped] 验收面：`ai-e2e/src/__tests__/`（ai、database 等）单元 + 集成测试。
 - [designed] 页面运行匹配器以已交付的 Origin 无关 semantic 页面修订、部署绑定和 baseline variant 为输入；legacy `urls.url` 仍只保存完整 URL。完整参数校验、动态参数和基线采集 runtime 尚未实现。
 - [designed] 模块需求内容应融合 PRD 片段、真实 DOM/截图、页面锚点、功能说明与有序场景；不可变 requirement/coverage 表已交付，内容仍待 authoring runtime 生成。
