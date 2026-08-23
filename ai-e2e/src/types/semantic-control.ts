@@ -130,6 +130,8 @@ export interface AuthoringSnapshotV1 {
   tasks: Array<Record<string, unknown>>;
   attempts: Array<Record<string, unknown>>;
   decisions: Array<Record<string, unknown>>;
+  contextThreads: Array<Record<string, unknown>>;
+  amendments: Array<Record<string, unknown>>;
   browserJob?: Record<string, unknown>;
   policyEvaluation?: Record<string, unknown>;
   activeApprovalGrant?: Record<string, unknown>;

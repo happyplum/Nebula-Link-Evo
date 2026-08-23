@@ -163,12 +163,32 @@ export class SemanticQueryRepository {
       jobId
     );
     const decisions = this.getDecisions('authoring', jobId);
+    const contextThreads = this.selectRows(
+      `SELECT * FROM authoring_context_threads
+       WHERE job_id = ? ORDER BY created_at`,
+      jobId
+    );
+    const amendmentRows = this.selectRows(
+      `SELECT * FROM authoring_amendments
+       WHERE job_id = ? ORDER BY created_at`,
+      jobId
+    );
+    const amendments = amendmentRows.map((amendment) => ({
+      ...amendment,
+      changes: this.selectRows(
+        `SELECT * FROM authoring_amendment_changes
+         WHERE amendment_id = ? ORDER BY sequence`,
+        String(amendment.id)
+      ),
+    }));
     return {
       schema: 'nebula.ai-e2e.authoring-snapshot/1.0',
       job,
       tasks,
       attempts,
       decisions,
+      contextThreads,
+      amendments,
       ...this.getLinkedControlState('authoring', jobId, row),
       seq: Number(row.next_event_seq) - 1,
       stateVersion: Number(row.state_version),
