@@ -250,22 +250,22 @@
 - 当前 `ai-chat-service` 已交付 Agent 工具循环、任务 POST/GET/commands、MCP client/ToolRegistry、结构化任务结果、安全 checkpoint、snapshot-first events/event-log 与本地只读单 Skill loader/catalog/runtime；通用视觉 v2 与完整 policy/grant 授权交集尚未实现。
 - 当前 `ai-e2e` 主要使用纯文本生成接口，尚未实现主代理/页面子代理的任务图、上下文隔离、暂停决策和恢复运行时。
 - 持久 authoring job/task/attempt/event、coverage disposition、candidate verification/activation、revision dependency index 和 browser FIFO 数据基座已交付；生成和修复服务仍围绕旧项目状态与短期调用，尚未切入新协调器。
-- 当前 `ai-e2e` UI 尚未集成测试浏览器的实时画面、语义步骤时间线和统一证据浏览。
-- 当前 UI 以本地 `isRunning`、同名步骤合并和 progress 事件递增 5% 推断执行状态；目标必须改为持久化运行快照、每运行单调事件序号和服务端计算进度。
+- `ai-e2e` semantic 生产工作台已集成只读测试浏览器画面、TODO/尝试状态、决策和统一证据定位；legacy 四步向导保持原有展示。
+- semantic UI 以持久化运行快照、单调事件序号和服务端状态恢复，不再用本地累计百分比推断；legacy UI 仍只消费旧项目事件，禁止跨链恢复。
 
 ## 10. 尚待技术设计的内容
 
 以下内容仍未全部锁定或尚待形成可执行实现，不得描述为已交付：
 
-- `target-data-model.md` 已锁定完整目标表与事务；migration 014–017 和 semantic repositories 已实现目标表、copy、核心状态/证据/outbox 事务。公开 API、执行协调器、策略/决策应用、迁移 preflight/importer 与 UI 仍未实现。
+- `target-data-model.md` 已锁定完整目标表与事务；migration 014–018、semantic repositories、公开 workspace/Authoring/Run API、执行协调器、策略/决策应用与生产 UI 已实现。完整 bootstrap/recheck、通用资产写接口、迁移 preflight/importer 仍未实现。
 - 场景调用图、运行计划、TODO、追加式修订和受控条件 payload 已锁定为 `nebula.ai-e2e.scenario/1.0` 与对应运行表；正式 JSON Schema 文件尚未生成。
 - 页面模板语法、参数类型、WHATWG URL 规范化、匹配评分、基线指纹/阈值和多部署 revision 已锁定；旧数据迁移仍待兼容契约。
 - 语义脚本 DSL v1 已在 `semantic-script-schema.md` 锁定；实现仍需按其中能力差距扩展 proxy 原子动作并生成正式 JSON Schema 文件。
-- 浏览器执行会话、Tab、observe/control 租约、原子操作、去重账本、结果查询、Agent task 和四类目标事件流（Authoring/Run/Agent/Browser）的 API/Schema 已在 `service-api-event-contract.md` 锁定；Agent/Browser 控制与 snapshot-first 事件面已交付，Authoring/Run API/SSE 仍 pending。v1 单 BrowserContext、单活动身份与显式串行切换已锁定，同时多身份/多 Context 及后期多 Tab 并发仍需在启用前另行设计。
+- 浏览器执行会话、Tab、observe/control 租约、原子操作、去重账本、结果查询、Agent task 和四类目标事件流（Authoring/Run/Agent/Browser）的 API/Schema 已在 `service-api-event-contract.md` 锁定；三服务控制面与 Authoring/Run snapshot-first SSE 已交付。v1 单 BrowserContext、单活动身份与显式串行切换已锁定，同时多身份/多 Context 及后期多 Tab 并发仍需在启用前另行设计。
 - 主代理与子代理运行时采用干净 Agent task、模型不可见短期 opaque 租约 token、hash/process epoch、主代理签发/回收和 proxy SQLite WAL 操作账本的协议已锁定；三服务数据账本已落地，正式任务包 Schema、派发/回收 runtime 与跨服务协调仍未实现。
 - 双模型调用、`vision.analyze_page`、`vision.resolve_target`、声明式 Skill manifest、版本 pin 和工具权限交集已在 `ai-model-skill-contract.md` 锁定；本地只读单 Skill loader/catalog/runtime、精确版本/hash pin 与工具/预算缩权已实现，通用视觉 v2、完整 policy/grant 授权交集和独立正式 JSON Schema 仍待实现。
 - 决策、内容寻址 artifact、evidence manifest/item 和默认保留结构已落库，证据追加/封存仓储已实现；跨服务脱敏提升、身份访问控制和清理任务仍待实现。
-- 环境风险矩阵、计划级风险投影、staging grant、production 硬拒绝和修订后重新审批已锁定；evaluation/grant/decision migration 与 evaluation 仓储已实现，策略引擎、grant 应用和 UI 尚未实现。
+- 环境风险矩阵、计划级风险投影、staging grant、production 硬拒绝和修订后重新审批已锁定；策略引擎、evaluation/grant/decision 持久化、grant 应用和审批 UI 已实现，逐 effectId 跨服务授权交集尚未实现。
 - 首期非本机/多用户部署不在当前信任边界内；若未来开放，必须先设计统一身份、授权和租户隔离，不以 capability/lease 代替认证。
 - 可视操作动画的表现、节奏和重放协议。
 - 现有 TypeScript、登录录制、历史项目/run 的保守导入、双轨 API、版本级切流、回滚和技术验收已在 `migration-compatibility-acceptance-contract.md` 锁定；正式 migrations/importer 和 fixtures 尚未实现。

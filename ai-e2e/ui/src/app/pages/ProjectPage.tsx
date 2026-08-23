@@ -1,4 +1,5 @@
 import { useParams, useSearchParams, Link } from 'react-router-dom';
+import { MonitorUp } from 'lucide-react';
 import { Stepper, type Step, type StepStatus } from '@/components/ui/stepper.js';
 import { ConfigPanel } from '../../features/project/components/ConfigPanel.js';
 import { UnderstandStep } from '../../features/analysis/components/UnderstandStep.js';
@@ -51,20 +52,14 @@ const COMPLETED_STATUSES: Record<WizardStepId, ReadonlySet<ProjectStatus>> = {
     'running',
     'completed',
   ]),
-  explore: new Set<ProjectStatus>([
-    'explored',
-    'generating',
-    'ready',
-    'running',
-    'completed',
-  ]),
+  explore: new Set<ProjectStatus>(['explored', 'generating', 'ready', 'running', 'completed']),
   run: new Set<ProjectStatus>(),
 };
 
 function computeStepStatus(
   stepId: WizardStepId,
   activeStep: WizardStepId,
-  projectStatus: ProjectStatus | undefined,
+  projectStatus: ProjectStatus | undefined
 ): StepStatus {
   if (stepId === activeStep) return 'current';
   if (projectStatus && COMPLETED_STATUSES[stepId].has(projectStatus)) return 'completed';
@@ -99,12 +94,19 @@ export function ProjectPage() {
     <div className="flex h-full flex-col">
       {/* Header: back link + project title + status */}
       <div className="border-b border-border-default bg-surface-content px-6 pt-4 pb-3">
-        <div className="mb-3 flex items-center gap-3">
+        <div className="mb-3 flex items-center justify-between gap-3">
           <Link
             to="/"
             className="text-xs text-text-muted transition-colors hover:text-text-primary"
           >
             ← 工作区
+          </Link>
+          <Link
+            to={`/semantic/${projectId}`}
+            className="inline-flex min-h-9 items-center gap-2 rounded-md border border-cyan-800/60 bg-cyan-950/30 px-3 text-xs font-medium text-cyan-300 transition hover:border-cyan-600 hover:text-cyan-200"
+          >
+            <MonitorUp className="h-4 w-4" aria-hidden="true" />
+            打开浏览器中心工作台
           </Link>
         </div>
         <h1 className="text-lg font-semibold text-text-primary">

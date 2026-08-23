@@ -90,6 +90,34 @@ describe('semantic authoring routes', () => {
     ).toEqual({ type: 'analyze_impact', state: 'ready', target_id: fixture.module1Id });
   });
 
+  it('accepts an explicit navigation-only locate intent without broadening asset authority', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/business-versions/${fixture.versionId}/authoring-jobs`,
+      headers: { 'idempotency-key': 'locate-module-1' },
+      payload: {
+        schema: 'nebula.ai-e2e.create-authoring-job/1.0',
+        mode: 'recheck',
+        intent: 'locate_in_browser',
+        targetType: 'functional_module',
+        targetId: fixture.module1Id,
+        currentUrl: 'https://test.example/login',
+        reason: '在浏览器中定位登录模块',
+        createdBy: 'user-1',
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    const task = db
+      .prepare('SELECT input_json_redacted FROM authoring_tasks WHERE id = ?')
+      .get(response.json().data.taskId) as { input_json_redacted: string };
+    expect(JSON.parse(task.input_json_redacted)).toMatchObject({
+      intent: 'locate_in_browser',
+      requestedBy: 'user-1',
+      currentUrl: 'https://test.example/login',
+    });
+  });
+
   it('turns a structured candidate into diff state while chat text remains only audit context', async () => {
     const jobId = await createJob(app, fixture);
     const threadId = await createThread(app, fixture, jobId);
@@ -152,7 +180,9 @@ describe('semantic authoring routes', () => {
     expect(verifying.json().data.state).toBe('verifying');
     expect(directActivation.statusCode).toBe(400);
     expect(
-      db.prepare('SELECT lifecycle FROM semantic_functional_module_revisions WHERE id = ?').get(candidate.id)
+      db
+        .prepare('SELECT lifecycle FROM semantic_functional_module_revisions WHERE id = ?')
+        .get(candidate.id)
     ).toEqual({ lifecycle: 'draft' });
   });
 

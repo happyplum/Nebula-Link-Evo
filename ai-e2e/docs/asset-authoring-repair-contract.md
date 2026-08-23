@@ -241,7 +241,7 @@ revision 激活事务同步维护 `asset_revision_dependencies`，关系至少�
 
 | Method | Path | 语义 |
 |---|---|---|
-| POST | `/api/v1/business-versions/:versionId/authoring-jobs` | 创建 bootstrap/recheck/repair/import_conversion job，要求幂等键。 |
+| POST | `/api/v1/business-versions/:versionId/authoring-jobs` | 创建 bootstrap/recheck/repair/import_conversion job，要求幂等键；可选 `intent=locate_in_browser` 只调度 navigation-only 浏览器任务，不生成候选。 |
 | GET | `/api/v1/authoring-jobs/:jobId` | 返回权威 authoring snapshot、coverage 和 active task。 |
 | POST | `/api/v1/authoring-jobs/:jobId/commands` | `start/pause/resume/cancel`，要求 `If-Match`。 |
 | GET | `/api/v1/authoring-jobs/:jobId/events` | snapshot-first SSE，job-scoped 单调 seq。 |
@@ -254,12 +254,10 @@ revision 激活事务同步维护 `asset_revision_dependencies`，关系至少�
 
 ## 11. 当前实现差距
 
-- 当前项目状态机是准备阶段枚举，没有 authoring job/task/attempt/event、版本写锁或可恢复主代理。
-- 当前 PRDAnalyzer/Explorer/ScriptGenerator 直接围绕项目旧表和纯文本生成工作，不能产出不可变 revision/coverage/dependency index。
-- 当前脚本生成后即可进入旧执行器，没有 candidate static-valid/verified/current 分层。
-- 当前自动修复按旧 run 修改 scenario 级 TypeScript，不能分类 locator/interaction/contract/requirement 或计算 revision 影响集。
-- 当前浏览器 singleton 有进程内 mutex，但没有跨 authoring/run 的全局 application session 调度。
-- 当前没有 environment 固定、风险投影、policy evaluation、job 级审批或逐 effectId 授权门禁。
+- 局部 repair 已有持久 job/task/attempt/event、版本写锁、结构化 candidate/影响审批、真实浏览器验证、原子激活与重启恢复；完整 bootstrap/recheck 多阶段图、coverage 生成和版本 validator 仍未交付。
+- Legacy PRDAnalyzer/Explorer/ScriptGenerator 仍围绕旧表和纯文本生成，未迁入不可变 semantic revision/coverage/dependency authoring 链。
+- semantic 调度已统一使用跨 authoring/run FIFO；逐 effectId 的跨服务 runtime 授权交集仍未交付。
+- 生产工作台已经从权威 snapshot/SSE 呈现修订、审批与验证状态；通用资产 CRUD/手动修订接口仍未开放。
 
 ## 12. 验收原则
 

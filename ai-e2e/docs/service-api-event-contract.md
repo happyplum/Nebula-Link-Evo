@@ -118,7 +118,7 @@ interface ServiceCapabilitiesV1 {
 
 | Method | Path | 语义 |
 |---|---|---|
-| POST | `/api/v1/business-versions/:versionId/authoring-jobs` | 创建 bootstrap/recheck/repair/import_conversion job。 |
+| POST | `/api/v1/business-versions/:versionId/authoring-jobs` | 创建 bootstrap/recheck/repair/import_conversion job；`intent` 默认为 `author_assets`，`locate_in_browser` 只创建 navigation-only task。 |
 | GET | `/api/v1/authoring-jobs/:jobId` | 读取 authoring snapshot、coverage 和 active task。 |
 | POST | `/api/v1/authoring-jobs/:jobId/commands` | `start/pause/resume/cancel`。 |
 | GET | `/api/v1/authoring-jobs/:jobId/events` | snapshot-first authoring SSE。 |
@@ -131,7 +131,7 @@ interface ServiceCapabilitiesV1 {
 | POST | `/api/v1/authoring-amendments/:amendmentId/decisions/:decisionId/answer` | 批准或拒绝同页跨模块/跨 URL 范围扩展。 |
 | POST | `/api/v1/authoring-amendments/:amendmentId/commands` | 用户请求安全边界应用或拒绝；协调器内部开始真实验证，验证成功后原子激活，失败保持 current。 |
 
-当前实现：job 创建会立即生成首个 task；snapshot/event-log/snapshot-first SSE、context thread、Chat 审计、结构化 amendment、范围审批与安全边界命令已交付。协调器会为 repair task 创建受限 Agent task 和 observe lease，将输出固化为 draft candidate；用户应用后重新调度真实浏览器验证，成功才原子激活。完整 bootstrap/recheck 阶段图与 job 自身 pause/resume/cancel 仍未交付。
+当前实现：job 创建会立即生成首个 task；snapshot/event-log/snapshot-first SSE、context thread、Chat 审计、结构化 amendment、范围审批与安全边界命令已交付。协调器会为 repair task 创建受限 Agent task 和 observe lease，将输出固化为 draft candidate；用户应用后重新调度真实浏览器验证，成功才原子激活。`locate_in_browser` 使用同一 FIFO 和 control lease，只允许 `navigate`/`page_state`，完成后不生成 amendment、不改 current 资产。完整 bootstrap/recheck 阶段图与 job 自身 pause/resume/cancel 仍未交付。
 
 完整阶段、coverage、candidate 验证和激活规则见 `asset-authoring-repair-contract.md`。
 

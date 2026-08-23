@@ -3,6 +3,8 @@ import { Routes as RouterRoutes, Route } from 'react-router-dom';
 import { Layout } from './layout.js';
 import { HomePage } from './pages/HomePage.js';
 import { ProjectPage } from './pages/ProjectPage.js';
+import { SemanticHomePage } from '../features/semantic/SemanticHomePage.js';
+import { SemanticAuthoringPage, SemanticRunPage } from '../features/semantic/SemanticWorkbench.js';
 
 const PreviewApp = import.meta.env.DEV
   ? lazy(() =>
@@ -40,9 +42,12 @@ export function Routes() {
           }
         />
       )}
+      <Route path="/semantic/:projectId/authoring/:versionId" element={<SemanticAuthoringPage />} />
+      <Route path="/semantic/:projectId/runs/:runId" element={<SemanticRunPage />} />
       <Route element={<Layout />}>
         <Route path="/" element={<HomePage />} />
         <Route path="/project/:projectId" element={<ProjectPage />} />
+        <Route path="/semantic/:projectId" element={<SemanticHomePage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </RouterRoutes>

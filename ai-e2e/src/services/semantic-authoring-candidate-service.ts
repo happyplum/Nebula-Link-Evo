@@ -63,6 +63,7 @@ export class SemanticAuthoringCandidateService {
 
   buildAgentRequest(task: CoordinatorAuthoringTask): Omit<CreateAgentTaskInput, 'browserBinding'> {
     if (isVerificationTask(task)) return this.buildVerificationAgentRequest(task);
+    if (task.input.intent === 'locate_in_browser') return this.buildLocateAgentRequest(task);
     const workspace = this.requireWorkspace(task.businessVersionId);
     const context = resolveContext(task, workspace);
     return {
@@ -149,16 +150,23 @@ export class SemanticAuthoringCandidateService {
     operations: string[];
   } {
     const request = this.buildAgentRequest(task);
-    const constraints = objectValue(request.toolPolicy.constraints?.['browser-control.operation_execute']);
+    const constraints = objectValue(
+      request.toolPolicy.constraints?.['browser-control.operation_execute']
+    );
     const steps = Array.isArray(constraints.steps) ? constraints.steps.filter(isObject) : [];
     const mode = steps.some((step) => step.kind === 'act') ? 'control' : 'observe';
     return {
       mode,
-      operations: [...new Set(steps.map((step) => stringValue(step.operation)).filter(Boolean))] as string[],
+      operations: [
+        ...new Set(steps.map((step) => stringValue(step.operation)).filter(Boolean)),
+      ] as string[],
     };
   }
 
-  applyAgentOutput(task: CoordinatorAuthoringTask, agentTask: AgentTaskView): AuthoringCandidateResult {
+  applyAgentOutput(
+    task: CoordinatorAuthoringTask,
+    agentTask: AgentTaskView
+  ): AuthoringCandidateResult {
     if (agentTask.status !== 'completed') {
       return {
         status: 'blocked',
@@ -196,6 +204,15 @@ export class SemanticAuthoringCandidateService {
       },
       createdBy: 'semantic-coordinator',
     });
+    const userRequest = stringValue(task.input.reason);
+    if (userRequest) {
+      this.amendments.addChatMessage({
+        threadId: thread.id,
+        role: 'user',
+        content: userRequest,
+        createdBy: stringValue(task.input.requestedBy) ?? 'semantic-coordinator',
+      });
+    }
     const candidateChanges = proposals.map((proposal, index) => {
       const revision = this.assets.createRevision({
         id: stableUuid(agentTask.taskId, proposal.assetType, proposal.assetId, String(index)),
@@ -285,7 +302,8 @@ export class SemanticAuthoringCandidateService {
     }
     const output = objectValue(agentTask.output);
     const result = stringValue(output.result);
-    const summary = stringValue(output.summary) ?? agentTask.error?.message ?? '浏览器验证未返回摘要';
+    const summary =
+      stringValue(output.summary) ?? agentTask.error?.message ?? '浏览器验证未返回摘要';
     const hasSuccessfulOperation = agentTask.toolCalls.some((call) => call.status === 'succeeded');
     if (agentTask.status === 'completed' && result === 'succeeded' && hasSuccessfulOperation) {
       return {
@@ -303,7 +321,7 @@ export class SemanticAuthoringCandidateService {
             ? `agent_${agentTask.status}`
             : !hasSuccessfulOperation
               ? 'verification_operation_missing'
-              : result ?? 'verification_failed',
+              : (result ?? 'verification_failed'),
         summary,
         agentTaskId: agentTask.taskId,
       }),
@@ -366,6 +384,67 @@ export class SemanticAuthoringCandidateService {
     };
   }
 
+  private buildLocateAgentRequest(
+    task: CoordinatorAuthoringTask
+  ): Omit<CreateAgentTaskInput, 'browserBinding'> {
+    const workspace = this.requireWorkspace(task.businessVersionId);
+    const context = resolveContext(task, workspace);
+    const steps: AgentTaskBrowserStep[] = [
+      {
+        stepId: 'locate-target-url',
+        kind: 'act',
+        operation: 'navigate',
+        capture: { beforeScreenshot: true, afterScreenshot: true, domSnapshot: true },
+      },
+      {
+        stepId: 'observe-located-page',
+        kind: 'observe',
+        operation: 'page_state',
+        capture: { afterScreenshot: true, domSnapshot: true },
+      },
+    ];
+    return {
+      schema: 'nebula.ai.agent-task/1.0',
+      clientTaskId: `authoring-locate:${task.taskId}`,
+      modelRole: 'decision',
+      input: {
+        schema: 'nebula.ai-e2e.browser-locate-input/1.0',
+        objective: '仅导航到目标 URL 并确认页面已到达，不生成或修改任何候选资产。',
+        jobId: task.jobId,
+        taskId: task.taskId,
+        targetUrl: context.currentUrl,
+        pageDefinitionId: context.pageId,
+        functionalModuleId: context.moduleId,
+        authorizedSteps: steps,
+      },
+      responseSchema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          status: { type: 'string', enum: ['no_change', 'blocked'] },
+          summary: { type: 'string', minLength: 1, maxLength: 4_000 },
+        },
+        required: ['status', 'summary'],
+      },
+      toolPolicy: {
+        allow: ['browser-control.operation_execute'],
+        constraints: { 'browser-control.operation_execute': { steps } },
+      },
+      skillPolicy: { allow: [] },
+      budgets: {
+        maxDurationMs: 120_000,
+        maxModelTurns: 4,
+        maxToolCalls: 4,
+        maxTokens: 8_000,
+      },
+      correlation: {
+        authoringJobId: task.jobId,
+        authoringTaskId: task.taskId,
+        businessVersionId: task.businessVersionId,
+      },
+    };
+  }
+
   private requireWorkspace(versionId: string): SemanticWorkspaceV1 {
     const workspace = this.queries.getWorkspace(versionId);
     if (!workspace) throw new Error('Authoring business version workspace not found');
@@ -403,10 +482,14 @@ interface VerificationCandidate {
   payload: Record<string, unknown>;
 }
 
-function resolveContext(task: CoordinatorAuthoringTask, workspace: SemanticWorkspaceV1): AuthoringContext {
-  let module = task.targetType === 'functional_module'
-    ? workspace.functionalModules.find((entry) => entry.id === task.targetId)
-    : undefined;
+function resolveContext(
+  task: CoordinatorAuthoringTask,
+  workspace: SemanticWorkspaceV1
+): AuthoringContext {
+  let module =
+    task.targetType === 'functional_module'
+      ? workspace.functionalModules.find((entry) => entry.id === task.targetId)
+      : undefined;
   if (!module && task.targetType === 'functional_script') {
     const script = workspace.functionalScripts.find((entry) => entry.id === task.targetId);
     module = workspace.functionalModules.find((entry) => entry.id === script?.functionalModuleId);
@@ -429,7 +512,9 @@ function resolveContext(task: CoordinatorAuthoringTask, workspace: SemanticWorks
   const visibleScripts = new Set(
     workspace.functionalScripts
       .filter((script) => {
-        const owner = workspace.functionalModules.find((entry) => entry.id === script.functionalModuleId);
+        const owner = workspace.functionalModules.find(
+          (entry) => entry.id === script.functionalModuleId
+        );
         return owner?.primaryPageDefinitionId === page.id;
       })
       .map((script) => script.id)
@@ -437,7 +522,10 @@ function resolveContext(task: CoordinatorAuthoringTask, workspace: SemanticWorks
   const visibleScenarioIds = workspace.scenarios
     .filter((scenario) => {
       const calls = scenario.currentRevision.payload.calls;
-      return Array.isArray(calls) && calls.some((call) => isObject(call) && visibleScripts.has(String(call.functionalScriptId)));
+      return (
+        Array.isArray(calls) &&
+        calls.some((call) => isObject(call) && visibleScripts.has(String(call.functionalScriptId)))
+      );
     })
     .map((scenario) => scenario.id);
   return {
@@ -457,14 +545,17 @@ function validateProposal(
 ): ValidatedProposal {
   const proposal = objectValue(value);
   const assetType = requiredString(proposal.assetType, 'proposal.assetType') as SemanticAssetType;
-  if (!CANDIDATE_ASSET_TYPES.has(assetType)) throw new Error(`候选资产类型 '${assetType}' 不允许自动修改`);
+  if (!CANDIDATE_ASSET_TYPES.has(assetType))
+    throw new Error(`候选资产类型 '${assetType}' 不允许自动修改`);
   const assetId = requiredString(proposal.assetId, 'proposal.assetId');
   const baseRevisionId = requiredString(proposal.baseRevisionId, 'proposal.baseRevisionId');
   const base = queries.getRevision(assetType, assetId, baseRevisionId);
   if (!base) throw new Error('候选基础 revision 不存在');
   const candidatePayload = objectValue(proposal.candidatePayload);
-  if (candidatePayload.schema !== base.schemaId) throw new Error('候选 payload schema 与基础 revision 不一致');
-  if (hashValue(candidatePayload) === base.contentSha256) throw new Error('候选 payload 与基础 revision 完全相同');
+  if (candidatePayload.schema !== base.schemaId)
+    throw new Error('候选 payload schema 与基础 revision 不一致');
+  if (hashValue(candidatePayload) === base.contentSha256)
+    throw new Error('候选 payload 与基础 revision 完全相同');
   const category = requiredString(proposal.category, 'proposal.category');
   const reason = requiredString(proposal.reason, 'proposal.reason');
   const targetUrl = stringValue(proposal.targetUrl) ?? context.currentUrl;
@@ -513,9 +604,15 @@ function compactWorkspace(
   const scripts = workspace.functionalScripts.filter(
     (script) => pageModuleIds.has(script.functionalModuleId) || referencedScriptIds.has(script.id)
   );
-  const moduleIds = new Set([...pageModuleIds, ...scripts.map((script) => script.functionalModuleId)]);
+  const moduleIds = new Set([
+    ...pageModuleIds,
+    ...scripts.map((script) => script.functionalModuleId),
+  ]);
   const modules = workspace.functionalModules.filter((module) => moduleIds.has(module.id));
-  const pageIds = new Set([context.pageId, ...modules.map((module) => module.primaryPageDefinitionId)]);
+  const pageIds = new Set([
+    context.pageId,
+    ...modules.map((module) => module.primaryPageDefinitionId),
+  ]);
   const compact = {
     schema: workspace.schema,
     version: workspace.version,
@@ -554,7 +651,9 @@ function buildVerificationSteps(
   const scripts: Array<{ key: string; payload: Record<string, unknown> }> = candidates
     .filter((candidate) => candidate.assetType === 'functional_script')
     .map((candidate) => ({ key: candidate.assetId, payload: candidate.payload }));
-  for (const scenario of candidates.filter((candidate) => candidate.assetType === 'test_scenario')) {
+  for (const scenario of candidates.filter(
+    (candidate) => candidate.assetType === 'test_scenario'
+  )) {
     const calls = Array.isArray(scenario.payload.calls) ? scenario.payload.calls : [];
     for (const [index, call] of calls.entries()) {
       if (!isObject(call)) continue;
@@ -562,7 +661,8 @@ function buildVerificationSteps(
       if (!scriptId) continue;
       const payload =
         candidateScripts.get(scriptId) ??
-        workspace.functionalScripts.find((script) => script.id === scriptId)?.currentRevision.payload;
+        workspace.functionalScripts.find((script) => script.id === scriptId)?.currentRevision
+          .payload;
       if (payload) scripts.push({ key: `${scenario.assetId}-${index + 1}-${scriptId}`, payload });
     }
   }
@@ -603,7 +703,10 @@ function parseJsonArray(value: unknown, label: string): unknown[] {
   return parsed;
 }
 
-function parseJsonObject(value: unknown, fallback: Record<string, unknown>): Record<string, unknown> {
+function parseJsonObject(
+  value: unknown,
+  fallback: Record<string, unknown>
+): Record<string, unknown> {
   if (typeof value !== 'string' || !value) return fallback;
   const parsed = JSON.parse(value) as unknown;
   return isObject(parsed) ? parsed : fallback;
