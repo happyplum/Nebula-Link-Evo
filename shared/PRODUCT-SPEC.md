@@ -9,20 +9,20 @@
 
 ### 目标
 
-- 沉淀跨包共享的纯类型、纯函数与测试辅助，保证 `proxy-adapter` / `ai-chat-service` / `ai-e2e` 之间契约一致。
+- 沉淀跨包共享的纯类型、纯函数与测试辅助，保证 `proxy-adapter` / `ai-chat-service` / `ai-e2e` / `integrations/*` 之间契约一致。
 - 框架中立、服务中立，**不引入任何后端业务语义**。
 
 ### 边界
 
 | Owns | Consumes | Does NOT own |
 |------|----------|--------------|
-| 运行时类型（action / sse-events / vision-marker / debug-events / constants） | 无外部运行时依赖 | 业务逻辑、浏览器引擎、AI provider、数据库访问 |
+| 运行时类型（action / browser-execution / sse-events / vision-marker / debug-events / constants） | 无外部运行时依赖 | 业务逻辑、浏览器引擎、AI provider、数据库访问 |
 | 运行时工具（frame-counter 等） |  | 任何 `dist/` 产物（直接编辑源码） |
 | 源码级测试辅助（test-utils/，含 mocks、service-lifecycle） |  |  |
 
 ### 硬约束
 
-- 不反向依赖任何上层包（`proxy-adapter` / `ai-chat-service` / `ai-e2e`）。
+- 不反向依赖任何上层包（`proxy-adapter` / `ai-chat-service` / `ai-e2e` / `integrations/*`）。
 - 不写入后端业务逻辑或服务假设。
 - 工具函数无隐藏副作用。
 
@@ -33,7 +33,7 @@
 | 模块 | 路径 | 状态 | 职责 | 边界/契约 |
 |------|------|------|------|----------|
 | 公共入口 | `index.ts` | shipped | 聚合 re-export 运行时类型与工具 | 仅 re-export，不放新逻辑 |
-| 运行时类型 | `types/` | shipped | action、sse-events、vision-marker、debug-events、constants、index | 框架中立；新增类型需同时更新 `types/index.ts` 与 `index.ts` |
+| 运行时类型 | `types/` | shipped | action、browser-execution、sse-events、vision-marker、debug-events、constants、index | 框架中立；browser-execution 只含线协议，token hash/持久化记录仍归 proxy；新增类型需同时更新 `types/index.ts` 与 `index.ts` |
 | 运行时工具 | `utils/` | shipped | frame-counter、index 等纯函数 | 必须纯函数，无副作用 |
 | 测试辅助 | `test-utils/` | shipped | mocks（BrowserContext、KimiClient、sse-event、debug-event）、service-lifecycle、index | **不进 `tsc -b` 构建产物**；消费方按源码相对路径引用 |
 | Vitest 配置 | `vitest.config.ts` | shipped | shared 包测试配置 | 仅本包测试 |
@@ -44,6 +44,7 @@
 |---------|------|
 | `.`（root） | 运行时类型 + 工具 |
 | `./types` | 仅类型 |
+| `./types/browser-execution` | 浏览器 execution session/lease/operation/target/capability/problem 线协议与操作常量 |
 | `./utils` | 仅工具 |
 | `./test-utils` | 测试辅助（源码引用，不入 build） |
 
@@ -54,6 +55,7 @@
 | 功能 | 入口 | 状态 | 验收面 | 关联模块 |
 |------|------|------|--------|----------|
 | Action 类型契约 | `types/action.ts` | shipped | 跨包使用一致；契约测试通过 | types/ |
+| 浏览器执行线协议 | `types/browser-execution.ts` | shipped | shared build + proxy/client/plugin 类型检查与测试 | types/；不含 token hash、artifact bytes 或持久化内部记录 |
 | SSE 事件契约 | `types/sse-events.ts` | shipped | `__tests__/sse-events-contract.test.ts` | types/ |
 | Debug 事件契约 | `types/debug-events.ts` | shipped | `__tests__/debug-events-contract.test.ts` | types/ |
 | 视觉标记契约 | `types/vision-marker.ts` | shipped | 截图契约测试 | types/ |

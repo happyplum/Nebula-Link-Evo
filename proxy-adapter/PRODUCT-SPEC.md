@@ -11,7 +11,7 @@
 
 - 统一封装进程内 Playwright 与页面级 CDP 会话，提供浏览器分析、观测和操作能力；支持 12 种操作类型（click / type / focus / blur / hover / value / dispatch / scroll / navigate / wait / mcp_call / finish，对应 `shared/types/action.ts` 的 `Action` 联合类型）。
 - 提供实时调试观测面（MJPEG、DOM 快照、debug event stream）供 `debug-ui` 消费。
-- 通过 MCP 协议成为任意 AI 客户端（Claude Desktop / Cursor / aichat / `ai-chat-service`）的浏览器能力底座。
+- 通过 MCP 协议成为任意 AI 客户端（Claude Desktop / Cursor / aichat / `ai-chat-service`）及本地受控 CLI/Harness adapter 的浏览器能力底座。
 - 目标承载 ai-e2e 结构化语义功能脚本的唯一可视执行链，使动作、实时画面、步骤结果、交互记录和失败证据可关联、可理解、可复现；当前正式 MCP 工具仍以单步浏览器操作为主。
 
 ### 边界
@@ -38,6 +38,7 @@
 - 本包只生成并短期保留通用浏览器原始产物及内容校验信息；长期证据 manifest、业务关联、保留/pin 和决策归调用方，清理前必须提供可提升或明确过期的产物引用。
 - 不在 `src/` 下恢复 `static/debug/` 前端源码。
 - 不在 generic route handler 中写 provider-specific 逻辑。
+- 不实现 CLI 执行链或 DeepSeek 专属逻辑；这些消费者只能通过既有 HTTP `/api/v1/browser-execution/*` 与 `/mcp` 接入。
 - 不与其他服务共享数据库。
 - 本地 TS import 保留 `.js` 后缀（仓库通用约定）。
 
@@ -59,7 +60,7 @@
 | 工具注册 | `src/tools/`（registry / types / index / providers/browser-tools-provider / adapters/*） | shipped | ToolRegistry + 本地 browser-control provider + MCP Server 适配器 | 外部 MCP client/provider 已归 `ai-chat-service`；本包不存在 mcp-client-provider |
 | 浏览器工具适配 | `src/browser-tools/`（definitions / tool-map / param-adapter / result-adapter / types / index） | shipped | browser-control.* 工具定义与参数/结果适配 | 工具集含 screenshot、click、type 等；区别于 `Action` 联合类型（12 种） |
 | MCP Server | `src/mcp-server/`（index / transport） | shipped | StreamableHTTP 传输层 + MCP Server 入口 | 路径 `/mcp`；`ai-chat-service` 通过 `PROXY_ADAPTER_URL + /mcp` 接入 |
-| 浏览器执行控制面 | `src/browser-execution/`                                                                                                                                                                                             | in-progress | application-level session/Context/Tab、observe/control lease、通用独占 admission gate、白名单原子操作、持久 operation ledger 与短期 artifact/event 数据层 | 已交付单活动 session/单 Context、32-byte opaque token hash/process epoch、FIFO 操作互斥、SQLite WAL、重启收敛、语义 locator 执行、真实截图/DOM 采集、失败截图、内容寻址本地存储、完整性校验、snapshot-first SSE/event-log/artifact GET，以及 capture 完整度、artifact 元数据/hold/清理资格；租约续租和清理 worker 仍待实现 |
+| 浏览器执行控制面 | `src/browser-execution/`                                                                                                                                                                                             | in-progress | application-level session/Context/Tab、observe/control lease、通用独占 admission gate、白名单原子操作、持久 operation ledger 与短期 artifact/event 数据层 | 公共 session/lease/operation/target/capability/problem 复用 `shared/types/browser-execution.ts`；token hash、SQLite/bytes 等内部记录仍留本包；其余已交付边界不变 |
 | 浏览器引擎 | `src/browser-engine/`（services/{browser-lifecycle,browser-service,dom-extractor,page-actions,click-resolution,snapshot-cache,browser-lock} / screencast / locator-generator / marker-injector / dom-utils / index） | shipped | 进程内 Playwright Chromium 控制、可选远程调试端口、页面 CDP 会话、DOM 提取、点击解析、快照缓存、视觉标记注入、屏播 | 当前自行启动 Chromium，不存在外部 `playwright-server` 或 `connectOverCDP` 连接链；7 级目标链：nebula-id → role → testid → aria → text → css → xpath |
 | 插件 | `src/plugins/`（01-cors / 02-swagger / 03-error-handler / 10-routes-autoload / routes/{api/livekit-token, browser-execution, capabilities, debug/index, debug/stream, config, health}） | shipped | Fastify 插件与路由 | 浏览器控制路由通过 plugin options 注入领域服务；路由按编号约定加载顺序 |
 | Schemas | `src/schemas/`（health / config） | shipped | 健康检查与配置响应 schema |  |
@@ -110,7 +111,7 @@
 | 服务生命周期 | services/app-service | shipped | `__tests__/service-lifecycle.test.ts`、app-service-marker | services |
 | 通用浏览器执行会话与操作账本 | `src/browser-execution/` | shipped | service/repository 单元测试 + Fastify inject 契约测试 + 重启恢复测试 | 全局单 session/单 Context、lease token hash/process epoch、FIFO 原子边界、幂等冲突、queued cancel、`outcome_unknown`、脱敏请求账本和 legacy 门禁；不解释 E2E actor/environment/审批 |
 | 浏览器短期产物与会话事件运行时                                                                                                    | `src/browser-execution/{artifact-store,repository,service}.ts`、`plugins/routes/browser-execution.ts` | shipped     | repository/service/真实 Playwright/Fastify SSE 与下载契约测试                          | schema migration 2 记录 capture/产物/hold/清理资格和 session-scoped 单调 seq；截图/DOM bytes 以 SHA-256 内容寻址保存到 SQLite 外，操作可请求 before/after/DOM，失败操作自动尝试现场截图；提供 snapshot-first SSE、event-log 和带完整性复核的会话范围 artifact GET                                  |
-| E2E 受限 MCP 原子工具 | tools/providers/browser-execution-tools-provider、browser-execution | shipped | `__tests__/browser-execution-tools-provider.test.ts` | `browser-control.operation_execute/get/cancel` 已交付；session/Tab/lease/token 仍须由未来 `ai-chat-service` 受限包装层注入，普通 Chat 已显式过滤三项工具 |
+| 受限 MCP 原子工具 | tools/providers/browser-execution-tools-provider、browser-execution | shipped | `__tests__/browser-execution-tools-provider.test.ts` | `browser-control.operation_execute/get/cancel` 已交付；调用方隐藏注入 session/Tab/lease/token；BrowserExecutionError 以结构化 problem 穿过 MCP 文本 envelope，普通 Chat 继续过滤三项工具 |
 | 语义脚本原子动作/观测覆盖                                                                                                         | browser-execution/playwright-browser、validation                                                      | in-progress | 真实 Playwright integration 测试                                                       | 已交付 10 种观测（page_state/dom_snapshot/target_state/url/title/text/value/attribute/count/tabs）和除 set_files 外 14 种动作，按 role/test-id/label/placeholder/text/css/xpath 候选解析并拒绝歧义；禁止任意 JS/CDP/裸坐标。截图/DOM capture 已生效，set_files、video segment 和操作动画待后续交付 |
 | 错误分类 | errors/http-errors | shipped | `__tests__/errors.test.ts` | errors |
 

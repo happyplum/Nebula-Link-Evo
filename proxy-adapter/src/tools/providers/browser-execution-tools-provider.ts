@@ -1,5 +1,9 @@
 import { EventEmitter } from 'node:events';
 import type { BrowserExecutionService } from '../../browser-execution/service.js';
+import {
+  BrowserExecutionError,
+  toBrowserExecutionProblem,
+} from '../../browser-execution/errors.js';
 import type {
   BrowserExecutionCredentials,
   BrowserOperationRequestV1,
@@ -76,7 +80,16 @@ export class BrowserExecutionToolsProvider extends EventEmitter implements ToolP
       providerId: this.id,
       exposeTo: ['mcp-server'] as const,
       isAvailable: true,
-      execute: async (rawArgs) => this.executeTool(definition.name, rawArgs),
+      execute: async (rawArgs) => {
+        try {
+          return await this.executeTool(definition.name, rawArgs);
+        } catch (error) {
+          if (error instanceof BrowserExecutionError) {
+            return JSON.stringify(toBrowserExecutionProblem(error));
+          }
+          throw error;
+        }
+      },
     }));
     this.status = 'ready';
     this.emit('status-changed', 'ready');
