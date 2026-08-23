@@ -33,6 +33,10 @@ let isPublishing = false;
 let frameTimestampUs = 0n;
 let publishWidth = 0;
 let publishHeight = 0;
+let latestFrameData: Uint8Array | null = null;
+let latestFrameWidth = 0;
+let latestFrameHeight = 0;
+let staticFrameInterval: ReturnType<typeof setInterval> | null = null;
 
 /** Stored frame listener for proper removal during cleanup */
 let storedFrameListener: ((event: ScreencastFrameEvent) => void) | null = null;
@@ -43,6 +47,20 @@ let debugInterval: ReturnType<typeof setInterval> | null = null;
 
 // ~66ms per frame at 15fps
 const FRAME_INTERVAL_US = 66_666n;
+const STATIC_FRAME_INTERVAL_MS = 500;
+
+function captureLatestFrame(): void {
+  if (!videoSource || videoSource.closed || !latestFrameData) return;
+
+  const frame = new VideoFrame(
+    latestFrameData,
+    latestFrameWidth,
+    latestFrameHeight,
+    VideoBufferType.RGBA
+  );
+  frameTimestampUs += FRAME_INTERVAL_US;
+  videoSource.captureFrame(frame, frameTimestampUs, undefined);
+}
 
 export async function startPublisher(
   page: Page,
@@ -101,6 +119,8 @@ export async function startPublisher(
       maxHeight: height,
     });
 
+    staticFrameInterval = setInterval(captureLatestFrame, STATIC_FRAME_INTERVAL_MS);
+
     // Dev-only debug frame counter
     if (process.env.NODE_ENV !== 'production') {
       debugCounter = createFrameCounter();
@@ -153,15 +173,10 @@ async function handleScreencastFrame(event: ScreencastFrameEvent): Promise<void>
       .raw()
       .toBuffer({ resolveWithObject: true });
 
-    const frame = new VideoFrame(
-      new Uint8Array(data.buffer, data.byteOffset, data.byteLength),
-      info.width,
-      info.height,
-      VideoBufferType.RGBA
-    );
-
-    frameTimestampUs += FRAME_INTERVAL_US;
-    videoSource.captureFrame(frame, frameTimestampUs, undefined);
+    latestFrameData = new Uint8Array(data);
+    latestFrameWidth = info.width;
+    latestFrameHeight = info.height;
+    captureLatestFrame();
 
     if (debugCounter) debugCounter.recordFrame();
   } catch (error) {
@@ -198,6 +213,14 @@ async function cleanupPublisher(): Promise<void> {
   }
 
   // 2. Close video source
+  if (staticFrameInterval) {
+    clearInterval(staticFrameInterval);
+    staticFrameInterval = null;
+  }
+  latestFrameData = null;
+  latestFrameWidth = 0;
+  latestFrameHeight = 0;
+
   if (videoSource) {
     videoSource.close();
     videoSource = null;

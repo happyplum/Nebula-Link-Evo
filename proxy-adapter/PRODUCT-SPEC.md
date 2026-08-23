@@ -176,3 +176,14 @@
 - `ai-e2e/docs/environment-side-effect-policy-contract.md` — 上游环境/副作用门禁与本包通用执行边界
 - `docs/reference/debug-page-integration-api-reference.md` — Proxy Adapter API 参考
 - 根 `AGENTS.md` — 仓库范围约束
+
+## 静态页面首帧与 Marker 覆盖 [shipped]
+
+- MJPEG 新监听者立即获得当前浏览器最近帧；LiveKit publisher 在页面静止时周期性重发最近帧，保证晚加入订阅者可解码首帧。
+- DOM Marker 必须包含无显式 `type` 的输入框，以及 text/email/password/search/url/tel/number/submit/button/checkbox/radio/file 等常见输入类型。
+### Debug stream recovery [shipped]
+
+- `/debug/stream` 在浏览器页面仍可用但推流管理器尚未启动时，会基于当前页面惰性恢复 screencast；仅在不存在可用页面或恢复失败时返回 502。
+### LiveKit publisher recovery [shipped]
+
+- `/api/livekit-token` 在当前浏览器页面仍可用且发布端未运行时，会异步恢复 LiveKit Publisher，支持 LiveKit 晚启动或发布端异常退出后的 WebRTC 重连。

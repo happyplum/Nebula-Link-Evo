@@ -53,8 +53,8 @@ export function generateMarkerInjectionScript(): string {
     const selectors = [
       'button, [role="button"]',
       'a[href]',
-      'input[type="text"], input[type="email"], input[type="password"], input[type="search"]',
-      'input[type="submit"], input[type="button"]',
+      'input:not([type]), input[type="text"], input[type="email"], input[type="password"], input[type="search"], input[type="url"], input[type="tel"], input[type="number"]',
+      'input[type="submit"], input[type="button"], input[type="checkbox"], input[type="radio"], input[type="file"]',
       'textarea',
       'select',
       '[role="link"], [role="menuitem"], [role="tab"]',

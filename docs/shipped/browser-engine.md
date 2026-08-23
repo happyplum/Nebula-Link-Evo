@@ -15,3 +15,5 @@ proxy-adapter 内联 Playwright Chromium 控制层：浏览器生命周期、DOM
 - [shipped] 标注截图返回格式：`annotated_screenshot_base64` 为 gzip-compressed JPEG bytes 的 base64 字符串；消费方调用视觉模型前必须先解压为 raw JPEG base64。
 - [shipped] 验收面：marker-mode-e2e + 集成测试。
 - [shipped] `BrowserService` 的异步生命周期、页面动作与 DOM 方法统一通过模块级 `browserMutex` 串行化，同步状态访问器不加锁；`getDebugStatus()` 持锁时直接调用 `lifecycle.getTitle()`，避免递归调用公开 `getTitle()` 造成自死锁。
+
+- [shipped] DOM Marker 覆盖默认类型 input 与常见文本、数值、选择及文件输入控件。
