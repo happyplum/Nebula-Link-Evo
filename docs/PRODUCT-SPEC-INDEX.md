@@ -105,10 +105,10 @@ debug-ui  ←──  （仅被用户消费）
 | 受限 Agent task（in-progress） | `ai-chat-service` | `ai-e2e` | `POST/GET /api/v1/agent-tasks*`、`POST /:taskId/commands`、`GET /:taskId/{events,event-log}`、`GET /api/v1/skills` 已交付 | 已交付不可变输入、工具白名单、预算、模型不可见 browser binding、结构化结果、乐观命令、安全 checkpoint、snapshot-first SSE/event-log 与单 Skill 精确 pin/执行；完整 policy/grant 交集未交付 |
 | 业务版本资产（in-progress） | `ai-e2e` | `ai-e2e ui` | create/list/get/copy 及 workspace/分类资产/revision 读已交付：`/api/v1/projects/:projectId/business-versions`、`/api/v1/business-versions/:versionId[/copy|/workspace]`、分类资产 GET 与 `/api/v1/assets/*/revisions`；validate/修订写 pending | 业务版本、独立 copy、不可变 current asset revision 和工作台聚合读模型；UI/recheck/修订写 API 尚未交付 |
 | 资产 authoring（in-progress） | `ai-e2e` | `ai-e2e ui` | job create/snapshot/event-log、context thread/Chat audit、结构化 amendment、同页跨模块/跨 URL 审批和安全边界/验证/原子激活命令已交付；job pause/resume/cancel/events pending | bootstrap/recheck/repair/import_conversion、exact base/candidate、stale、impact decision 与 snapshot-first SSE |
-| E2E Run（in-progress） | `ai-e2e` | `ai-e2e ui` | `GET /api/v1/runs/:runId`、plan/TODO/decision/evidence/event-log 已交付；create/commands/decision answer/events pending | run 命令、决策、证据、snapshot-first SSE 与持久 event log |
-| 环境与副作用策略（pending） | `ai-e2e` | `ai-e2e ui` / `ai-chat-service` | Run/Authoring snapshot、decision、event 与 Agent task 输入 | `side-effect-policy/1.0` 风险投影/evaluation/grant；staging 高风险一次审批，production 业务写硬拒绝 |
+| E2E Run（in-progress） | `ai-e2e` | `ai-e2e ui` | formal create、start/pause/resume/cancel/close-browser、TODO attempt/recovery、decision answer、snapshot/plan/TODO/decision/evidence/event-log 与 snapshot-first SSE 已交付；跨服务 coordinator pending | run 命令、决策、证据、snapshot-first SSE 与持久 event log |
+| 环境与副作用策略（in-progress） | `ai-e2e` | `ai-e2e ui` / `ai-chat-service` | Run snapshot/decision/event、policy evaluation/active grant 与 Agent task 输入 | 计划级 local/test 自动放行、staging 高风险一次审批并生成 grant、production 业务写硬拒绝已交付；逐 effectId runtime 交集 pending |
 | 浏览器执行控制面（in-progress） | `proxy-adapter`                     | `ai-e2e` / `ai-chat-service`    | `/api/v1/browser-execution/*`                                                                                                                        | session/lease/operation query、真实 before/after screenshot 与 DOM capture、失败截图、内容寻址短期存储、完整性校验、session-scoped artifact GET、snapshot-first SSE 和 event-log 已交付；单活动 session/单 Context、opaque token hash、SQLite WAL、legacy 门禁和重启 `outcome_unknown` 已生效。opaque hold/retention eligibility 已有数据层，续租、脱敏/清理 worker、video 和动画仍 pending |
-| 能力协商（shipped） | 三个后端服务 | 其他服务/UI | `GET /api/v1/capabilities` | 三服务均已交付各自 capability；ai-e2e 对尚未交付的命令、amendment 与 snapshot-first SSE 显式返回 feature `false`。协议 major、功能和限制不含 secret，run preflight 不兼容时禁止静默回退 |
+| 能力协商（shipped） | 三个后端服务 | 其他服务/UI | `GET /api/v1/capabilities` | 三服务均已交付各自 capability；ai-e2e 已声明 structured amendment、Run command 与 snapshot-first SSE，未交付的 Authoring job command 保持 `false`。协议 major、功能和限制不含 secret，run preflight 不兼容时禁止静默回退 |
 
 ### 3.3 MCP 工具契约
 
@@ -187,15 +187,15 @@ debug-ui  ←──  （仅被用户消费）
 - **主代理 / 页面子代理（in-progress）**：authoring/run job/task/attempt/command/event、计划/TODO/变量与 browser FIFO 数据基座已交付；主代理确定性协调器、页面子代理派发/恢复/跳过/验收 runtime 仍 pending。
 - **上下文（pending）**：大多数派发使用干净子代理上下文；登出等可恢复中断可由主代理在页面状态和副作用检查后续接原上下文，否则从检查点与授权变量重建。
 - **串行调度与身份（in-progress）**：ai-e2e 持久 `browser_jobs` FIFO、全库单 active 槽和嵌套 authoring/verification 复用父槽规则已交付；实际 proxy session/lease 派发与 actor 检查 runtime 仍 pending。
-- **环境与副作用安全（in-progress）**：风险投影 hash、policy evaluation/grant/decision 表与 evaluation 仓储已交付；local/test/staging/production 规则、审批/grant 应用和逐 effectId 执行门禁仍 pending。
+- **环境与副作用安全（in-progress）**：风险投影 hash、policy evaluation/grant/decision 表、local/test 自动放行、staging 高风险计划审批/active grant 和 production 业务写拒绝已交付；逐 effectId 跨服务执行门禁仍 pending。
 - **编排与执行分属两层（pending）**：页面任务图、模块范围与验收标准归 `ai-e2e`；模型调用、MCP 工具和 Skills 执行归 `ai-chat-service`。当前 `AiChatClient.generateText()` 只调用纯文本生成端点，尚未接入已交付的 Agent task/Skill tool loop。
 - **页面任务与控制租约（pending）**：主代理派发不可变页面任务包并持有共享浏览器生命周期；子代理只取得指定 TODO、actor、Tab、工具、输出槽的短期控制租约。跨服务只传递稳定会话/Tab/操作/快照/目标引用和非秘密 actor 约束，不传 Playwright 对象或凭据值。
 - **可视语义执行（pending）**：系统内权威资产是结构化语义功能脚本；执行按单个语义步骤推进，每个 `proxy-adapter` 浏览器原子操作具有幂等 ID、结构化结果和通用生命周期事件，并关联实时画面、脚本步骤与证据。无法确认动作是否发生时进入结果不确定态并先检查副作用。当前 `npx tsx` 子进程执行器不满足该目标。完整契约见 `ai-e2e/docs/agent-browser-execution-contract.md`。
-- **跨服务 API/事件（in-progress）**：proxy capability/browser control、真实截图/DOM artifact、browser session event-log/snapshot-first SSE，ai-chat-service Agent task create/get/commands/events/event-log/capability/Skill catalog/runtime，以及 ai-e2e capability、业务版本读写、workspace/分类资产/revision 读、Authoring job create/结构化 amendment/范围审批/安全边界命令、Authoring/Run snapshot 与 event-log 已交付。业务版本 validate/revision 通用写、Authoring job/Run 写控制及 SSE、通用视觉 v2 与完整副作用授权仍 pending。
+- **跨服务 API/事件（in-progress）**：proxy capability/browser control、真实截图/DOM artifact、browser session event-log/snapshot-first SSE，ai-chat-service Agent task create/get/commands/events/event-log/capability/Skill catalog/runtime，以及 ai-e2e capability、业务版本读写、workspace/分类资产/revision 读、Authoring job create/结构化 amendment/范围审批/安全边界命令、formal Run 创建/控制/决策/恢复和 Authoring/Run snapshot/event-log/snapshot-first SSE 已交付。业务版本 validate/revision 通用写、Authoring job 写控制、跨服务 coordinator、通用视觉 v2 与完整逐 effect 授权仍 pending。
 - **资产生成/复核/修复（in-progress）**：authoring job/task/attempt/event、candidate verification、dependency index 与 verified-scope activation 数据/事务基座已交付；PRD + URL、Agent/browser 协调器和影响分析 runtime 仍 pending。
 - **迁移与切流（in-progress）**：015–017 已进入 checksum migration 账本，失败 rollback/漂移拒绝且旧表不变；001–014 preflight/baseline、文件备份、legacy importer 与版本级 capability cutover 仍 pending。
-- **分层状态与传播（in-progress）**：Run/plan/TODO/dependency/page task/attempt/variable/decision/command/event 数据层与正式 run 原子冻结已交付；执行、依赖传播、决策应用和公开 snapshot/SSE 仍 pending。
-- **决策与证据（in-progress）**：版本/运行决策表、内容寻址 artifact、append-only evidence item、sealed manifest 与仓储已交付；proxy 产物提升、保留清理、决策/grant 应用和 UI 恢复仍 pending。
+- **分层状态与传播（in-progress）**：Run/plan/TODO/dependency/page task/attempt/variable/decision/command/event 数据层、正式 Run 冻结/命令、attempt、依赖传播、恢复/决策与公开 snapshot/SSE 已交付；外部 Agent/browser 页面任务执行仍 pending。
+- **决策与证据（in-progress）**：版本/运行决策表、计划级决策/grant 应用、内容寻址 artifact、append-only evidence item、sealed manifest 与读 API 已交付；proxy 产物提升、保留清理和 UI 恢复仍 pending。
 - **DOM 变化局部修复（in-progress）**：当前只有 run 级诊断/自动修复；目标是只修复当前业务版本内受影响的功能脚本并重新验证。
 
 ---

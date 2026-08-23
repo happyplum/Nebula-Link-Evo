@@ -1,7 +1,7 @@
 # AI E2E 运行状态、决策与证据契约
 
-> 状态：`in-progress`。Run/plan/TODO/dependency/page-task/attempt/variable/decision/command/event 与 artifact/evidence manifest/item 数据模型已交付；正式 run 原子冻结、optimistic command/event、证据追加/封存仓储已实现。执行协调、依赖传播、决策应用、公开 API/SSE 与 UI 尚未实现。
-> 更新时间：2026-08-20。
+> 状态：`in-progress`。Run/plan/TODO/dependency/page-task/attempt/variable/decision/command/event 与 artifact/evidence manifest/item 数据模型已交付；正式 Run 原子冻结、乐观命令、TODO attempt、依赖传播、恢复/决策、计划级副作用审批、公开 API 与 snapshot-first SSE 已实现。跨服务 Agent/browser 执行协调、产物自动提升与生产 UI 尚未实现。
+> 更新时间：2026-08-24。
 > 本文定义测试流程从调度到结果汇总的状态、失败传播、决策记录、证据包和人工控制语义。精确 Run API/SSE 见 `service-api-event-contract.md`；数据库物理字段和 UI 布局可以在实现设计中调整，但不同层级状态不得重新混为一个字段。
 
 ## 1. 核心原则
@@ -301,12 +301,11 @@ open → answered → applied
 
 ## 12. 当前实现差距
 
-- 当前项目状态机只表达项目准备阶段；`execution_runs` 只关联一个脚本并混用 running/pass/fail/error/timeout，尚无流程、TODO、尝试、决策和证据完整度状态。
-- 当前取消子进程会被记录为 timeout，无法区分用户取消、真实超时和结果不确定。
-- 当前 SSE 事件只有时间和简单 payload，没有持久 event ID、每运行序号、快照恢复、TODO/尝试/决策/证据事件。
-- 当前 UI 通过本地 `isRunning` 和每个 progress 事件增加 5% 推断状态；同名步骤会合并，不能准确展示多次调用和尝试。
-- 当前运行详情只读取可选步骤 JSON 和单张 base64 截图；失败日志与截图路径没有不可变证据 manifest、哈希、脱敏、保留或完整度语义。
-- 当前 AI 修复有 run 级诊断、变更比例与人工审批基础，但审批对象仍是旧 TypeScript 脚本修改，不是版本决策、页面任务恢复或追加式运行计划修订。
+- semantic Run 已区分 Run/TODO/page task/attempt/decision/evidence 状态，取消、可恢复中断、结果未知和依赖跳过拥有独立事实；legacy `execution_runs` 仍只关联一个 TypeScript 脚本并混用 running/pass/fail/error/timeout。
+- semantic Run 已提供持久 event ID/seq、snapshot-first SSE 与 event-log；legacy 项目 SSE 仍是易失阶段事件。
+- 生产 UI 仍使用 legacy 本地 `isRunning`/progress 推断与单截图详情，尚未消费 semantic Run 快照、DAG、决策和证据投影。
+- artifact/evidence manifest/item 仓储和读 API 已交付；proxy 截图/DOM/operation 自动提升、脱敏/保留 worker 与 UI 证据时间线未交付。
+- semantic 决策已能处理计划级副作用审批、blocked/outcome-unknown 恢复；旧 AI 修复审批仍针对 TypeScript 脚本，尚未由跨服务协调器自动转为结构化 amendment。
 
 ## 13. 实现前仍需精确定义
 

@@ -1,8 +1,8 @@
 # AI E2E 跨服务 API 与事件契约
 
 > 状态：已确认目标设计，部分实现。
-> 更新时间：2026-08-12。
-> 本文固定 `ai-e2e`、`ai-chat-service` 与 `proxy-adapter` 的目标调用面、事件信封、幂等和恢复语义。三服务已分别交付 browser capture/artifact/event、Agent task create/get/command/event/checkpoint/Skill runtime、ai-e2e authoring/run/evidence/outbox/external-link 数据基座；`proxy-adapter` browser control/capture/event 与 `ai-chat-service` Agent task create/get/commands/events/event-log/Skill catalog 已成为公开核心。ai-e2e authoring/run API/SSE 与 outbox worker 尚未实现。现有 `/api/ai/generate`、项目级 SSE 和兼容浏览器 MCP 工具继续存在；各节必须按实际状态描述。
+> 更新时间：2026-08-24。
+> 本文固定 `ai-e2e`、`ai-chat-service` 与 `proxy-adapter` 的目标调用面、事件信封、幂等和恢复语义。三服务已分别交付 browser capture/artifact/event、Agent task create/get/command/event/checkpoint/Skill runtime，以及 ai-e2e Authoring 结构化 amendment、正式 Run 创建/控制/决策/恢复和 Authoring/Run snapshot-first SSE。ai-e2e 跨服务 outbox/外部任务协调 worker 尚未实现。现有 `/api/ai/generate`、项目级 SSE 和兼容浏览器 MCP 工具继续存在；各节必须按实际状态描述。
 
 ## 1. 设计目标
 
@@ -62,7 +62,7 @@ interface ApiProblem {
 
 ### 2.4 能力协商
 
-三项服务均提供 `GET /api/v1/capabilities`；三项服务均已实现，ai-e2e 对尚未交付的命令、结构化 amendment 和 snapshot-first SSE 以 feature `false` 明示，不得仅凭协议 major 推断写能力：
+三项服务均提供 `GET /api/v1/capabilities`；三项服务均已实现，ai-e2e 已声明 `structuredAmendments/runCommands/snapshotFirstEvents`，尚未交付的 Authoring job command 继续以 feature `false` 明示，不得仅凭协议 major 推断写能力：
 
 ```ts
 interface ServiceCapabilitiesV1 {
@@ -89,7 +89,7 @@ interface ServiceCapabilitiesV1 {
 
 ## 3. `ai-e2e` 对外业务 API
 
-实施状态：业务版本 create/list/get/copy、capability、workspace/分类资产列表、资产 revision 读、Authoring job 创建/结构化 amendment/范围审批/安全边界命令、Authoring/Run 权威 snapshot 及持久 event-log 已 `shipped`；validate、通用资产 revision 写、Authoring job pause/resume/cancel、Run 写控制与 snapshot-first SSE 仍为 `pending`。幂等创建端点要求 `Idempotency-Key`；v1 成功响应统一 `{ data, meta }`，错误统一 `ApiProblem`。
+实施状态：业务版本 create/list/get/copy、capability、workspace/分类资产列表、资产 revision 读、Authoring job 创建/结构化 amendment/范围审批/安全边界命令、正式 Run 创建/控制/TODO attempt/决策/恢复，以及 Authoring/Run 权威 snapshot、持久 event-log 和 snapshot-first SSE 已 `shipped`；validate、通用资产 revision 写和 Authoring job pause/resume/cancel 仍为 `pending`。幂等创建端点要求 `Idempotency-Key`；v1 成功响应统一 `{ data, meta }`，错误统一 `ApiProblem`。
 
 ### 3.1 业务资产
 
@@ -131,7 +131,7 @@ interface ServiceCapabilitiesV1 {
 | POST | `/api/v1/authoring-amendments/:amendmentId/decisions/:decisionId/answer` | 批准或拒绝同页跨模块/跨 URL 范围扩展。 |
 | POST | `/api/v1/authoring-amendments/:amendmentId/commands` | 安全边界排队、开始验证、原子激活、拒绝或记录失败。 |
 
-当前实现：job 创建会立即生成首个 task；snapshot/event-log、context thread、Chat 审计、结构化 amendment、范围审批与 amendment 命令已交付。job 自身 pause/resume/cancel、自动 Agent/browser coordinator 和 snapshot-first SSE 未交付。
+当前实现：job 创建会立即生成首个 task；snapshot/event-log/snapshot-first SSE、context thread、Chat 审计、结构化 amendment、范围审批与 amendment 命令已交付。job 自身 pause/resume/cancel 和自动 Agent/browser coordinator 未交付。
 
 完整阶段、coverage、candidate 验证和激活规则见 `asset-authoring-repair-contract.md`。
 
@@ -153,7 +153,7 @@ interface CreateRunRequestV1 {
 
 公开 CreateRun 只创建 `purpose=formal`：必须确认所选 deployment revision + 当前 asset graph + Git/build/角色/locale/viewport scope 存在 `business_version_validations.status=valid`，所引用 current 脚本/场景均 static valid 且有匹配的 `asset_revision_verifications.status=verified`，并冻结精确 revision/hash。`needs_recheck`、stale 或 candidate 资产只能由 authoring coordinator 创建内部 `purpose=authoring_verification` run，不能经正式 Run API 绕过门禁。
 
-创建事务还必须冻结 `side-effect-policy/1.0` 风险投影并持久化 evaluation：local/test 与 staging 低风险计划进入 `ready`；staging 高风险计划创建一次 `side_effect_approval` 决策并进入 `paused(approval_required)`，且不申请 browser job/control；production 业务写计划直接封存为 `cancelled(side_effect_policy_denied)`，不创建审批、不申请 browser job/control。策略拒绝是可审计的运行终止原因，不是业务断言失败。
+创建事务还必须冻结 `side-effect-policy/1.0` 风险投影并持久化 evaluation：local/test 与 staging 低风险计划进入 `ready`；staging 高风险计划创建一次 `side_effect_approval` 决策并进入 `paused(approval_required)`，其 queued browser job 在批准前不可被 FIFO 获取；production 业务写计划直接封存为 `cancelled(side_effect_policy_denied)`，不创建审批并取消 queued browser job。策略拒绝是可审计的运行终止原因，不是业务断言失败。
 
 verification scope 由服务端从精确 deployment revision、冻结的 Git/build、场景/角色要求、locale、viewport、baseline 与策略 major 确定性生成；客户端不能直接提交 scope hash 冒充已验证环境。
 
@@ -172,18 +172,20 @@ verification scope 由服务端从精确 deployment revision、冻结的 Git/bui
 | GET | `/api/v1/runs/:runId/events` | Run SSE；每次连接先发完整 snapshot，再发 live event。 |
 | GET | `/api/v1/runs/:runId/event-log?afterSeq=N&limit=M` | 审计和补洞读取持久事件，不替代 snapshot bootstrap。 |
 
-当前实现：Run snapshot、plan、TODO、decision、evidence 与 event-log 读端点已交付；公开创建、命令、决策回答与 snapshot-first SSE 未交付。
+当前实现：正式 Run 公开创建、start/pause/resume/cancel/close-browser 命令、TODO page task/attempt/显式恢复、决策回答，以及 snapshot、plan、TODO、decision、evidence、event-log 与 snapshot-first SSE 已交付。Run 创建只接受精确 valid business-version validation 与 current verified scenario/script revision；跨服务 Agent/browser coordinator 尚未接入。
 
 `POST /commands` 请求：
 
 ```ts
 interface RunCommandRequestV1 {
   schema: 'nebula.ai-e2e.run-command/1.0';
-  commandId: string;
   action: 'start' | 'pause' | 'resume' | 'cancel' | 'close_browser';
   reason?: string;
+  createdBy: string;
 }
 ```
+
+命令 ID 由必需的 `Idempotency-Key` 请求头提供，期望状态版本由必需的 `If-Match` 请求头提供；同一命令 ID 以不同 action/reason/version 重放必须拒绝。
 
 `cancel` 不隐式关闭浏览器；`close_browser` 是独立破坏性命令。`start/resume` 必须先重新检查浏览器会话、页面、登录状态、未决副作用、当前 policy evaluation 和所需 active grant；审批缺失、过期、撤销或投影不匹配时拒绝命令并停在安全边界。
 
@@ -427,7 +429,7 @@ ai-e2e 持久化 intent/outbox
 
 ## 8. 兼容与迁移边界
 
-- `ai-e2e` 当前 `/api/projects/:id/events` 只发布易失项目阶段事件；目标运行 UI 必须迁移到 `/api/v1/runs/:runId/events` 后才能依赖断线恢复。
+- `ai-e2e` legacy `/api/projects/:id/events` 仍只发布易失项目阶段事件；semantic 工作台必须使用已交付的 `/api/v1/runs/:runId/events` snapshot-first SSE 与 event-log 才能依赖断线恢复。
 - 当前 `/api/projects/:projectId/execution/*` 和 `ExecutorService` 是旧 scenario-level TypeScript 执行面；在语义运行链验收前继续存在，但新业务版本不得生成新的不可视旁路依赖。
 - `ai-chat-service` 当前 `/api/ai/generate` 是无工具的纯文本调用；目标 Agent API 应作为独立路由和持久任务模型实现。
 - `proxy-adapter` 当前 MCP transport 无会话，浏览器服务是进程级实例；目标应用层 session/lease/operation ledger 不得依赖 MCP transport session。

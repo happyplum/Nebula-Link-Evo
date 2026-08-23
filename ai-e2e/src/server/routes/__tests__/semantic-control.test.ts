@@ -12,7 +12,7 @@ import { SemanticQueryRepository } from '../../../database/repositories/semantic
 import { SemanticWorkflowRepository } from '../../../database/repositories/semantic-workflow-repository.js';
 import { SemanticQueryService } from '../../../services/semantic-query-service.js';
 import errorHandlerPlugin from '../../plugins/error-handler.js';
-import semanticControlRoutes from '../semantic-control.js';
+import semanticControlRoutes, { encodeSseEvent } from '../semantic-control.js';
 
 const HASH_A = 'a'.repeat(64);
 const HASH_B = 'b'.repeat(64);
@@ -62,7 +62,7 @@ describe('semantic control read routes', () => {
       data: {
         schema: 'nebula.service-capabilities/1.0',
         service: 'ai-e2e',
-        features: { workspaceProjection: true, runCommands: false },
+        features: { workspaceProjection: true, runCommands: true, snapshotFirstEvents: true },
         limits: { maxActiveBrowserSessions: 1 },
       },
       meta: { requestId: expect.any(String) },
@@ -197,6 +197,19 @@ describe('semantic control read routes', () => {
       retryable: false,
       correlationId: expect.any(String),
     });
+  });
+
+  it('encodes snapshot-first SSE frames with resumable sequence metadata', () => {
+    expect(
+      encodeSseEvent({
+        id: '7',
+        event: 'run.snapshot',
+        retry: 1_000,
+        data: { schema: 'nebula.ai-e2e.snapshot-event/1.0', seq: 7, stateVersion: 3 },
+      })
+    ).toBe(
+      'id: 7\nevent: run.snapshot\nretry: 1000\ndata: {"schema":"nebula.ai-e2e.snapshot-event/1.0","seq":7,"stateVersion":3}\n\n'
+    );
   });
 });
 

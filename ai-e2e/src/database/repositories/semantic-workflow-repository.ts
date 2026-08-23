@@ -976,7 +976,22 @@ export class SemanticWorkflowRepository {
         .get();
       if (active) return null;
       const job = this.db
-        .prepare("SELECT * FROM browser_jobs WHERE state = 'queued' ORDER BY queue_seq LIMIT 1")
+        .prepare(
+          `SELECT jobs.* FROM browser_jobs AS jobs
+           LEFT JOIN test_runs AS runs
+             ON jobs.root_context_type = 'run' AND runs.id = jobs.root_context_id
+           LEFT JOIN authoring_jobs AS authoring
+             ON jobs.root_context_type = 'authoring' AND authoring.id = jobs.root_context_id
+           WHERE jobs.state = 'queued'
+             AND (
+               (jobs.root_context_type = 'run'
+                 AND runs.lifecycle IN ('created','planning','ready','running','completing'))
+               OR
+               (jobs.root_context_type = 'authoring'
+                 AND authoring.lifecycle IN ('created','planning','running','completing'))
+             )
+           ORDER BY jobs.queue_seq LIMIT 1`
+        )
         .get() as Record<string, unknown> | undefined;
       if (!job) return null;
       this.db

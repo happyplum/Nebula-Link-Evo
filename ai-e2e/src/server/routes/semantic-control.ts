@@ -1,9 +1,9 @@
 import type { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import { Type, type Static } from '@sinclair/typebox';
-import type { FastifyRequest } from 'fastify';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { SemanticQueryService } from '../../services/semantic-query-service.js';
 import { ServiceError } from '../../services/service-error.js';
-import type { ApiSuccess } from '../../types/semantic-control.js';
+import type { ApiSuccess, SemanticEventV1 } from '../../types/semantic-control.js';
 import {
   ApiProblemSchema,
   SemanticAssetTypeSchema,
@@ -193,6 +193,18 @@ const semanticControlRoutes: FastifyPluginAsyncTypebox<SemanticControlRoutesOpti
     }
   );
 
+  fastify.get<{ Params: Static<typeof JobParamsSchema> }>(
+    '/authoring-jobs/:jobId/events',
+    { schema: { params: JobParamsSchema } },
+    async (request, reply) => {
+      const service = requireService();
+      const snapshot = service.getAuthoringSnapshot(request.params.jobId);
+      openSnapshotFirstStream(request, reply, 'authoring.snapshot', snapshot, (afterSeq) =>
+        service.listAuthoringEvents(request.params.jobId, afterSeq, 500)
+      );
+    }
+  );
+
   fastify.get<{
     Params: Static<typeof JobParamsSchema>;
     Querystring: Static<typeof EventLogQuerySchema>;
@@ -229,6 +241,18 @@ const semanticControlRoutes: FastifyPluginAsyncTypebox<SemanticControlRoutesOpti
     async (request) => {
       const snapshot = requireService().getRunSnapshot(request.params.runId);
       return success(request, snapshot, { stateVersion: snapshot.stateVersion });
+    }
+  );
+
+  fastify.get<{ Params: Static<typeof RunParamsSchema> }>(
+    '/runs/:runId/events',
+    { schema: { params: RunParamsSchema } },
+    async (request, reply) => {
+      const service = requireService();
+      const snapshot = service.getRunSnapshot(request.params.runId);
+      openSnapshotFirstStream(request, reply, 'run.snapshot', snapshot, (afterSeq) =>
+        service.listRunEvents(request.params.runId, afterSeq, 500)
+      );
     }
   );
 
@@ -300,6 +324,90 @@ const semanticControlRoutes: FastifyPluginAsyncTypebox<SemanticControlRoutesOpti
     }
   );
 };
+
+type Snapshot = { seq: number; stateVersion: number; schema: string };
+
+function openSnapshotFirstStream<T extends Snapshot>(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  snapshotEvent: 'authoring.snapshot' | 'run.snapshot',
+  snapshot: T,
+  listEvents: (afterSeq: number) => SemanticEventV1[]
+): void {
+  reply.hijack();
+  reply.raw.writeHead(200, {
+    'content-type': 'text/event-stream; charset=utf-8',
+    'cache-control': 'no-cache, no-transform',
+    connection: 'keep-alive',
+    'x-accel-buffering': 'no',
+  });
+  reply.raw.write(
+    encodeSseEvent({
+      id: String(snapshot.seq),
+      event: snapshotEvent,
+      retry: 1_000,
+      data: {
+        schema: 'nebula.ai-e2e.snapshot-event/1.0',
+        seq: snapshot.seq,
+        stateVersion: snapshot.stateVersion,
+        snapshot,
+      },
+    })
+  );
+
+  let afterSeq = snapshot.seq;
+  let closed = false;
+  const poll = setInterval(() => {
+    if (closed) return;
+    try {
+      const events = listEvents(afterSeq);
+      for (const event of events) {
+        reply.raw.write(encodeSseEvent({ id: String(event.seq), event: event.type, data: event }));
+        afterSeq = event.seq;
+      }
+    } catch (error) {
+      reply.raw.write(
+        encodeSseEvent({
+          event: 'stream.error',
+          data: {
+            retryable: true,
+            message: error instanceof Error ? error.message : 'Event stream failed',
+          },
+        })
+      );
+      cleanup();
+      reply.raw.end();
+    }
+  }, 500);
+  const heartbeat = setInterval(() => {
+    if (!closed) reply.raw.write(': heartbeat\n\n');
+  }, 15_000);
+
+  const cleanup = () => {
+    if (closed) return;
+    closed = true;
+    clearInterval(poll);
+    clearInterval(heartbeat);
+  };
+  request.raw.once('close', cleanup);
+  reply.raw.once('close', cleanup);
+}
+
+export function encodeSseEvent(input: {
+  id?: string;
+  event: string;
+  retry?: number;
+  data: unknown;
+}): string {
+  return [
+    ...(input.id ? [`id: ${input.id}`] : []),
+    `event: ${input.event}`,
+    ...(input.retry ? [`retry: ${input.retry}`] : []),
+    `data: ${JSON.stringify(input.data)}`,
+    '',
+    '',
+  ].join('\n');
+}
 
 function success<T>(
   request: FastifyRequest,
