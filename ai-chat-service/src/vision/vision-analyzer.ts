@@ -2,9 +2,13 @@ import { generateText } from 'ai';
 import type { LanguageModelV3 } from '@ai-sdk/provider';
 import type { DOMSnapshotResponse } from '@nebula-link-evo/shared';
 import type { VisionConfig } from './types.js';
-import type { VisionMatchResult } from './types.js';
+import type { VisionMatchResult, VisionPageAnalysis } from './types.js';
 import { VisionAnalysisError } from './errors.js';
-import { buildElementsContext, buildFindingPrompt } from './prompts/element-finding.js';
+import {
+  buildAnalyzePagePrompt,
+  buildElementsContext,
+  buildFindingPrompt,
+} from './prompts/element-finding.js';
 
 export class VisionAnalyzer {
   private model: LanguageModelV3;
@@ -19,12 +23,37 @@ export class VisionAnalyzer {
     return this.config;
   }
 
-  async findElement(
+  async resolveTarget(
     snapshot: DOMSnapshotResponse,
     description: string,
   ): Promise<VisionMatchResult> {
     const elementsContext = buildElementsContext(snapshot.elements_map);
     const prompt = buildFindingPrompt(elementsContext, description);
+    const parsed = await this.generateJson(snapshot, prompt, normalizeTargetResult);
+    if (parsed.nebula_id !== null && !(parsed.nebula_id in snapshot.elements_map)) {
+      return {
+        nebula_id: null,
+        confidence: 0,
+        reasoning: `Vision model returned invalid nebula_id "${parsed.nebula_id}"`,
+      };
+    }
+    return parsed;
+  }
+
+  async analyzePage(snapshot: DOMSnapshotResponse, objective?: string): Promise<VisionPageAnalysis> {
+    const elementsContext = buildElementsContext(snapshot.elements_map);
+    return this.generateJson(
+      snapshot,
+      buildAnalyzePagePrompt(elementsContext, objective),
+      normalizePageAnalysis
+    );
+  }
+
+  private async generateJson<T>(
+    snapshot: DOMSnapshotResponse,
+    prompt: string,
+    normalize: (value: unknown) => T
+  ): Promise<T> {
     const maxRetries = this.config.maxRetries;
 
     for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
@@ -45,18 +74,7 @@ export class VisionAnalyzer {
           abortSignal: AbortSignal.timeout(this.config.timeoutMs),
         });
 
-        const parsed = this.parseResponse(result.text);
-
-        if (parsed.nebula_id !== null && !(parsed.nebula_id in snapshot.elements_map)) {
-          if (attempt < maxRetries) continue;
-          return {
-            nebula_id: null,
-            confidence: 0,
-            reasoning: `Vision model returned invalid nebula_id "${parsed.nebula_id}"`,
-          };
-        }
-
-        return parsed;
+        return normalize(this.parseResponse(result.text));
       } catch (error) {
         if (attempt === maxRetries) {
           const message = error instanceof Error ? error.message : String(error);
@@ -74,17 +92,21 @@ export class VisionAnalyzer {
       }
     }
 
-    return { nebula_id: null, confidence: 0, reasoning: 'Max retries exceeded' };
+    throw new VisionAnalysisError({
+      code: 'VISION_ERROR',
+      message: 'Vision model retry budget was exhausted',
+      retryable: false,
+    });
   }
 
-  private parseResponse(text: string): VisionMatchResult {
+  private parseResponse(text: string): unknown {
     if (!text || !text.trim()) {
       throw new Error('Empty response from vision model');
     }
 
     try {
       const parsed: unknown = JSON.parse(text);
-      return normalizeResult(parsed);
+      return parsed;
     } catch {
       // not pure JSON
     }
@@ -93,7 +115,7 @@ export class VisionAnalyzer {
     if (codeBlockMatch) {
       try {
         const parsed: unknown = JSON.parse(codeBlockMatch[1].trim());
-        return normalizeResult(parsed);
+        return parsed;
       } catch {
         // code block content not valid JSON
       }
@@ -103,7 +125,7 @@ export class VisionAnalyzer {
     if (braceMatch) {
       try {
         const parsed: unknown = JSON.parse(braceMatch[0]);
-        return normalizeResult(parsed);
+        return parsed;
       } catch {
         // embedded JSON not valid
       }
@@ -113,7 +135,7 @@ export class VisionAnalyzer {
   }
 }
 
-function normalizeResult(value: unknown): VisionMatchResult {
+function normalizeTargetResult(value: unknown): VisionMatchResult {
   if (typeof value !== 'object' || value === null) {
     return {
       nebula_id: null,
@@ -131,5 +153,33 @@ function normalizeResult(value: unknown): VisionMatchResult {
         : null,
     confidence: typeof obj.confidence === 'number' ? obj.confidence : 0,
     reasoning: typeof obj.reasoning === 'string' ? obj.reasoning : 'No reasoning provided',
+  };
+}
+
+function normalizePageAnalysis(value: unknown): VisionPageAnalysis {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Vision page analysis is not an object');
+  }
+  const record = value as Record<string, unknown>;
+  const notable = Array.isArray(record.notable_elements)
+    ? record.notable_elements.flatMap((item) => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) return [];
+        const element = item as Record<string, unknown>;
+        return typeof element.nebula_id === 'string' && typeof element.description === 'string'
+          ? [{
+              nebula_id: element.nebula_id,
+              description: element.description,
+              confidence: typeof element.confidence === 'number' ? element.confidence : 0,
+            }]
+          : [];
+      })
+    : [];
+  return {
+    summary: typeof record.summary === 'string' ? record.summary : '',
+    notable_elements: notable,
+    risks: Array.isArray(record.risks)
+      ? record.risks.filter((item): item is string => typeof item === 'string')
+      : [],
+    reasoning: typeof record.reasoning === 'string' ? record.reasoning : '',
   };
 }

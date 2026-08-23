@@ -15,6 +15,9 @@ import type {
   AgentTaskCheckpointRecord,
 } from './repository.js';
 import type { SkillRuntime } from '../skills/runtime.js';
+import type { HarnessRuntime } from '../harness/types.js';
+import { recoverDurableHarnessResult } from './executor.js';
+import type { HarnessRunScheduler } from '../harness/run-scheduler.js';
 
 export interface CreateAgentTaskOptions {
   idempotencyKey?: string;
@@ -44,6 +47,7 @@ export class AgentTaskService {
     {
       request: ReturnType<typeof validateCreateAgentTaskRequest>['request'];
       skill?: AgentTaskSkillExecution;
+      idempotencyKey?: string;
     }
   >();
   private readonly controllers = new Map<string, AbortController>();
@@ -61,11 +65,24 @@ export class AgentTaskService {
     private readonly repository: AgentTaskRepository,
     private readonly executor: AgentTaskExecutor,
     private readonly logger: Pick<Logger, 'info' | 'warn' | 'error'>,
-    private readonly skillRuntime?: SkillRuntime
+    private readonly skillRuntime?: SkillRuntime,
+    private readonly runScheduler?: HarnessRunScheduler,
+    private readonly admitNewRun?: () => void
   ) {}
 
   recoverUnfinished(): number {
     return this.repository.recoverUnfinished();
+  }
+
+  async reconcileDurableHarness(harness: HarnessRuntime): Promise<number> {
+    let reconciled = 0;
+    for (const candidate of this.repository.listPendingHarnessResults()) {
+      const result = await recoverDurableHarnessResult(harness, candidate);
+      if (!result) continue;
+      this.repository.completeHarness(candidate.taskId, result);
+      reconciled += 1;
+    }
+    return reconciled;
   }
 
   create(rawRequest: unknown, options: CreateAgentTaskOptions = {}): CreateAgentTaskResult {
@@ -95,26 +112,50 @@ export class AgentTaskService {
       throw new AgentTaskError('dependency_unavailable', 'Skills runtime is unavailable', true);
     }
     const preparedSkill = this.skillRuntime?.prepareTask(validated.request);
+    try {
+      this.admitNewRun?.();
+    } catch (error) {
+      throw new AgentTaskError(
+        'dependency_unavailable',
+        error instanceof Error ? error.message : 'Harness storage admission failed',
+        true
+      );
+    }
     const taskId = randomUUID();
-    const stored = this.repository.createOrGetWithSkills(
-      {
-        taskId,
-        request: validated.persistedRequest,
-        requestHash: validated.requestHash,
-        ...(options.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : {}),
-      },
-      preparedSkill
-        ? {
-            pins: preparedSkill.pins,
-            policySha256: preparedSkill.policySha256,
-            boundAt: new Date().toISOString(),
-          }
-        : undefined
-    );
+    this.runScheduler?.enqueue({
+      runId: taskId,
+      ownerType: 'agent_task',
+      ownerId: taskId,
+      messageId: validated.request.clientTaskId,
+      ...(options.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : {}),
+    });
+    let stored: ReturnType<AgentTaskRepository['createOrGetWithSkills']>;
+    try {
+      stored = this.repository.createOrGetWithSkills(
+        {
+          taskId,
+          request: validated.persistedRequest,
+          requestHash: validated.requestHash,
+          ...(options.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : {}),
+        },
+        preparedSkill
+          ? {
+              pins: preparedSkill.pins,
+              policySha256: preparedSkill.policySha256,
+              boundAt: new Date().toISOString(),
+            }
+          : undefined
+      );
+    } catch (error) {
+      this.runScheduler?.cancel(taskId);
+      throw error;
+    }
+    if (!stored.created) this.runScheduler?.cancel(taskId);
     if (stored.created) {
       this.activeRequests.set(taskId, {
         request: validated.request,
         ...(preparedSkill ? { skill: preparedSkill.execution } : {}),
+        ...(options.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : {}),
       });
       this.toolCallsStarted.set(taskId, 0);
       this.schedule(taskId);
@@ -210,22 +251,26 @@ export class AgentTaskService {
     const timeout = setTimeout(() => controller.abort(), request.budgets.maxDurationMs);
     timeout.unref();
     this.controllers.set(taskId, controller);
-    const running = this.repository.markRunning(taskId);
-    if (running.status !== 'running') return;
-    this.logger.info({ taskId, clientTaskId: request.clientTaskId }, 'Agent task started');
     try {
+      await this.runScheduler?.wait(taskId, controller.signal);
+      const running = this.repository.markRunning(taskId);
+      if (running.status !== 'running') return;
+      const harnessProjection = this.repository.getHarnessProjection(taskId);
+      this.logger.info({ taskId, clientTaskId: request.clientTaskId }, 'Agent task started');
       const result = await this.executor.execute({
         taskId,
         request,
         deadlineAt: Date.now() + request.budgets.maxDurationMs,
         signal: controller.signal,
         ...(skill ? { skill } : {}),
+        harnessProjectedSeq: harnessProjection.projectedDshSeq,
         beforeToolCall: () => {
           if (controller.signal.aborted || this.repository.get(taskId)?.status !== 'running') {
             throw new AgentTaskError('conflict', 'Agent task is not at a runnable tool boundary');
           }
           this.toolCallsStarted.set(taskId, (this.toolCallsStarted.get(taskId) ?? 0) + 1);
         },
+        shouldPause: () => this.controlActions.get(taskId) === 'pause',
         emitEvent: (type, payload) => {
           this.repository.appendEvent(
             taskId,
@@ -236,11 +281,34 @@ export class AgentTaskService {
               : undefined
           );
         },
+        persistPendingResult: (callId, resultHash, output) => {
+          this.repository.recordPendingHarnessResult(taskId, callId, resultHash, output);
+        },
+        reserveTokenBudget: (reservationId, totalBudget, estimatedInput, requestedOutput) =>
+          this.repository.reserveTokenBudget(
+            taskId,
+            reservationId,
+            totalBudget,
+            estimatedInput,
+            requestedOutput
+          ),
+        settleTokenBudget: (reservationId, inputTokens, outputTokens) => {
+          this.repository.settleTokenBudget(taskId, reservationId, inputTokens, outputTokens);
+        },
+        persistOperation: (operation) => {
+          this.repository.reserveOperation(taskId, operation);
+        },
+        markOperationDispatched: (toolCallId) => {
+          this.repository.markOperationDispatched(taskId, toolCallId);
+        },
+        settleOperation: (toolCallId, status, proxyStatus) => {
+          this.repository.settleOperation(taskId, toolCallId, status, proxyStatus);
+        },
       });
       if (this.controlActions.has(taskId) || this.repository.get(taskId)?.status !== 'running') {
         return;
       }
-      this.repository.complete(taskId, result);
+      this.repository.completeHarness(taskId, result);
       this.logger.info(
         { taskId, terminationReason: result.terminationReason },
         'Agent task completed'
@@ -274,10 +342,11 @@ export class AgentTaskService {
       );
       this.logger.warn({ taskId, code: taskError.code }, 'Agent task terminated');
     } finally {
+      this.runScheduler?.complete(taskId);
       clearTimeout(timeout);
       this.controllers.delete(taskId);
       const status = this.repository.get(taskId)?.status;
-      if (status !== 'paused') {
+      if (status !== 'paused' && this.controlActions.get(taskId) !== 'pause') {
         this.activeRequests.delete(taskId);
         this.toolCallsStarted.delete(taskId);
       }
@@ -346,21 +415,22 @@ export class AgentTaskService {
     if (task.status !== 'running') {
       throw new AgentTaskError('conflict', `Agent task ${taskId} is not running`);
     }
-    if ((this.toolCallsStarted.get(taskId) ?? 0) > 0) {
-      throw new AgentTaskError(
-        'conflict',
-        'Agent task cannot be paused after a tool call has started; interrupt it instead'
-      );
+    this.controlActions.set(taskId, 'pause');
+    const toolCallsStarted = this.toolCallsStarted.get(taskId) ?? 0;
+    // Before the first operation, cancellation is itself a safe checkpoint. Once an
+    // atomic operation has started, the executor observes shouldPause at pre-step.
+    if (toolCallsStarted === 0) this.controllers.get(taskId)?.abort();
+    await this.taskRuns.get(taskId);
+    if (this.get(taskId).status !== 'running') {
+      throw new AgentTaskError('conflict', `Agent task ${taskId} settled before pause`);
     }
     this.repository.pause(taskId, {
       id: `pause:${command.id}`,
       taskId,
-      payload: { kind: 'safe_pause', toolCallsStarted: 0 },
+      payload: { kind: 'safe_pause', toolCallsStarted },
       createdAt: new Date().toISOString(),
     });
-    this.controlActions.set(taskId, 'pause');
-    this.controllers.get(taskId)?.abort();
-    await this.taskRuns.get(taskId);
+    this.controlActions.delete(taskId);
   }
 
   private resumeTask(taskId: string): void {
@@ -378,6 +448,15 @@ export class AgentTaskService {
     }
     this.repository.resume(taskId);
     this.toolCallsStarted.set(taskId, 0);
+    this.runScheduler?.enqueue({
+      runId: taskId,
+      ownerType: 'agent_task',
+      ownerId: taskId,
+      messageId: this.activeRequests.get(taskId)?.request.clientTaskId ?? taskId,
+      ...(this.activeRequests.get(taskId)?.idempotencyKey
+        ? { idempotencyKey: this.activeRequests.get(taskId)?.idempotencyKey }
+        : {}),
+    });
     this.schedule(taskId);
   }
 
@@ -400,6 +479,7 @@ export class AgentTaskService {
       retryable: command.type === 'interrupt',
     });
     this.controllers.get(taskId)?.abort();
+    this.runScheduler?.cancel(taskId);
     await this.taskRuns.get(taskId);
     this.activeRequests.delete(taskId);
     this.toolCallsStarted.delete(taskId);

@@ -11,6 +11,7 @@ import type {
   AgentTaskToolCallSummary,
   AgentTaskUsage,
   AgentTaskView,
+  AgentTaskOperationReservation,
   PersistedAgentTaskRequest,
 } from './types.js';
 import { AGENT_TASK_LIMITS, validateBoundedObjectSchema } from './validation.js';
@@ -38,6 +39,17 @@ interface TaskStateRow {
   state_version: number;
   next_event_seq: number;
   last_checkpoint_id: string | null;
+}
+
+interface HarnessProjectionRow {
+  task_id: string;
+  session_id: string;
+  projected_dsh_seq: number;
+  durable_dsh_seq: number;
+  durable_revision: string | null;
+  pending_result_call_id: string | null;
+  pending_result_hash: string | null;
+  pending_result_json: string | null;
 }
 
 interface TaskEventRow {
@@ -191,6 +203,15 @@ export interface AgentTaskSkillBindingRecord {
   contentHash: string;
   policySha256: string;
   boundAt: string;
+}
+
+export interface PendingHarnessResultRecord {
+  taskId: string;
+  sessionId: string;
+  projectedDshSeq: number;
+  callId: string;
+  resultHash: string;
+  output: unknown;
 }
 
 export interface CreateAgentTaskCommand {
@@ -357,6 +378,247 @@ export class AgentTaskRepository {
         BEGIN SELECT RAISE(ABORT, 'agent task event is immutable'); END;
     `
     );
+    this.applyMigration(
+      3,
+      'agent-task-harness-projection',
+      `
+      CREATE TABLE IF NOT EXISTS agent_task_harness_projection (
+        task_id TEXT PRIMARY KEY REFERENCES agent_tasks(task_id) ON DELETE RESTRICT,
+        session_id TEXT NOT NULL UNIQUE,
+        projected_dsh_seq INTEGER NOT NULL DEFAULT 0 CHECK(projected_dsh_seq >= 0),
+        durable_dsh_seq INTEGER NOT NULL DEFAULT 0 CHECK(durable_dsh_seq >= 0),
+        durable_revision TEXT,
+        pending_result_call_id TEXT,
+        pending_result_hash TEXT CHECK(pending_result_hash IS NULL OR length(pending_result_hash) = 64),
+        pending_result_json TEXT,
+        pending_recorded_at TEXT,
+        result_confirmed_at TEXT
+      );
+      CREATE TABLE IF NOT EXISTS agent_task_harness_events (
+        task_id TEXT NOT NULL REFERENCES agent_tasks(task_id) ON DELETE RESTRICT,
+        dsh_seq INTEGER NOT NULL CHECK(dsh_seq >= 0),
+        dsh_event_type TEXT NOT NULL,
+        PRIMARY KEY(task_id, dsh_seq)
+      );
+    `
+    );
+    this.applyMigration(
+      4,
+      'agent-task-token-reservations',
+      `
+      CREATE TABLE IF NOT EXISTS agent_task_token_reservations (
+        reservation_id TEXT PRIMARY KEY,
+        task_id TEXT NOT NULL REFERENCES agent_tasks(task_id) ON DELETE RESTRICT,
+        estimated_input INTEGER NOT NULL CHECK(estimated_input >= 0),
+        output_cap INTEGER NOT NULL CHECK(output_cap > 0),
+        reserved_total INTEGER NOT NULL CHECK(reserved_total > 0),
+        actual_input INTEGER CHECK(actual_input IS NULL OR actual_input >= 0),
+        actual_output INTEGER CHECK(actual_output IS NULL OR actual_output >= 0),
+        status TEXT NOT NULL CHECK(status IN ('reserved', 'settled')),
+        created_at TEXT NOT NULL,
+        settled_at TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_agent_task_token_reservations_task
+        ON agent_task_token_reservations(task_id, status);
+    `
+    );
+    this.applyMigration(
+      5,
+      'agent-task-retention',
+      `
+      ALTER TABLE agent_tasks ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0 CHECK(pinned IN (0, 1));
+      CREATE INDEX IF NOT EXISTS idx_agent_tasks_retention
+        ON agent_tasks(pinned, status, completed_at);
+    `
+    );
+    this.applyMigration(
+      6,
+      'agent-task-operation-reservations',
+      `
+      CREATE TABLE IF NOT EXISTS agent_task_operations (
+        task_id TEXT NOT NULL REFERENCES agent_tasks(task_id) ON DELETE RESTRICT,
+        tool_call_id TEXT NOT NULL,
+        operation_id TEXT NOT NULL UNIQUE,
+        tool_name TEXT NOT NULL,
+        request_hash TEXT NOT NULL CHECK(length(request_hash) = 64),
+        args_json TEXT NOT NULL,
+        quantity_json TEXT NOT NULL,
+        authorization_json TEXT NOT NULL,
+        browser_binding_json TEXT NOT NULL,
+        status TEXT NOT NULL CHECK(status IN (
+          'reserved','dispatched','succeeded','failed','outcome_unknown','interrupted'
+        )),
+        proxy_status TEXT,
+        created_at TEXT NOT NULL,
+        dispatched_at TEXT,
+        settled_at TEXT,
+        PRIMARY KEY (task_id, tool_call_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_agent_task_operations_recovery
+        ON agent_task_operations(task_id, status);
+    `
+    );
+  }
+
+  listRetentionCandidates(now = Date.now()): Array<{
+    taskId: string;
+    sessionId: string;
+    status: AgentTaskStatus;
+  }> {
+    const successBefore = new Date(now - 7 * 24 * 60 * 60 * 1_000).toISOString();
+    const failureBefore = new Date(now - 30 * 24 * 60 * 60 * 1_000).toISOString();
+    return this.db
+      .prepare(
+        `SELECT task.task_id AS taskId, projection.session_id AS sessionId, task.status
+         FROM agent_tasks task
+         JOIN agent_task_harness_projection projection ON projection.task_id = task.task_id
+         WHERE task.pinned = 0 AND task.completed_at IS NOT NULL AND (
+           (task.status = 'completed' AND task.completed_at < ?) OR
+           (task.status IN ('failed','interrupted','cancelled','blocked') AND task.completed_at < ?)
+         )
+         ORDER BY task.completed_at ASC`
+      )
+      .all(successBefore, failureBefore) as unknown as Array<{
+        taskId: string;
+        sessionId: string;
+        status: AgentTaskStatus;
+      }>;
+  }
+
+  deleteRetainedTask(taskId: string): void {
+    this.transaction(() => {
+      const task = this.requireTask(taskId);
+      if (!['completed', 'failed', 'interrupted', 'cancelled', 'blocked'].includes(task.status)) {
+        throw new AgentTaskError('conflict', `Agent task ${taskId} is not eligible for retention GC`);
+      }
+      for (const table of [
+        'agent_task_commands',
+        'agent_task_checkpoints',
+        'agent_task_skill_bindings',
+        'agent_task_events',
+        'agent_task_harness_events',
+        'agent_task_token_reservations',
+        'agent_task_operations',
+        'agent_task_harness_projection',
+        'agent_task_state',
+      ]) {
+        this.db.prepare(`DELETE FROM ${table} WHERE task_id = ?`).run(taskId);
+      }
+      this.db.prepare('DELETE FROM agent_tasks WHERE task_id = ?').run(taskId);
+    });
+  }
+
+  setPinned(taskId: string, pinned: boolean): void {
+    const updated = this.db
+      .prepare('UPDATE agent_tasks SET pinned = ?, updated_at = ? WHERE task_id = ?')
+      .run(pinned ? 1 : 0, new Date().toISOString(), taskId);
+    if (updated.changes !== 1) throw new AgentTaskError('not_found', `Agent task ${taskId} was not found`);
+  }
+
+  reserveOperation(taskId: string, operation: AgentTaskOperationReservation): void {
+    const now = new Date().toISOString();
+    const immutable = {
+      requestHash: operation.requestHash,
+      args: JSON.stringify(operation.canonicalArgs),
+      quantity: JSON.stringify(operation.quantity),
+      authorization: JSON.stringify(operation.authorization),
+      binding: JSON.stringify(operation.browserBinding),
+    };
+    this.transaction(() => {
+      this.requireTask(taskId);
+      const existing = this.db
+        .prepare(
+          `SELECT operation_id, tool_name, request_hash, args_json, quantity_json,
+                  authorization_json, browser_binding_json
+           FROM agent_task_operations WHERE task_id = ? AND tool_call_id = ?`
+        )
+        .get(taskId, operation.toolCallId) as
+        | {
+            operation_id: string;
+            tool_name: string;
+            request_hash: string;
+            args_json: string;
+            quantity_json: string;
+            authorization_json: string;
+            browser_binding_json: string;
+          }
+        | undefined;
+      if (existing) {
+        if (
+          existing.operation_id !== operation.operationId ||
+          existing.tool_name !== operation.toolName ||
+          existing.request_hash !== immutable.requestHash ||
+          existing.args_json !== immutable.args ||
+          existing.quantity_json !== immutable.quantity ||
+          existing.authorization_json !== immutable.authorization ||
+          existing.browser_binding_json !== immutable.binding
+        ) {
+          throw new AgentTaskError(
+            'conflict',
+            `Agent task operation ${operation.toolCallId} immutable identity changed`
+          );
+        }
+        return;
+      }
+      this.db
+        .prepare(
+          `INSERT INTO agent_task_operations (
+             task_id, tool_call_id, operation_id, tool_name, request_hash, args_json,
+             quantity_json, authorization_json, browser_binding_json, status, created_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'reserved', ?)`
+        )
+        .run(
+          taskId,
+          operation.toolCallId,
+          operation.operationId,
+          operation.toolName,
+          immutable.requestHash,
+          immutable.args,
+          immutable.quantity,
+          immutable.authorization,
+          immutable.binding,
+          now
+        );
+    });
+  }
+
+  markOperationDispatched(taskId: string, toolCallId: string): void {
+    const updated = this.db
+      .prepare(
+        `UPDATE agent_task_operations SET status = 'dispatched', dispatched_at = ?
+         WHERE task_id = ? AND tool_call_id = ? AND status = 'reserved'`
+      )
+      .run(new Date().toISOString(), taskId, toolCallId);
+    if (updated.changes !== 1) {
+      const existing = this.db
+        .prepare('SELECT status FROM agent_task_operations WHERE task_id = ? AND tool_call_id = ?')
+        .get(taskId, toolCallId) as { status: string } | undefined;
+      if (existing?.status !== 'dispatched') {
+        throw new AgentTaskError('conflict', `Agent task operation ${toolCallId} is not dispatchable`);
+      }
+    }
+  }
+
+  settleOperation(
+    taskId: string,
+    toolCallId: string,
+    status: 'succeeded' | 'failed' | 'outcome_unknown',
+    proxyStatus?: string
+  ): void {
+    const updated = this.db
+      .prepare(
+        `UPDATE agent_task_operations SET status = ?, proxy_status = ?, settled_at = ?
+         WHERE task_id = ? AND tool_call_id = ? AND status = 'dispatched'`
+      )
+      .run(status, proxyStatus ?? null, new Date().toISOString(), taskId, toolCallId);
+    if (updated.changes !== 1) {
+      const existing = this.db
+        .prepare('SELECT status, proxy_status FROM agent_task_operations WHERE task_id = ? AND tool_call_id = ?')
+        .get(taskId, toolCallId) as { status: string; proxy_status: string | null } | undefined;
+      if (existing?.status !== status || existing.proxy_status !== (proxyStatus ?? null)) {
+        throw new AgentTaskError('conflict', `Agent task operation ${toolCallId} settlement changed`);
+      }
+    }
   }
 
   createOrGet(input: CreateStoredAgentTask): CreateStoredAgentTaskResult {
@@ -542,6 +804,243 @@ export class AgentTaskRepository {
     });
   }
 
+  getHarnessProjection(taskId: string): {
+    sessionId: string;
+    projectedDshSeq: number;
+    durableDshSeq: number;
+  } {
+    this.requireTask(taskId);
+    const sessionId = `agent-task-${taskId}`;
+    this.db
+      .prepare(
+        `INSERT OR IGNORE INTO agent_task_harness_projection(task_id, session_id)
+         VALUES (?, ?)`
+      )
+      .run(taskId, sessionId);
+    const row = this.db
+      .prepare('SELECT * FROM agent_task_harness_projection WHERE task_id = ?')
+      .get(taskId) as unknown as HarnessProjectionRow;
+    if (row.session_id !== sessionId) {
+      throw new AgentTaskError('conflict', 'Agent task Harness session identity is immutable');
+    }
+    return {
+      sessionId: row.session_id,
+      projectedDshSeq: row.projected_dsh_seq,
+      durableDshSeq: row.durable_dsh_seq,
+    };
+  }
+
+  recordPendingHarnessResult(
+    taskId: string,
+    callId: string,
+    resultHash: string,
+    output: unknown
+  ): void {
+    assertSha256(resultHash, 'Harness result hash');
+    const serialized = stableStringify(output);
+    this.transaction(() => {
+      this.getHarnessProjection(taskId);
+      const row = this.db
+        .prepare('SELECT * FROM agent_task_harness_projection WHERE task_id = ?')
+        .get(taskId) as unknown as HarnessProjectionRow;
+      if (row.pending_result_call_id) {
+        if (
+          row.pending_result_call_id !== callId ||
+          row.pending_result_hash !== resultHash ||
+          row.pending_result_json !== serialized
+        ) {
+          throw new AgentTaskError('conflict', 'Agent task pending Harness result is immutable');
+        }
+        return;
+      }
+      const task = this.requireTask(taskId);
+      if (task.status !== 'running') {
+        throw new AgentTaskError('conflict', 'Agent task is not running at submit_result');
+      }
+      this.db
+        .prepare(
+          `UPDATE agent_task_harness_projection
+           SET pending_result_call_id = ?, pending_result_hash = ?, pending_result_json = ?,
+               pending_recorded_at = ? WHERE task_id = ?`
+        )
+        .run(callId, resultHash, serialized, new Date().toISOString(), taskId);
+    });
+  }
+
+  listPendingHarnessResults(): PendingHarnessResultRecord[] {
+    const rows = this.db
+      .prepare(
+        `SELECT projection.* FROM agent_task_harness_projection projection
+         JOIN agent_tasks task ON task.task_id = projection.task_id
+         WHERE task.status IN ('created', 'running', 'paused')
+           AND projection.pending_result_call_id IS NOT NULL
+           AND projection.pending_result_hash IS NOT NULL
+           AND projection.pending_result_json IS NOT NULL
+         ORDER BY task.created_at ASC`
+      )
+      .all() as unknown as HarnessProjectionRow[];
+    return rows.map((row) => ({
+      taskId: row.task_id,
+      sessionId: row.session_id,
+      projectedDshSeq: row.projected_dsh_seq,
+      callId: row.pending_result_call_id as string,
+      resultHash: row.pending_result_hash as string,
+      output: JSON.parse(row.pending_result_json as string) as unknown,
+    }));
+  }
+
+  reserveTokenBudget(
+    taskId: string,
+    reservationId: string,
+    totalBudget: number,
+    estimatedInput: number,
+    requestedOutput: number
+  ): number {
+    for (const [value, label] of [
+      [totalBudget, 'totalBudget'],
+      [estimatedInput, 'estimatedInput'],
+      [requestedOutput, 'requestedOutput'],
+    ] as const) {
+      if (!Number.isSafeInteger(value) || value < (label === 'estimatedInput' ? 0 : 1)) {
+        throw new AgentTaskError('validation_failed', `${label} is invalid`);
+      }
+    }
+    return this.transaction(() => {
+      const existing = this.db
+        .prepare(
+          'SELECT output_cap FROM agent_task_token_reservations WHERE reservation_id = ? AND task_id = ?'
+        )
+        .get(reservationId, taskId) as { output_cap: number } | undefined;
+      if (existing) return existing.output_cap;
+      const task = this.requireTask(taskId);
+      if (task.status !== 'running') {
+        throw new AgentTaskError('conflict', 'Agent task is not running at token reservation');
+      }
+      const row = this.db
+        .prepare(
+          `SELECT COALESCE(SUM(
+             CASE WHEN status = 'settled' THEN actual_input + actual_output ELSE reserved_total END
+           ), 0) AS used
+           FROM agent_task_token_reservations WHERE task_id = ?`
+        )
+        .get(taskId) as { used: number };
+      const remaining = totalBudget - row.used;
+      const outputCap = Math.min(requestedOutput, remaining - estimatedInput);
+      if (outputCap < 1) {
+        throw new AgentTaskError('budget_exceeded', 'Agent task token budget cannot reserve this request');
+      }
+      this.db
+        .prepare(
+          `INSERT INTO agent_task_token_reservations(
+             reservation_id, task_id, estimated_input, output_cap, reserved_total, status, created_at
+           ) VALUES (?, ?, ?, ?, ?, 'reserved', ?)`
+        )
+        .run(
+          reservationId,
+          taskId,
+          estimatedInput,
+          outputCap,
+          estimatedInput + outputCap,
+          new Date().toISOString()
+        );
+      return outputCap;
+    });
+  }
+
+  settleTokenBudget(
+    taskId: string,
+    reservationId: string,
+    inputTokens: number,
+    outputTokens: number
+  ): void {
+    if (
+      !Number.isSafeInteger(inputTokens) ||
+      inputTokens < 0 ||
+      !Number.isSafeInteger(outputTokens) ||
+      outputTokens < 0
+    ) {
+      throw new AgentTaskError('validation_failed', 'Actual token usage is invalid');
+    }
+    this.transaction(() => {
+      const row = this.db
+        .prepare(
+          `SELECT status, actual_input, actual_output FROM agent_task_token_reservations
+           WHERE reservation_id = ? AND task_id = ?`
+        )
+        .get(reservationId, taskId) as
+        | { status: 'reserved' | 'settled'; actual_input: number | null; actual_output: number | null }
+        | undefined;
+      if (!row) throw new AgentTaskError('conflict', 'Token reservation is missing');
+      if (row.status === 'settled') {
+        if (row.actual_input !== inputTokens || row.actual_output !== outputTokens) {
+          throw new AgentTaskError('conflict', 'Settled token usage is immutable');
+        }
+        return;
+      }
+      this.db
+        .prepare(
+          `UPDATE agent_task_token_reservations
+           SET actual_input = ?, actual_output = ?, status = 'settled', settled_at = ?
+           WHERE reservation_id = ? AND task_id = ? AND status = 'reserved'`
+        )
+        .run(inputTokens, outputTokens, new Date().toISOString(), reservationId, taskId);
+    });
+  }
+
+  completeHarness(taskId: string, result: AgentTaskExecutionResult): AgentTaskView {
+    const commit = result.harness;
+    if (!commit) return this.complete(taskId, result);
+    return this.transaction(() => {
+      const projection = this.db
+        .prepare('SELECT * FROM agent_task_harness_projection WHERE task_id = ?')
+        .get(taskId) as HarnessProjectionRow | undefined;
+      if (!projection || projection.session_id !== commit.sessionId) {
+        throw new AgentTaskError('conflict', 'Agent task Harness projection is missing');
+      }
+      if (
+        projection.pending_result_call_id !== commit.resultCallId ||
+        projection.pending_result_hash !== commit.resultHash ||
+        projection.pending_result_json !== stableStringify(result.output)
+      ) {
+        throw new AgentTaskError('conflict', 'Durable Harness result does not match pending result');
+      }
+      if (projection.projected_dsh_seq > commit.durableSeq) {
+        throw new AgentTaskError('execution_failed', 'Agent task Harness cursor exceeds durable seq');
+      }
+      let next = projection.projected_dsh_seq;
+      for (const event of commit.events) {
+        if (event.seq < next) continue;
+        if (event.seq !== next || event.seq >= commit.durableSeq) {
+          throw new AgentTaskError('execution_failed', 'Agent task Harness suffix is not contiguous');
+        }
+        this.db
+          .prepare(
+            `INSERT INTO agent_task_harness_events(task_id, dsh_seq, dsh_event_type)
+             VALUES (?, ?, ?)`
+          )
+          .run(taskId, event.seq, event.type);
+        next += 1;
+      }
+      if (next !== commit.durableSeq) {
+        throw new AgentTaskError('execution_failed', 'Agent task Harness suffix is incomplete');
+      }
+      this.db
+        .prepare(
+          `UPDATE agent_task_harness_projection
+           SET projected_dsh_seq = ?, durable_dsh_seq = ?, durable_revision = ?,
+               result_confirmed_at = ? WHERE task_id = ?`
+        )
+        .run(
+          next,
+          commit.durableSeq,
+          commit.durableRevision,
+          new Date().toISOString(),
+          taskId
+        );
+      return this.complete(taskId, result);
+    });
+  }
+
   fail(
     taskId: string,
     status: Extract<AgentTaskStatus, 'failed' | 'interrupted' | 'blocked' | 'cancelled'>,
@@ -595,6 +1094,16 @@ export class AgentTaskRepository {
       retryable: true,
     };
     return this.transaction(() => {
+      this.db
+        .prepare(
+          "UPDATE agent_task_operations SET status = 'interrupted', settled_at = ? WHERE status = 'reserved'"
+        )
+        .run(now);
+      this.db
+        .prepare(
+          "UPDATE agent_task_operations SET status = 'outcome_unknown', settled_at = ? WHERE status = 'dispatched'"
+        )
+        .run(now);
       const rows = this.db
         .prepare(
           "SELECT task_id, status FROM agent_tasks WHERE status IN ('created', 'running', 'paused')"
@@ -1011,6 +1520,11 @@ export class AgentTaskRepository {
   close(): void {
     this.events.removeAllListeners();
     this.db.close();
+  }
+
+  /** Package-internal connection used for consistent backup and retention transactions. */
+  connection(): DatabaseSync {
+    return this.db;
   }
 
   private transitionStatus(

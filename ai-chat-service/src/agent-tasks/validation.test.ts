@@ -65,8 +65,8 @@ describe('Agent task validation', () => {
   it('rejects tool constraints that this phase cannot enforce', () => {
     const request = validRequest();
     request.toolPolicy = {
-      allow: ['vision.find_element'],
-      constraints: { 'vision.find_element': { maxCalls: 1 } },
+      allow: ['vision.resolve_target'],
+      constraints: { 'vision.resolve_target': { maxCalls: 1 } },
     } as typeof request.toolPolicy;
 
     expect(() => validateCreateAgentTaskRequest(request)).toThrow(

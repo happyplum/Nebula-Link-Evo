@@ -1,6 +1,6 @@
 # ai-chat-service — 产品规格 (PRODUCT-SPEC)
 
-> 一句话目标：作为可复用的 **AI 基础能力层**，承载分析/决策模型、视觉模型、MCP 工具编排、AI 对话、会话管理、provider 编排与 Chat SSE；通过 MCP-over-HTTP 消费 `proxy-adapter` 的浏览器工具。
+> 一句话目标：作为可复用的 **AI Agent Harness 基础能力层**，以统一 DSH Agent Loop 承载分析/决策模型、视觉模型、MCP/产品工具、Chat、受限 Agent Task、持久化与部署期扩展；通过 MCP-over-HTTP 消费 `proxy-adapter` 的浏览器工具。
 > 端口：`:3001` ｜ 角色：AI 对话服务 ｜ 默认绑定 `127.0.0.1`（localhost-only，无 auth 层）
 
 ---
@@ -9,27 +9,27 @@
 
 ### 目标
 
-- 提供 Agent Chat 会话状态机（idle → running ↔ paused，interrupt → interrupted，cancel → cancelled，completed）与互斥锁。
-- 编排多 AI provider（GLM / OpenAI / Anthropic / Kimi / NVIDIA）通过 Vercel AI SDK。
-- 通过 MCP Client 连接 `proxy-adapter` MCP Server，自动获取 `browser-control.*` 工具。
-- 通过内部 `VisionAnalyzer` 提供视觉分析工具 `vision.find_element`（`exposeTo: ['chat']`，不通过 MCP 暴露）。
+- 每个 Fastify `buildApp()` 创建独立 Cordis root；Chat 与 Agent Task 共用该实例唯一的 DSH Agent Loop、ToolRuntime、retry、token meter、compaction、checkpoint、Skill 与 attachment seam。
+- 常规模型通过 `dsh-llm-pi-ai`/Pi profile 编排；GLM 通过保留 JWT 机制的 `NebulaGlmLlmAdapter` 接入；`/api/ai/generate` 保持无 session、无 tool 的单次 DSH LLM stream。
+- 通过隔离的 transport child scope 连接 `proxy-adapter` MCP Server；产品工具经严格 Schema 校验和 DSH-safe-name 原子投影，原始 operation 工具不进入模型可见表。
+- 通过内部 `VisionAnalyzer` 提供 `vision.analyze_page` 与 `vision.resolve_target`；只接受 proxy 授权的不可变 `VisionSnapshotBindingV1`，不通过 MCP 暴露。
 - 向 `debug-ui` 提供 Chat SSE 流（每次建连先发完整 `session.snapshot` 再续 live stream）。
-- 提供 provider preflight（`/test-ai`、`/verify-keys`）、loop-guard（防止 AI 重复陷入同一种失败）、数据库备份。
+- 提供 provider preflight、持久 FIFO/容量门、token reservation、loop guard、JSONL durable projection、删除 saga、配额/留存与可校验全量备份。
 - 提供可复用 Skills Runtime：从 `AI_SKILLS_DIRS` 配置的本地只读目录加载固定 id/version/hash 的声明式指令包，完成 manifest/hash/Schema/目录边界校验、task 精确 pin、指令装载、预算与工具权限收缩及审计事件；不执行附带代码、不联网安装。
 - 提供 `/api/v1/agent-tasks` 通用受限任务执行核心：调用方传入不可变任务输入、工具白名单、可选单 Skill 精确 pin、预算和模型不可见浏览器 binding，服务异步执行决策模型并返回 Schema 校验后的结构化结果；命令、snapshot-first SSE、event-log、checkpoint 安全暂停/恢复与 Skill 执行已交付，不持有调用方业务运行计划。
-- 目标 Agent 工具包装层接收调用方冻结的 policy evaluation、风险投影 hash、当前语义步骤/effectId/数量边界和可选 grant 引用，并逐次求权限交集；本服务不决定环境矩阵、不签发审批，也不能让模型/Skill 扩大副作用授权。
+- Agent 工具包装层逐次求 task/Skill/budget/冻结步骤/effectId/单项数量/browser binding/lease 的交集，并在 dispatch 前持久化 canonical args、request hash、数量投影与授权快照；policy evaluation/active grant 的签发、撤销与跨服务核验仍由 ai-e2e/proxy 权威边界承担。
 
 ### 边界
 
 | Owns | Consumes | Does NOT own |
 |------|----------|--------------|
-| conversation / session / message | `@nebula-link-evo/shared` | 浏览器引擎、Playwright（在 `proxy-adapter`） |
+| DSH Agent Loop、JSONL session source、SQLite 投影/控制面 | `@nebula-link-evo/shared` | 浏览器引擎、Playwright（在 `proxy-adapter`） |
 | AI provider 编排（多模型、流式） | `proxy-adapter` MCP-over-HTTP（`PROXY_ADAPTER_URL + /mcp`） | MCP Server (StreamableHTTP) |
 | Chat SSE → debug-ui |  | 浏览器调试 REST（MJPEG、DOM 快照） |
 | Provider preflight |  | 前端代码（在 `debug-ui`） |
 | loop-guard（干预与指纹） |  | `proxy-adapter` 的数据库 |
-| 独立 SQLite DB（含 sessions / session_state / session_events） |  |  |
-| DB 备份 |  |  |
+| 独立 SQLite DB（控制面、幂等、公开事件、projection watermark） |  |  |
+| JSONL/附件/SQLite/配置/BOM/plugin lock 全量备份与留存 |  |  |
 | Token 估算、流式持久化 worker、连接性测试 |  |  |
 | 目标通用 Agent 任务会话、工具/Skills 作用域和结构化执行结果 | 调用方提供的不可变任务输入与不透明关联标识 | ai-e2e 的场景、TODO、业务断言、决策/长期证据，浏览器生命周期或操作幂等账本 |
 
@@ -38,23 +38,26 @@
 - **不直连** Playwright / browser engine —— 浏览器能力**只能**经 MCP Client 到 `proxy-adapter`。
 - **不共享** `proxy-adapter` 数据库 —— 独立 SQLite。
 - **v1 不引入** auth 层 —— 因此只允许 localhost-only 单用户绑定；非本机或多用户拓扑必须先单独设计统一认证、授权和租户隔离。
-- 普通 Chat 不得直接获得 `browser-control.operation_execute/get/cancel`；MCP client 可发现三项工具，但 provider 必须过滤。受限 Agent 只向模型暴露调用方预授权的 `stepId/target/args`，由 wrapper 注入 session/Tab/lease/token/leaseSequence/operationId；`operation_get/cancel` 不暴露给模型。
+- 普通 Chat 不得直接获得 `browser-control.operation_execute/get/cancel`；三项原始工具仅装配在模型不可见的 Cordis transport child scope。受限 Agent 只向模型暴露调用方预授权的 `stepId/target/args`，由 wrapper 注入 session/Tab/lease/token/leaseSequence/operationId；`operation_get/cancel` 不暴露给模型。
 - **不引入** frontend 代码。
 - **不引入** `proxy-adapter` 特有概念。
+- 同进程插件是完全信任代码，只能由部署期 lock 精确固定的 direct dependency 提供；运行期禁止安装/HMR/组合树修改。低信任扩展只能使用 optional remote HTTP MCP + ToolGuard quarantine。
 - 本地 TS import 保留 `.js` 后缀。
 
 ### 双模型与扩展能力契约
 
 | 能力 | 状态 | 职责与边界 |
 |------|------|------------|
-| 分析/决策模型（`defaults.decision`） | shipped | 理解需求、文档与浏览器证据，规划下一步测试动作；在 Chat agent loop 中消费 MCP 工具与结构化视觉结果。provider/model 只是该角色的实现配置。 |
-| 视觉模型（`defaults.vision`） | shipped | 当前通过 `vision.find_element` 解释标注截图 + DOM 快照并返回目标元素、`snapshot_id`、置信度与定位证据。跨服务目标必须可序列化，不得返回 `Page` / `Locator` / `ElementHandle` 等进程内 Playwright 对象。 |
-| 单次视觉分析契约 | in-progress | 目标同时服务主代理和子代理；每次调用必须是完整输入、单一问题、单次输出。视觉模型不保存流程状态、不连续执行、不调度脚本、不操作浏览器。当前元素查找符合单次调用形态，通用页面状态分析接口仍为 pending。 |
-| 通用页面状态理解 | pending | 在元素查找之外，向调用代理提供结构化的页面功能、视觉区域和 DOM 状态摘要；当前没有独立接口。 |
-| MCP client / ToolRegistry | shipped | 接入 `proxy-adapter` 的浏览器工具及其他外部 MCP 工具；普通 Chat 只暴露兼容工具，显式过滤 `operation_execute/get/cancel`，防止模型接触 session/Tab/lease/token 注入字段。 |
+| 统一 Harness / Agent Loop | shipped | 每个 `buildApp()` 独立 Cordis root；Chat 与 Agent Task 都通过同一 DSH Agent Loop 执行，公开 HTTP/SSE union 不暴露 DSH 内部事件。 |
+| 分析/决策模型（`defaults.decision`） | shipped | 理解需求、文档与浏览器证据，规划下一步测试动作；常规模型映射 Pi profile，GLM 使用专用 adapter。provider/model 只是角色实现配置。 |
+| 视觉模型（`defaults.vision`） | shipped | `vision.analyze_page`/`vision.resolve_target` 解释经完整 binding/hash/MIME/size/status 校验的 proxy snapshot。跨服务目标必须可序列化，不得返回 Playwright 对象。 |
+| 单次视觉分析契约 | shipped | 主代理和子代理均可用；每次完整输入、单一问题、单次输出，不保存流程状态、不连续执行、不调度脚本、不操作浏览器。 |
+| 通用页面状态理解 | shipped | `vision.analyze_page` 输出页面/区域/dialog/form/table/异常摘要；`vision.resolve_target` 输出有序 locator candidates，最终重解析仍归 proxy。 |
+| MCP client / ToolRuntime | shipped | MCP transport 与模型可见 ToolRuntime 隔离；严格 input/output Schema、不支持 schema quarantine、discovery watchdog abort、调用 timeout/cancel、required startup-fatal、optional remote HTTP quarantine 和原子工具 generation。 |
 | Skills runtime | shipped | `nebula.ai.skill/1.0` 从本地只读目录加载；manifest、输入/输出 Schema、hash、目录与 symlink 边界严格校验；Agent task 精确固定一个当前 Skill，并按 task allowlist ∩ Skill patterns ∩ 既有 browser step/lease 收缩工具与预算，记录 load/execute/result/failure 事件。 |
-| 受限 Agent 任务执行 | in-progress | 已交付不可变输入、严格 response Schema、工具白名单、预算、独立持久状态、结构化结果、模型不可见 browser wrapper，以及 stateVersion、task-scoped event seq、command 幂等、checkpoint 安全暂停/恢复、snapshot-first SSE/event-log 与单 Skill 执行；当前语义步骤 `stepId/kind/operation/effectId/单项数量边界` 由调用方冻结。完整 policy evaluation/grant 权限交集仍 pending。 |
-| Agent/视觉/Skills 目标协议 | in-progress | `nebula.ai.agent-task/1.0` 的创建/查询/命令/事件、`nebula.ai.skill/1.0` runtime/catalog 与 capability 已实现；通用视觉 Schema 仍是目标协议。 |
+| 受限 Agent 任务执行 | in-progress | 已交付统一 DSH loop、不可变输入、严格 response Schema、工具白名单、持久预算 reservation、结构化结果、模型不可见 browser wrapper、持久 operation 授权快照、stateVersion/command 幂等/checkpoint/snapshot-first SSE；外部 policy evaluation/active grant 完整交集仍 pending。 |
+| Agent/视觉/Skills 目标协议 | shipped | `nebula.ai.agent-task/1.0`、`nebula.ai.skill/1.0` 与 `VisionSnapshotBindingV1` 已实现；公开路径和事件 union 保持兼容。 |
+| 部署期可信插件 | shipped | lock 可扩展工具、prompt、hook、LLM adapter、Skill provider 与 MCP；校验 realpath、精确版本/entry/tree/config digest、DSH/Cordis ABI、peer closure，任一失败即启动失败。 |
 
 受限 Agent task 是一次有界执行，不是 ai-e2e 的持久主代理。bootstrap/recheck/repair 的阶段、candidate、coverage、decision、dependency index、environment policy evaluation/grant 与激活仍由 ai-e2e 保存和推进；browser binding 只声明模型不可见的 `observe/control` 权限，主代理分析只使用安全边界 observe，执行型页面子代理才可使用 control。actor/角色与副作用授权只是调用方提供的不可变任务约束，本服务不维护认证状态、不切换 BrowserContext/storage state、不签发审批，也不授权子代理自行登录或新增写操作。
 
@@ -64,28 +67,29 @@
 
 | 模块 | 路径 | 状态 | 职责 | 边界/契约 |
 |------|------|------|------|----------|
-| 服务入口 | `src/server.ts` | shipped | dotenv 加载、CORS、`/health`、`/config`、SIGINT hook | localhost-only 默认绑定 |
-| 配置 | `src/config/`（schema / loader / resolver / validator / service-config / index） | shipped | env 驱动的配置（port、LOG_LEVEL、providers） | resolver 解析 provider alias 与 SDK 包名 |
+| 服务入口/应用装配 | `src/server.ts`、`src/app.ts` | shipped | server 仅负责进程信号；`buildApp()` 每实例装配/关闭 Fastify、Cordis root、数据库、队列与 SSE | localhost-only；双实例测试保证无状态串扰 |
+| 配置 | `src/config/`、`src/harness/config-mapper.ts` | shipped | 兼容原配置并 fail-closed 映射 Pi/GLM、模型角色、retry/deadline/MCP reconnect | `{VAR}` 仅转为内存 `apiKeyEnv`；secret 不进 inventory/lock |
 | 应用服务 | `src/services/app-service.ts` | shipped | 单例 facade，组合所有 service |  |
 | 日志 | `src/services/logger.ts` | shipped | 结构化日志 |  |
-| 会话任务队列 | `src/services/conversation-job-queue.ts` | shipped | 后台任务队列，3 次重试 + 10 分钟空闲清理 |  |
+| 会话任务队列 | `src/services/conversation-job-queue.ts`、`src/harness/run-scheduler.ts` | shipped | Chat/Task 共用持久 FIFO；全局 active=4、queued=1000，resume 重新竞争许可 | 容量、run identity、幂等和 queueSeq 同事务 |
 | 流持久化 worker | `src/services/stream-persist-worker.ts`（+ `.types.ts`） | shipped | 异步持久化流式消息 |  |
 | workers | `src/workers/stream-persist-worker.ts` | shipped | 后台 worker 实现 |  |
 | Provider 子系统 | `src/services/provider/`（registry / resolver / loader / preflight / errors / error-classifier / token-estimator / adapters/glm / types） | shipped | provider 编排、加载、错误分类 | **错误分类**：CONFIG_INVALID → INSTALL_FAILED → INIT_FAILED；`ProviderError` 立即阻断，非 provider 错误走 3 次 `job_error` |
 | Loop-guard | `src/services/loop-guard/`（loop-guard-service / intervention / fingerprint / types / index） | shipped | AI 重复失败干预 + 指纹 |  |
 | 连接性测试 | `src/services/connectivity-test.ts`、`connectivity-gate-service.ts` | shipped | provider / browser 连通性 |  |
 | Chat 会话控制器 | `src/services/chat-session-controller.ts` | shipped | 会话状态机执行入口 | 互斥锁保证单活跃 |
-| Conversation 子系统 | `src/conversation/`（manager / types / chat-handler / db / compressor / session-state-dao / session-events-dao / session-event-hub / index） | shipped | 会话、消息压缩、DAO、事件 hub | 压缩触发阈值：消息数 > 20 |
-| DB 迁移 | `src/conversation/migrations/`（004-sessions-state / 005-migrate-existing-sessions / 006-session-events / 007-add-vision-model-columns） | shipped | SQLite schema 迁移 | 顺序不可乱 |
+| Conversation 子系统 | `src/conversation/` | shipped | Chat 公共状态、DSH durable projection、删除 tombstone/saga、事件 hub | JSONL 是模型 transcript 事实源；SQLite 是控制面/公开投影 |
+| DB 迁移 | `src/conversation/migrations/`（004–010） | shipped | 007 vision role；008 DSH projection watermark；009 deletion saga/attachment ref；010 durable scheduler | 顺序不可乱；`(sessionId,dshSeq)` 唯一 |
 | 数据库 | `src/db/`（ConversationDatabase / SessionStateDAO / SessionEventsDAO / SessionEventsCleanup / types / index） | shipped | 独立 SQLite 数据库与 DAO | 不与 `proxy-adapter` 共享 |
-| 视觉分析 | `src/vision/`（vision-analyzer / prompts / types / index） | shipped | Vision 分析引擎，通过 AI 模型识别 DOM 元素 | 构造函数接收 `LanguageModelV3` + `VisionConfig`；提供 `findElement()` 方法 |
-| 工具注册 | `src/tools/`（registry / types / index / providers/{mcp-client-provider,vision-tool-provider} / adapters/{vercel-ai,json-schema-to-zod}） | shipped | ToolRegistry + providers（MCP client + VisionToolProvider） | MCP 客户端：状态机管理 server 生命周期、指数退避重连（最多 5 次）、`toolsChanged` 事件 |
+| Harness runtime | `src/harness/` | shipped | Cordis/DSH 装配、Pi/GLM、JSONL、projection/delete/scheduler/retention/backup、BOM、可信插件、MCP transport 与产品工具桥 | 精确版本/BOM/patch hash；公开 API 不透传 DSH event |
+| 视觉分析 | `src/vision/` | shipped | `VisionAnalyzer` + proxy immutable snapshot loader + DSH attachment store | 生产仅 `analyzePage()` / `resolveTarget()`；拒绝 raw base64/screenshot body |
+| 工具注册 | `src/tools/`、`src/harness/gateway-tool-bridge.ts` | shipped | ToolRegistry providers 经严格 schema/quarantine 映射到 DSH ToolRuntime | product-id↔safe-name generation 原子切换；raw operation 不可见 |
 | Skills runtime | `src/skills/`、`src/agent-tasks/repository.ts` | shipped | 本地只读 package loader、不可变 registry/version/hash、task exact pin/policy hash、输入/输出 Schema、指令装载、权限/预算收缩与审计事件 | v1 每 task 最多一个 Skill；只允许 `vision.*` 与 `browser-control.operation_execute` Skill 工具命名空间；不执行附带代码、不联网安装、不暴露指令/文件路径 |
-| 受限 Agent tasks | `src/agent-tasks/` | in-progress | 独立 SQLite 状态、严格输入/response Schema、task tool allowlist、预算、决策模型结构化执行、模型不可见 browser wrapper、单 Skill、乐观命令、snapshot-first SSE/event-log、checkpoint 与 capabilities | browser operation kind/observe/act 常量复用 `shared/types/browser-execution.ts`；普通 Chat 继续过滤三个受控 MCP 工具；与交互 Chat session 分离，完整副作用授权仍 pending |
-| 客户端 | `src/clients/`（vercel-ai/provider / mcp/sdk-client / mcp/fetch / compression / types） | shipped | Vercel AI Provider 与 MCP SDK 客户端（含 fetch MCP server） |  |
+| 受限 Agent tasks | `src/agent-tasks/` | in-progress | 独立控制面 SQLite、统一 DSH loop、预算 reservation、持久 operation authorization、终态事务、Skill、命令/SSE/checkpoint | complete external policy/grant intersection 仍 pending |
+| 客户端 | `src/clients/` | shipped | MCP discovery/schema validation/product transport compatibility 与 legacy provider preflight | 模型生成不再使用旧 Vercel tool loop |
 | 插件与路由 | `src/plugins/routes/api/`（chat/{stream,sessions,control,connectivity-test,runtime-state,index} / ai-service / debug-ai / agent-tasks） | shipped | Fastify 路由 | Chat SSE 每次建连发完整 `session.snapshot`；Agent task 控制面要求服务绑定 loopback |
 | 错误 | `src/errors/`（http-errors / index） | shipped | HTTP 错误分类 | API 边界：未知 provider → 400；不可用 provider → 503 |
-| DB 备份 | `src/utils/db-backup.ts` | shipped | SQLite 备份 |  |
+| 备份与留存 | `src/harness/{backup-service,retention-service}.ts` | shipped | SQLite online backup、JSONL/attachment/config/BOM/lock hash manifest、原子发布保留 5 份；任务 7/30 天留存和 2GiB×2 水位门 | pinned 不 GC；symlink/special file fail-closed |
 | 类型 | `src/types.ts`、`src/types/fastify.d.ts` | shipped | 包内共享类型 |  |
 | 测试 | `src/**/*.test.ts` | shipped | unit / 集成 | Agent task、browser wrapper、持久化、路由、脱敏和备份隔离均有定向测试；最终计数见第 6 节 |
 
@@ -124,31 +128,32 @@
 |------|------|------|--------|----------|
 | 会话状态机（idle/running/paused/interrupted/cancelled/completed） | services/chat-session-controller | shipped | 集成测试 + 状态机测试 | conversation、chat-session-controller |
 | 互斥锁（同一会话仅一个活跃执行） | conversation/manager | shipped | 并发测试 | conversation |
-| Chat SSE（`session.snapshot` → live） | plugins/routes/api/chat/stream | shipped | SSE 测试 | conversation、stream-persist-worker |
-| Provider 编排（多模型、流式） | services/provider | shipped | `loader.test.ts`、`adapters/glm.test.ts` | clients/vercel-ai |
+| Chat SSE（`session.snapshot` → live） | plugins/routes/api/chat/stream、services/sse-writer | shipped | SSE/backpressure 测试 | durable catch-up 后广播；单订阅者 256 条、5s 写超时，溢出断连后 snapshot 恢复 |
+| Provider 编排（Pi + GLM） | harness/runtime、glm-adapter、config-mapper | shipped | runtime/config/GLM tests | retry 默认 3；token meter/compaction；secret fail-closed |
 | Provider preflight（异步探测） | services/provider/preflight | shipped | 集成测试 | services/provider |
-| MCP Client（崩溃恢复 + 指数退避） | clients/mcp、tools/providers/mcp-client-provider | shipped | `sdk-client.test.ts`、`mcp-client-provider.test.ts` | clients/mcp；发现 proxy 的 18 个工具，普通 Chat provider 过滤 3 个受控 operation 工具 |
-| MCP 工具名解析（同名前缀 `<server>-<tool>`） | tools/providers/mcp-client-provider | shipped | 工具注册测试 | tools |
-| 上下文压缩（>20 条消息触发） | conversation/compressor | shipped | 单元测试 | conversation |
-| 后台任务队列（3 次重试 + 10min idle） | services/conversation-job-queue | shipped | 单元测试 | services |
+| MCP transport / quarantine / hot-sync | clients/mcp、harness/runtime、gateway-tool-bridge | shipped | MCP/bridge tests | watchdog abort+dispose；input/output strict schema；required fatal，optional remote quarantine；调用 timeout/cancel |
+| DSH-safe 工具名映射 | harness/gateway-tool-bridge、agent-tasks/executor | shipped | bridge/executor tests | 稳定 hash 防超长/冲突；不再使用公开 `<server>-<tool>` 作为模型名 |
+| DSH compaction | harness/runtime | shipped | runtime/BOM tests | basic compaction + tool-result pruner；不以旧 SQLite transcript 作为模型事实源 |
+| 持久全局调度 | harness/run-scheduler、conversation-job-queue | shipped | scheduler/service tests | active=4、queued=1000；Task/Chat 同一 admission gate |
 | 流式持久化 worker | services/stream-persist-worker、workers/ | shipped | 单元测试 | services、workers |
 | Loop-guard（重复失败干预） | services/loop-guard | shipped | 单元测试 | services/loop-guard |
 | Token 估算 | services/provider/token-estimator | shipped | 单元测试 | services/provider |
-| 数据库迁移 | conversation/migrations、db/ConversationDatabase | shipped | migration 测试 | db、conversation |
-| Agent 数据 migration 2 | `agent-tasks/repository.ts` | shipped | `repository.foundation.test.ts` | checksum 可重入、只增不毁；新增 task state/event/command/checkpoint、Skill registry/version/task binding，独立于 Chat conversation DB |
+| DSH durable projection / delete saga | harness/projection-store、deletion-service、conversation migrations 008–009 | shipped | corruption/catch-up/delete/restart tests | flush 后投影；cursor 超 durable seq 拒绝；DELETE 物理完成 204，30s 未完 503 同 job |
+| Agent 数据 migrations 2–6 | `agent-tasks/repository.ts` | shipped | repository tests | state/event/command/checkpoint、Skill、retention pin、token reservation、operation authorization ledger |
 | SessionEvents 清理 | db/SessionEventsCleanup | shipped | 单元测试 | db |
-| DB 备份 | utils/db-backup | shipped | 单元测试 | utils |
+| Harness 全量备份/恢复校验 | harness/backup-service | shipped | `backup-service.test.ts` | 真实 SQLite backup + JSONL/attachment/config/BOM/plugin lock/hash；原子发布、保留 5 份 |
 | 错误分类（CONFIG_INVALID / INSTALL_FAILED / INIT_FAILED） | services/provider/{errors,error-classifier} | shipped | `errors.test.ts` | errors、services/provider |
 | 连接性 gate | services/connectivity-gate-service | shipped | 单元测试 | services |
 | Vision model 列（007 迁移） | conversation/migrations/007 | shipped | `007-add-vision-model-columns.test.ts`、`session-vision-config.test.ts` | conversation |
-| Vision 分析引擎（VisionAnalyzer） | src/vision/ | shipped | 通过 `vision-tool-provider.test.ts` 覆盖调用与错误映射 | src/vision/ |
-| 视觉元素查找工具（`vision.find_element`） | tools/providers/vision-tool-provider | shipped | `vision-tool-provider.test.ts` | tools/providers、src/vision/、clients/mcp；支持 `snapshot_id` 复用最近 5 个本地快照 |
-| 结构化页面分析（`vision.analyze_page`） | vision、tools/providers/vision-tool-provider（待扩展） | pending | 当前仅有元素查找 | 单次 snapshot 输入，输出页面/区域/dialog/form/table/异常状态和证据，不操作浏览器 |
-| 可序列化目标解析（`vision.resolve_target`） | vision、tools/providers/vision-tool-provider（待扩展） | pending | 当前 `vision.find_element` 兼容面 | 返回有序 locator candidates、约束和显式视觉兜底；由 proxy 在当前 DOM 重解析 |
+| Vision 分析引擎（VisionAnalyzer） | src/vision/ | shipped | vision provider/snapshot loader tests | 页面摘要与目标候选两种单次调用 |
+| proxy snapshot binding/attachment | vision/snapshot-loader、shared VisionSnapshotBindingV1 | shipped | hash/MIME/size/status/session/tab/op mismatch tests | 只接受 proxy managed bytes；内容寻址进入 DSH attachment store |
+| 结构化页面分析（`vision.analyze_page`） | vision、tools/providers/vision-tool-provider | shipped | provider/analyzer tests | 单次不可变 snapshot，输出页面/区域/dialog/form/table/异常证据，不操作浏览器 |
+| 可序列化目标解析（`vision.resolve_target`） | vision、tools/providers/vision-tool-provider | shipped | provider/analyzer tests | 返回有序 locator candidates；由 proxy 在当前 DOM 重解析 |
 | Skills registry 与 task pin 数据层 | `src/agent-tasks/repository.ts` | shipped | `repository.foundation.test.ts` | 同 id/version 不同 hash 拒绝，版本内容不可更新，task 精确 pin + policy hash 不可变 |
 | Skills 加载与执行 | `src/skills/`、agent task service/executor | shipped | loader/runtime/service/executor/Fastify 测试 | 本地只读发现、manifest/hash/Schema/symlink 校验、精确 catalog、单 Skill 指令装载、默认拒绝权限交集、预算收缩、Skill 审计与幂等重放 |
-| 受限 Agent 任务执行核心 | `src/agent-tasks/`、tools、plugins/routes/api/agent-tasks | shipped | unit + Fastify inject | POST/GET/capability、独立 `agent-tasks.sqlite`、幂等、预算、严格 response Schema、模型不可见 binding、预授权步骤及 screenshot/DOM capture、operation ledger 恢复与结构化结果；operation 类型/常量来自 shared 公共线协议；video capture 仍拒绝，普通 Chat 行为不变 |
-| Agent task command/event/checkpoint 控制面 | `src/agent-tasks/`、`plugins/routes/api/agent-tasks.ts` | shipped | repository/service/Fastify/SSE 测试 | task 状态更新、stateVersion 与事件同事务；command ID/hash 幂等 + expected stateVersion；pause 与安全 checkpoint 同事务；snapshot-first SSE/event-log；重启将遗留任务中断并拒绝 accepted 命令 |
+| 受限 Agent 任务执行核心 | `src/agent-tasks/`、harness、plugins/routes/api/agent-tasks | shipped | unit + Fastify inject | 唯一 DSH loop、持久 FIFO/预算 reservation、strict output、pending submit_result durable reconcile、operation identity/authorization/outcome_unknown |
+| Agent task command/event/checkpoint 控制面 | `src/agent-tasks/`、`plugins/routes/api/agent-tasks.ts` | shipped | repository/service/Fastify/SSE 测试 | pause 等待当前原子 operation 结算/unknown 后在下一 checkpoint 生效；resume 重新竞争全局许可 |
+| 可信 Harness 插件 | trusted lock、harness/trusted-plugin-loader | shipped | fixture/tamper/startup-failure/MCP-lock tests | direct dependency、realpath/integrity/config/ABI/peer closure；完全信任且 required |
 | 完整副作用授权 | `src/agent-tasks/`（待扩展） | pending | 尚无端到端验收面 | policy evaluation/projection/grant 逐调用交集仍按跨服务契约实现；现有 Skill 只能在预授权 step/lease 内继续缩权 |
 
 ---
@@ -170,6 +175,8 @@
 > 12. 新增 / 删除 / 修改 Skills runtime、Skill 权限或执行隔离规则
 > 13. 新增 / 删除 / 修改通用 Agent 任务输入、工具作用域、结构化结果或控制传播契约
 > 14. 修改调用方副作用授权输入、逐工具 effectId/grant 校验或环境策略所有权边界
+> 15. 修改 DSH/Cordis/Pi 精确版本、BOM、patch、JSONL persistence/projection/purge/retention 语义
+> 16. 修改 trusted plugin lock、ABI/integrity 校验或部署期组合树
 
 ### 维护检查清单
 
@@ -182,6 +189,7 @@
 | 新增或修改 Skills runtime | 双模型与扩展能力契约 + 模块清单 + 功能清单 + 已知缺口 + `ai-e2e/docs/ai-model-skill-contract.md` + `docs/PRODUCT-SPEC-INDEX.md` |
 | 新增或修改受限 Agent 任务执行 | 包级目标与边界 + 双模型与扩展能力契约 + 功能清单 + `ai-e2e/docs/agent-browser-execution-contract.md` + `ai-e2e/docs/service-api-event-contract.md` + 消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
 | 修改副作用授权包装层 | 包级目标与边界 + 双模型与扩展能力契约 + 功能清单 + 已知缺口 + `ai-e2e/docs/environment-side-effect-policy-contract.md` + `ai-e2e/docs/ai-model-skill-contract.md` + `ai-e2e/docs/service-api-event-contract.md` + `docs/PRODUCT-SPEC-INDEX.md` |
+| 修改 Harness persistence/插件/BOM | 模块清单 + 功能清单 + shipped 清单 + THIRD_PARTY_NOTICES + lock/patch hash 验证 |
 | 修改 Chat SSE 行为 | 包级目标与边界 + 功能清单（Chat SSE 条目） + `debug-ui` 的 PRODUCT-SPEC |
 | 跨包契约变更（端口、MCP 路径、SSE 事件） | 本文件 + 所有消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
 
@@ -191,9 +199,9 @@
 
 | 缺口 | 类型 | 状态 | 备注 |
 |------|------|------|------|
-| 当前已实现能力暂无活跃技术债 | — | — | 2026-08-13 本地验证 124/124 测试通过；下列为新增目标能力缺口 |
-| 通用页面状态理解接口未实现 | requirement-gap | pending | `vision.analyze_page`/`vision.resolve_target` 输入输出已设计；当前能力仍聚焦 `vision.find_element` |
+| 旧 MCP SDK discovery/product transport 与 DSH MCP transport 并存 | tech-debt | tech-debt | 模型执行已统一进入 DSH ToolRuntime，原始 operation 在隔离 child scope；旧 SDK 仍承担严格 schema quarantine/hot-sync product projection，后续需在 DSH upstream 提供等价 seam 后收敛为单 transport |
 | 完整逐工具副作用授权校验未实现 | requirement-gap | pending | 当前只执行调用方冻结的浏览器 `stepId/kind/operation/effectId`，若声明数量边界仅接受 `maxAffectedItems=1`；尚未接收/验证 policy evaluation、风险投影 hash、active grant 与参数级数量交集，环境矩阵与审批仍由 ai-e2e 持有 |
+| 生产旧数据切换尚需现场 restore/cutover drill | rollout-gate | pending | 本地已覆盖全量备份 hash 与 SQLite integrity 隔离恢复校验；真实旧包/旧数据停服演练必须在目标部署执行，通过前不得清理生产旧库 |
 
 ---
 

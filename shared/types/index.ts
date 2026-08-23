@@ -92,3 +92,9 @@ export { MAX_SCREENSHOT_SIZE_BYTES } from './constants.js';
 
 // Browser execution wire contracts
 export * from './browser-execution.js';
+
+// Immutable proxy-owned evidence passed to bounded Vision tools
+export type {
+  VisionSnapshotArtifactBindingV1,
+  VisionSnapshotBindingV1,
+} from './vision-snapshot.js';

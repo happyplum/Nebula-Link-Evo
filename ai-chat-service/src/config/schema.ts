@@ -71,6 +71,10 @@ export interface MCPServerConfig {
   command: string;
   args: string[];
   env: Record<string, string>;
+  /** Only remote HTTP MCP servers may be optional and quarantined. */
+  optional?: boolean;
+  /** Canonicalized before a trusted stdio server is started. */
+  cwd?: string;
   stdin?: boolean;
   url?: string;
 }

@@ -6,7 +6,7 @@ import { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import { Type } from '@sinclair/typebox';
 import type { ChatHandler } from '../../../../conversation/chat-handler.js';
 import type { ConversationManager } from '../../../../conversation/manager.js';
-import { ChatSessionController, SessionNotFoundError } from '../../../../services/chat-session-controller.js';
+import { SessionNotFoundError } from '../../../../services/chat-session-controller.js';
 import {
   AgentStateSchema,
   SessionStatusSchema,
@@ -63,7 +63,7 @@ const OperationResponse = Type.Object({
 const OperationsResponse = Type.Array(OperationResponse);
 
 const controlRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
-  const controller = ChatSessionController.getInstance();
+  const controller = fastify.chatSessionController;
   const chatHandler = (fastify as typeof fastify & { chatHandler: ChatHandler }).chatHandler;
   const conversationManager = (fastify as typeof fastify & { conversationManager: ConversationManager })
     .conversationManager;
@@ -252,7 +252,8 @@ const controlRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         const runtimeState = await getRuntimeSessionState(
           conversationManager,
           sessionId,
-          session?.status
+          session?.status,
+          controller
         );
         return {
           sessionId,

@@ -5,7 +5,6 @@
 import { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import { Type, Static } from '@sinclair/typebox';
 import { testConnectivity } from '../../../../services/connectivity-test.js';
-import { connectivityGateService } from '../../../../services/connectivity-gate-service.js';
 
 const ConnectivityTestBodySchema = Type.Object({
   provider: Type.Optional(Type.String()),
@@ -38,7 +37,7 @@ const connectivityTestRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       const result = await testConnectivity(request.body);
 
       // Update gate state based on test result
-      connectivityGateService.setConnectivityState({
+      fastify.connectivityGate.setConnectivityState({
         ok: result.ok,
         message: result.message,
         latencyMs: result.latencyMs,

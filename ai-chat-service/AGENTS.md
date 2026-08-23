@@ -2,7 +2,7 @@
 
 ## Overview
 
-`ai-chat-service` is the reusable AI capability and conversation backend (port `3001`). It owns the analysis/decision and vision model roles, conversation/session management, AI provider orchestration, MCP client/tool orchestration, Chat SSE streaming, provider preflight, db-backup, loop-guard, and vision analysis via the internal `vision.find_element` tool. It consumes the browser MCP gateway (`proxy-adapter` :3000) via MCP-over-HTTP for browser-control tools.
+`ai-chat-service` is the reusable AI capability and conversation backend (port `3001`). It owns the analysis/decision and vision model roles, the per-application DeepSeek Harness runtime, conversation/session management, MCP client/tool orchestration, Chat SSE streaming, provider preflight, verified backup/retention, and the internal `vision.analyze_page` / `vision.resolve_target` tools. It consumes the browser MCP gateway (`proxy-adapter` :3000) via MCP-over-HTTP for browser-control tools.
 
 This package is the migration target for the AI chat stack split (M2) and the vision-ai-extraction (M3). Proxy-adapter keeps only browser-control tools; chat/provider/conversation/vision ownership moves here.
 
@@ -20,13 +20,14 @@ pnpm type-check   # tsc --noEmit
 
 | Area        | Path              | Notes                                            |
 | ----------- | ----------------- | ------------------------------------------------ |
-| Server      | `src/server.ts`   | dotenv load, CORS, /health, /config, SIGINT hook |
+| Server      | `src/server.ts`   | dotenv load and one `buildApp()` lifecycle       |
+| App         | `src/app.ts`      | per-instance Fastify + Cordis root composition   |
 | Config      | `src/config/`     | Env-driven loader (port, LOG_LEVEL, providers)   |
 
 ## Boundaries
 
-- **Owns**: analysis/decision and vision model roles, conversation/session, AI provider orchestration, MCP client/tool registry, Chat SSE, provider preflight, db-backup, loop-guard.
-- **Consumes (not owns)**: browser-control tools via MCP-over-HTTP to `proxy-adapter`. **Owns**: vision analysis via internal `VisionAnalyzer` + `VisionToolProvider` (`vision.find_element`).
+- **Owns**: analysis/decision and vision model roles, one DSH Agent Loop shared by Chat and Agent Task, JSONL session persistence, SQLite control/event projections, MCP product-tool registry, Chat SSE, provider preflight, verified backup/retention and deployment-locked trusted plugins.
+- **Consumes (not owns)**: browser-control tools and proxy-managed immutable evidence via MCP/loopback HTTP to `proxy-adapter`. **Owns**: vision interpretation via `VisionAnalyzer` + `VisionToolProvider` (`vision.analyze_page`, `vision.resolve_target`).
 - **Does NOT own**: browser engine, Playwright, MCP Server (StreamableHTTP) — those stay in `proxy-adapter`.
 - No auth (localhost-only binding constraint).
 - Independent SQLite DB — no cross-DB FK to proxy-adapter.
@@ -40,7 +41,7 @@ pnpm type-check   # tsc --noEmit
 - The reusable **Skills runtime** loads only local immutable declarative packages from `AI_SKILLS_DIRS`, pins id/version/content hash, and never executes bundled code or installs from the network. V1 permits one current Skill per Agent task; its effective tools are the task allowlist intersected with the Skill declaration and existing browser step/lease checks. Skill instructions, source paths and secret values never enter catalog/events. Contract: `ai-e2e/docs/ai-model-skill-contract.md`.
 - The shipped **scoped Agent task runtime** under `/api/v1/agent-tasks` receives immutable inputs, explicit tool/Skill allowlists, budgets, model-hidden browser bindings and opaque correlation metadata, then returns a schema-validated result and propagates controls/events. It must not copy the caller's business run plan or infer that an interrupted Agent rolled back a browser operation. Full policy/grant intersection remains pending. API: `ai-e2e/docs/service-api-event-contract.md`.
 - Scoped E2E tasks also receive caller-frozen policy evaluation, risk projection hash, current semantic step/effectId/quantity bound and optional grant reference. The tool wrapper must intersect these with task/Skill/browser permissions before every call. Environment classification and approval issuance remain in `ai-e2e`; this service cannot let a model, Skill or page content expand them. Target policy: `ai-e2e/docs/environment-side-effect-policy-contract.md`.
-- Target vision additions `vision.analyze_page` and `vision.resolve_target` are single-snapshot internal tools. They return serializable page summaries/locator candidates only and never own browser actions. Current `vision.find_element` remains the shipped compatibility surface.
+- `vision.analyze_page` and `vision.resolve_target` are the only production vision tools. They accept a validated `VisionSnapshotBindingV1`, read proxy-managed immutable bytes, and return serializable page summaries/locator candidates only. `vision.find_element` is test/dev compatibility only and must not return to production registration.
 - Target `/api/v1/capabilities` advertises agent-task/vision/skill protocol majors and limits without secrets. A run must fail preflight rather than silently fall back to legacy or swap models after tool execution; rollout contract: `ai-e2e/docs/migration-compatibility-acceptance-contract.md`.
 
 ## Conventions
@@ -49,7 +50,9 @@ pnpm type-check   # tsc --noEmit
 - `@nebula-link-evo/shared` via `workspace:*`.
 - Browser operation kind/observe/act vocabulary comes from `@nebula-link-evo/shared/types/browser-execution`; do not fork a second constant list.
 - Localhost-only bind (`127.0.0.1`) by default.
-- Chat 工具必须由 `ToolRegistry.getAvailableTools({ consumer: 'chat' })` 统一筛选，再经 `gatewayToolsToVercelToolMap()` 转换；不得在 `ChatHandler` 中重新引入 browser/MCP 工具的手动合并或旧 schema 转换链。
+- Chat 与 Agent Task 工具必须进入 DSH `ToolRuntime`；产品工具由 `GatewayToolBridge` 原子投影并使用 DSH-safe name。原始 `operation_execute/get/cancel` 只能存在于模型不可见的 transport child scope，不得直接注册到模型工具表。
+- 每个 `buildApp()` 必须创建并销毁自己的 Cordis root、DSH session store 和应用状态；禁止模块级单例 Harness。
+- 同进程扩展只能来自 `trusted-harness-plugins.lock.json` 精确锁定的 direct dependency，加载失败必须阻断启动；运行期禁止安装、HMR 或修改组合树。
 
 ## Anti-Patterns
 

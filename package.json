@@ -2,6 +2,9 @@
   "name": "nebula-link-evo",
   "private": true,
   "license": "AGPL-3.0-only",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
   "packageManager": "pnpm@10.34.5",
   "scripts": {
     "predev": "cmd /c tools\\livekit\\start.bat",

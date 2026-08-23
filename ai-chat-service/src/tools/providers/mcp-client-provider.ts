@@ -76,13 +76,20 @@ export class MCPClientProvider extends EventEmitter implements ToolProvider {
         serverName: metadata.serverName,
         toolName: metadata.toolName,
       },
-      execute: async (args: unknown) => {
+      execute: async (args: unknown, context) => {
         try {
-          const result = await this.mcpClient.callTool(
-            metadata.serverName,
-            metadata.toolName,
-            args as Record<string, unknown>
-          );
+          const result = context?.abortSignal
+            ? await this.mcpClient.callTool(
+                metadata.serverName,
+                metadata.toolName,
+                args as Record<string, unknown>,
+                { signal: context.abortSignal }
+              )
+            : await this.mcpClient.callTool(
+                metadata.serverName,
+                metadata.toolName,
+                args as Record<string, unknown>
+              );
           if (result && typeof result === 'object' && 'text' in result) {
             return (result as { text: string }).text;
           }

@@ -1,7 +1,7 @@
-import { generateText } from 'ai';
-import { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
-import { AppService } from '../../../services/index.js';
-import { ProviderError, parseProviderModel } from '../../../services/provider/errors.js';
+import { createUserMessage } from '@deepseek-ai/dsh-llm';
+import type { FinishReason, StreamChunk, TokenUsage } from '@deepseek-ai/dsh-llm';
+import type { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
+import type { HarnessModelRoute, HarnessRuntime } from '../../../harness/index.js';
 
 interface GenerateBody {
   prompt: string;
@@ -9,51 +9,16 @@ interface GenerateBody {
   maxTokens?: number;
 }
 
-interface DecisionSelector {
-  provider: string;
-  model: string;
+export interface AiServiceRouteOptions {
+  harness: HarnessRuntime;
+  decision: HarnessModelRoute;
+  timeoutMs: number;
 }
 
-function resolveDecisionSelector(decision: unknown): DecisionSelector {
-  if (typeof decision === 'string') {
-    return parseProviderModel(decision);
-  }
-
-  if (
-    decision &&
-    typeof decision === 'object' &&
-    typeof (decision as { provider?: unknown }).provider === 'string' &&
-    typeof (decision as { model?: unknown }).model === 'string'
-  ) {
-    return {
-      provider: (decision as { provider: string }).provider,
-      model: (decision as { model: string }).model,
-    };
-  }
-
-  throw new Error('Decision provider is not configured');
-}
-
-function getTokenUsage(usage: unknown) {
-  const usageRecord = usage && typeof usage === 'object' ? (usage as Record<string, unknown>) : {};
-
-  return {
-    promptTokens:
-      typeof usageRecord.inputTokens === 'number'
-        ? usageRecord.inputTokens
-        : typeof usageRecord.promptTokens === 'number'
-          ? usageRecord.promptTokens
-          : 0,
-    completionTokens:
-      typeof usageRecord.outputTokens === 'number'
-        ? usageRecord.outputTokens
-        : typeof usageRecord.completionTokens === 'number'
-          ? usageRecord.completionTokens
-          : 0,
-  };
-}
-
-const aiServiceRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
+const aiServiceRoutes: FastifyPluginAsyncTypebox<AiServiceRouteOptions> = async (
+  fastify,
+  routeOptions
+) => {
   fastify.post<{ Body: GenerateBody }>(
     '/generate',
     {
@@ -90,87 +55,82 @@ const aiServiceRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           502: {
             type: 'object',
             required: ['error'],
-            properties: {
-              error: { type: 'string' },
-            },
+            properties: { error: { type: 'string' } },
           },
           503: {
             type: 'object',
             required: ['error'],
-            properties: {
-              error: { type: 'string' },
-            },
+            properties: { error: { type: 'string' } },
           },
         },
       },
     },
     async (request, reply) => {
-      const appService = AppService.getInstance();
-      const config = appService.getConfig();
-      const registry = appService.getRegistry();
-
-      if (!config) {
-        return reply.status(503).send({ error: 'AI configuration is unavailable' });
-      }
-
-      if (!registry) {
-        return reply.status(503).send({ error: 'AI provider registry is unavailable' });
-      }
-
-      let provider: string;
-      let model: string;
+      const route = routeOptions.decision;
       try {
-        ({ provider, model } = resolveDecisionSelector(config.defaults?.decision));
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Decision provider is not configured';
-        return reply.status(503).send({ error: message });
-      }
-
-      if (!config.providers?.[provider]?.enabled) {
-        return reply.status(503).send({ error: `Decision provider '${provider}' is not enabled` });
-      }
-
-      if (!registry.isAvailable(provider)) {
-        const detail = registry.getAvailabilityError(provider);
-        return reply.status(503).send({
-          error: detail
-            ? `Decision provider '${provider}' is unavailable: ${detail}`
-            : `Decision provider '${provider}' is unavailable`,
+        let text = '';
+        let usage: TokenUsage | undefined;
+        let finish: FinishReason | undefined;
+        const chunks = routeOptions.harness.stream({
+          provider: route.provider,
+          model: route.model,
+          messages: [
+            createUserMessage({
+              content: [{ type: 'text', text: request.body.prompt }],
+              source: { kind: 'user' },
+            }),
+          ],
+          temperature: request.body.temperature ?? route.temperature,
+          maxTokens: request.body.maxTokens ?? route.maxTokens,
+          signal: AbortSignal.timeout(routeOptions.timeoutMs),
         });
-      }
-
-      try {
-        const languageModel = await registry.resolve(provider, model);
-        const result = await generateText({
-          model: languageModel,
-          prompt: request.body.prompt,
-          temperature: request.body.temperature ?? config.settings.temperature,
-          ...(request.body.maxTokens !== undefined ? { maxOutputTokens: request.body.maxTokens } : {}),
-          abortSignal: AbortSignal.timeout(config.settings.timeout),
-        });
-
+        for await (const chunk of chunks) {
+          ({ text, usage, finish } = collectChunk(chunk, text, usage, finish));
+        }
+        if (!finish || finish.kind === 'error' || finish.kind === 'aborted') {
+          const detail =
+            finish?.kind === 'error' || finish?.kind === 'aborted'
+              ? `${finish.failure.code}: ${finish.failure.message}`
+              : 'model stream ended without a finish event';
+          return reply.status(502).send({ error: `Text generation failed: ${detail}` });
+        }
         return reply.send({
           success: true,
-          text: result.text,
-          tokenUsage: getTokenUsage(result.usage),
-          model: `${provider}/${model}`,
+          text,
+          tokenUsage: {
+            promptTokens:
+              (usage?.inputTokens ?? 0) +
+              (usage?.cacheReadTokens ?? 0) +
+              (usage?.cacheWriteTokens ?? 0),
+            completionTokens: usage?.outputTokens ?? 0,
+          },
+          model: `${route.provider}/${route.model}`,
         });
       } catch (error) {
-        if (error instanceof ProviderError) {
-          const detail = error.details ?? error.message;
-          return reply.status(503).send({
-            error: `Decision provider '${provider}' is unavailable: ${String(detail)}`,
-          });
-        }
-
         const message = error instanceof Error ? error.message : 'Unknown text generation error';
-        fastify.log.error({ err: error, provider, model }, 'AI text generation failed');
-        return reply.status(502).send({
-          error: `Text generation failed for '${provider}/${model}': ${message}`,
+        const unavailable = /NO_ADAPTER|MISSING_CREDENTIAL|AUTH|credential|adapter/iu.test(message);
+        fastify.log.error(
+          { err: error, provider: route.provider, model: route.model },
+          'Harness text generation failed'
+        );
+        return reply.status(unavailable ? 503 : 502).send({
+          error: `Text generation failed for '${route.provider}/${route.model}': ${message}`,
         });
       }
     }
   );
 };
+
+function collectChunk(
+  chunk: StreamChunk,
+  text: string,
+  usage: TokenUsage | undefined,
+  finish: FinishReason | undefined
+): { text: string; usage: TokenUsage | undefined; finish: FinishReason | undefined } {
+  if (chunk.type === 'text-delta') return { text: text + chunk.text, usage, finish };
+  if (chunk.type === 'usage') return { text, usage: chunk.usage, finish };
+  if (chunk.type === 'finish') return { text, usage, finish: chunk.reason };
+  return { text, usage, finish };
+}
 
 export default aiServiceRoutes;

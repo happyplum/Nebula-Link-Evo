@@ -29,7 +29,7 @@ function repository(): AgentTaskRepository {
 
 function skillRecord(
   instructions = '只依据明确输入提取结果。',
-  requiredToolPatterns: string[] = ['vision.find_element']
+  requiredToolPatterns: string[] = ['vision.resolve_target']
 ): SkillVersionRecord {
   const manifest: SkillManifestV1 = {
     schema: 'nebula.ai.skill/1.0',
@@ -77,7 +77,7 @@ function taskRequest(record: SkillVersionRecord) {
     modelRole: 'decision',
     input: { objective: '提取登录需求' },
     responseSchema: structuredClone(record.manifest.outputSchema),
-    toolPolicy: { allow: ['vision.find_element', 'document.read'] },
+    toolPolicy: { allow: ['vision.resolve_target', 'document.read'] },
     skillPolicy: {
       allow: [
         {
@@ -100,7 +100,7 @@ describe('Skills runtime', () => {
     const store = repository();
     const runtime = new SkillRuntime(store);
 
-    const catalog = runtime.loadFromDirectories([root], ['vision.find_element']);
+    const catalog = runtime.loadFromDirectories([root], ['vision.resolve_target']);
     expect(catalog).toEqual([
       expect.objectContaining({
         skillId: record.manifest.id,
@@ -123,7 +123,7 @@ describe('Skills runtime', () => {
     const packageDirectory = writePackage(root, record);
     writeFileSync(join(packageDirectory, 'instructions.md'), '被篡改的指令');
     expect(() =>
-      new SkillRuntime(repository()).loadFromDirectories([root], ['vision.find_element'])
+      new SkillRuntime(repository()).loadFromDirectories([root], ['vision.resolve_target'])
     ).toThrow(
       'contentHash does not match'
     );
@@ -137,7 +137,7 @@ describe('Skills runtime', () => {
       process.platform === 'win32' ? 'junction' : 'dir'
     );
     expect(() =>
-      new SkillRuntime(repository()).loadFromDirectories([root], ['vision.find_element'])
+      new SkillRuntime(repository()).loadFromDirectories([root], ['vision.resolve_target'])
     ).toThrow(
       'only contain Skill directories'
     );
@@ -162,7 +162,7 @@ describe('Skills runtime', () => {
     expect(prepared?.execution).toMatchObject({
       skillId: record.manifest.id,
       contentHash: record.manifest.contentHash,
-      effectiveToolAllow: ['vision.find_element'],
+      effectiveToolAllow: ['vision.resolve_target'],
       effectiveBudgets: { maxModelTurns: 1, maxToolCalls: 1, maxTokens: 100 },
     });
     expect(prepared?.policySha256).toMatch(/^[a-f0-9]{64}$/);

@@ -20,6 +20,9 @@ import type {
   UpdateOperationParams,
   OperationStatus,
 } from './types.js';
+import { up as applyHarnessProjectionMigration } from '../conversation/migrations/008-harness-projection.js';
+import { up as applyHarnessDeletionMigration } from '../conversation/migrations/009-harness-deletion.js';
+import { up as applyHarnessSchedulerMigration } from '../conversation/migrations/010-harness-scheduler.js';
 
 const DEFAULT_DB_PATH = join(process.cwd(), 'data', 'ai-chat-service', 'conversations.sqlite');
 
@@ -33,7 +36,7 @@ export class ConversationDatabase {
   private sessionEventsDAO: SessionEventsDAO | null = null;
   private sessionEventsCleanup: SessionEventsCleanup | null = null;
 
-  private constructor() {}
+  constructor() {}
 
   static getInstance(): ConversationDatabase {
     if (!ConversationDatabase.instance) {
@@ -102,6 +105,11 @@ export class ConversationDatabase {
       throw new Error('Conversation database not initialized');
     }
     return this.sessionEventsCleanup;
+  }
+
+  /** Shared connection for transactionally consistent package-internal read models. */
+  connection(): DatabaseSync {
+    return this.getDb();
   }
 
   createSession(params: CreateSessionParams): Session {
@@ -359,6 +367,9 @@ export class ConversationDatabase {
     `);
     db.exec('CREATE INDEX IF NOT EXISTS idx_operation_logs_session_id ON operation_logs(session_id)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_operation_logs_start_time ON operation_logs(start_time DESC)');
+    applyHarnessProjectionMigration(db);
+    applyHarnessDeletionMigration(db);
+    applyHarnessSchedulerMigration(db);
   }
 
   createOperation(params: CreateOperationParams): TracedOperation {

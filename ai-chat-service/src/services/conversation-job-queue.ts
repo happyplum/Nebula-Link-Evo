@@ -8,6 +8,7 @@ import type { SessionEventHub } from '../conversation/session-event-hub.js';
 import { ProviderError, PROVIDER_ERRORS } from './provider/errors.js';
 import { createWorkerLogger } from './logger.js';
 import type { PendingJobInfo } from '@nebula-link-evo/shared';
+import type { HarnessRunScheduler } from '../harness/run-scheduler.js';
 
 const logger = createWorkerLogger('ConversationJobQueue');
 
@@ -91,6 +92,7 @@ export interface JobPayload {
   execute: (context: JobContext) => Promise<void>;
   messageId?: string;
   contentPreview?: string;
+  idempotencyKey?: string;
 }
 
 export class ConversationJobQueue {
@@ -102,15 +104,25 @@ export class ConversationJobQueue {
   private maxQueueSize = 1000;
   private persistWorker: StreamPersistWorker;
   private eventHub?: SessionEventHub;
+  private readonly db: DatabaseManager;
+  private readonly runs = new Set<Promise<void>>();
+  private accepting = true;
 
-  constructor(persistWorker: StreamPersistWorker, eventHub?: SessionEventHub) {
+  constructor(
+    persistWorker: StreamPersistWorker,
+    eventHub?: SessionEventHub,
+    db: DatabaseManager = DatabaseManager.getInstance(),
+    private readonly runScheduler?: HarnessRunScheduler,
+    private readonly admitNewRun?: () => void
+  ) {
     this.persistWorker = persistWorker;
     this.eventHub = eventHub;
+    this.db = db;
   }
 
   private getSessionStateDAO() {
     try {
-      return DatabaseManager.getInstance().getSessionStateDAO();
+      return this.db.getSessionStateDAO();
     } catch {
       return null;
     }
@@ -142,11 +154,22 @@ export class ConversationJobQueue {
   }
 
   async enqueue(payload: JobPayload): Promise<string> {
+    if (!this.accepting) {
+      throw new ServiceUnavailableError('Job queue is shutting down');
+    }
     if (this.jobs.size >= this.maxQueueSize) {
       throw new ServiceUnavailableError('Job queue is full');
     }
+    this.admitNewRun?.();
 
     const id = randomUUID();
+    this.runScheduler?.enqueue({
+      runId: id,
+      ownerType: 'chat',
+      ownerId: payload.sessionId,
+      messageId: payload.messageId ?? id,
+      ...(payload.idempotencyKey ? { idempotencyKey: payload.idempotencyKey } : {}),
+    });
     const originalExecute = payload.execute;
 
     const job: Job & JobPayload = {
@@ -263,7 +286,11 @@ export class ConversationJobQueue {
     }
 
     // Start execution in background on next tick
-    Promise.resolve().then(() => this.executeJob(job)).catch((err) => logger.error({ err }, 'Job execution failed'));
+    const run = Promise.resolve().then(() => this.executeJob(job));
+    this.runs.add(run);
+    void run
+      .catch((err) => logger.error({ err }, 'Job execution failed'))
+      .finally(() => this.runs.delete(run));
 
     return id;
   }
@@ -279,6 +306,8 @@ export class ConversationJobQueue {
       if (job.status === 'cancelled') {
         return;
       }
+
+      await this.runScheduler?.wait(job.id);
 
       job.status = 'running';
       job.startedAt = new Date();
@@ -302,7 +331,7 @@ export class ConversationJobQueue {
       job.status = 'failed';
       job.completedAt = new Date();
       job.error = error instanceof Error ? error.message : String(error);
-    });
+    }).finally(() => this.runScheduler?.complete(job.id));
 
     this.sessionLastActive.set(job.sessionId, Date.now());
   }
@@ -362,6 +391,7 @@ export class ConversationJobQueue {
     if (job.status === 'queued') {
       job.status = 'cancelled';
       job.completedAt = new Date();
+      this.runScheduler?.cancel(jobId);
 
       if (this.eventHub) {
         this.eventHub.publish(job.sessionId, {
@@ -384,6 +414,7 @@ export class ConversationJobQueue {
     if (job && (job.status === 'queued' || job.status === 'running')) {
       job.status = 'cancelled';
       job.completedAt = new Date();
+      this.runScheduler?.cancel(jobId);
 
       // Emit job.cancelled event
       if (this.eventHub) {
@@ -426,5 +457,17 @@ export class ConversationJobQueue {
         this.jobs.delete(jobId);
       }
     }
+  }
+
+  async close(): Promise<void> {
+    this.stopAccepting();
+    for (const job of this.jobs.values()) {
+      if (job.status === 'queued') this.cancelJob(job.id);
+    }
+    await Promise.allSettled(this.runs);
+  }
+
+  stopAccepting(): void {
+    this.accepting = false;
   }
 }

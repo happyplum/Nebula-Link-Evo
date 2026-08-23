@@ -16,7 +16,7 @@ function buildServiceWithVisionState(options: {
   };
 
   serviceInternals.toolRegistry = {
-    getAvailableTools: () => (options.hasVisionTool ? [{ name: 'vision.find_element' }] : []),
+    getAvailableTools: () => (options.hasVisionTool ? [{ name: 'vision.resolve_target' }] : []),
   };
   serviceInternals.mcpClient = {
     getServerList: () => [
@@ -39,7 +39,7 @@ describe('AppService.testAIConnectivity vision status', () => {
     const result = await service.testAIConnectivity();
 
     expect(result.visionAgent.status).toBe('degraded');
-    expect(result.visionAgent.tools).toEqual(['vision.find_element']);
+    expect(result.visionAgent.tools).toEqual(['vision.resolve_target']);
     expect(result.visionAgent.error).toContain('Gateway MCP server is unavailable');
   });
 
@@ -49,7 +49,7 @@ describe('AppService.testAIConnectivity vision status', () => {
     const result = await service.testAIConnectivity();
 
     expect(result.visionAgent.status).toBe('connected');
-    expect(result.visionAgent.tools).toEqual(['vision.find_element']);
+    expect(result.visionAgent.tools).toEqual(['vision.resolve_target']);
     expect(result.visionAgent.error).toBeNull();
   });
 });

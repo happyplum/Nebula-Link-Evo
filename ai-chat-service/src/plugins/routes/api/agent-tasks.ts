@@ -5,6 +5,7 @@ import type { AgentTaskService } from '../../../agent-tasks/service.js';
 import type { AgentTaskEventRecord } from '../../../agent-tasks/repository.js';
 import { buildAgentTaskCapabilities } from '../../../agent-tasks/capabilities.js';
 import type { SkillCatalogEntry } from '../../../skills/runtime.js';
+import { BoundedSseWriter } from '../../../services/sse-writer.js';
 
 const ProblemSchema = Type.Object(
   {
@@ -411,14 +412,20 @@ const agentTaskRoutes: FastifyPluginAsyncTypebox<AgentTaskRoutesOptions> = async
       const bufferedEvents: AgentTaskEventRecord[] = [];
       let bootstrapComplete = false;
       let lastSeq = 0;
-      const unsubscribe = options.service.subscribeEvents(request.params.taskId, (event) => {
+      let unsubscribe = (): void => {};
+      const writer = new BoundedSseWriter(reply.raw, { onClose: () => unsubscribe() });
+      unsubscribe = options.service.subscribeEvents(request.params.taskId, (event) => {
         try {
           if (!bootstrapComplete) {
+            if (bufferedEvents.length >= 256) {
+              writer.close('overflow', true);
+              return;
+            }
             bufferedEvents.push(event);
             return;
           }
           if (event.seq <= lastSeq) return;
-          writeSse(reply, event.type, event.seq, event);
+          writeSse(writer, event.type, event.seq, event);
           lastSeq = event.seq;
         } catch {
           // The close handler releases the subscription.
@@ -432,12 +439,12 @@ const agentTaskRoutes: FastifyPluginAsyncTypebox<AgentTaskRoutesOptions> = async
           'X-Accel-Buffering': 'no',
         });
         const snapshot = options.service.getSnapshot(request.params.taskId);
-        writeSse(reply, snapshot.type, snapshot.seq, snapshot);
+        writeSse(writer, snapshot.type, snapshot.seq, snapshot);
         lastSeq = snapshot.seq;
         bootstrapComplete = true;
         for (const event of bufferedEvents) {
           if (event.seq <= lastSeq) continue;
-          writeSse(reply, event.type, event.seq, event);
+          writeSse(writer, event.type, event.seq, event);
           lastSeq = event.seq;
         }
       } catch (error) {
@@ -446,7 +453,7 @@ const agentTaskRoutes: FastifyPluginAsyncTypebox<AgentTaskRoutesOptions> = async
       }
       const heartbeat = setInterval(() => {
         try {
-          reply.raw.write(': keepalive\n\n');
+          writer.push(': keepalive\n\n');
         } catch {
           clearInterval(heartbeat);
         }
@@ -455,6 +462,7 @@ const agentTaskRoutes: FastifyPluginAsyncTypebox<AgentTaskRoutesOptions> = async
         request.raw.on('close', () => {
           clearInterval(heartbeat);
           unsubscribe();
+          writer.close();
           resolve();
         });
       });
@@ -465,10 +473,10 @@ const agentTaskRoutes: FastifyPluginAsyncTypebox<AgentTaskRoutesOptions> = async
 export default agentTaskRoutes;
 
 function writeSse(
-  reply: { raw: { write: (chunk: string) => void } },
+  writer: BoundedSseWriter,
   type: string,
   seq: number,
   data: unknown
 ): void {
-  reply.raw.write(`event: ${type}\nid: ${seq}\ndata: ${JSON.stringify(data)}\n\n`);
+  writer.push(`event: ${type}\nid: ${seq}\ndata: ${JSON.stringify(data)}\n\n`);
 }

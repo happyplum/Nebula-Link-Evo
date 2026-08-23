@@ -1,6 +1,5 @@
 import type { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import { Type } from '@sinclair/typebox';
-import { appService } from '../../../services/index.js';
 
 const DecisionResultSchema = Type.Object({
   status: Type.String(),
@@ -36,7 +35,7 @@ const debugAiRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         },
       },
     },
-    async () => appService.testAIConnectivity(),
+    async () => fastify.appService.testAIConnectivity(),
   );
 
   fastify.get(
@@ -66,7 +65,7 @@ const debugAiRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         },
       },
     },
-    async () => ({ keys: appService.getApiKeyStatuses() }),
+    async () => ({ keys: fastify.appService.getApiKeyStatuses() }),
   );
 };
 

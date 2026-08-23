@@ -8,14 +8,11 @@ import { randomUUID } from 'node:crypto';
 import type { ChatHandler } from '../../../../conversation/chat-handler.js';
 import type { ConversationManager } from '../../../../conversation/manager.js';
 import { ConversationJobQueue } from '../../../../services/conversation-job-queue.js';
-import { SessionEventHub } from '../../../../conversation/session-event-hub.js';
-import { DatabaseManager } from '../../../../conversation/db.js';
 import { ServiceUnavailableError } from '../../../../errors/http-errors.js';
-import { MAX_SCREENSHOT_SIZE_BYTES, type MessageCreatedEvent } from '@nebula-link-evo/shared';
-import { connectivityGateService } from '../../../../services/connectivity-gate-service.js';
-import { AppService } from '../../../../services/index.js';
+import { MAX_SCREENSHOT_SIZE_BYTES } from '@nebula-link-evo/shared';
 import { validateProviderModel } from '../../../../config/validator.js';
 import { AgentStateSchema, SessionStatusSchema, getRuntimeSessionState } from './runtime-state.js';
+import type { HarnessDeletionService } from '../../../../harness/deletion-service.js';
 
 // Schemas
 const SessionResponseSchema = Type.Object({
@@ -85,6 +82,9 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
   ).conversationManager;
   const chatHandler = (fastify as typeof fastify & { chatHandler: ChatHandler }).chatHandler;
   const jobQueue = (fastify as typeof fastify & { jobQueue: ConversationJobQueue }).jobQueue;
+  const deletionService = (
+    fastify as typeof fastify & { deletionService: HarnessDeletionService }
+  ).deletionService;
 
   // POST / - Create a new session
   fastify.post<{ Body: Static<typeof CreateSessionBodySchema> }>(
@@ -117,7 +117,7 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     async (request, reply) => {
       try {
         const { title = '新会话', provider, model } = request.body || {};
-        const config = AppService.getInstance().getConfig();
+        const config = fastify.appService.getConfig();
         if (config === null) {
           reply.status(500);
           return { error: 'Server configuration unavailable' };
@@ -129,7 +129,7 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         }
 
         // Check provider availability after config validation passes
-        const registry = AppService.getInstance().getRegistry();
+        const registry = fastify.appService.getRegistry();
         if (registry && !registry.isAvailable(provider)) {
           const errorDetail = registry.getAvailabilityError(provider);
           throw new ServiceUnavailableError(
@@ -199,7 +199,8 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
             const runtimeState = await getRuntimeSessionState(
               conversationManager,
               session.id,
-              session.status
+              session.status,
+              fastify.chatSessionController
             );
             return {
               ...session,
@@ -249,7 +250,8 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         const runtimeState = await getRuntimeSessionState(
           conversationManager,
           sessionId,
-          session.status
+          session.status,
+          fastify.chatSessionController
         );
 
         return {
@@ -308,7 +310,7 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           return { error: `Session ${sessionId} not found` };
         }
 
-        const registry = AppService.getInstance().getRegistry();
+        const registry = fastify.appService.getRegistry();
         if (!registry) {
           reply.status(500);
           return { error: 'Provider registry unavailable' };
@@ -361,8 +363,8 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           id: Type.String(),
         }),
         response: {
-          200: Type.Object({ success: Type.Boolean() }),
           404: ErrorResponseSchema,
+          503: ErrorResponseSchema,
         },
       },
     },
@@ -370,16 +372,18 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       const { id: sessionId } = request.params;
 
       try {
-        const session = conversationManager.getSession(sessionId);
-
-        if (!session) {
+        const result = await withTimeout(deletionService.deleteSession(sessionId), 30_000);
+        if (result === 'not_found') {
           reply.status(404);
           return { error: `Session ${sessionId} not found` };
         }
-
-        conversationManager.deleteSession(sessionId);
-        return { success: true };
+        reply.status(204).send();
+        return;
       } catch (error) {
+        if (error instanceof DeletionPendingError) {
+          reply.status(503);
+          return { error: 'deletion_pending' };
+        }
         const errorMessage = error instanceof Error ? error.message : String(error);
         request.log.error({ error: errorMessage, sessionId }, 'Failed to delete session');
         reply.status(500);
@@ -467,8 +471,7 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
 
         const messages = conversationManager.getMessages(sessionId, { limit, offset });
 
-        const db = DatabaseManager.getInstance();
-        const sessionEventsDAO = db.getSessionEventsDAO();
+        const sessionEventsDAO = fastify.conversationDatabase.getSessionEventsDAO();
         const assistantIds = messages.filter((m) => m.role === 'assistant').map((m) => m.id);
         const thinkingMap =
           sessionEventsDAO.getThinkingForSession(sessionId, assistantIds) ??
@@ -527,12 +530,8 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     async (request, reply) => {
       const { id: sessionId } = request.params;
       const { content, screenshot } = request.body;
-      const db = DatabaseManager.getInstance();
-      const sessionEventsDAO = db.getSessionEventsDAO();
-      const sessionEventHub =
-        typeof chatHandler.getSessionEventHub === 'function'
-          ? chatHandler.getSessionEventHub()
-          : SessionEventHub.getInstance();
+      const sessionEventsDAO = fastify.conversationDatabase.getSessionEventsDAO();
+      const sessionEventHub = chatHandler.getSessionEventHub();
       const runId = randomUUID();
 
       try {
@@ -552,7 +551,7 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         }
 
         // Fail-close gate: Check connectivity before allowing new messages
-        if (connectivityGateService.isConnectivityFailed()) {
+        if (fastify.connectivityGate.isConnectivityFailed()) {
           reply.status(503);
           return { error: 'Connectivity test required' };
         }
@@ -567,28 +566,7 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         let jobId: string;
 
         try {
-          const message = conversationManager.addMessage(sessionId, {
-            role: 'user',
-            content: content.trim(),
-            metadata: { provider: session.provider, model: session.model },
-          });
-          messageId = message.id;
-
-          const eventPayload: Omit<MessageCreatedEvent, 'type'> = {
-            sessionId,
-            messageId,
-            content: content.trim(),
-          };
-          const createdSeq = await sessionEventsDAO.appendEvent(
-            sessionId,
-            'message.created',
-            eventPayload
-          );
-          sessionEventHub.publish(sessionId, {
-            type: 'message.created',
-            seq: createdSeq,
-            ...eventPayload,
-          });
+          messageId = randomUUID();
 
           jobId = await jobQueue.enqueue({
             sessionId,
@@ -598,6 +576,7 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
               await chatHandler.handleChatSend('http', {
                 sessionId,
                 message: content.trim(),
+                messageId,
                 skipAddMessage: true,
                 screenshot,
               });
@@ -641,3 +620,20 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
 };
 
 export default sessionRoutes;
+
+class DeletionPendingError extends Error {}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new DeletionPendingError()), timeoutMs);
+        timer.unref();
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}

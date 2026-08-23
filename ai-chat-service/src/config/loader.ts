@@ -13,6 +13,36 @@ export interface LoadResult {
   configPath: string;
 }
 
+export interface RawLoadResult {
+  config: Config | null;
+  configPath: string;
+  errors: string[];
+}
+
+/** Load provider configuration without resolving `{VAR}` placeholders into secret values. */
+export function loadRawConfig(configPath?: string): RawLoadResult {
+  const searchPaths = [
+    ...(configPath ? [configPath] : []),
+    'config/config.json',
+    '../config/config.json',
+    '../../config/config.json',
+    'nebula-link-evo/config/config.json',
+  ];
+  const errors: string[] = [];
+  for (const candidate of searchPaths) {
+    const absolutePath = path.resolve(candidate);
+    if (!fs.existsSync(absolutePath)) continue;
+    try {
+      const parsed = JSON.parse(fs.readFileSync(absolutePath, 'utf-8')) as Config;
+      return { config: withAutoRegisteredGateway(parsed), configPath: absolutePath, errors };
+    } catch (error) {
+      errors.push(`${absolutePath}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  if (errors.length === 0) errors.push('Config file not found');
+  return { config: null, configPath: '', errors };
+}
+
 export function loadConfig(configPath?: string): LoadResult {
   const searchPaths = [
     'config/config.json',
@@ -69,7 +99,7 @@ export function loadConfig(configPath?: string): LoadResult {
   };
 }
 
-function withAutoRegisteredGateway(config: ResolvedConfig): ResolvedConfig {
+function withAutoRegisteredGateway<T extends Config | ResolvedConfig>(config: T): T {
   if (!config.mcp.enabled) {
     return config;
   }
@@ -96,7 +126,7 @@ function withAutoRegisteredGateway(config: ResolvedConfig): ResolvedConfig {
         },
       },
     },
-  };
+  } as T;
 }
 
 export function saveConfig(configPath: string, config: Config): void {

@@ -40,6 +40,7 @@ class StreamPersistWorker extends EventEmitter {
   private isHealthy: boolean = true;
   private maxQueueSize: number = 1000;
   private healthCheckInterval: NodeJS.Timeout | null = null;
+  private shuttingDown = false;
 
   constructor() {
     super();
@@ -79,6 +80,7 @@ class StreamPersistWorker extends EventEmitter {
     });
 
     this.worker.on('error', (error) => {
+      if (this.shuttingDown) return;
       logger.error({ error }, 'Worker error');
       this.isHealthy = false;
       this.rejectAllPending(error);
@@ -86,7 +88,7 @@ class StreamPersistWorker extends EventEmitter {
     });
 
     this.worker.on('exit', (code) => {
-      if (code !== 0) {
+      if (code !== 0 && !this.shuttingDown) {
         logger.error({ code }, 'Worker exited');
         this.isHealthy = false;
         this.rejectAllPending(new Error('Worker crashed'));
@@ -179,6 +181,7 @@ class StreamPersistWorker extends EventEmitter {
    * Restart worker after crash
    */
   private restartWorker(): void {
+    if (this.shuttingDown) return;
     logger.info('Restarting worker');
     if (this.worker) {
       this.worker.terminate();
@@ -205,13 +208,15 @@ class StreamPersistWorker extends EventEmitter {
    * Stop worker and cleanup
    */
   async shutdown(): Promise<void> {
+    if (this.shuttingDown) return;
+    this.shuttingDown = true;
     if (this.healthCheckInterval) {
       clearInterval(this.healthCheckInterval);
       this.healthCheckInterval = null;
     }
 
     if (this.worker) {
-      this.worker.terminate();
+      await this.worker.terminate();
       this.worker = null;
     }
   }

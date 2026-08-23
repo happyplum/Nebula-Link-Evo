@@ -1,0 +1,94 @@
+diff --git a/lib/index.js b/lib/index.js
+index 66db7ece732136abedd2ccbddcdfddc295a5f1e0..f9fadcf47a7e6183ea627893ce4a85ec754df9fc 100644
+--- a/lib/index.js
++++ b/lib/index.js	
+@@ -1,7 +1,7 @@
+ import z from "@deepseek-ai/schemastery";
+ import { readdirSync } from "node:fs";
+-import { link, mkdir, mkdtemp, open, readFile, readdir, realpath, rm, stat, truncate } from "node:fs/promises";
+-import { dirname, join, parse, resolve, toNamespacedPath } from "node:path";
++import { link, lstat, mkdir, mkdtemp, open, readFile, readdir, realpath, rename, rm, stat, truncate } from "node:fs/promises";
++import { dirname, isAbsolute, join, parse, relative, resolve, toNamespacedPath } from "node:path";
+ import { performance } from "node:perf_hooks";
+ import { scheduler } from "node:timers/promises";
+ import { randomBytes } from "node:crypto";
+@@ -824,6 +824,9 @@ var JsonlSessionPersistence = class extends SessionPersistence {
+ 	readFrom(id, fromSeq, signal) {
+ 		return this.coordinator.readFrom(id, fromSeq, signal);
+ 	}
++	purge(id, expectedRevision, signal) {
++		return this.coordinator.purge(id, expectedRevision, signal);
++	}
+ 	/** Read a stored prefix by id across all project directories when cwd is unknown. */
+ 	async loadStored(id, signal) {
+ 		signal?.throwIfAborted();
+@@ -853,6 +856,40 @@ var JsonlSessionPersistence = class extends SessionPersistence {
+ 			throw error;
+ 		}
+ 	}
++	async purgeStored(id, expectedRevision, signal) {
++		signal?.throwIfAborted();
++		await this.ensureRootEncoding();
++		const path = await this.findLog(id, signal);
++		if (path === void 0) return false;
++		const sessionDir = dirname(path);
++		const projectDir = dirname(sessionDir);
++		const [rootReal, fileReal, dirInfo, fileInfo, identity] = await Promise.all([
++			realpath(this.root),
++			realpath(path),
++			lstat(sessionDir),
++			lstat(path),
++			stat(path, { bigint: true })
++		]);
++		signal?.throwIfAborted();
++		if (dirInfo.isSymbolicLink() || fileInfo.isSymbolicLink()) throw new Error(`refusing to purge session "${id}" through a symbolic link or reparse point`);
++		const escaped = relative(rootReal, fileReal);
++		if (escaped === "" || escaped.split(/[\\/]/, 1)[0] === ".." || isAbsolute(escaped)) throw new Error(`refusing to purge session "${id}" outside the configured root`);
++		if (fileRevision(identity) !== expectedRevision) throw new Error(`cannot purge session "${id}": durable revision changed`);
++		const trashRoot = join(this.root, ".gc-trash");
++		const trashPath = join(trashRoot, randomBytes(16).toString("hex"));
++		if (process.platform === "win32") {
++			await ensureDurableDirectoryWin32(trashRoot);
++			await publishNewFileWin32(sessionDir, trashPath);
++		} else {
++			await mkdir(trashRoot, { recursive: true, mode: 448 });
++			await this.syncDirPosix(this.root);
++			await rename(sessionDir, trashPath);
++			await Promise.all([this.syncDirPosix(projectDir), this.syncDirPosix(trashRoot)]);
++		}
++		await rm(trashPath, { recursive: true, force: true });
++		if (process.platform !== "win32") await this.syncDirPosix(trashRoot);
++		return true;
++	}
+ 	/**
+ 	* Read a session's stored artifact text verbatim: the durable file bytes
+ 	* decoded from this backend's physical encoding (complete zstd frames
+@@ -1379,7 +1416,7 @@ var JsonlSessionPersistence = class extends SessionPersistence {
+ 			signal?.throwIfAborted();
+ 			const entries = await readdir(this.root, { withFileTypes: true });
+ 			signal?.throwIfAborted();
+-			return entries.filter((e) => e.isDirectory()).map((e) => join(this.root, e.name));
++			return entries.filter((e) => e.isDirectory() && e.name !== ".gc-trash").map((e) => join(this.root, e.name));
+ 		} catch (error) {
+ 			if (isENOENT(error)) return [];
+ 			throw error;
+diff --git a/lib/types/index.d.ts b/lib/types/index.d.ts
+index 0c1467564263e2ad593a6f597667c81e03ac5a44..4b3cc9ebd250b54a8456695e3dc1c0a2b2d7a018 100644
+--- a/lib/types/index.d.ts
++++ b/lib/types/index.d.ts	
+@@ -77,6 +77,7 @@ export declare class JsonlSessionPersistence extends SessionPersistence implemen
+         meta: SessionHeader;
+         events: SessionEvent[];
+     }>;
++    purge(id: SessionId, expectedRevision: PersistenceRevision, signal?: AbortSignal): Promise<boolean>;
+     /** Read a stored prefix by id across all project directories when cwd is unknown. */
+     loadStored(id: SessionId, signal?: AbortSignal): Promise<StoredPrefix<JsonlTornMarker> | undefined>;
+     /**
+@@ -84,6 +85,7 @@ export declare class JsonlSessionPersistence extends SessionPersistence implemen
+      * Resolving an id with unknown cwd still scans the project directories.
+      */
+     readStoredRevision(id: SessionId, signal?: AbortSignal): Promise<PersistenceRevision | undefined>;
++    purgeStored(id: SessionId, expectedRevision: PersistenceRevision, signal?: AbortSignal): Promise<boolean>;
+     /**
+      * Read a session's stored artifact text verbatim: the durable file bytes
+      * decoded from this backend's physical encoding (complete zstd frames
