@@ -5,6 +5,7 @@ packages:
   - ai-chat-service
   - ai-e2e
   - ai-e2e/ui
+  - integrations/*
 
 onlyBuiltDependencies:
   - better-sqlite3

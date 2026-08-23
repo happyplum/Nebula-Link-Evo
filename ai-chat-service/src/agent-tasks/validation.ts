@@ -1,4 +1,8 @@
 import { createHash } from 'node:crypto';
+import {
+  ACT_OPERATIONS,
+  OBSERVE_OPERATIONS,
+} from '@nebula-link-evo/shared/types/browser-execution';
 import { AgentTaskError } from './errors.js';
 import type {
   AgentTaskBrowserStep,
@@ -12,33 +16,10 @@ const CONTROLLED_INTERNAL_TOOLS = new Set([
   'browser-control.operation_get',
   'browser-control.operation_cancel',
 ]);
-const OBSERVE_OPERATIONS = new Set([
-  'page_state',
-  'target_state',
-  'url',
-  'title',
-  'text',
-  'value',
-  'attribute',
-  'count',
-  'tabs',
-]);
-const ACT_OPERATIONS = new Set([
-  'navigate',
-  'click',
-  'fill',
-  'type_text',
-  'press',
-  'select_option',
-  'check',
-  'uncheck',
-  'focus',
-  'blur',
-  'hover',
-  'scroll',
-  'switch_tab',
-  'close_tab',
-]);
+const OBSERVE_OPERATION_SET = new Set<string>(
+  OBSERVE_OPERATIONS.filter((operation) => operation !== 'dom_snapshot')
+);
+const ACT_OPERATION_SET = new Set<string>(ACT_OPERATIONS);
 const SENSITIVE_KEY =
   /^(?:password|token|api[_-]?key|authorization|cookie|secret|access[_-]?token|browserLeaseToken)$/i;
 const SCHEMA_KEYS = new Set([
@@ -475,9 +456,9 @@ function validateBrowserSteps(
     if (result.has(step.stepId)) fail(`Duplicate browser stepId: ${step.stepId}`);
     const operations =
       step.kind === 'observe'
-        ? OBSERVE_OPERATIONS
+        ? OBSERVE_OPERATION_SET
         : step.kind === 'act'
-          ? ACT_OPERATIONS
+          ? ACT_OPERATION_SET
           : undefined;
     if (!operations?.has(step.operation))
       fail(`Browser step ${step.stepId} kind and operation do not match`);

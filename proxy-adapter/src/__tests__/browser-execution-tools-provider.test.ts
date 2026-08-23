@@ -81,6 +81,31 @@ describe('BrowserExecutionToolsProvider', () => {
     );
     expect(service.getOperation).not.toHaveBeenCalled();
   });
+
+  it('preserves structured browser problems across the MCP text envelope', async () => {
+    const service = {
+      executeOperation: vi.fn(),
+      getOperation: vi.fn(() => {
+        throw new BrowserExecutionError('lease_expired', 'expired');
+      }),
+      cancelOperation: vi.fn(),
+    } as unknown as BrowserExecutionService;
+    const provider = new BrowserExecutionToolsProvider(service);
+    await provider.initialize();
+    const tool = provider.getTools().find((item) => item.name.endsWith('operation_get'))!;
+
+    const output = JSON.parse(await tool.execute({ operationId: 'op-1' })) as Record<
+      string,
+      unknown
+    >;
+
+    expect(output).toMatchObject({
+      code: 'lease_expired',
+      message: 'expired',
+      retryable: false,
+    });
+    expect(output.correlationId).toEqual(expect.any(String));
+  });
 });
 
 describe('BrowserClient controlled-session gate', () => {

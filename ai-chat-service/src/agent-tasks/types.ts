@@ -1,3 +1,5 @@
+import type { BrowserOperationKind } from '@nebula-link-evo/shared/types/browser-execution';
+
 export const AGENT_TASK_SCHEMA = 'nebula.ai.agent-task/1.0' as const;
 
 export const AGENT_TASK_STATUSES = [
@@ -12,7 +14,7 @@ export const AGENT_TASK_STATUSES = [
 ] as const;
 
 export type AgentTaskStatus = (typeof AGENT_TASK_STATUSES)[number];
-export type BrowserOperationKind = 'observe' | 'act';
+export type { BrowserOperationKind } from '@nebula-link-evo/shared/types/browser-execution';
 
 export interface AgentTaskBrowserBinding {
   browserSessionId: string;

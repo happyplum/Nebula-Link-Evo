@@ -89,3 +89,6 @@ export type {
 
 // Constants
 export { MAX_SCREENSHOT_SIZE_BYTES } from './constants.js';
+
+// Browser execution wire contracts
+export * from './browser-execution.js';

@@ -47,6 +47,7 @@ pnpm type-check   # tsc --noEmit
 
 - `.js` extension for local TS imports (repo-wide convention).
 - `@nebula-link-evo/shared` via `workspace:*`.
+- Browser operation kind/observe/act vocabulary comes from `@nebula-link-evo/shared/types/browser-execution`; do not fork a second constant list.
 - Localhost-only bind (`127.0.0.1`) by default.
 - Chat 工具必须由 `ToolRegistry.getAvailableTools({ consumer: 'chat' })` 统一筛选，再经 `gatewayToolsToVercelToolMap()` 转换；不得在 `ChatHandler` 中重新引入 browser/MCP 工具的手动合并或旧 schema 转换链。
 

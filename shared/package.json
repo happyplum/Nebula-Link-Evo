@@ -32,6 +32,10 @@
       "types": "./dist/types/debug-events.d.ts",
       "import": "./dist/types/debug-events.js"
     },
+    "./types/browser-execution": {
+      "types": "./dist/types/browser-execution.d.ts",
+      "import": "./dist/types/browser-execution.js"
+    },
     "./utils": {
       "types": "./dist/utils/index.d.ts",
       "import": "./dist/utils/index.js"
