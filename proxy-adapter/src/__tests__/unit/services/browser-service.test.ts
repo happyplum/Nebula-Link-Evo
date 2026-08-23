@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createBrowserContextMock, createMockPage } from '../../../../../shared/test-utils/mocks/BrowserContext.mock.js';
+import { createMockPage } from '../../../../../shared/test-utils/mocks/BrowserContext.mock.js';
 
 // Mock the browser-lifecycle module
 const mockBrowserLifecycle = {

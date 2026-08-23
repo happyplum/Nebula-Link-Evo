@@ -472,6 +472,7 @@ describe('BrowserToolsProvider (execution)', () => {
     it('should handle undefined args gracefully', async () => {
       const result = await findAndExecute('browser-control.browser_status', undefined);
       expect(mockClient.getStatus).toHaveBeenCalledOnce();
+      expect(result).toContain('example.com');
     });
   });
 });

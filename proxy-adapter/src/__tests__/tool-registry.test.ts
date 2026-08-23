@@ -51,8 +51,6 @@ function makeProvider(overrides: {
   };
 }
 
-type EventEmitter_on = (event: string, handler: (...args: unknown[]) => void) => void;
-
 describe('ToolRegistry', () => {
   let registry: ToolRegistry;
 

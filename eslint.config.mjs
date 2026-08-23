@@ -27,6 +27,26 @@ export default tseslint.config(
     },
   },
   {
+    files: ['ai-chat-service/src/**/*.ts'],
+    languageOptions: {
+      parserOptions: {
+        projectService: false,
+        project: ['./ai-chat-service/tsconfig.eslint.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+  },
+  {
+    files: ['proxy-adapter/src/**/*.ts'],
+    languageOptions: {
+      parserOptions: {
+        projectService: false,
+        project: ['./proxy-adapter/tsconfig.test.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+  },
+  {
     files: ['**/*.tsx'],
     plugins: {
       'react-hooks': reactHooks,
