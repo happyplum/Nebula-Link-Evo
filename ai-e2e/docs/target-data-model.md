@@ -1,7 +1,7 @@
 # AI E2E 目标数据模型
 
-> 状态：`in-progress`。migration 014–018 已交付资产治理、authoring/run/browser queue、decision/policy/evidence/outbox/external link、结构化 amendment/Chat scope 目标表与核心仓储；015+ checksum runner 已落地。部分公开 API 已接入，执行协调器、001–014 preflight/baseline、备份与 legacy importer 仍未实现。
-> 更新时间：2026-08-12。
+> 状态：`in-progress`。migration 014–018 已交付资产治理、authoring/run/browser queue、decision/policy/evidence/outbox/external link、结构化 amendment/Chat scope 目标表与核心仓储；015+ checksum runner 已落地。正式 Run 控制、TODO attempt/依赖传播/决策与公开 API/SSE 已接入，跨服务执行协调器、001–014 preflight/baseline、备份与 legacy importer 仍未实现。
+> 更新时间：2026-08-24。
 > 本文定义 `ai-e2e` 首期最终关系模型、不可变修订、版本复制事务、页面规范化、运行数据与证据存储。迁移编号和物理 SQL 在实施时按现有 SQLite migration 链追加，但不得改变本文的所有权和唯一性约束。
 
 ### 当前物理映射
@@ -931,13 +931,13 @@ manifest sealed 后不可修改；补充证据创建新的 manifest revision 或
 
 - semantic v1 已有 business version 与独立 current asset graph；legacy module、URL、scenario 和 script 仍直接归项目链路，尚未导入或切流。
 - semantic v1 已有稳定功能脚本身份、不可变 revision payload/hash、scoped verification、dependency index 和 verified-scope 激活事务；公开 authoring/修订 API、完整 Schema 校验及语义执行尚未实现。legacy `scripts` 仍保存 scenario 级 TypeScript 文本与可变 status。
-- semantic `test_runs` 已能原子冻结 base plan、TODO/依赖和初始变量，并通过 optimistic command + 持久 seq event 转换 run 状态；page task/attempt 执行、依赖传播、决策应用、公开 API/SSE 尚未实现。legacy `execution_runs` 保持原义且不混链。
+- semantic `test_runs` 已能从 verified scenario 原子冻结 base plan、TODO/依赖和初始变量，并通过乐观命令、page task/attempt、精确依赖传播、恢复/决策应用、持久 seq event 和公开 API/SSE 驱动状态；跨服务 Agent/browser coordinator 尚未实现。legacy `execution_runs` 保持原义且不混链。
 - 数据库已有持久 outbox、opaque external task link 与 claim/settle/单调 reconciliation 仓储；网络派发 worker、重启扫描和跨服务查询收敛 loop 尚未实现。
 - 数据库已有内容寻址 artifact、append-only evidence item 和 sealed manifest 仓储；proxy 截图/DOM/operation 的自动提升、保留清理 worker 和 UI 证据时间线尚未实现。
 - semantic 页面 revision 已保存 Origin 无关签名；legacy URL 表仍把实际 URL、单快照和逻辑页面混为一个实体，尚无运行匹配器、完整参数 Schema 或基线变体。
 - 当前启动仍直接执行 legacy migration 001–014；015–018 已使用 checksum/状态账本并覆盖失败 rollback 与 checksum 漂移拒绝，但 001–014 结构 preflight/baseline、文件备份和 legacy importer 尚未实现。
 - 持久 authoring job/task/attempt/command/event、candidate verification/activation、coverage/dependency 和跨 authoring/run 的 browser FIFO 数据基座已交付；PRD/探索/生成/修复协调器仍围绕旧项目状态和短期调用。
-- 风险投影 hash、policy evaluation/grant/decision 表与 evaluation 仓储已交付；确定性环境规则、审批/grant 原子应用、逐 effectId 校验和 production 写门禁 runtime 尚未实现。
+- 风险投影 hash、policy evaluation/grant/decision 表与确定性计划级环境规则已交付；staging 高风险审批会原子创建 active grant，production 业务写会取消 Run/browser job。逐 effectId 的跨服务参数门禁尚未实现。
 
 ## 17. 验收原则
 
