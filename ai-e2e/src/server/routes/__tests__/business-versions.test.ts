@@ -52,7 +52,7 @@ describe('business version routes', () => {
     });
 
     expect(created.statusCode).toBe(201);
-    const versionId = created.json().id as string;
+    const versionId = created.json().data.id as string;
     const list = await app.inject({
       method: 'GET',
       url: '/api/v1/projects/project-1/business-versions',
@@ -63,9 +63,11 @@ describe('business version routes', () => {
     });
 
     expect(list.statusCode).toBe(200);
-    expect(list.json().versions).toHaveLength(1);
+    expect(list.json().data.versions).toHaveLength(1);
     expect(detail.statusCode).toBe(200);
     expect(detail.json()).toMatchObject({
+      meta: { requestId: expect.any(String) },
+      data: {
       id: versionId,
       validationStatus: 'draft',
       assets: {
@@ -75,6 +77,7 @@ describe('business version routes', () => {
         functionalScripts: 0,
         scenarios: 0,
         staleExecutableAssets: 0,
+      },
       },
     });
   });
@@ -92,6 +95,11 @@ describe('business version routes', () => {
 
     expect(missingKey.statusCode).toBe(400);
     expect(missingVersion.statusCode).toBe(404);
+    expect(missingVersion.json()).toMatchObject({
+      code: 'not_found',
+      retryable: false,
+      correlationId: expect.any(String),
+    });
   });
 
   it('copies a valid source through the HTTP API and replays the idempotency key', async () => {
@@ -116,14 +124,18 @@ describe('business version routes', () => {
     expect(copied.statusCode).toBe(201);
     expect(replay.statusCode).toBe(200);
     expect(copied.json()).toMatchObject({
-      created: true,
-      version: { sourceVersionId: source.id, validationStatus: 'needs_recheck' },
-      counts: { functionalScripts: 0, scenarios: 0, staleExecutableAssets: 0 },
-      staleAssetIds: [],
+      data: {
+        created: true,
+        version: { sourceVersionId: source.id, validationStatus: 'needs_recheck' },
+        counts: { functionalScripts: 0, scenarios: 0, staleExecutableAssets: 0 },
+        staleAssetIds: [],
+      },
     });
     expect(replay.json()).toMatchObject({
-      created: false,
-      version: { id: copied.json().version.id },
+      data: {
+        created: false,
+        version: { id: copied.json().data.version.id },
+      },
     });
   });
 });

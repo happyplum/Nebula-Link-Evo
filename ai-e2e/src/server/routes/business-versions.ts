@@ -1,8 +1,10 @@
 import type { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import { Type, type Static } from '@sinclair/typebox';
+import type { FastifyRequest } from 'fastify';
 import type { BusinessVersionService } from '../../services/business-version-service.js';
 import { ServiceError } from '../../services/service-error.js';
-import { ErrorResponseSchema } from '../../types/api.js';
+import type { ApiSuccess } from '../../types/semantic-control.js';
+import { ApiProblemSchema, apiSuccessSchema } from '../../types/semantic-api.js';
 import fp from '../plugins/fastify-plugin.js';
 
 const StableKeySchema = Type.String({
@@ -116,6 +118,10 @@ const CopyResponseSchema = Type.Object(
   },
   { additionalProperties: false }
 );
+const BusinessVersionSuccessSchema = apiSuccessSchema(BusinessVersionSchema);
+const BusinessVersionDetailSuccessSchema = apiSuccessSchema(BusinessVersionDetailSchema);
+const VersionListSuccessSchema = apiSuccessSchema(VersionListSchema);
+const CopySuccessSchema = apiSuccessSchema(CopyResponseSchema);
 
 type CreateBody = Static<typeof CreateBusinessVersionBodySchema>;
 type CopyBody = Static<typeof CopyBusinessVersionBodySchema>;
@@ -147,12 +153,12 @@ const businessVersionRoutes: FastifyPluginAsyncTypebox<BusinessVersionRoutesOpti
         headers: IdempotencyHeaderSchema,
         body: CreateBusinessVersionBodySchema,
         response: {
-          200: BusinessVersionSchema,
-          201: BusinessVersionSchema,
-          400: ErrorResponseSchema,
-          404: ErrorResponseSchema,
-          409: ErrorResponseSchema,
-          503: ErrorResponseSchema,
+          200: BusinessVersionSuccessSchema,
+          201: BusinessVersionSuccessSchema,
+          400: ApiProblemSchema,
+          404: ApiProblemSchema,
+          409: ApiProblemSchema,
+          503: ApiProblemSchema,
         },
       },
     },
@@ -169,7 +175,7 @@ const businessVersionRoutes: FastifyPluginAsyncTypebox<BusinessVersionRoutesOpti
           ? { deploymentRevisionId: request.body.deploymentRevisionId }
           : {}),
       });
-      return reply.status(result.created ? 201 : 200).send(result.version);
+      return reply.status(result.created ? 201 : 200).send(success(request, result.version));
     }
   );
 
@@ -178,10 +184,11 @@ const businessVersionRoutes: FastifyPluginAsyncTypebox<BusinessVersionRoutesOpti
     {
       schema: {
         params: ProjectParamsSchema,
-        response: { 200: VersionListSchema, 503: ErrorResponseSchema },
+        response: { 200: VersionListSuccessSchema, 503: ApiProblemSchema },
       },
     },
-    async (request) => ({ versions: requireService().list(request.params.projectId) })
+    async (request) =>
+      success(request, { versions: requireService().list(request.params.projectId) })
   );
 
   fastify.get<{ Params: Static<typeof VersionParamsSchema> }>(
@@ -190,13 +197,13 @@ const businessVersionRoutes: FastifyPluginAsyncTypebox<BusinessVersionRoutesOpti
       schema: {
         params: VersionParamsSchema,
         response: {
-          200: BusinessVersionDetailSchema,
-          404: ErrorResponseSchema,
-          503: ErrorResponseSchema,
+          200: BusinessVersionDetailSuccessSchema,
+          404: ApiProblemSchema,
+          503: ApiProblemSchema,
         },
       },
     },
-    async (request) => requireService().get(request.params.versionId)
+    async (request) => success(request, requireService().get(request.params.versionId))
   );
 
   fastify.post<{
@@ -211,12 +218,12 @@ const businessVersionRoutes: FastifyPluginAsyncTypebox<BusinessVersionRoutesOpti
         headers: IdempotencyHeaderSchema,
         body: CopyBusinessVersionBodySchema,
         response: {
-          200: CopyResponseSchema,
-          201: CopyResponseSchema,
-          400: ErrorResponseSchema,
-          404: ErrorResponseSchema,
-          409: ErrorResponseSchema,
-          503: ErrorResponseSchema,
+          200: CopySuccessSchema,
+          201: CopySuccessSchema,
+          400: ApiProblemSchema,
+          404: ApiProblemSchema,
+          409: ApiProblemSchema,
+          503: ApiProblemSchema,
         },
       },
     },
@@ -232,13 +239,29 @@ const businessVersionRoutes: FastifyPluginAsyncTypebox<BusinessVersionRoutesOpti
           ? { deploymentRevisionId: request.body.deploymentRevisionId }
           : {}),
       });
-      return reply.status(result.created ? 201 : 200).send({
-        ...result,
-        version: requireService().get(result.version.id),
-      });
+      return reply.status(result.created ? 201 : 200).send(
+        success(request, {
+          ...result,
+          version: requireService().get(result.version.id),
+        })
+      );
     }
   );
 };
+
+function success<T>(request: FastifyRequest, data: T): ApiSuccess<T> {
+  const correlationHeader = request.headers['x-correlation-id'];
+  const correlationId = Array.isArray(correlationHeader)
+    ? correlationHeader[0]
+    : correlationHeader;
+  return {
+    data,
+    meta: {
+      requestId: request.id,
+      ...(correlationId ? { correlationId } : {}),
+    },
+  };
+}
 
 export default fp(businessVersionRoutes, {
   fastify: '5.x',

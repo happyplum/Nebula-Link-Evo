@@ -46,6 +46,7 @@ import { BusinessVersionRepository } from './repositories/business-version-repos
 import { SemanticAssetRepository } from './repositories/semantic-asset-repository.js';
 import { SemanticEvidenceRepository } from './repositories/semantic-evidence-repository.js';
 import { SemanticWorkflowRepository } from './repositories/semantic-workflow-repository.js';
+import { SemanticQueryRepository } from './repositories/semantic-query-repository.js';
 
 export function generateId(): string {
   return randomBytes(8).toString('hex');
@@ -72,6 +73,7 @@ class DatabaseManager {
   private semanticAssetRepo: SemanticAssetRepository | null = null;
   private semanticWorkflowRepo: SemanticWorkflowRepository | null = null;
   private semanticEvidenceRepo: SemanticEvidenceRepository | null = null;
+  private semanticQueryRepo: SemanticQueryRepository | null = null;
 
   private constructor() {}
 
@@ -148,6 +150,7 @@ class DatabaseManager {
     this.semanticAssetRepo = new SemanticAssetRepository(this.db);
     this.semanticWorkflowRepo = new SemanticWorkflowRepository(this.db);
     this.semanticEvidenceRepo = new SemanticEvidenceRepository(this.db);
+    this.semanticQueryRepo = new SemanticQueryRepository(this.db, this.businessVersionRepo);
   }
 
   getDatabase(): Database.Database {
@@ -176,6 +179,7 @@ class DatabaseManager {
       this.semanticAssetRepo = null;
       this.semanticWorkflowRepo = null;
       this.semanticEvidenceRepo = null;
+      this.semanticQueryRepo = null;
     }
   }
 
@@ -195,6 +199,7 @@ class DatabaseManager {
   getSemanticAssetRepo(): SemanticAssetRepository { if (!this.semanticAssetRepo) throw new Error('Database not initialized'); return this.semanticAssetRepo; }
   getSemanticWorkflowRepo(): SemanticWorkflowRepository { if (!this.semanticWorkflowRepo) throw new Error('Database not initialized'); return this.semanticWorkflowRepo; }
   getSemanticEvidenceRepo(): SemanticEvidenceRepository { if (!this.semanticEvidenceRepo) throw new Error('Database not initialized'); return this.semanticEvidenceRepo; }
+  getSemanticQueryRepo(): SemanticQueryRepository { if (!this.semanticQueryRepo) throw new Error('Database not initialized'); return this.semanticQueryRepo; }
 }
 
 export { DatabaseManager };

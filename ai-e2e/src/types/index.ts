@@ -142,6 +142,21 @@ export type {
   ScenarioAsset,
 } from './business-version.js';
 
+export type {
+  ApiProblem,
+  ApiSuccess,
+  AuthoringSnapshotV1,
+  RunSnapshotV1,
+  SemanticAssetType,
+  SemanticEventV1,
+  SemanticRevisionHistoryV1,
+  SemanticRevisionV1,
+  SemanticWorkspaceV1,
+  ServiceCapabilitiesV1,
+  WorkspacePrdDocumentV1,
+  WorkspaceValidationV1,
+} from './semantic-control.js';
+
 // ========== ENUM VALUES (CONST OBJECTS) ==========
 export {
   ProjectStatus as ProjectStatusValues,
