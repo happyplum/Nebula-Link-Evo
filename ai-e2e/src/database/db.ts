@@ -54,6 +54,7 @@ import { SemanticWorkflowRepository } from './repositories/semantic-workflow-rep
 import { SemanticQueryRepository } from './repositories/semantic-query-repository.js';
 import { AuthoringAmendmentRepository } from './repositories/authoring-amendment-repository.js';
 import { SemanticRunControlRepository } from './repositories/semantic-run-control-repository.js';
+import { SemanticCoordinatorRepository } from './repositories/semantic-coordinator-repository.js';
 
 export function generateId(): string {
   return randomBytes(8).toString('hex');
@@ -83,6 +84,7 @@ class DatabaseManager {
   private semanticQueryRepo: SemanticQueryRepository | null = null;
   private authoringAmendmentRepo: AuthoringAmendmentRepository | null = null;
   private semanticRunControlRepo: SemanticRunControlRepository | null = null;
+  private semanticCoordinatorRepo: SemanticCoordinatorRepository | null = null;
 
   private constructor() {}
 
@@ -170,6 +172,7 @@ class DatabaseManager {
       this.semanticWorkflowRepo,
       this.semanticEvidenceRepo
     );
+    this.semanticCoordinatorRepo = new SemanticCoordinatorRepository(this.db);
   }
 
   getDatabase(): Database.Database {
@@ -201,6 +204,7 @@ class DatabaseManager {
       this.semanticQueryRepo = null;
       this.authoringAmendmentRepo = null;
       this.semanticRunControlRepo = null;
+      this.semanticCoordinatorRepo = null;
     }
   }
 
@@ -223,6 +227,7 @@ class DatabaseManager {
   getSemanticQueryRepo(): SemanticQueryRepository { if (!this.semanticQueryRepo) throw new Error('Database not initialized'); return this.semanticQueryRepo; }
   getAuthoringAmendmentRepo(): AuthoringAmendmentRepository { if (!this.authoringAmendmentRepo) throw new Error('Database not initialized'); return this.authoringAmendmentRepo; }
   getSemanticRunControlRepo(): SemanticRunControlRepository { if (!this.semanticRunControlRepo) throw new Error('Database not initialized'); return this.semanticRunControlRepo; }
+  getSemanticCoordinatorRepo(): SemanticCoordinatorRepository { if (!this.semanticCoordinatorRepo) throw new Error('Database not initialized'); return this.semanticCoordinatorRepo; }
 }
 
 export { DatabaseManager };

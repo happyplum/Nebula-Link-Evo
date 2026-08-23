@@ -563,6 +563,139 @@ export class SemanticWorkflowRepository {
     });
   }
 
+  settleAuthoringJob(
+    jobId: string,
+    lifecycle: 'paused' | 'waiting_decision' | 'completed' | 'failed',
+    result: unknown
+  ): { lifecycle: string; stateVersion: number } {
+    assertNoInlineSecrets(result);
+    return inImmediateTransaction(this.db, () => {
+      const job = this.db
+        .prepare('SELECT lifecycle, state_version, next_event_seq FROM authoring_jobs WHERE id = ?')
+        .get(jobId) as Record<string, unknown> | undefined;
+      if (!job) throw new Error('Authoring job not found');
+      if (['completed', 'cancelled', 'failed'].includes(String(job.lifecycle))) {
+        if (job.lifecycle === lifecycle) {
+          return { lifecycle, stateVersion: Number(job.state_version) };
+        }
+        throw new Error('Terminal authoring job cannot be settled again');
+      }
+      const runningTask = this.db
+        .prepare("SELECT 1 FROM authoring_tasks WHERE job_id = ? AND state = 'running' LIMIT 1")
+        .get(jobId);
+      if (runningTask) throw new Error('Running authoring task must finish before job settlement');
+      const now = new Date().toISOString();
+      const nextVersion = Number(job.state_version) + 1;
+      this.db
+        .prepare(
+          `UPDATE authoring_jobs SET lifecycle = ?, outcome = ?, result_json = ?,
+             state_version = ?, completed_at = CASE WHEN ? IN ('completed','failed') THEN ? ELSE NULL END
+           WHERE id = ?`
+        )
+        .run(
+          lifecycle,
+          lifecycle === 'completed' ? 'succeeded' : lifecycle === 'failed' ? 'failed' : null,
+          stableStringify(result),
+          nextVersion,
+          lifecycle,
+          now,
+          jobId
+        );
+      this.bumpAuthoringEvent(
+        jobId,
+        Number(job.next_event_seq),
+        'authoring.settled',
+        'authoring_job',
+        jobId,
+        { lifecycle, result },
+        now
+      );
+      return { lifecycle, stateVersion: nextVersion };
+    });
+  }
+
+  ensureAuthoringVerification(amendmentId: string): { taskId: string; browserJobId: string } {
+    const amendment = this.db
+      .prepare(
+        `SELECT amendments.job_id, amendments.state, jobs.browser_job_id
+         FROM authoring_amendments AS amendments
+         JOIN authoring_jobs AS jobs ON jobs.id = amendments.job_id
+         WHERE amendments.id = ?`
+      )
+      .get(amendmentId) as
+      | { job_id: string; state: string; browser_job_id: string }
+      | undefined;
+    if (!amendment || amendment.state !== 'verifying') {
+      throw new Error('Authoring amendment is not ready for verification');
+    }
+    const task = this.createAuthoringTask({
+      jobId: amendment.job_id,
+      taskKey: `verify-amendment:${amendmentId}`,
+      type: 'validate_version',
+      targetType: 'authoring_amendment',
+      targetId: amendmentId,
+      inputRedacted: {
+        amendmentId,
+        verificationMode: 'control',
+        output: 'structured_verification_result',
+      },
+      toolPolicyHash: hashValue({ tool: 'browser-control.operation_execute', amendmentId }),
+      skillPolicyHash: hashValue({ skill: 'semantic-authoring-verification', version: 1 }),
+      budget: { maxAttempts: 1, maxToolCalls: 50 },
+    });
+    inImmediateTransaction(this.db, () => {
+      const job = this.db
+        .prepare(
+          `SELECT lifecycle, state_version, next_event_seq, browser_job_id
+           FROM authoring_jobs WHERE id = ?`
+        )
+        .get(amendment.job_id) as Record<string, unknown> | undefined;
+      if (!job || ['completed', 'cancelled', 'failed'].includes(String(job.lifecycle))) {
+        throw new Error('Authoring job is not writable');
+      }
+      const now = new Date().toISOString();
+      if (job.lifecycle !== 'running') {
+        const nextVersion = Number(job.state_version) + 1;
+        this.db
+          .prepare(
+            `UPDATE authoring_jobs SET lifecycle = 'running', state_version = ?
+             WHERE id = ?`
+          )
+          .run(nextVersion, amendment.job_id);
+        this.bumpAuthoringEvent(
+          amendment.job_id,
+          Number(job.next_event_seq),
+          'authoring.verification_scheduled',
+          'authoring_amendment',
+          amendmentId,
+          { taskId: task.id },
+          now
+        );
+      }
+      const browserJob = this.db
+        .prepare('SELECT state FROM browser_jobs WHERE id = ?')
+        .get(amendment.browser_job_id) as { state: BrowserJobState } | undefined;
+      if (!browserJob) throw new Error('Authoring browser job not found');
+      if (['completed', 'cancelled', 'failed'].includes(browserJob.state)) {
+        const meta = this.db
+          .prepare("SELECT next_queue_seq FROM browser_job_queue_meta WHERE key = 'global'")
+          .get() as { next_queue_seq: number | bigint };
+        const queueSeq = Number(meta.next_queue_seq);
+        this.db
+          .prepare(
+            `UPDATE browser_jobs SET queue_seq = ?, state = 'queued', browser_session_id = NULL,
+               capability_snapshot_sha256 = NULL, acquired_at = NULL, released_at = NULL,
+               error_json = NULL WHERE id = ?`
+          )
+          .run(queueSeq, amendment.browser_job_id);
+        this.db
+          .prepare("UPDATE browser_job_queue_meta SET next_queue_seq = ? WHERE key = 'global'")
+          .run(queueSeq + 1);
+      }
+    });
+    return { taskId: task.id, browserJobId: amendment.browser_job_id };
+  }
+
   applyAuthoringTransition(
     commandId: string,
     to: AuthoringLifecycle,

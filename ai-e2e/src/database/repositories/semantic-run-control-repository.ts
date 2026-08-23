@@ -34,6 +34,7 @@ export interface FormalRunCreationResult extends SemanticRunResult {
 }
 
 export interface StartTodoInput {
+  pageTaskId?: string;
   runId: string;
   todoId: string;
   browserSessionId: string;
@@ -327,7 +328,7 @@ export class SemanticRunControlRepository {
         .prepare('SELECT COALESCE(MAX(task_no), 0) + 1 AS task_no FROM page_tasks WHERE run_id = ?')
         .get(todo.run_id) as { task_no: number | bigint };
       const taskNo = Number(next.task_no);
-      const pageTaskId = randomUUID();
+      const pageTaskId = input.pageTaskId ?? randomUUID();
       const now = new Date().toISOString();
       this.db
         .prepare(

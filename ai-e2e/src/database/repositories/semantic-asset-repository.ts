@@ -22,6 +22,7 @@ export type SemanticAssetType =
 export type SemanticActorType = 'user' | 'main_agent' | 'child_agent' | 'system' | 'migration';
 
 export interface CreateSemanticRevisionParams {
+  id?: string;
   assetType: SemanticAssetType;
   assetId: string;
   businessVersionId: string;
@@ -184,6 +185,36 @@ export class SemanticAssetRepository {
       if (!asset || asset.business_version_id !== params.businessVersionId) {
         throw new Error(`${params.assetType} does not belong to the business version`);
       }
+      const payloadJson = stableStringify(params.payload);
+      const contentSha256 = sha256(payloadJson);
+      if (params.id) {
+        const existing = this.db
+          .prepare(
+            `SELECT business_version_id, ${spec.assetColumn} AS asset_id, revision_no,
+                    lifecycle, content_sha256, validation_status
+             FROM ${spec.table} WHERE id = ?`
+          )
+          .get(params.id) as Record<string, unknown> | undefined;
+        if (existing) {
+          if (
+            existing.business_version_id !== params.businessVersionId ||
+            existing.asset_id !== params.assetId ||
+            existing.content_sha256 !== contentSha256
+          ) {
+            throw new Error('Semantic revision id was reused with different content');
+          }
+          return {
+            id: params.id,
+            assetType: params.assetType,
+            assetId: params.assetId,
+            businessVersionId: params.businessVersionId,
+            revisionNo: Number(existing.revision_no),
+            lifecycle: existing.lifecycle as SemanticRevisionRecord['lifecycle'],
+            contentSha256,
+            validationStatus: existing.validation_status as SemanticRevisionRecord['validationStatus'],
+          };
+        }
+      }
       if (params.supersedesRevisionId) {
         const superseded = this.db
           .prepare(`SELECT ${spec.assetColumn} AS asset_id FROM ${spec.table} WHERE id = ?`)
@@ -198,9 +229,8 @@ export class SemanticAssetRepository {
            FROM ${spec.table} WHERE ${spec.assetColumn} = ?`
         )
         .get(params.assetId) as { revision_no: number | bigint };
-      const id = randomUUID();
+      const id = params.id ?? randomUUID();
       const revisionNo = Number(next.revision_no);
-      const payloadJson = stableStringify(params.payload);
       const validationStatus = params.validationStatus ?? 'pending';
       const now = new Date().toISOString();
       const columns = [
@@ -231,7 +261,7 @@ export class SemanticAssetRepository {
         'draft',
         params.schemaId,
         payloadJson,
-        sha256(payloadJson),
+        contentSha256,
         validationStatus,
         params.validationErrors === undefined ? null : stableStringify(params.validationErrors),
         params.supersedesRevisionId ?? null,

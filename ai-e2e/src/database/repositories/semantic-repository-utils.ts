@@ -77,10 +77,19 @@ function inspectSecrets(value: unknown, path: string): void {
     const normalized = key.replace(/[^a-z0-9]/gi, '').toLowerCase();
     const isReference =
       normalized.endsWith('ref') || normalized.endsWith('refs') || normalized.endsWith('hash');
+    const isTokenMetric =
+      typeof nested === 'number' &&
+      /^(?:max|input|output|total)?tokens?(?:used|remaining|budget)?$/.test(normalized);
     const isSecretKey = /(password|passwd|secret|token|authorization|cookie|apikey|accesskey)/.test(
       normalized
     );
-    if (isSecretKey && !isReference && nested !== null && nested !== '[REDACTED]') {
+    if (
+      isSecretKey &&
+      !isReference &&
+      !isTokenMetric &&
+      nested !== null &&
+      nested !== '[REDACTED]'
+    ) {
       throw new Error(`Inline secret-like value is forbidden at ${path}.${key}`);
     }
     inspectSecrets(nested, `${path}.${key}`);

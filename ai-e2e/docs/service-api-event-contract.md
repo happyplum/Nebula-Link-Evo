@@ -2,7 +2,7 @@
 
 > 状态：已确认目标设计，部分实现。
 > 更新时间：2026-08-24。
-> 本文固定 `ai-e2e`、`ai-chat-service` 与 `proxy-adapter` 的目标调用面、事件信封、幂等和恢复语义。三服务已分别交付 browser capture/artifact/event、Agent task create/get/command/event/checkpoint/Skill runtime，以及 ai-e2e Authoring 结构化 amendment、正式 Run 创建/控制/决策/恢复和 Authoring/Run snapshot-first SSE。ai-e2e 跨服务 outbox/外部任务协调 worker 尚未实现。现有 `/api/ai/generate`、项目级 SSE 和兼容浏览器 MCP 工具继续存在；各节必须按实际状态描述。
+> 本文固定 `ai-e2e`、`ai-chat-service` 与 `proxy-adapter` 的目标调用面、事件信封、幂等和恢复语义。三服务已分别交付 browser capture/artifact/event、Agent task create/get/command/event/checkpoint/Skill runtime，以及 ai-e2e Authoring/Run 控制面、snapshot-first SSE 和基于 outbox/外部关联的跨服务协调器。现有 `/api/ai/generate`、项目级 SSE 和兼容浏览器 MCP 工具继续存在；各节必须按实际状态描述。
 
 ## 1. 设计目标
 
@@ -129,9 +129,9 @@ interface ServiceCapabilitiesV1 {
 | GET/POST | `/api/v1/authoring-jobs/:jobId/amendments` | 列表/创建精确 base→candidate 的结构化修改；写要求幂等键。 |
 | GET | `/api/v1/authoring-amendments/:amendmentId` | 读取 diff、影响范围、审批、验证计划与候选状态。 |
 | POST | `/api/v1/authoring-amendments/:amendmentId/decisions/:decisionId/answer` | 批准或拒绝同页跨模块/跨 URL 范围扩展。 |
-| POST | `/api/v1/authoring-amendments/:amendmentId/commands` | 安全边界排队、开始验证、原子激活、拒绝或记录失败。 |
+| POST | `/api/v1/authoring-amendments/:amendmentId/commands` | 用户请求安全边界应用或拒绝；协调器内部开始真实验证，验证成功后原子激活，失败保持 current。 |
 
-当前实现：job 创建会立即生成首个 task；snapshot/event-log/snapshot-first SSE、context thread、Chat 审计、结构化 amendment、范围审批与 amendment 命令已交付。job 自身 pause/resume/cancel 和自动 Agent/browser coordinator 未交付。
+当前实现：job 创建会立即生成首个 task；snapshot/event-log/snapshot-first SSE、context thread、Chat 审计、结构化 amendment、范围审批与安全边界命令已交付。协调器会为 repair task 创建受限 Agent task 和 observe lease，将输出固化为 draft candidate；用户应用后重新调度真实浏览器验证，成功才原子激活。完整 bootstrap/recheck 阶段图与 job 自身 pause/resume/cancel 仍未交付。
 
 完整阶段、coverage、candidate 验证和激活规则见 `asset-authoring-repair-contract.md`。
 
@@ -172,7 +172,7 @@ verification scope 由服务端从精确 deployment revision、冻结的 Git/bui
 | GET | `/api/v1/runs/:runId/events` | Run SSE；每次连接先发完整 snapshot，再发 live event。 |
 | GET | `/api/v1/runs/:runId/event-log?afterSeq=N&limit=M` | 审计和补洞读取持久事件，不替代 snapshot bootstrap。 |
 
-当前实现：正式 Run 公开创建、start/pause/resume/cancel/close-browser 命令、TODO page task/attempt/显式恢复、决策回答，以及 snapshot、plan、TODO、decision、evidence、event-log 与 snapshot-first SSE 已交付。Run 创建只接受精确 valid business-version validation 与 current verified scenario/script revision；跨服务 Agent/browser coordinator 尚未接入。
+当前实现：正式 Run 公开创建、start/pause/resume/cancel/close-browser 命令、TODO page task/attempt/显式恢复、决策回答，以及 snapshot、plan、TODO、decision、evidence、event-log 与 snapshot-first SSE 已交付。Run 创建只接受精确 valid business-version validation 与 current verified scenario/script revision；跨服务协调器已把冻结脚本投影为受限 Agent task，通过 control lease 可视执行并以业务验收结果收敛 TODO。
 
 `POST /commands` 请求：
 
@@ -426,6 +426,8 @@ ai-e2e 持久化 intent/outbox
 4. 已完成事实按原 correlation 写回；执行中任务重新订阅事件；丢失的 Agent task 进入 `interrupted/blocked`，由主代理重建。
 5. 所有 `outcome_unknown` 先生成副作用检查 TODO；没有检查结果不得重试。
 6. 控制租约失效后由主代理重新签发；子代理不能自行扩大授权。
+
+当前实现通过 500ms 确定性协调循环执行上述核对：启动时把遗留 `dispatching` outbox 恢复为可重放状态，外部 create/command 使用稳定幂等键，session/lease/Agent/operation/artifact 只保存 opaque ref 与哈希；一次性 lease token 仅保存在本机 AES-GCM secret store。若 token 或 Agent 创建确认事实不可恢复，则显式落 `interrupted/failed`，不盲目生成第二个副作用任务。
 
 ## 8. 兼容与迁移边界
 

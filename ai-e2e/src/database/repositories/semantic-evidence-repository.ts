@@ -450,6 +450,28 @@ export class SemanticEvidenceRepository {
     });
   }
 
+  recoverDispatchingOutbox(now = new Date().toISOString()): number {
+    return inImmediateTransaction(this.db, () => {
+      const result = this.db
+        .prepare(
+          `UPDATE integration_outbox
+           SET status = 'retryable_failed', next_attempt_at = ?,
+               last_error_json = ?, updated_at = ?
+           WHERE status = 'dispatching'`
+        )
+        .run(
+          now,
+          stableStringify({
+            code: 'coordinator_restarted',
+            message: '协调器重启后通过幂等键重新核对外部事实',
+            retryable: true,
+          }),
+          now
+        );
+      return Number(result.changes);
+    });
+  }
+
   settleOutbox(
     id: string,
     status: 'confirmed' | 'retryable_failed' | 'terminal_failed' | 'cancelled',

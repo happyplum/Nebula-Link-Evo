@@ -6,6 +6,8 @@
 
 - **`AiChatClient`** → `ai-chat-service` (:3001)：AI 文本生成、provider 连通性探测、chat session/message（未来用）。
 - **`BrowserGatewayClient`** → `proxy-adapter` (:3000)：浏览器控制、debug DOM/截图、health。
+- **`AgentTaskClient`** → `ai-chat-service` (:3001)：semantic v1 不可变 Agent task、结构化结果与命令同步。
+- **`SemanticBrowserClient`** → `proxy-adapter` (:3000)：semantic v1 browser session/lease/operation/artifact 控制面。
 
 历史统一入口 `ProxyAdapterClient` 仍存在，但现在是一个 **facade**，内部组合上述两个客户端：`generateText()` 路由到 :3001，所有浏览器方法路由到 :3000。需要单一后端能力的新代码应直接依赖 `AiChatClient` 或 `BrowserGatewayClient`。
 
@@ -45,6 +47,9 @@ ai-e2e (:3002)
 │   └── POST /api/ai/generate
 ├── BrowserGatewayClient (:3000)      # 浏览器能力入口
 │   └── /debug/api/playwright/*
+├── AgentTaskClient (:3001)           # semantic v1 Agent task 控制面
+├── SemanticBrowserClient (:3000)     # semantic v1 browser execution 控制面
+├── SemanticCoordinatorService        # FIFO/outbox/Agent/browser/恢复/证据协调器
 ├── ProxyAdapterClient (facade)       # 组合 AiChatClient + BrowserGatewayClient
 ├── PromptTemplateManager             # prompts/*.md
 ├── TokenBudgetTracker                # token 预算统计
@@ -61,9 +66,9 @@ ai-e2e (:3002)
 4. 创建 `TokenBudgetTracker`
 5. 初始化 `DatabaseManager`
 6. 创建 `LoginRecorderService`
-7. `createServer({ proxyClient, promptManager, tokenTracker, loginRecorder })`
-8. 注册路由、SSE、静态 UI、404 处理
-9. `app.listen()`
+7. 创建 semantic query/authoring/run 服务和跨服务协调器
+8. `createServer(...)` 并注册 legacy/v1 路由、SSE、静态 UI、404 处理
+9. `app.listen()` 后启动可关闭的 semantic 协调循环
 
 ## Runtime Facts
 
@@ -89,6 +94,9 @@ ai-e2e (:3002)
 | HTTP client (AI) | `src/infrastructure/ai-chat-client.ts` | ai-chat-service (:3001)：generateText / test-ai / verify-keys / chat sessions |
 | HTTP client (browser) | `src/infrastructure/browser-gateway-client.ts` | proxy-adapter (:3000)：browser control、debug DOM、health |
 | HTTP client (facade) | `src/infrastructure/proxy-adapter-client.ts` | 组合 AiChatClient + BrowserGatewayClient，保留历史统一 API |
+| HTTP client (semantic Agent) | `src/infrastructure/agent-task-client.ts` | ai-chat-service Agent task create/get/commands |
+| HTTP client (semantic browser) | `src/infrastructure/semantic-browser-client.ts` | proxy browser session/lease/operation/artifact |
+| Semantic coordinator | `src/services/semantic-coordinator-service.ts` | FIFO、outbox、恢复、验收和证据提升 |
 | HTTP client 共享工具 | `src/infrastructure/http-client-helpers.ts` | axios 创建、base URL 解析、错误映射 |
 | Services | `src/services/` | PRD 分析、探索、脚本、执行、诊断、状态机 |
 | Routes | `src/server/routes/` | 通过 plugin options 注入依赖 |
@@ -108,6 +116,9 @@ ai-e2e (:3002)
 - `/api/projects/:id/diagnosis`
 - `/api/projects/:id/state`
 - `/api/projects/:id/events`
+- `/api/v1/business-versions/*`
+- `/api/v1/authoring-jobs/*`、`/api/v1/authoring-amendments/*`
+- `/api/v1/projects/:projectId/runs`、`/api/v1/runs/*`
 
 ## Dependency Injection Rule
 
@@ -127,8 +138,8 @@ ai-e2e (:3002)
 
 ## Hard Boundaries
 
-- **不直连 AI provider**：所有 AI 调用必须经 `AiChatClient.generateText()`（或 facade 的 `ProxyAdapterClient.generateText()`），最终落到 ai-chat-service (:3001) 的 `POST /api/ai/generate`
-- **不直连 `proxy-adapter` 内进程浏览器引擎**：所有浏览器操作必须经 `BrowserGatewayClient`（或 facade 的 `ProxyAdapterClient`），最终落到 proxy-adapter (:3000) 的 `/debug/api/*`
+- **不直连 AI provider**：Legacy AI 调用经 `AiChatClient`/facade 的 `POST /api/ai/generate`；semantic v1 经 `AgentTaskClient` 的 `/api/v1/agent-tasks`。
+- **不直连 `proxy-adapter` 内进程浏览器引擎**：Legacy 浏览器调用经 `BrowserGatewayClient`/facade 的 `/debug/api/*`；semantic v1 经 `SemanticBrowserClient` 的 `/api/v1/browser-execution/*`。
 - **不引入 `@ai-sdk/*`**：ai-e2e 已被重构为零 AI SDK 依赖
 - **不共享 proxy-adapter / ai-chat-service 数据库**：ai-e2e 维护自己的 SQLite
 - **不在 proxy-adapter / ai-chat-service 中引入 ai-e2e 特有概念**
@@ -165,21 +176,21 @@ ai-e2e (:3002)
 - **功能脚本与场景（pending）**：功能脚本是最小复用/修复单元；首期脚本使用显式输入、线性步骤、硬业务断言、成功后输出和声明副作用，不允许通用分支、业务循环或嵌套脚本调用。场景是业务验收单位，可跨模块、跨页面按顺序、依赖、重复和输入输出关系调用多个功能脚本。当前存储和版本仍以单个 scenario 对应 TypeScript script 为单位；产品语义见 `docs/functional-script-contract.md`，机器 Schema 见 `docs/semantic-script-schema.md`。
 - **场景运行层次（pending）**：业务版本保存场景定义与 TODO 模板；启动时冻结运行计划，展开为运行 TODO，每次派发形成独立执行尝试。调用图首期无环，有界重复预先展开，运行调整使用追加式计划修订。完整契约见 `docs/scenario-orchestration-contract.md`。
 - **业务版本（in-progress）**：create/list/get/copy 已交付；copy 已覆盖 current PRD、变量、决策、基线、模块需求、coverage、依赖和 semantic 资产，生成新身份并重建内部引用，复用内容寻址 blob 并增加引用计数，不复制验证、运行、证据 manifest、实际数据或秘密。公开 recheck/validate 与 UI 仍 pending。完整契约见 `docs/version-page-asset-contract.md`。
-- **目标数据模型（in-progress）**：migration 014–017 已交付稳定资产/修订、authoring/run/browser queue、decision/policy/evidence/outbox/external link/legacy import 目标表；015+ 使用 checksum migration 账本。仓储已覆盖修订验证/激活、业务版本 scoped validation、authoring task/attempt/event、正式 run 冻结、命令状态、FIFO browser job、证据封存与 outbox 收敛。001–014 baseline/preflight/backup、公开 API、runtime worker 和 legacy importer 仍 pending。完整表与约束见 `docs/target-data-model.md`。
-- **资产 authoring（in-progress）**：bootstrap/recheck/repair/import_conversion job/task/attempt/event、单版本写锁、candidate verification、dependency activation 的数据与事务基座已交付；实际 PRD/浏览器/Agent 协调器、coverage 生成和完整验证器仍 pending。完整契约见 `docs/asset-authoring-repair-contract.md`。
-- **主代理（in-progress）**：持久 authoring/run/command/event/browser queue 数据基座已交付；确定性协调器服务、派发/恢复/跳过/验收 runtime 仍 pending。登录、造数等跨场景前置动作必须由主代理安排。
+- **目标数据模型（in-progress）**：migration 014–018、业务版本/Authoring/Run API/SSE、FIFO/outbox/external link 与确定性协调器已交付。001–014 baseline/preflight/backup、legacy importer 和生产 UI 仍 pending。完整表与约束见 `docs/target-data-model.md`。
+- **资产 authoring（in-progress）**：局部 repair 已接入结构化 Agent 候选、范围审批、安全边界、真实浏览器验证、证据和原子激活；完整 bootstrap/recheck 阶段图、coverage 生成和版本 validator 仍 pending。完整契约见 `docs/asset-authoring-repair-contract.md`。
+- **主代理（shipped）**：持久 authoring/run 状态与确定性协调器已接通 Agent/browser 派发、暂停恢复、依赖跳过、验收和证据闭环。登录、造数等跨场景前置动作必须由主代理安排。
 - **页面子代理（pending）**：只执行派发的页面场景片段及其中明确授权的功能脚本，负责重新检查、执行、验证、职责内修复和结构化汇报；不得自行登录、造数或调用场景外脚本。
 - **上下文（pending）**：大多数派发创建干净上下文；登出等可恢复中断可以由主代理在页面状态与副作用检查后续接原上下文，否则用检查点和授权变量重建干净上下文。
-- **串行调度与身份（in-progress）**：`browser_jobs.queue_seq` 的持久 FIFO、全库单 active 槽和嵌套 authoring/verification 复用父 browser job 已交付；实际 session/lease 派发与身份检查 runtime 仍 pending。首期每个 session 固定一个 BrowserContext 和一个活动 actor，跨账号/角色只通过主代理显式编排认证脚本串行切换。
+- **串行调度与身份（shipped）**：持久 FIFO、全库单 active 槽、session/lease 派发、显式释放和重启收敛已接入；每个 session 固定一个 BrowserContext 和活动 actor，跨账号/角色只通过主代理显式编排认证脚本串行切换。
 - **环境与副作用策略（in-progress）**：policy evaluation/grant/decision 表、Run/Authoring 风险投影 hash 与 evaluation 幂等仓储已交付；确定性环境规则、审批/grant 原子应用和逐 effectId runtime 门禁仍 pending。完整契约见 `docs/environment-side-effect-policy-contract.md`。
-- **编排/执行分层（pending）**：页面任务图、页面/模块范围和验收标准由 ai-e2e 持有；模型、MCP 工具和 Skills 的执行必须通过 ai-chat-service。上游 Agent task/单 Skill tool loop 已交付，但本包当前 `generateText()` 仍是纯文本调用，尚未接入该执行链。
-- **跨服务协议（in-progress）**：三服务数据账本与 opaque 引用边界、ai-e2e outbox/external link 已交付；ai-e2e authoring/run API、outbox worker、四类 snapshot-first SSE 和端到端重启协调仍 pending。完整契约见 `docs/service-api-event-contract.md`。
+- **编排/执行分层（shipped）**：页面任务图、页面/模块范围和验收标准由 ai-e2e 持有；模型、MCP 工具和 Skills 执行通过 ai-chat-service Agent task。Legacy 纯文本链保持兼容但不得与 semantic run 混用。
+- **跨服务协议（in-progress）**：三服务控制面、ai-e2e Authoring/Run API/SSE、outbox worker、opaque 关联与端到端重启协调已交付；Agent/browser 事件流消费和完整逐 effect 授权仍 pending。完整契约见 `docs/service-api-event-contract.md`。
 - **双模型与 Skills（in-progress）**：`ai-chat-service` 已交付本地只读、固定版本/hash、默认拒绝扩权的单 Skill runtime；目标 `vision.analyze_page`/`vision.resolve_target` 和本包消费链仍 pending。视觉结果只返回一次不可变快照的可序列化定位候选。完整契约见 `docs/ai-model-skill-contract.md`。
 - **迁移与切流（in-progress）**：015–017 已通过 checksum/状态账本增量创建目标表，失败 rollback、checksum 漂移拒绝且 legacy 表保持不动；001–014 结构 preflight/baseline、文件备份、legacy importer 与 capability cutover 仍 pending。同一 run 不混用 legacy 与 `semantic_v1`。完整契约见 `docs/migration-compatibility-acceptance-contract.md`。
-- **受限页面任务（pending）**：页面子代理必须接收不可变任务包和短期浏览器控制租约，只能操作指定 TODO、Tab、工具和输出槽；主代理持有共享浏览器生命周期。完整契约见 `docs/agent-browser-execution-contract.md`。
-- **可视语义执行（pending）**：权威资产是结构化语义功能脚本，一个语义步骤一次受控推进；所有浏览器动作通过 proxy-adapter 执行并关联实时画面、语义步骤和结果证据。每个原子操作必须有幂等 ID，状态无法确认时先检查副作用；当前 `npx tsx` 子进程执行器是待替换的现状，不是目标执行路径。
-- **失败/暂停/跳过（pending）**：失败先保存截图和现场，子代理评估后续阻碍；主代理按依赖决定跳过或继续。意外登出按可恢复中断上报，需要主代理决策时暂停并在决策写入版本文档后恢复。
-- **分层状态与证据（in-progress）**：Run/TODO/page task/attempt/decision/event、内容寻址 artifact、不可变 evidence item 与 sealed manifest 数据基座已交付；TODO 执行/依赖传播、截图/DOM 提升 worker、公开 snapshot/SSE 与 UI 仍 pending。完整契约见 `docs/run-state-decision-evidence-contract.md`。
+- **受限页面任务（shipped）**：semantic 页面任务接收不可变任务包和短期浏览器租约，只能操作指定 TODO、Tab、工具和输出槽；主代理持有共享浏览器生命周期。完整契约见 `docs/agent-browser-execution-contract.md`。
+- **可视语义执行（in-progress）**：semantic v1 通过 proxy `operation_execute` 受控推进并关联实时画面、步骤和证据，operation 使用稳定幂等事实；Legacy `npx tsx` 仍保留，browser event 流消费和逐 effectId 参数门禁 pending。
+- **失败/暂停/跳过（shipped）**：失败保存现场并按依赖传播；可恢复中断、结果未知、人工决策、取消和依赖跳过均由持久状态收敛。
+- **分层状态与证据（in-progress）**：Run/TODO/page task/attempt/decision/event、截图/DOM/operation 自动提升和 sealed manifest 已交付；脱敏/保留清理和生产 UI 仍 pending。完整契约见 `docs/run-state-decision-evidence-contract.md`。
 - **局部修复（in-progress）**：现有 run 级诊断/自动修复已交付；目标是在页面或 DOM 节点变化后只修复当前业务版本内受影响的功能脚本并重新验证。
 
 ## Anti-Patterns

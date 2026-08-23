@@ -33,6 +33,10 @@ import semanticAuthoringRoutes from './routes/semantic-authoring.js';
 import { SemanticAuthoringService } from '../services/semantic-authoring-service.js';
 import semanticRunRoutes from './routes/semantic-runs.js';
 import { SemanticRunService } from '../services/semantic-run-service.js';
+import { AgentTaskClient } from '../infrastructure/agent-task-client.js';
+import { SemanticBrowserClient } from '../infrastructure/semantic-browser-client.js';
+import { SemanticCoordinatorService } from '../services/semantic-coordinator-service.js';
+import { SemanticAuthoringCandidateService } from '../services/semantic-authoring-candidate-service.js';
 
 const envLocalPath = path.join(process.cwd(), '.env.local');
 const envRootPath = path.join(process.cwd(), '..', '.env');
@@ -48,6 +52,7 @@ if (fs.existsSync(envLocalPath)) {
 const DEFAULT_PORT = 3002;
 const DEFAULT_DB_PATH = './data/ai-e2e.sqlite';
 const DEFAULT_TOKEN_BUDGET = 500_000;
+const DEFAULT_COORDINATOR_INTERVAL_MS = 500;
 
 let shutdownHandlersRegistered = false;
 
@@ -168,8 +173,8 @@ function registerGracefulShutdown(app: AppServer, databaseManager: DatabaseManag
     app.log.info({ signal }, 'Shutting down AI E2E server');
 
     try {
-      databaseManager.close();
       await app.close();
+      databaseManager.close();
       process.exit(0);
     } catch (error) {
       app.log.error({ err: error, signal }, 'Failed to shut down AI E2E server cleanly');
@@ -242,6 +247,19 @@ export async function start() {
     databaseManager.getBusinessVersionRepo()
   );
   const semanticRunService = new SemanticRunService(databaseManager.getSemanticRunControlRepo());
+  const semanticCoordinator = new SemanticCoordinatorService({
+    repository: databaseManager.getSemanticCoordinatorRepo(),
+    workflows: databaseManager.getSemanticWorkflowRepo(),
+    evidence: databaseManager.getSemanticEvidenceRepo(),
+    runs: databaseManager.getSemanticRunControlRepo(),
+    agentTasks: new AgentTaskClient(),
+    browser: new SemanticBrowserClient(),
+    authoringCandidates: new SemanticAuthoringCandidateService(
+      databaseManager.getSemanticQueryRepo(),
+      databaseManager.getSemanticAssetRepo(),
+      databaseManager.getAuthoringAmendmentRepo()
+    ),
+  });
 
   // Create server with all dependencies
   const app = createServer({
@@ -267,6 +285,10 @@ export async function start() {
       host: '127.0.0.1',
     });
 
+    if (process.env.AI_E2E_COORDINATOR_ENABLED !== 'false') {
+      startCoordinatorLoop(app, semanticCoordinator);
+    }
+
     app.log.info({ port, dbPath }, 'AI E2E server listening');
     app.log.info(
       {
@@ -279,8 +301,35 @@ export async function start() {
     return app;
   } catch (error) {
     app.log.error({ err: error }, 'Failed to start AI E2E server');
-    databaseManager.close();
     await app.close();
+    databaseManager.close();
     throw error;
   }
+}
+
+function startCoordinatorLoop(
+  app: AppServer,
+  coordinator: SemanticCoordinatorService
+): void {
+  const configured = Number.parseInt(
+    process.env.AI_E2E_COORDINATOR_INTERVAL_MS ?? `${DEFAULT_COORDINATOR_INTERVAL_MS}`,
+    10
+  );
+  const intervalMs = Number.isFinite(configured) ? Math.max(100, configured) : DEFAULT_COORDINATOR_INTERVAL_MS;
+  let lastErrorLogAt = 0;
+  const run = async () => {
+    try {
+      await coordinator.tick();
+    } catch (error) {
+      const now = Date.now();
+      if (now - lastErrorLogAt >= 30_000) {
+        lastErrorLogAt = now;
+        app.log.warn({ err: error }, 'Semantic coordinator tick failed; will retry');
+      }
+    }
+  };
+  const timer = setInterval(() => void run(), intervalMs);
+  timer.unref();
+  app.addHook('onClose', async () => clearInterval(timer));
+  void run();
 }
