@@ -28,6 +28,7 @@ export class ScreencastManager {
   );
   private readonly frameHeaderSuffix = Buffer.from('\r\n\r\n');
   private readonly frameFooter = Buffer.from('\r\n');
+  private lastMjpegFrame: Buffer | null = null;
   private debugCounter: ReturnType<typeof createFrameCounter> | null = null;
   private debugInterval: ReturnType<typeof setInterval> | null = null;
   private screencastFrameHandler: ((event: ScreencastFrameEvent) => void) | null = null;
@@ -104,6 +105,15 @@ export class ScreencastManager {
 
   addListener(res: ServerResponse): void {
     this.listeners.add(res);
+    if (this.lastMjpegFrame && res.writable !== false) {
+      const canContinue = res.write(this.lastMjpegFrame);
+      if (!canContinue) {
+        this.backedUpListeners.add(res);
+        res.once('drain', () => {
+          this.backedUpListeners.delete(res);
+        });
+      }
+    }
     this.logger.debug({ total: this.listeners.size }, 'Listener added');
   }
 
@@ -175,6 +185,7 @@ export class ScreencastManager {
 
     const frameData = Buffer.from(event.data, 'base64');
     const mjpegFrame = this.formatMjpegFrame(frameData);
+    this.lastMjpegFrame = mjpegFrame;
 
     for (const listener of this.listeners) {
       try {
@@ -221,6 +232,7 @@ export class ScreencastManager {
     this.isStreaming = false;
     this.cdpClient = null;
     this.lastFrameTime = 0;
+    this.lastMjpegFrame = null;
 
     // Tear down debug instrumentation to prevent orphaned interval
     if (this.debugInterval) {

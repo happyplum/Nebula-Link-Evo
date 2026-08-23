@@ -4,6 +4,8 @@
   border-radius: var(--radius-sm);
   overflow: hidden;
   flex-shrink: 0;
+  position: relative;
+  z-index: 1;
 }
 
 .segment {

@@ -1,5 +1,10 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { AccessToken } from 'livekit-server-sdk';
+import { BrowserService } from '../../../browser-engine/services/browser-service.js';
+import {
+  isPublisherActive,
+  startPublisher,
+} from '../../../services/livekit-publisher.js';
 
 // Env vars are read at call sites, not module level, to ensure dotenv has loaded.
 
@@ -40,6 +45,16 @@ const routes: FastifyPluginAsync = async (fastify) => {
         identity: `debug-ui-${Date.now()}`,
       });
       accessToken.addGrant({ roomJoin: true, room });
+
+      if (!isPublisherActive()) {
+        const page = BrowserService.getInstance().getPage();
+        if (page && !page.isClosed()) {
+          const viewport = page.viewportSize() ?? { width: 1280, height: 720 };
+          void startPublisher(page, viewport).catch((error) => {
+            fastify.log.warn({ err: error }, 'LiveKit publisher recovery failed');
+          });
+        }
+      }
 
       return {
         token: await accessToken.toJwt(),

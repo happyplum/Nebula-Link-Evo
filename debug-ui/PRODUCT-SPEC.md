@@ -159,3 +159,7 @@
 - `docs/PRODUCT-SPEC-INDEX.md` — 跨包契约与全局索引
 - 根 `README.md` 的 "Debug Chat Rendering" 与 "Debug UI Monitor Sidebar" 章节 — Chat 渲染与监控面板契约
 - 根 `AGENTS.md` — 仓库范围约束
+
+## 运行时流媒体交互修复 [shipped]
+
+- 实时画面 header 在窄中栏中必须保留 MJPEG/WebRTC 切换控件的可见与可点击区域，URL 文本只允许收缩和截断，不得溢出到右侧面板下方。

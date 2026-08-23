@@ -1,6 +1,7 @@
 import { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import { browserClient } from '../../../browser-client.js';
 import { screencastManager } from '../../../browser-engine/screencast.js';
+import { BrowserService } from '../../../browser-engine/services/browser-service.js';
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { AppService } from '../../../services/index.js';
@@ -310,6 +311,18 @@ const debugRoutes: FastifyPluginAsyncTypebox<DebugRoutesOptions> = async (fastif
     },
     async (request, reply) => {
       // Serve MJPEG directly from the in-process screencast engine (migrated from playwright-server proxy)
+      if (!screencastManager.isActive()) {
+        try {
+          await BrowserService.getInstance().withPage('debug-stream-recovery', async (page) => {
+            if (!screencastManager.isActive()) {
+              await screencastManager.start(page);
+            }
+          });
+        } catch {
+          // Preserve the existing 502 response when no usable browser page exists.
+        }
+      }
+
       if (!screencastManager.isActive()) {
         reply.status(502);
         return { success: false, error: 'LiveView stream unavailable' };
