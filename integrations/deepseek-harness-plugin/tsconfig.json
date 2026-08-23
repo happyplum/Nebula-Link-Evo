@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022", "DOM"],
+    "types": ["node"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "declaration": true,
+    "composite": true,
+    "resolveJsonModule": true,
+    "baseUrl": ".",
+    "paths": {
+      "@nebula-link-evo/browser-control-client": ["../browser-control-client/src/index.ts"],
+      "@nebula-link-evo/shared": ["../../shared/index.ts"],
+      "@nebula-link-evo/shared/*": ["../../shared/*"]
+    }
+  },
+  "references": [{ "path": "../../shared" }, { "path": "../browser-control-client" }],
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "src/**/*.test.ts"]
+}

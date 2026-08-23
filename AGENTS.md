@@ -16,6 +16,9 @@ ai-chat-service/    AI chat backend — conversation, provider orchestration, Ch
 debug-ui/           Primary web UI — React SPA, Vite (:5173 dev)
 ai-e2e/             AI E2E test orchestration (:3002)
   ui/               Nested workspace — React SPA served at /ai-e2e/ (:5174 dev)
+integrations/        Local controlled consumers (no browser engine ownership)
+  browser-control-client/    Shared HTTP/MCP client + nebula-browser CLI
+  deepseek-harness-plugin/   DeepSeek Harness controlled DSH bundle
 config/             Shared config templates (not a package)
 tools/              Utility scripts (not a package)
 docs/               Architecture docs, API references, skill docs (not a package)
@@ -24,6 +27,7 @@ docs/               Architecture docs, API references, skill docs (not a package
 ## Core product boundaries
 
 - `proxy-adapter` owns browser analysis and actions through in-process Playwright plus CDP sessions, and exposes those capabilities as `browser-control.*` over MCP. No upstream package may import or bypass its browser engine.
+- `integrations/browser-control-client` consumes only the existing loopback browser-execution HTTP control plane and `/mcp`; `integrations/deepseek-harness-plugin` consumes that client and must not add DeepSeek-specific behavior to proxy-adapter.
 - `ai-chat-service` owns reusable AI capabilities. The analysis/decision model understands requirements and browser evidence, plans the next test action, and consumes MCP/vision tools; the vision model interprets screenshots together with DOM evidence for text-only analysis models.
 - MCP client/tool orchestration belongs in `ai-chat-service`. Its shipped reusable Skills runtime loads only local immutable declarative packages, pins id/version/content hash, permits at most one current Skill per Agent task, and can only shrink the task's tool and budget authority. General vision v2 and complete policy/grant intersection remain pending.
 - `ai-e2e` owns PRD-driven E2E product orchestration, not generic AI or browser infrastructure. A page contains functional modules, a functional module contains multiple reusable functional scripts, and scenarios compose script calls across modules/pages.
@@ -38,7 +42,7 @@ docs/               Architecture docs, API references, skill docs (not a package
 
 ```bash
 pnpm dev            # shared build + parallel dev for shared/debug-ui/proxy-adapter/ai-chat-service
-pnpm build          # shared → debug-ui → proxy-adapter → ai-chat-service → ai-e2e
+pnpm build          # shared → integrations → debug-ui → proxy-adapter → ai-chat-service → ai-e2e
 pnpm test           # pnpm -r test (vitest everywhere)
 pnpm lint           # eslint debug-ui/src proxy-adapter/src ai-chat-service/src
 pnpm format         # prettier --write debug-ui/src proxy-adapter/src ai-chat-service/src
@@ -46,13 +50,13 @@ pnpm format         # prettier --write debug-ui/src proxy-adapter/src ai-chat-se
 
 ## Scope & routing
 
-- Root `AGENTS.md` only covers repo-wide landmines. Prefer nearer docs when working in `debug-ui/`, `proxy-adapter/`, `ai-chat-service/`, `shared/`, `ai-e2e/`, `config/`, or `tools/`.
+- Root `AGENTS.md` only covers repo-wide landmines. Prefer nearer docs when working in `debug-ui/`, `proxy-adapter/`, `ai-chat-service/`, `shared/`, `ai-e2e/`, `integrations/`, `config/`, or `tools/`.
 - `debug-ui/` owns all frontend code. Do not revive `proxy-adapter/src/static/debug/` or move frontend source back under the backend package.
 - Cross-package imports use `@nebula-link-evo/shared`. Do not reintroduce stale `@shared/*` aliases.
 
 ## Hidden runtime order
 
-- Build order is strict: `shared` → `debug-ui` → `proxy-adapter` → `ai-chat-service` → `ai-e2e`.
+- Build order is strict: `shared` → `browser-control-client` → `deepseek-harness-plugin` → `debug-ui` → `proxy-adapter` → `ai-chat-service` → `ai-e2e`.
 - `start.bat` is not a thin wrapper around `pnpm build`: it builds `shared`, starts LiveKit, verifies ports, then builds/starts `proxy-adapter` and `ai-chat-service` (if applicable).
 - `proxy-adapter` startup order matters: env/config load → DB backup init outside tests → plugin registration → `AppService.initialize()` → browser-control provider → MCP/debug surfaces.
 - Chat reconnect always reboots from a fresh `session.snapshot`; there is no `Last-Event-ID` replay contract to preserve.
@@ -90,6 +94,7 @@ pnpm format         # prettier --write debug-ui/src proxy-adapter/src ai-chat-se
 - `shared/AGENTS.md`
 - `ai-e2e/AGENTS.md`
 - `ai-e2e/ui/AGENTS.md`
+- `integrations/AGENTS.md`
 - `config/AGENTS.md`
 - `tools/AGENTS.md`
 
@@ -113,6 +118,8 @@ pnpm format         # prettier --write debug-ui/src proxy-adapter/src ai-chat-se
 - `ai-chat-service/PRODUCT-SPEC.md`
 - `debug-ui/PRODUCT-SPEC.md`
 - `ai-e2e/PRODUCT-SPEC.md`
+- `integrations/browser-control-client/PRODUCT-SPEC.md`
+- `integrations/deepseek-harness-plugin/PRODUCT-SPEC.md`
 
 <!-- shipped-workflow:start -->
 ## shipped 清单工作流（防回退 / 漂移）
