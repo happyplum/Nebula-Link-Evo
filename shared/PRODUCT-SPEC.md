@@ -16,7 +16,7 @@
 
 | Owns | Consumes | Does NOT own |
 |------|----------|--------------|
-| 运行时类型（action / browser-execution / sse-events / vision-marker / debug-events / constants） | 无外部运行时依赖 | 业务逻辑、浏览器引擎、AI provider、数据库访问 |
+| 运行时类型（action / browser-execution / vision-snapshot / sse-events / vision-marker / debug-events / constants） | 无外部运行时依赖 | 业务逻辑、浏览器引擎、AI provider、数据库访问 |
 | 运行时工具（frame-counter 等） |  | 任何 `dist/` 产物（直接编辑源码） |
 | 源码级测试辅助（test-utils/，含 mocks、service-lifecycle） |  |  |
 
@@ -33,7 +33,7 @@
 | 模块 | 路径 | 状态 | 职责 | 边界/契约 |
 |------|------|------|------|----------|
 | 公共入口 | `index.ts` | shipped | 聚合 re-export 运行时类型与工具 | 仅 re-export，不放新逻辑 |
-| 运行时类型 | `types/` | shipped | action、browser-execution、sse-events、vision-marker、debug-events、constants、index | 框架中立；browser-execution 只含线协议，token hash/持久化记录仍归 proxy；新增类型需同时更新 `types/index.ts` 与 `index.ts` |
+| 运行时类型 | `types/` | shipped | action、browser-execution、vision-snapshot、sse-events、vision-marker、debug-events、constants、index | 框架中立；vision snapshot 只含不可变 evidence binding，不含 bytes/token；新增类型需同时更新公共入口 |
 | 运行时工具 | `utils/` | shipped | frame-counter、index 等纯函数 | 必须纯函数，无副作用 |
 | 测试辅助 | `test-utils/` | shipped | mocks（BrowserContext、KimiClient、sse-event、debug-event）、service-lifecycle、index | **不进 `tsc -b` 构建产物**；消费方按源码相对路径引用 |
 | Vitest 配置 | `vitest.config.ts` | shipped | shared 包测试配置 | 仅本包测试 |
@@ -45,6 +45,7 @@
 | `.`（root） | 运行时类型 + 工具 |
 | `./types` | 仅类型 |
 | `./types/browser-execution` | 浏览器 execution session/lease/operation/target/capability/problem 线协议与操作常量 |
+| `./types/vision-snapshot` | proxy-owned immutable snapshot/artifact binding，供 ai-chat-service Vision v2 校验 |
 | `./utils` | 仅工具 |
 | `./test-utils` | 测试辅助（源码引用，不入 build） |
 
@@ -56,6 +57,7 @@
 |------|------|------|--------|----------|
 | Action 类型契约 | `types/action.ts` | shipped | 跨包使用一致；契约测试通过 | types/ |
 | 浏览器执行线协议 | `types/browser-execution.ts` | shipped | shared build + proxy/client/plugin 类型检查与测试 | types/；不含 token hash、artifact bytes 或持久化内部记录 |
+| Vision snapshot binding | `types/vision-snapshot.ts` | shipped | shared build + ai-chat-service snapshot-loader tests | session/tab/operation/requestHash/lease/snapshot/artifact hash/MIME/size/status；不含 artifact bytes 或 lease token |
 | SSE 事件契约 | `types/sse-events.ts` | shipped | `__tests__/sse-events-contract.test.ts` | types/ |
 | Debug 事件契约 | `types/debug-events.ts` | shipped | `__tests__/debug-events-contract.test.ts` | types/ |
 | 视觉标记契约 | `types/vision-marker.ts` | shipped | 截图契约测试 | types/ |

@@ -82,7 +82,7 @@ debug-ui  ←──  （仅被用户消费）
 |----|------|----------|
 | 浏览器能力层：`proxy-adapter` | shipped | Playwright/CDP 集成的唯一所有者；分析页面、生成 DOM/截图证据、执行浏览器动作，并以 `browser-control.*` MCP 工具和调试 API 对外服务。 |
 | 受控本地接入层：`integrations/*` | shipped | 复用既有 browser-execution HTTP + `/mcp`；提供 CLI 与只暴露 observe/act、逐 act 审批的 DeepSeek Harness bundle，不拥有浏览器引擎或业务编排。 |
-| AI 基础能力层：`ai-chat-service` | in-progress | 分析/决策模型、视觉模型、MCP client/ToolRegistry、会话能力、Agent task 命令/事件控制面与本地只读声明式 Skills Runtime 已交付；通用视觉 v2 与完整副作用授权仍 pending。 |
+| AI 基础能力层：`ai-chat-service` | in-progress | 每 Fastify 实例独立 Cordis root，Chat/Agent Task 共用唯一 DSH Agent Loop；Pi/GLM、JSONL persistence/SQLite projection、MCP ToolRuntime、Vision v2、Skills、预算/调度/删除/留存/备份和部署锁定插件已交付；完整跨服务 policy/grant 交集与生产切换演练仍 pending。 |
 | E2E 业务层：`ai-e2e` | in-progress | PRD 分析、页面探索和 legacy TypeScript 链保持兼容；semantic 业务版本、结构化 Authoring/Run 控制面、主/页面任务协调、浏览器可视语义执行与证据闭环已交付。完整页面匹配、bootstrap/recheck、生产 UI 和 legacy importer 仍 pending。 |
 
 跨层原则：浏览器执行证据只能来自 `proxy-adapter`；通用 AI/MCP/Skills 能力只能归属 `ai-chat-service`；E2E 的页面、模块、脚本和修复语义只能归属 `ai-e2e`。
@@ -114,7 +114,7 @@ debug-ui  ←──  （仅被用户消费）
 | Chat control | `ai-chat-service` | `debug-ui` | `POST /api/chat/control/:sessionId` | 暂停/恢复/中断/取消 |
 | Provider preflight | `ai-chat-service` | 任意 | `POST /test-ai`、`POST /verify-keys` | provider 探测；`visionAgent` 同时反映 gateway MCP server 状态 |
 | AI 生成 | `ai-chat-service` | `ai-e2e` | `POST /api/ai/generate` | 文本生成 |
-| 受限 Agent task（in-progress） | `ai-chat-service` | `ai-e2e` | `POST/GET /api/v1/agent-tasks*`、`POST /:taskId/commands`、`GET /:taskId/{events,event-log}`、`GET /api/v1/skills` 已交付 | 已交付不可变输入、工具白名单、预算、模型不可见 browser binding、结构化结果、乐观命令、安全 checkpoint、snapshot-first SSE/event-log 与单 Skill 精确 pin/执行；完整 policy/grant 交集未交付 |
+| 受限 Agent task（in-progress） | `ai-chat-service` | `ai-e2e` | `POST/GET /api/v1/agent-tasks*`、`POST /:taskId/commands`、`GET /:taskId/{events,event-log}`、`GET /api/v1/skills` | 公开路径/event union 保持兼容；内部已统一 DSH loop、JSONL durable transcript、SQLite projection、持久 FIFO/token reservation/operation authorization 与安全 checkpoint；完整外部 policy/grant 交集未交付 |
 | 业务版本资产（in-progress） | `ai-e2e` | `ai-e2e ui` | create/list/get/copy 及 workspace/分类资产/revision 读已交付：`/api/v1/projects/:projectId/business-versions`、`/api/v1/business-versions/:versionId[/copy|/workspace]`、分类资产 GET 与 `/api/v1/assets/*/revisions`；validate/修订写 pending | 业务版本、独立 copy、不可变 current asset revision 和工作台聚合读模型；UI/recheck/修订写 API 尚未交付 |
 | 资产 authoring（in-progress） | `ai-e2e` | `ai-e2e ui` | job create/snapshot/SSE、context thread/Chat audit、结构化 amendment、同页跨模块/跨 URL 审批、安全边界、Agent/browser 验证和协调器原子激活已交付；完整 job pause/resume/cancel pending | repair 已闭环；bootstrap/recheck 阶段图、coverage 和生产 UI pending |
 | E2E Run（in-progress） | `ai-e2e` | `ai-e2e ui` | formal create、控制/恢复/决策、snapshot-first SSE，以及 outbox 驱动的 Agent/browser 协调、可视语义执行和证据提升已交付；生产 UI pending | run 命令、决策、证据、跨服务协调与持久 event log |
@@ -125,14 +125,15 @@ debug-ui  ←──  （仅被用户消费）
 ### 3.3 MCP 工具契约
 
 - `proxy-adapter` 通过 MCP Server 暴露 `browser-control.*`（15 个兼容工具 + `operation_execute/get/cancel`，共 18 个）。Vision-agent 工具已移除。
-- `ai-chat-service` 通过 MCP Client 自动拉取 browser-control 工具；状态机管理 server 生命周期，指数退避重连（最多 5 次），`toolsChanged` 事件通知工具变更。
-- 视觉分析由 `ai-chat-service` 内部 `VisionAnalyzer` + `VisionToolProvider` 提供，注册 `vision.find_element` 工具（`exposeTo: ['chat']`），不通过 MCP Server 暴露；工具本地缓存最近 5 个 DOM snapshot，`snapshot_id` 命中时复用缓存。
+- `ai-chat-service` 将 MCP transport 装配在模型不可见的 Cordis child scope；required server/discovery 失败即启动失败，只有显式 optional 的 remote HTTP MCP 可 quarantine。Schema 先编译为 DSH 支持的严格子集，不支持的 input/output schema 不发布；discovery timeout 会 abort transport、dispose scope 并拒绝迟到注册。
+- 模型可见产品工具通过 `GatewayToolBridge` 原子投影到 DSH ToolRuntime，并使用稳定 DSH-safe name；原始 `operation_execute/get/cancel` 不进入该工具表。调用 timeout/cancel、retry、token meter 与 compaction 由 Harness runtime 统一承载。
+- 视觉分析由 `ai-chat-service` 内部 `VisionAnalyzer` + `VisionToolProvider` 提供，生产仅注册 `vision.analyze_page` 与 `vision.resolve_target`。二者只接受通过 `VisionSnapshotBindingV1` 校验的 proxy-managed immutable bytes，不通过 MCP Server 暴露；`vision.find_element` 仅可存在于 test/dev adapter。
 - `browser-control.operation_execute/get/cancel` 已作为 E2E 受限原子工具交付；现有 15 个工具继续作为兼容/调试面。`ai-chat-service` 普通 Chat provider 明确过滤三项受控工具；受限 Agent wrapper 已模型不可见地注入 session/Tab/lease/token/leaseSequence/operation ID，get/cancel 不暴露给任务模型。
 - `browser-control-client` 通过 HTTP 管理 capability/session/lease/artifact/ledger，只通过 `/mcp` 调用 execute/cancel；`nebula-browser` 和 DeepSeek 插件都复用该客户端。DeepSeek profile 不得同时向同一 proxy 挂载未包装的通用 MCP bridge。
 - DeepSeek 插件只向模型暴露 `nebula_browser_observe` / `nebula_browser_act`；后者逐次要求 Harness `allowed-once`，所有 binding/凭证/operationId 隐藏注入。
 - 当前 wrapper 把模型调用限制到调用方冻结的语义 `stepId/kind/operation/effectId`，并与 lease 的 Tab/operation 约束叠加；完整 policy evaluation/风险投影/active grant 与参数级数量交集尚未实现。`proxy-adapter` 不解释 environment 或审批，只执行通用 operation 约束。
-- 目标新增内部 `vision.analyze_page` 和 `vision.resolve_target`；两者只读取一次不可变 snapshot，返回页面摘要或可序列化 locator candidates，不操作浏览器。`vision.find_element` 在迁移期保留兼容。
-- 同名工具命名规则：`<serverName>-<toolName>` 前缀。
+- `vision.analyze_page`/`vision.resolve_target` 只读取一次不可变 snapshot，返回页面摘要或可序列化 locator candidates，不操作浏览器；最终定位重解析仍归 proxy。
+- 模型工具名规则：`nebula__<normalized-product-id>`，超过 64 字符附稳定 SHA-256 短 hash；product-id↔safe-name mapping 随工具 generation 原子替换。
 - 配置入口：`PROXY_ADAPTER_URL + /mcp`（默认 `http://127.0.0.1:3000/mcp`）。
 
 ### 3.4 共享类型契约（`@nebula-link-evo/shared`）
@@ -141,6 +142,7 @@ debug-ui  ←──  （仅被用户消费）
 |-----------|------|--------|
 | Action 类型 | `types/action.ts` | `proxy-adapter`、`debug-ui`、`ai-chat-service` |
 | 浏览器执行线协议与操作常量 | `types/browser-execution.ts` | `proxy-adapter`、`ai-chat-service`、`browser-control-client`、`deepseek-harness-plugin` |
+| Vision snapshot/artifact binding | `types/vision-snapshot.ts` | `ai-chat-service`（消费）；proxy-adapter operation/artifact（权威生产语义） |
 | SSE 事件 | `types/sse-events.ts` | `proxy-adapter`、`ai-chat-service`、`debug-ui` |
 | Debug 事件 | `types/debug-events.ts` | `proxy-adapter`、`debug-ui` |
 | 视觉标记 | `types/vision-marker.ts` | `proxy-adapter`、`debug-ui` |
@@ -164,9 +166,8 @@ debug-ui  ←──  （仅被用户消费）
 - 12 种 action（`shared/types/action.ts` 的 `Action` 联合）：`click / type / focus / blur / hover / value / dispatch / scroll / navigate / wait / mcp_call / finish`。注意：`screenshot` 是 browser-control MCP **工具名**，不在 `Action` 联合中。
 - 7 级目标链：nebula-id → role → testid → aria → text → css → xpath。
 - DOM 快照 v2.0：含 `data-nebula-id` 属性；element 归一化字段 `id` + `locator_bundle`。
-- 视觉标记（Vision Marker）系统：通过 `data-nebula-id` 属性关联操作坐标与 DOM 元素；标注截图由 `browser-control.dom_snapshot` 工具生成，消费方（如 `ai-chat-service` 的 `VisionAnalyzer`）负责基于标注截图调用视觉模型完成元素匹配。
-- Vision 配置（ai-chat-service 内部）：`config.json` 的 `defaults.vision.{provider,model}`，由 resolver 自动解析 `apiKey`/`baseUrl`；缺失或初始化失败时降级为不可用工具，不阻断启动。
-- 标注截图返回格式：`annotated_screenshot_base64` 为 gzip-compressed JPEG bytes 的 base64 字符串；消费方调用视觉模型前必须先解压为 raw JPEG base64。
+- 视觉标记（Vision Marker）系统：通过 `data-nebula-id` 关联操作坐标与 DOM 元素；生产 Vision v2 不接收调用方 raw base64，而是通过 `VisionSnapshotBindingV1` 校验 proxy operation/artifact 的 session、Tab、lease sequence、request hash、status、SHA、MIME 与 size 后加载 immutable bytes。
+- Vision 配置（ai-chat-service 内部）：`config.json` 的 `defaults.vision.{provider,model}` 映射为 Harness model route；缺失 secret fail closed，provider 不可用时工具不发布。
 
 ### 3.7 ai-e2e 后端消费契约
 
@@ -182,12 +183,14 @@ debug-ui  ←──  （仅被用户消费）
 
 ### 3.8 AI 双模型、MCP 与 Skills 契约
 
-- **分析/决策模型**（`ai-chat-service` `defaults.decision`）：理解 PRD/文档与浏览器证据，规划下一步测试内容和浏览器动作；在 Chat agent loop 中消费 MCP 工具与结构化视觉结果。
-- **视觉模型**（`ai-chat-service` `defaults.vision`）：主代理和子代理均可调用，每次只处理一个具有完整输入的不可变 snapshot，不保存流程状态、不连续执行、不调度脚本、不操作浏览器。当前 shipped 能力是 `vision.find_element`；目标 `vision.analyze_page`/`vision.resolve_target` 已设计但未实现。
+- **Harness runtime**：每个 `buildApp()` 实例创建独立 Cordis root；Chat 与 Agent Task 共用唯一 DSH Agent Loop。DSH zstd JSONL append-only log 是模型 transcript 事实源，SQLite 只保存控制面、幂等、公开事件投影与 durable watermark。
+- **分析/决策模型**（`ai-chat-service` `defaults.decision`）：理解 PRD/文档与浏览器证据并规划动作；常规模型映射 Pi provider profile，GLM 使用专用 JWT adapter。`/api/ai/generate` 是无 session/tool 的单次 DSH LLM stream。
+- **视觉模型**（`ai-chat-service` `defaults.vision`）：主代理和子代理均可调用，每次只处理一个完整、不可变且经 proxy binding/hash/MIME/size/status 验证的 snapshot；生产工具为 `vision.analyze_page`/`vision.resolve_target`，不保存流程状态、不调度脚本、不操作浏览器。
 - **目标引用**：跨服务只传递可序列化的 `snapshot_id` / `nebula_id` / `locator_bundle` / confidence / evidence；`Page` / `Locator` / `ElementHandle` 等真实 Playwright 对象只存在于 `proxy-adapter` 进程内。
-- **MCP**：`proxy-adapter` 只提供浏览器 MCP 服务；MCP client、工具聚合和 AI 工具调用归 `ai-chat-service`。
+- **MCP**：`proxy-adapter` 只提供浏览器 MCP 服务；隔离 transport、严格 schema quarantine、模型可见产品 wrapper 与 DSH ToolRuntime 归 `ai-chat-service`。raw operation 只允许 wrapper 内隐藏调用。
 - **Skills**：可复用 Skills 的发现、加载、注册、权限和执行隔离归 `ai-chat-service`；v1 从 `AI_SKILLS_DIRS` 加载本地只读、固定 id/version/hash 的声明式指令包，不执行附带代码、不联网安装、不能扩权。每个 Agent task 最多固定一个当前 Skill，工具与预算只能在 task 和既有浏览器授权内继续收缩。
 - **受限 Agent 任务（in-progress）**：`ai-chat-service` 的 `/api/v1/agent-tasks` 已接收不可变输入、工具白名单、可选单 Skill 精确 pin、预算、模型不可见 browser binding、调用方冻结的语义步骤与不透明关联信息，并返回 Schema 校验结果；stateVersion、command 幂等、安全 checkpoint、task event-log、snapshot-first SSE 与 Skill 审计已公开交付。完整 policy/grant 权限交集仍 pending。环境矩阵、审批和调用方业务计划不进入本服务权威状态，proxy 操作账本仍归 proxy。
+- **可信插件**：同进程扩展仅支持部署期 lock 精确固定的 direct dependency，并校验 realpath/entry/tree/config digest/DSH-Cordis ABI/peer closure；全部 required，加载失败即启动失败。运行期禁止安装、HMR 或修改组合树；低信任扩展仅允许 optional remote HTTP MCP quarantine。
 - 完整双模型、Skill manifest、权限交集与 prompt injection 边界见 `ai-e2e/docs/ai-model-skill-contract.md`；精确 Agent task API/事件见 `ai-e2e/docs/service-api-event-contract.md`。
 - provider alias/model name 只是角色实现配置，不改变“分析/决策模型”和“视觉模型”的产品职责。
 
@@ -206,7 +209,7 @@ debug-ui  ←──  （仅被用户消费）
 - **编排与执行分属两层（shipped）**：页面任务图、模块范围与验收标准归 `ai-e2e`；模型调用、MCP 工具和 Skills 执行归 `ai-chat-service`。semantic v1 已接入 Agent task/Skill tool loop，Legacy 纯文本链保持兼容。
 - **页面任务与控制租约（shipped）**：主代理派发不可变页面任务包并持有共享浏览器生命周期；页面任务只取得指定 TODO、Tab、工具和输出槽的短期租约。跨服务只传稳定引用和非秘密约束，不传 Playwright 对象或凭据值。
 - **可视语义执行（in-progress）**：semantic v1 把结构化脚本投影为受限 `operation_execute` 步骤，关联 operation、截图/DOM 与 evidence manifest；结果不确定先进入决策/恢复。Legacy `npx tsx` 只保留旧 run，browser event 流消费与逐 effectId 参数门禁仍 pending。
-- **跨服务 API/事件（in-progress）**：三服务 capability、Agent/browser 控制面，以及 ai-e2e 业务版本、Authoring/Run API/SSE、outbox coordinator 和证据提升已交付。业务版本通用 revision 写、完整 Authoring job 控制、Agent/browser 事件流消费、通用视觉 v2 与完整逐 effect 授权仍 pending。
+- **跨服务 API/事件（in-progress）**：三服务 capability、Agent/browser 控制面、Vision v2 evidence binding，以及 ai-e2e 业务版本、Authoring/Run API/SSE、outbox coordinator 和证据提升已交付。业务版本通用 revision 写、完整 Authoring job 控制、Agent/browser event stream 消费、Vision v2 在全部业务流程的接入与完整逐 effect 授权仍 pending。
 - **资产生成/复核/修复（in-progress）**：局部 repair 已接入结构化 Agent 候选、同页跨模块/跨 URL 影响审批、安全边界、真实浏览器验证和原子激活；完整 PRD bootstrap/recheck 与 coverage 生成仍 pending。
 - **迁移与切流（in-progress）**：015–017 已进入 checksum migration 账本，失败 rollback/漂移拒绝且旧表不变；001–014 preflight/baseline、文件备份、legacy importer 与版本级 capability cutover 仍 pending。
 - **分层状态与传播（shipped）**：Run/plan/TODO/dependency/page task/attempt/variable/decision/command/event、正式 Run 冻结/命令、Agent/browser 页面执行、依赖传播、恢复/决策与公开 snapshot/SSE 已交付。

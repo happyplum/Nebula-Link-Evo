@@ -1,8 +1,8 @@
 # AI 模型角色与 Skills 运行契约
 
-> 状态：已确认目标设计；Agent task 命令/事件与 Skills Runtime 已实现。
-> 更新时间：2026-08-13。
-> 本文定义 `ai-chat-service` 的分析/决策模型、单次视觉模型、受限 Agent task 与 Skills runtime。当前已交付 provider 角色配置、Chat tool loop、MCP client/ToolRegistry、`vision.find_element`，以及受限 Agent task 的创建/查询/命令/事件、持久状态、结构化输出、模型不可见 browser wrapper 与本地只读单 Skill runtime；页面分析、目标解析 v2 与完整副作用授权仍是目标协议。
+> 状态：统一 DSH Harness、Agent task 命令/事件、Vision v2 与 Skills Runtime 已实现；完整跨服务副作用授权仍在推进。
+> 更新时间：2026-08-24。
+> 本文定义 `ai-chat-service` 的统一 DSH Agent Loop、分析/决策模型、单次视觉模型、受限 Agent task 与 Skills runtime。当前已交付 Pi/GLM provider route、JSONL persistence/SQLite projection、MCP ToolRuntime、`vision.analyze_page`/`vision.resolve_target`、Agent task 控制面、模型不可见 browser wrapper 与本地只读单 Skill runtime；完整 policy evaluation/active grant 交集仍是目标协议。
 
 ## 1. 服务边界
 
@@ -76,7 +76,7 @@ interface PageAgentResultV1 {
 
 ### 3.1 强约束
 
-- 一次调用只回答一个完整、边界明确的问题，输入必须引用不可变 `snapshotId`。
+- 一次调用只回答一个完整、边界明确的问题，输入必须携带不可变 `VisionSnapshotBindingV1`。
 - 视觉模型不持有 Agent task、浏览器租约、Page/Tab 控制权或连续对话状态。
 - 视觉模型不能调用 MCP、不能点击/输入/导航，也不能主动请求“下一张图继续”。
 - 输出是建议性证据；定位结果必须由 `proxy-adapter` 在当前 DOM 中重新解析、检查唯一性和可操作性。
@@ -88,11 +88,8 @@ interface PageAgentResultV1 {
 
 ```ts
 interface AnalyzePageInputV1 {
-  schema: 'nebula.vision.analyze-page/1.0';
-  snapshotId: string;
-  question: string;
-  expectedPage?: { pageKey?: string; purpose?: string; expectedStateTags?: string[] };
-  focus?: { kind: 'page' | 'region' | 'dialog' | 'form' | 'table'; description?: string };
+  binding: VisionSnapshotBindingV1;
+  objective?: string;
 }
 ```
 
@@ -100,24 +97,12 @@ interface AnalyzePageInputV1 {
 
 ```ts
 interface AnalyzePageResultV1 {
-  schema: 'nebula.vision.page-analysis/1.0';
   ok: boolean;
-  snapshotId: string;
-  page: {
-    title?: string;
-    pageKind: string;
-    stateTags: string[];
-    abnormalState?: 'logged_out' | 'error_page' | 'permission_denied' | 'loading' | 'unknown';
-  };
-  regions: { kind: string; label?: string; summary: string; targetHintIds?: string[] }[];
-  dialogs: { open: boolean; title?: string; summary: string; targetHintIds?: string[] }[];
-  forms: { label?: string; fields: string[]; actions: string[] }[];
-  tables: { label?: string; columns: string[]; rowSummary?: string }[];
-  alerts: { level: 'info' | 'warning' | 'error' | 'success'; text: string }[];
-  domSummary: string;
-  answer: string;
-  confidence: number;
-  evidence: { screenshotRegion?: [number, number, number, number]; nebulaIds?: string[]; domPaths?: string[] }[];
+  snapshot_id: string;
+  summary: string;
+  notable_elements: Array<{ nebula_id: string; description: string; confidence: number }>;
+  risks: string[];
+  reasoning: string;
 }
 ```
 
@@ -129,11 +114,8 @@ interface AnalyzePageResultV1 {
 
 ```ts
 interface ResolveTargetInputV1 {
-  schema: 'nebula.vision.resolve-target/1.0';
-  snapshotId: string;
+  binding: VisionSnapshotBindingV1;
   description: string;
-  interaction: 'click' | 'fill' | 'type_text' | 'press' | 'select_option' | 'check' | 'uncheck' | 'focus' | 'blur' | 'hover' | 'scroll' | 'set_files';
-  constraints?: { visible?: boolean; enabled?: boolean; editable?: boolean; unique?: boolean };
 }
 ```
 
@@ -141,39 +123,25 @@ interface ResolveTargetInputV1 {
 
 ```ts
 interface ResolveTargetResultV1 {
-  schema: 'nebula.vision.target-resolution/1.0';
   ok: boolean;
-  snapshotId: string;
+  snapshot_id: string;
   confidence: number;
   reasoning: string;
-  target?: {
-    semantic: string;
-    nebulaId?: string;
-    candidates: Array<
-      | { kind: 'role'; role: string; name?: string; exact?: boolean }
-      | { kind: 'label'; text: string; exact?: boolean }
-      | { kind: 'test_id'; value: string }
-      | { kind: 'text'; text: string; exact?: boolean }
-      | { kind: 'css'; selector: string }
-      | { kind: 'xpath'; expression: string }
-    >;
-    expected: { visible?: boolean; enabled?: boolean; editable?: boolean; unique?: boolean };
-    visualFallback?: { xRatio: number; yRatio: number; screenshotWidth: number; screenshotHeight: number };
-  };
-  alternatives?: { semantic: string; nebulaId?: string; confidence: number }[];
+  nebula_id: string | null;
+  element?: { tag: string; text: string; bbox: unknown; locator_bundle: unknown };
 }
 ```
 
 规则：
 
-- candidates 按稳定性排序：role/name、label、test id、稳定文本、CSS、XPath；不能输出快照临时 `nebulaId` 作为唯一长期定位器。
-- 坐标只记录为显式视觉兜底，`proxy-adapter` 不因候选 stale/歧义自动使用坐标。
-- `confidence` 低、候选冲突或目标不唯一时返回 `ok=false` 或 alternatives，调用方停止并重新分析。
-- 当前 `vision.find_element` 保持兼容；目标实现后由它适配 `vision.resolve_target`，再在消费者迁移完毕后标记 deprecated。
+- `locator_bundle` 由 proxy snapshot 生成，按稳定性提供 role/name、label、test id、稳定文本、CSS、XPath 候选；不能把快照临时 `nebula_id` 当作唯一长期定位器。
+- bbox 只作为视觉证据，`proxy-adapter` 不因候选 stale/歧义自动使用坐标。
+- `confidence` 低、候选冲突或目标不唯一时调用方必须停止并重新分析。
+- 生产工具表只包含 `vision.analyze_page` 与 `vision.resolve_target`；`vision.find_element` 只允许 test/dev compatibility adapter 使用。
 
 ### 3.4 快照与预算
 
-- 调用方只传 `snapshotId`，运行时从授权的 `proxy-adapter` 会话读取对应标注截图和 DOM；不把大段 base64 写入 Agent 消息或审计事件。
+- 调用方传 `VisionSnapshotBindingV1`，运行时从授权的 `proxy-adapter` operation/artifact 读取对应 DOM；binding 必须匹配 session/Tab/operation/request hash/lease sequence/status 和 artifact SHA/MIME/size，不把 raw base64 写入 Agent 消息或审计事件。
 - 一次视觉调用固定模型角色 `vision`，有独立 timeout、token 和图片尺寸上限。
 - 快照找不到、已过保留期或与授权 Tab 不匹配时明确失败，不自动改用“当前页面”。
 - 输出必须通过 JSON Schema；解析失败只可在同一不可变输入上做一次格式修复，不允许让视觉模型进入连续任务。
@@ -271,9 +239,9 @@ provider/runtime 可用工具
 
 ## 7. 当前实现差距
 
-- 受限 Agent task 已独立于 ChatSessionController，具备逐任务精确 tool allowlist、Tab/lease binding、预算和结构化结果；普通 Chat 仍使用原有 tool loop 并过滤三项受控 operation 工具。
-- 当前 `/api/ai/generate` 只调用 `generateText()`，不执行工具。
-- 当前只有 `vision.find_element`，内部临时缓存最近 5 份 DOM snapshot；尚无通用页面状态分析、目标候选 v2 或持久 snapshot 授权。
+- Chat 与 Agent Task 已共用每应用实例唯一的 DSH Agent Loop；各自使用独立 session/tool scope 和兼容公开控制面。raw proxy operation 仅存在于模型不可见 transport child scope。
+- `/api/ai/generate` 使用无 session、无 tool 的单次 `ctx.llm.stream()`。
+- Vision v2 与 proxy immutable snapshot binding 已交付；ai-e2e 通用 authoring/Run 消费仍需逐业务流程接入。
 - 当前 Skills Runtime 已支持本地只读目录加载、immutable registry/version/hash、task 单 Skill exact pin/policy hash、Schema/hash/path 校验、指令装载、权限/预算收缩、catalog 与执行事件；多 Skill 组合/嵌套调用不在 v1。
 - 当前 Agent browser wrapper 已冻结 `stepId/kind/operation/effectId` 并限制 observe/control，模糊失败先查询 operation ledger；仍没有 policy evaluation、风险投影 hash、active grant 与参数级数量的完整逐调用交集校验。
 - 当前 `ai-e2e` prompts 是业务侧模板，可继续作为迁移输入；不得把它们直接等同于可复用 Skill。

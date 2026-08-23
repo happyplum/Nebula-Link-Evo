@@ -4,7 +4,7 @@
 - [shipped] `GET /api/v1/capabilities` 声明 agent-task/skill/browser-operation `1.0`、已实现功能和硬限制；`taskEvents/taskCommands/skillsRuntime=true`、`operationPresentationAnimation=false`，并返回 `maxSkillsPerTask=1` 与 loaded Skill version 数；Agent task 控制面要求 ai-chat-service 绑定 loopback。
 - [shipped] `ai-chat-service/src/agent-tasks/` 独立于交互 Chat session：严格校验请求大小、预算、inline secret、response Schema 深度/关键字，使用 `data/ai-chat-service/agent-tasks.sqlite` 持久化；凭证 token 不明文持久化，服务重启把 created/running 收敛为 interrupted。
 - [shipped] Agent 数据 migration 2 使用 checksum 账本、可重入且只增不毁；任务创建/运行/终态与 `stateVersion`、task-scoped 单调 event seq 在同一事务写入，服务重启中断也会追加持久状态事件。
-- [shipped] `POST /api/v1/agent-tasks/:taskId/commands` 已交付：command ID + request hash 幂等、`expectedStateVersion` 乐观冲突拒绝、accepted/terminal 审计事件；pause 只允许首个工具调用前并与安全 checkpoint 原子持久化，工具调用开始后必须 interrupt/cancel，终止不推断浏览器副作用回滚。
+- [shipped] `POST /api/v1/agent-tasks/:taskId/commands` 已交付：command ID + request hash 幂等、`expectedStateVersion` 乐观冲突拒绝、accepted/terminal 审计事件；pause 不打断已经开始的原子 operation，待其结算或 `outcome_unknown` 后在下一安全 checkpoint 生效，resume 重新竞争全局许可。
 - [shipped] `GET /api/v1/agent-tasks/:taskId/events` 每次连接先发送当前 `agent_task.snapshot`，再发送提交后的 task-scoped 单调 live event；`event-log?afterSeq=&limit=` 提供持久审计与补洞，heartbeat 不占 seq。
 - [shipped] 重启恢复覆盖 created/running/paused：统一收敛为 `interrupted(service_restarted)`，遗留 accepted command 收敛为 rejected；暂停任务只在同一服务进程且安全执行上下文仍存在时允许 resume。
 - [shipped] `AI_SKILLS_DIRS` 使用平台路径分隔符配置本地只读 Skill roots；每个 package 固定为 `<skillId>/<semver>/{manifest.json,instructions.md}`，拒绝目录逃逸、symlink、额外文件、超限内容、Schema/hash/目录名不一致、同版本漂移及启动时缺失的必需工具引用。
@@ -17,6 +17,10 @@
 - [shipped] Agent browser step 可预授权 `beforeScreenshot/afterScreenshot/domSnapshot`，wrapper 原样注入受控 operation，由 proxy 生成真实 artifact；`videoSegment=true` 在 ai-chat-service 请求边界拒绝，不能绕过 proxy capability。
 - [shipped] `operation_execute` 传输失败或超时后先以同一 operationId 调用 `operation_get`；无法证明终态时返回 `outcome_unknown`，禁止盲重试。`operation_cancel` 已作为服务端内部包装能力接通，不暴露给模型。
 - [shipped] MCP 调试日志只记录脱敏、截断后的参数摘要，覆盖驼峰 `leaseToken` 等敏感字段；Agent task 模型输入、持久请求和 HTTP 响应不包含 token 值。
-- [shipped] Vercel AI SDK 使用配置的 decision model、受限工具集、turn/tool/time/token 预算与调用方 response Schema；`completed` 只表示结构化任务完成，不等于 ai-e2e TODO 通过。
-- [pending] 通用视觉 v2 与完整 policy evaluation/风险投影/active grant/参数级数量交集仍未实现；多 Skill 组合/嵌套调用也不在 v1，必须由调用方拆为独立 task。
+- [shipped] Agent Task 与 Chat 共用 DSH Agent Loop；常规模型走 Pi adapter，GLM 走 Nebula JWT adapter。Task 使用受限 DSH tool scope、turn/tool/time/token 预算与调用方 response Schema；`completed` 只表示结构化任务完成，不等于 ai-e2e TODO 通过。
+- [shipped] `submit_result` 先形成 pending result；只有同 callId/hash 的 DSH tool result 已 durable 后才完成。终态按 flush → projection catch-up → 同一 SQLite 事务写结构化结果/usage/status/terminal event/cursor；崩溃未持久化结果收敛为 interrupted。
+- [shipped] 全局持久调度默认 `maxActiveModelRuns=4`、`maxQueuedRuns=1000`；run identity/idempotency/queueSeq 与 capacity 在同一 `BEGIN IMMEDIATE` 事务维护。token 预算先按 estimated input + output cap CAS reservation，实际 usage 后结算，崩溃 reservation 保守计耗。
+- [shipped] 浏览器调用在 dispatch 前持久化 toolCallId/operationId、canonical args/request hash、Quantity、task/Skill/budget/冻结 step 授权快照以及无 token 的 browser binding；reserved/dispatched 重启分别收敛为 interrupted/outcome_unknown，身份漂移拒绝。
+- [shipped] 通用视觉 v2 已由 `vision.analyze_page`/`vision.resolve_target` 提供并使用 `VisionSnapshotBindingV1`；`vision.find_element` 不在生产工具表。
+- [pending] 完整 policy evaluation/风险投影/active grant/参数级数量交集仍未实现；多 Skill 组合/嵌套调用也不在 v1，必须由调用方拆为独立 task。
 - [pending] 操作动画不在本阶段；browser operation 固定注入 `animation=off`，proxy capability 仍声明 `operationPresentationAnimation=false`。

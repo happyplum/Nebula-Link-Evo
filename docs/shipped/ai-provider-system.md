@@ -1,6 +1,6 @@
 # ai-provider-system `ai-chat-service :3001`
 
-多 AI provider 编排子系统：通过 Vercel AI SDK 编排 GLM / OpenAI / Anthropic / Kimi / NVIDIA，含错误分类体系与启动 preflight。
+多 AI provider 编排子系统：Agent loop 常规模型通过 DSH Pi adapter、GLM 通过 Nebula JWT adapter；旧 provider loader 继续服务兼容配置/preflight，`/api/ai/generate` 为无 session/tool 的单次 DSH LLM stream。
 
 - [shipped] Provider 注册与加载：`ai-chat-service/src/services/provider/`（registry / resolver / loader / preflight / errors / error-classifier / token-estimator / adapters/glm / types）。
 - [shipped] Provider 别名与 SDK 包名规范化（I/O 前完成）：
@@ -17,9 +17,9 @@
 - [shipped] Token 估算：`ai-chat-service/src/services/provider/token-estimator.ts`。
 - [shipped] 双模型角色配置：`defaults.decision` 是分析/决策模型，负责理解需求与浏览器证据并规划动作；`defaults.vision` 是视觉模型，为无原生视觉能力的分析模型提供视觉/DOM 定位证据。provider/model 名仅是角色实现配置。
 - [designed] 主代理与子代理均可调用视觉模型；视觉模型只处理单次、完整输入的分析请求，不持有连续任务状态、不调度脚本、不操作浏览器。
-- [designed] 目标内部视觉工具为 `vision.analyze_page` 与 `vision.resolve_target`：输入一个授权 snapshot，输出页面/DOM 摘要或可序列化 locator candidates；当前 `vision.find_element` 保留兼容，完整 Schema 见 `ai-e2e/docs/ai-model-skill-contract.md`。
-- [shipped] MCP client 与 ToolRegistry 位于 ai-chat-service，通过 Chat agent loop 向分析/决策模型提供浏览器及外部工具。
-- [shipped] ai-chat-service 已提供通用受限 Agent 任务核心，按任务约束精确工具白名单、预算和不透明关联信息，并以 decision model 返回调用方 Schema 校验后的结构化结果；与 Chat tool loop 隔离。
+- [shipped] 内部视觉工具为 `vision.analyze_page` 与 `vision.resolve_target`：输入 `VisionSnapshotBindingV1`，输出页面/DOM 摘要或可序列化 locator candidates；生产不注册 `vision.find_element`。
+- [shipped] MCP transport、ToolRegistry product projection 与 DSH ToolRuntime 位于 ai-chat-service；Chat/Agent Task 共用唯一 DSH Agent Loop，raw proxy operation 仅存在于模型不可见 child scope。
+- [shipped] ai-chat-service 已提供通用受限 Agent 任务核心，按任务约束精确工具白名单、预算和不透明关联信息，并以 decision model 返回调用方 Schema 校验后的结构化结果；与 Chat 共用 loop、分离 session/tool scope 与公开控制面。
 - [shipped] `POST/GET /api/v1/agent-tasks*`、乐观 commands、安全 checkpoint、snapshot-first events/event-log 和 `GET /api/v1/capabilities` 已实现；browser binding 对模型、普通日志、持久请求和 HTTP 响应不可见。完整契约见 `ai-e2e/docs/service-api-event-contract.md`。
 - [designed] Agent task 是一次有界执行，不是 ai-e2e 的持久主代理；authoring 阶段、candidate、coverage、decision、actor/认证状态和激活留在 ai-e2e。browser binding 区分 `observe/control`，主代理分析只在 proxy 安全边界 observe，执行型页面子代理才可 control；ai-chat-service 不切换 BrowserContext/storage state，也不授权子代理自行登录。
 - [designed] E2E Agent task 接收 ai-e2e 冻结的 policy evaluation、风险投影 hash、当前语义步骤/effectId/数量边界和可选 grant 引用；工具 wrapper 每次调用求权限交集。ai-chat-service 不决定 environment、不签发审批，模型/Skill/页面内容不能扩大授权。

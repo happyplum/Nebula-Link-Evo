@@ -4,7 +4,7 @@ import {
   validateProviderModel,
   canProviderDo,
 } from '../../config/validator.js';
-import type { ResolvedConfig, ModelConfig } from '../../config/schema.js';
+import type { ResolvedConfig } from '../../config/schema.js';
 
 describe('validateConfig', () => {
   describe('valid configuration', () => {

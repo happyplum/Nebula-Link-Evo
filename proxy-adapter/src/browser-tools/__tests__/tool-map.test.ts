@@ -66,7 +66,7 @@ describe('createToolMap 结构', () => {
 
   it('每个工具都有 description / parameters / execute', () => {
     const tools = createToolMap(mockBC);
-    for (const [name, tool] of Object.entries(tools)) {
+    for (const tool of Object.values(tools)) {
       expect(tool).toHaveProperty('description');
       expect(typeof tool.description).toBe('string');
       expect(tool).toHaveProperty('parameters');

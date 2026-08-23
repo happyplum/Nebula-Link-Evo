@@ -11,4 +11,7 @@ ai-chat-service 向 debug-ui 提供 Chat SSE 流式传输。每次建连先发�
 - [shipped] 流式持久化 worker：`ai-chat-service/src/services/stream-persist-worker.ts` + `ai-chat-service/src/workers/stream-persist-worker.ts`。异步持久化流式消息。
 - [shipped] 后台任务队列：3 次重试 + 10 分钟空闲清理。入口：`ai-chat-service/src/services/conversation-job-queue.ts`。
 - [shipped] Conversation 子系统：`ai-chat-service/src/conversation/`（manager / db / compressor / session-state-dao / session-events-dao / session-event-hub）。
-- [shipped] 验收面：SSE 测试、stream-persist-worker 单元测试。
+- [shipped] Chat 生成已进入与 Agent Task 共用的 DSH Agent Loop；zstd JSONL durable log 为模型 transcript 事实源，SQLite 通过 `(sessionId,dshSeq)` 唯一投影和 watermark 保持公开 event/state。
+- [shipped] live event 只在 DSH flush/catch-up 与 SQLite seq/state/projection 事务提交后广播；每订阅者队列最多 256 条、单次写超时 5 秒，溢出/超时断连，重连仍依赖 snapshot。
+- [shipped] 会话 DELETE 使用持久 deletion saga；物理删除完成返回 204，30 秒未完成返回 `503 deletion_pending`，重复删除等待同一 job，重启继续未完成阶段且 deleted tombstone 禁止 resume/复活。
+- [shipped] 验收面：SSE、backpressure、DSH projection/corruption、delete/restart 与 stream-persist-worker 测试。
