@@ -62,7 +62,7 @@ interface ApiProblem {
 
 ### 2.4 能力协商
 
-三项服务均提供或目标提供 `GET /api/v1/capabilities`；proxy-adapter 与 ai-chat-service 已实现，ai-e2e 尚未实现：
+三项服务均提供 `GET /api/v1/capabilities`；三项服务均已实现，ai-e2e 对尚未交付的命令、结构化 amendment 和 snapshot-first SSE 以 feature `false` 明示，不得仅凭协议 major 推断写能力：
 
 ```ts
 interface ServiceCapabilitiesV1 {
@@ -89,7 +89,7 @@ interface ServiceCapabilitiesV1 {
 
 ## 3. `ai-e2e` 对外业务 API
 
-实施状态：下表前四个业务版本 create/list/get/copy 端点已 `shipped`；validate、资产 revision、authoring、run、事件与 capability 仍为 `pending`。已交付写端点要求 `Idempotency-Key`，通过 Fastify plugin options 注入 `BusinessVersionService`，DB-only 可用。
+实施状态：业务版本 create/list/get/copy、capability、workspace/分类资产列表、资产 revision 读、Authoring/Run 权威 snapshot 及持久 event-log 已 `shipped`；validate、资产 revision 写/激活、Authoring/Run 写控制与 snapshot-first SSE 仍为 `pending`。已交付写端点要求 `Idempotency-Key`；v1 成功响应统一 `{ data, meta }`，错误统一 `ApiProblem`。
 
 ### 3.1 业务资产
 
@@ -100,6 +100,7 @@ interface ServiceCapabilitiesV1 {
 | POST | `/api/v1/projects/:projectId/business-versions` | 创建空白业务版本或由指定来源复制；创建与 copy 都要求幂等键。 |
 | GET | `/api/v1/projects/:projectId/business-versions` | 查询业务版本列表。 |
 | GET | `/api/v1/business-versions/:versionId` | 读取版本、来源、部署/Git 标识、有效性和 current asset 摘要。 |
+| GET | `/api/v1/business-versions/:versionId/workspace` | 读取工作台聚合投影：current PRD、页面、业务/功能模块、功能脚本、场景及当前版本验证；不创建第二份业务状态。 |
 | POST | `/api/v1/business-versions/:versionId/copy` | 原子深复制当前有效资产并重建内部 ID。 |
 | POST | `/api/v1/business-versions/:versionId/validate` | 执行 Schema、引用、页面签名、调用图和待重检校验，不启动浏览器运行，也不能单独授予可运行 valid。 |
 | GET/POST | `/api/v1/business-versions/:versionId/pages` | 列表或创建页面定义。 |
@@ -123,6 +124,8 @@ interface ServiceCapabilitiesV1 {
 | GET | `/api/v1/authoring-jobs/:jobId/events` | snapshot-first authoring SSE。 |
 | GET | `/api/v1/authoring-jobs/:jobId/event-log?afterSeq=N&limit=M` | 持久 authoring event log。 |
 | POST | `/api/v1/authoring-jobs/:jobId/decisions/:decisionId/answer` | 回答 authoring decision；长期影响同步 version decision。 |
+
+当前实现：`GET /api/v1/authoring-jobs/:jobId` 与 `GET /event-log` 已交付；创建、命令、决策回答与 snapshot-first SSE 未交付。
 
 完整阶段、coverage、candidate 验证和激活规则见 `asset-authoring-repair-contract.md`。
 
@@ -162,6 +165,8 @@ verification scope 由服务端从精确 deployment revision、冻结的 Git/bui
 | POST | `/api/v1/runs/:runId/decisions/:decisionId/answer` | 回答一次开放决策；影响需求的答案应用时追加版本决定。 |
 | GET | `/api/v1/runs/:runId/events` | Run SSE；每次连接先发完整 snapshot，再发 live event。 |
 | GET | `/api/v1/runs/:runId/event-log?afterSeq=N&limit=M` | 审计和补洞读取持久事件，不替代 snapshot bootstrap。 |
+
+当前实现：Run snapshot、plan、TODO、decision、evidence 与 event-log 读端点已交付；公开创建、命令、决策回答与 snapshot-first SSE 未交付。
 
 `POST /commands` 请求：
 
