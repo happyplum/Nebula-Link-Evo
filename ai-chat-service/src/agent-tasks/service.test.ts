@@ -153,21 +153,20 @@ describe('AgentTaskService', () => {
     expect(replay.command.status).toBe('completed');
   });
 
-  it('rejects pause after a tool call starts and allows explicit cancellation', async () => {
+  it('waits for an atomic tool call to settle before pausing', async () => {
     const repository = new AgentTaskRepository(':memory:');
+    let settleOperation = (): void => {};
+    const operation = new Promise<void>((resolve) => {
+      settleOperation = resolve;
+    });
     const service = new AgentTaskService(
       repository,
       {
         execute: async (context) => {
           context.beforeToolCall();
-          await new Promise<void>((_resolve, reject) => {
-            context.signal.addEventListener(
-              'abort',
-              () => reject(new DOMException('Cancelled', 'AbortError')),
-              { once: true }
-            );
-          });
-          throw new Error('unreachable');
+          await operation;
+          expect(context.shouldPause?.()).toBe(true);
+          throw new DOMException('Paused at safe checkpoint', 'AbortError');
         },
       },
       { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
@@ -177,24 +176,18 @@ describe('AgentTaskService', () => {
     await vi.waitFor(() => expect(service.get(created.task.taskId).status).toBe('running'));
 
     const running = service.get(created.task.taskId);
-    const pause = await service.command(created.task.taskId, {
+    const pausePromise = service.command(created.task.taskId, {
       commandId: 'pause-after-tool',
       type: 'pause',
       expectedStateVersion: running.stateVersion,
     });
+    await Promise.resolve();
+    expect(service.get(created.task.taskId).status).toBe('running');
+    settleOperation();
+    const pause = await pausePromise;
     expect(pause).toMatchObject({
-      command: { status: 'rejected', error: { code: 'conflict' } },
-      task: { status: 'running' },
-    });
-
-    const cancelled = await service.command(created.task.taskId, {
-      commandId: 'cancel-1',
-      type: 'cancel',
-      expectedStateVersion: pause.task.stateVersion,
-    });
-    expect(cancelled).toMatchObject({
       command: { status: 'completed' },
-      task: { status: 'cancelled' },
+      task: { status: 'paused' },
     });
   });
 

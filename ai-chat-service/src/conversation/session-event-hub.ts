@@ -20,7 +20,7 @@ export class SessionEventHub {
    */
   private subscribers = new Map<string, Map<string, SSESubscriber>>();
 
-  private constructor() {}
+  constructor() {}
 
   static getInstance(): SessionEventHub {
     if (!SessionEventHub.instance) {
@@ -88,6 +88,10 @@ export class SessionEventHub {
   getSubscriberCount(sessionId: string): number {
     const sessionSubscribers = this.subscribers.get(sessionId);
     return sessionSubscribers?.size ?? 0;
+  }
+
+  close(): void {
+    this.subscribers.clear();
   }
 
   /**

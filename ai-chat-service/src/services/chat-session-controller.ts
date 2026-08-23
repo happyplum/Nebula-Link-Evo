@@ -41,7 +41,10 @@ export class ChatSessionController {
   private sessionMetadata = new Map<string, SessionMetadata>();
   private logger: Logger;
 
-  private constructor(logger?: Logger) {
+  constructor(
+    private readonly db: DatabaseManager = DatabaseManager.getInstance(),
+    logger?: Logger
+  ) {
     this.logger = logger ?? createWorkerLogger('ChatSessionController');
   }
 
@@ -102,9 +105,8 @@ export class ChatSessionController {
     this.abortControllers.set(sessionId, controller);
     this.sessionStatuses.set(sessionId, 'running');
 
-    const db = DatabaseManager.getInstance();
     if (activateSession) {
-      db.activateSession(sessionId);
+      this.db.activateSession(sessionId);
     }
 
     const traceId = this.logOperation(sessionId, 'create');
@@ -141,8 +143,7 @@ export class ChatSessionController {
     const traceId = this.logOperation(sessionId, 'mark_as_paused');
     this.sessionStatuses.set(sessionId, 'paused');
     this.updateMetadata(sessionId, { pauseRequested: false });
-    const db = DatabaseManager.getInstance();
-    db.updateSessionStatus(sessionId, 'paused');
+    this.db.updateSessionStatus(sessionId, 'paused');
     this.log(sessionId, 'Session is now paused', traceId);
   }
 
@@ -166,8 +167,7 @@ export class ChatSessionController {
       pauseRequested: false,
       lastActivity: new Date().toISOString(),
     });
-    const db = DatabaseManager.getInstance();
-    db.updateSessionStatus(sessionId, 'running');
+    this.db.updateSessionStatus(sessionId, 'running');
     this.log(sessionId, 'Session resumed', traceId);
   }
 
@@ -212,8 +212,7 @@ export class ChatSessionController {
     if (controller) {
       controller.abort('interrupted');
       this.sessionStatuses.set(sessionId, 'interrupted');
-      const db = DatabaseManager.getInstance();
-      db.updateSessionStatus(sessionId, 'interrupted');
+      this.db.updateSessionStatus(sessionId, 'interrupted');
       this.log(sessionId, 'Interrupted', traceId);
     }
   }
@@ -238,8 +237,7 @@ export class ChatSessionController {
     }
 
     this.sessionStatuses.set(sessionId, 'cancelled');
-    const db = DatabaseManager.getInstance();
-    db.updateSessionStatus(sessionId, 'cancelled');
+    this.db.updateSessionStatus(sessionId, 'cancelled');
     this.log(sessionId, 'Cancelled', traceId);
   }
 
@@ -256,8 +254,7 @@ export class ChatSessionController {
     const traceId = this.logOperation(sessionId, 'cleanup');
     this.abortControllers.delete(sessionId);
     this.sessionStatuses.set(sessionId, 'idle');
-    const db = DatabaseManager.getInstance();
-    db.updateSessionStatus(sessionId, 'idle');
+    this.db.updateSessionStatus(sessionId, 'idle');
     this.log(sessionId, 'Cleaned up, status: idle', traceId);
   }
 
@@ -274,13 +271,12 @@ export class ChatSessionController {
     * Returns the traceId for tracking
     */
   private logOperation(sessionId: string, operationType: ControlCommandType): string {
-    const db = DatabaseManager.getInstance();
-    const tracedOperation = db.createOperation({ sessionId, operation: operationType });
+    const tracedOperation = this.db.createOperation({ sessionId, operation: operationType });
 
     const traceId = tracedOperation.traceId;
     Promise.resolve().then(() => {
       try {
-        db.updateOperation(traceId, { status: 'success', endTime: Date.now() });
+        this.db.updateOperation(traceId, { status: 'success', endTime: Date.now() });
       } catch (err) {
         this.logger.error({ err, traceId }, 'Failed to update operation trace');
       }
@@ -293,8 +289,7 @@ export class ChatSessionController {
      * Get operation history for a session
      */
   getOperations(sessionId: string): TracedOperation[] {
-    const db = DatabaseManager.getInstance();
-    return db.getOperationsBySession(sessionId);
+    return this.db.getOperationsBySession(sessionId);
   }
 
   /**
@@ -302,8 +297,7 @@ export class ChatSessionController {
      * Changes status from 'running' to 'blocked' with reason 'process_restart'
      */
   recoverRunningSessions(): string[] {
-    const db = DatabaseManager.getInstance();
-    const recoveredSessions = db.recoverRunningSessions();
+    const recoveredSessions = this.db.recoverRunningSessions();
 
     const recoveredSessionIds: string[] = [];
     for (const session of recoveredSessions) {

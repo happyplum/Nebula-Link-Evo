@@ -14,11 +14,15 @@ import { ResolvedConfig, MCPServerConfig } from '../../config/schema.js';
 import { createWorkerLogger } from '../../services/logger.js';
 import type { Logger } from 'pino';
 import { EventEmitter } from 'node:events';
+import { assertObjectJsonSchema, assertSupportedJsonSchema } from '@deepseek-ai/dsh-tools';
+import { realpathSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 export interface MCPTool {
   name: string;
   description: string;
   inputSchema: object;
+  outputSchema?: object;
   serverName?: string;
   originalName?: string;
   annotations?: {
@@ -30,6 +34,11 @@ export interface MCPTool {
   };
 }
 
+export interface MCPCallOptions {
+  signal?: AbortSignal;
+  timeoutMs?: number;
+}
+
 /** Text content block returned by MCP tool calls. */
 interface MCPTextContent {
   type: 'text';
@@ -38,6 +47,12 @@ interface MCPTextContent {
 
 /** SDK-level return type of client.callTool(). */
 type SDKCallToolResult = Awaited<ReturnType<Client['callTool']>>;
+
+const ISOLATED_PROXY_OPERATION_TOOLS = new Set([
+  'browser-control.operation_execute',
+  'browser-control.operation_get',
+  'browser-control.operation_cancel',
+]);
 
 /** Structured result when a tool call returns text content. */
 interface MCPToolCallTextResult {
@@ -73,6 +88,8 @@ const DEFAULT_RECONNECT_POLICY: MCPReconnectPolicy = {
   maxDelayMs: 30000,
   jitterMs: 500,
 };
+const MCP_DISCOVERY_TIMEOUT_MS = 30_000;
+const MCP_TOOL_CALL_TIMEOUT_MS = 30_000;
 
 interface MCPServerRuntime {
   name: string;
@@ -220,7 +237,12 @@ export class MCPSDKClient extends EventEmitter {
       runtime.state = 'failed';
       runtime.lastError = error as Error;
       this.logger.error({ err: error, name }, 'Failed to start MCP server');
-      this.scheduleReconnect(name);
+      if (config.optional === true && config.url) {
+        this.scheduleReconnect(name);
+      } else {
+        await this.cleanupServerResources(runtime);
+        throw error;
+      }
       return false;
     }
   }
@@ -240,28 +262,37 @@ export class MCPSDKClient extends EventEmitter {
 
     this.bindServerLifecycle(name, runtime, client, transport);
 
-    await client.connect(transport);
-    this.logger.info({ name }, 'MCP server connected');
+    const discovery = AbortSignal.timeout(MCP_DISCOVERY_TIMEOUT_MS);
+    try {
+      await client.connect(transport, {
+        signal: discovery,
+        timeout: MCP_DISCOVERY_TIMEOUT_MS,
+        maxTotalTimeout: MCP_DISCOVERY_TIMEOUT_MS,
+      });
+      this.logger.info({ name }, 'MCP server connected');
 
-    const tools = await this.fetchToolsList(client);
+      const tools = await this.fetchToolsList(name, client, discovery);
 
-    // Atomically replace client/transport/tools.
-    runtime.client = client;
-    runtime.transport = transport;
-    runtime.tools = tools;
-    runtime.state = 'running';
-    runtime.reconnectAttempts = 0;
-    runtime.lastError = undefined;
-    runtime.lastExitReason = undefined;
-    runtime.lastStartedAt = Date.now();
+      // Publish transport and the compiled schema snapshot as one generation.
+      runtime.client = client;
+      runtime.transport = transport;
+      runtime.tools = tools;
+      runtime.state = 'running';
+      runtime.reconnectAttempts = 0;
+      runtime.lastError = undefined;
+      runtime.lastExitReason = undefined;
+      runtime.lastStartedAt = Date.now();
 
-    this.logger.info(
-      { name, toolCount: tools.length },
-      'MCP server ready',
-    );
+      this.logger.info({ name, toolCount: tools.length }, 'MCP server ready');
 
-    if (tools.length > 0) {
-      this.emitToolsChanged(name);
+      if (tools.length > 0) this.emitToolsChanged(name);
+    } catch (error) {
+      // A timed-out discovery never publishes a late tool generation.
+      client.onclose = undefined;
+      transport.onclose = undefined;
+      transport.onerror = undefined;
+      await Promise.allSettled([client.close(), transport.close()]);
+      throw error;
     }
   }
 
@@ -443,7 +474,11 @@ export class MCPSDKClient extends EventEmitter {
     serverName: string,
     toolName: string,
     args: Record<string, unknown> = {},
+    options: MCPCallOptions = {},
   ): Promise<SDKCallToolResult | MCPToolCallTextResult> {
+    if (ISOLATED_PROXY_OPERATION_TOOLS.has(toolName)) {
+      throw new Error(`${toolName} is available only through the isolated Harness transport`);
+    }
     const runtime = this.servers.get(serverName);
     if (!runtime) {
       throw new MCPServerUnavailableError(serverName, 'stopped');
@@ -460,10 +495,15 @@ export class MCPSDKClient extends EventEmitter {
     );
 
     try {
-      const result = await runtime.client.callTool({
-        name: toolName,
-        arguments: args,
-      });
+      const result = await runtime.client.callTool(
+        { name: toolName, arguments: args },
+        undefined,
+        {
+          ...(options.signal ? { signal: options.signal } : {}),
+          timeout: options.timeoutMs ?? MCP_TOOL_CALL_TIMEOUT_MS,
+          maxTotalTimeout: options.timeoutMs ?? MCP_TOOL_CALL_TIMEOUT_MS,
+        }
+      );
 
       this.logger.info({ toolName, result: this.summarizeResult(result) }, 'MCP tool result');
 
@@ -652,6 +692,7 @@ export class MCPSDKClient extends EventEmitter {
       command: config.command,
       args: config.args || [],
       env: this.buildServerEnv(name, config),
+      cwd: realpathSync(resolve(config.cwd ?? process.cwd())),
       stderr: 'inherit',
     });
   }
@@ -664,22 +705,37 @@ export class MCPSDKClient extends EventEmitter {
     return url;
   }
 
-  private async fetchToolsList(client: Client): Promise<MCPTool[]> {
-    try {
-      const result = await client.listTools();
-      if (result?.tools) {
-        return result.tools.map((tool) => ({
+  private async fetchToolsList(
+    serverName: string,
+    client: Client,
+    signal: AbortSignal
+  ): Promise<MCPTool[]> {
+    const result = await client.listTools(undefined, {
+      signal,
+      timeout: MCP_DISCOVERY_TIMEOUT_MS,
+      maxTotalTimeout: MCP_DISCOVERY_TIMEOUT_MS,
+    });
+    const admitted: MCPTool[] = [];
+    for (const tool of result?.tools ?? []) {
+      if (ISOLATED_PROXY_OPERATION_TOOLS.has(tool.name)) continue;
+      try {
+        assertObjectJsonSchema(tool.inputSchema);
+        if (tool.outputSchema !== undefined) assertSupportedJsonSchema(tool.outputSchema);
+        admitted.push({
           name: tool.name,
           description: tool.description || '',
-          inputSchema: tool.inputSchema || {},
+          inputSchema: tool.inputSchema,
+          ...(tool.outputSchema ? { outputSchema: tool.outputSchema } : {}),
           annotations: tool.annotations ?? undefined,
-        }));
+        });
+      } catch (error) {
+        this.logger.warn(
+          { err: error, serverName, toolName: tool.name },
+          'MCP tool schema is unsupported and was quarantined'
+        );
       }
-      return [];
-    } catch (error) {
-      this.logger.warn({ err: error }, 'Failed to fetch tools list');
-      return [];
     }
+    return admitted;
   }
 
   private tryParseJson(text: string): unknown {

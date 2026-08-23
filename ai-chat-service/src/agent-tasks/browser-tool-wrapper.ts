@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto';
-import type { MCPSDKClient } from '../clients/mcp/sdk-client.js';
+import type { HarnessMcpCaller } from '../harness/types.js';
 import { GATEWAY_MCP_SERVER_NAME } from '../config/service-config.js';
 import type { GatewayTool } from '../tools/types.js';
 import { AgentTaskError } from './errors.js';
 import type {
   AgentTaskBrowserBinding,
   AgentTaskBrowserStep,
+  AgentTaskOperationReservation,
   AgentTaskToolCallSummary,
 } from './types.js';
 
@@ -32,7 +33,15 @@ export interface BrowserToolWrapperOptions {
   maxToolCalls: number;
   beforeToolCall?: () => void;
   consumeToolCall?: () => void;
-  mcpClient: Pick<MCPSDKClient, 'callTool'>;
+  mcpClient: HarnessMcpCaller;
+  authorizationSnapshot: Record<string, unknown>;
+  persistOperation?: (operation: AgentTaskOperationReservation) => void;
+  markOperationDispatched?: (toolCallId: string) => void;
+  settleOperation?: (
+    toolCallId: string,
+    status: 'succeeded' | 'failed' | 'outcome_unknown',
+    proxyStatus?: string
+  ) => void;
 }
 
 export class BrowserToolWrapper {
@@ -109,10 +118,51 @@ export class BrowserToolWrapper {
       ...(step.capture ? { capture: step.capture } : {}),
       presentation: { animation: 'off' },
     };
+    const canonicalArgs = {
+      stepId,
+      ...(input.target !== undefined ? { target: requireObject(input.target, 'target') } : {}),
+      ...(input.args !== undefined ? { args: requireObject(input.args, 'args') } : {}),
+    };
+    const browserBinding = {
+      browserSessionId: this.options.binding.browserSessionId,
+      tabId: this.options.binding.tabId,
+      browserLeaseId: this.options.binding.browserLeaseId,
+      browserLeaseSequence: this.options.binding.browserLeaseSequence,
+      access: this.options.binding.access,
+    };
+    const requestHash = createHash('sha256')
+      .update(stableStringify({ toolName: EXECUTE_TOOL, canonicalArgs, request, browserBinding }))
+      .digest('hex');
+    this.options.persistOperation?.({
+      toolCallId,
+      operationId,
+      toolName: EXECUTE_TOOL,
+      requestHash,
+      canonicalArgs,
+      quantity: {
+        browserOperations: 1,
+        affectedItems: 1,
+        sideEffectUnits: step.kind === 'act' ? 1 : 0,
+      },
+      authorization: {
+        ...this.options.authorizationSnapshot,
+        step: {
+          stepId: step.stepId,
+          kind: step.kind,
+          operation: step.operation,
+          ...(step.effectId ? { effectId: step.effectId } : {}),
+          maxAffectedItems: step.maxAffectedItems ?? 1,
+        },
+      },
+      browserBinding,
+    });
 
+    let dispatchRecorded = false;
     try {
       let operation: BrowserOperationRecord;
       try {
+        this.options.markOperationDispatched?.(toolCallId);
+        dispatchRecorded = true;
         operation = await this.callOperation(EXECUTE_TOOL, {
           sessionId: this.options.binding.browserSessionId,
           leaseId: this.options.binding.browserLeaseId,
@@ -131,6 +181,15 @@ export class BrowserToolWrapper {
             ? 'outcome_unknown'
             : 'failed';
       if (operation.error?.code) summary.errorCode = operation.error.code;
+      this.options.settleOperation?.(
+        toolCallId,
+        operation.status === 'succeeded'
+          ? 'succeeded'
+          : operation.status === 'outcome_unknown'
+            ? 'outcome_unknown'
+            : 'failed',
+        operation.status
+      );
       return operation;
     } catch (error) {
       const taskError =
@@ -141,6 +200,9 @@ export class BrowserToolWrapper {
             });
       summary.status = taskError.code === 'outcome_unknown' ? 'outcome_unknown' : 'failed';
       summary.errorCode = taskError.code;
+      if (dispatchRecorded) {
+        this.options.settleOperation?.(toolCallId, summary.status, summary.status);
+      }
       throw taskError;
     }
   }
@@ -245,6 +307,15 @@ function stableUuid(...parts: string[]): string {
   bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
   const hex = bytes.toString('hex');
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+function stableStringify(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+  return `{${Object.entries(value as Record<string, unknown>)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, nested]) => `${JSON.stringify(key)}:${stableStringify(nested)}`)
+    .join(',')}}`;
 }
 
 function requireObject(value: unknown, label: string): Record<string, unknown> {

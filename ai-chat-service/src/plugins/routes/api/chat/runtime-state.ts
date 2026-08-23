@@ -85,9 +85,10 @@ export function mergeRuntimeSessionState(options: {
 export async function getRuntimeSessionState(
   conversationManager: ConversationManager,
   sessionId: string,
-  baseStatus?: SessionStatus
+  baseStatus?: SessionStatus,
+  controller: ChatSessionController = ChatSessionController.getInstance()
 ): Promise<RuntimeSessionState> {
-  const controllerStatus = ChatSessionController.getInstance().getStatus(sessionId);
+  const controllerStatus = controller.getStatus(sessionId);
   const sessionState = await conversationManager.getSessionState(sessionId);
 
   return mergeRuntimeSessionState({

@@ -1,0 +1,69 @@
+diff --git a/lib/index.js b/lib/index.js
+index 2340fbd5adae991ac1da82017e152c592d97b5b1..d47daa75df055f48b57030fd163f6789aec473ad 100644
+--- a/lib/index.js
++++ b/lib/index.js	
+@@ -933,6 +933,26 @@ var PersistenceCoordinator = class {
+ 		const retired = Promise.resolve(this.retirements.get(id));
+ 		return (signal === void 0 ? retired : observeQueuedAbort(retired, signal, () => false)).then(() => this.serialize(id, () => this.readFromCore(id, fromSeq, signal), signal));
+ 	}
++	async purge(id, expectedRevision, signal) {
++		await this.waitForRetirement(id, signal);
++		return this.serialize(id, async () => {
++			signal?.throwIfAborted();
++			const live = this.ctx.sessions.get(id);
++			const state = this.states.get(id);
++			if (live !== void 0 || state?.owner !== void 0) throw new Error(`cannot purge session "${id}" while it has a live persistence owner`);
++			this.preparations.invalidate(id);
++			const current = await this.backend.readStoredRevision(id, signal);
++			if (current === void 0) {
++				this.states.delete(id);
++				return false;
++			}
++			if (current !== expectedRevision) throw new Error(`cannot purge session "${id}": durable revision changed`);
++			const purged = await this.backend.purgeStored(id, expectedRevision, signal);
++			if (purged) this.states.delete(id);
++			this.preparations.invalidate(id);
++			return purged;
++		}, signal);
++	}
+ 	async readFromCore(id, fromSeq, signal) {
+ 		signal?.throwIfAborted();
+ 		if (this.backend.loadStoredFrom !== void 0) {
+diff --git a/lib/types/coordinator.d.ts b/lib/types/coordinator.d.ts
+index 04301acda450bd855d0ed8f8ec4a7277b66771ec..2904f8c4b4200aea3d18982740e1f0ea5fc6cb41 100644
+--- a/lib/types/coordinator.d.ts
++++ b/lib/types/coordinator.d.ts	
+@@ -116,6 +116,8 @@ export interface PersistenceBackend<TornMarker = unknown> {
+      * @param signal - optional cancellation for backend read work.
+      */
+     readStoredRevision(id: SessionId, signal?: AbortSignal): Promise<SessionPersistenceRevision | undefined>;
++    /** Delete the exact stored revision after the coordinator has retired all in-process owners. */
++    purgeStored(id: SessionId, expectedRevision: SessionPersistenceRevision, signal?: AbortSignal): Promise<boolean>;
+     /**
+      * Optional seek-capable suffix read behind the service's `readFrom`: return
+      * the header plus the stored events with `seq >= fromSeq` without reading
+@@ -263,6 +265,8 @@ export declare class PersistenceCoordinator<TornMarker = unknown> {
+         meta: SessionHeader;
+         events: SessionEvent[];
+     }>;
++    /** Purge one non-live session only when its durable revision still matches. */
++    purge(id: SessionId, expectedRevision: SessionPersistenceRevision, signal?: AbortSignal): Promise<boolean>;
+     private readFromCore;
+     /** Read one detached physical prefix without logical recovery or caching. */
+     private readStoredPrefix;
+diff --git a/lib/types/index.d.ts b/lib/types/index.d.ts
+index 1ef1a8f1cb53ae650ea92ac6602718f932b4e149..56e7a5b7955f93d0ca85c49db6702ee29aff0502 100644
+--- a/lib/types/index.d.ts
++++ b/lib/types/index.d.ts	
+@@ -168,6 +168,11 @@ export declare abstract class SessionPersistence extends Service {
+         meta: SessionHeader;
+         events: SessionEvent[];
+     }>;
++    /**
++     * Delete a materialized session after rejecting live ownership and verifying
++     * the caller-observed revision. Returns false when the artifact is already absent.
++     */
++    abstract purge(id: SessionId, expectedRevision: SessionPersistenceRevision, signal?: AbortSignal): Promise<boolean>;
+     /**
+      * Lightweight listing from metadata, without a full-log parse.
+      * @param signal - optional cancellation for backend listing work.

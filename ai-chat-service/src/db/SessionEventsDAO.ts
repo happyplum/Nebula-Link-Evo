@@ -186,6 +186,12 @@ export class SessionEventsDAO {
     return row.max_seq;
   }
 
+  /** Advance the in-process allocator after another transaction committed a public event. */
+  observeCommittedSeq(sessionId: string, seq: number): void {
+    const current = this.sessionSeqCounters.get(sessionId) ?? this.getLastSeq(sessionId) ?? 0;
+    if (seq > current) this.sessionSeqCounters.set(sessionId, seq);
+  }
+
   async getSnapshot(sessionId: string): Promise<SnapshotResult> {
     const stmt = this.db.prepare(
       `SELECT * FROM session_events

@@ -8,24 +8,24 @@ import type { ChatHandler } from '../../../../conversation/chat-handler.js';
 import type { ConversationManager } from '../../../../conversation/manager.js';
 import type { SessionEventsDAO } from '../../../../conversation/session-events-dao.js';
 import type { SessionStatus } from '../../../../conversation/types.js';
-import { DatabaseManager } from '../../../../conversation/db.js';
-import { SessionEventHub } from '../../../../conversation/session-event-hub.js';
+import type { ChatSessionController } from '../../../../services/chat-session-controller.js';
 import type { SessionEvent, SessionSnapshotEvent, SessionState } from '@nebula-link-evo/shared';
 import { eventToSSEFormat } from '@nebula-link-evo/shared';
 import type { ConversationJobQueue } from '../../../../services/conversation-job-queue.js';
 import { getRuntimeSessionState } from './runtime-state.js';
+import { BoundedSseWriter } from '../../../../services/sse-writer.js';
 
 function writeSSEEvent(
-  reply: { raw: { write: (chunk: string) => void } },
+  writer: BoundedSseWriter,
   event: SessionEvent,
   eventId: string
 ): void {
   const formatted = eventToSSEFormat(event, eventId);
-  reply.raw.write(`event: ${formatted.event}\nid: ${eventId}\ndata: ${formatted.data}\n\n`);
+  writer.push(`event: ${formatted.event}\nid: ${eventId}\ndata: ${formatted.data}\n\n`);
 }
 
 function writeBootstrapEvent(
-  reply: { raw: { write: (chunk: string) => void } },
+  writer: BoundedSseWriter,
   event: SessionEvent,
   lastDeliveredSeq: { value: number }
 ): void {
@@ -37,7 +37,7 @@ function writeBootstrapEvent(
   }
 
   const eventId = event.seq !== undefined ? String(event.seq) : '';
-  writeSSEEvent(reply, event, eventId);
+  writeSSEEvent(writer, event, eventId);
 }
 
 async function buildSnapshotEvent(
@@ -45,10 +45,16 @@ async function buildSnapshotEvent(
   sessionId: string,
   sessionEventsDAO: SessionEventsDAO | null,
   baseStatus?: SessionStatus,
-  jobQueue?: ConversationJobQueue
+  jobQueue?: ConversationJobQueue,
+  controller?: ChatSessionController
 ): Promise<SessionSnapshotEvent> {
   const messages = conversationManager.getMessages(sessionId);
-  const runtimeState = await getRuntimeSessionState(conversationManager, sessionId, baseStatus);
+  const runtimeState = await getRuntimeSessionState(
+    conversationManager,
+    sessionId,
+    baseStatus,
+    controller
+  );
   const activeToolCalls = conversationManager.getActiveToolCalls(sessionId);
   const pendingJobs = jobQueue?.getPendingJobs(sessionId) ?? [];
 
@@ -142,26 +148,28 @@ const streamRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         return { success: false, error: 'Session not found' };
       }
 
-      const sessionEventsDAO =
-        typeof chatHandler?.getSessionEventsDAO === 'function'
-          ? chatHandler.getSessionEventsDAO() || DatabaseManager.getInstance().getSessionEventsDAO()
-          : DatabaseManager.getInstance().getSessionEventsDAO();
-      const eventHub =
-        typeof chatHandler?.getSessionEventHub === 'function'
-          ? chatHandler.getSessionEventHub()
-          : SessionEventHub.getInstance();
+      const sessionEventsDAO = chatHandler.getSessionEventsDAO();
+      const eventHub = chatHandler.getSessionEventHub();
       const lastDeliveredSeq = { value: 0 };
       const bufferedEvents: SessionEvent[] = [];
       let bootstrapComplete = false;
+      let unsubscribe = (): void => {};
+      const writer = new BoundedSseWriter(reply.raw, {
+        onClose: () => unsubscribe(),
+      });
 
-      const unsubscribe = eventHub.subscribe(sessionId, (event: SessionEvent) => {
+      unsubscribe = eventHub.subscribe(sessionId, (event: SessionEvent) => {
         try {
           if (!bootstrapComplete) {
+            if (bufferedEvents.length >= 256) {
+              writer.close('overflow', true);
+              return;
+            }
             bufferedEvents.push(event);
             return;
           }
 
-          writeBootstrapEvent(reply, event, lastDeliveredSeq);
+          writeBootstrapEvent(writer, event, lastDeliveredSeq);
         } catch {
           // Ignore write errors (client disconnected)
         }
@@ -180,13 +188,14 @@ const streamRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           sessionId,
           sessionEventsDAO,
           session.status,
-          jobQueue
+          jobQueue,
+          fastify.chatSessionController
         );
-        writeSSEEvent(reply, snapshotEvent, '0');
+        writeSSEEvent(writer, snapshotEvent, '0');
 
         bootstrapComplete = true;
         for (const event of bufferedEvents) {
-          writeBootstrapEvent(reply, event, lastDeliveredSeq);
+          writeBootstrapEvent(writer, event, lastDeliveredSeq);
         }
       } catch (error) {
         unsubscribe();
@@ -195,7 +204,7 @@ const streamRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
 
       const heartbeatInterval = setInterval(() => {
         try {
-          reply.raw.write(':heartbeat\n\n');
+          writer.push(':heartbeat\n\n');
         } catch {
           clearInterval(heartbeatInterval);
         }
@@ -205,7 +214,7 @@ const streamRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         () => {
           clearInterval(heartbeatInterval);
           unsubscribe();
-          reply.raw.end();
+          writer.close('closed', true);
         },
         5 * 60 * 1000
       );
@@ -218,6 +227,7 @@ const streamRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           clearInterval(heartbeatInterval);
           clearTimeout(timeout);
           unsubscribe();
+          writer.close();
           resolve();
         });
       });

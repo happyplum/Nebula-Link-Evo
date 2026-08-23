@@ -142,7 +142,7 @@ describe('MCPSDKClient HTTP transport', () => {
     const client = new MCPSDKClient(createConfig(), logger as never);
     await client.initialize();
 
-    await client.callTool('gateway', 'browser-control.operation_execute', {
+    await client.callTool('gateway', 'browser-control.screenshot', {
       leaseToken: 'top-secret',
       authorization: 'Bearer private-value',
     });
@@ -151,6 +151,9 @@ describe('MCPSDKClient HTTP transport', () => {
     expect(logged).not.toContain('top-secret');
     expect(logged).not.toContain('private-value');
     expect(logged).toContain('***');
+    await expect(
+      client.callTool('gateway', 'browser-control.operation_execute', {})
+    ).rejects.toThrow('only through the isolated Harness transport');
     await client.shutdown();
   });
 });

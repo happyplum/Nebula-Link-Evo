@@ -50,8 +50,8 @@ class ConversationManager {
   private logger = createWorkerLogger('conversation-manager');
   private activeToolCalls = new Map<string, ToolCall[]>();
 
-  constructor(dbPath: string = ':memory:') {
-    this.db = ConversationDatabase.getInstance();
+  constructor(dbPath: string = ':memory:', db: ConversationDatabase = ConversationDatabase.getInstance()) {
+    this.db = db;
     this.initialize(dbPath);
     this.compressor = new SessionCompressor(this.db);
   }

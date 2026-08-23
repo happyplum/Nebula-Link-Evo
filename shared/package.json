@@ -36,6 +36,10 @@
       "types": "./dist/types/browser-execution.d.ts",
       "import": "./dist/types/browser-execution.js"
     },
+    "./types/vision-snapshot": {
+      "types": "./dist/types/vision-snapshot.d.ts",
+      "import": "./dist/types/vision-snapshot.js"
+    },
     "./utils": {
       "types": "./dist/utils/index.d.ts",
       "import": "./dist/utils/index.js"

@@ -40,8 +40,8 @@ export class AppService {
     AppService.instance = instance;
   }
 
-  async initialize(): Promise<void> {
-    const loadResult = loadConfig();
+  async initialize(configPath?: string): Promise<void> {
+    const loadResult = loadConfig(configPath);
     this.config = loadResult.config;
     this.configPath = loadResult.configPath;
 
@@ -70,11 +70,7 @@ export class AppService {
     this.registry = new ProviderRegistry(configProviders);
 
     this.mcpClient = new MCPSDKClient(this.config);
-    try {
-      await this.mcpClient.initialize();
-    } catch (error) {
-      this.logger.warn({ err: error }, 'MCP initialization failed, continuing without MCP tools');
-    }
+    await this.mcpClient.initialize();
   }
 
   getConfig(): ResolvedConfig | null {
