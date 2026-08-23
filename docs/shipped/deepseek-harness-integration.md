@@ -1,5 +1,11 @@
 # deepseek-harness-integration
 
+- [shipped] `ai-chat-service` 每个 Fastify `buildApp()` 创建独立 Cordis `4.0.1` root；Chat 与 Agent Task 共用该实例唯一的 DSH Agent Loop/ToolRuntime/session/timeout/retry/token-meter/compaction/Skill/attachment/invariant 组合，不复用 DSH UI、shell/fs/code mode、sandbox、subagent/jobs/goal/todo 或 bundle runtime patch。
+- [shipped] ai-chat-service 精确固定 `@deepseek-ai/dsh-* 0.1.1-rc.2`、`@earendil-works/pi-ai 0.82.1`、Node `^22.19.0 || >=24.0.0`；`harness-bom.json` 与 `verify:harness-bom` 校验完整 peer closure、license、koffi/native build 和 pnpm patch hash。
+- [shipped] DSH zstd JSONL append-only log 是模型 transcript 事实源；SQLite 只保存控制面、幂等、公开 event projection 与 `projectedDshSeq` watermark。flush 后才投影，cursor 越过 durable seq 时 fail closed。
+- [shipped] 上游 persistence/jsonl 的最小 pnpm patch 提供同 session 串行 `purge(sessionId, expectedRevision)`：等待 retirement、拒绝 live owner、清 controller/preparation/cache、拒绝 symlink/reparse 越界并经 GC trash 安全删除；patch hash 纳入 BOM。
+- [shipped] `trusted-harness-plugins.lock.json` 支持部署期可信工具/prompt/hook/LLM adapter/Skill provider/MCP 扩展；校验 direct dependency、canonical realpath、精确版本、entry/tree/config digest、DSH/Cordis ABI 与 peer closure。全部 required，运行期禁止 install/HMR/组合树修改。
+- [shipped] `THIRD_PARTY_NOTICES.md` 保留 DeepSeek Harness、Cordis、Pi 及递归 DSH 包的 MIT notice；Nebula 自有代码继续 `AGPL-3.0-only`。
 - [shipped] `integrations/deepseek-harness-plugin/package.json` 以 `dsh.bundle.patch` 指向 `cordis.patch.yml`，可通过 `dsh plugin --profile <name> add ./integrations/deepseek-harness-plugin` 本地安装；卸载使用 `remove @nebula-link-evo/deepseek-harness-plugin`。
 - [shipped] 已验证依赖精确锁定：`@deepseek-ai/dsh@0.1.1-rc.2`、`@deepseek-ai/cordis@4.0.1`、`@deepseek-ai/dsh-tools@0.1.1-rc.2`、`@deepseek-ai/dsh-user-approval@0.1.1-rc.2`；registry peer contract 已证明旧 tools/approval `0.0.1-rc.1` 与该 DSH 版本不兼容。
 - [shipped] 插件注入 `tools` 与 `approval`，只注册 `nebula_browser_observe` 和 `nebula_browser_act`；模型参数仅 `{operation,target?,args?}`，浏览器 session/Tab/lease/token/sequence/operationId 全部隐藏。
