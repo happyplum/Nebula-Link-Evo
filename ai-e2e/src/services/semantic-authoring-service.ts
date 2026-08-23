@@ -23,6 +23,7 @@ export type AuthoringMode = 'bootstrap' | 'recheck' | 'repair' | 'import_convers
 export interface CreateAuthoringJobInput {
   businessVersionId: string;
   mode: AuthoringMode;
+  intent?: 'author_assets' | 'locate_in_browser';
   idempotencyKey: string;
   targetType?: string;
   targetId?: string;
@@ -67,12 +68,15 @@ export class SemanticAuthoringService {
         strategyVersion: 'semantic-v1',
         sourceFingerprint: hashValue({
           mode: input.mode,
+          intent: input.intent ?? 'author_assets',
           targetType: input.targetType ?? null,
           targetId: input.targetId ?? null,
           currentUrl: input.currentUrl ?? null,
           reason: input.reason ?? null,
         }),
         input: {
+          intent: input.intent ?? 'author_assets',
+          requestedBy: input.createdBy,
           targetType: input.targetType ?? null,
           targetId: input.targetId ?? null,
           currentUrl: input.currentUrl ?? null,
@@ -89,6 +93,8 @@ export class SemanticAuthoringService {
         ...(input.targetId ? { targetId: input.targetId } : {}),
         inputRedacted: {
           mode: input.mode,
+          intent: input.intent ?? 'author_assets',
+          requestedBy: input.createdBy,
           targetType: input.targetType ?? null,
           targetId: input.targetId ?? null,
           currentUrl: input.currentUrl ?? null,
@@ -96,8 +102,11 @@ export class SemanticAuthoringService {
           output: 'structured_authoring_amendment',
         },
         toolPolicyHash: hashValue({
-          allow: ['vision.analyze_page', 'browser-control.operation_observe'],
-          mutation: 'candidate_only',
+          allow:
+            input.intent === 'locate_in_browser'
+              ? ['browser-control.operation_execute']
+              : ['vision.analyze_page', 'browser-control.operation_observe'],
+          mutation: input.intent === 'locate_in_browser' ? 'navigation_only' : 'candidate_only',
         }),
         skillPolicyHash: hashValue({ skill: 'semantic-authoring', version: 1 }),
         budget: { maxAttempts: 3, maxToolCalls: 24 },
@@ -189,9 +198,7 @@ export class SemanticAuthoringService {
 
   command(
     amendmentId: string,
-    input:
-      | { action: 'queue_at_safe_boundary' }
-      | { action: 'reject'; reason: string }
+    input: { action: 'queue_at_safe_boundary' } | { action: 'reject'; reason: string }
   ): AmendmentRecord {
     try {
       switch (input.action) {

@@ -24,6 +24,8 @@ PRD 驱动的 E2E 自动化测试编排器。把"需求分析 → 页面探索 �
 - [shipped] Prompt 模板（稳定资产）：`ai-e2e/prompts/*.md`。脚本生成模板按 DOM 快照 v2 的 `elements_map[*].locator_bundle` 读取定位候选，优先使用真实 `testid`，不会把元素 ID 当作 testid。必须保留。
 - [shipped] SPA UI 挂载前缀 `/ai-e2e/`：HomePage（`/`）+ ProjectPage（`/project/:projectId`），项目页为四步向导。
 - [shipped] dev-only 浏览器中心体验原型：`ai-e2e/ui/src/features/preview/` 在 `/#/__preview/*` 提供总览、业务版本、资产、Authoring、Run、决策、证据和设置页面；Authoring/Run 使用可拖拽且可键盘调整的三栏布局，中间浏览器持续挂载，模块切换不隐式导航，Chat 生成结构化候选，同页其他模块资产与跨 URL 修改进入人工审批。原型只使用本地 fixtures、不请求 `/api`，并由 `import.meta.env.DEV` 保证生产构建不注册且不打包；不得据此把目标 authoring/run API、SSE 或协调器描述为 shipped。
+- [shipped] semantic 浏览器中心生产工作台：`ai-e2e/ui/src/features/semantic/` 提供业务版本入口、Authoring 与 Run 全屏工作台；左侧上下文/TODO、中间持续挂载的 proxy 只读浏览器、右侧 PRD/模块/场景/DAG/Diff/影响/决策/证据及常驻可折叠 Chat。三栏支持指针/键盘调整、边界约束、双击复位和持久化，支持 system/light/dark、缩放/收起/专注和 reduced-motion；模块切换只更新深链接上下文，显式定位通过 `intent=locate_in_browser` 调度 navigation-only task且不生成候选。
+- [shipped] semantic 工作台真实控制闭环：模块/场景一键 repair 与 Chat 都生成结构化 amendment；同页其他模块和跨 URL 变更必须审批，stale/错误模块/未授权候选不可应用，安全边界后验证并原子激活。Run 页面从 snapshot-first SSE 呈现权威 Run/TODO/attempt 状态、恢复/决策/依赖跳过与证据，并提供 start/pause/resume/cancel/close-browser；legacy 四步向导与旧控制链保持不变。
 - [shipped] 验收面：`ai-e2e/src/__tests__/`（ai、database 等）单元 + 集成测试。
 - [designed] 页面运行匹配器以已交付的 Origin 无关 semantic 页面修订、部署绑定和 baseline variant 为输入；legacy `urls.url` 仍只保存完整 URL。完整参数校验、动态参数和基线采集 runtime 尚未实现。
 - [designed] 模块需求内容应融合 PRD 片段、真实 DOM/截图、页面锚点、功能说明与有序场景；不可变 requirement/coverage 表已交付，内容仍待 authoring runtime 生成。
@@ -54,7 +56,7 @@ PRD 驱动的 E2E 自动化测试编排器。把"需求分析 → 页面探索 �
 - [designed] 系统内权威脚本是结构化语义功能脚本；所有浏览器动作按语义步骤通过 proxy-adapter 可视执行。原子操作使用幂等 ID 和结果账本，状态不确定时先检查副作用；当前 `npx tsx` 子进程执行器不是目标执行路径。完整契约见 `ai-e2e/docs/agent-browser-execution-contract.md`。
 - [designed] 失败先保存截图和现场并评估后续阻碍；主代理按依赖跳过或继续。意外登出按可恢复中断上报，需要决策时暂停并在决策写入版本文档后恢复。
 - [designed] 测试流程、运行 TODO、执行尝试、Agent 和浏览器操作分别持有状态；blocked/interrupted/waiting_decision 未收敛前不提前跳过下游，取消不再记作超时。
-- [designed] ai-e2e 的不可变证据 manifest/item 与持久 run event 数据层已交付；后续 UI 从 `run.snapshot` + 单调事件恢复，并展示实时浏览器、依赖传播、决策与证据。
+- [shipped] ai-e2e 生产工作台从 `run.snapshot` + 单调事件恢复，并展示只读实时浏览器、TODO/尝试、依赖传播、决策与证据；不可变证据 manifest/item 与持久 run event 仍是权威状态源。
 - [shipped] 目标业务版本/Authoring/Run API、`ai-chat-service /api/v1/agent-tasks`、`proxy-adapter /api/v1/browser-execution/*`、`browser-control.operation_*` 与重启恢复协议见 `ai-e2e/docs/service-api-event-contract.md`；三服务控制面和 ai-e2e 跨服务协调均已接通。同一 run 禁止混用新旧执行器；ai-e2e 对 Agent/Browser SSE 的直接消费仍 pending。
 - [designed] 双模型、`vision.analyze_page`/`vision.resolve_target`、声明式 Skill manifest、版本/hash pin、工具权限交集和 prompt injection 边界见 `ai-e2e/docs/ai-model-skill-contract.md`。
 - [designed] 目标 migration 后续对 001–014 做结构 preflight/checksum baseline 和文件备份，旧 TypeScript/login/run 只读保留，legacy importer 只生成 needs_recheck 版本/候选；新链按业务版本 opt-in 且 run 固定 `semantic_v1`。

@@ -62,17 +62,17 @@
 | 模块需求文档 | in-progress | 已交付不可变 `module_requirement_revisions`、逐功能点 `functional_point_coverage` 和 copy 重映射；PRD/DOM/截图融合生成、公开 authoring 接口和完整 Schema 校验仍 pending。 |
 | 功能脚本 | in-progress | 已新增版本隔离的稳定功能脚本、不可变 current revision、模块归属和 readiness；copy 后执行资产统一 stale。公开 authoring/修订 API、完整机器 Schema 校验和语义执行仍 pending；旧 `scripts` 继续承载 legacy TypeScript。 |
 | 测试场景 | in-progress | 业务验收单位，目标以无环调用图跨模块/页面编排多个功能脚本；业务版本保存场景定义与 TODO 模板，运行时冻结计划并产生 TODO 与独立执行尝试。当前 scenario 只能直接拥有一组测试数据和脚本版本。 |
-| 业务版本 | in-progress | 已交付用户创建/查询、来源/Git/精确部署 revision 记录、幂等 `BEGIN IMMEDIATE` 深复制，以及聚合 PRD/current 资产/验证的生产 workspace 读投影；current PRD、变量、决策、页面基线、模块需求、coverage、revision dependency 与全部 semantic 资产生成新身份并重写内部引用，内容寻址 blob 复用并增加引用计数；不复制验证、运行、证据 manifest、实际数据或秘密。公开 validate/recheck、写入 UI 和正式运行仍 pending。 |
+| 业务版本 | in-progress | 已交付用户创建/查询、来源/Git/精确部署 revision 记录、幂等 `BEGIN IMMEDIATE` 深复制，以及聚合 PRD/current 资产/验证的生产 workspace 读投影和浏览器中心 UI；current PRD、变量、决策、页面基线、模块需求、coverage、revision dependency 与全部 semantic 资产生成新身份并重写内部引用，内容寻址 blob 复用并增加引用计数；不复制验证、运行、证据 manifest、实际数据或秘密。公开 validate/recheck 与通用资产写接口仍 pending。 |
 | 主代理 | in-progress | 已交付持久 authoring/run job/task/attempt/command/event、运行计划/TODO/变量、browser FIFO，以及确定性协调器对 Agent task、浏览器 session/lease/operation、outbox、恢复、依赖传播和验收结果的收敛；完整 bootstrap/recheck 阶段图与 coverage 生成仍 pending。 |
 | 页面子代理 | pending | 只执行派发的页面场景片段，负责固定重新检查、执行、验证、职责内修复和汇报；不得自行登录、造数或调用场景外脚本。 |
 | 上下文策略 | pending | 默认创建干净子代理上下文；登出等可恢复中断可由主代理在状态/副作用检查后续接原上下文，否则从检查点重建。v1 每个 browser session 固定一个 BrowserContext 和一个活动 actor；跨角色只允许主代理显式编排认证脚本串行切换。 |
 | 环境与副作用策略 | in-progress | 正式 Run 已按 immutable deployment 环境确定性投影计划副作用：local/test 自动放行，staging 删除/上传/批量/不可逆操作先生成计划级决策，批准后原子创建 active grant，production 业务写硬拒绝且 browser job 不可获取；逐 effectId 的跨服务 runtime 门禁仍 pending。完整契约见 `docs/environment-side-effect-policy-contract.md`。 |
 | Agent 执行路径 | in-progress | semantic v1 页面任务图和验收归 ai-e2e；协调器通过 ai-chat-service 的统一 DSH Agent task runtime 执行冻结结构化任务和受限 tool loop，browser binding token 只存在本机加密 secret store，不进入模型输入或数据库明文。Legacy `AiChatClient.generateText()` 仅保留无 session/tool 的单次生成链。 |
 | 页面任务与浏览器控制租约 | shipped | proxy session/lease/operation 控制面与 ai-e2e 持久 FIFO 已接通：正式 Run 使用短期 control lease，Authoring 分析使用 observe lease，候选验证按步骤自动选择 observe/control；单 session/Context/active actor、显式释放和重启收敛均有集成测试。 |
-| 可视执行与证据 | in-progress | semantic 协调器已把冻结脚本投影为 `operation_execute` 白名单步骤，拉取 operation 结果与截图/DOM artifact，校验 SHA-256 后提升到本地内容寻址存储并封存 evidence manifest；UI 时间线、脱敏完成和保留清理 worker 仍 pending。 |
+| 可视执行与证据 | in-progress | semantic 协调器已把冻结脚本投影为 `operation_execute` 白名单步骤，拉取 operation 结果与截图/DOM artifact，校验 SHA-256 后提升到本地内容寻址存储并封存 evidence manifest；生产工作台已提供只读实时画面、TODO/尝试状态与证据定位，脱敏完成和保留清理 worker 仍 pending。 |
 | 分层运行状态 | shipped | 已交付 verified scenario → immutable plan/TODO 展开、Run start/pause/resume/cancel/close-browser、page task/attempt、Agent/browser 派发、依赖传播、决策回答、可恢复中断、重启收敛、权威 snapshot/event-log 与 snapshot-first SSE。 |
 | 失败/阻塞/暂停/跳过 | shipped | semantic Run 中 `blocked/interrupted/waiting_decision` 未收敛前不传播；`recoverable_interruption` 只允许显式恢复，`outcome_unknown` 必须先回答决策，终态失败只跳过 `requires_success` 依赖，取消在活动原子操作完成后把剩余 TODO 置为 cancelled，且不伪装成 timeout。 |
-| 决策与证据 | in-progress | 版本/运行/authoring decision、policy evaluation/grant、artifact/evidence manifest/item 表与读投影已交付；协调器已自动提升 proxy operation/截图/DOM 产物并封存 manifest，inline secret 拒绝、完整性校验和外部关联有测试；保留清理、脱敏完成和生产 UI 仍 pending。 |
+| 决策与证据 | in-progress | 版本/运行/authoring decision、policy evaluation/grant、artifact/evidence manifest/item 表、读投影及生产工作台已交付；协调器已自动提升 proxy operation/截图/DOM 产物并封存 manifest，inline secret 拒绝、完整性校验和外部关联有测试；保留清理与脱敏完成仍 pending。 |
 | DOM 变化局部修复 | in-progress | 当前已支持 run 级诊断与可选自动修复；目标是只修复当前业务版本内受影响的功能脚本并重新验证。 |
 | 资产 authoring 工作流 | in-progress | job/task/attempt/event、单版本写锁、结构化 Agent 候选、上下文线程/Chat 审计、同页跨模块/跨 URL 审批、安全边界排队、真实浏览器验证、失败保持 current、stale 防错位和多资产原子激活已接入协调器；完整 PRD bootstrap/recheck 阶段图、coverage 生成和版本 validator 仍 pending。完整契约见 `docs/asset-authoring-repair-contract.md`。 |
 
@@ -93,7 +93,7 @@
 | 业务服务 | `src/services/` | shipped | PRDAnalyzerService、ExplorerService、ScriptGeneratorService、TestScenarioService、ProjectService、ExecutorService、AIDiagnosisService、StateMachineService、LoginRecorderService、BusinessVersionService | 工作流核心 |
 | AI 提示与 token | `src/ai/`（PromptTemplateManager、TokenBudgetTracker） | shipped | prompts 加载 + token 预算统计 |  |
 | 数据库 | `src/database/`（DatabaseManager、migrations、repos） | shipped | 独立 SQLite | 不与 proxy-adapter / ai-chat-service 共享 |
-| 目标领域数据模型 | `src/database/migrations/014-*`–`018-authoring-amendments.ts`、`src/database/repositories/semantic-*-repository.ts` | in-progress | 已交付目标资产治理、authoring/run/browser queue、decision/policy/evidence/outbox/external link/legacy import、结构化 amendment/Chat scope、正式 Run 控制、跨服务协调与面向工作台的安全读写投影；生产 UI、legacy importer 与保留清理仍 pending | legacy 同名表保持不动，semantic 物理表映射见 `docs/target-data-model.md` |
+| 目标领域数据模型 | `src/database/migrations/014-*`–`018-authoring-amendments.ts`、`src/database/repositories/semantic-*-repository.ts` | in-progress | 已交付目标资产治理、authoring/run/browser queue、decision/policy/evidence/outbox/external link/legacy import、结构化 amendment/Chat scope、正式 Run 控制、跨服务协调、面向工作台的安全读写投影与生产 UI；legacy importer 与保留清理仍 pending | legacy 同名表保持不动，semantic 物理表映射见 `docs/target-data-model.md` |
 | 目标 migration/import | `src/database/migration-runner.ts`、`src/database/migrations/015-*`–`018-*` | in-progress | 015+ checksum/status migration、失败 rollback、checksum 漂移拒绝、legacy import ledger 与 amendment scope 表已交付；001–014 baseline/preflight、文件备份和 importer 仍 pending | 只增不毁；旧脚本/登录/run 生成候选或只读历史，见 `docs/migration-compatibility-acceptance-contract.md` |
 | 目标 authoring 协调器 | `src/services/semantic-{coordinator,authoring-candidate}-service.ts`、`src/infrastructure/{agent-task-client,semantic-browser-client,coordinator-secret-store}.ts` | in-progress | repair 候选生成、结构化影响审批、安全边界、真实浏览器验证、证据提升、原子激活/失败保持 current 和重启收敛已交付；完整 bootstrap/recheck 阶段图与 coverage 生成仍 pending | 外部调用只走 outbox；同一版本一个写 job，完整契约见 `docs/asset-authoring-repair-contract.md` |
 | 类型 | `src/types/`（project / test-scenario / state-machine / sse-events / script / url / business-version） | shipped | 后端领域类型 / API schema |  |
@@ -110,6 +110,7 @@
 |------|------|------|------|----------|
 | App Shell | `app/`（layout、routes、pages/{HomePage,ProjectPage}） | shipped | 应用壳 + 路由 | 路由表见下 |
 | 浏览器中心体验原型 | `ui/src/features/preview/`（PreviewApp、PreviewWorkbench、fixtures、types、独立主题样式） | shipped | 仅开发环境提供的目标信息架构、Authoring/Run 三栏工作台、结构化候选与范围审批模拟 | `/#/__preview/*`；不请求 `/api`，不接目标 runtime；生产构建通过 `import.meta.env.DEV` 剔除 |
+| semantic 浏览器中心工作台 | `ui/src/features/semantic/` | shipped | 业务版本入口、Authoring/Run 三栏工作台、只读实时浏览器、PRD/模块/场景联动预览、结构化 Chat amendment、范围审批、Run 控制/恢复/决策/证据 | 只消费 `/api/v1` 权威 snapshot/SSE；模块切换不隐式导航，显式定位创建 navigation-only authoring job；布局/主题持久化且浏览器不因调整重新挂载 |
 | 项目 | `features/project/`（components/{ProjectList,ProjectCard,CreateProjectDialog,ConfigPanel,DashboardMetricCard,QuickActions}、store/{projectApi,configApi}） | shipped | 项目管理 + 配置 |  |
 | 分析 | `features/analysis/`（components/{AnalysisPanel,ModuleTree,ModuleDetail,UnderstandStep,PRDUpload}、store/analysisApi） | shipped | PRD 分析、L1/L2 模块 |  |
 | 探索 | `features/exploration/`（components/{ExplorationPanel,ExplorationControls,URLList,BindingEditor,PagePreview,UnboundModuleIndicator}、store/explorationApi） | shipped | 站点探索、URL 绑定、未绑定模块提示 |  |
@@ -148,8 +149,8 @@
 | `POST/GET /api/v1/projects/:projectId/business-versions` | shipped | 创建空白版本或从来源 copy；查询项目版本列表；写请求要求 `Idempotency-Key` | `BusinessVersionService` |
 | `GET /api/v1/business-versions/:versionId`、`POST /api/v1/business-versions/:versionId/copy` | shipped | 查询版本/current 资产摘要；原子深复制并返回资产计数和 stale ID | `BusinessVersionService` |
 | `GET /api/v1/business-versions/:versionId/{workspace,pages,modules,functional-scripts,scenarios}`、`GET /api/v1/assets/:assetType/:assetId/revisions[/revisionId]` | shipped | 聚合 PRD/current 资产/验证的工作台投影、分类资产列表、不可变修订历史与精确 revision/verification/dependency 读取 | 写入、validate 与 activate 仍 pending；`workspace` 是 UI 聚合读模型 |
-| `/api/v1/business-versions/:versionId/authoring-jobs`、`/api/v1/authoring-jobs/:jobId/*`、`/api/v1/authoring-{context-threads,amendments}/*` | in-progress | 创建 job 时立即落 repair/引导 task；context thread、结构化 amendment、Chat、影响审批、用户安全应用/拒绝，以及 snapshot/event-log/SSE 已交付；验证/激活/失败只由协调器内部推进，公开 API 不允许绕过；job pause/resume/cancel pending | amendment 只接受精确 base/candidate revision；Chat 文本不直接改变资产 |
-| `/api/v1/projects/:projectId/runs`、`/api/v1/runs/:runId/*` | in-progress | 已交付正式 Run 幂等创建、start/pause/resume/cancel/独立 close-browser、TODO page task/attempt/恢复、决策回答、snapshot/plan/TODO/decision/evidence/event-log 与 snapshot-first SSE；跨服务 worker 尚未接入 | 目标契约见 `docs/service-api-event-contract.md` |
+| `/api/v1/business-versions/:versionId/authoring-jobs`、`/api/v1/authoring-jobs/:jobId/*`、`/api/v1/authoring-{context-threads,amendments}/*` | in-progress | 创建 job 时立即落 repair/引导 task；`intent=locate_in_browser` 只创建 navigation-only control task 且不生成候选；context thread、结构化 amendment、Chat、影响审批、用户安全应用/拒绝，以及 snapshot/event-log/SSE 已交付；验证/激活/失败只由协调器内部推进，公开 API 不允许绕过；job pause/resume/cancel pending | amendment 只接受精确 base/candidate revision；Chat 文本不直接改变资产 |
+| `/api/v1/projects/:projectId/runs`、`/api/v1/runs/:runId/*` | shipped | 已交付正式 Run 幂等创建、start/pause/resume/cancel/独立 close-browser、TODO page task/attempt/恢复、决策回答、snapshot/plan/TODO/decision/evidence/event-log、snapshot-first SSE 与跨服务协调 | 目标契约见 `docs/service-api-event-contract.md` |
 | `/api/v1/capabilities` | shipped | 声明 semantic asset/authoring/run/side-effect-policy 协议、逐项 feature 和单浏览器限制；未交付写能力显式为 `false` | 目标契约见 `docs/service-api-event-contract.md` |
 
 ### 前端页面（HashRouter）
@@ -158,6 +159,9 @@
 |------|------|------|------|------|
 | `/`（HomePage） | HomePage | shipped | projectApi | 项目列表、创建对话、快捷操作、最近 run |
 | `/project/:projectId`（ProjectPage） | ProjectPage | shipped | 全部 feature APIs | 四步向导：准备目标站点 → 理解测试意图 → 探索与绑定 → 生成与执行 |
+| `/semantic/:projectId` | SemanticHomePage | shipped | business version API | semantic v1 业务版本入口；旧四步向导继续保留 |
+| `/semantic/:projectId/authoring/:versionId` | SemanticAuthoringPage | shipped | workspace、authoring snapshot/SSE、amendment/Chat/decision API、proxy MJPEG | 浏览器中心资产编排、联动预览、显式定位、候选 Diff/审批/安全应用 |
+| `/semantic/:projectId/runs/:runId` | SemanticRunPage | shipped | run snapshot/SSE、TODO/decision/evidence API、proxy MJPEG | 运行控制、恢复、依赖状态、决策与证据定位 |
 | `/__preview/*`（开发环境） | PreviewApp | shipped | 本地 fixtures | 目标体验原型：总览、版本、资产、Authoring、运行、决策、证据和设置；生产构建不注册且不打包 |
 
 ---
@@ -184,6 +188,7 @@
 | 项目状态机（draft → ... → completed） | services/StateMachineService | shipped | 单元 | services |
 | SSE 阶段事件推送 | server/plugins (SSE)、hooks/use-sse | shipped | 集成 | server、ui |
 | 浏览器中心目标体验原型 | ui/features/preview | shipped | 类型检查、Vitest、开发构建视觉与 Lighthouse | 1440px 主设计、1920px 扩展；明暗主题；三栏拖拽/键盘调整/持久化；模块切换不隐式导航；Chat 只生成结构化候选；同页其他模块资产与跨 URL 修改需审批；纯 fixtures、无生产 API |
+| semantic 浏览器中心生产工作台 | ui/features/semantic | shipped | Vitest 交互/权限测试、1440/1920 明暗视觉检查、键盘/语义/a11y 审计、生产构建 | 三列浏览器中心布局；模块切换只改深链接上下文，显式定位才调度 navigation-only task；PRD/模块/场景/DAG 联动；Chat 结构化修订、影响审批、安全边界应用；Run/TODO/恢复/决策/证据均来自权威 snapshot/SSE；legacy 向导不变 |
 | Token 预算追踪 | ai/TokenBudgetTracker | shipped | `__tests__/ai/token-tracker.test.ts` | ai |
 | Prompt 模板管理 | ai/PromptTemplateManager | shipped | `__tests__/ai/prompt-template.test.ts` | ai |
 | DB 迁移与 repo | database/ | shipped | `__tests__/database/{repositories,migration}.test.ts` | database |
@@ -202,10 +207,10 @@
 | proxy-adapter 可视语义执行 | infrastructure/semantic-browser-client、services/semantic-task-projection | in-progress | session/lease/`operation_execute/get`、真实截图/DOM 下载、SHA-256 校验与证据封存已接入 | Legacy `ExecutorService` 仍为 `npx tsx`；browser event 流消费、set_files 与逐 effectId 参数门禁仍 pending |
 | 跨服务 outbox 与恢复 | SemanticEvidenceRepository、SemanticCoordinatorService、EncryptedCoordinatorSecretStore | shipped | outbox 幂等派发/claim/settle、dispatching 重启恢复、opaque external link 单调核对、租约 token 本机加密保存与孤儿任务收敛测试 | 不在 SQLite 或模型输入保存 token 明文 |
 | 旧资产导入与版本级切流 | database、services、ui（待新增） | pending | 当前无验收面 | 旧表只读保留；生成 needs_recheck 业务版本/候选，不自动转换任意 TypeScript；run 固定 legacy 或 semantic_v1 |
-| 分层运行状态、决策与依赖传播 | database/semantic workflow foundation、SemanticQueryRepository/Service | in-progress | formal run 原子冻结、optimistic command、单调 event、Fastify snapshot/event-log 测试 | 物理模型、核心仓储与公开只读 snapshot/event-log 已交付；TODO/attempt 执行、决策应用、依赖传播、写命令和 snapshot-first SSE 仍 pending |
-| 失败证据、影响评估与依赖跳过 | database/semantic evidence foundation、services/AIDiagnosisService | in-progress | artifact/item/sealed manifest 与 secret 拒绝测试 | 证据数据层已交付；proxy 产物提升、步骤关联 runtime、影响评估和依赖跳过仍 pending |
-| 可视运行控制台 | ui/features/execution | pending | 当前有运行列表、简单时间线、诊断和修复审批；`features/preview` 已提供 dev-only fixtures 体验原型 | 仍需把原型接入真实浏览器、服务端 snapshot/event、分层状态、依赖图、决策、证据及安全暂停/恢复/取消控制后才能视为生产能力 |
-| Legacy/semantic 双轨工作区 | ui、v1 capabilities | in-progress | ai-e2e capability 与 semantic workspace/snapshot 读 API 已交付；生产 UI 尚未接入 | 同页可汇总但显著标记 executionKind；legacy 只读/旧控制，semantic 只用 v1 snapshot/events，禁止跨链 resume |
+| 分层运行状态、决策与依赖传播 | database/semantic workflow foundation、SemanticRunService、ui/features/semantic | shipped | formal run 原子冻结、optimistic command、单调 event、TODO/attempt 执行、恢复/决策、依赖传播、snapshot-first SSE 与 UI 测试 | semantic 工作台只呈现后端权威状态；legacy 项目事件继续按旧链处理 |
+| 失败证据、影响评估与依赖跳过 | database/semantic evidence foundation、SemanticCoordinatorService、ui/features/semantic | in-progress | artifact/item/sealed manifest、proxy 产物提升、依赖传播、证据读投影与 UI 定位测试 | runtime 与 UI 已交付；自动脱敏完成、保留清理和按项目权限下载仍 pending |
+| 可视运行控制台 | ui/features/semantic | shipped | 生产 API/SSE、只读 proxy 画面、分层状态、决策、证据与安全控制交互测试 | 浏览器在三栏调整时持续挂载；运行控制携带权威 stateVersion，取消与关闭浏览器分离 |
+| Legacy/semantic 双轨工作区 | ui、v1 capabilities | shipped | 项目页保留旧四步向导并提供 semantic 入口；semantic 页面只消费 v1 workspace/snapshot/SSE | legacy 与 semantic 路由/控制链分离，禁止跨链 resume |
 | DOM 变化后的功能脚本局部修复 | services/AIDiagnosisService | in-progress | 当前仅有 run 级诊断/自动修复 | 需当前业务版本内的页面/模块/功能脚本影响定位与定向修复 |
 
 ---
@@ -267,14 +272,13 @@
 | PowerShell JSON 序列化陷阱 | tech-debt | known | 上传 PRD 应用 `curl --data-binary @file.json`；中文 stderr 可能 GBK 乱码但不影响逻辑 |
 | 缺少规范化页面与 URL 参数模型 | requirement-gap | pending | 当前 `urls.url` 保存完整字符串，无法区分部署 Origin、路由模板、身份/运行参数与基线变体 |
 | 模块需求内容生成与公开接口未实现 | requirement-gap | pending | `module_requirement_revisions`/coverage 已落库；PRD、页面证据和决策尚未由 authoring runtime 收敛为内容 |
-| 业务版本 recheck/校验与 UI 未实现 | requirement-gap | pending | 创建、查询和独立 copy 已交付；尚无公开资产 CRUD/修订激活、deployment-scoped 真实验证、recheck job、正式运行门禁或 UI |
-| semantic v1 尚未完整产品化 | requirement-gap | in-progress | migration 014–018、workspace/Authoring/Run API、snapshot-first SSE、跨服务协调器与可视语义执行已接入；完整 bootstrap/recheck、生产 UI 和 legacy importer 尚未接入 |
+| 业务版本 recheck/校验与通用资产写接口未实现 | requirement-gap | pending | 创建、查询、独立 copy、工作台 UI、局部 repair 与正式运行门禁已交付；尚无完整公开资产 CRUD/修订激活、deployment-scoped recheck job 与版本 validator |
+| semantic v1 尚未完整产品化 | requirement-gap | in-progress | migration 014–018、workspace/Authoring/Run API、snapshot-first SSE、跨服务协调器、可视语义执行与生产浏览器中心工作台已接入；完整 bootstrap/recheck 和 legacy importer 尚未接入 |
 | 模块下多功能脚本与场景调用图仅有持久化基座 | requirement-gap | pending | semantic stable identity/current revision 与无环引用校验已交付；authoring、重复/条件、运行计划、TODO、跨脚本输入输出和追加式修订仍未实现，legacy `run-all` 仍只是顺序遍历 |
 | 完整 Authoring 阶段编排未实现 | requirement-gap | pending | 正式 Run 与局部 repair 已有确定性协调器、Agent 派发、租约、暂停恢复和依赖传播；bootstrap/recheck 的多阶段任务图与 coverage 生成仍 pending |
 | Agent task 事件流消费未实现 | requirement-gap | pending | semantic 协调器已消费 Agent task create/get/commands 与结构化结果，并通过 outbox/外部关联重启收敛；当前采用 GET 核对，尚未消费 Agent snapshot-first SSE/event-log |
 | proxy browser event 流消费未实现 | requirement-gap | pending | semantic 协调器已接入 session/lease/operation、可视语义步骤和 artifact 提升；尚未消费 browser snapshot-first SSE/event-log，Legacy `ExecutorService` 仍用 `npx tsx` |
-| 证据脱敏与保留清理未实现 | requirement-gap | pending | operation、截图与 DOM artifact 已自动校验哈希、内容寻址提升并封存 manifest；异步脱敏完成、保留清理和生产 UI 时间线仍 pending |
-| 分层状态生产 UI 未实现 | requirement-gap | pending | Run/TODO/attempt/decision/command/event、公开 snapshot/SSE、决策应用、依赖传播和跨服务协调已交付；生产工作台仍 pending |
+| 证据脱敏与保留清理未实现 | requirement-gap | pending | operation、截图与 DOM artifact 已自动校验哈希、内容寻址提升并封存 manifest，生产工作台已提供证据定位；异步脱敏完成与保留清理仍 pending |
 | DOM 变化影响定位未实现 | requirement-gap | pending | 当前自动修复由失败 run 触发，尚不能按当前业务版本的功能脚本定向维护 |
 | migration baseline/import/cutover 未实现 | requirement-gap | pending | 015+ checksum runner 与 legacy import ledger 表已交付；001–014 preflight/baseline、文件备份、候选 importer、能力协商和版本级切流仍未实现 |
 | 完整 authoring/coverage 阶段图未实现 | requirement-gap | pending | 局部 repair 的 Agent 候选、影响审批、真实浏览器验证和激活协调器已交付；旧 PRDAnalyzer/Explorer/ScriptGenerator 尚未切换，bootstrap/recheck 与 coverage 生成仍 pending |

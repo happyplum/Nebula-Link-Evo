@@ -224,8 +224,11 @@ pnpm type-check   # tsc --noEmit
 - `POST/GET /api/v1/projects/:projectId/business-versions`
 - `GET /api/v1/business-versions/:versionId`
 - `POST /api/v1/business-versions/:versionId/copy`
+- `/api/v1/business-versions/:versionId/authoring-jobs`、`/api/v1/authoring-jobs/:jobId/*`
+- `/api/v1/authoring-context-threads/:threadId/messages`、`/api/v1/authoring-amendments/:amendmentId/*`
+- `/api/v1/projects/:projectId/runs`、`/api/v1/runs/:runId/*`
 
-业务版本写请求必须携带 `Idempotency-Key`。公开资产 authoring、recheck、semantic run 与对应 UI 尚未交付。
+semantic v1 的业务版本、局部 repair Authoring、正式 Run 与浏览器中心工作台已交付；写请求按接口要求携带 `Idempotency-Key`，状态命令同时携带 `If-Match`。完整 bootstrap/recheck、通用资产写接口和 legacy importer 尚未交付。
 - `/api/projects/:id/state`
 - `/api/projects/:id/events`
 

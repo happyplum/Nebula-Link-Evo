@@ -38,6 +38,9 @@ const CreateJobBodySchema = Type.Object(
       Type.Literal('repair'),
       Type.Literal('import_conversion'),
     ]),
+    intent: Type.Optional(
+      Type.Union([Type.Literal('author_assets'), Type.Literal('locate_in_browser')])
+    ),
     targetType: Type.Optional(Type.String({ maxLength: 100 })),
     targetId: Type.Optional(IdSchema),
     currentUrl: Type.Optional(Type.String({ maxLength: 2_000 })),
@@ -196,6 +199,7 @@ const semanticAuthoringRoutes: FastifyPluginAsyncTypebox<SemanticAuthoringRoutes
       const result = requireService().createJob({
         businessVersionId: request.params.versionId,
         mode: request.body.mode,
+        ...(request.body.intent ? { intent: request.body.intent } : {}),
         idempotencyKey: request.headers['idempotency-key'],
         ...(request.body.targetType ? { targetType: request.body.targetType } : {}),
         ...(request.body.targetId ? { targetId: request.body.targetId } : {}),

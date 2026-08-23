@@ -93,27 +93,39 @@ describe('SemanticCoordinatorService', () => {
 
     for (let index = 0; index < 16; index += 1) await coordinator.tick();
 
-    expect(db.prepare('SELECT lifecycle, outcome FROM test_runs WHERE id = ?').get(created.id)).toEqual({
+    expect(
+      db.prepare('SELECT lifecycle, outcome FROM test_runs WHERE id = ?').get(created.id)
+    ).toEqual({
       lifecycle: 'completed',
       outcome: 'passed',
     });
-    expect(db.prepare('SELECT state FROM browser_jobs WHERE id = ?').get(created.browserJobId)).toEqual({
+    expect(
+      db.prepare('SELECT state FROM browser_jobs WHERE id = ?').get(created.browserJobId)
+    ).toEqual({
       state: 'completed',
     });
     expect(db.prepare('SELECT state FROM run_todos WHERE run_id = ?').get(created.id)).toEqual({
       state: 'passed',
     });
     expect(
-      db.prepare("SELECT COUNT(*) AS count FROM external_task_links WHERE run_id = ?").get(created.id)
+      db
+        .prepare('SELECT COUNT(*) AS count FROM external_task_links WHERE run_id = ?')
+        .get(created.id)
     ).toEqual({ count: 3 });
     expect(
-      db.prepare("SELECT COUNT(*) AS count FROM evidence_manifests WHERE run_id = ? AND status = 'sealed'").get(created.id)
+      db
+        .prepare(
+          "SELECT COUNT(*) AS count FROM evidence_manifests WHERE run_id = ? AND status = 'sealed'"
+        )
+        .get(created.id)
     ).toEqual({ count: 1 });
     expect(browser.closed).toBe(true);
     expect(browser.revoked).toBe(true);
     expect(agent.createdRequest?.browserBinding.browserLeaseToken).toBe('opaque-lease-token');
     const persistedAgentPayload = db
-      .prepare("SELECT payload_json_redacted FROM integration_outbox WHERE command_type = 'agent_task.create'")
+      .prepare(
+        "SELECT payload_json_redacted FROM integration_outbox WHERE command_type = 'agent_task.create'"
+      )
       .get() as { payload_json_redacted: string };
     expect(persistedAgentPayload.payload_json_redacted).not.toContain('opaque-lease-token');
   });
@@ -148,7 +160,9 @@ describe('SemanticCoordinatorService', () => {
     });
 
     expect(coordinator.initialize()).toEqual({ recoveredOutbox: 1 });
-    expect(db.prepare('SELECT status FROM integration_outbox WHERE id = ?').get('recover-me')).toEqual({
+    expect(
+      db.prepare('SELECT status FROM integration_outbox WHERE id = ?').get('recover-me')
+    ).toEqual({
       status: 'retryable_failed',
     });
   });
@@ -221,14 +235,17 @@ describe('SemanticCoordinatorService', () => {
     const candidateRevisionId = String(amendment?.changes[0]?.candidateRevisionId);
     expect(candidateRevisionId).toMatch(/^[0-9a-f-]{36}$/);
     expect(
-      db.prepare(
-        "SELECT id FROM semantic_functional_module_revisions WHERE functional_module_id = ? AND lifecycle = 'current'"
-      ).get(fixture.moduleId)
+      db
+        .prepare(
+          "SELECT id FROM semantic_functional_module_revisions WHERE functional_module_id = ? AND lifecycle = 'current'"
+        )
+        .get(fixture.moduleId)
     ).toEqual({ id: fixture.moduleRevisionId });
-    const candidateRevision =
-      db.prepare('SELECT payload_json, lifecycle FROM semantic_functional_module_revisions WHERE id = ?').get(
-        candidateRevisionId
-      ) as { payload_json: string; lifecycle: string };
+    const candidateRevision = db
+      .prepare(
+        'SELECT payload_json, lifecycle FROM semantic_functional_module_revisions WHERE id = ?'
+      )
+      .get(candidateRevisionId) as { payload_json: string; lifecycle: string };
     expect(candidateRevision.lifecycle).toBe('draft');
     expect(JSON.parse(candidateRevision.payload_json)).toEqual(candidatePayload);
     expect(agent.createdRequest?.browserBinding.access).toBe('observe');
@@ -245,20 +262,82 @@ describe('SemanticCoordinatorService', () => {
 
     expect(verificationActions).toContain('authoring_verification.activated');
     expect(amendments.getAmendment(amendment!.id)).toMatchObject({ state: 'activated' });
-    expect(db.prepare('SELECT lifecycle, outcome FROM authoring_jobs WHERE id = ?').get(job.id)).toEqual({
+    expect(
+      db.prepare('SELECT lifecycle, outcome FROM authoring_jobs WHERE id = ?').get(job.id)
+    ).toEqual({
       lifecycle: 'completed',
       outcome: 'succeeded',
     });
     expect(
-      db.prepare(
-        "SELECT id FROM semantic_functional_module_revisions WHERE functional_module_id = ? AND lifecycle = 'current'"
-      ).get(fixture.moduleId)
+      db
+        .prepare(
+          "SELECT id FROM semantic_functional_module_revisions WHERE functional_module_id = ? AND lifecycle = 'current'"
+        )
+        .get(fixture.moduleId)
     ).toEqual({ id: candidateRevisionId });
     expect(
-      db.prepare(
-        "SELECT COUNT(*) AS count FROM evidence_manifests WHERE authoring_job_id = ? AND status = 'sealed'"
-      ).get(job.id)
+      db
+        .prepare(
+          "SELECT COUNT(*) AS count FROM evidence_manifests WHERE authoring_job_id = ? AND status = 'sealed'"
+        )
+        .get(job.id)
     ).toEqual({ count: 2 });
+  });
+
+  it('将显式浏览器定位限制为 navigation-only 控制任务且不生成候选', async () => {
+    const fixture = createFixture(db, assets);
+    const versions = new BusinessVersionRepository(db);
+    const amendments = new AuthoringAmendmentRepository(db, assets);
+    const authoring = new SemanticAuthoringService(workflows, assets, amendments, versions);
+    const job = authoring.createJob({
+      businessVersionId: fixture.versionId,
+      mode: 'recheck',
+      intent: 'locate_in_browser',
+      idempotencyKey: 'locate-account-page',
+      targetType: 'functional_module',
+      targetId: fixture.moduleId,
+      currentUrl: 'https://test.example/account',
+      reason: '在浏览器中定位账号页',
+      createdBy: 'operator',
+    });
+    const agent = new FakeAgentTaskClient();
+    const coordinator = new SemanticCoordinatorService({
+      repository: new SemanticCoordinatorRepository(db),
+      workflows,
+      evidence,
+      runs,
+      agentTasks: agent,
+      browser: new FakeBrowserClient(),
+      secretStore: new MemoryCoordinatorSecretStore(),
+      authoringCandidates: new SemanticAuthoringCandidateService(
+        new SemanticQueryRepository(db, versions),
+        assets,
+        amendments
+      ),
+    });
+
+    for (let index = 0; index < 16; index += 1) await coordinator.tick();
+
+    expect(agent.createdRequest?.clientTaskId).toBe(`authoring-locate:${job.taskId}`);
+    expect(agent.createdRequest?.browserBinding.access).toBe('control');
+    expect(agent.createdRequest?.toolPolicy).toMatchObject({
+      allow: ['browser-control.operation_execute'],
+      constraints: {
+        'browser-control.operation_execute': {
+          steps: [
+            { stepId: 'locate-target-url', kind: 'act', operation: 'navigate' },
+            { stepId: 'observe-located-page', kind: 'observe', operation: 'page_state' },
+          ],
+        },
+      },
+    });
+    expect(amendments.listAmendments(job.id)).toEqual([]);
+    expect(
+      db.prepare('SELECT lifecycle, outcome FROM authoring_jobs WHERE id = ?').get(job.id)
+    ).toEqual({
+      lifecycle: 'completed',
+      outcome: 'succeeded',
+    });
   });
 });
 
@@ -295,14 +374,19 @@ class FakeAgentTaskClient implements AgentTaskClientPort {
             reasonClass: 'acceptance_passed',
             summary: '候选已通过真实浏览器验证',
           }
-        : input.clientTaskId.startsWith('authoring:')
-        ? this.authoringOutput
-        : {
-            result: 'succeeded',
-            reasonClass: 'acceptance_passed',
-            summary: '所有硬断言通过',
-            confirmedOutputsJson: '{}',
-          },
+        : input.clientTaskId.startsWith('authoring-locate:')
+          ? {
+              status: 'no_change',
+              summary: '已定位目标页面，未修改任何资产',
+            }
+          : input.clientTaskId.startsWith('authoring:')
+            ? this.authoringOutput
+            : {
+                result: 'succeeded',
+                reasonClass: 'acceptance_passed',
+                summary: '所有硬断言通过',
+                confirmedOutputsJson: '{}',
+              },
       toolCalls: verifying
         ? [
             {
@@ -363,7 +447,12 @@ class FakeBrowserClient implements SemanticBrowserClientPort {
   async createLease(
     _sessionId: string,
     _idempotencyKey: string,
-    input: { mode: 'observe' | 'control'; ttlSeconds?: number; tabIds?: string[]; operations?: string[] }
+    input: {
+      mode: 'observe' | 'control';
+      ttlSeconds?: number;
+      tabIds?: string[];
+      operations?: string[];
+    }
   ): Promise<{ lease: BrowserLeaseView; token: string; tokenIssued: true }> {
     this.leaseCounter += 1;
     const leaseId = `10000000-0000-4000-8000-${String(this.leaseCounter).padStart(12, '0')}`;
@@ -411,7 +500,9 @@ class FakeBrowserClient implements SemanticBrowserClientPort {
     throw new Error('not used');
   }
 
-  private session(status: BrowserSessionView['status'] = this.closed ? 'closed' : 'active'): BrowserSessionView {
+  private session(
+    status: BrowserSessionView['status'] = this.closed ? 'closed' : 'active'
+  ): BrowserSessionView {
     return {
       id: SESSION_ID,
       status,
@@ -475,7 +566,12 @@ function createFixture(db: DatabaseSync, assets: SemanticAssetRepository) {
   const businessModule = versions.createBusinessModule({
     businessVersionId: version.id,
     moduleKey: 'account',
-    payload: { schema: 'nebula.ai-e2e.business-module/1.0', name: '账号', sortOrder: 0, prdSourceRefs: [] },
+    payload: {
+      schema: 'nebula.ai-e2e.business-module/1.0',
+      name: '账号',
+      sortOrder: 0,
+      prdSourceRefs: [],
+    },
     createdBy: 'system',
   });
   const module = versions.createFunctionalModule({
@@ -538,8 +634,16 @@ function createFixture(db: DatabaseSync, assets: SemanticAssetRepository) {
     status: 'valid',
   });
   for (const executable of [
-    { assetType: 'functional_script' as const, assetId: script.id, revisionId: script.currentRevision.id },
-    { assetType: 'test_scenario' as const, assetId: scenario.id, revisionId: scenario.currentRevision.id },
+    {
+      assetType: 'functional_script' as const,
+      assetId: script.id,
+      revisionId: script.currentRevision.id,
+    },
+    {
+      assetType: 'test_scenario' as const,
+      assetId: scenario.id,
+      revisionId: scenario.currentRevision.id,
+    },
   ]) {
     assets.recordVerification({
       businessVersionId: version.id,
