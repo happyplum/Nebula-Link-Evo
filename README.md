@@ -19,6 +19,9 @@ Browser ←→ Debug UI (:5173 dev)
          AI Providers                Chromium
     (GLM, OpenAI, Anthropic, Kimi, NVIDIA)
 
+  nebula-browser CLI / DeepSeek Harness plugin
+              └── controlled client ──→ :3000 HTTP + /mcp
+
          AI E2E (:3002) — 自动化测试编排
     AiChatClient(:3001) + BrowserGatewayClient(:3000)
 ```
@@ -71,6 +74,8 @@ Browser ←→ Debug UI (:5173 dev)
 | `debug-ui` | :5173 | 实时调试监控面板（chat SSE → :3001, browser/debug → :3000） |
 | `ai-e2e` | :3002 | AI 驱动的 E2E 自动化测试编排（通过 AiChatClient(:3001) 和 BrowserGatewayClient(:3000) 消费） |
 | `shared` | — | 共享类型和工具库 |
+| `integrations/browser-control-client` | — | 受控 HTTP/MCP 客户端、自动会话控制器与 `nebula-browser` CLI |
+| `integrations/deepseek-harness-plugin` | — | 仅暴露 observe/act 的 DeepSeek Harness bundle；act 逐次审批 |
 
 ## Quick Start
 
@@ -124,6 +129,7 @@ proxy-adapter/      # Browser MCP gateway (Fastify, MCP Server, Playwright contr
 ai-chat-service/    # AI chat backend (Fastify, conversation, chat SSE, provider orchestration)
 ai-e2e/             # E2E automation orchestrator (consumes proxy-adapter and ai-chat-service HTTP APIs)
 shared/             # Shared types & utils (@nebula-link-evo/shared)
+integrations/       # Local controlled clients and harness adapters
 docs/               # Documentation
 ```
 
@@ -142,6 +148,8 @@ docs/               # Documentation
 - [AI Operation Flow](docs/reference/ai-operation-flow.md) — AI 执行模型
 - [API Reference (Chat & Debug)](docs/reference/debug-page-integration-api-reference.md) — Proxy Adapter API
 - [Product Spec Index](docs/PRODUCT-SPEC-INDEX.md) — 跨包产品规格索引（端口、API、SSE、MCP、shared 类型、依赖方向、强制维护协议）
+- [Browser Control Client](integrations/browser-control-client/README.md) — `nebula-browser` CLI、NDJSON 与受控会话语义
+- [DeepSeek Harness Plugin](integrations/deepseek-harness-plugin/README.md) — bundle 安装、审批与安全边界
 - [AI E2E Service API & Events](ai-e2e/docs/service-api-event-contract.md) — 三服务目标 API、MCP 原子操作、事件、幂等与恢复
 - [AI Models & Skills](ai-e2e/docs/ai-model-skill-contract.md) — 双模型、单次视觉分析、受限 Agent task 与声明式 Skills
 - [AI E2E Migration & Acceptance](ai-e2e/docs/migration-compatibility-acceptance-contract.md) — 旧数据/脚本迁移、版本级切流、回滚与发布门禁
@@ -171,6 +179,7 @@ AGPL 允许个人和企业使用、修改与分发软件，但必须遵守其开
 系统按“浏览器能力 → AI 基础能力 → E2E 业务”三层演进，层间职责不得倒置：
 
 - **`proxy-adapter`（shipped）**：Playwright/CDP 集成的唯一所有者，负责页面分析、DOM/截图证据和浏览器动作，并通过 `browser-control.*` MCP 工具及调试 API 对外提供服务。当前实现由进程内 Playwright 启动 Chromium，可选开放 remote-debugging-port，并通过页面 `CDPSession` 获取屏播帧；没有外部 `playwright-server` 或 `connectOverCDP` 链路。
+- **`integrations/*`（shipped）**：`browser-control-client` 只通过既有 loopback HTTP 控制面与 `/mcp` 管理受控浏览器会话，提供 `nebula-browser` CLI；DeepSeek Harness bundle 只暴露收窄后的 observe/act 工具、隐藏 binding 并对每个 act 使用原生一次性审批。两者都不拥有 Playwright/CDP，也不替代 `ai-chat-service` 或 `ai-e2e` 编排。
 - **`ai-chat-service`（in-progress）**：可复用 AI 基础能力层。分析/决策模型负责理解需求、文档和浏览器证据并规划下一步测试动作；主代理和子代理都可调用视觉模型，但视觉模型每次只完成一个具有完整输入的分析问题，不保存流程状态或连续执行。跨服务只传递 `snapshot_id`、`nebula_id`、`locator_bundle`、置信度等可序列化目标引用，不传递进程内 Playwright 对象。MCP client/ToolRegistry、受限 Agent task 命令/事件控制面和本地只读声明式 Skills Runtime 已交付；通用视觉 v2 与完整副作用授权仍为 `pending`。
 - **`ai-e2e`（in-progress）**：面向 E2E 的业务层，通过 PRD 与真实网页建立业务版本、页面、功能模块、功能脚本和测试场景。现有 PRD 分析、页面探索、legacy TypeScript 链，以及 semantic 业务版本/current 资产图/独立 copy 基座已交付；完整资产 authoring/recheck、语义执行和主/子代理编排仍需实现。
 

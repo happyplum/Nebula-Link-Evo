@@ -45,6 +45,8 @@
 | liveview-system | debug-ui + proxy-adapter | [liveview-system.md](liveview-system.md) |
 | ai-e2e-orchestration | ai-e2e | [ai-e2e-orchestration.md](ai-e2e-orchestration.md) |
 | shared-types | shared | [shared-types.md](shared-types.md) |
+| browser-control-cli | shared + proxy-adapter + browser-control-client | [browser-control-cli.md](browser-control-cli.md) |
+| deepseek-harness-integration | browser-control-client + deepseek-harness-plugin | [deepseek-harness-integration.md](deepseek-harness-integration.md) |
 
 ## 同步规则
 

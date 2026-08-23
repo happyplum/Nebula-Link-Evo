@@ -1,0 +1,9 @@
+- insert:
+    - id: nebula-browser-control
+      name: '@nebula-link-evo/deepseek-harness-plugin'
+      inject: [tools, approval]
+      config:
+        baseUrl: http://127.0.0.1:3000
+        leaseTtlSeconds: 300
+        leaseRefreshSkewSeconds: 30
+        operationTimeoutMs: 30000

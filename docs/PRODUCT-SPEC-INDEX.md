@@ -14,6 +14,8 @@
 | `ai-chat-service` | `:3001` | AI 对话服务（provider 编排 + Chat SSE） | [`ai-chat-service/PRODUCT-SPEC.md`](../ai-chat-service/PRODUCT-SPEC.md) | [`ai-chat-service/AGENTS.md`](../ai-chat-service/AGENTS.md) |
 | `debug-ui` | `:5173`（dev） | 主调试监控面板（前端 SPA） | [`debug-ui/PRODUCT-SPEC.md`](../debug-ui/PRODUCT-SPEC.md) | [`debug-ui/AGENTS.md`](../debug-ui/AGENTS.md) |
 | `ai-e2e` | `:3002` | PRD 驱动 E2E 自动化测试编排器 | [`ai-e2e/PRODUCT-SPEC.md`](../ai-e2e/PRODUCT-SPEC.md) | [`ai-e2e/AGENTS.md`](../ai-e2e/AGENTS.md) |
+| `integrations/browser-control-client` | —（客户端） | 受控 HTTP/MCP 客户端与 CLI | [`integrations/browser-control-client/PRODUCT-SPEC.md`](../integrations/browser-control-client/PRODUCT-SPEC.md) | [`integrations/AGENTS.md`](../integrations/AGENTS.md) |
+| `integrations/deepseek-harness-plugin` | —（DSH bundle） | DeepSeek Harness 受控浏览插件 | [`integrations/deepseek-harness-plugin/PRODUCT-SPEC.md`](../integrations/deepseek-harness-plugin/PRODUCT-SPEC.md) | [`integrations/AGENTS.md`](../integrations/AGENTS.md) |
 
 ### 系统拓扑
 
@@ -31,6 +33,9 @@ Browser ←→ debug-ui (:5173 dev)
    ├── AiChatClient → ai-chat-service (:3001) POST /api/ai/generate
    └── BrowserGatewayClient → proxy-adapter (:3000) /debug/api/*
 
+   nebula-browser / DeepSeek Harness plugin
+   └── browser-control-client → proxy-adapter (:3000) HTTP + /mcp
+
    shared (@nebula-link-evo/shared) — 跨包类型与工具
 ```
 
@@ -43,10 +48,15 @@ shared  ←──  proxy-adapter
         ←──  ai-chat-service
         ←──  ai-e2e
         ←──  debug-ui（间接，通过类型）
+        ←──  browser-control-client
+        ←──  deepseek-harness-plugin
 
 proxy-adapter  ←──  ai-chat-service（MCP Client → /mcp）
                ←──  ai-e2e（BrowserGatewayClient → /debug/api/*）
                ←──  debug-ui（REST + SSE + MJPEG）
+               ←──  browser-control-client（HTTP browser-execution + /mcp operation）
+
+browser-control-client  ←──  deepseek-harness-plugin
 
 ai-chat-service  ←──  debug-ui（Chat SSE）
                  ←──  ai-e2e（当前消费 /api/ai/generate；Agent task 命令/事件与单 Skill runtime 已可用，消费接入 pending）
@@ -63,6 +73,7 @@ debug-ui  ←──  （仅被用户消费）
 - **ai-chat-service** 通过 MCP-over-HTTP 消费 `proxy-adapter`，不直连 Playwright。
 - **ai-e2e** 通过 `AiChatClient` + `BrowserGatewayClient` 消费，零 `@ai-sdk/*` 依赖。
 - **debug-ui** 仅消费 `ai-chat-service` 与 `proxy-adapter` 的 HTTP/SSE。
+- **browser-control-client** 只消费 proxy 的 loopback HTTP 控制面与 `/mcp`，不直连 Playwright/CDP；**deepseek-harness-plugin** 只消费该客户端。
 - 跨包数据库**互不共享**：每个后端包维护独立 SQLite。
 
 ### 2.1 核心产品分层与目标状态
@@ -70,6 +81,7 @@ debug-ui  ←──  （仅被用户消费）
 | 层 | 状态 | 产品职责 |
 |----|------|----------|
 | 浏览器能力层：`proxy-adapter` | shipped | Playwright/CDP 集成的唯一所有者；分析页面、生成 DOM/截图证据、执行浏览器动作，并以 `browser-control.*` MCP 工具和调试 API 对外服务。 |
+| 受控本地接入层：`integrations/*` | shipped | 复用既有 browser-execution HTTP + `/mcp`；提供 CLI 与只暴露 observe/act、逐 act 审批的 DeepSeek Harness bundle，不拥有浏览器引擎或业务编排。 |
 | AI 基础能力层：`ai-chat-service` | in-progress | 分析/决策模型、视觉模型、MCP client/ToolRegistry、会话能力、Agent task 命令/事件控制面与本地只读声明式 Skills Runtime 已交付；通用视觉 v2 与完整副作用授权仍 pending。 |
 | E2E 业务层：`ai-e2e` | in-progress | PRD 分析、页面探索、legacy scenario 级 TypeScript 链，以及 semantic 业务版本/current 资产图/独立 copy 基座已交付；完整页面匹配、authoring/recheck、主/页面子代理编排和可视语义执行仍为目标能力。 |
 
@@ -92,7 +104,7 @@ debug-ui  ←──  （仅被用户消费）
 
 | 契约 | 提供方 | 消费方 | 路径 | 备注 |
 |------|--------|--------|------|------|
-| MCP Server (StreamableHTTP) | `proxy-adapter` | `ai-chat-service` (MCP Client) | `POST /mcp`；`GET /mcp` 返回 405 | 无状态 JSON 响应；GET SSE 不可用时以 405 允许标准客户端回退；暴露 `browser-control.*`（15 个兼容工具 + 3 个受控 operation 工具）；普通 Chat 过滤受控工具 |
+| MCP Server (StreamableHTTP) | `proxy-adapter` | `ai-chat-service` / `browser-control-client` | `POST /mcp`；`GET /mcp` 返回 405 | 无状态 JSON 响应；暴露 15 个兼容工具 + 3 个受控 operation 工具；受控客户端只调用 execute/cancel 并通过 HTTP 查 ledger；普通 Chat 过滤受控工具 |
 | LiveKit token | `proxy-adapter` | `debug-ui` | `GET /api/livekit-token` | 用于 LiveView 升级 |
 | Health | `proxy-adapter` / `ai-chat-service` | 任意 | `GET /api/health` 或 `/health` | 健康检查 |
 | Config | `proxy-adapter` / `ai-chat-service` | `debug-ui` | `GET /api/config` 或 `/config` | 当前运行配置 |
@@ -107,7 +119,7 @@ debug-ui  ←──  （仅被用户消费）
 | 资产 authoring（in-progress） | `ai-e2e` | `ai-e2e ui` | job create/snapshot/event-log、context thread/Chat audit、结构化 amendment、同页跨模块/跨 URL 审批和安全边界/验证/原子激活命令已交付；job pause/resume/cancel/events pending | bootstrap/recheck/repair/import_conversion、exact base/candidate、stale、impact decision 与 snapshot-first SSE |
 | E2E Run（in-progress） | `ai-e2e` | `ai-e2e ui` | formal create、start/pause/resume/cancel/close-browser、TODO attempt/recovery、decision answer、snapshot/plan/TODO/decision/evidence/event-log 与 snapshot-first SSE 已交付；跨服务 coordinator pending | run 命令、决策、证据、snapshot-first SSE 与持久 event log |
 | 环境与副作用策略（in-progress） | `ai-e2e` | `ai-e2e ui` / `ai-chat-service` | Run snapshot/decision/event、policy evaluation/active grant 与 Agent task 输入 | 计划级 local/test 自动放行、staging 高风险一次审批并生成 grant、production 业务写硬拒绝已交付；逐 effectId runtime 交集 pending |
-| 浏览器执行控制面（in-progress） | `proxy-adapter`                     | `ai-e2e` / `ai-chat-service`    | `/api/v1/browser-execution/*`                                                                                                                        | session/lease/operation query、真实 before/after screenshot 与 DOM capture、失败截图、内容寻址短期存储、完整性校验、session-scoped artifact GET、snapshot-first SSE 和 event-log 已交付；单活动 session/单 Context、opaque token hash、SQLite WAL、legacy 门禁和重启 `outcome_unknown` 已生效。opaque hold/retention eligibility 已有数据层，续租、脱敏/清理 worker、video 和动画仍 pending |
+| 浏览器执行控制面（in-progress） | `proxy-adapter` | `ai-e2e` / `ai-chat-service` / `browser-control-client` | `/api/v1/browser-execution/*` | session/lease/operation query、artifact、snapshot-first SSE/event-log 已交付；CLI/Harness 客户端不增加路由。单活动 session/单 Context、opaque token hash、SQLite WAL、legacy 门禁和重启 `outcome_unknown` 已生效；续租 API、脱敏/清理 worker、video 和动画仍 pending |
 | 能力协商（shipped） | 三个后端服务 | 其他服务/UI | `GET /api/v1/capabilities` | 三服务均已交付各自 capability；ai-e2e 已声明 structured amendment、Run command 与 snapshot-first SSE，未交付的 Authoring job command 保持 `false`。协议 major、功能和限制不含 secret，run preflight 不兼容时禁止静默回退 |
 
 ### 3.3 MCP 工具契约
@@ -116,6 +128,8 @@ debug-ui  ←──  （仅被用户消费）
 - `ai-chat-service` 通过 MCP Client 自动拉取 browser-control 工具；状态机管理 server 生命周期，指数退避重连（最多 5 次），`toolsChanged` 事件通知工具变更。
 - 视觉分析由 `ai-chat-service` 内部 `VisionAnalyzer` + `VisionToolProvider` 提供，注册 `vision.find_element` 工具（`exposeTo: ['chat']`），不通过 MCP Server 暴露；工具本地缓存最近 5 个 DOM snapshot，`snapshot_id` 命中时复用缓存。
 - `browser-control.operation_execute/get/cancel` 已作为 E2E 受限原子工具交付；现有 15 个工具继续作为兼容/调试面。`ai-chat-service` 普通 Chat provider 明确过滤三项受控工具；受限 Agent wrapper 已模型不可见地注入 session/Tab/lease/token/leaseSequence/operation ID，get/cancel 不暴露给任务模型。
+- `browser-control-client` 通过 HTTP 管理 capability/session/lease/artifact/ledger，只通过 `/mcp` 调用 execute/cancel；`nebula-browser` 和 DeepSeek 插件都复用该客户端。DeepSeek profile 不得同时向同一 proxy 挂载未包装的通用 MCP bridge。
+- DeepSeek 插件只向模型暴露 `nebula_browser_observe` / `nebula_browser_act`；后者逐次要求 Harness `allowed-once`，所有 binding/凭证/operationId 隐藏注入。
 - 当前 wrapper 把模型调用限制到调用方冻结的语义 `stepId/kind/operation/effectId`，并与 lease 的 Tab/operation 约束叠加；完整 policy evaluation/风险投影/active grant 与参数级数量交集尚未实现。`proxy-adapter` 不解释 environment 或审批，只执行通用 operation 约束。
 - 目标新增内部 `vision.analyze_page` 和 `vision.resolve_target`；两者只读取一次不可变 snapshot，返回页面摘要或可序列化 locator candidates，不操作浏览器。`vision.find_element` 在迁移期保留兼容。
 - 同名工具命名规则：`<serverName>-<toolName>` 前缀。
@@ -126,6 +140,7 @@ debug-ui  ←──  （仅被用户消费）
 | 类型/模块 | 路径 | 消费方 |
 |-----------|------|--------|
 | Action 类型 | `types/action.ts` | `proxy-adapter`、`debug-ui`、`ai-chat-service` |
+| 浏览器执行线协议与操作常量 | `types/browser-execution.ts` | `proxy-adapter`、`ai-chat-service`、`browser-control-client`、`deepseek-harness-plugin` |
 | SSE 事件 | `types/sse-events.ts` | `proxy-adapter`、`ai-chat-service`、`debug-ui` |
 | Debug 事件 | `types/debug-events.ts` | `proxy-adapter`、`debug-ui` |
 | 视觉标记 | `types/vision-marker.ts` | `proxy-adapter`、`debug-ui` |
@@ -219,6 +234,7 @@ debug-ui  ←──  （仅被用户消费）
 | 修改分析/决策模型、视觉模型、MCP 聚合或 Skills 职责 | 跨包契约（3.8） + `ai-chat-service` PRODUCT-SPEC + `ai-e2e/docs/ai-model-skill-contract.md` + 根 README "核心产品架构" |
 | 修改业务版本、页面锚点、功能脚本、场景调用图、主/页面子代理、上下文、可视执行或失败证据 | 跨包契约（3.9） + `ai-e2e` PRODUCT-SPEC + `ai-e2e/AGENTS.md` + `ai-e2e/docs/requirements-baseline.md`；涉及版本/页面同步 `ai-e2e/docs/version-page-asset-contract.md`，功能脚本同步 `ai-e2e/docs/functional-script-contract.md`，场景编排同步 `ai-e2e/docs/scenario-orchestration-contract.md`，代理/浏览器执行同步 `ai-e2e/docs/agent-browser-execution-contract.md` + 根 README "核心产品架构" |
 | 修改 Agent 任务输入/工具作用域或浏览器会话、Tab、控制租约、原子操作、结果账本与生命周期事件 | 跨包契约（3.2、3.3、3.8、3.9） + 三服务 PRODUCT-SPEC + `ai-e2e/docs/agent-browser-execution-contract.md` + `ai-e2e/docs/service-api-event-contract.md` |
+| 修改 browser-control-client CLI/退出码/token/attach/恢复语义或 DeepSeek 工具/审批/bundle | 跨包契约（3.2、3.3、3.4） + 两个 integrations PRODUCT-SPEC + `shared`/`proxy-adapter` PRODUCT-SPEC + 对应 shipped 清单 |
 | 修改 environment、副作用分类/风险投影、计划级审批或逐工具 effectId/grant 门禁 | 跨包契约（3.2、3.3、3.7、3.8、3.9） + 三服务 PRODUCT-SPEC/AGENTS + `ai-e2e/docs/environment-side-effect-policy-contract.md` + 语义 Schema/数据/API/迁移契约 + 根 README |
 | 修改运行/TODO/尝试状态、决策、依赖传播、证据所有权/完整度/保留/脱敏或运行快照事件 | 跨包契约（3.9） + `ai-e2e` PRODUCT-SPEC/AGENTS/UI AGENTS + `proxy-adapter` PRODUCT-SPEC（涉及原始产物时） + `ai-e2e/docs/run-state-decision-evidence-contract.md` |
 | 修改语义脚本 Schema、动作/断言/引用白名单或映射 | 跨包契约（3.6、3.9） + `ai-e2e`/`proxy-adapter` PRODUCT-SPEC + `ai-e2e/docs/functional-script-contract.md` + `ai-e2e/docs/semantic-script-schema.md` |
