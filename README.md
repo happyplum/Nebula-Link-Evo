@@ -72,7 +72,7 @@ Browser ←→ Debug UI (:5173 dev)
 | `proxy-adapter` | :3000 | 纯浏览器 MCP 网关（browser-control.* 工具、调试流、LiveKit 令牌、配置与健康检查） |
 | `ai-chat-service` | :3001 | AI 对话服务（会话管理、AI provider 编排、Chat SSE、provider preflight、视觉分析、数据库备份） |
 | `debug-ui` | :5173 | 实时调试监控面板（chat SSE → :3001, browser/debug → :3000） |
-| `ai-e2e` | :3002 | AI 驱动的 E2E 自动化测试编排（通过 AiChatClient(:3001) 和 BrowserGatewayClient(:3000) 消费） |
+| `ai-e2e` | :3002 | AI 驱动的 E2E 编排；Legacy 使用 AiChat/BrowserGateway，semantic v1 使用 AgentTask/SemanticBrowser 客户端 |
 | `shared` | — | 共享类型和工具库 |
 | `integrations/browser-control-client` | — | 受控 HTTP/MCP 客户端、自动会话控制器与 `nebula-browser` CLI |
 | `integrations/deepseek-harness-plugin` | — | 仅暴露 observe/act 的 DeepSeek Harness bundle；act 逐次审批 |
@@ -181,22 +181,22 @@ AGPL 允许个人和企业使用、修改与分发软件，但必须遵守其开
 - **`proxy-adapter`（shipped）**：Playwright/CDP 集成的唯一所有者，负责页面分析、DOM/截图证据和浏览器动作，并通过 `browser-control.*` MCP 工具及调试 API 对外提供服务。当前实现由进程内 Playwright 启动 Chromium，可选开放 remote-debugging-port，并通过页面 `CDPSession` 获取屏播帧；没有外部 `playwright-server` 或 `connectOverCDP` 链路。
 - **`integrations/*`（shipped）**：`browser-control-client` 只通过既有 loopback HTTP 控制面与 `/mcp` 管理受控浏览器会话，提供 `nebula-browser` CLI；DeepSeek Harness bundle 只暴露收窄后的 observe/act 工具、隐藏 binding 并对每个 act 使用原生一次性审批。两者都不拥有 Playwright/CDP，也不替代 `ai-chat-service` 或 `ai-e2e` 编排。
 - **`ai-chat-service`（in-progress）**：可复用 AI 基础能力层。分析/决策模型负责理解需求、文档和浏览器证据并规划下一步测试动作；主代理和子代理都可调用视觉模型，但视觉模型每次只完成一个具有完整输入的分析问题，不保存流程状态或连续执行。跨服务只传递 `snapshot_id`、`nebula_id`、`locator_bundle`、置信度等可序列化目标引用，不传递进程内 Playwright 对象。MCP client/ToolRegistry、受限 Agent task 命令/事件控制面和本地只读声明式 Skills Runtime 已交付；通用视觉 v2 与完整副作用授权仍为 `pending`。
-- **`ai-e2e`（in-progress）**：面向 E2E 的业务层，通过 PRD 与真实网页建立业务版本、页面、功能模块、功能脚本和测试场景。现有 PRD 分析、页面探索、legacy TypeScript 链，以及 semantic 业务版本/current 资产图/独立 copy 基座已交付；完整资产 authoring/recheck、语义执行和主/子代理编排仍需实现。
+- **`ai-e2e`（in-progress）**：面向 E2E 的业务层，通过 PRD 与真实网页建立业务版本、页面、功能模块、功能脚本和测试场景。Legacy TypeScript 链保持兼容；semantic 业务版本、结构化 Authoring/Run、主/页面任务协调、可视语义执行与证据闭环已交付。完整 bootstrap/recheck、生产 UI 和 legacy importer 仍需实现。
 
 **领域层级**：逻辑页面由不含部署 Origin 的规范化路由模板与身份参数约束标识；实际运行再绑定部署、动态参数和参考基线。一个页面包含多个功能模块，一个模块包含多个可复用、可独立验证和修复的功能脚本。首期脚本采用显式输入、线性步骤、硬业务断言、成功后输出和声明副作用；场景使用无环调用图负责跨模块/页面的顺序、重复、分支、依赖和数据传递。PRD 形成场景定义与 TODO 模板，每次执行冻结独立运行计划并产生运行 TODO 和执行尝试。
 
-**代理、资产生成与执行目标（in-progress）**：`proxy-adapter` session/lease/operation 控制核心、截图/DOM 取证和 Browser 事件面，`ai-chat-service` 受限 Agent task 命令/事件/单 Skill runtime，以及 `ai-e2e` authoring/run/浏览器队列数据基座已交付；ai-e2e 确定性协调器、Agent task 消费、Authoring/Run API/SSE 和语义执行仍待实现。主代理是 `ai-e2e` 内可暂停、可恢复的持久工作流协调器，负责 PRD/页面资产生成、TODO、依赖、全局运行变量、决策和调度；模型对话不是状态源。bootstrap/recheck/repair 先生成 candidate，再经静态校验、真实可视浏览器验证和原子激活。子代理只执行不可变页面任务包授权的 TODO、actor、Tab 和工具。首期每个 `proxy-adapter` 进程全局最多一个活动浏览器执行会话，authoring 与正式 run 共用 FIFO；每个会话固定一个 BrowserContext 和一个活动 actor，跨账号/角色只由主代理显式编排退出/登录脚本串行切换。只有当前执行型子代理持有 control，主代理只在安全边界 observe，UI 实时画面只读。子代理上下文可按任务重建，多 Tab 并发和并存身份留作后期扩展。可恢复中断可以由主代理决定继续原上下文。主/子代理都可调用只完成单次 snapshot 分析的视觉模型。浏览器操作必须按语义步骤通过 `proxy-adapter` 的同一可视执行链完成，每个原子操作具备幂等身份；状态不确定时先检查副作用。系统内权威脚本是可编排、可重放的结构化语义功能脚本，而不是独立启动 Chromium 的 `.spec.ts`。目标协议见 [`ai-e2e/docs/asset-authoring-repair-contract.md`](ai-e2e/docs/asset-authoring-repair-contract.md)、[`ai-e2e/docs/service-api-event-contract.md`](ai-e2e/docs/service-api-event-contract.md) 与 [`ai-e2e/docs/ai-model-skill-contract.md`](ai-e2e/docs/ai-model-skill-contract.md)。
+**代理、资产生成与执行（in-progress）**：`proxy-adapter` session/lease/operation 与截图/DOM，`ai-chat-service` 受限 Agent task/Skill runtime，以及 `ai-e2e` Authoring/Run API/SSE、outbox 确定性协调器和语义执行已接通。主代理由持久状态驱动，不依赖长模型对话；正式 Run 派发冻结页面任务，局部 repair 先形成结构化 candidate，经范围审批、安全边界和真实浏览器验证后才原子激活。每个 proxy 进程最多一个活动 session，Authoring 与 Run 共用 FIFO；每个 session 固定单 Context/actor，短期租约和一次性 token 不进入模型或数据库明文。完整 bootstrap/recheck 阶段图、Agent/browser 事件流消费、通用视觉 v2 与完整逐 effect 授权仍 pending。目标协议见 [`ai-e2e/docs/asset-authoring-repair-contract.md`](ai-e2e/docs/asset-authoring-repair-contract.md)、[`ai-e2e/docs/service-api-event-contract.md`](ai-e2e/docs/service-api-event-contract.md) 与 [`ai-e2e/docs/ai-model-skill-contract.md`](ai-e2e/docs/ai-model-skill-contract.md)。
 
-**状态、决策与证据目标（in-progress）**：Run/计划/TODO/依赖/页面任务/尝试/变量/决策/命令/事件与内容寻址 artifact/evidence 数据基座已交付；执行协调、依赖传播、决策应用、跨服务产物提升、公开 Run API/SSE 与 UI 仍待实现。测试流程、运行 TODO、执行尝试、Agent 和浏览器操作分别持有状态；登出中断、前置阻塞、待决策、依赖跳过、用户取消和业务失败不会混为一个 fail。运行级决定与业务版本长期决定追加审计，失败证据缺失只降低证据完整度。执行 UI 从持久化运行快照和单调事件序号恢复，并同时展示实时浏览器、当前语义步骤、依赖影响、决策与证据。完整契约见 [`ai-e2e/docs/run-state-decision-evidence-contract.md`](ai-e2e/docs/run-state-decision-evidence-contract.md)。
+**状态、决策与证据（in-progress）**：Run/计划/TODO/依赖/页面任务/尝试/变量/决策/命令/事件、执行协调、依赖传播、决策应用、公开 Run API/SSE 和 proxy operation/截图/DOM 证据提升已交付。登出中断、前置阻塞、待决策、依赖跳过、取消和业务失败保持独立语义；失败证据缺失只降低完整度。生产 UI、证据脱敏完成和保留清理仍待实现。完整契约见 [`ai-e2e/docs/run-state-decision-evidence-contract.md`](ai-e2e/docs/run-state-decision-evidence-contract.md)。
 
 **环境与副作用安全目标（in-progress）**：风险投影 hash、policy evaluation/grant/decision 表与 evaluation 仓储已交付；确定性环境规则、审批/grant 原子应用和逐 effectId 的跨服务运行时门禁仍待实现。运行冻结 immutable deployment environment 和精确副作用投影。local/test 自动执行已声明、有界副作用；staging 的单项非不可逆 create/update 自动，删除、批量、不可逆和上传在 browser job/control 前做一次当前 run/job 计划级审批；production 只允许显式登录/退出/会话刷新、导航、只读观测和断言，业务写入与上传硬拒绝，首期不设绕过。`ai-e2e` 持有策略/审批，`ai-chat-service` 逐工具校验授权交集，`proxy-adapter` 保持通用浏览器网关。完整契约见 [`ai-e2e/docs/environment-side-effect-policy-contract.md`](ai-e2e/docs/environment-side-effect-policy-contract.md)。
 
-**迁移与发布目标（in-progress）**：add-only migration 014–017 已建立 semantic 资产、authoring/run/browser queue、decision/policy/evidence/outbox/external-link/legacy-import 数据基座，015+ checksum migration runner 已交付；legacy 001–013 的 scenario 级 TypeScript、项目登录录制和历史 run 不直接改写为已验证语义资产。001–014 结构 preflight/baseline、文件备份、可重入 legacy importer、双轨 capability 与版本级 cutover 仍 pending。完整门禁见 [`ai-e2e/docs/migration-compatibility-acceptance-contract.md`](ai-e2e/docs/migration-compatibility-acceptance-contract.md)。
+**迁移与发布目标（in-progress）**：add-only migration 014–018 已建立 semantic 资产、Authoring/Run/FIFO/decision/policy/evidence/outbox/external-link/amendment 数据基座，015+ checksum runner 已交付；legacy 数据不直接改写为已验证语义资产。001–014 preflight/baseline、文件备份、可重入 importer、双轨 UI cutover 仍 pending。完整门禁见 [`ai-e2e/docs/migration-compatibility-acceptance-contract.md`](ai-e2e/docs/migration-compatibility-acceptance-contract.md)。
 
 ### AI E2E 需求基线
 
 - `ai-e2e` 当前定位是 **PRD 驱动的 E2E 自动化测试编排器**，不是新的浏览器底座；它负责把 **需求分析 → 页面探索 → URL 绑定 → 脚本生成 → 执行 → 单次失败诊断 → 可选自动修复** 串成闭环。
-- `ai-e2e` 必须继续作为 `proxy-adapter` 与 `ai-chat-service` 的纯消费者：当前 AI 文本能力经 `AiChatClient` → `ai-chat-service` :3001（`POST /api/ai/generate`），当前浏览器能力经 `BrowserGatewayClient` → `proxy-adapter` :3000（`/debug/api/*`）；目标代理执行仍经 `ai-chat-service` 的 Agent/MCP 能力到 `proxy-adapter`。`ProxyAdapterClient` 仅作为组合 facade 保留，不得重新引入直连 provider 或 browser engine 的实现。
+- `ai-e2e` 必须继续作为 `proxy-adapter` 与 `ai-chat-service` 的纯消费者：Legacy 经 `AiChatClient`/`BrowserGatewayClient`，semantic v1 经 `AgentTaskClient`/`SemanticBrowserClient`；不得重新引入直连 provider、Playwright 或 CDP 的实现。
 - 当前已实现主链路：L1/L2 模块分析、测试场景生成、URL 绑定建议与人工调整、脚本生成、脚本人工编辑与版本历史、脚本执行、run 级失败诊断、自动修复审批/拒绝、`/ai-e2e/` 包级 UI。
 - 探索阶段已支持 SPA-aware URL 发现：在原有 AI/BFS 基础上，补充使用渲染后 DOM、HashRouter、History API 观察器和可访问 router 配置发现客户端路由；非 SPA 站点保持原有 BFS 行为。
 - 上述 3 个已知缺口现已全部实现：
@@ -282,7 +282,7 @@ ai-chat-service (:3001) — AI 对话服务
 - `playwright-server` 已移除，proxy-adapter 内联 Playwright 控制 Chromium
 - 两者通过 MCP-over-HTTP 通信
 - debug-ui 分别连接两个服务（chat SSE → :3001, browser/debug → :3000）
-- ai-e2e 通过 AiChatClient(:3001) 和 BrowserGatewayClient(:3000) 消费
+- ai-e2e 的 Legacy 链通过 AiChatClient/BrowserGatewayClient 消费，semantic v1 通过 AgentTaskClient/SemanticBrowserClient 消费
 - 独立数据库、独立部署
 
 **收益**：proxy-adapter 职责单一（浏览器 MCP 网关），任何 AI 客户端（Claude Desktop、Cursor、aichat）均可通过 MCP 协议消费浏览器能力；chat 服务独立演进、独立部署。

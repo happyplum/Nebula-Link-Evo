@@ -149,20 +149,8 @@ const DecisionAnswerBodySchema = Type.Object(
 
 const AmendmentCommandBodySchema = Type.Union([
   Type.Object({ action: Type.Literal('queue_at_safe_boundary') }, { additionalProperties: false }),
-  Type.Object({ action: Type.Literal('begin_verification') }, { additionalProperties: false }),
-  Type.Object(
-    { action: Type.Literal('activate'), correlationId: Type.Optional(IdSchema) },
-    { additionalProperties: false }
-  ),
   Type.Object(
     { action: Type.Literal('reject'), reason: Type.String({ minLength: 1, maxLength: 2_000 }) },
-    { additionalProperties: false }
-  ),
-  Type.Object(
-    {
-      action: Type.Literal('fail'),
-      failure: Type.Record(Type.String(), Type.Unknown()),
-    },
     { additionalProperties: false }
   ),
 ]);
@@ -381,23 +369,8 @@ const semanticAuthoringRoutes: FastifyPluginAsyncTypebox<SemanticAuthoringRoutes
         response: { 200: UnknownSuccessSchema, ...ErrorResponses },
       },
     },
-    async (request) => {
-      const correlationHeader = request.headers['x-correlation-id'];
-      const correlationId = Array.isArray(correlationHeader)
-        ? correlationHeader[0]
-        : correlationHeader;
-      const command =
-        request.body.action === 'activate' && !request.body.correlationId && correlationId
-          ? { ...request.body, correlationId }
-          : request.body;
-      return success(
-        request,
-        requireService().command(request.params.amendmentId, command),
-        request.body.action === 'activate' && request.body.correlationId
-          ? { correlationId: request.body.correlationId }
-          : {}
-      );
-    }
+    async (request) =>
+      success(request, requireService().command(request.params.amendmentId, request.body))
   );
 };
 

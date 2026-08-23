@@ -144,17 +144,16 @@ describe('semantic authoring routes', () => {
       url: `/api/v1/authoring-amendments/${amendment.json().data.id}/commands`,
       payload: { action: 'queue_at_safe_boundary' },
     });
-    const activated = await app.inject({
+    const directActivation = await app.inject({
       method: 'POST',
       url: `/api/v1/authoring-amendments/${amendment.json().data.id}/commands`,
-      headers: { 'x-correlation-id': 'apply-1' },
       payload: { action: 'activate' },
     });
     expect(verifying.json().data.state).toBe('verifying');
-    expect(activated.json()).toMatchObject({
-      data: { state: 'activated' },
-      meta: { correlationId: 'apply-1' },
-    });
+    expect(directActivation.statusCode).toBe(400);
+    expect(
+      db.prepare('SELECT lifecycle FROM semantic_functional_module_revisions WHERE id = ?').get(candidate.id)
+    ).toEqual({ lifecycle: 'draft' });
   });
 
   it('requires approval for another module and stales the candidate after context switch', async () => {

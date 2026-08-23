@@ -42,24 +42,26 @@ PRD 驱动的 E2E 自动化测试编排器。把"需求分析 → 页面探索 �
 - [shipped] semantic Run 传播与恢复：`passed` 只解锁满足依赖的 TODO，终态失败/取消只传播到真实下游；`recoverable_interruption` 显式恢复，`blocked/outcome_unknown/decision_required` 生成持久决策且未回答前不跳过，取消等待活动 attempt 安全结束后把剩余 TODO 标为 cancelled，不记为 timeout。
 - [shipped] semantic 计划级环境门禁：local/test 自动放行；staging 删除/上传/批量/不可逆副作用先暂停并生成决策，批准后写 active `side_effect_approval_grants` 再允许 browser FIFO 获取；production 业务写硬拒绝并取消 queued browser job。逐 effectId 跨服务运行时交集仍 pending。
 - [shipped] Authoring/Run snapshot-first SSE：`GET /api/v1/authoring-jobs/:jobId/events` 与 `GET /api/v1/runs/:runId/events` 首帧发送权威 snapshot/seq/stateVersion，随后从持久 event-log 按单调 seq 投递并发送 heartbeat；断线事实不依赖内存事件总线。
-- [shipped] semantic 证据与集成仓储：artifact 内容寻址去重、evidence item 追加、manifest 原子 seal、inline secret-like 字段拒绝；outbox 支持同 ID/hash 重放、claim/settle，external link 只保存 opaque ID/hash/secret ref 并拒绝外部 seq 倒退。网络 worker 与公开 API/SSE 仍未交付。
+- [shipped] semantic 证据与集成仓储：artifact 内容寻址去重、evidence item 追加、manifest 原子 seal、inline secret-like 字段拒绝；outbox 支持同 ID/hash 重放、claim/settle，external link 只保存 opaque ID/hash/secret ref 并拒绝外部 seq 倒退。
+- [shipped] semantic 跨服务确定性协调器：`SemanticCoordinatorService` 以全局 browser FIFO 驱动 proxy session/lease 与 ai-chat-service Agent task，正式 Run 把冻结语义脚本投影为 `operation_execute` 白名单步骤并按结构化验收结果收敛 TODO；Authoring repair 使用 observe 分析、结构化 draft candidate、范围审批和安全边界后二次真实浏览器验证，成功才原子激活。
+- [shipped] semantic outbox/恢复与证据提升：外部 create/command 使用稳定幂等键，启动把遗留 dispatching 恢复为可重放状态；browser/Agent/operation/artifact 只保存 opaque ref/hash，lease token 仅进入本机 AES-GCM secret store。协调器下载 operation 截图/DOM、校验 SHA-256、写入本地内容寻址存储并封存 evidence manifest；丢失不可恢复事实时显式记 interrupted/failed，不盲目重放副作用。
 - [shipped] business version copy 扩展：current decision、page baseline、module requirement、functional-point coverage 和 revision dependency 全量生成新 ID 并重写版本内引用；共享 content-addressed blob 只增加 ref count，不复制 asset/business-version verification、run、evidence manifest、实际变量或秘密，目标继续 `needs_recheck`。
 - [designed] 主代理维护 PRD 流程、TODO 依赖、运行变量和决策，并负责派发、恢复、跳过、验收与汇总；页面子代理只执行获授权的页面场景片段，负责重新检查、执行、验证、职责内修复和结构化汇报。
 - [designed] 默认创建干净子代理上下文；登出等可恢复中断可由主代理在页面状态和副作用检查后续接原上下文，否则从检查点和授权变量重建。
 - [designed] 首期一个主代理在任一时刻只运行一个执行型子代理，同一测试流程复用 proxy-adapter 托管的 Playwright/Chromium 实例和浏览器会话，所有动作串行；每个会话固定一个 BrowserContext 和一个活动 actor，跨角色由主代理显式编排退出/登录脚本，子代理发现身份异常即停止。子代理上下文可按任务重建，并存身份、多 Context/Tab 并发仅作为后期扩展。
-- [designed] 页面任务图、页面/模块范围与验收归 ai-e2e；模型、MCP 工具和 Skills 的执行归 ai-chat-service。上游 Agent task/单 Skill tool loop 已交付，当前 `AiChatClient.generateText()` 仍仅调用纯文本生成端点，ai-e2e 尚未接入。
+- [shipped] semantic 页面任务图、页面/模块范围与验收归 ai-e2e；模型、MCP 工具和 Skills 的执行归 ai-chat-service。ai-e2e 已通过 Agent task client 接入不可变任务、工具/预算约束、模型不可见 browser binding、命令同步和结构化结果；Legacy `AiChatClient.generateText()` 继续服务旧链。
 - [designed] 主代理派发不可变页面任务包并持有共享浏览器生命周期；子代理只取得指定 TODO、actor、Tab、工具和输出槽的短期控制租约，不获得凭据明文或自行登录权限。
 - [designed] 系统内权威脚本是结构化语义功能脚本；所有浏览器动作按语义步骤通过 proxy-adapter 可视执行。原子操作使用幂等 ID 和结果账本，状态不确定时先检查副作用；当前 `npx tsx` 子进程执行器不是目标执行路径。完整契约见 `ai-e2e/docs/agent-browser-execution-contract.md`。
 - [designed] 失败先保存截图和现场并评估后续阻碍；主代理按依赖跳过或继续。意外登出按可恢复中断上报，需要决策时暂停并在决策写入版本文档后恢复。
 - [designed] 测试流程、运行 TODO、执行尝试、Agent 和浏览器操作分别持有状态；blocked/interrupted/waiting_decision 未收敛前不提前跳过下游，取消不再记作超时。
 - [designed] ai-e2e 的不可变证据 manifest/item 与持久 run event 数据层已交付；后续 UI 从 `run.snapshot` + 单调事件恢复，并展示实时浏览器、依赖传播、决策与证据。
-- [designed] 目标业务版本/Authoring/Run API、`ai-chat-service /api/v1/agent-tasks`、`proxy-adapter /api/v1/browser-execution/*` 与 `browser-control.operation_*`、四类目标 snapshot-first SSE（Authoring/Run/Agent/Browser）和重启恢复协议见 `ai-e2e/docs/service-api-event-contract.md`；业务版本 create/list/get/copy、Agent task 命令/事件/Skill catalog/runtime 和 Browser session 控制/取证/事件路由已交付，ai-e2e Authoring/Run API/SSE 与跨服务协调仍未实现。同一 run 禁止混用新旧执行器。
+- [shipped] 目标业务版本/Authoring/Run API、`ai-chat-service /api/v1/agent-tasks`、`proxy-adapter /api/v1/browser-execution/*`、`browser-control.operation_*` 与重启恢复协议见 `ai-e2e/docs/service-api-event-contract.md`；三服务控制面和 ai-e2e 跨服务协调均已接通。同一 run 禁止混用新旧执行器；ai-e2e 对 Agent/Browser SSE 的直接消费仍 pending。
 - [designed] 双模型、`vision.analyze_page`/`vision.resolve_target`、声明式 Skill manifest、版本/hash pin、工具权限交集和 prompt injection 边界见 `ai-e2e/docs/ai-model-skill-contract.md`。
 - [designed] 目标 migration 后续对 001–014 做结构 preflight/checksum baseline 和文件备份，旧 TypeScript/login/run 只读保留，legacy importer 只生成 needs_recheck 版本/候选；新链按业务版本 opt-in 且 run 固定 `semantic_v1`。
-- [designed] 主代理 runtime 由已交付的持久 authoring/run 数据驱动，不依赖长模型对话；后续仍需把 PRD/页面/Agent/browser 调用接入阶段协调、coverage 生成、真实验证和局部修复闭环。
+- [shipped] 主代理 runtime 由持久 authoring/run 数据和 outbox 驱动，不依赖长模型对话；正式 Run 与局部 repair 已接入 Agent/browser、真实验证、证据和恢复闭环。完整 PRD bootstrap/recheck 阶段协调与 coverage 生成仍 pending。
 - [designed] revision dependency index 由已校验资产确定性生成，页面变化按 none/locator_only/interaction/contract/requirement/environment 分类；局部修复只修改并重验受影响闭包。
 - [designed] copy 后执行资产在目标版本保持 current 选择但标为 stale，目标版本 `needs_recheck`；目标 deployment 上真实重验前不能创建正式 semantic run。
-- [designed] ai-e2e 持久 FIFO/单 active browser job 已交付；后续 runtime 必须让每个 proxy 进程最多一个活动 browser execution session，主代理安全边界 observe、当前子代理 control、UI live view 只读。
+- [shipped] ai-e2e 持久 FIFO/单 active browser job 已接入 runtime；每个 proxy 进程最多一个活动 browser execution session，Authoring 分析 observe、正式执行/候选验证按冻结步骤取得 control，租约和 session 显式释放，UI live view 保持只读。
 - [designed] v1 语义控制面只在 loopback/local 单用户边界启用；远程或多用户拓扑必须先交付统一认证、授权与租户隔离。
 - [designed] environment 固定在 immutable deployment revision。local/test 自动允许已声明、有界副作用；staging 单项非不可逆 create/update 自动，删除/批量/不可逆/上传做一次当前 run/job 计划级审批；production 只允许显式认证会话变化和只读行为且无 v1 绕过。ai-e2e 持有风险投影、policy evaluation/grant 与逐 effectId 授权，完整契约见 `ai-e2e/docs/environment-side-effect-policy-contract.md`。
 - [designed] 页面或 DOM 节点变化后只修复当前业务版本内受影响的功能脚本并重新验证；当前仅有 run 级失败诊断与自动修复。

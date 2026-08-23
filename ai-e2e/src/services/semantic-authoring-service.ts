@@ -191,23 +191,14 @@ export class SemanticAuthoringService {
     amendmentId: string,
     input:
       | { action: 'queue_at_safe_boundary' }
-      | { action: 'begin_verification' }
-      | { action: 'activate'; correlationId?: string }
       | { action: 'reject'; reason: string }
-      | { action: 'fail'; failure: Record<string, unknown> }
   ): AmendmentRecord {
     try {
       switch (input.action) {
         case 'queue_at_safe_boundary':
           return this.amendments.queueAtSafeBoundary(amendmentId);
-        case 'begin_verification':
-          return this.amendments.beginQueuedVerification(amendmentId);
-        case 'activate':
-          return this.amendments.activate(amendmentId, input.correlationId);
         case 'reject':
           return this.amendments.reject(amendmentId, input.reason);
-        case 'fail':
-          return this.amendments.fail(amendmentId, input.failure);
       }
     } catch (error) {
       throw mapSemanticError(error);
