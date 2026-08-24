@@ -189,7 +189,7 @@
 | 新增或修改 Skills runtime | 双模型与扩展能力契约 + 模块清单 + 功能清单 + 已知缺口 + `ai-e2e/docs/ai-model-skill-contract.md` + `docs/PRODUCT-SPEC-INDEX.md` |
 | 新增或修改受限 Agent 任务执行 | 包级目标与边界 + 双模型与扩展能力契约 + 功能清单 + `ai-e2e/docs/agent-browser-execution-contract.md` + `ai-e2e/docs/service-api-event-contract.md` + 消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
 | 修改副作用授权包装层 | 包级目标与边界 + 双模型与扩展能力契约 + 功能清单 + 已知缺口 + `ai-e2e/docs/environment-side-effect-policy-contract.md` + `ai-e2e/docs/ai-model-skill-contract.md` + `ai-e2e/docs/service-api-event-contract.md` + `docs/PRODUCT-SPEC-INDEX.md` |
-| 修改 Harness persistence/插件/BOM | 模块清单 + 功能清单 + shipped 清单 + THIRD_PARTY_NOTICES + lock/patch hash 验证 |
+| 修改或升级 Harness persistence/插件/BOM 依赖 | 先判定上游是否已覆盖本地 patch 行为：已覆盖则删除 `patchedDependencies` 与 patch 文件，未覆盖则按新版本重建 patch；同步更新模块清单 + 功能清单 + shipped 清单 + THIRD_PARTY_NOTICES + lockfile + Harness BOM/patch hash，并验证 persistence/projection/purge/retention 相关测试 |
 | 修改 Chat SSE 行为 | 包级目标与边界 + 功能清单（Chat SSE 条目） + `debug-ui` 的 PRODUCT-SPEC |
 | 跨包契约变更（端口、MCP 路径、SSE 事件） | 本文件 + 所有消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
 

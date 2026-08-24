@@ -61,6 +61,7 @@ pnpm format         # prettier --write debug-ui/src proxy-adapter/src ai-chat-se
 - `proxy-adapter` startup order matters: env/config load → DB backup init outside tests → plugin registration → `AppService.initialize()` → browser-control provider → MCP/debug surfaces.
 - Chat reconnect always reboots from a fresh `session.snapshot`; there is no `Last-Event-ID` replay contract to preserve.
 - `proxy-adapter` 与 `ai-chat-service` 的配置加载器只按工作目录依次搜索 `config/config.json`、`../config/config.json`、`../../config/config.json`、`nebula-link-evo/config/config.json`（显式 `configPath` 优先）；不会自动搜索包内 `proxy-adapter/config/` 或 `ai-chat-service/config/`。
+- 升级被 `pnpm-workspace.yaml#patchedDependencies` 覆盖的依赖时，必须同步评估对应 patch：上游已包含所需行为时删除 patch 配置与文件，否则针对新版本重建 patch；两种情况都必须重新生成并校验 lockfile、Harness BOM/patch hash 及相关持久化测试，不得留下失效或无引用 patch。
 
 ## Repository-wide constraints
 
