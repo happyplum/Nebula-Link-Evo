@@ -275,6 +275,7 @@ const agentTaskRoutes: FastifyPluginAsyncTypebox<AgentTaskRoutesOptions> = async
             skillPolicy: Type.Unknown(),
             budgets: Type.Unknown(),
             browserBinding: Type.Optional(Type.Unknown()),
+            sideEffectAuthorization: Type.Optional(Type.Unknown()),
             correlation: Type.Optional(Type.Record(Type.String(), Type.String())),
           },
           { additionalProperties: false }
