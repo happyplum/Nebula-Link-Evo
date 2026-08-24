@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { SessionId } from '@deepseek-ai/dsh-session';
 import type { ResolvedConfig } from '../config/schema.js';
-import type { MCPSDKClient } from '../clients/mcp/sdk-client.js';
 import type { ConversationManager } from './manager.js';
 import type { SessionEventsDAO } from './session-events-dao.js';
 import type { SessionEventHub } from './session-event-hub.js';
@@ -46,9 +45,6 @@ export class ChatHandler {
     return this.sessionEventHub;
   }
 
-  /** Retained for source compatibility while MCP ownership moves into Cordis scopes. */
-  setMCPClient(_client: MCPSDKClient): void {}
-
   async handleChatSend(_clientId: string, params: ChatSendParams): Promise<void> {
     if (params.screenshot) {
       throw new Error(
@@ -86,7 +82,8 @@ export class ChatHandler {
   async resumeSession(_clientId: string, sessionId: string): Promise<void> {
     const session = this.requireSession(sessionId);
     const revision = await this.harness.revision(SessionId(sessionId));
-    if (!revision) throw new Error(`Cannot resume session ${sessionId}: durable Harness log not found`);
+    if (!revision)
+      throw new Error(`Cannot resume session ${sessionId}: durable Harness log not found`);
     await this.startRun(sessionId, async (abortSignal, setHandle) => {
       const handle = await this.harness.openSession({
         sessionId: SessionId(sessionId),
@@ -156,7 +153,10 @@ export class ChatHandler {
     try {
       await this.sessionController.cancel(sessionId);
     } catch (error) {
-      this.logger.debug({ err: error, sessionId }, 'Session controller was already settled during deletion');
+      this.logger.debug(
+        { err: error, sessionId },
+        'Session controller was already settled during deletion'
+      );
     }
     await run.completion;
   }
@@ -173,7 +173,8 @@ export class ChatHandler {
       setHandle: (handle: HarnessSessionHandle) => void
     ) => Promise<void>
   ): Promise<void> {
-    if (this.active.has(sessionId)) throw new Error(`Session ${sessionId} already has an active Harness run`);
+    if (this.active.has(sessionId))
+      throw new Error(`Session ${sessionId} already has an active Harness run`);
     const abortController = this.sessionController.createAbortController(sessionId);
     let resolveCompletion = (): void => {};
     const completion = new Promise<void>((resolve) => {
@@ -221,12 +222,7 @@ export class ChatHandler {
         `Harness durable seq changed during projection for ${sessionId}: flushed ${durableSeq}, read ${durable.durableSeq}`
       );
     }
-    const result = this.projection.catchUp(
-      sessionId,
-      durableSeq,
-      durable.events,
-      String(revision)
-    );
+    const result = this.projection.catchUp(sessionId, durableSeq, durable.events, String(revision));
     this.publish(result.publicEvents);
   }
 

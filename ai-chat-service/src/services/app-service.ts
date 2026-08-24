@@ -2,7 +2,6 @@ import { generateText } from 'ai';
 import type { Logger } from 'pino';
 import { loadConfig, validateConfig } from '../config/index.js';
 import type { ResolvedConfig } from '../config/schema.js';
-import { MCPSDKClient } from '../clients/mcp/sdk-client.js';
 import { ProviderRegistry } from './provider/registry.js';
 import type { ProviderConfig } from './provider/types.js';
 import { createWorkerLogger } from './logger.js';
@@ -21,7 +20,9 @@ export class AppService {
   private config: ResolvedConfig | null = null;
   private configPath = '';
   private registry: ProviderRegistry | null = null;
-  private mcpClient: MCPSDKClient | null = null;
+  private mcpServers: Array<{ name: string; state: string; running: boolean; toolsCount: number }> =
+    [];
+  private mcpTools: string[] = [];
   private toolRegistry: ToolRegistry | null = null;
   private readonly logger: Logger;
 
@@ -68,9 +69,6 @@ export class AppService {
       }
     }
     this.registry = new ProviderRegistry(configProviders);
-
-    this.mcpClient = new MCPSDKClient(this.config);
-    await this.mcpClient.initialize();
   }
 
   getConfig(): ResolvedConfig | null {
@@ -85,8 +83,17 @@ export class AppService {
     return this.registry;
   }
 
-  getMCPSDKClient(): MCPSDKClient | null {
-    return this.mcpClient;
+  setHarnessMcpInventory(serverNames: readonly string[], toolNames: readonly string[]): void {
+    this.mcpTools = [...toolNames];
+    this.mcpServers = serverNames.map((name) => {
+      const toolsCount = toolNames.filter((tool) => tool.startsWith(`mcp__${name}__`)).length;
+      return {
+        name,
+        state: toolsCount > 0 ? 'running' : 'degraded',
+        running: toolsCount > 0,
+        toolsCount,
+      };
+    });
   }
 
   setToolRegistry(registry: ToolRegistry): void {
@@ -99,29 +106,34 @@ export class AppService {
 
   getMCPStatus(): {
     readonly enabled: boolean;
-    readonly servers: Array<{ readonly name: string; readonly state: string; readonly running: boolean; readonly toolsCount: number }>;
+    readonly servers: Array<{
+      readonly name: string;
+      readonly state: string;
+      readonly running: boolean;
+      readonly toolsCount: number;
+    }>;
   } {
     return {
-      enabled: this.mcpClient?.isEnabled() ?? false,
-      servers: this.mcpClient?.getServerList() ?? [],
+      enabled: this.mcpServers.length > 0,
+      servers: this.mcpServers,
     };
   }
 
-  getMCPTools(): Array<{ readonly name: string; readonly description: string; readonly inputSchema?: object; readonly annotations?: unknown; readonly source: 'external' }> {
-    return (this.mcpClient?.getAvailableTools() ?? []).map((tool) => ({
-      name: tool.name,
-      description: tool.description || '',
-      inputSchema: tool.inputSchema,
-      annotations: tool.annotations,
+  getMCPTools(): Array<{
+    readonly name: string;
+    readonly description: string;
+    readonly inputSchema?: object;
+    readonly annotations?: unknown;
+    readonly source: 'external';
+  }> {
+    return this.mcpTools.map((name) => ({
+      name,
+      description: '',
       source: 'external' as const,
     }));
   }
 
-  async shutdown(): Promise<void> {
-    if (this.mcpClient) {
-      await this.mcpClient.shutdown();
-    }
-  }
+  async shutdown(): Promise<void> {}
 
   getApiKeyStatuses(): ApiKeyStatus[] {
     if (!this.config?.providers) {
@@ -140,8 +152,20 @@ export class AppService {
   }
 
   async testAIConnectivity(): Promise<{
-    readonly decision: { readonly status: string; readonly provider?: string; readonly model?: string; readonly responseTime: number; readonly error?: string | null; readonly intro?: string };
-    readonly visionAgent: { readonly status: string; readonly tools: string[]; readonly responseTime: number; readonly error?: string | null };
+    readonly decision: {
+      readonly status: string;
+      readonly provider?: string;
+      readonly model?: string;
+      readonly responseTime: number;
+      readonly error?: string | null;
+      readonly intro?: string;
+    };
+    readonly visionAgent: {
+      readonly status: string;
+      readonly tools: string[];
+      readonly responseTime: number;
+      readonly error?: string | null;
+    };
     readonly totalResponseTime: number;
   }> {
     const startedAt = Date.now();
@@ -149,15 +173,30 @@ export class AppService {
     const defaults = this.config?.defaults;
     const registry = this.registry;
 
-    let decision: { status: string; provider?: string; model?: string; responseTime: number; error?: string | null; intro?: string };
+    let decision: {
+      status: string;
+      provider?: string;
+      model?: string;
+      responseTime: number;
+      error?: string | null;
+      intro?: string;
+    };
     if (!defaults || !registry) {
-      decision = { status: 'not_configured', responseTime: Date.now() - decisionStartedAt, error: 'No config or registry' };
+      decision = {
+        status: 'not_configured',
+        responseTime: Date.now() - decisionStartedAt,
+        error: 'No config or registry',
+      };
     } else {
       const provider = defaults.decision.provider;
       const model = defaults.decision.model;
       try {
         if (!registry.isAvailable(provider)) {
-          decision = { status: 'not_configured', responseTime: Date.now() - decisionStartedAt, error: 'No decision provider available' };
+          decision = {
+            status: 'not_configured',
+            responseTime: Date.now() - decisionStartedAt,
+            error: 'No decision provider available',
+          };
         } else {
           const languageModel = await registry.resolve(provider, model);
           const result = await generateText({
@@ -189,19 +228,19 @@ export class AppService {
     }
 
     const visionStartedAt = Date.now();
-    const visionTools = this.toolRegistry
-      ?.getAvailableTools({ consumer: 'chat' })
-      .filter((tool) => tool.name.startsWith('vision.')) ?? [];
-    const gatewayServer = this.mcpClient
-      ?.getServerList()
-      .find((server) => server.name === GATEWAY_MCP_SERVER_NAME);
+    const visionTools =
+      this.toolRegistry
+        ?.getAvailableTools({ consumer: 'chat' })
+        .filter((tool) => tool.name.startsWith('vision.')) ?? [];
+    const gatewayServer = this.mcpServers.find((server) => server.name === GATEWAY_MCP_SERVER_NAME);
     const gatewayRunning = gatewayServer?.running === true;
     const visionStatus = visionTools.length > 0 && gatewayRunning ? 'connected' : 'degraded';
-    const visionError = visionTools.length === 0
-      ? 'Vision tools are unavailable'
-      : gatewayRunning
-        ? null
-        : `Gateway MCP server is unavailable${gatewayServer ? ` (state: ${gatewayServer.state})` : ''}`;
+    const visionError =
+      visionTools.length === 0
+        ? 'Vision tools are unavailable'
+        : gatewayRunning
+          ? null
+          : `Gateway MCP server is unavailable${gatewayServer ? ` (state: ${gatewayServer.state})` : ''}`;
     const visionAgent = {
       status: visionStatus,
       tools: visionTools.map((tool) => tool.name),

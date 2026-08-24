@@ -3,6 +3,7 @@
 - [shipped] `ai-chat-service` 每个 Fastify `buildApp()` 创建独立 Cordis `4.0.1` root；Chat 与 Agent Task 共用该实例唯一的 DSH Agent Loop/ToolRuntime/session/timeout/retry/token-meter/compaction/Skill/attachment/invariant 组合，不复用 DSH UI、shell/fs/code mode、sandbox、subagent/jobs/goal/todo 或 bundle runtime patch。
 - [shipped] ai-chat-service 精确固定 `@deepseek-ai/dsh-* 0.1.1-rc.2`、`@earendil-works/pi-ai 0.82.1`、Node `^22.19.0 || >=24.0.0`；`harness-bom.json` 与 `verify:harness-bom` 校验完整 peer closure、license、koffi/native build 和 pnpm patch hash。
 - [shipped] DSH zstd JSONL append-only log 是模型 transcript 事实源；SQLite 只保存控制面、幂等、公开 event projection 与 `projectedDshSeq` watermark。flush 后才投影，cursor 越过 durable seq 时 fail closed。
+- [shipped] ai-chat-service 已删除旧 `MCPSDKClient/MCPClientProvider` 双 transport；MCP discovery、schema quarantine、timeout/cancel 与模型 ToolRuntime 投影统一由 DSH transport 管理，原始 operation 工具留在模型不可见 child scope。
 - [shipped] 上游 persistence/jsonl 的最小 pnpm patch 提供同 session 串行 `purge(sessionId, expectedRevision)`：等待 retirement、拒绝 live owner、清 controller/preparation/cache、拒绝 symlink/reparse 越界并经 GC trash 安全删除；patch hash 纳入 BOM。
 - [shipped] `trusted-harness-plugins.lock.json` 支持部署期可信工具/prompt/hook/LLM adapter/Skill provider/MCP 扩展；校验 direct dependency、canonical realpath、精确版本、entry/tree/config digest、DSH/Cordis ABI 与 peer closure。全部 required，运行期禁止 install/HMR/组合树修改。
 - [shipped] `THIRD_PARTY_NOTICES.md` 保留 DeepSeek Harness、Cordis、Pi 及递归 DSH 包的 MIT notice；Nebula 自有代码继续 `AGPL-3.0-only`。
@@ -14,5 +15,5 @@
 - [shipped] 一个插件实例只允许一个 Harness session 持有浏览器；其他 session 返回 `browser_busy`，不共享隐藏 binding。HMR/卸载注销工具并按 client 所有权语义清理 session/lease。
 - [shipped] DSH 原生 generic card 展示操作、状态、语义目标和 artifact 数量；无专属 UI，不接管 debug-ui live view。
 - [shipped] 操作枚举不包含 JS/CDP/坐标能力，模型工具不暴露 session/lease/browser open/close 生命周期入口；坐标/脚本/敏感参数键及 password/token 类 fill/type_text 目标在审批前拒绝，v1 不注入秘密。
-- [shipped] 同一 profile 不得向同 proxy 同时挂载官方通用 MCP bridge，避免 18 个原始工具绕过包装层。
+- [shipped] 同一 profile 不得向同 proxy 同时挂载官方通用 MCP bridge；proxy `/mcp` 本身也只发布 3 个受控 operation 工具，避免旧浏览器工具绕过包装层。
 - [shipped] 真实 Cordis/SystemPrompt/ToolRuntime/Approval 测试覆盖注册、observe、act/拒绝态、never、跨 session 争用、稳定调用身份、脱敏及 HMR/卸载。

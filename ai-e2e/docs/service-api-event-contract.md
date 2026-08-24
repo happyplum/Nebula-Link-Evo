@@ -293,7 +293,7 @@ v1 每个 application session 从创建到释放只能绑定一个 `BrowserConte
 
 ### 5.2 MCP 工具
 
-现有 15 个 `browser-control.*` 工具继续服务调试/兼容调用。以下 3 个受控工具已在 proxy MCP Server 交付；`ai-chat-service` 普通 Chat 明确过滤它们，E2E 受限任务必须等待模型不可见 wrapper 注入 browser binding 后才能调用：
+proxy MCP Server 只暴露以下 3 个受控工具；旧 15 个 browser tools 不进入 MCP consumer。`ai-chat-service` 将原始工具隔离在模型不可见的 DSH transport scope，E2E 受限任务模型只提交冻结 `stepId`，由 wrapper 注入 target/args、browser binding 与授权快照：
 
 | MCP tool | 语义 |
 |---|---|

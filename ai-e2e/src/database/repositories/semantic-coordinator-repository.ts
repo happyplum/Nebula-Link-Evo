@@ -27,6 +27,11 @@ export interface CoordinatorTodo {
   browserSessionId: string;
   policyEvaluationId?: string;
   approvalGrantId?: string;
+  policyVersion?: string;
+  policyResult?: 'auto_allowed' | 'approval_required' | 'denied';
+  policyProjectionSha256?: string;
+  approvalGrantStatus?: string;
+  approvedProjectionSha256?: string;
   todoId: string;
   todoStateVersion: number;
   todoKey: string;
@@ -124,9 +129,12 @@ export class SemanticCoordinatorRepository {
     inImmediateTransaction(this.db, () => {
       if (job.contextType === 'run') {
         const run = this.db
-          .prepare('SELECT browser_job_id, browser_session_id, state_version, next_event_seq FROM test_runs WHERE id = ?')
+          .prepare(
+            'SELECT browser_job_id, browser_session_id, state_version, next_event_seq FROM test_runs WHERE id = ?'
+          )
           .get(job.contextId) as DbRow | undefined;
-        if (!run || run.browser_job_id !== job.id) throw new Error('Browser job does not own the run');
+        if (!run || run.browser_job_id !== job.id)
+          throw new Error('Browser job does not own the run');
         if (run.browser_session_id && run.browser_session_id !== sessionId) {
           throw new Error('Run is already attached to another browser session');
         }
@@ -170,6 +178,10 @@ export class SemanticCoordinatorRepository {
                 runs.business_version_id, runs.deployment_revision_id,
                 runs.browser_job_id, runs.browser_session_id,
                 runs.current_policy_evaluation_id, runs.active_approval_grant_id,
+                evaluations.policy_version, evaluations.result AS policy_result,
+                evaluations.projection_sha256 AS policy_projection_sha256,
+                grants.status AS approval_grant_status,
+                grants.approved_projection_sha256,
                 todos.id AS todo_id, todos.state_version AS todo_state_version,
                 todos.todo_key, todos.input_json_redacted, todos.input_secret_refs_json,
                 todos.auth_context_json,
@@ -186,6 +198,10 @@ export class SemanticCoordinatorRepository {
            ON pages.id = todos.page_definition_revision_id
          JOIN deployment_profile_revisions AS deployments
            ON deployments.id = runs.deployment_revision_id
+         LEFT JOIN side_effect_policy_evaluations AS evaluations
+           ON evaluations.id = runs.current_policy_evaluation_id
+         LEFT JOIN side_effect_approval_grants AS grants
+           ON grants.id = runs.active_approval_grant_id
          WHERE runs.browser_job_id = ? AND runs.lifecycle = 'running'
            AND runs.browser_session_id IS NOT NULL AND todos.state = 'ready'
            AND NOT EXISTS (
@@ -206,6 +222,10 @@ export class SemanticCoordinatorRepository {
                 runs.business_version_id, runs.deployment_revision_id,
                 runs.browser_job_id, runs.browser_session_id,
                 runs.current_policy_evaluation_id, runs.active_approval_grant_id,
+                evaluations.policy_version, evaluations.result AS policy_result,
+                evaluations.projection_sha256 AS policy_projection_sha256,
+                grants.status AS approval_grant_status,
+                grants.approved_projection_sha256,
                 todos.id AS todo_id, todos.state_version AS todo_state_version,
                 todos.todo_key, todos.input_json_redacted, todos.input_secret_refs_json,
                 todos.auth_context_json,
@@ -223,6 +243,10 @@ export class SemanticCoordinatorRepository {
            ON pages.id = todos.page_definition_revision_id
          JOIN deployment_profile_revisions AS deployments
            ON deployments.id = runs.deployment_revision_id
+         LEFT JOIN side_effect_policy_evaluations AS evaluations
+           ON evaluations.id = runs.current_policy_evaluation_id
+         LEFT JOIN side_effect_approval_grants AS grants
+           ON grants.id = runs.active_approval_grant_id
          WHERE tasks.id = ?`
       )
       .get(pageTaskId) as DbRow | undefined;
@@ -291,7 +315,10 @@ export class SemanticCoordinatorRepository {
     };
   }
 
-  getAuthoringExternalLink(taskId: string, kind: 'agent_task' | 'browser_lease'): ExternalLink | null {
+  getAuthoringExternalLink(
+    taskId: string,
+    kind: 'agent_task' | 'browser_lease'
+  ): ExternalLink | null {
     const row = this.db
       .prepare(
         `SELECT * FROM external_task_links
@@ -316,7 +343,8 @@ export class SemanticCoordinatorRepository {
            AND (ai_task_id IS NULL OR ai_task_id = ?)`
       )
       .run(agentTaskId, pageTaskId, agentTaskId);
-    if (Number(result.changes) !== 1) throw new Error('Active page task could not accept Agent task');
+    if (Number(result.changes) !== 1)
+      throw new Error('Active page task could not accept Agent task');
   }
 
   getExternalLink(pageTaskId: string, kind: 'agent_task' | 'browser_lease'): ExternalLink | null {
@@ -329,7 +357,9 @@ export class SemanticCoordinatorRepository {
     return row ? mapExternalLink(row) : null;
   }
 
-  getRunBrowserSession(runId: string): { jobId: string; sessionId: string; jobState: string } | null {
+  getRunBrowserSession(
+    runId: string
+  ): { jobId: string; sessionId: string; jobState: string } | null {
     const row = this.db
       .prepare(
         `SELECT runs.browser_job_id, runs.browser_session_id, jobs.state
@@ -405,6 +435,19 @@ function mapCoordinatorTodo(row: DbRow): CoordinatorTodo {
       : {}),
     ...(row.active_approval_grant_id
       ? { approvalGrantId: String(row.active_approval_grant_id) }
+      : {}),
+    ...(row.policy_version ? { policyVersion: String(row.policy_version) } : {}),
+    ...(row.policy_result
+      ? { policyResult: String(row.policy_result) as CoordinatorTodo['policyResult'] }
+      : {}),
+    ...(row.policy_projection_sha256
+      ? { policyProjectionSha256: String(row.policy_projection_sha256) }
+      : {}),
+    ...(row.approval_grant_status
+      ? { approvalGrantStatus: String(row.approval_grant_status) }
+      : {}),
+    ...(row.approved_projection_sha256
+      ? { approvedProjectionSha256: String(row.approved_projection_sha256) }
       : {}),
     todoId: String(row.todo_id),
     todoStateVersion: Number(row.todo_state_version),

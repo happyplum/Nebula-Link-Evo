@@ -54,9 +54,8 @@ describe('BrowserToolsProvider (structural)', () => {
       createBrowserTools: vi.fn(() => mockToolMap),
     }));
 
-    const { BrowserToolsProvider: BTP } = await import(
-      '../tools/providers/browser-tools-provider.js'
-    );
+    const { BrowserToolsProvider: BTP } =
+      await import('../tools/providers/browser-tools-provider.js');
     provider = new BTP(makeMockBrowserClient());
   });
 
@@ -83,7 +82,7 @@ describe('BrowserToolsProvider (structural)', () => {
       expect(tools).toHaveLength(TOOL_DEFINITIONS.length);
 
       for (const tool of tools) {
-        expect(tool.exposeTo).toEqual(['chat', 'mcp-server']);
+        expect(tool.exposeTo).toEqual([]);
         expect(tool.providerId).toBe('browser-tools');
       }
     });
@@ -410,7 +409,7 @@ describe('BrowserToolsProvider (execution)', () => {
   describe('error handling', () => {
     it('should return Error: prefixed string when BrowserClient throws', async () => {
       vi.mocked(mockClient.navigate).mockRejectedValueOnce(
-        new Error('Playwright Server error: 500 - timeout'),
+        new Error('Playwright Server error: 500 - timeout')
       );
 
       const result = await findAndExecute('browser-control.browser_navigate', {

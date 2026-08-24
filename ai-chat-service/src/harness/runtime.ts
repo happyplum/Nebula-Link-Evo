@@ -1,6 +1,11 @@
 import { Context } from '@deepseek-ai/cordis';
 import Timer from '@deepseek-ai/cordis-plugin-timer';
-import LlmRuntime, { CallId, MessageId, createUserMessage, freezeMessage } from '@deepseek-ai/dsh-llm';
+import LlmRuntime, {
+  CallId,
+  MessageId,
+  createUserMessage,
+  freezeMessage,
+} from '@deepseek-ai/dsh-llm';
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session';
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl';
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt';
@@ -42,7 +47,9 @@ const CANCEL_CAUSES: Record<'user' | 'timeout' | 'shutdown', AgentCancelCause> =
   shutdown: { kind: 'disposed' },
 };
 
-export async function createHarnessRuntime(options: HarnessRuntimeOptions): Promise<HarnessRuntime> {
+export async function createHarnessRuntime(
+  options: HarnessRuntimeOptions
+): Promise<HarnessRuntime> {
   const context = new Context();
   const transportContext = context.isolate('tools');
   let disposed = false;
@@ -97,6 +104,29 @@ export async function createHarnessRuntime(options: HarnessRuntimeOptions): Prom
       });
     }
     for (const server of options.mcp) await transportContext.plugin(mcpClient, server);
+    for (const schema of transportContext.tools.schemas()) {
+      if (isRawProxyTool(options.mcp, schema.name)) continue;
+      context.tools.register({
+        ...schema,
+        output: {
+          schema: {},
+          render: (_args, value) => [
+            { type: 'text', text: typeof value === 'string' ? value : JSON.stringify(value) },
+          ],
+        },
+        timeoutMs: 30_000,
+        execute: async (args, exec) => {
+          const result = await transportContext.tools.execute({
+            callId: CallId(randomUUID()),
+            name: schema.name,
+            arguments: args,
+            signal: exec.signal,
+          });
+          if (result.isError) throw new Error(result.error.message);
+          return result.value;
+        },
+      });
+    }
     await context.plugin(AgentLoop, {
       agents: [],
       maxParallelToolCalls: options.maxParallelToolCalls,
@@ -257,13 +287,22 @@ function sessionHandle(context: Context, handle: AgentHandle): HarnessSessionHan
 
 export { SessionId };
 
-function publicMcpToolName(serverName: string, rawName: string): string {
+export function publicMcpToolName(serverName: string, rawName: string): string {
   const joined = `mcp__${serverName}__${rawName}`;
   const normalized = joined.replace(/[^A-Za-z0-9_-]/gu, '_');
   if (normalized === joined && normalized.length <= 64) return normalized;
-  const hash = createHash('sha256')
-    .update(`${serverName}\0${rawName}`)
-    .digest('hex')
-    .slice(0, 12);
+  const hash = createHash('sha256').update(`${serverName}\0${rawName}`).digest('hex').slice(0, 12);
   return `${normalized.slice(0, 51)}_${hash}`;
+}
+
+function isRawProxyTool(servers: HarnessRuntimeOptions['mcp'], safeName: string): boolean {
+  return servers.some((server) =>
+    [
+      'browser-control.operation_execute',
+      'browser-control.operation_get',
+      'browser-control.operation_cancel',
+    ]
+      .map((toolName) => publicMcpToolName(server.serverName, toolName))
+      .includes(safeName)
+  );
 }

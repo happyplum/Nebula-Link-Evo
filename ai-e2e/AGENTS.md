@@ -182,7 +182,7 @@ ai-e2e (:3002)
 - **页面子代理（pending）**：只执行派发的页面场景片段及其中明确授权的功能脚本，负责重新检查、执行、验证、职责内修复和结构化汇报；不得自行登录、造数或调用场景外脚本。
 - **上下文（pending）**：大多数派发创建干净上下文；登出等可恢复中断可以由主代理在页面状态与副作用检查后续接原上下文，否则用检查点和授权变量重建干净上下文。
 - **串行调度与身份（shipped）**：持久 FIFO、全库单 active 槽、session/lease 派发、显式释放和重启收敛已接入；每个 session 固定一个 BrowserContext 和活动 actor，跨账号/角色只通过主代理显式编排认证脚本串行切换。
-- **环境与副作用策略（in-progress）**：policy evaluation/grant/decision 表、Run/Authoring 风险投影 hash 与 evaluation 幂等仓储已交付；确定性环境规则、审批/grant 原子应用和逐 effectId runtime 门禁仍 pending。完整契约见 `docs/environment-side-effect-policy-contract.md`。
+- **环境与副作用策略（formal run shipped）**：正式 Run 已完成确定性风险投影、local/test 自动放行、staging 计划级审批/active grant、production 业务写拒绝，以及逐 effectId/数量/grant 跨服务门禁；Authoring 全流程统一门禁仍 pending。完整契约见 `docs/environment-side-effect-policy-contract.md`。
 - **编排/执行分层（shipped）**：页面任务图、页面/模块范围和验收标准由 ai-e2e 持有；模型、MCP 工具和 Skills 执行通过 ai-chat-service Agent task。Legacy 纯文本链保持兼容但不得与 semantic run 混用。
 - **跨服务协议（in-progress）**：三服务控制面、ai-e2e Authoring/Run API/SSE、outbox worker、opaque 关联与端到端重启协调已交付；Agent/browser 事件流消费和完整逐 effect 授权仍 pending。完整契约见 `docs/service-api-event-contract.md`。
 - **双模型与 Skills（in-progress）**：`ai-chat-service` 已交付本地只读、固定版本/hash、默认拒绝扩权的单 Skill runtime；目标 `vision.analyze_page`/`vision.resolve_target` 和本包消费链仍 pending。视觉结果只返回一次不可变快照的可序列化定位候选。完整契约见 `docs/ai-model-skill-contract.md`。

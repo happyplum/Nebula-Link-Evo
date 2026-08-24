@@ -1,6 +1,7 @@
 import axios, { isAxiosError, type AxiosInstance } from 'axios';
 import { randomUUID } from 'node:crypto';
 import { IntegrationClientError } from './integration-client-error.js';
+import type { BrowserTargetRefV1 } from '@nebula-link-evo/shared/types/browser-execution';
 
 export type AgentTaskStatus =
   | 'created'
@@ -16,6 +17,8 @@ export interface AgentTaskBrowserStep {
   stepId: string;
   kind: 'observe' | 'act';
   operation: string;
+  target?: BrowserTargetRefV1;
+  args?: Record<string, unknown>;
   effectId?: string;
   maxAffectedItems?: number;
   capture?: {
@@ -51,6 +54,23 @@ export interface CreateAgentTaskInput {
     browserLeaseToken: string;
     browserLeaseSequence: number;
     access: 'observe' | 'control';
+  };
+  sideEffectAuthorization?: {
+    contextType: 'run' | 'authoring';
+    contextId: string;
+    environment: 'local' | 'test' | 'staging' | 'production';
+    policyVersion: string;
+    policyEvaluationId: string;
+    policyResult: 'auto_allowed' | 'approval_required';
+    projectionSha256: string;
+    effects: Array<{
+      stepId: string;
+      effectId: string;
+      kind: 'create' | 'update' | 'delete' | 'auth_change';
+      maxAffectedItems: number;
+      reversibility: 'reversible' | 'compensatable' | 'irreversible';
+    }>;
+    grant?: { grantId: string; status: 'active'; approvedProjectionSha256: string };
   };
   correlation?: Record<string, string>;
 }
@@ -160,11 +180,10 @@ export class AgentTaskClient implements AgentTaskClientPort {
     }
   ): Promise<{ task: AgentTaskView }> {
     return this.request(() =>
-      this.client.post(
-        `/api/v1/agent-tasks/${encodeURIComponent(taskId)}/commands`,
-        input,
-        { timeout: this.timeoutMs, headers: headers() }
-      )
+      this.client.post(`/api/v1/agent-tasks/${encodeURIComponent(taskId)}/commands`, input, {
+        timeout: this.timeoutMs,
+        headers: headers(),
+      })
     );
   }
 
@@ -193,7 +212,14 @@ function mapError(error: unknown): IntegrationClientError {
   }
   const status = error.response?.status;
   const body = error.response?.data as
-    | { error?: { code?: string; message?: string; retryable?: boolean; details?: Record<string, unknown> } }
+    | {
+        error?: {
+          code?: string;
+          message?: string;
+          retryable?: boolean;
+          details?: Record<string, unknown>;
+        };
+      }
     | undefined;
   const problem = body?.error;
   return new IntegrationClientError(

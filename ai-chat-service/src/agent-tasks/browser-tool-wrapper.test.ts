@@ -19,6 +19,11 @@ function createWrapper(callTool: ReturnType<typeof vi.fn>) {
           stepId: 'login',
           kind: 'act',
           operation: 'click',
+          target: {
+            semantic: '登录按钮',
+            candidates: [{ strategy: 'role', role: 'button', name: '登录', exact: true }],
+            expected: { cardinality: 'exactly_one', visible: true, enabled: true },
+          },
           effectId: 'effect-login',
           capture: { beforeScreenshot: true, afterScreenshot: true, domSnapshot: true },
         },
@@ -43,17 +48,12 @@ describe('BrowserToolWrapper', () => {
     );
     const wrapper = createWrapper(callTool);
 
-    const first = await wrapper.execute(
-      { stepId: 'login', target: { semantic: '登录按钮' } },
-      'call-1'
-    );
-    const second = await wrapper.execute(
-      { stepId: 'login', target: { semantic: '登录按钮' } },
-      'call-1'
-    );
+    const first = await wrapper.execute({ stepId: 'login' }, 'call-1');
+    const second = await wrapper.execute({ stepId: 'login' }, 'call-1');
 
     expect(first.operationId).toBe(second.operationId);
-    const envelope = callTool.mock.calls[0]![2] as Record<string, unknown>;
+    const envelope = callTool.mock.calls.at(0)?.[2] as Record<string, unknown> | undefined;
+    expect(envelope).toBeDefined();
     expect(envelope).toMatchObject({
       sessionId: 'session-1',
       tabId: 'tab-1',
@@ -63,10 +63,21 @@ describe('BrowserToolWrapper', () => {
     expect(envelope.request).toMatchObject({
       leaseSequence: 7,
       operation: 'click',
+      target: { semantic: '登录按钮' },
       capture: { beforeScreenshot: true, afterScreenshot: true, domSnapshot: true },
       presentation: { animation: 'off' },
     });
     expect(wrapper.summaries[0]).not.toHaveProperty('args');
+  });
+
+  it('rejects model attempts to replace frozen target or args', async () => {
+    const callTool = vi.fn();
+    const wrapper = createWrapper(callTool);
+
+    await expect(
+      wrapper.execute({ stepId: 'login', target: { semantic: '替换目标' } }, 'call-replace')
+    ).rejects.toMatchObject({ code: 'validation_failed' });
+    expect(callTool).not.toHaveBeenCalled();
   });
 
   it('queries the durable ledger after an ambiguous execute failure', async () => {
@@ -102,6 +113,26 @@ describe('BrowserToolWrapper', () => {
     expect(wrapper.summaries).toMatchObject([
       { toolCallId: 'call-3', status: 'outcome_unknown', errorCode: 'outcome_unknown' },
     ]);
+  });
+
+  it('does not query the ledger after a deterministic proxy rejection', async () => {
+    const callTool = vi.fn(async () => {
+      throw new Error(
+        JSON.stringify({
+          code: 'lease_expired',
+          message: 'expired',
+          retryable: false,
+          correlationId: 'c-1',
+        })
+      );
+    });
+    const wrapper = createWrapper(callTool);
+
+    await expect(wrapper.execute({ stepId: 'login' }, 'call-denied')).rejects.toMatchObject({
+      code: 'tool_not_allowed',
+      details: { proxyCode: 'lease_expired', correlationId: 'c-1' },
+    });
+    expect(callTool).toHaveBeenCalledTimes(1);
   });
 
   it('keeps cancel internal and injects credentials', async () => {

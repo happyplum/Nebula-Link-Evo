@@ -66,7 +66,7 @@
 | 主代理 | in-progress | 已交付持久 authoring/run job/task/attempt/command/event、运行计划/TODO/变量、browser FIFO，以及确定性协调器对 Agent task、浏览器 session/lease/operation、outbox、恢复、依赖传播和验收结果的收敛；完整 bootstrap/recheck 阶段图与 coverage 生成仍 pending。 |
 | 页面子代理 | pending | 只执行派发的页面场景片段，负责固定重新检查、执行、验证、职责内修复和汇报；不得自行登录、造数或调用场景外脚本。 |
 | 上下文策略 | pending | 默认创建干净子代理上下文；登出等可恢复中断可由主代理在状态/副作用检查后续接原上下文，否则从检查点重建。v1 每个 browser session 固定一个 BrowserContext 和一个活动 actor；跨角色只允许主代理显式编排认证脚本串行切换。 |
-| 环境与副作用策略 | in-progress | 正式 Run 已按 immutable deployment 环境确定性投影计划副作用：local/test 自动放行，staging 删除/上传/批量/不可逆操作先生成计划级决策，批准后原子创建 active grant，production 业务写硬拒绝且 browser job 不可获取；逐 effectId 的跨服务 runtime 门禁仍 pending。完整契约见 `docs/environment-side-effect-policy-contract.md`。 |
+| 环境与副作用策略 | in-progress | 正式 Run 已从脚本顶层 sideEffects 与 step sideEffectId 确定性投影计划副作用：local/test 自动放行，staging 删除/批量/不可逆操作先生成计划级决策，批准后原子创建 active grant，production 业务写硬拒绝；任务派发携带精确 evaluation/projection/grant/effect/数量快照并由 ai-chat wrapper 逐调用校验。authoring 全流程策略仍 pending。完整契约见 `docs/environment-side-effect-policy-contract.md`。 |
 | Agent 执行路径 | in-progress | semantic v1 页面任务图和验收归 ai-e2e；协调器通过 ai-chat-service 的统一 DSH Agent task runtime 执行冻结结构化任务和受限 tool loop，browser binding token 只存在本机加密 secret store，不进入模型输入或数据库明文。Legacy `AiChatClient.generateText()` 仅保留无 session/tool 的单次生成链。 |
 | 页面任务与浏览器控制租约 | shipped | proxy session/lease/operation 控制面与 ai-e2e 持久 FIFO 已接通：正式 Run 使用短期 control lease，Authoring 分析使用 observe lease，候选验证按步骤自动选择 observe/control；单 session/Context/active actor、显式释放和重启收敛均有集成测试。 |
 | 可视执行与证据 | in-progress | semantic 协调器已把冻结脚本投影为 `operation_execute` 白名单步骤，拉取 operation 结果与截图/DOM artifact，校验 SHA-256 后提升到本地内容寻址存储并封存 evidence manifest；生产工作台已提供只读实时画面、TODO/尝试状态与证据定位，脱敏完成和保留清理 worker 仍 pending。 |
@@ -200,11 +200,11 @@
 | 功能脚本 + 场景调用图 | database/semantic asset foundation | in-progress | repository 验证引用重写、无环校验与 stale 投影 | 稳定功能脚本与场景 current graph 已落库；完整 v1 Schema、重复/条件、运行计划/TODO/尝试与语义执行仍 pending |
 | 业务版本 + 深复制 | services/BusinessVersionService、database/BusinessVersionRepository | shipped | migration + repository + Fastify inject：创建/查询、幂等重放、全图 ID 重映射、artifact ref count、stale、失败回滚 | 复制 current PRD/变量/决策/基线/需求/coverage/dependency/semantic 资产与部署引用；不复制验证、运行、证据 manifest、实际数据或秘密，目标保持 `needs_recheck` |
 | 从零生成、复核与局部修复 | SemanticAuthoringService、SemanticCoordinatorService、SemanticAuthoringCandidateService | in-progress | repair 一键任务、结构化候选、范围权限、stale、安全边界、真实 Agent/browser 验证、失败不切 current 与多资产原子激活测试 | 局部 repair 闭环已交付；完整 PRD bootstrap/recheck 阶段图和 coverage 生成仍 pending |
-| 环境风险投影与计划级审批 | database/semantic run-control/evidence repositories、SemanticRunService | in-progress | local/test、staging 审批/grant、production 拒绝与 FIFO 门禁测试 | 计划级环境规则与 grant 应用已交付；逐 effectId 跨服务 runtime 门禁仍 pending |
+| 环境风险投影与计划级审批 | database/semantic run-control/evidence repositories、SemanticRunService、semantic-task-projection | shipped（formal run） | local/test、staging 审批/grant、production 拒绝、projection/effectId 派发与 ai-chat 校验测试 | formal run 的计划级规则、grant 应用与逐 effectId/数量 runtime 门禁已交付 |
 | 主代理 / 页面子代理调度与上下文策略 | SemanticCoordinatorService、semantic workflow/coordinator repositories | shipped | 全局 FIFO、冻结页面任务、短期租约、Agent 派发、暂停/恢复/取消、依赖传播、显式释放和重启收敛集成测试 | 每次只运行一个执行型页面任务；模型不持有浏览器生命周期 |
 | ai-chat-service Agent task 消费 | infrastructure/agent-task-client、services/semantic-coordinator-service | shipped | capability 预检、不可变输入、tool/skill policy、预算、模型不可见 binding、结构化结果、命令同步与终态验收集成测试 | 仅 semantic v1 使用；Legacy 纯文本生成链保持兼容 |
 | Vision v2 evidence 消费契约 | semantic browser operation/artifact → ai-chat Agent tool | in-progress | shared build + ai-chat snapshot binding/hash/MIME/status tests | 生产工具固定为 `vision.analyze_page`/`vision.resolve_target`；ai-e2e 只传 proxy-issued immutable binding，通用 authoring/Run 消费尚未全面接入 |
-| proxy-adapter 可视语义执行 | infrastructure/semantic-browser-client、services/semantic-task-projection | in-progress | session/lease/`operation_execute/get`、真实截图/DOM 下载、SHA-256 校验与证据封存已接入 | Legacy `ExecutorService` 仍为 `npx tsx`；browser event 流消费、set_files 与逐 effectId 参数门禁仍 pending |
+| proxy-adapter 可视语义执行 | infrastructure/semantic-browser-client、services/semantic-task-projection | in-progress | session/lease/`operation_execute/get`、冻结 target/args、policy/grant/effect 交集、真实截图/DOM 下载、SHA-256 校验与证据封存已接入 | Legacy `ExecutorService` 仍为 `npx tsx`；browser event 流消费与 set_files 仍 pending |
 | 跨服务 outbox 与恢复 | SemanticEvidenceRepository、SemanticCoordinatorService、EncryptedCoordinatorSecretStore | shipped | outbox 幂等派发/claim/settle、dispatching 重启恢复、opaque external link 单调核对、租约 token 本机加密保存与孤儿任务收敛测试 | 不在 SQLite 或模型输入保存 token 明文 |
 | 旧资产导入与版本级切流 | database、services、ui（待新增） | pending | 当前无验收面 | 旧表只读保留；生成 needs_recheck 业务版本/候选，不自动转换任意 TypeScript；run 固定 legacy 或 semantic_v1 |
 | 分层运行状态、决策与依赖传播 | database/semantic workflow foundation、SemanticRunService、ui/features/semantic | shipped | formal run 原子冻结、optimistic command、单调 event、TODO/attempt 执行、恢复/决策、依赖传播、snapshot-first SSE 与 UI 测试 | semantic 工作台只呈现后端权威状态；legacy 项目事件继续按旧链处理 |
@@ -282,7 +282,7 @@
 | DOM 变化影响定位未实现 | requirement-gap | pending | 当前自动修复由失败 run 触发，尚不能按当前业务版本的功能脚本定向维护 |
 | migration baseline/import/cutover 未实现 | requirement-gap | pending | 015+ checksum runner 与 legacy import ledger 表已交付；001–014 preflight/baseline、文件备份、候选 importer、能力协商和版本级切流仍未实现 |
 | 完整 authoring/coverage 阶段图未实现 | requirement-gap | pending | 局部 repair 的 Agent 候选、影响审批、真实浏览器验证和激活协调器已交付；旧 PRDAnalyzer/Explorer/ScriptGenerator 尚未切换，bootstrap/recheck 与 coverage 生成仍 pending |
-| 环境与副作用执行门禁未实现 | requirement-gap | pending | policy evaluation/grant/decision 表与 evaluation 仓储已交付；staging 审批应用、grant 生命周期、production 硬拒绝和逐 effectId runtime 校验仍 pending |
+| Authoring 环境与副作用门禁尚未全量接入 | requirement-gap | pending | formal run 的 evaluation/grant/production 拒绝与逐 effectId/数量跨服务门禁已交付；bootstrap/recheck/repair 的统一计划投影与撤销事件仍需补齐 |
 
 完整目标需求、已确认边界与尚待技术设计内容见 `docs/requirements-baseline.md`。
 

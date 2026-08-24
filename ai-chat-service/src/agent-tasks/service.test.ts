@@ -230,6 +230,48 @@ describe('AgentTaskService', () => {
     await first;
   });
 
+  it('cancels queued proxy operations before aborting the Agent loop', async () => {
+    const repository = new AgentTaskRepository(':memory:');
+    const order: string[] = [];
+    const cancelOperation = vi.fn(async () => {
+      order.push('operation_cancel');
+    });
+    const service = new AgentTaskService(
+      repository,
+      {
+        execute: async (context) => {
+          context.registerOperationCanceller?.(cancelOperation);
+          await new Promise<void>((_resolve, reject) => {
+            context.signal.addEventListener(
+              'abort',
+              () => {
+                order.push('agent_abort');
+                reject(new DOMException('Cancelled', 'AbortError'));
+              },
+              { once: true }
+            );
+          });
+          throw new Error('unreachable');
+        },
+      },
+      { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+    );
+    services.push(service);
+    const created = service.create(request());
+    await vi.waitFor(() => expect(service.get(created.task.taskId).status).toBe('running'));
+    const running = service.get(created.task.taskId);
+
+    const result = await service.command(created.task.taskId, {
+      commandId: 'cancel-with-operation',
+      type: 'cancel',
+      expectedStateVersion: running.stateVersion,
+    });
+
+    expect(result.task.status).toBe('cancelled');
+    expect(cancelOperation).toHaveBeenCalledOnce();
+    expect(order).toEqual(['operation_cancel', 'agent_abort']);
+  });
+
   it('binds an exact Skill policy before scheduling and passes its immutable execution view', async () => {
     const repository = new AgentTaskRepository(':memory:');
     const runtime = new SkillRuntime(repository);

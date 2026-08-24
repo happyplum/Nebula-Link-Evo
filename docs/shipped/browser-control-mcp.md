@@ -1,17 +1,17 @@
 # browser-control-mcp `proxy-adapter :3000 /mcp`
 
-proxy-adapter 通过 MCP Server (StreamableHTTP) 对外暴露 `browser-control.*` 工具集，是所有 AI 客户端（ai-chat-service / Claude Desktop / Cursor / aichat）的浏览器能力底座。
+proxy-adapter 通过 MCP Server (StreamableHTTP) 只对外暴露受控 `browser-control.operation_execute/get/cancel`，是 Nebula 受控浏览器执行的网关。
 
 - [shipped] MCP Server 传输层：`proxy-adapter/src/mcp-server/`（index / transport），`POST /mcp` 提供无状态 JSON StreamableHTTP；可选 `GET /mcp` SSE 通道返回 405，使标准客户端回退到 POST 响应而不触发重连。
 - [shipped] ToolRegistry + browser-control provider：`proxy-adapter/src/tools/`（registry / types / index / providers/browser-tools-provider / adapters/mcp-server / adapters/json-schema-to-zod）。外部 MCP client/provider 归 `ai-chat-service`，proxy-adapter 不再包含该 provider。
 - [tech-debt] `GatewayTool.exposeTo` / `BrowserToolsProvider` 仍保留未使用的 legacy `chat` consumer 标记；本包当前没有 Chat 路由或 Chat 工具消费方。
 - [shipped] browser-control.\* 工具定义与参数/结果适配：`proxy-adapter/src/browser-tools/`（definitions / tool-map / param-adapter / result-adapter / types / index）。
-- [shipped] MCP 工具集共 18 个：15 个兼容 browser-control 工具（含 screenshot、click、type、dom_snapshot 等）+ 3 个受控原子工具 `browser-control.operation_execute/get/cancel`；区别于 `Action` 联合类型（12 种，不含 screenshot）。
+- [shipped] MCP 工具集仅 3 个受控原子工具 `browser-control.operation_execute/get/cancel`；旧 15 个 browser-control 工具保留包内实现但 `exposeTo=[]`，不能从 `/mcp` 发现或调用。
 - [shipped] 12 种 action 类型（对应 `shared/types/action.ts` 的 `Action` 联合）：click / type / focus / blur / hover / value / dispatch / scroll / navigate / wait / mcp_call / finish。
 - [shipped] action 执行入口：`proxy-adapter/src/services/action-executor.ts`。
 - [shipped] 结构化语义步骤可通过 application-level session/稳定 Tab/短期 lease 进入 FIFO 原子操作链；网关只处理通用浏览器约束，不解释场景或脚本业务语义。
-- [shipped] `browser-control.operation_execute/get/cancel` 已注册到 MCP Server；`ai-chat-service` 受限 Agent wrapper 已模型不可见地注入 session/Tab/lease/token/leaseSequence/operation ID，并在 execute 结果不明时先调用 get 核账。普通 Chat provider 继续显式过滤三项工具，get/cancel 不暴露给任务模型。
-- [shipped] `integrations/browser-control-client` 复用同一组受控工具：execute/cancel 走 `/mcp`，capability/session/lease/artifact/operation ledger 走既有 HTTP；BrowserExecutionError 以结构化 problem 穿过 MCP 文本 envelope，未新增 proxy 路由或工具。
+- [shipped] `browser-control.operation_execute/get/cancel` 是唯一 MCP 工具面；`ai-chat-service` 只在隔离 DSH transport 中持有原始工具，受限 Agent 模型只提交冻结 stepId，wrapper 注入 target/args、session/Tab/lease/token/leaseSequence/operation ID，get/cancel 不暴露给模型。
+- [shipped] `integrations/browser-control-client` 复用同一组受控工具：execute/cancel 走 `/mcp`，capability/session/lease/artifact/operation ledger 走既有 HTTP；BrowserExecutionError 通过 `isError: true` 的结构化 problem 穿过真实 MCP 边界，未新增 proxy 路由或工具。
 - [shipped] `GET /api/v1/capabilities` 已声明 browser-execution/operation `1.0`、支持动作/观测、持久账本、可视画面和当前限制；proxy 重启递增 process epoch、使旧租约失效，并将 running operation 收敛为 `outcome_unknown`。
 - [shipped] v1 固定 `maxActiveBrowserSessions=1`、`maxBrowserContextsPerSession=1`，不支持运行中 Context/storage-state 切换；最多一个 control lease，observe 只在安全边界签发且单次使用，live view 无控制权。受控 session 期间 legacy MCP/debug 写入及直接 DOM/截图读取返回 `browser_busy`。
 - [designed] deployment environment、副作用风险投影和计划级审批归 ai-e2e，逐工具授权交集归 ai-chat-service wrapper；proxy 不读取环境标签、不签发/解释 grant，只校验通用 lease/Tab/operation/target/args 与幂等账本。

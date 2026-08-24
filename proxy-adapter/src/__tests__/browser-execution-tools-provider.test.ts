@@ -94,17 +94,16 @@ describe('BrowserExecutionToolsProvider', () => {
     await provider.initialize();
     const tool = provider.getTools().find((item) => item.name.endsWith('operation_get'))!;
 
-    const output = JSON.parse(await tool.execute({ operationId: 'op-1' })) as Record<
-      string,
-      unknown
-    >;
-
-    expect(output).toMatchObject({
-      code: 'lease_expired',
-      message: 'expired',
-      retryable: false,
+    await expect(tool.execute({ operationId: 'op-1' })).rejects.toSatisfy((error: unknown) => {
+      const problem = JSON.parse((error as Error).message) as Record<string, unknown>;
+      expect(problem).toMatchObject({
+        code: 'lease_expired',
+        message: 'expired',
+        retryable: false,
+      });
+      expect(problem.correlationId).toEqual(expect.any(String));
+      return true;
     });
-    expect(output.correlationId).toEqual(expect.any(String));
   });
 });
 

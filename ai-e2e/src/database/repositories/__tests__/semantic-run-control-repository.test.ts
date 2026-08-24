@@ -96,7 +96,10 @@ describe('semantic run control repository', () => {
   });
 
   it('requires staging approval before the browser FIFO can acquire a high-risk run', () => {
-    const fixture = createFixture(db, assets, 'staging', { kind: 'delete', irreversible: true });
+    const fixture = createFixture(db, assets, 'staging', {
+      kind: 'delete',
+      reversibility: 'irreversible',
+    });
     const created = runs.createFormalRun(runInput(fixture, 'run-staging'));
 
     expect(created).toMatchObject({ lifecycle: 'paused', admission: 'approval_required' });
@@ -120,7 +123,10 @@ describe('semantic run control repository', () => {
   });
 
   it('denies production business writes and leaves no acquirable browser job', () => {
-    const fixture = createFixture(db, assets, 'production', { kind: 'submit' });
+    const fixture = createFixture(db, assets, 'production', {
+      kind: 'create',
+      reversibility: 'compensatable',
+    });
     const created = runs.createFormalRun(runInput(fixture, 'run-production'));
 
     expect(created).toMatchObject({ lifecycle: 'cancelled', admission: 'denied' });
@@ -409,7 +415,19 @@ function createFixture(
       scriptKey: 'account.action',
       functionalModuleId: functionalModule.id,
       entryPageDefinitionId: page.id,
-      steps: effect ? [{ action: 'click', effect }] : [{ action: 'observe' }],
+      steps: effect
+        ? [{ id: 'step_effect', action: 'click', sideEffectId: 'effect-1' }]
+        : [{ action: 'observe' }],
+      sideEffects: effect
+        ? [
+            {
+              id: 'effect-1',
+              resourceType: 'fixture',
+              affectedItems: { kind: 'single' },
+              ...effect,
+            },
+          ]
+        : [],
     },
     createdBy: 'system',
     readinessStatus: 'verified',

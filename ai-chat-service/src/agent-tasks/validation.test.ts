@@ -108,9 +108,7 @@ describe('Agent task validation', () => {
     request.toolPolicy.constraints['browser-control.operation_execute'].steps[0].capture = {
       videoSegment: true,
     };
-    expect(() => validateCreateAgentTaskRequest(request)).toThrow(
-      'video capture is not available'
-    );
+    expect(() => validateCreateAgentTaskRequest(request)).toThrow('video capture is not available');
   });
 
   it('redacts the lease token and blocks actions on observe bindings', () => {
@@ -141,6 +139,70 @@ describe('Agent task validation', () => {
     const validated = validateCreateAgentTaskRequest(request);
     expect(JSON.stringify(validated.persistedRequest)).not.toContain('top-secret');
     expect(validated.browserSteps.get('click-login')?.operation).toBe('click');
+  });
+
+  it('requires an exact policy/grant intersection for effect-bearing steps', () => {
+    const request = {
+      ...validRequest(),
+      correlation: { runId: 'run-1' },
+      browserBinding: {
+        browserSessionId: 'session-1',
+        tabId: 'tab-1',
+        browserLeaseId: 'lease-1',
+        browserLeaseToken: 'secret',
+        browserLeaseSequence: 1,
+        access: 'control' as const,
+      },
+      toolPolicy: {
+        allow: ['browser-control.operation_execute'],
+        constraints: {
+          'browser-control.operation_execute': {
+            steps: [
+              {
+                stepId: 'delete-one',
+                kind: 'act',
+                operation: 'click',
+                effectId: 'effect-delete',
+                maxAffectedItems: 1,
+              },
+            ],
+          },
+        },
+      },
+    };
+    expect(() => validateCreateAgentTaskRequest(request)).toThrow('sideEffectAuthorization');
+
+    const authorized = {
+      ...request,
+      sideEffectAuthorization: {
+        contextType: 'run' as const,
+        contextId: 'run-1',
+        environment: 'staging' as const,
+        policyVersion: 'side-effect-policy/1.0',
+        policyEvaluationId: 'evaluation-1',
+        policyResult: 'approval_required' as const,
+        projectionSha256: 'a'.repeat(64),
+        effects: [
+          {
+            stepId: 'delete-one',
+            effectId: 'effect-delete',
+            kind: 'delete' as const,
+            maxAffectedItems: 1,
+            reversibility: 'compensatable' as const,
+          },
+        ],
+        grant: {
+          grantId: 'grant-1',
+          status: 'active' as const,
+          approvedProjectionSha256: 'a'.repeat(64),
+        },
+      },
+    };
+    expect(
+      validateCreateAgentTaskRequest(authorized).request.sideEffectAuthorization
+    ).toBeDefined();
+    authorized.sideEffectAuthorization.grant.approvedProjectionSha256 = 'b'.repeat(64);
+    expect(() => validateCreateAgentTaskRequest(authorized)).toThrow('inactive or stale');
   });
 
   it('validates structured response values deterministically', () => {

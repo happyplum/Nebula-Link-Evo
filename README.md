@@ -14,7 +14,7 @@ Browser ←→ Debug UI (:5173 dev)
               ↕ SSE (Chat)        ↕ REST (Browser/Config)
          AI Chat Service       Proxy Adapter
             (:3001)                (:3000)
-              ↕ MCP Client ──────→  ↕ MCP Server (StreamableHTTP)
+              ↕ DSH MCP transport →  ↕ MCP Server (StreamableHTTP)
               ↕ HTTP                    ↕ Playwright
          AI Providers                Chromium
     (GLM, OpenAI, Anthropic, Kimi, NVIDIA)
@@ -124,7 +124,7 @@ curl http://localhost:3000/api/health
 debug-ui/           # Frontend (React 19 + TypeScript + Vite)
 proxy-adapter/      # Browser MCP gateway (Fastify, MCP Server, Playwright control)
   src/mcp-server/   #   MCP Server transport (StreamableHTTP)
-  src/tools/        #   ToolRegistry + providers (browser-control, MCP client)
+  src/tools/        #   ToolRegistry + browser-control providers
   src/browser-tools/#   browser-control tool definitions
 ai-chat-service/    # AI chat backend (Fastify, conversation, chat SSE, provider orchestration)
 ai-e2e/             # E2E automation orchestrator (consumes proxy-adapter and ai-chat-service HTTP APIs)
@@ -180,16 +180,16 @@ AGPL 允许个人和企业使用、修改与分发软件，但必须遵守其开
 
 - **`proxy-adapter`（shipped）**：Playwright/CDP 集成的唯一所有者，负责页面分析、DOM/截图证据和浏览器动作，并通过 `browser-control.*` MCP 工具及调试 API 对外提供服务。当前实现由进程内 Playwright 启动 Chromium，可选开放 remote-debugging-port，并通过页面 `CDPSession` 获取屏播帧；没有外部 `playwright-server` 或 `connectOverCDP` 链路。
 - **`integrations/*`（shipped）**：`browser-control-client` 只通过既有 loopback HTTP 控制面与 `/mcp` 管理受控浏览器会话，提供 `nebula-browser` CLI；DeepSeek Harness bundle 只暴露收窄后的 observe/act 工具、隐藏 binding 并对每个 act 使用原生一次性审批。两者都不拥有 Playwright/CDP，也不替代 `ai-chat-service` 或 `ai-e2e` 编排。
-- **`ai-chat-service`（in-progress）**：可复用 AI 基础能力层。分析/决策模型负责理解需求、文档和浏览器证据并规划下一步测试动作；主代理和子代理都可调用视觉模型，但视觉模型每次只完成一个具有完整输入的分析问题，不保存流程状态或连续执行。跨服务只传递 `snapshot_id`、`nebula_id`、`locator_bundle`、置信度等可序列化目标引用，不传递进程内 Playwright 对象。MCP client/ToolRegistry、受限 Agent task 命令/事件控制面和本地只读声明式 Skills Runtime 已交付；通用视觉 v2 与完整副作用授权仍为 `pending`。
+- **`ai-chat-service`（in-progress）**：可复用 AI 基础能力层。分析/决策模型负责理解需求、文档和浏览器证据并规划下一步测试动作；主代理和子代理都可调用视觉模型，但视觉模型每次只完成一个具有完整输入的分析问题，不保存流程状态或连续执行。跨服务只传递 `snapshot_id`、`nebula_id`、`locator_bundle`、置信度等可序列化目标引用，不传递进程内 Playwright 对象。MCP 统一由 DSH transport/ToolRuntime 管理，受限 Agent task、正式 Run 的逐 effect 授权闭环和本地只读声明式 Skills Runtime 已交付；通用视觉 v2 的全业务接入仍为 `pending`。
 - **`ai-e2e`（in-progress）**：面向 E2E 的业务层，通过 PRD 与真实网页建立业务版本、页面、功能模块、功能脚本和测试场景。Legacy TypeScript 链保持兼容；semantic 业务版本、结构化 Authoring/Run、主/页面任务协调、可视语义执行与证据闭环已交付。完整 bootstrap/recheck、生产 UI 和 legacy importer 仍需实现。
 
 **领域层级**：逻辑页面由不含部署 Origin 的规范化路由模板与身份参数约束标识；实际运行再绑定部署、动态参数和参考基线。一个页面包含多个功能模块，一个模块包含多个可复用、可独立验证和修复的功能脚本。首期脚本采用显式输入、线性步骤、硬业务断言、成功后输出和声明副作用；场景使用无环调用图负责跨模块/页面的顺序、重复、分支、依赖和数据传递。PRD 形成场景定义与 TODO 模板，每次执行冻结独立运行计划并产生运行 TODO 和执行尝试。
 
-**代理、资产生成与执行（in-progress）**：`proxy-adapter` session/lease/operation 与截图/DOM，`ai-chat-service` 受限 Agent task/Skill runtime，以及 `ai-e2e` Authoring/Run API/SSE、outbox 确定性协调器和语义执行已接通。主代理由持久状态驱动，不依赖长模型对话；正式 Run 派发冻结页面任务，局部 repair 先形成结构化 candidate，经范围审批、安全边界和真实浏览器验证后才原子激活。每个 proxy 进程最多一个活动 session，Authoring 与 Run 共用 FIFO；每个 session 固定单 Context/actor，短期租约和一次性 token 不进入模型或数据库明文。完整 bootstrap/recheck 阶段图、Agent/browser 事件流消费、通用视觉 v2 与完整逐 effect 授权仍 pending。目标协议见 [`ai-e2e/docs/asset-authoring-repair-contract.md`](ai-e2e/docs/asset-authoring-repair-contract.md)、[`ai-e2e/docs/service-api-event-contract.md`](ai-e2e/docs/service-api-event-contract.md) 与 [`ai-e2e/docs/ai-model-skill-contract.md`](ai-e2e/docs/ai-model-skill-contract.md)。
+**代理、资产生成与执行（in-progress）**：`proxy-adapter` session/lease/operation 与截图/DOM，`ai-chat-service` 受限 Agent task/Skill runtime，以及 `ai-e2e` Authoring/Run API/SSE、outbox 确定性协调器和语义执行已接通。主代理由持久状态驱动，不依赖长模型对话；正式 Run 派发冻结页面任务，局部 repair 先形成结构化 candidate，经范围审批、安全边界和真实浏览器验证后才原子激活。每个 proxy 进程最多一个活动 session，Authoring 与 Run 共用 FIFO；每个 session 固定单 Context/actor，短期租约和一次性 token 不进入模型或数据库明文。正式 Run 的冻结 target/args 与逐 effect 授权闭环已交付；完整 bootstrap/recheck 阶段图、Agent/browser 事件流消费和通用视觉 v2 的全业务接入仍 pending。目标协议见 [`ai-e2e/docs/asset-authoring-repair-contract.md`](ai-e2e/docs/asset-authoring-repair-contract.md)、[`ai-e2e/docs/service-api-event-contract.md`](ai-e2e/docs/service-api-event-contract.md) 与 [`ai-e2e/docs/ai-model-skill-contract.md`](ai-e2e/docs/ai-model-skill-contract.md)。
 
 **状态、决策与证据（in-progress）**：Run/计划/TODO/依赖/页面任务/尝试/变量/决策/命令/事件、执行协调、依赖传播、决策应用、公开 Run API/SSE 和 proxy operation/截图/DOM 证据提升已交付。登出中断、前置阻塞、待决策、依赖跳过、取消和业务失败保持独立语义；失败证据缺失只降低完整度。生产 UI、证据脱敏完成和保留清理仍待实现。完整契约见 [`ai-e2e/docs/run-state-decision-evidence-contract.md`](ai-e2e/docs/run-state-decision-evidence-contract.md)。
 
-**环境与副作用安全目标（in-progress）**：风险投影 hash、policy evaluation/grant/decision 表与 evaluation 仓储已交付；确定性环境规则、审批/grant 原子应用和逐 effectId 的跨服务运行时门禁仍待实现。运行冻结 immutable deployment environment 和精确副作用投影。local/test 自动执行已声明、有界副作用；staging 的单项非不可逆 create/update 自动，删除、批量、不可逆和上传在 browser job/control 前做一次当前 run/job 计划级审批；production 只允许显式登录/退出/会话刷新、导航、只读观测和断言，业务写入与上传硬拒绝，首期不设绕过。`ai-e2e` 持有策略/审批，`ai-chat-service` 逐工具校验授权交集，`proxy-adapter` 保持通用浏览器网关。完整契约见 [`ai-e2e/docs/environment-side-effect-policy-contract.md`](ai-e2e/docs/environment-side-effect-policy-contract.md)。
+**环境与副作用安全目标（in-progress）**：正式 Run 已确定性冻结部署环境和精确副作用投影，完成 policy evaluation、staging 计划级审批/active grant 原子应用、production 业务写拒绝，以及逐 effectId/数量/grant 的跨服务运行时门禁。local/test 自动执行已声明、有界副作用；staging 的单项非不可逆 create/update 自动，删除、批量、不可逆和上传在 browser job/control 前审批；production 只允许显式登录/退出/会话刷新、导航、只读观测和断言，业务写入与上传硬拒绝。`ai-e2e` 持有策略/审批，`ai-chat-service` 逐工具校验授权交集，`proxy-adapter` 保持通用浏览器网关；authoring 全流程的统一门禁仍待接入。完整契约见 [`ai-e2e/docs/environment-side-effect-policy-contract.md`](ai-e2e/docs/environment-side-effect-policy-contract.md)。
 
 **迁移与发布目标（in-progress）**：add-only migration 014–018 已建立 semantic 资产、Authoring/Run/FIFO/decision/policy/evidence/outbox/external-link/amendment 数据基座，015+ checksum runner 已交付；legacy 数据不直接改写为已验证语义资产。001–014 preflight/baseline、文件备份、可重入 importer、双轨 UI cutover 仍 pending。完整门禁见 [`ai-e2e/docs/migration-compatibility-acceptance-contract.md`](ai-e2e/docs/migration-compatibility-acceptance-contract.md)。
 
@@ -268,7 +268,7 @@ proxy-adapter (:3000) — 纯浏览器 MCP 网关
   └── 配置与健康检查
 
 ai-chat-service (:3001) — AI 对话服务
-  ├── MCP Client → proxy-adapter MCP Server（获取浏览器/视觉工具）
+  ├── DSH MCP transport → proxy-adapter MCP Server（仅获取受控操作工具）
   ├── AI provider 编排（多模型、流式）
   ├── 会话（conversation/session）管理
   ├── Chat SSE → debug-ui

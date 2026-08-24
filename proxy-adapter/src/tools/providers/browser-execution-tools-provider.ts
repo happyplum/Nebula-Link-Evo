@@ -85,7 +85,7 @@ export class BrowserExecutionToolsProvider extends EventEmitter implements ToolP
           return await this.executeTool(definition.name, rawArgs);
         } catch (error) {
           if (error instanceof BrowserExecutionError) {
-            return JSON.stringify(toBrowserExecutionProblem(error));
+            throw new Error(JSON.stringify(toBrowserExecutionProblem(error)), { cause: error });
           }
           throw error;
         }
