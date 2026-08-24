@@ -33,22 +33,12 @@ describe('migration 014 semantic asset foundation', () => {
         name TEXT NOT NULL,
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
       );
-      CREATE TABLE business_modules (id TEXT PRIMARY KEY, project_id TEXT NOT NULL);
-      CREATE TABLE functional_modules (id TEXT PRIMARY KEY, business_module_id TEXT NOT NULL);
-      CREATE TABLE test_scenarios (id TEXT PRIMARY KEY, functional_module_id TEXT NOT NULL);
     `);
   });
 
   afterEach(() => db.close());
 
-  it('adds the semantic schema without changing legacy tables and is idempotent', () => {
-    const legacyBefore = db
-      .prepare(
-        `SELECT name, sql FROM sqlite_master
-         WHERE type = 'table' AND name IN ('business_modules','functional_modules','test_scenarios')
-         ORDER BY name`
-      )
-      .all();
+  it('adds the semantic schema and is idempotent', () => {
     up(db);
     expect(() => up(db)).not.toThrow();
 
@@ -57,14 +47,6 @@ describe('migration 014 semantic asset foundation', () => {
       .all()
       .map((row) => String((row as { name: string }).name));
     for (const table of EXPECTED_TABLES) expect(names).toContain(table);
-    const legacyAfter = db
-      .prepare(
-        `SELECT name, sql FROM sqlite_master
-         WHERE type = 'table' AND name IN ('business_modules','functional_modules','test_scenarios')
-         ORDER BY name`
-      )
-      .all();
-    expect(legacyAfter).toEqual(legacyBefore);
   });
 
   it('enforces one current revision and immutable revision payloads', () => {

@@ -36,7 +36,6 @@ const CreateJobBodySchema = Type.Object(
       Type.Literal('bootstrap'),
       Type.Literal('recheck'),
       Type.Literal('repair'),
-      Type.Literal('import_conversion'),
     ]),
     intent: Type.Optional(
       Type.Union([Type.Literal('author_assets'), Type.Literal('locate_in_browser')])

@@ -34,7 +34,7 @@ export const migrationSql = `
     id TEXT PRIMARY KEY,
     project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE RESTRICT,
     business_version_id TEXT NOT NULL REFERENCES business_versions(id) ON DELETE RESTRICT,
-    mode TEXT NOT NULL CHECK(mode IN ('bootstrap','recheck','repair','import_conversion')),
+    mode TEXT NOT NULL CHECK(mode IN ('bootstrap','recheck','repair')),
     idempotency_key TEXT NOT NULL,
     request_sha256 TEXT NOT NULL CHECK(length(request_sha256) = 64),
     parent_run_id TEXT,

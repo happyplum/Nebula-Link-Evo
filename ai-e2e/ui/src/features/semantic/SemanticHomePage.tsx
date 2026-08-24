@@ -18,9 +18,9 @@ export function SemanticHomePage() {
           <div>
             <Link
               className="text-xs text-text-secondary hover:text-text-primary"
-              to={`/project/${projectId}`}
+              to="/"
             >
-              ← 返回旧版项目向导
+              ← 返回项目工作区
             </Link>
             <h1 className="mt-3 text-2xl font-semibold tracking-tight text-text-primary">
               浏览器中心工作台
@@ -52,7 +52,7 @@ export function SemanticHomePage() {
             <Boxes className="mx-auto h-8 w-8 text-text-muted" aria-hidden="true" />
             <h2 className="mt-3 font-medium text-text-primary">还没有 semantic v1 业务版本</h2>
             <p className="mt-2 text-sm text-text-secondary">
-              先通过导入转换或后端业务版本接口创建版本，再进入资产编排。
+              从项目工作区创建包含 PRD 与部署信息的业务版本，再进入资产编排。
             </p>
           </div>
         )}

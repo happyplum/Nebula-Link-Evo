@@ -11,14 +11,14 @@ afterEach(async () => {
 });
 
 describe('createServer', () => {
-  it('creates a fastify instance with the SSE emitter decoration', async () => {
+  it('does not expose the removed legacy project API', async () => {
     const app = createServer();
     apps.add(app);
 
     await app.ready();
 
-    expect(app.hasDecorator('sseEmitter')).toBe(true);
-    expect(app.sseEmitter.getClientCount()).toBe(0);
+    const response = await app.inject({ method: 'GET', url: '/api/projects' });
+    expect(response.statusCode).toBe(404);
   });
 
   it('registers CORS with credentials support', async () => {
@@ -53,12 +53,11 @@ describe('createServer', () => {
     const response = await app.inject({ method: 'GET', url: '/boom' });
 
     expect(response.statusCode).toBe(409);
-    expect(response.json()).toEqual({
-      error: {
-        code: 'CONFLICT',
-        message: 'exploded',
-        details: ['duplicate'],
-      },
+    expect(response.json()).toMatchObject({
+      code: 'conflict',
+      message: 'exploded',
+      details: { errors: ['duplicate'] },
+      retryable: false,
     });
   });
 });

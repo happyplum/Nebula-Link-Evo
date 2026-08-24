@@ -10,6 +10,7 @@
   --sem-text-2: #405a73;
   --sem-muted: #667c92;
   --sem-primary: #0b64cf;
+  --sem-primary-solid: #0b64cf;
   --sem-primary-soft: #e1eeff;
   --sem-cyan: #08738a;
   --sem-cyan-soft: #dff6fa;
@@ -51,6 +52,7 @@
   --sem-text-2: #b7c7d9;
   --sem-muted: #8fa3b9;
   --sem-primary: #58a0ff;
+  --sem-primary-solid: #2563eb;
   --sem-primary-soft: #112e55;
   --sem-cyan: #42c9df;
   --sem-cyan-soft: #0a3541;
@@ -77,6 +79,7 @@
     --sem-text-2: #b7c7d9;
     --sem-muted: #8fa3b9;
     --sem-primary: #58a0ff;
+    --sem-primary-solid: #2563eb;
     --sem-primary-soft: #112e55;
     --sem-cyan: #42c9df;
     --sem-cyan-soft: #0a3541;
@@ -549,8 +552,8 @@
 .semantic-url-editor button.is-primary,
 .semantic-action-cluster button.is-run,
 .semantic-button-row button.is-primary {
-  border-color: var(--sem-primary);
-  background: var(--sem-primary);
+  border-color: var(--sem-primary-solid);
+  background: var(--sem-primary-solid);
   color: white;
 }
 .semantic-action-cluster {
@@ -1338,7 +1341,7 @@
 }
 .semantic-scope-lock code {
   margin-top: 2px;
-  opacity: 0.8;
+  color: var(--sem-text-2);
   font-size: 8px;
 }
 .semantic-chat-messages {

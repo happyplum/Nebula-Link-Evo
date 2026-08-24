@@ -177,32 +177,6 @@ export const migrationSql = `
     CHECK((context_type = 'run' AND context_id = run_id AND run_id IS NOT NULL AND authoring_job_id IS NULL) OR (context_type = 'authoring' AND context_id = authoring_job_id AND authoring_job_id IS NOT NULL AND run_id IS NULL))
   );
 
-  CREATE TABLE IF NOT EXISTS legacy_import_batches (
-    id TEXT PRIMARY KEY,
-    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE RESTRICT,
-    source_schema_version TEXT NOT NULL,
-    status TEXT NOT NULL CHECK(status IN ('pending','running','needs_review','completed','failed')),
-    source_fingerprint TEXT NOT NULL,
-    counts_json TEXT NOT NULL,
-    issues_json TEXT NOT NULL,
-    started_at TEXT,
-    completed_at TEXT,
-    created_at TEXT NOT NULL,
-    UNIQUE(project_id, source_fingerprint)
-  );
-
-  CREATE TABLE IF NOT EXISTS legacy_entity_links (
-    batch_id TEXT NOT NULL REFERENCES legacy_import_batches(id) ON DELETE RESTRICT,
-    source_table TEXT NOT NULL,
-    source_id TEXT NOT NULL,
-    target_type TEXT NOT NULL,
-    target_id TEXT,
-    target_revision_id TEXT,
-    status TEXT NOT NULL CHECK(status IN ('imported','candidate','skipped','blocked')),
-    reason_json TEXT,
-    PRIMARY KEY(batch_id, source_table, source_id)
-  );
-
   CREATE TRIGGER IF NOT EXISTS trg_artifact_object_content_immutable
     BEFORE UPDATE OF sha256, size_bytes, media_type, storage_backend, storage_key, sensitivity
     ON artifact_objects BEGIN SELECT RAISE(ABORT, 'artifact object content is immutable'); END;

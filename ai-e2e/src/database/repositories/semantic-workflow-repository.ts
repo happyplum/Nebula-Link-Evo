@@ -36,7 +36,7 @@ export interface CreateAuthoringJobParams {
   id?: string;
   projectId: string;
   businessVersionId: string;
-  mode: 'bootstrap' | 'recheck' | 'repair' | 'import_conversion';
+  mode: 'bootstrap' | 'recheck' | 'repair';
   idempotencyKey: string;
   stage: string;
   strategyVersion: string;

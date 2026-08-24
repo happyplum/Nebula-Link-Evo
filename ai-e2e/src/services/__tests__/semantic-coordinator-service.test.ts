@@ -352,7 +352,10 @@ class FakeAgentTaskClient implements AgentTaskClientPort {
       schema: 'nebula.service-capabilities/1.0',
       service: 'ai-chat-service',
       protocols: { 'nebula.ai.agent-task': { major: 1, minor: 0 } },
-      features: { localControlPlane: true },
+      features: {
+        localControlPlane: true,
+        sideEffectAuthorization: 'preauthorized_steps_only',
+      },
       limits: {},
     };
   }

@@ -110,6 +110,31 @@ export class SemanticQueryRepository {
     };
   }
 
+  getDefaultDeployment(versionId: string): {
+    revisionId: string;
+    environment: 'local' | 'test' | 'staging' | 'production';
+    payload: Record<string, unknown>;
+  } | null {
+    const row = this.db.prepare(
+      `SELECT r.id, r.payload_json
+       FROM version_deployment_bindings b
+       JOIN deployment_profile_revisions r ON r.id = b.deployment_revision_id
+       WHERE b.business_version_id = ? AND b.is_default = 1
+       LIMIT 1`
+    ).get(versionId) as { id: string; payload_json: string } | undefined;
+    if (!row) return null;
+    const payload = parseObject(row.payload_json);
+    const environment = String(payload.environment);
+    if (!['local', 'test', 'staging', 'production'].includes(environment)) {
+      throw new Error('默认部署修订的 environment 无效');
+    }
+    return {
+      revisionId: row.id,
+      environment: environment as 'local' | 'test' | 'staging' | 'production',
+      payload,
+    };
+  }
+
   getRevisionHistory(
     assetType: SemanticAssetType,
     assetId: string

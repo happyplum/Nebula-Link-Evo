@@ -30,7 +30,6 @@
 | `bootstrap` | 新业务版本首次 PRD + URL | 从零生成并验证完整资产图 |
 | `recheck` | copy、部署/Git 变化、定期复核或运行前检查 | 确认页面/脚本是否仍有效，生成影响报告 |
 | `repair` | 运行失败、DOM/交互变化或用户指定资产 | 只修复受影响 revision 并验证 |
-| `import_conversion` | legacy import candidate | 结合旧来源、PRD 和当前页面重新生成语义资产 |
 
 ### 3.2 生命周期与结果
 
@@ -226,7 +225,7 @@ revision 激活事务同步维护 `asset_revision_dependencies`，关系至少�
 
 - 同一 business version 同时最多一个写 authoring job；其他 recheck/repair 请求复用、排队或因 stateVersion 冲突拒绝。
 - 已冻结 test run 可以继续引用旧 revision；authoring 激活新 current 不改写该 run。页面已显著漂移时主代理仍可按运行安全规则中断旧 run。
-- v1 由 `ai-e2e` 以持久 `browser_jobs.queue_seq` 维护 authoring verification/test run 的公平 FIFO，只把队首交给 proxy；重启不改变已排顺序。`proxy-adapter` 用通用独占门禁保证每进程全局最多一个活动 browser execution session，不解释两类业务 job，也不允许 legacy 写工具在会话期间旁路控制。
+- v1 由 `ai-e2e` 以持久 `browser_jobs.queue_seq` 维护 authoring verification/test run 的公平 FIFO，只把队首交给 proxy；重启不改变已排顺序。`proxy-adapter` 用通用独占门禁保证每进程全局最多一个活动 browser execution session，不解释两类业务 job。
 - formal run 在 preflight/失败后触发的 repair 是该 run 的嵌套 authoring job：关联 `parentRunId`，在原子操作安全边界复用父 run 已占用的 browser job/session 槽位，不排到自己后面，也不允许无关 authoring/run 插队。父 run 先暂停并释放 control lease，内部 verification run 才取得 control；repair 完成后释放子租约，再通过精确 revision 的 run plan amendment 恢复父 run。
 - run-triggered repair 只修改 locator/等待/证据且副作用投影不变时可沿用父 run grant；新增或扩大副作用、资源/actor/数量、上传、不可逆性或 deployment/policy 时，旧 grant 失效，父 run 在安全边界重新审批。production 业务写修复仍硬拒绝。
 - session 暂停且保留页面时仍占用全局浏览器；只有显式结束/关闭或主代理接受丢失 Context 的释放，下一 job 才可进入。
@@ -241,7 +240,7 @@ revision 激活事务同步维护 `asset_revision_dependencies`，关系至少�
 
 | Method | Path | 语义 |
 |---|---|---|
-| POST | `/api/v1/business-versions/:versionId/authoring-jobs` | 创建 bootstrap/recheck/repair/import_conversion job，要求幂等键；可选 `intent=locate_in_browser` 只调度 navigation-only 浏览器任务，不生成候选。 |
+| POST | `/api/v1/business-versions/:versionId/authoring-jobs` | 创建 bootstrap/recheck/repair job，要求幂等键；可选 `intent=locate_in_browser` 只调度 navigation-only 浏览器任务，不生成候选。 |
 | GET | `/api/v1/authoring-jobs/:jobId` | 返回权威 authoring snapshot、coverage 和 active task。 |
 | POST | `/api/v1/authoring-jobs/:jobId/commands` | `start/pause/resume/cancel`，要求 `If-Match`。 |
 | GET | `/api/v1/authoring-jobs/:jobId/events` | snapshot-first SSE，job-scoped 单调 seq。 |
@@ -254,9 +253,8 @@ revision 激活事务同步维护 `asset_revision_dependencies`，关系至少�
 
 ## 11. 当前实现差距
 
-- 局部 repair 已有持久 job/task/attempt/event、版本写锁、结构化 candidate/影响审批、真实浏览器验证、原子激活与重启恢复；完整 bootstrap/recheck 多阶段图、coverage 生成和版本 validator 仍未交付。
-- Legacy PRDAnalyzer/Explorer/ScriptGenerator 仍围绕旧表和纯文本生成，未迁入不可变 semantic revision/coverage/dependency authoring 链。
-- semantic 调度已统一使用跨 authoring/run FIFO；逐 effectId 的跨服务 runtime 授权交集仍未交付。
+- bootstrap/recheck/repair 已有持久 job/task/attempt/event、版本写锁、结构化 candidate/影响审批、真实浏览器验证、revision verification、原子激活与重启恢复；完整独立机器 Schema validator 仍为技术债。
+- semantic 调度统一使用跨 authoring/run FIFO，并以逐 effectId 授权信封接入 ai-chat-service。
 - 生产工作台已经从权威 snapshot/SSE 呈现修订、审批与验证状态；通用资产 CRUD/手动修订接口仍未开放。
 
 ## 12. 验收原则
@@ -288,5 +286,4 @@ revision 激活事务同步维护 `asset_revision_dependencies`，关系至少�
 - `target-data-model.md`：authoring/依赖索引与资产/run 关系模型。
 - `service-api-event-contract.md`：API、Agent/browser 调用、事件和 outbox。
 - `ai-model-skill-contract.md`：模型、视觉和 Skills 边界。
-- `migration-compatibility-acceptance-contract.md`：legacy import 和发布验收。
 - `environment-side-effect-policy-contract.md`：authoring 环境矩阵、job 级审批和修复投影规则。

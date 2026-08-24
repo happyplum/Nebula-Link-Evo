@@ -1,24 +1,40 @@
-export type ProjectStatus =
+export type BusinessVersionValidationStatus =
   | 'draft'
-  | 'configuring'
-  | 'analyzing'
-  | 'analyzed'
-  | 'exploring'
-  | 'explored'
-  | 'generating'
-  | 'ready'
-  | 'running'
-  | 'completed';
+  | 'validating'
+  | 'needs_recheck'
+  | 'valid'
+  | 'invalid'
+  | 'archived';
+
+export interface ProjectVersionSummary {
+  id: string;
+  versionKey: string;
+  name: string;
+  validationStatus: BusinessVersionValidationStatus;
+}
 
 export interface Project {
   id: string;
   name: string;
-  target_base_url?: string;
   description?: string;
-  status: ProjectStatus;
-  tags?: string[];
-  login_script_id?: string;
-  created_at: string;
-  updated_at: string;
-  completed_at?: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  latestVersion?: ProjectVersionSummary;
+}
+
+export interface CreatedProjectWorkspace extends Project {
+  versionId: string;
+  deploymentRevisionId: string;
+}
+
+export interface CreateProjectInput {
+  name: string;
+  description?: string;
+  versionKey: string;
+  versionName: string;
+  targetOrigin: string;
+  environment: 'local' | 'test' | 'staging' | 'production';
+  prd: { format: 'markdown' | 'plain_text'; content: string };
+  createdBy: string;
 }

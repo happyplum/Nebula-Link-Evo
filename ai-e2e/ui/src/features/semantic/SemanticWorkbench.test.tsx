@@ -294,6 +294,23 @@ describe('SemanticWorkbench', () => {
     );
   });
 
+  it('新项目深链接只自动创建一次 bootstrap Agent 任务', async () => {
+    renderAuthoring(
+      '/semantic/p1/authoring/v1?bootstrap=1&url=https%3A%2F%2Fexample.test%2F&page=page1&module=m1&scenario=sc1'
+    );
+    await screen.findByRole('button', { name: /订单摘要/ });
+    await waitFor(() => expect(api.createAuthoringJob).toHaveBeenCalledTimes(1));
+    expect(api.createAuthoringJob.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        versionId: 'v1',
+        mode: 'bootstrap',
+        intent: 'author_assets',
+        targetId: 'm1',
+        currentUrl: 'https://example.test/',
+      })
+    );
+  });
+
   it('支持键盘调宽、持久化和双击复位', async () => {
     renderAuthoring();
     const splitter = await screen.findByRole('separator', { name: '左侧上下文宽度调整' });

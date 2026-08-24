@@ -18,7 +18,7 @@ import type {
 import { ServiceError } from './service-error.js';
 import type { BusinessVersionRepository } from '../database/repositories/business-version-repository.js';
 
-export type AuthoringMode = 'bootstrap' | 'recheck' | 'repair' | 'import_conversion';
+export type AuthoringMode = 'bootstrap' | 'recheck' | 'repair';
 
 export interface CreateAuthoringJobInput {
   businessVersionId: string;
@@ -105,7 +105,11 @@ export class SemanticAuthoringService {
           allow:
             input.intent === 'locate_in_browser'
               ? ['browser-control.operation_execute']
-              : ['vision.analyze_page', 'browser-control.operation_observe'],
+              : [
+                  'browser-control.operation_execute',
+                  'vision.analyze_page',
+                  'vision.resolve_target',
+                ],
           mutation: input.intent === 'locate_in_browser' ? 'navigation_only' : 'candidate_only',
         }),
         skillPolicyHash: hashValue({ skill: 'semantic-authoring', version: 1 }),
@@ -221,15 +225,12 @@ function stageForMode(mode: AuthoringMode): string {
       return 'validate_version';
     case 'repair':
       return 'analyze_impact';
-    case 'import_conversion':
-      return 'ingest_legacy';
   }
 }
 
 function initialTaskType(mode: AuthoringMode) {
   switch (mode) {
     case 'bootstrap':
-    case 'import_conversion':
       return 'ingest_prd' as const;
     case 'recheck':
       return 'validate_version' as const;

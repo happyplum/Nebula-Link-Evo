@@ -14,7 +14,7 @@
 - 审批只授权一个精确 run 或 authoring job 的安全相关计划投影，不是版本、账号或环境的永久通行证。
 - 浏览器仍按原子操作推进、保留幂等与 `outcome_unknown` 检查；审批不能替代断言、副作用验证或重试约束。
 
-本策略只约束 `semantic_v1` 的 formal run、bootstrap/recheck/repair 中的真实浏览器验证及其嵌套 run。旧 execution/debug 入口不因此自动获得生产安全承诺；目标新链活动时仍由 browser session 独占门禁阻断 legacy 写旁路。
+本策略约束 `semantic_v1` 的 formal run、bootstrap/recheck/repair 中的真实浏览器验证及其嵌套 run。
 
 ## 2. 副作用与风险投影
 
@@ -171,7 +171,7 @@ grant 只对当前 run 或 authoring job 有效，不能复制到业务版本、
 1. 规划阶段拒绝未声明/无界/production 写计划。
 2. 页面任务包只投影当前已授权 TODO、语义步骤、effectId、风险摘要和 grant 引用；不包含凭据或审批者敏感信息。
 3. `ai-chat-service` 的 task/tool wrapper 每次调用前取 task allowlist、当前语义步骤、browser lease 和副作用授权的交集；模型不能新增步骤、替换 effectId 或把只读任务改成写任务。
-4. `proxy-adapter` 不理解 environment、actor、场景或审批，只按 lease 的通用 operation/Tab/target/args 约束和幂等账本执行；活动 session 期间 legacy 写入口仍返回 `browser_busy`。
+4. `proxy-adapter` 不理解 environment、actor、场景或审批，只按 lease 的通用 operation/Tab/target/args 约束和幂等账本执行。
 5. `ai-e2e` 在写回 attempt 前核对 Agent tool summary、proxy operation ledger、脚本声明和 grant；不一致时结果失败或 `outcome_unknown`，不能发布输出。
 
 v1 控制面是 loopback/local 单用户信任边界，但仍采用默认拒绝。未来开放远程/多用户后，`approvedBy` 和 `requiredAuthority` 必须接入统一身份、项目授权与租户隔离；不能把本地单用户决定记录当作远程认证。
@@ -206,4 +206,3 @@ v1 控制面是 loopback/local 单用户信任边界，但仍采用默认拒绝�
 - `service-api-event-contract.md`：API、事件和跨服务门禁。
 - `asset-authoring-repair-contract.md`：真实验证与局部修复复用/重新审批。
 - `agent-browser-execution-contract.md`：页面任务、工具授权和 proxy 通用边界。
-- `migration-compatibility-acceptance-contract.md`：旧链切流与发布验收。

@@ -153,18 +153,14 @@ URL 参数按对页面身份的影响分为三类：
 
 ## 12. 当前实现差距
 
-- legacy `projects.target_base_url` 仍同时承担项目和部署地址；semantic 版本可绑定精确 deployment revision，但运行时部署快照尚未实现。
-- semantic v1 已新增业务版本、精确 deployment revision binding 与 Git 元数据；deployment profile 的公开管理 API 尚未实现。
-- semantic 页面 revision 已保存版本归属、Origin 无关 route template/identity query 和唯一签名；legacy `urls` 仍保存完整 URL/单份 `page_snapshot_json`，完整参数 Schema、运行匹配器和基线变体尚未实现。
-- 当前 `url_module_bindings` 直接把完整 URL 记录绑定到功能模块，无法稳定复用动态参数页面或跨部署资产。
-- 当前手工添加 URL 只用 `new URL(record.url).pathname` 生成展示 path；Explorer 只做同源检查和 URL 解析，没有规范页面签名或歧义检测。
-- `BusinessVersionRepository` 已使用幂等 `BEGIN IMMEDIATE` 复制当前 PRD/变量/页面/模块/功能脚本/场景，生成新身份、重写内部引用、保留来源审计并把执行资产置为 stale；decision、coverage、baseline、scoped verification 和 recheck 尚未落地。
+- 项目初始化会建立精确 deployment revision，业务版本运行时冻结该部署引用。
+- 页面 revision 保存版本归属、Origin 无关 route template/identity query 和唯一签名；完整参数 Schema、运行匹配器和基线采集尚未实现。
+- `BusinessVersionRepository` 使用幂等 `BEGIN IMMEDIATE` 复制当前 PRD/变量/页面/模块/功能脚本/场景，生成新身份、重写内部引用、保留来源审计并把执行资产置为 stale；decision、coverage、baseline、scoped verification 和 recheck 已接入。
 
 ## 13. 技术落点与剩余实现细节
 
 - `target-data-model.md` 已锁定稳定实体 + 不可变修订表、唯一 current、版本 copy 事务、多命名部署 revision、页面模板语法、参数类型、WHATWG URL 规范化、消歧评分、基线指纹/阈值与内容寻址存储。
 - 环境与副作用策略已锁定：local/test 自动允许已声明有界副作用；staging 的删除、批量、不可逆和上传做一次当前 run/job 计划级审批；production 只允许显式认证会话变化与只读行为且无 v1 绕过。v1 单 BrowserContext、单活动 actor 和显式串行认证切换保持不变，秘密只以 provider reference 保存。
-- 旧 project/URL/binding/snapshot 数据的分批迁移、兼容读写和回滚步骤在迁移契约中单独定义。
 
 ## 14. 关联文档
 

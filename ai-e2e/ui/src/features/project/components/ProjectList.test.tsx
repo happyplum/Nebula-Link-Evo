@@ -40,6 +40,6 @@ describe('ProjectList', () => {
     // Click the standalone button → dialog should open
     fireEvent.click(screen.getAllByText('新建项目')[0]);
     // CreateProjectDialog exposes a name input unique to the modal
-    expect(screen.getByPlaceholderText('输入项目名称')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('例如：订单中心')).toBeInTheDocument();
   });
 });

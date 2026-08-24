@@ -43,8 +43,6 @@ const EXPECTED_TABLES = [
   'browser_operation_links',
   'integration_outbox',
   'external_task_links',
-  'legacy_import_batches',
-  'legacy_entity_links',
   'authoring_context_threads',
   'authoring_amendments',
   'authoring_amendment_decisions',
@@ -64,12 +62,7 @@ describe('semantic data foundation migrations 015-018', () => {
 
   afterEach(() => db.close());
 
-  it('adds every semantic data domain without touching legacy tables and is idempotent', () => {
-    db.exec(`CREATE TABLE execution_runs (id TEXT PRIMARY KEY, status TEXT NOT NULL)`);
-    const legacyBefore = db
-      .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'execution_runs'")
-      .get();
-
+  it('adds every semantic data domain and is idempotent', () => {
     for (const migrate of [up015, up016, up017, up018]) {
       migrate(db);
       expect(() => migrate(db)).not.toThrow();
@@ -80,11 +73,6 @@ describe('semantic data foundation migrations 015-018', () => {
       .all()
       .map((row) => String((row as { name: string }).name));
     for (const table of EXPECTED_TABLES) expect(names).toContain(table);
-    expect(
-      db
-        .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'execution_runs'")
-        .get()
-    ).toEqual(legacyBefore);
     expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
   });
 

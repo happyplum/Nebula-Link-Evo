@@ -1,34 +1,16 @@
 import { Outlet, NavLink, useParams } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
-import { useProjects, useProject, projectKeys } from '../features/project/store/projectApi.js';
-import { useSSE } from '@/hooks/use-sse.js';
-import { AgentEntry } from '../features/agent/components/AgentEntry.js';
+import { useProjects, useProject } from '../features/project/store/projectApi.js';
 
 export function Layout() {
   const { data: projects } = useProjects();
   const { projectId } = useParams<{ projectId: string }>();
   const { data: currentProject } = useProject(projectId || '');
-  const queryClient = useQueryClient();
-
-  // Listen for project status changes to refresh project data
-  useSSE({
-    projectId: projectId || '',
-    handlers: {
-      'project.status_changed': () => {
-        if (projectId) {
-          queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) });
-        }
-        queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
-      },
-    },
-    enabled: !!projectId,
-  });
 
   // Get up to 5 most recent projects
   const recentProjects = projects
     ? [...projects]
-        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
         .slice(0, 5)
     : [];
 
@@ -46,7 +28,7 @@ export function Layout() {
             <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-sm bg-status-info text-xs font-bold text-white">
               AI
             </span>
-            <span className="text-sm font-semibold text-text-primary">AI E2E 测试工具</span>
+            <span className="text-sm font-semibold text-text-primary">Semantic E2E</span>
           </div>
 
           {/* Navigation */}
@@ -71,7 +53,11 @@ export function Layout() {
                 {recentProjects.map((project) => (
                   <NavLink
                     key={project.id}
-                    to={`/project/${project.id}`}
+                    to={
+                      project.latestVersion
+                        ? `/semantic/${project.id}/authoring/${project.latestVersion.id}`
+                        : `/semantic/${project.id}`
+                    }
                     className={({ isActive }) =>
                       cn(
                         'truncate rounded-sm py-1.5 pr-3 text-[13px] no-underline transition-colors',
@@ -99,7 +85,11 @@ export function Layout() {
           {/* Workspace Header */}
           <header className="flex h-12 shrink-0 items-center justify-between border-b border-border-default px-6">
             <h1 className="truncate text-sm font-semibold text-text-primary">{workspaceTitle}</h1>
-            <AgentEntry />
+            {currentProject?.latestVersion && (
+              <span className="rounded-full border border-border-default bg-surface-elevated px-2.5 py-1 text-xs text-text-secondary">
+                {currentProject.latestVersion.name}
+              </span>
+            )}
           </header>
 
           {/* Page Content */}
@@ -115,7 +105,7 @@ export function Layout() {
           <span>当前项目: {currentProject?.name || '未选择'}</span>
           <div className="flex items-center gap-1">
             <div className="h-2 w-2 rounded-full bg-status-success" />
-            <span>{currentProject?.status || '未选择项目'}</span>
+            <span>{currentProject?.latestVersion?.validationStatus || '未选择版本'}</span>
           </div>
         </div>
       </footer>
