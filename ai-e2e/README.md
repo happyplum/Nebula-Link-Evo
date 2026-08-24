@@ -1,364 +1,125 @@
 # AI E2E
 
-AI 驱动的端到端自动化测试编排子包。它把 **PRD 分析、目标站点探索、Playwright 脚本生成、脚本执行、失败诊断** 串成一个完整工作流，并且**统一通过 `proxy-adapter` 获取 AI 与浏览器能力**。
+`ai-e2e` 是 PRD 驱动的 semantic E2E 业务编排服务。它负责项目、业务版本、结构化测试资产、Authoring、正式 Run、证据闭环和浏览器中心工作台；AI Agent/Vision 由 `ai-chat-service` 提供，浏览器执行由 `proxy-adapter` 提供。
 
-> 当前实现的重点是“从需求到脚本，再到执行与失败诊断”的闭环，而不是做一个通用测试平台。
-
-## 它解决什么问题
-
-ai-e2e 面向这样一类场景：
-
-- 你已经有一个待测 Web 应用
-- 你有产品需求文档（PRD）或至少有较明确的业务描述
-- 你希望 AI 帮你完成需求拆解、页面探索、测试脚本生成与失败诊断
-- 你希望测试编排层本身**不要再直连 AI provider 或 Playwright**，而是复用平台已有基础设施
-
-它不是浏览器控制底座，也不是通用 Agent 聊天系统；它是一个**基于需求驱动的 E2E 测试编排器**。
-
-## 当前真实工作流
+## 产品工作流
 
 ```text
-PRD / 业务描述
-  → AI 分析业务模块 / 功能模块 / 测试场景
-  → AI 探索目标网站并提出 URL 绑定
-  → AI 为测试场景生成 Playwright 脚本
-  → 人工可编辑脚本并保存版本
-  → 执行脚本
-  → 失败时进行单次运行级别的 AI 诊断
-  → 对明确可修复的问题可选执行自动修复
+PRD + 目标 URL
+  → 创建项目、部署修订、业务版本和待验证资产图
+  → bootstrap / recheck / repair Authoring
+  → 结构化候选、影响审批和安全边界排队
+  → 真实浏览器验证并原子激活 revision
+  → 冻结 Run 计划、TODO、变量和副作用授权
+  → 页面任务经 Agent task 与 browser operation 可视执行
+  → snapshot-first 事件、证据、恢复和结果汇总
 ```
 
-## 当前功能边界
+## 服务边界
 
-### 已实现
+- `ai-e2e` 持有 PRD、页面、模块、功能脚本、场景、业务版本、Authoring 和 Run 的业务真相。
+- `AgentTaskClient` 只消费 `ai-chat-service /api/v1/agent-tasks`、Vision v2 和逐 effect 授权控制面。
+- `SemanticBrowserClient` 只消费 `proxy-adapter /api/v1/browser-execution/*`；Playwright/CDP 归 `proxy-adapter` 独占。
+- 权威脚本是结构化 semantic 功能脚本，场景使用 DAG 编排跨模块或跨页面调用。
+- Authoring 与 Run 共享单浏览器 FIFO；只有活动执行者持有控制，工作台实时画面只读。
 
-- **项目管理**：创建项目、配置目标 URL、维护基础测试配置
-- **PRD 分析**：把需求拆成 L1 业务模块、L2 功能模块和测试场景
-- **模块编辑**：支持业务模块 / 功能模块的增删改排
-- **站点探索**：AI 驱动探索页面并提出 URL 与功能模块的绑定建议
-- **SPA-aware URL 探索**：探索流程会补充读取渲染后 DOM、HashRouter 路由、History API 路由观察结果，以及可访问的客户端 router 配置；非 SPA 站点继续走原有 BFS/AI 链路
-- **脚本生成**：按测试场景生成 Playwright TypeScript 脚本
-- **脚本编辑与版本管理**：人工修改脚本、保存版本、查看版本历史
-- **脚本执行**：执行单个脚本、批量执行、查看 run 历史与详情
-- **失败诊断**：对单次运行失败进行 AI 诊断，支持项目级诊断汇总报告、根因分布统计、JSON/HTML 导出
-- **可选自动修复**：对选择器漂移、等待时序等明确问题做受限自动修复
-- **SSE 实时推送**：向前端推送分析 / 探索 / 生成 / 执行阶段的实时事件
-- **SPA UI**：通过 `/ai-e2e/` 提供 React 前端
-- **业务版本快照基座**：创建/查询业务版本，记录来源、Git 和精确部署 revision；原子 copy 当前 PRD/变量/页面/模块/功能脚本/场景并重建内部引用，复制后执行资产标记 stale
+## 已交付功能
 
-### 已实现的增强功能
-
-1. **项目级诊断汇总报告**
-   - 已支持项目范围的失败聚合、根因汇总、JSON/HTML 导出
-   - 根因类型：selector|timing|assertion|environment|data|unknown
-
-2. **每个功能模块都必须绑定 URL 的强校验**
-   - 状态机现在强制每个功能模块都必须完成 URL 绑定才允许继续生成脚本
-   - `ai_proposed` 状态计为已绑定
-
-3. **测试场景（scenario）的人工作业面**
-   - 提供完整的独立人工编辑 API / UI 能力
-   - 支持测试场景的增删改查和数据映射
-
-## 设计思路
-
-### 1. 把 ai-e2e 定位成“编排层”，而不是基础设施层
-
-ai-e2e 自己不负责：
-
-- 直连 AI provider
-- 直连 Playwright 浏览器服务
-- 管理多 provider 配置
-
-AI 能力交给 `ai-chat-service`，浏览器能力交给 `proxy-adapter`。ai-e2e 只关心：
-
-- 需求如何拆解
-- 页面如何探索
-- 脚本如何生成 / 编辑 / 执行
-- 失败如何诊断 / 修复
-
-### 2. 外部能力按权威服务显式装配
-
-```text
-ai-e2e
-  ├── AiE2eRuntimeClient
-  │     ├── AiChatClient → ai-chat-service /api/v1/ai/generate
-  │     └── BrowserGatewayClient → proxy-adapter /debug/*
-  ├── AgentTaskClient → ai-chat-service /api/v1/agent-tasks
-  └── SemanticBrowserClient → proxy-adapter /api/v1/browser-execution/* + /mcp
-```
-
-这样做的好处：
-
-- ai-e2e 不依赖 `@ai-sdk/*`
-- 浏览器操作契约统一
-- provider/model 与 Agent Harness 演进由 ai-chat-service 吸收，Playwright/CDP 演进由 proxy-adapter 吸收
-- ai-e2e 的职责更清晰：只做测试编排，不做基础设施拼装
-
-### 3. 服务层按工作流拆分
-
-| 服务                     | 作用                                                         |
-| ------------------------ | ------------------------------------------------------------ |
-| `ProjectService`         | 项目与基础配置管理                                           |
-| `PRDAnalyzerService`     | PRD → 业务模块 / 功能模块 / 测试场景                         |
-| `TestScenarioService`    | 测试场景 CRUD + 数据映射（preconditions ↔ expected_results） |
-| `ExplorerService`        | 页面探索与 URL 绑定建议                                      |
-| `ScriptGeneratorService` | 测试脚本生成、再生成、保存人工编辑版本                       |
-| `LoginRecorderService`   | 登录步骤录制与回放支撑                                       |
-| `ExecutorService`        | 运行脚本并收集产物                                           |
-| `AIDiagnosisService`     | 单次运行失败诊断、自动修复、人工审核升级、项目级诊断聚合     |
-| `StateMachineService`    | 项目状态流转与阶段门禁                                       |
-| `BusinessVersionService` | semantic 业务版本创建、查询与独立 copy                       |
-
-### 4. 用状态机约束交付物边界
-
-当前状态流：
-
-```text
-draft → configuring → analyzing → analyzed → exploring → explored → generating → ready → running → completed
-```
-
-关键门禁：
-
-- `configuring → analyzing`：要求已有 `target_base_url`
-- `analyzed → exploring`：要求已有业务模块
-- `explored → generating`：要求每个功能模块至少绑定一个 URL（`ai_proposed` 状态计为已绑定）
-- `ready → running`：要求已有脚本
-
-## 与 proxy-adapter 的关系
-
-ai-e2e 是 `proxy-adapter` 的下游消费者：
-
-- AI 文本生成：`POST /api/v1/ai/generate`
-- Playwright 操作：`/debug/api/playwright/*`
-- 简化 DOM / 页面状态等调试信息：通过 debug API 获取
-
-因此：
-
-- ai-e2e **不应该**引入新的 AI SDK 依赖
-- ai-e2e **不应该**直接请求 `proxy-adapter` 内部浏览器引擎，应通过 MCP 接口
-- ai-chat-service 与 proxy-adapter 分别是 AI 和浏览器能力权威，ai-e2e 不聚合或绕过二者
-
-## 失败诊断与自动修复
-
-当前实现支持的是：
-
-- **单次运行级别诊断**：针对某个 `runId` 收集错误信息、日志、脚本上下文并生成诊断
-- **诊断历史**：查询该次运行的 AI 干预记录
-- **可选自动修复**：仅在问题足够明确、改动受控时尝试自动修复
-- **项目级诊断报告**：聚合项目所有失败、根因分布统计、JSON/HTML 导出
+- 原子项目初始化及幂等重放。
+- 不可变部署修订、业务版本、资产 revision 和版本 copy。
+- `bootstrap`、`recheck`、`repair` Authoring 与结构化 amendment。
+- 同页/跨 URL 影响决策、stale 防护、安全边界排队、浏览器验证和原子激活。
+- 正式 Run、TODO/DAG、页面 task/attempt、暂停/恢复/取消、依赖跳过和结果未知决策。
+- local/test/staging/production 副作用策略与逐 `stepId/effectId` 授权。
+- outbox、稳定幂等键、重启收敛、snapshot-first SSE 和证据提升。
+- 浏览器中心三栏工作台、PRD/模块/场景联动预览、显式浏览器定位、Diff/审批/证据和作用域 Chat。
+- 三栏调宽、布局持久化、浏览器缩放/收起/专注、明暗主题及 reduced-motion。
 
 ## 快速开始
 
-### 前置条件
+前置条件：Node.js `^22.19.0 || >=24.0.0`、pnpm、运行于 `127.0.0.1:3000` 的 `proxy-adapter` 和运行于 `127.0.0.1:3001` 的 `ai-chat-service`。
 
-- Node.js >= 22.13.0
-- pnpm >= 8
-- `proxy-adapter` 已启动（默认 `http://localhost:3000`）
-- `proxy-adapter` 内进程 Playwright 引擎
-
-### 安装与启动
-
-```bash
+```powershell
 cd ai-e2e
 pnpm install
 pnpm dev
 ```
 
-启动后：
-
-- API：`http://localhost:3002`
-- UI：`http://localhost:3002/ai-e2e/`
-- 首期仅监听 `127.0.0.1`，不提供远程/多用户认证边界
+- API：`http://127.0.0.1:3002/api/v1`
+- UI：`http://127.0.0.1:3002/ai-e2e/`
+- 当前控制面仅支持 loopback 单用户部署。
 
 ### 环境变量
 
-当前后端启动逻辑实际读取的是：
-
-```bash
+```dotenv
 PROXY_ADAPTER_URL=http://localhost:3000
+AI_CHAT_SERVICE_URL=http://localhost:3001
 AI_E2E_PORT=3002
-AI_E2E_DB_PATH=./data/ai-e2e.sqlite
+AI_E2E_DB_PATH=./data/ai-e2e-semantic.sqlite
+AI_E2E_COORDINATOR_ENABLED=true
+AI_E2E_COORDINATOR_INTERVAL_MS=500
+AI_E2E_SECRET_STORE_PATH=./data/semantic-secrets
+AI_E2E_EVIDENCE_PATH=./data/semantic-evidence
 ```
-
-说明：
-
-- `PROXY_ADAPTER_URL` 为空时，DB-only 路由仍可工作
-- AI / Playwright 相关路由会优雅降级为 `503 Service Unavailable`
 
 ### 常用命令
 
-```bash
-pnpm dev          # tsx watch src/server.ts
-pnpm build        # tsc -b && cd ui && pnpm build
-pnpm start        # node dist/server.js
-pnpm test         # vitest run
-pnpm type-check   # tsc --noEmit
+```powershell
+pnpm dev
+pnpm type-check
+pnpm test
+pnpm build
+pnpm lint
 ```
 
-## 使用方式
+UI 严格类型检查使用：
 
-### 通过 UI
+```powershell
+cd ui
+pnpm exec tsc -p tsconfig.app.json --noEmit
+```
 
-1. 打开 `/ai-e2e/`
-2. 创建项目并填写目标站点 URL
-3. 上传 PRD 或粘贴需求文本
-4. 触发分析，得到业务模块 / 功能模块 / 测试场景
-5. 启动探索，确认或调整 URL 绑定
-6. 为测试场景生成脚本
-7. 人工查看和编辑脚本（如有需要）
-8. 执行脚本并查看诊断结果
+## API 与 UI
 
-### 通过 API（按阶段）
+所有业务 API 均位于 `/api/v1`：
 
-主要路由分组：
+- `/projects`、`/projects/:projectId`
+- `/projects/:projectId/business-versions`、`/business-versions/:versionId/*`
+- `/business-versions/:versionId/authoring-jobs`
+- `/authoring-jobs/:jobId/*`、`/authoring-amendments/:amendmentId/*`
+- `/projects/:projectId/runs`、`/runs/:runId/*`
+- `/capabilities`
 
-- `/api/projects`
-- `/api/projects/:id/config`
-- `/api/projects/:id/analysis`
-- `/api/projects/:id/exploration`
-- `/api/projects/:id/scenarios`
-- `/api/projects/:id/scripts`
-- `/api/projects/:id/execution`
-- `/api/projects/:id/diagnosis`
-- `POST/GET /api/v1/projects/:projectId/business-versions`
-- `GET /api/v1/business-versions/:versionId`
-- `POST /api/v1/business-versions/:versionId/copy`
-- `/api/v1/business-versions/:versionId/authoring-jobs`、`/api/v1/authoring-jobs/:jobId/*`
-- `/api/v1/authoring-context-threads/:threadId/messages`、`/api/v1/authoring-amendments/:amendmentId/*`
-- `/api/v1/projects/:projectId/runs`、`/api/v1/runs/:runId/*`
+写请求按接口要求携带 `Idempotency-Key`；状态命令同时携带 `If-Match`。
 
-semantic v1 的业务版本、局部 repair Authoring、正式 Run 与浏览器中心工作台已交付；写请求按接口要求携带 `Idempotency-Key`，状态命令同时携带 `If-Match`。完整 bootstrap/recheck、通用资产写接口和 legacy importer 尚未交付。
+UI 路由：
 
-- `/api/projects/:id/state`
-- `/api/projects/:id/events`
+- `/`
+- `/semantic/:projectId`
+- `/semantic/:projectId/authoring/:versionId`
+- `/semantic/:projectId/runs/:runId`
 
-这套 API 分别对应：项目管理、配置、需求分析、站点探索、测试场景、脚本管理、执行诊断、项目级诊断、状态流转、实时事件。
-
-## 目录结构
+## 目录
 
 ```text
 ai-e2e/
 ├── src/
-│   ├── server/                 # Fastify 后端与路由注册
-│   │   ├── index.ts            # createServer()/start()、DI、静态 UI 挂载
-│   │   ├── routes/             # 项目 / 分析 / 探索 / 脚本 / 执行 / 状态 / 事件
-│   │   └── plugins/            # 错误处理、SSE 等插件
-│   ├── services/               # 工作流核心服务
-│   ├── infrastructure/         # AI runtime、Agent task、Browser gateway/semantic clients
-│   ├── ai/                     # PromptTemplateManager / TokenBudgetTracker
-│   ├── database/               # SQLite 初始化、repo、migrations
-│   └── types/                  # 后端领域类型 / API schema
-├── prompts/                    # AI 提示词模板
-├── ui/                         # React SPA
-│   └── src/
-│       ├── app/                # 路由、页面、应用壳
-│       ├── features/           # project / analysis / exploration / scripts / execution / ai-status / scenario / report
-│       ├── shared/             # 通用组件、hooks、API 基础设施
-│       └── types/              # 前端类型
-├── data/                       # SQLite 数据文件
-├── artifacts/                  # 执行产物
-├── AGENTS.md                   # 包级开发约束
-└── docs/                       # 包级需求基线 / 防偏移文档
+│   ├── server/          Fastify、canonical v1 路由与静态 UI
+│   ├── services/        Project、Version、Authoring、Run 与 Coordinator
+│   ├── infrastructure/  Agent task、浏览器、证据与本地 secret 客户端
+│   └── database/        semantic SQLite schema、migration 与 repository
+├── ui/src/
+│   ├── features/project/
+│   └── features/semantic/
+└── docs/                semantic 资产、编排、API、授权与证据契约
 ```
 
-## 非目标
+## 规格与技术债
 
-当前 ai-e2e 明确**不做**这些事情：
+- 产品状态与验收：[`PRODUCT-SPEC.md`](PRODUCT-SPEC.md)
+- 跨服务 API 与事件：[`docs/service-api-event-contract.md`](docs/service-api-event-contract.md)
+- Authoring 与 repair：[`docs/asset-authoring-repair-contract.md`](docs/asset-authoring-repair-contract.md)
+- Run、决策与证据：[`docs/run-state-decision-evidence-contract.md`](docs/run-state-decision-evidence-contract.md)
+- 环境与副作用：[`docs/environment-side-effect-policy-contract.md`](docs/environment-side-effect-policy-contract.md)
 
-- 不与 proxy-adapter 合并为单一包
-- 不共享 proxy-adapter 的数据库
-- 不统一到 debug-ui 的 SSE 模型
-- 不再把 UI 视觉重设计作为临时执行计划维护；当前 Atlas UI 架构见 `../docs/reference/ai-e2e-ui-architecture.md`
-- 不在本包实现 Playwright 浏览器会话/Tab/控制租约底座；这些通用能力归 `proxy-adapter`，本包只持有业务运行绑定和调度
-- 不做通用测试平台化抽象
-
-## 已知限制与技术债
-
-### 已解决的历史限制
-
-1. ~~诊断能力是 run 级，不是 project 级~~ — 已支持项目级诊断聚合与导出
-2. ~~URL 绑定校验粒度不足~~ — 已强制每个功能模块必须绑定 URL
-3. ~~scenario 人工编辑面不完整~~ — 已提供完整的独立编辑能力
-4. ~~SPA 探索器无效~~ — 已实现 SPA-aware BFS：通过浏览器上下文读取渲染后 DOM、History API / `hashchange` 观察器和可访问 router 配置，补充 HashRouter / History API 路由发现；非 SPA 站点保留原有 BFS 降级路径
-
-### 当前已知限制（2026-06-05 验收后识别）
-
-#### 脚本质量依赖 page_snapshot_json
-
-脚本生成模板依赖 `{{page_snapshot}}` 提供选择器信息。手动添加的 URL 不经过探索流程，`page_snapshot_json` 为 NULL，导致 AI 编造选择器。
-
-**数据链路**：`探索 → getSnapshot() → urls.page_snapshot_json → {{page_snapshot}} → AI 选择器 → 脚本通过率`
-
-**变通方案**：手动注入 DOM 快照到 URL 记录的 `page_snapshot_json` 字段。
-
-#### AI 脚本生成模板约束不总能被遵守
-
-AI 偶尔生成不兼容的代码：`test()`/`expect()`（Playwright Test API，executor 不支持）、`waitForLoadState('networkidle')`（SPA 不触发）、`typescript` 语言标记前缀。
-
-**变通方案**：批量生成后用脚本自动检测和替换。
-
-#### AI 超时预算尚未按操作细分
-
-基础默认值已对齐实际负载：`config/config.json` 中 `settings.timeout` 当前默认 180s，`proxy-adapter-client.ts` 中 `DEFAULT_AI_TIMEOUT_MS` 当前默认 300s。
-
-**剩余限制**：尚未按操作类型（分析 / 分解 / 生成 / 诊断）或 provider 响应特征设置差异化超时预算。
-
-#### 并发执行不支持
-
-`ExecutorService` 不支持并发执行。并发调用 `POST /execution/run/:scriptId` 会导致进程被 SIGTERM，全部超时。批量执行必须串行。
-
-## 配置调优指南（生产经验）
-
-基于首次完整 E2E 验收（280 脚本对 debug-ui）的实际经验。
-
-### AI 超时配置
-
-```text
-config/config.json:
-  settings.timeout: 180000（当前默认）
-
-proxy-adapter-client.ts:
-  DEFAULT_AI_TIMEOUT_MS: 300000（当前默认）
-```
-
-### 批量操作策略
-
-| 操作                              | 建议策略              | 原因                                       |
-| --------------------------------- | --------------------- | ------------------------------------------ |
-| 模块分解 (decompose-all)          | 逐个调用              | 20 并发 + 40 RPM 限速                      |
-| 场景生成 (generate-all-scenarios) | 逐个调用              | 同上                                       |
-| 脚本生成 (generate-all)           | 20 并发 + 40 RPM 限速 | AI 调用密度高                              |
-| 脚本执行 (run-all)                | 顺序执行              | 并发导致假超时                             |
-| PRD 上传                          | curl --data-binary    | PowerShell ConvertTo-Json 会破坏多行字符串 |
-
-### 超时预算
-
-| 阶段     | 单次 AI 调用 | 建议超时 |
-| -------- | ------------ | -------- |
-| PRD 分析 | 30-120s      | 180s     |
-| 模块分解 | 30-90s       | 180s     |
-| 场景生成 | 30-90s       | 180s     |
-| 脚本生成 | 30-120s      | 300s     |
-| 脚本执行 | 10-60s       | 120s     |
-
-## 首次 E2E 验收数据（2026-06-05）
-
-| 指标         | 数值                                                |
-| ------------ | --------------------------------------------------- |
-| 目标应用     | debug-ui（HashRouter SPA，2 个路由）                |
-| 业务模块     | 6                                                   |
-| 功能模块     | 28                                                  |
-| 测试场景     | 287                                                 |
-| 生成脚本     | 280                                                 |
-| 执行结果     | 13 pass (4.6%), 268 fail (95.4%)                    |
-| 通过脚本特征 | 仅做页面加载 + viewport/title 检查                  |
-| 主要失败类型 | typescript 前缀(75), 选择器超时(54), 断言不匹配(33) |
-
-**关键发现**：完整链路已打通（PRD → 分析 → 探索 → 脚本 → 执行 → 诊断），但脚本质量严重依赖 DOM 快照数据完整性和 AI 模板约束执行力。
-
-## 一句话总结
-
-如果你想快速理解 ai-e2e，可以把它看成：
-
-> 一个通过 `proxy-adapter` 复用 AI 与浏览器能力的、面向 PRD 驱动测试生成与失败诊断的 E2E 编排层。
+当前技术债以 `PRODUCT-SPEC.md` 第 6 节为准。

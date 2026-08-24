@@ -189,7 +189,7 @@ AGPL 允许个人和企业使用、修改与分发软件，但必须遵守其开
 
 **环境与副作用安全目标（shipped）**：正式 Run 与 Authoring 验证均确定性冻结部署环境和精确副作用投影，完成 policy evaluation、staging 计划级审批/active grant 原子应用、production 业务写拒绝，以及逐 effectId/数量/grant 的跨服务运行时门禁。local/test 自动执行已声明、有界副作用；staging 的单项非不可逆 create/update 自动，删除、批量、不可逆和上传在 browser job/control 前审批；production 只允许显式认证会话变化、导航、只读观测和断言，业务写入与上传硬拒绝。`ai-e2e` 持有策略/审批，`ai-chat-service` 逐工具校验授权交集，`proxy-adapter` 保持通用浏览器网关。完整契约见 [`ai-e2e/docs/environment-side-effect-policy-contract.md`](ai-e2e/docs/environment-side-effect-policy-contract.md)。
 
-**产品切换（shipped）**：ai-e2e 使用独立纯 semantic 数据库、migration 001/014–018 和 canonical `/api/v1/*`；旧表、旧路由、旧 UI、导入器和任意 TypeScript/JavaScript 执行路径均不在产品边界内。
+**semantic 产品面（shipped）**：ai-e2e 使用独立的 `ai-e2e-semantic.sqlite`、结构化 semantic 资产和 canonical `/api/v1/*`，Authoring 与 Run 均通过受控 Agent/browser 执行链完成。
 
 ### AI E2E 需求基线
 

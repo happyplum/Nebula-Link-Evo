@@ -188,10 +188,7 @@
 
 ## 6. 已知缺口与技术债
 
-| 缺口                                         | 类型            | 状态    | 备注                                                                                                                        |
-| -------------------------------------------- | --------------- | ------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Authoring 全流程副作用门禁尚未接入           | requirement-gap | pending | 正式 Run 的 policy evaluation/projection/grant/effect/数量跨服务校验已交付；bootstrap/recheck/repair 仍需统一投影与撤销传播 |
-| 生产旧数据切换尚需现场 restore/cutover drill | rollout-gate    | pending | 本地已覆盖全量备份 hash 与 SQLite integrity 隔离恢复校验；真实旧包/旧数据停服演练必须在目标部署执行，通过前不得清理生产旧库 |
+当前无已登记缺口。
 
 ---
 
@@ -204,7 +201,6 @@
 - `ai-e2e/docs/run-state-decision-evidence-contract.md` — Agent 会话审计与 E2E 业务状态/决策/长期证据的所有权边界
 - `ai-e2e/docs/service-api-event-contract.md` — Agent task API、事件、浏览器 binding 与跨服务恢复
 - `ai-e2e/docs/ai-model-skill-contract.md` — 双模型、单次视觉 Schema、Skill manifest 与权限隔离
-- `ai-e2e/docs/migration-compatibility-acceptance-contract.md` — 服务升级顺序、能力门禁、故障注入与发布验收
 - `ai-e2e/docs/asset-authoring-repair-contract.md` — ai-e2e 持久 authoring 主代理与本包有界 Agent task 的边界
 - `ai-e2e/docs/environment-side-effect-policy-contract.md` — 调用方环境策略、计划级审批与本包逐工具授权边界
 - 根 `AGENTS.md` — 仓库范围约束

@@ -1,7 +1,7 @@
 # ai-e2e-orchestration `ai-e2e :3002 /ai-e2e/`
 
 - [shipped] 纯 semantic 项目初始化：`POST /api/v1/projects` 原子创建项目、不可变部署修订、业务版本、PRD 和待验证起始资产图；支持幂等重放并拒绝请求漂移。
-- [shipped] 旧四步向导、`/api/projects/*`、旧服务/仓储/迁移、单次文本 AI facade、debug browser client、TypeScript 脚本和 `npx tsx` 执行器已删除；不提供导入或向后兼容。
+- [shipped] 产品面仅包含独立 semantic 数据库、canonical `/api/v1/*`、受控 Agent/browser 客户端和结构化资产执行链。
 - [shipped] 业务版本与 semantic 资产图：页面→业务模块→功能模块→多个功能脚本→场景 DAG，稳定身份、不可变修订、copy 引用重建和验证失效。
 - [shipped] Authoring `bootstrap/recheck/repair`：持久 job/task/attempt/event、结构化 amendment、Chat scope、同页/跨 URL 影响审批、安全边界排队、真实浏览器验证与原子激活。
 - [shipped] Authoring 验证接入 ai-chat-service Vision v2 工具；候选副作用按 environment、stepId、effectId、数量和 grant 生成冻结授权，production 业务写拒绝。
