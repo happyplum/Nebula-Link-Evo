@@ -5,13 +5,13 @@ import errorHandlerPlugin from '../../plugins/error-handler.js';
 import sseEmitterPlugin from '../../plugins/sse-emitter.js';
 import projectAnalysisRoutes from '../../routes/project-analysis.js';
 import type { PRDAnalyzerService } from '../../../services/prd-analyzer-service.js';
-import type { ProxyAdapterClient } from '../../../infrastructure/proxy-adapter-client.js';
+import type { AiE2eRuntimeClient } from '../../../infrastructure/ai-e2e-runtime-client.js';
 import type { PromptTemplateManager } from '../../../ai/prompt-manager.js';
 import { TokenBudgetTracker } from '../../../ai/token-tracker.js';
 
 const apps = new Set<FastifyInstance>();
 
-const mockProxyClient = {
+const mockRuntimeClient = {
   generateText: vi.fn(),
   navigate: vi.fn(),
   getSnapshot: vi.fn(),
@@ -27,7 +27,7 @@ const mockProxyClient = {
   getDOM: vi.fn(),
   openBrowser: vi.fn(),
   closeBrowser: vi.fn(),
-} as unknown as ProxyAdapterClient;
+} as unknown as AiE2eRuntimeClient;
 
 const mockPromptManager = {
   render: vi.fn(),
@@ -48,17 +48,20 @@ const mockAnalyzer = {
 } as unknown as PRDAnalyzerService;
 
 vi.mock('../../../services/prd-analyzer-service.js', () => ({
-  PRDAnalyzerService: vi.fn(function () { return mockAnalyzer; }),
+  PRDAnalyzerService: vi.fn(function () {
+    return mockAnalyzer;
+  }),
 }));
 
 async function buildApp(): Promise<FastifyInstance> {
   const Fastify = (await import('fastify')).default;
-  const app = Fastify().withTypeProvider<import('@fastify/type-provider-typebox').TypeBoxTypeProvider>();
+  const app =
+    Fastify().withTypeProvider<import('@fastify/type-provider-typebox').TypeBoxTypeProvider>();
   app.register(errorHandlerPlugin);
   app.register(sseEmitterPlugin);
   app.register(projectAnalysisRoutes, {
     prefix: '/api/projects/:id/analysis',
-    proxyClient: mockProxyClient,
+    runtimeClient: mockRuntimeClient,
     promptManager: mockPromptManager,
     tokenTracker: mockTokenTracker,
   });
@@ -73,7 +76,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   DatabaseManager.resetInstance();
-  await Promise.all(Array.from(apps, async app => app.close()));
+  await Promise.all(Array.from(apps, async (app) => app.close()));
   apps.clear();
 });
 
@@ -131,7 +134,15 @@ describe('POST /api/projects/:id/analysis/analyze', () => {
     const project = db.getProjectRepo().create({ name: 'Analyze Me' });
 
     (mockAnalyzer.analyzePRD as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { id: 'bm-1', project_id: project.id, name: 'Auth Module', description: 'Authentication', sort_order: 0, source: 'ai_generated', created_at: '2026-01-01' },
+      {
+        id: 'bm-1',
+        project_id: project.id,
+        name: 'Auth Module',
+        description: 'Authentication',
+        sort_order: 0,
+        source: 'ai_generated',
+        created_at: '2026-01-01',
+      },
     ]);
 
     const app = await buildApp();
@@ -344,7 +355,9 @@ describe('DELETE /api/projects/:id/analysis/modules/:moduleId', () => {
     const db = DatabaseManager.getInstance();
     const project = db.getProjectRepo().create({ name: 'Delete' });
     const bm = db.getBusinessModuleRepo().create({ project_id: project.id, name: 'Parent' });
-    const fm = db.getFunctionalModuleRepo().create({ business_module_id: bm.id, name: 'To Delete' });
+    const fm = db
+      .getFunctionalModuleRepo()
+      .create({ business_module_id: bm.id, name: 'To Delete' });
 
     const res = await app.inject({
       method: 'DELETE',
@@ -374,25 +387,31 @@ describe('POST /api/projects/:id/analysis/decompose-all', () => {
     const app = await buildApp();
     const db = DatabaseManager.getInstance();
     const project = db.getProjectRepo().create({ name: 'Batch Decompose' });
-    const firstBm = db.getBusinessModuleRepo().create({ project_id: project.id, name: 'Existing BM' });
-    const secondBm = db.getBusinessModuleRepo().create({ project_id: project.id, name: 'Retry BM' });
-    db.getFunctionalModuleRepo().create({ business_module_id: firstBm.id, name: 'Existing FM', description: 'seeded' });
+    const firstBm = db
+      .getBusinessModuleRepo()
+      .create({ project_id: project.id, name: 'Existing BM' });
+    const secondBm = db
+      .getBusinessModuleRepo()
+      .create({ project_id: project.id, name: 'Retry BM' });
+    db.getFunctionalModuleRepo().create({
+      business_module_id: firstBm.id,
+      name: 'Existing FM',
+      description: 'seeded',
+    });
 
     const decomposeMock = mockAnalyzer.decomposeBusinessModule as ReturnType<typeof vi.fn>;
     decomposeMock.mockReset();
-    decomposeMock
-      .mockRejectedValueOnce(new Error('temporary'))
-      .mockResolvedValueOnce([
-        {
-          id: 'fm-retry',
-          business_module_id: secondBm.id,
-          name: 'Recovered FM',
-          description: 'from retry',
-          sort_order: 0,
-          source: 'ai_generated',
-          created_at: '2026-01-01',
-        },
-      ]);
+    decomposeMock.mockRejectedValueOnce(new Error('temporary')).mockResolvedValueOnce([
+      {
+        id: 'fm-retry',
+        business_module_id: secondBm.id,
+        name: 'Recovered FM',
+        description: 'from retry',
+        sort_order: 0,
+        source: 'ai_generated',
+        created_at: '2026-01-01',
+      },
+    ]);
 
     const res = await app.inject({
       method: 'POST',
@@ -413,9 +432,7 @@ describe('POST /api/projects/:id/analysis/decompose-all', () => {
       {
         business_module_id: secondBm.id,
         business_module_name: 'Retry BM',
-        functional_modules: [
-          { id: 'fm-retry', name: 'Recovered FM', description: 'from retry' },
-        ],
+        functional_modules: [{ id: 'fm-retry', name: 'Recovered FM', description: 'from retry' }],
       },
     ]);
     expect(decomposeMock).toHaveBeenCalledTimes(2);
@@ -463,9 +480,7 @@ describe('POST /api/projects/:id/analysis/decompose-all', () => {
       {
         business_module_id: secondBm.id,
         business_module_name: 'Pass BM',
-        functional_modules: [
-          { id: 'fm-pass', name: 'Pass FM' },
-        ],
+        functional_modules: [{ id: 'fm-pass', name: 'Pass FM' }],
       },
     ]);
     expect(decomposeMock).toHaveBeenCalledTimes(4);
@@ -478,25 +493,31 @@ describe('POST /api/projects/:id/analysis/generate-all-scenarios', () => {
     const db = DatabaseManager.getInstance();
     const project = db.getProjectRepo().create({ name: 'Batch Scenario' });
     const bm = db.getBusinessModuleRepo().create({ project_id: project.id, name: 'BM' });
-    const firstFm = db.getFunctionalModuleRepo().create({ business_module_id: bm.id, name: 'Existing FM' });
-    const secondFm = db.getFunctionalModuleRepo().create({ business_module_id: bm.id, name: 'Retry FM' });
-    db.getTestScenarioRepo().create({ functional_module_id: firstFm.id, name: 'Existing Scenario', description: 'seeded' });
+    const firstFm = db
+      .getFunctionalModuleRepo()
+      .create({ business_module_id: bm.id, name: 'Existing FM' });
+    const secondFm = db
+      .getFunctionalModuleRepo()
+      .create({ business_module_id: bm.id, name: 'Retry FM' });
+    db.getTestScenarioRepo().create({
+      functional_module_id: firstFm.id,
+      name: 'Existing Scenario',
+      description: 'seeded',
+    });
 
     const scenarioMock = mockAnalyzer.generateTestScenarios as ReturnType<typeof vi.fn>;
     scenarioMock.mockReset();
-    scenarioMock
-      .mockRejectedValueOnce(new Error('temporary'))
-      .mockResolvedValueOnce([
-        {
-          id: 'ts-retry',
-          functional_module_id: secondFm.id,
-          name: 'Recovered Scenario',
-          description: 'from retry',
-          sort_order: 0,
-          source: 'ai_generated',
-          created_at: '2026-01-01',
-        },
-      ]);
+    scenarioMock.mockRejectedValueOnce(new Error('temporary')).mockResolvedValueOnce([
+      {
+        id: 'ts-retry',
+        functional_module_id: secondFm.id,
+        name: 'Recovered Scenario',
+        description: 'from retry',
+        sort_order: 0,
+        source: 'ai_generated',
+        created_at: '2026-01-01',
+      },
+    ]);
 
     const res = await app.inject({
       method: 'POST',
@@ -510,16 +531,12 @@ describe('POST /api/projects/:id/analysis/generate-all-scenarios', () => {
       {
         functional_module_id: firstFm.id,
         functional_module_name: 'Existing FM',
-        scenarios: [
-          { id: expect.any(String), name: 'Existing Scenario', description: 'seeded' },
-        ],
+        scenarios: [{ id: expect.any(String), name: 'Existing Scenario', description: 'seeded' }],
       },
       {
         functional_module_id: secondFm.id,
         functional_module_name: 'Retry FM',
-        scenarios: [
-          { id: 'ts-retry', name: 'Recovered Scenario', description: 'from retry' },
-        ],
+        scenarios: [{ id: 'ts-retry', name: 'Recovered Scenario', description: 'from retry' }],
       },
     ]);
     expect(scenarioMock).toHaveBeenCalledTimes(2);
@@ -530,8 +547,12 @@ describe('POST /api/projects/:id/analysis/generate-all-scenarios', () => {
     const db = DatabaseManager.getInstance();
     const project = db.getProjectRepo().create({ name: 'Batch Scenario Fail' });
     const bm = db.getBusinessModuleRepo().create({ project_id: project.id, name: 'BM' });
-    const firstFm = db.getFunctionalModuleRepo().create({ business_module_id: bm.id, name: 'Fail FM' });
-    const secondFm = db.getFunctionalModuleRepo().create({ business_module_id: bm.id, name: 'Pass FM' });
+    const firstFm = db
+      .getFunctionalModuleRepo()
+      .create({ business_module_id: bm.id, name: 'Fail FM' });
+    const secondFm = db
+      .getFunctionalModuleRepo()
+      .create({ business_module_id: bm.id, name: 'Pass FM' });
 
     const scenarioMock = mockAnalyzer.generateTestScenarios as ReturnType<typeof vi.fn>;
     scenarioMock.mockReset();
@@ -568,9 +589,7 @@ describe('POST /api/projects/:id/analysis/generate-all-scenarios', () => {
       {
         functional_module_id: secondFm.id,
         functional_module_name: 'Pass FM',
-        scenarios: [
-          { id: 'ts-pass', name: 'Pass Scenario' },
-        ],
+        scenarios: [{ id: 'ts-pass', name: 'Pass Scenario' }],
       },
     ]);
     expect(scenarioMock).toHaveBeenCalledTimes(4);
@@ -582,8 +601,12 @@ describe('PUT /api/projects/:id/analysis/modules/reorder', () => {
     const app = await buildApp();
     const db = DatabaseManager.getInstance();
     const project = db.getProjectRepo().create({ name: 'Reorder' });
-    const bm1 = db.getBusinessModuleRepo().create({ project_id: project.id, name: 'First', sort_order: 0 });
-    const bm2 = db.getBusinessModuleRepo().create({ project_id: project.id, name: 'Second', sort_order: 1 });
+    const bm1 = db
+      .getBusinessModuleRepo()
+      .create({ project_id: project.id, name: 'First', sort_order: 0 });
+    const bm2 = db
+      .getBusinessModuleRepo()
+      .create({ project_id: project.id, name: 'Second', sort_order: 1 });
 
     const res = await app.inject({
       method: 'PUT',
@@ -618,8 +641,12 @@ describe('PUT /api/projects/:id/analysis/modules/reorder', () => {
     const db = DatabaseManager.getInstance();
     const project = db.getProjectRepo().create({ name: 'Reorder FM' });
     const bm = db.getBusinessModuleRepo().create({ project_id: project.id, name: 'Parent' });
-    const fm1 = db.getFunctionalModuleRepo().create({ business_module_id: bm.id, name: 'First', sort_order: 0 });
-    const fm2 = db.getFunctionalModuleRepo().create({ business_module_id: bm.id, name: 'Second', sort_order: 1 });
+    const fm1 = db
+      .getFunctionalModuleRepo()
+      .create({ business_module_id: bm.id, name: 'First', sort_order: 0 });
+    const fm2 = db
+      .getFunctionalModuleRepo()
+      .create({ business_module_id: bm.id, name: 'Second', sort_order: 1 });
 
     const res = await app.inject({
       method: 'PUT',

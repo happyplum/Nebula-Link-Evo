@@ -5,12 +5,22 @@
     "glm": {
       "baseUrl": "https://open.bigmodel.cn/api/paas/v4",
       "apiKey": "{GLM_API_KEY}",
-      "enabled": true
+      "enabled": false
     },
     "nvidia": {
       "baseUrl": "https://integrate.api.nvidia.com/v1",
       "apiKey": "{NVIDIA_API_KEY}",
-      "enabled": true
+      "enabled": true,
+      "models": {
+        "nvidia/nemotron-3-super-120b-a12b": {
+          "type": "decision",
+          "capabilities": ["decision"]
+        },
+        "qwen/qwen3.5-122b-a10b": {
+          "type": "vision",
+          "capabilities": ["vision"]
+        }
+      }
     }
   },
   "defaults": {

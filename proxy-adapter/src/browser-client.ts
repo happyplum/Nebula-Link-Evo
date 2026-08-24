@@ -14,12 +14,12 @@ const logger = createWorkerLogger('BrowserClient');
 
 const browserService = BrowserService.getInstance();
 
-// Replaces the previous x-browser-owner header (always 'chat' for BrowserClient calls)
-const OWNER = 'chat';
+// Direct debug/live-view calls share one explicit owner and remain subject to arbitration.
+const DIRECT_BROWSER_OWNER = 'debug-ui';
 
 const DEBUG_MARKER_TTL_MS = 5000;
 
-// Patterns from the former /dom/script route safety check
+// Direct debug script execution rejects high-risk page-context APIs.
 const DANGEROUS_SCRIPT_PATTERNS: readonly RegExp[] = [
   /eval\s*\(/,
   /Function\s*\(/,
@@ -38,8 +38,8 @@ interface PageStateElement {
   isInteractable: boolean;
 }
 
-export interface LegacyBrowserAccessGate {
-  assertLegacyBrowserAccess(kind: 'read' | 'capture' | 'write'): void;
+export interface DirectBrowserAccessArbiter {
+  assertDirectBrowserAccess(kind: 'read' | 'capture' | 'write'): void;
 }
 
 // ---------------------------------------------------------------------------
@@ -52,7 +52,7 @@ async function publishDebugStatus(reason: DebugStatusReason): Promise<void> {
   try {
     debugEventHub.publish({
       type: 'debug.status',
-      status: await browserService.getDebugStatus(reason, OWNER),
+      status: await browserService.getDebugStatus(reason, DIRECT_BROWSER_OWNER),
       emittedAt: new Date().toISOString(),
     });
   } catch {
@@ -112,39 +112,44 @@ function delay(ms: number): Promise<void> {
 
 export class BrowserClient {
   private cdpPort: number = 9222;
-  private accessGate?: LegacyBrowserAccessGate;
+  private accessArbiter?: DirectBrowserAccessArbiter;
 
-  setAccessGate(accessGate: LegacyBrowserAccessGate): void {
-    this.accessGate = accessGate;
+  setAccessArbiter(accessArbiter: DirectBrowserAccessArbiter): void {
+    this.accessArbiter = accessArbiter;
   }
 
   async openBrowser(): Promise<void> {
-    this.accessGate?.assertLegacyBrowserAccess('write');
-    await browserService.open(false, { width: 1920, height: 1080 }, this.cdpPort, OWNER);
+    this.accessArbiter?.assertDirectBrowserAccess('write');
+    await browserService.open(
+      false,
+      { width: 1920, height: 1080 },
+      this.cdpPort,
+      DIRECT_BROWSER_OWNER
+    );
     await publishDebugStatus('open');
   }
 
   async closeBrowser(): Promise<void> {
-    this.accessGate?.assertLegacyBrowserAccess('write');
-    await browserService.close(OWNER);
+    this.accessArbiter?.assertDirectBrowserAccess('write');
+    await browserService.close(DIRECT_BROWSER_OWNER);
     await publishDebugStatus('close');
   }
 
   async navigate(url: string): Promise<void> {
-    this.accessGate?.assertLegacyBrowserAccess('write');
-    await browserService.navigate(url, 'networkidle', OWNER);
+    this.accessArbiter?.assertDirectBrowserAccess('write');
+    await browserService.navigate(url, 'networkidle', DIRECT_BROWSER_OWNER);
     await publishDebugStatus('navigate');
   }
 
   async screenshot(fullPage: boolean = false): Promise<ScreenshotData> {
-    this.accessGate?.assertLegacyBrowserAccess('capture');
-    const result = await browserService.screenshot(fullPage, OWNER);
+    this.accessArbiter?.assertDirectBrowserAccess('capture');
+    const result = await browserService.screenshot(fullPage, DIRECT_BROWSER_OWNER);
     return { screenshot: result.screenshot, viewport: result.viewport };
   }
 
   async getSimplifiedDOM(): Promise<DOMSnapshotResponse> {
-    this.accessGate?.assertLegacyBrowserAccess('capture');
-    const data = await browserService.getSimplifiedDOMV2(OWNER);
+    this.accessArbiter?.assertDirectBrowserAccess('capture');
+    const data = await browserService.getSimplifiedDOMV2(DIRECT_BROWSER_OWNER);
     if (!data.snapshot_id) {
       logger.warn('DOM response missing snapshot_id');
     }
@@ -152,12 +157,12 @@ export class BrowserClient {
   }
 
   async click(x: number, y: number): Promise<void> {
-    this.accessGate?.assertLegacyBrowserAccess('write');
-    // Preserves the 3-attempt retry from the former /action/click route
+    this.accessArbiter?.assertDirectBrowserAccess('write');
+    // Direct UI clicks retry transient browser failures up to three times.
     let lastError: Error | null = null;
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        await browserService.click(x, y, OWNER);
+        await browserService.click(x, y, DIRECT_BROWSER_OWNER);
         return;
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
@@ -166,29 +171,29 @@ export class BrowserClient {
         }
       }
     }
-    throw lastError!;
+    throw lastError ?? new Error('Click failed without an error');
   }
 
   async clickBySelector(selector: string): Promise<void> {
-    this.accessGate?.assertLegacyBrowserAccess('write');
-    // Preserves the force-click fallback from the former /action/click-by-selector route
+    this.accessArbiter?.assertDirectBrowserAccess('write');
+    // Direct UI selector clicks use a force fallback after a normal click fails.
     try {
-      await browserService.clickBySelector(selector, undefined, OWNER);
+      await browserService.clickBySelector(selector, undefined, DIRECT_BROWSER_OWNER);
     } catch {
       logger.info({ selector }, 'Normal click failed, retrying with force');
-      await browserService.clickBySelector(selector, { force: true }, OWNER);
+      await browserService.clickBySelector(selector, { force: true }, DIRECT_BROWSER_OWNER);
     }
   }
 
   async executeScript(script: string, args?: unknown[]): Promise<unknown> {
-    this.accessGate?.assertLegacyBrowserAccess('capture');
-    // Preserves the safety check from the former /dom/script route
+    this.accessArbiter?.assertDirectBrowserAccess('capture');
+    // Apply the direct debug script safety policy before page execution.
     for (const pattern of DANGEROUS_SCRIPT_PATTERNS) {
       if (pattern.test(script)) {
         throw new Error('Potentially dangerous script detected');
       }
     }
-    const result = await browserService.executeScript(script, args ?? [], OWNER);
+    const result = await browserService.executeScript(script, args ?? [], DIRECT_BROWSER_OWNER);
     return result;
   }
 
@@ -231,48 +236,59 @@ export class BrowserClient {
   }
 
   async clickByMarker(snapshotId: string, nebulaId: number): Promise<void> {
-    this.accessGate?.assertLegacyBrowserAccess('write');
-    const result = await browserService.clickByMarker(snapshotId, nebulaId, OWNER);
+    this.accessArbiter?.assertDirectBrowserAccess('write');
+    const result = await browserService.clickByMarker(snapshotId, nebulaId, DIRECT_BROWSER_OWNER);
     if (result.success) {
       await publishMarkerDebugEvents('click', result);
     }
   }
 
   async typeByMarker(snapshotId: string, nebulaId: number, text: string): Promise<void> {
-    this.accessGate?.assertLegacyBrowserAccess('write');
-    const result = await browserService.typeByMarker(snapshotId, nebulaId, text, undefined, OWNER);
+    this.accessArbiter?.assertDirectBrowserAccess('write');
+    const result = await browserService.typeByMarker(
+      snapshotId,
+      nebulaId,
+      text,
+      undefined,
+      DIRECT_BROWSER_OWNER
+    );
     if (result.success) {
       await publishMarkerDebugEvents('type', result);
     }
   }
 
   async focusByMarker(snapshotId: string, nebulaId: number): Promise<void> {
-    this.accessGate?.assertLegacyBrowserAccess('write');
-    const result = await browserService.focusByMarker(snapshotId, nebulaId, OWNER);
+    this.accessArbiter?.assertDirectBrowserAccess('write');
+    const result = await browserService.focusByMarker(snapshotId, nebulaId, DIRECT_BROWSER_OWNER);
     if (result.success) {
       await publishMarkerDebugEvents('focus', result);
     }
   }
 
   async blurByMarker(snapshotId: string, nebulaId: number): Promise<void> {
-    this.accessGate?.assertLegacyBrowserAccess('write');
-    const result = await browserService.blurByMarker(snapshotId, nebulaId, OWNER);
+    this.accessArbiter?.assertDirectBrowserAccess('write');
+    const result = await browserService.blurByMarker(snapshotId, nebulaId, DIRECT_BROWSER_OWNER);
     if (result.success) {
       await publishMarkerDebugEvents('blur', result);
     }
   }
 
   async hoverByMarker(snapshotId: string, nebulaId: number): Promise<void> {
-    this.accessGate?.assertLegacyBrowserAccess('write');
-    const result = await browserService.hoverByMarker(snapshotId, nebulaId, OWNER);
+    this.accessArbiter?.assertDirectBrowserAccess('write');
+    const result = await browserService.hoverByMarker(snapshotId, nebulaId, DIRECT_BROWSER_OWNER);
     if (result.success) {
       await publishMarkerDebugEvents('hover', result);
     }
   }
 
   async setValueByMarker(snapshotId: string, nebulaId: number, value: string): Promise<void> {
-    this.accessGate?.assertLegacyBrowserAccess('write');
-    const result = await browserService.setValueByMarker(snapshotId, nebulaId, value, OWNER);
+    this.accessArbiter?.assertDirectBrowserAccess('write');
+    const result = await browserService.setValueByMarker(
+      snapshotId,
+      nebulaId,
+      value,
+      DIRECT_BROWSER_OWNER
+    );
     if (result.success) {
       await publishMarkerDebugEvents('value', result);
     }
@@ -283,12 +299,12 @@ export class BrowserClient {
     nebulaId: number,
     eventType: string
   ): Promise<void> {
-    this.accessGate?.assertLegacyBrowserAccess('write');
+    this.accessArbiter?.assertDirectBrowserAccess('write');
     const result = await browserService.dispatchEventByMarker(
       snapshotId,
       nebulaId,
       eventType,
-      OWNER
+      DIRECT_BROWSER_OWNER
     );
     if (result.success) {
       await publishMarkerDebugEvents('dispatch', result);
@@ -296,15 +312,15 @@ export class BrowserClient {
   }
 
   async type(selector: string, text: string): Promise<void> {
-    this.accessGate?.assertLegacyBrowserAccess('write');
-    // Preserves the 3-attempt retry with force escalation from the former /action/type route
+    this.accessArbiter?.assertDirectBrowserAccess('write');
+    // Direct UI typing retries transient failures and escalates to force.
     let currentOptions: { delay?: number; clear?: boolean; force?: boolean } | undefined =
       undefined;
     let lastError: Error | null = null;
 
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        await browserService.type(selector, text, currentOptions, OWNER);
+        await browserService.type(selector, text, currentOptions, DIRECT_BROWSER_OWNER);
         return;
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
@@ -319,41 +335,41 @@ export class BrowserClient {
       }
     }
 
-    throw lastError!;
+    throw lastError ?? new Error('Type failed without an error');
   }
 
   async scroll(x: number, y: number): Promise<void> {
-    this.accessGate?.assertLegacyBrowserAccess('write');
-    await browserService.scroll(x, y, OWNER);
+    this.accessArbiter?.assertDirectBrowserAccess('write');
+    await browserService.scroll(x, y, DIRECT_BROWSER_OWNER);
   }
 
   async focus(selector: string): Promise<void> {
-    this.accessGate?.assertLegacyBrowserAccess('write');
-    await browserService.focus(selector, OWNER);
+    this.accessArbiter?.assertDirectBrowserAccess('write');
+    await browserService.focus(selector, DIRECT_BROWSER_OWNER);
   }
 
   async blur(selector: string): Promise<void> {
-    this.accessGate?.assertLegacyBrowserAccess('write');
-    await browserService.blur(selector, OWNER);
+    this.accessArbiter?.assertDirectBrowserAccess('write');
+    await browserService.blur(selector, DIRECT_BROWSER_OWNER);
   }
 
   async hover(selector: string): Promise<void> {
-    this.accessGate?.assertLegacyBrowserAccess('write');
-    await browserService.hover(selector, OWNER);
+    this.accessArbiter?.assertDirectBrowserAccess('write');
+    await browserService.hover(selector, DIRECT_BROWSER_OWNER);
   }
 
   async setValue(selector: string, value: string): Promise<void> {
-    this.accessGate?.assertLegacyBrowserAccess('write');
-    await browserService.setValue(selector, value, OWNER);
+    this.accessArbiter?.assertDirectBrowserAccess('write');
+    await browserService.setValue(selector, value, DIRECT_BROWSER_OWNER);
   }
 
   async dispatchEvent(selector: string, eventType: string): Promise<void> {
-    this.accessGate?.assertLegacyBrowserAccess('write');
-    await browserService.dispatchEvent(selector, eventType, OWNER);
+    this.accessArbiter?.assertDirectBrowserAccess('write');
+    await browserService.dispatchEvent(selector, eventType, DIRECT_BROWSER_OWNER);
   }
 
   async elementAction(selector: string, action: string, param?: string): Promise<void> {
-    this.accessGate?.assertLegacyBrowserAccess('write');
+    this.accessArbiter?.assertDirectBrowserAccess('write');
     switch (action) {
       case 'click':
         await this.clickBySelector(selector);
@@ -391,7 +407,7 @@ export class BrowserClient {
       return {
         isOpen: browserService.isOpen(),
         url: browserService.getCurrentUrl(),
-        title: await browserService.getTitle(OWNER),
+        title: await browserService.getTitle(DIRECT_BROWSER_OWNER),
         viewport: browserService.getViewport() ?? undefined,
       };
     } catch {
@@ -401,21 +417,21 @@ export class BrowserClient {
 
   async getTabs(): Promise<Array<{ id: string; url: string; title: string; isActive: boolean }>> {
     try {
-      return await browserService.getTabs(OWNER);
+      return await browserService.getTabs(DIRECT_BROWSER_OWNER);
     } catch {
       return [];
     }
   }
 
   async switchTab(id: string): Promise<void> {
-    this.accessGate?.assertLegacyBrowserAccess('write');
-    await browserService.switchTab(id, OWNER);
+    this.accessArbiter?.assertDirectBrowserAccess('write');
+    await browserService.switchTab(id, DIRECT_BROWSER_OWNER);
     await publishDebugStatus('switch_tab');
   }
 
   async getElementAt(x: number, y: number): Promise<ElementInfo | null> {
-    this.accessGate?.assertLegacyBrowserAccess('capture');
-    const element = await browserService.getElementAt(x, y, OWNER);
+    this.accessArbiter?.assertDirectBrowserAccess('capture');
+    const element = await browserService.getElementAt(x, y, DIRECT_BROWSER_OWNER);
     return element;
   }
 
@@ -426,7 +442,7 @@ export class BrowserClient {
     viewport: { width: number; height: number };
     screenshot?: string;
   } | null> {
-    this.accessGate?.assertLegacyBrowserAccess('capture');
+    this.accessArbiter?.assertDirectBrowserAccess('capture');
     try {
       const [dom, screenshotData] = await Promise.all([
         this.getSimplifiedDOM(),

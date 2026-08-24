@@ -1,11 +1,6 @@
 import type { DomSnapshotElementInfo } from '../api/control.adapters.js';
 import type { DomElement } from '../store/control.store.js';
 
-type DomSnapshotElementInfoV2 = DomSnapshotElementInfo & {
-  id?: string;
-  locator_bundle?: Record<string, string>;
-};
-
 function parseMarkerNumber(value: string | undefined): number | undefined {
   if (!value) {
     return undefined;
@@ -16,32 +11,18 @@ function parseMarkerNumber(value: string | undefined): number | undefined {
 }
 
 export function normalizeDomElements(
-  elementsMap: [number, DomSnapshotElementInfo][] | Record<string, DomSnapshotElementInfo>
+  elementsMap: Record<string, DomSnapshotElementInfo>
 ): DomElement[] {
-  if (Array.isArray(elementsMap)) {
-    return elementsMap.map(([markerNumber, info]) => ({
-      markerNumber,
-      tag: info.tag,
-      id: info['data-nebula-id'],
-      text: info.text,
-      bbox: info.bbox,
-      isVisible: info.isVisible,
-      isInteractable: info.isInteractable,
-      dataNebulaId: info['data-nebula-id'],
-      locatorBundle: info.locatorBundle,
-    }));
-  }
-
   return Object.entries(elementsMap).map(([id, info]) => ({
-    markerNumber: parseMarkerNumber(info['data-nebula-id']) ?? parseMarkerNumber(id),
+    markerNumber: parseMarkerNumber(info.id) ?? parseMarkerNumber(id),
     tag: info.tag,
     id,
     text: info.text,
     bbox: info.bbox,
-    isVisible: info.isVisible ?? true,
-    isInteractable: info.isInteractable ?? true,
-    dataNebulaId: info['data-nebula-id'] ?? (info as DomSnapshotElementInfoV2).id ?? id,
-    locatorBundle: info.locatorBundle ?? (info as DomSnapshotElementInfoV2).locator_bundle,
+    isVisible: true,
+    isInteractable: true,
+    dataNebulaId: info.id,
+    locatorBundle: info.locator_bundle,
   }));
 }
 

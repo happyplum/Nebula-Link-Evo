@@ -5,12 +5,7 @@
 /**
  * 工具提供方状态机
  */
-export type ToolProviderStatus =
-  | 'initializing'
-  | 'ready'
-  | 'degraded'
-  | 'disabled'
-  | 'failed';
+export type ToolProviderStatus = 'initializing' | 'ready' | 'degraded' | 'disabled' | 'failed';
 
 export interface GatewayToolExecutionContext {
   readonly toolCallId?: string;
@@ -19,7 +14,7 @@ export interface GatewayToolExecutionContext {
 
 /**
  * 网关工具统一表示
- * 与 SDKTool.execute 签名兼容: (args: unknown) => Promise<string>
+ * 工具执行入口统一返回可持久化字符串。
  */
 export interface GatewayTool {
   readonly id: string;
@@ -27,12 +22,8 @@ export interface GatewayTool {
   readonly description: string;
   readonly inputSchema: Record<string, unknown>;
   readonly providerId: string;
-  readonly exposeTo: readonly ('chat' | 'mcp-server')[];
   readonly isAvailable: boolean;
-  readonly execute: (
-    args: unknown,
-    context?: GatewayToolExecutionContext,
-  ) => Promise<string>;
+  readonly execute: (args: unknown, context?: GatewayToolExecutionContext) => Promise<string>;
   readonly source?: {
     readonly type: 'mcp';
     readonly serverName: string;

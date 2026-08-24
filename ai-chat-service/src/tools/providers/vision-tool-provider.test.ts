@@ -2,6 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 import type { VisionAnalyzer } from '../../vision/vision-analyzer.js';
 import type { VisionSnapshotLoader } from '../../vision/snapshot-loader.js';
 import { VisionToolProvider } from './vision-tool-provider.js';
+import type { GatewayTool } from '../types.js';
+
+function requireTool(provider: VisionToolProvider, name: string): GatewayTool {
+  const tool = provider.getTools().find((candidate) => candidate.name === name);
+  if (!tool) throw new Error(`Missing fixture tool ${name}`);
+  return tool;
+}
 
 const snapshot = {
   snapshot_id: 'snapshot-1',
@@ -15,12 +22,12 @@ const snapshot = {
       bbox: { x: 1, y: 2, width: 10, height: 20 },
       locator_bundle: {
         nebula_id: '1',
-        css: 'button',
+        css: 'button[data-testid="submit\\:button"]',
         xpath: '//button',
-        role: 'button',
-        testid: null,
-        aria: null,
-        text: '提交',
+        role: '[role="button"][name="提交"]',
+        testid: '[data-testid="submit\\:button"]',
+        aria: '[aria-label="提交"]',
+        text: 'text=提交',
       },
     },
   },
@@ -35,29 +42,68 @@ describe('VisionToolProvider', () => {
       'vision.analyze_page',
       'vision.resolve_target',
     ]);
-    expect(provider.getTools().every((tool) => tool.inputSchema.additionalProperties === false)).toBe(true);
+    expect(
+      provider.getTools().every((tool) => tool.inputSchema.additionalProperties === false)
+    ).toBe(true);
   });
 
   it('loads an immutable binding before resolving a target', async () => {
     const loader = { load: vi.fn(async () => ({ snapshot, attachment: {} })) };
     const analyzer = {
-      resolveTarget: vi.fn(async () => ({ nebula_id: '1', confidence: 0.9, reasoning: 'match' })),
+      resolveTarget: vi.fn(async () => ({
+        nebula_id: '1',
+        confidence: 0.9,
+        ambiguous: false,
+        reasoning: 'match',
+      })),
     };
     const provider = new VisionToolProvider(
       analyzer as unknown as VisionAnalyzer,
       loader as unknown as VisionSnapshotLoader
     );
     await provider.initialize();
-    const tool = provider.getTools().find((candidate) => candidate.name === 'vision.resolve_target')!;
-    const result = JSON.parse(await tool.execute({ binding: { schema: 'binding' }, description: '提交按钮' }));
+    const tool = requireTool(provider, 'vision.resolve_target');
+    const result = JSON.parse(
+      await tool.execute({ binding: { schema: 'binding' }, description: '提交按钮' })
+    );
     expect(loader.load).toHaveBeenCalledWith({ schema: 'binding' }, undefined);
     expect(analyzer.resolveTarget).toHaveBeenCalledWith(snapshot, '提交按钮');
     expect(result).toMatchObject({
       ok: true,
       snapshot_id: 'snapshot-1',
-      nebula_id: '1',
-      element: { locator_bundle: { css: 'button' } },
+      target: {
+        semantic: '提交按钮',
+        candidates: [
+          { strategy: 'role', role: 'button', name: '提交', exact: true },
+          { strategy: 'test_id', value: 'submit:button' },
+          { strategy: 'label', value: '提交', exact: true },
+          { strategy: 'text', value: '提交', exact: true },
+          { strategy: 'css', value: 'button[data-testid="submit\\:button"]' },
+          { strategy: 'xpath', value: '//button' },
+        ],
+      },
+      evidence: { nebula_id: '1' },
     });
+  });
+
+  it.each([
+    [
+      { nebula_id: '1', confidence: 0.6, ambiguous: false, reasoning: 'weak' },
+      'VISION_TARGET_LOW_CONFIDENCE',
+    ],
+    [
+      { nebula_id: '1', confidence: 0.9, ambiguous: true, reasoning: 'two matches' },
+      'VISION_TARGET_AMBIGUOUS',
+    ],
+  ])('fails closed for uncertain target evidence', async (match, code) => {
+    const provider = new VisionToolProvider(
+      { resolveTarget: vi.fn(async () => match) } as unknown as VisionAnalyzer,
+      { load: vi.fn(async () => ({ snapshot, attachment: {} })) } as unknown as VisionSnapshotLoader
+    );
+    await provider.initialize();
+    const tool = requireTool(provider, 'vision.resolve_target');
+    const result = JSON.parse(await tool.execute({ binding: {}, description: '提交按钮' }));
+    expect(result).toMatchObject({ ok: false, code, retryable: false });
   });
 
   it('analyzes a page and contains rejected bindings without calling the model', async () => {
@@ -75,12 +121,16 @@ describe('VisionToolProvider', () => {
       loader as unknown as VisionSnapshotLoader
     );
     await provider.initialize();
-    const tool = provider.getTools().find((candidate) => candidate.name === 'vision.analyze_page')!;
+    const tool = requireTool(provider, 'vision.analyze_page');
     await expect(tool.execute({ binding: {}, objective: '识别页面' })).resolves.toContain('登录页');
 
     loader.load.mockRejectedValueOnce(new Error('hash mismatch'));
     const rejected = JSON.parse(await tool.execute({ binding: {} }));
-    expect(rejected).toMatchObject({ ok: false, code: 'VISION_SNAPSHOT_REJECTED', retryable: false });
+    expect(rejected).toMatchObject({
+      ok: false,
+      code: 'VISION_SNAPSHOT_REJECTED',
+      retryable: false,
+    });
     expect(analyzer.analyzePage).toHaveBeenCalledTimes(1);
   });
 });

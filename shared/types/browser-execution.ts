@@ -191,6 +191,8 @@ export interface BrowserArtifactRefV1 {
   kind: string;
   sha256: string;
   mimeType: string;
+  sizeBytes: number;
+  snapshotId?: string;
 }
 
 export interface BrowserOperationRecord {

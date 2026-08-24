@@ -10,10 +10,10 @@
 ### Session CRUD
 
 ```
-POST   /api/chat/sessions/                    Create session
-GET    /api/chat/sessions/                    List sessions
-GET    /api/chat/sessions/:id                 Get session
-DELETE /api/chat/sessions/:id                 Delete session
+POST   /api/v1/chat/sessions/                    Create session
+GET    /api/v1/chat/sessions/                    List sessions
+GET    /api/v1/chat/sessions/:id                 Get session
+DELETE /api/v1/chat/sessions/:id                 Delete session
 ```
 
 | Endpoint      | Body / Query                | Success Response         |
@@ -43,8 +43,8 @@ DELETE /api/chat/sessions/:id                 Delete session
 ### Messages
 
 ```
-GET    /api/chat/sessions/:id/messages        Message history
-POST   /api/chat/sessions/:id/messages        Send message (async)
+GET    /api/v1/chat/sessions/:id/messages        Message history
+POST   /api/v1/chat/sessions/:id/messages        Send message (async)
 ```
 
 | Endpoint             | Body / Query             | Success Response           |
@@ -63,7 +63,7 @@ POST   /api/chat/sessions/:id/messages        Send message (async)
 ### SSE Stream
 
 ```
-GET    /api/chat/sessions/:id/stream          Event stream
+GET    /api/v1/chat/sessions/:id/stream          Event stream
 ```
 
 **Note:** `Last-Event-ID` header and `afterSeq` query param are not supported. Reconnect always rebuilds from a fresh `session.snapshot` event — there is no cursor-based replay.
@@ -83,12 +83,12 @@ data: {"sessionId":"...","messageId":"...","text":"Hello"}
 ### Session Control
 
 ```
-POST   /api/chat/sessions/:id/interrupt       Interrupt execution
-POST   /api/chat/sessions/:id/cancel          Cancel execution
-POST   /api/chat/sessions/:id/pause           Pause execution
-POST   /api/chat/sessions/:id/resume          Resume execution
-GET    /api/chat/sessions/:id/status          Runtime status
-GET    /api/chat/sessions/:id/operations       Operation audit log
+POST   /api/v1/chat/sessions/:id/interrupt       Interrupt execution
+POST   /api/v1/chat/sessions/:id/cancel          Cancel execution
+POST   /api/v1/chat/sessions/:id/pause           Pause execution
+POST   /api/v1/chat/sessions/:id/resume          Resume execution
+GET    /api/v1/chat/sessions/:id/status          Runtime status
+GET    /api/v1/chat/sessions/:id/operations       Operation audit log
 ```
 
 | Endpoint              | Response                                                                |
@@ -106,7 +106,7 @@ GET    /api/chat/sessions/:id/operations       Operation audit log
 ### Connectivity Test
 
 ```
-POST   /api/chat/connectivity/test            Test AI provider
+POST   /api/v1/chat/connectivity-test         Test AI provider
 ```
 
 **Body:** `{provider?, baseUrl?, apiKey?, modelId?}`
@@ -174,8 +174,7 @@ POST   /debug/api/playwright/scroll           {x, y} Scroll
 GET    /debug/api/tasks                       Task history (?limit)
 GET    /debug/api/tasks/:id                   Specific task
 GET    /debug/api/health                      Service health
-POST   /debug/api/test-ai                     AI connectivity test
-GET    /debug/api/verify-keys                 API key status
+POST   /api/v1/test-ai                        AI/model and gateway capability preflight
 ```
 
 ### MCP
@@ -191,7 +190,6 @@ POST   /debug/api/mcp/call                    {server, tool, args?} Invoke tool
 ```
 GET    /debug/api/interactions                History (?limit, offset, action_type, success, locator_strategy, start_time)
 GET    /debug/api/interactions/stats          Statistics
-GET    /debug/api/failure-sample              ?path Sample data
 ```
 
 ---
@@ -200,12 +198,12 @@ GET    /debug/api/failure-sample              ?path Sample data
 
 ### Core
 
-| Object                 | Type              | Description                 |
-| ---------------------- | ----------------- | --------------------------- |
-| `window.chatManager`   | ChatManager       | Chat session management     |
-| `window.liveView`      | LiveView          | Dual-canvas browser preview |
-| `window.router`        | Navigo            | Hash router                 |
-| `window.chatComponent` | ChatComponent     | Full-screen overlay         |
+| Object                 | Type          | Description                 |
+| ---------------------- | ------------- | --------------------------- |
+| `window.chatManager`   | ChatManager   | Chat session management     |
+| `window.liveView`      | LiveView      | Dual-canvas browser preview |
+| `window.router`        | Navigo        | Hash router                 |
+| `window.chatComponent` | ChatComponent | Full-screen overlay         |
 
 ### UI
 

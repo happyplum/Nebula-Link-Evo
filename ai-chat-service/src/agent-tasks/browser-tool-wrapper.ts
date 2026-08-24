@@ -14,14 +14,37 @@ const EXECUTE_TOOL = 'browser-control.operation_execute';
 const GET_TOOL = 'browser-control.operation_get';
 const CANCEL_TOOL = 'browser-control.operation_cancel';
 const TERMINAL_STATUSES = new Set(['succeeded', 'failed', 'cancelled', 'outcome_unknown']);
+const OPERATION_STATUSES = new Set([
+  'queued',
+  'running',
+  'succeeded',
+  'failed',
+  'cancelled',
+  'outcome_unknown',
+]);
 
 interface BrowserOperationRecord {
+  schema: 'nebula.browser.operation-result/1.0';
   operationId: string;
+  requestHash: string;
+  sessionId: string;
+  leaseId: string;
+  leaseSequence: number;
+  tabId?: string;
+  kind: string;
   status: string;
-  operation?: string;
+  operation: string;
+  artifacts: Array<{
+    id: string;
+    kind: string;
+    sha256: string;
+    mimeType: string;
+    sizeBytes: number;
+    snapshotId?: string;
+  }>;
+  visionSnapshotBinding?: import('@nebula-link-evo/shared').VisionSnapshotBindingV1;
   actual?: unknown;
   resolvedTarget?: unknown;
-  artifacts?: unknown[];
   error?: { code?: string; message?: string; retryable?: boolean };
 }
 
@@ -71,7 +94,6 @@ export class BrowserToolWrapper {
         required: ['stepId'],
       },
       providerId: 'agent-task-browser-wrapper',
-      exposeTo: ['chat'],
       isAvailable: true,
       execute: async (args, context) => {
         const toolCallId = context?.toolCallId;
@@ -177,10 +199,12 @@ export class BrowserToolWrapper {
             tabId: this.options.binding.tabId,
             request,
           },
-          signal
+          signal,
+          operationId,
+          step.operation
         );
       } catch (executeError) {
-        operation = await this.recoverOperation(operationId, executeError);
+        operation = await this.recoverOperation(operationId, step.operation, executeError);
       }
 
       summary.status =
@@ -200,7 +224,7 @@ export class BrowserToolWrapper {
         operation.status
       );
       this.pendingOperationIds.delete(operationId);
-      return operation;
+      return withVisionSnapshotBinding(operation);
     } catch (error) {
       const taskError =
         error instanceof AgentTaskError
@@ -219,12 +243,17 @@ export class BrowserToolWrapper {
   }
 
   async cancel(operationId: string): Promise<BrowserOperationRecord> {
-    return this.callOperation(CANCEL_TOOL, {
-      operationId,
-      sessionId: this.options.binding.browserSessionId,
-      leaseId: this.options.binding.browserLeaseId,
-      leaseToken: this.options.binding.browserLeaseToken,
-    });
+    return this.callOperation(
+      CANCEL_TOOL,
+      {
+        operationId,
+        sessionId: this.options.binding.browserSessionId,
+        leaseId: this.options.binding.browserLeaseId,
+        leaseToken: this.options.binding.browserLeaseToken,
+      },
+      undefined,
+      operationId
+    );
   }
 
   async cancelPending(): Promise<void> {
@@ -234,12 +263,19 @@ export class BrowserToolWrapper {
 
   private async recoverOperation(
     operationId: string,
+    operationName: string,
     executeError: unknown
   ): Promise<BrowserOperationRecord> {
     const deterministic = toDeterministicProxyError(executeError);
     if (deterministic) throw deterministic;
     try {
-      const operation = await this.callOperation(GET_TOOL, { operationId });
+      const operation = await this.callOperation(
+        GET_TOOL,
+        { operationId },
+        undefined,
+        operationId,
+        operationName
+      );
       if (TERMINAL_STATUSES.has(operation.status)) return operation;
       throw new AgentTaskError(
         'outcome_unknown',
@@ -265,13 +301,17 @@ export class BrowserToolWrapper {
   private async callOperation(
     toolName: string,
     args: Record<string, unknown>,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    expectedOperationId?: string,
+    expectedOperation?: string
   ): Promise<BrowserOperationRecord> {
     const raw = signal
       ? await this.options.mcpClient.callTool(GATEWAY_MCP_SERVER_NAME, toolName, args, { signal })
       : await this.options.mcpClient.callTool(GATEWAY_MCP_SERVER_NAME, toolName, args);
     const parsed = extractParsedResult(raw);
-    if (!parsed || typeof parsed.operationId !== 'string' || typeof parsed.status !== 'string') {
+    if (
+      !isValidOperationRecord(parsed, this.options.binding, expectedOperationId, expectedOperation)
+    ) {
       throw new AgentTaskError(
         'dependency_unavailable',
         `${toolName} returned an invalid operation record`,
@@ -299,6 +339,13 @@ function extractParsedResult(value: unknown): Record<string, unknown> | null {
   if (record.parsed && typeof record.parsed === 'object' && !Array.isArray(record.parsed)) {
     return record.parsed as Record<string, unknown>;
   }
+  if (
+    record.structuredContent &&
+    typeof record.structuredContent === 'object' &&
+    !Array.isArray(record.structuredContent)
+  ) {
+    return record.structuredContent as Record<string, unknown>;
+  }
   if (Array.isArray(record.content)) {
     const text = record.content
       .filter(
@@ -320,6 +367,84 @@ function extractParsedResult(value: unknown): Record<string, unknown> | null {
     }
   }
   return record;
+}
+
+function isValidOperationRecord(
+  value: Record<string, unknown> | null,
+  binding: AgentTaskBrowserBinding,
+  expectedOperationId?: string,
+  expectedOperation?: string
+): boolean {
+  if (!value) return false;
+  return (
+    value.schema === 'nebula.browser.operation-result/1.0' &&
+    typeof value.operationId === 'string' &&
+    (expectedOperationId === undefined || value.operationId === expectedOperationId) &&
+    typeof value.requestHash === 'string' &&
+    value.requestHash.length > 0 &&
+    value.sessionId === binding.browserSessionId &&
+    value.leaseId === binding.browserLeaseId &&
+    value.leaseSequence === binding.browserLeaseSequence &&
+    value.tabId === binding.tabId &&
+    (value.kind === 'observe' || value.kind === 'act') &&
+    typeof value.operation === 'string' &&
+    (expectedOperation === undefined || value.operation === expectedOperation) &&
+    typeof value.status === 'string' &&
+    OPERATION_STATUSES.has(value.status) &&
+    Array.isArray(value.artifacts)
+  );
+}
+
+function withVisionSnapshotBinding(operation: BrowserOperationRecord): BrowserOperationRecord {
+  if (
+    operation.status !== 'succeeded' ||
+    operation.kind !== 'observe' ||
+    operation.operation !== 'dom_snapshot' ||
+    !operation.tabId
+  ) {
+    return operation;
+  }
+  const artifact = operation.artifacts.find(
+    (candidate) =>
+      candidate.kind === 'dom_snapshot' &&
+      candidate.mimeType === 'application/json' &&
+      typeof candidate.id === 'string' &&
+      candidate.id.length > 0 &&
+      typeof candidate.sha256 === 'string' &&
+      /^[a-f0-9]{64}$/u.test(candidate.sha256) &&
+      typeof candidate.snapshotId === 'string' &&
+      candidate.snapshotId.length > 0 &&
+      Number.isSafeInteger(candidate.sizeBytes) &&
+      candidate.sizeBytes > 0
+  );
+  const snapshotId = artifact?.snapshotId;
+  if (!artifact || !snapshotId) {
+    throw new AgentTaskError(
+      'dependency_unavailable',
+      'Succeeded dom_snapshot operation did not return a complete Vision artifact binding',
+      true
+    );
+  }
+  return {
+    ...operation,
+    visionSnapshotBinding: {
+      schema: 'nebula.vision-snapshot-binding/1.0',
+      sessionId: operation.sessionId,
+      tabId: operation.tabId,
+      operationId: operation.operationId,
+      requestHash: operation.requestHash,
+      leaseId: operation.leaseId,
+      leaseSequence: operation.leaseSequence,
+      snapshotId,
+      status: 'succeeded',
+      domArtifact: {
+        artifactId: artifact.id,
+        sha256: artifact.sha256,
+        mimeType: 'application/json',
+        sizeBytes: artifact.sizeBytes,
+      },
+    },
+  };
 }
 
 function stableUuid(...parts: string[]): string {

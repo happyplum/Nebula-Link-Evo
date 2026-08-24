@@ -1,5 +1,8 @@
 import { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
-import type { DebugPlaywrightState, DebugStreamEvent } from '@nebula-link-evo/shared/types/debug-events.js';
+import type {
+  DebugPlaywrightState,
+  DebugStreamEvent,
+} from '@nebula-link-evo/shared/types/debug-events.js';
 import { eventToSSEFormat } from '@nebula-link-evo/shared/types/sse-events';
 import { browserClient } from '../../../browser-client.js';
 import { debugEventHub } from '../../../services/debug-event-hub.js';
@@ -13,7 +16,9 @@ function writeDebugEvent(
   reply.raw.write(`event: ${formatted.event}\nid: ${eventId}\ndata: ${formatted.data}\n\n`);
 }
 
-function buildSnapshotEvent(status: DebugPlaywrightState): Extract<DebugStreamEvent, { type: 'debug.snapshot' }> {
+function buildSnapshotEvent(
+  status: DebugPlaywrightState
+): Extract<DebugStreamEvent, { type: 'debug.snapshot' }> {
   return {
     type: 'debug.snapshot',
     seq: 0,
@@ -43,10 +48,7 @@ const debugStreamRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
   fastify.get(
     '/stream',
     {
-      schema: {
-        description: 'Debug SSE stream with snapshot bootstrap and live browser status events',
-        tags: ['Debug', 'SSE'],
-      },
+      schema: {},
     },
     async (request, reply) => {
       const bufferedEvents: DebugStreamEvent[] = [];

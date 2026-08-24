@@ -5,24 +5,19 @@
 /**
  * 工具提供方状态机
  */
-export type ToolProviderStatus =
-  | 'initializing'
-  | 'ready'
-  | 'degraded'
-  | 'disabled'
-  | 'failed';
+export type ToolProviderStatus = 'initializing' | 'ready' | 'degraded' | 'disabled' | 'failed';
 
 /**
  * 网关工具统一表示
- * 与 SDKTool.execute 签名兼容: (args: unknown) => Promise<string>
+ * proxy-adapter 仅注册受控 MCP 工具。
  */
 export interface GatewayTool {
   readonly id: string;
   readonly name: string;
   readonly description: string;
   readonly inputSchema: Record<string, unknown>;
+  readonly outputSchema?: Record<string, unknown>;
   readonly providerId: string;
-  readonly exposeTo: readonly ('chat' | 'mcp-server')[];
   readonly isAvailable: boolean;
   readonly execute: (args: unknown) => Promise<string>;
 }

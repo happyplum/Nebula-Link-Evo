@@ -56,25 +56,23 @@ export interface RuntimeSessionState {
 
 function resolveRuntimeStatus(
   controllerStatus: SessionStatusResponse,
-  sessionState: SessionState | null,
-  baseStatus?: SessionStatus
+  sessionState: SessionState | null
 ): SessionStatus {
   if (controllerStatus.status !== 'idle') {
     return controllerStatus.status;
   }
 
-  return sessionState?.status ?? baseStatus ?? 'idle';
+  return sessionState?.status ?? 'idle';
 }
 
 export function mergeRuntimeSessionState(options: {
   controllerStatus: SessionStatusResponse;
   sessionState: SessionState | null;
-  baseStatus?: SessionStatus;
 }): RuntimeSessionState {
-  const { controllerStatus, sessionState, baseStatus } = options;
+  const { controllerStatus, sessionState } = options;
 
   return {
-    status: resolveRuntimeStatus(controllerStatus, sessionState, baseStatus),
+    status: resolveRuntimeStatus(controllerStatus, sessionState),
     jobId: sessionState?.jobId ?? controllerStatus.currentJobId,
     currentJobId: controllerStatus.currentJobId ?? sessionState?.jobId,
     lastActivity: sessionState?.lastActiveAt ?? controllerStatus.lastActivity,
@@ -85,7 +83,6 @@ export function mergeRuntimeSessionState(options: {
 export async function getRuntimeSessionState(
   conversationManager: ConversationManager,
   sessionId: string,
-  baseStatus?: SessionStatus,
   controller: ChatSessionController = ChatSessionController.getInstance()
 ): Promise<RuntimeSessionState> {
   const controllerStatus = controller.getStatus(sessionId);
@@ -94,6 +91,5 @@ export async function getRuntimeSessionState(
   return mergeRuntimeSessionState({
     controllerStatus,
     sessionState,
-    baseStatus,
   });
 }

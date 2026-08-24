@@ -8,13 +8,6 @@
 // Service lifecycle utilities
 export * from './service-lifecycle.js';
 
-// KimiClient mocks
-export {
-  createKimiClientMock,
-  createMockUIElement,
-  createMockActionResult,
-} from './mocks/KimiClient.mock.js';
-
 // BrowserContext mocks
 export {
   createBrowserContextMock,

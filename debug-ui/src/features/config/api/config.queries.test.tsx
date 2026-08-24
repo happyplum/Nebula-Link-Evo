@@ -1,19 +1,13 @@
 /**
  * Tests for config domain query hooks: useConfig, useHealth, useMcpStatus,
- * useMcpTools, useVerifyKeys.
+ * useMcpTools.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 
-import {
-  useConfig,
-  useHealth,
-  useMcpStatus,
-  useMcpTools,
-  useVerifyKeys,
-} from './config.queries.js';
+import { useConfig, useHealth, useMcpStatus, useMcpTools } from './config.queries.js';
 
 function createWrapper() {
   const client = new QueryClient({
@@ -29,7 +23,7 @@ function mockFetchResponse(data: unknown, status = 200) {
     new Response(JSON.stringify(data), {
       status,
       headers: { 'Content-Type': 'application/json' },
-    }),
+    })
   );
 }
 
@@ -73,13 +67,6 @@ const mcpToolsData = {
   ],
 };
 
-const verifyKeysData = {
-  keys: [
-    { provider: 'openai', displayName: 'OpenAI', status: 'valid' as const, keyPreview: 'sk-...abc' },
-    { provider: 'anthropic', status: 'not_set' as const, keyPreview: '' },
-  ],
-};
-
 describe('config.queries', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -112,7 +99,7 @@ describe('config.queries', () => {
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
       // Verify the endpoint was called
-      expect(fetch).toHaveBeenCalledWith('/api/config', { signal: expect.any(AbortSignal) });
+      expect(fetch).toHaveBeenCalledWith('/api/v1/config', { signal: expect.any(AbortSignal) });
     });
   });
 
@@ -131,11 +118,13 @@ describe('config.queries', () => {
       expect(data.services.playwright).toBe('running');
     });
 
-    it('fetches /api/health endpoint', async () => {
+    it('fetches /api/v1/health endpoint', async () => {
       mockFetchResponse(healthData);
 
       renderHook(() => useHealth(), { wrapper: createWrapper() });
-      await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/health', { signal: expect.any(AbortSignal) }));
+      await waitFor(() =>
+        expect(fetch).toHaveBeenCalledWith('/api/v1/health', { signal: expect.any(AbortSignal) })
+      );
     });
   });
 
@@ -158,7 +147,11 @@ describe('config.queries', () => {
       mockFetchResponse(mcpStatusData);
 
       renderHook(() => useMcpStatus(), { wrapper: createWrapper() });
-      await waitFor(() => expect(fetch).toHaveBeenCalledWith('/debug/api/mcp/status', { signal: expect.any(AbortSignal) }));
+      await waitFor(() =>
+        expect(fetch).toHaveBeenCalledWith('/debug/api/mcp/status', {
+          signal: expect.any(AbortSignal),
+        })
+      );
     });
   });
 
@@ -189,36 +182,18 @@ describe('config.queries', () => {
       mockFetchResponse(mcpToolsData);
 
       renderHook(() => useMcpTools(), { wrapper: createWrapper() });
-      await waitFor(() => expect(fetch).toHaveBeenCalledWith('/debug/api/mcp/tools', { signal: expect.any(AbortSignal) }));
-    });
-  });
-
-  describe('useVerifyKeys', () => {
-    it('fetches key verification status', async () => {
-      mockFetchResponse(verifyKeysData);
-
-      const { result } = renderHook(() => useVerifyKeys(), { wrapper: createWrapper() });
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
-
-      const keys = result.current.data!.keys;
-      expect(keys).toHaveLength(2);
-      expect(keys[0].status).toBe('valid');
-      expect(keys[0].keyPreview).toBe('sk-...abc');
-      expect(keys[1].status).toBe('not_set');
-    });
-
-    it('fetches /api/verify-keys endpoint', async () => {
-      mockFetchResponse(verifyKeysData);
-
-      renderHook(() => useVerifyKeys(), { wrapper: createWrapper() });
-      await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/verify-keys', { signal: expect.any(AbortSignal) }));
+      await waitFor(() =>
+        expect(fetch).toHaveBeenCalledWith('/debug/api/mcp/tools', {
+          signal: expect.any(AbortSignal),
+        })
+      );
     });
   });
 
   describe('error handling', () => {
     it('surfaces fetch errors for useConfig', async () => {
       vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-        new Response(JSON.stringify({ error: 'fail' }), { status: 500 }),
+        new Response(JSON.stringify({ error: 'fail' }), { status: 500 })
       );
 
       const { result } = renderHook(() => useConfig(), { wrapper: createWrapper() });
@@ -229,7 +204,7 @@ describe('config.queries', () => {
 
     it('surfaces fetch errors for useHealth', async () => {
       vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-        new Response('Internal Server Error', { status: 500 }),
+        new Response('Internal Server Error', { status: 500 })
       );
 
       const { result } = renderHook(() => useHealth(), { wrapper: createWrapper() });

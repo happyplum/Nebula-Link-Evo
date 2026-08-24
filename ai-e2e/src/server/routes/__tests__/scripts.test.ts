@@ -7,7 +7,7 @@ import { DatabaseManager } from '../../../database/db.js';
 import errorHandlerPlugin from '../../plugins/error-handler.js';
 import sseEmitterPlugin from '../../plugins/sse-emitter.js';
 import { default as scriptsRoutes } from '../scripts.js';
-import type { ProxyAdapterClient } from '../../../infrastructure/proxy-adapter-client.js';
+import type { AiE2eRuntimeClient } from '../../../infrastructure/ai-e2e-runtime-client.js';
 import type { PromptTemplateManager } from '../../../ai/prompt-manager.js';
 
 // ---------- Mocks ----------
@@ -21,10 +21,12 @@ const mockScriptGeneratorService = {
 };
 
 vi.mock('../../../services/script-generator-service.js', () => ({
-  ScriptGeneratorService: vi.fn(function () { return mockScriptGeneratorService; }),
+  ScriptGeneratorService: vi.fn(function () {
+    return mockScriptGeneratorService;
+  }),
 }));
 
-const mockProxyClient = {
+const mockRuntimeClient = {
   generateText: vi.fn(),
   navigate: vi.fn(),
   getSnapshot: vi.fn(),
@@ -40,7 +42,7 @@ const mockProxyClient = {
   getDOM: vi.fn(),
   openBrowser: vi.fn(),
   closeBrowser: vi.fn(),
-} as unknown as ProxyAdapterClient;
+} as unknown as AiE2eRuntimeClient;
 
 const mockPromptManager = {
   render: vi.fn(),
@@ -63,7 +65,7 @@ async function buildApp(): Promise<FastifyInstance> {
   app.register(sseEmitterPlugin);
   app.register(scriptsRoutes, {
     prefix: '/api/projects/:id/scripts',
-    proxyClient: mockProxyClient,
+    runtimeClient: mockRuntimeClient,
     promptManager: mockPromptManager,
   });
   await app.ready();
@@ -75,9 +77,11 @@ const PROJECT_ID = 'proj-001';
 
 function seedProject(): void {
   const db = DatabaseManager.getInstance();
-  db.getDatabase().prepare(
-    "INSERT OR IGNORE INTO projects (id, name, status, created_at, updated_at) VALUES (?, 'Test', 'draft', datetime('now'), datetime('now'))"
-  ).run(PROJECT_ID);
+  db.getDatabase()
+    .prepare(
+      "INSERT OR IGNORE INTO projects (id, name, status, created_at, updated_at) VALUES (?, 'Test', 'draft', datetime('now'), datetime('now'))"
+    )
+    .run(PROJECT_ID);
 }
 
 beforeEach(() => {
@@ -88,7 +92,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   DatabaseManager.resetInstance();
-  await Promise.all(Array.from(apps, async app => app.close()));
+  await Promise.all(Array.from(apps, async (app) => app.close()));
   apps.clear();
 });
 
@@ -144,8 +148,14 @@ describe('GET /', () => {
     seedProject();
     const bm = db.getBusinessModuleRepo().create({ project_id: PROJECT_ID, name: 'BM1' });
     const fm = db.getFunctionalModuleRepo().create({ business_module_id: bm.id, name: 'FM1' });
-    const scenario = db.getTestScenarioRepo().create({ functional_module_id: fm.id, name: 'Test 1' });
-    db.getScriptRepo().create({ test_scenario_id: scenario.id, content: 'test content', generated_by: 'ai_generated' });
+    const scenario = db
+      .getTestScenarioRepo()
+      .create({ functional_module_id: fm.id, name: 'Test 1' });
+    db.getScriptRepo().create({
+      test_scenario_id: scenario.id,
+      content: 'test content',
+      generated_by: 'ai_generated',
+    });
 
     const res = await app.inject({
       method: 'GET',
@@ -182,8 +192,12 @@ describe('GET /:scriptId', () => {
     seedProject();
     const bm = db.getBusinessModuleRepo().create({ project_id: PROJECT_ID, name: 'BM1' });
     const fm = db.getFunctionalModuleRepo().create({ business_module_id: bm.id, name: 'FM1' });
-    const scenario = db.getTestScenarioRepo().create({ functional_module_id: fm.id, name: 'Test 1' });
-    const script = db.getScriptRepo().create({ test_scenario_id: scenario.id, content: 'test content' });
+    const scenario = db
+      .getTestScenarioRepo()
+      .create({ functional_module_id: fm.id, name: 'Test 1' });
+    const script = db
+      .getScriptRepo()
+      .create({ test_scenario_id: scenario.id, content: 'test content' });
 
     const res = await app.inject({
       method: 'GET',
@@ -235,7 +249,7 @@ describe('PUT /:scriptId', () => {
     expect(res.json()).toEqual(updatedScript);
     expect(mockScriptGeneratorService.saveEditedScript).toHaveBeenCalledWith(
       'script-001',
-      "import { test } from '@playwright/test';\ntest('edited', () => {});",
+      "import { test } from '@playwright/test';\ntest('edited', () => {});"
     );
   });
 });
@@ -248,14 +262,32 @@ describe('GET /:scriptId/versions', () => {
     seedProject();
     const bm = db.getBusinessModuleRepo().create({ project_id: PROJECT_ID, name: 'BM1' });
     const fm = db.getFunctionalModuleRepo().create({ business_module_id: bm.id, name: 'FM1' });
-    const scenario = db.getTestScenarioRepo().create({ functional_module_id: fm.id, name: 'Test 1' });
+    const scenario = db
+      .getTestScenarioRepo()
+      .create({ functional_module_id: fm.id, name: 'Test 1' });
     db.getScriptRepo().create({ test_scenario_id: scenario.id, content: 'v1', version: 1 });
     db.getScriptRepo().create({ test_scenario_id: scenario.id, content: 'v2', version: 2 });
     const latestScript = db.getScriptRepo().findLatestByScenarioId(scenario.id);
 
     const versions = [
-      { id: 'script-002', version: 2, content: 'v2', generated_by: 'ai_generated', status: 'generated', created_at: '2026-01-02T00:00:00.000Z', updated_at: '2026-01-02T00:00:00.000Z' },
-      { id: 'script-001', version: 1, content: 'v1', generated_by: 'ai_generated', status: 'generated', created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z' },
+      {
+        id: 'script-002',
+        version: 2,
+        content: 'v2',
+        generated_by: 'ai_generated',
+        status: 'generated',
+        created_at: '2026-01-02T00:00:00.000Z',
+        updated_at: '2026-01-02T00:00:00.000Z',
+      },
+      {
+        id: 'script-001',
+        version: 1,
+        content: 'v1',
+        generated_by: 'ai_generated',
+        status: 'generated',
+        created_at: '2026-01-01T00:00:00.000Z',
+        updated_at: '2026-01-01T00:00:00.000Z',
+      },
     ];
     mockScriptGeneratorService.getScriptHistory.mockResolvedValue(versions);
 

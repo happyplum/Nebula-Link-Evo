@@ -116,16 +116,16 @@ describe('Frontend E2E - Marker Mode Operations', () => {
       expect(mockBrowserService.clickByMarker).toHaveBeenCalledWith(
         mockSnapshotId,
         mockNebulaId,
-        'chat'
+        'debug-ui'
       );
     });
 
     it('should handle click marker error', async () => {
       mockBrowserService.clickByMarker.mockRejectedValueOnce(new Error('Element not found'));
 
-      await expect(
-        browserClient.clickByMarker(mockSnapshotId, mockNebulaId)
-      ).rejects.toThrow('Element not found');
+      await expect(browserClient.clickByMarker(mockSnapshotId, mockNebulaId)).rejects.toThrow(
+        'Element not found'
+      );
     });
 
     it('should validate click parameters', async () => {
@@ -151,7 +151,7 @@ describe('Frontend E2E - Marker Mode Operations', () => {
         mockNebulaId,
         testText,
         undefined,
-        'chat'
+        'debug-ui'
       );
     });
 
@@ -181,16 +181,16 @@ describe('Frontend E2E - Marker Mode Operations', () => {
       expect(mockBrowserService.focusByMarker).toHaveBeenCalledWith(
         mockSnapshotId,
         mockNebulaId,
-        'chat'
+        'debug-ui'
       );
     });
 
     it('should handle focus marker error', async () => {
       mockBrowserService.focusByMarker.mockRejectedValueOnce(new Error('Focus failed'));
 
-      await expect(
-        browserClient.focusByMarker(mockSnapshotId, mockNebulaId)
-      ).rejects.toThrow('Focus failed');
+      await expect(browserClient.focusByMarker(mockSnapshotId, mockNebulaId)).rejects.toThrow(
+        'Focus failed'
+      );
     });
 
     it('should not include param for focus action', async () => {
@@ -210,16 +210,16 @@ describe('Frontend E2E - Marker Mode Operations', () => {
       expect(mockBrowserService.blurByMarker).toHaveBeenCalledWith(
         mockSnapshotId,
         mockNebulaId,
-        'chat'
+        'debug-ui'
       );
     });
 
     it('should handle blur marker error', async () => {
       mockBrowserService.blurByMarker.mockRejectedValueOnce(new Error('Blur failed'));
 
-      await expect(
-        browserClient.blurByMarker(mockSnapshotId, mockNebulaId)
-      ).rejects.toThrow('Blur failed');
+      await expect(browserClient.blurByMarker(mockSnapshotId, mockNebulaId)).rejects.toThrow(
+        'Blur failed'
+      );
     });
 
     it('should not include param for blur action', async () => {
@@ -238,16 +238,16 @@ describe('Frontend E2E - Marker Mode Operations', () => {
       expect(mockBrowserService.hoverByMarker).toHaveBeenCalledWith(
         mockSnapshotId,
         mockNebulaId,
-        'chat'
+        'debug-ui'
       );
     });
 
     it('should handle hover marker error', async () => {
       mockBrowserService.hoverByMarker.mockRejectedValueOnce(new Error('Hover failed'));
 
-      await expect(
-        browserClient.hoverByMarker(mockSnapshotId, mockNebulaId)
-      ).rejects.toThrow('Hover failed');
+      await expect(browserClient.hoverByMarker(mockSnapshotId, mockNebulaId)).rejects.toThrow(
+        'Hover failed'
+      );
     });
 
     it('should not include param for hover action', async () => {
@@ -269,7 +269,7 @@ describe('Frontend E2E - Marker Mode Operations', () => {
         mockSnapshotId,
         mockNebulaId,
         testValue,
-        'chat'
+        'debug-ui'
       );
     });
 
@@ -302,7 +302,7 @@ describe('Frontend E2E - Marker Mode Operations', () => {
         mockSnapshotId,
         mockNebulaId,
         testEventType,
-        'chat'
+        'debug-ui'
       );
     });
 
@@ -347,19 +347,43 @@ describe('Frontend E2E - Marker Mode Operations', () => {
 
     it('should call correct BrowserService method for each marker operation', async () => {
       const operations: Array<{ method: string; bsMethod: string; args: unknown[] }> = [
-        { method: 'typeByMarker', bsMethod: 'typeByMarker', args: [mockSnapshotId, mockNebulaId, 'text'] },
-        { method: 'focusByMarker', bsMethod: 'focusByMarker', args: [mockSnapshotId, mockNebulaId] },
+        {
+          method: 'typeByMarker',
+          bsMethod: 'typeByMarker',
+          args: [mockSnapshotId, mockNebulaId, 'text'],
+        },
+        {
+          method: 'focusByMarker',
+          bsMethod: 'focusByMarker',
+          args: [mockSnapshotId, mockNebulaId],
+        },
         { method: 'blurByMarker', bsMethod: 'blurByMarker', args: [mockSnapshotId, mockNebulaId] },
-        { method: 'hoverByMarker', bsMethod: 'hoverByMarker', args: [mockSnapshotId, mockNebulaId] },
-        { method: 'setValueByMarker', bsMethod: 'setValueByMarker', args: [mockSnapshotId, mockNebulaId, 'value'] },
-        { method: 'dispatchEventByMarker', bsMethod: 'dispatchEventByMarker', args: [mockSnapshotId, mockNebulaId, 'click'] },
+        {
+          method: 'hoverByMarker',
+          bsMethod: 'hoverByMarker',
+          args: [mockSnapshotId, mockNebulaId],
+        },
+        {
+          method: 'setValueByMarker',
+          bsMethod: 'setValueByMarker',
+          args: [mockSnapshotId, mockNebulaId, 'value'],
+        },
+        {
+          method: 'dispatchEventByMarker',
+          bsMethod: 'dispatchEventByMarker',
+          args: [mockSnapshotId, mockNebulaId, 'click'],
+        },
       ];
 
       for (const op of operations) {
         vi.clearAllMocks();
-        await (browserClient as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>)[op.method](...op.args);
+        await (
+          browserClient as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>
+        )[op.method](...op.args);
 
-        const bsMock = (mockBrowserService as unknown as Record<string, ReturnType<typeof vi.fn>>)[op.bsMethod];
+        const bsMock = (mockBrowserService as unknown as Record<string, ReturnType<typeof vi.fn>>)[
+          op.bsMethod
+        ];
         expect(bsMock).toHaveBeenCalledTimes(1);
       }
     });
@@ -377,33 +401,35 @@ describe('Frontend E2E - Marker Mode Operations', () => {
     it('should handle network/browser errors gracefully', async () => {
       mockBrowserService.clickByMarker.mockRejectedValueOnce(new Error('Network Error'));
 
-      await expect(
-        browserClient.clickByMarker(mockSnapshotId, mockNebulaId)
-      ).rejects.toThrow('Network Error');
+      await expect(browserClient.clickByMarker(mockSnapshotId, mockNebulaId)).rejects.toThrow(
+        'Network Error'
+      );
     });
 
     it('should handle timeout errors', async () => {
-      mockBrowserService.clickByMarker.mockRejectedValueOnce(new Error('Timeout of 30000ms exceeded'));
+      mockBrowserService.clickByMarker.mockRejectedValueOnce(
+        new Error('Timeout of 30000ms exceeded')
+      );
 
-      await expect(
-        browserClient.clickByMarker(mockSnapshotId, mockNebulaId)
-      ).rejects.toThrow('Timeout');
+      await expect(browserClient.clickByMarker(mockSnapshotId, mockNebulaId)).rejects.toThrow(
+        'Timeout'
+      );
     });
 
     it('should handle invalid snapshot ID', async () => {
       mockBrowserService.clickByMarker.mockRejectedValueOnce(new Error('Invalid snapshot'));
 
-      await expect(
-        browserClient.clickByMarker('invalid-snapshot', mockNebulaId)
-      ).rejects.toThrow('Invalid snapshot');
+      await expect(browserClient.clickByMarker('invalid-snapshot', mockNebulaId)).rejects.toThrow(
+        'Invalid snapshot'
+      );
     });
 
     it('should handle invalid nebula ID', async () => {
       mockBrowserService.clickByMarker.mockRejectedValueOnce(new Error('Element not found'));
 
-      await expect(
-        browserClient.clickByMarker(mockSnapshotId, 999999)
-      ).rejects.toThrow('Element not found');
+      await expect(browserClient.clickByMarker(mockSnapshotId, 999999)).rejects.toThrow(
+        'Element not found'
+      );
     });
   });
 

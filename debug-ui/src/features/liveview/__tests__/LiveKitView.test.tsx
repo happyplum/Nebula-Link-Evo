@@ -73,7 +73,7 @@ describe('LiveKitView', () => {
     render(<LiveKitView />);
 
     await waitFor(() => {
-      expect(globalThis.fetch).toHaveBeenCalledWith('/api/livekit-token');
+      expect(globalThis.fetch).toHaveBeenCalledWith('/api/v1/livekit-token');
       expect(connectMock).toHaveBeenCalledWith({
         token: 'livekit-token',
         url: 'wss://livekit.test',

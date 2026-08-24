@@ -3,6 +3,9 @@ import type { VisionAnalyzer } from '../../vision/vision-analyzer.js';
 import { VisionAnalysisError } from '../../vision/errors.js';
 import type { VisionSnapshotLoader } from '../../vision/snapshot-loader.js';
 import type { GatewayTool, ToolProvider, ToolProviderStatus } from '../types.js';
+import type { BrowserLocatorCandidate } from '@nebula-link-evo/shared';
+
+const MIN_TARGET_CONFIDENCE = 0.7;
 
 const BINDING_SCHEMA = {
   type: 'object',
@@ -82,7 +85,6 @@ export class VisionToolProvider extends EventEmitter implements ToolProvider {
         required: ['binding'],
       },
       providerId: this.id,
-      exposeTo: ['chat'],
       isAvailable: true,
       execute: async (args, context) =>
         this.execute(async () => {
@@ -109,7 +111,6 @@ export class VisionToolProvider extends EventEmitter implements ToolProvider {
         required: ['binding', 'description'],
       },
       providerId: this.id,
-      exposeTo: ['chat'],
       isAvailable: true,
       execute: async (args, context) =>
         this.execute(async () => {
@@ -118,22 +119,50 @@ export class VisionToolProvider extends EventEmitter implements ToolProvider {
             throw new Error('description is required');
           }
           const loaded = await this.snapshots.load(input.binding, context?.abortSignal);
-          const match = await this.analyzer.resolveTarget(loaded.snapshot, input.description.trim());
-          const element = match.nebula_id ? loaded.snapshot.elements_map[match.nebula_id] : undefined;
+          const match = await this.analyzer.resolveTarget(
+            loaded.snapshot,
+            input.description.trim()
+          );
+          const element = match.nebula_id
+            ? loaded.snapshot.elements_map[match.nebula_id]
+            : undefined;
+          if (!element || match.ambiguous || match.confidence < MIN_TARGET_CONFIDENCE) {
+            return {
+              ok: false,
+              code: match.ambiguous ? 'VISION_TARGET_AMBIGUOUS' : 'VISION_TARGET_LOW_CONFIDENCE',
+              message: match.reasoning,
+              retryable: false,
+              snapshot_id: loaded.snapshot.snapshot_id,
+              confidence: match.confidence,
+            };
+          }
+          const candidates = locatorCandidates(element.locator_bundle);
+          if (candidates.length === 0) {
+            return {
+              ok: false,
+              code: 'VISION_TARGET_HAS_NO_LOCATOR',
+              message: 'The matched element has no serializable locator candidate',
+              retryable: false,
+              snapshot_id: loaded.snapshot.snapshot_id,
+              confidence: match.confidence,
+            };
+          }
           return {
             ok: true,
             snapshot_id: loaded.snapshot.snapshot_id,
-            ...match,
-            ...(element
-              ? {
-                  element: {
-                    tag: element.tag,
-                    text: element.text,
-                    bbox: element.bbox,
-                    locator_bundle: element.locator_bundle,
-                  },
-                }
-              : {}),
+            confidence: match.confidence,
+            reasoning: match.reasoning,
+            target: {
+              semantic: input.description.trim(),
+              candidates,
+              expected: { cardinality: 'exactly_one', visible: true },
+            },
+            evidence: {
+              nebula_id: element.id,
+              tag: element.tag,
+              text: element.text,
+              bbox: element.bbox,
+            },
           };
         }),
     };
@@ -159,6 +188,44 @@ export class VisionToolProvider extends EventEmitter implements ToolProvider {
       });
     }
   }
+}
+
+function locatorCandidates(
+  bundle: import('@nebula-link-evo/shared').LocatorBundle
+): BrowserLocatorCandidate[] {
+  const candidates: BrowserLocatorCandidate[] = [];
+  if (bundle.role) {
+    const match = /^\[role="([^"]+)"\](?:\[name="([^"]+)"\])?$/u.exec(bundle.role);
+    if (match?.[1])
+      candidates.push({
+        strategy: 'role',
+        role: match[1],
+        ...(match[2] ? { name: match[2], exact: true } : {}),
+      });
+  }
+  const testId = bundle.testid ? selectorAttribute(bundle.testid, 'data-testid') : undefined;
+  if (testId) candidates.push({ strategy: 'test_id', value: testId });
+  const label = bundle.aria ? selectorAttribute(bundle.aria, 'aria-label') : undefined;
+  if (label) candidates.push({ strategy: 'label', value: label, exact: true });
+  if (bundle.text?.startsWith('text=')) {
+    candidates.push({
+      strategy: 'text',
+      value: unescapeSelector(bundle.text.slice(5)),
+      exact: true,
+    });
+  }
+  if (bundle.css) candidates.push({ strategy: 'css', value: bundle.css });
+  if (bundle.xpath) candidates.push({ strategy: 'xpath', value: bundle.xpath });
+  return candidates;
+}
+
+function selectorAttribute(selector: string, attribute: string): string | undefined {
+  const match = new RegExp(`^\\[${attribute}="((?:\\\\.|[^"\\\\])*)"\\]$`, 'u').exec(selector);
+  return match?.[1] ? unescapeSelector(match[1]) : undefined;
+}
+
+function unescapeSelector(value: string): string {
+  return value.replace(/\\(.)/gu, '$1');
 }
 
 function requireInput(value: unknown): Record<string, unknown> {

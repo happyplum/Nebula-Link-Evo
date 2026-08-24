@@ -67,7 +67,7 @@ describe('OperationLogsShell - Content Parity (P3-20-V)', () => {
         reset: vi.fn(),
       };
 
-      return selector(state);
+      return selector(state as never);
     });
   });
 
@@ -115,7 +115,7 @@ describe('OperationLogsShell - Content Parity (P3-20-V)', () => {
         reset: vi.fn(),
       };
 
-      return selector(state);
+      return selector(state as never);
     });
 
     render(<OperationLogsShell open={true} onToggle={onToggle} />);
@@ -170,7 +170,7 @@ describe('OperationLogsShell - Content Parity (P3-20-V)', () => {
         reset: vi.fn(),
       };
 
-      return selector(state);
+      return selector(state as never);
     });
 
     render(<OperationLogsShell open={true} onToggle={onToggle} />);
@@ -224,7 +224,7 @@ describe('OperationLogsShell - Content Parity (P3-20-V)', () => {
         reset: vi.fn(),
       };
 
-      return selector(state);
+      return selector(state as never);
     });
 
     render(<OperationLogsShell open={true} onToggle={onToggle} />);
@@ -273,7 +273,7 @@ describe('OperationLogsShell - Content Parity (P3-20-V)', () => {
         reset: vi.fn(),
       };
 
-      return selector(state);
+      return selector(state as never);
     });
 
     render(<OperationLogsShell open={true} onToggle={onToggle} />);
@@ -344,7 +344,7 @@ describe('OperationLogsShell - Content Parity (P3-20-V)', () => {
         reset: vi.fn(),
       };
 
-      return selector(state);
+      return selector(state as never);
     });
 
     render(<OperationLogsShell open={true} onToggle={onToggle} />);

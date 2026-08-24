@@ -14,7 +14,6 @@ export interface CreateInteractionParams {
   readonly latency_ms?: number;
   readonly error_code?: string;
   readonly error_message?: string;
-  readonly failure_sample_path?: string | null;
 }
 
 export interface QueryInteractionsOptions {
@@ -43,7 +42,6 @@ export interface Interaction {
   readonly latency_ms: number | null;
   readonly error_code: string | null;
   readonly error_message: string | null;
-  readonly failure_sample_path: string | null;
 }
 
 export interface InteractionStats {
@@ -70,7 +68,6 @@ interface InteractionRow {
   readonly latency_ms: number | null;
   readonly error_code: string | null;
   readonly error_message: string | null;
-  readonly failure_sample_path: string | null;
 }
 
 const DEFAULT_DEBUG_DB_PATH = join(process.cwd(), 'data', 'proxy-adapter', 'debug.sqlite');
@@ -118,9 +115,8 @@ export class DebugDatabaseManager {
     const stmt = db.prepare(
       `INSERT INTO interactions (
         timestamp, snapshot_id, nebula_id, action_type, target_type,
-        locator_strategy, success, attempts, latency_ms, error_code, error_message,
-        failure_sample_path
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        locator_strategy, success, attempts, latency_ms, error_code, error_message
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
 
     const result = stmt.run(
@@ -134,11 +130,12 @@ export class DebugDatabaseManager {
       params.attempts ?? null,
       params.latency_ms ?? null,
       params.error_code ?? null,
-      params.error_message ?? null,
-      params.failure_sample_path ?? null,
+      params.error_message ?? null
     );
 
-    const row = db.prepare('SELECT * FROM interactions WHERE id = ?').get(result.lastInsertRowid) as unknown as InteractionRow;
+    const row = db
+      .prepare('SELECT * FROM interactions WHERE id = ?')
+      .get(result.lastInsertRowid) as unknown as InteractionRow;
     return this.mapRowToInteraction(row);
   }
 
@@ -176,9 +173,13 @@ export class DebugDatabaseManager {
 
   getStats(): InteractionStats {
     const db = this.requireDb();
-    const total = (db.prepare('SELECT COUNT(*) as count FROM interactions').get() as { count: number }).count;
+    const total = (
+      db.prepare('SELECT COUNT(*) as count FROM interactions').get() as { count: number }
+    ).count;
     const successCount = (
-      db.prepare('SELECT COUNT(*) as count FROM interactions WHERE success = 1').get() as { count: number }
+      db.prepare('SELECT COUNT(*) as count FROM interactions WHERE success = 1').get() as {
+        count: number;
+      }
     ).count;
     const latency = db
       .prepare('SELECT AVG(latency_ms) as avg FROM interactions WHERE latency_ms IS NOT NULL')
@@ -214,8 +215,7 @@ export class DebugDatabaseManager {
         attempts INTEGER,
         latency_ms INTEGER,
         error_code TEXT,
-        error_message TEXT,
-        failure_sample_path TEXT
+        error_message TEXT
       )
     `);
     db.exec('CREATE INDEX IF NOT EXISTS idx_interactions_timestamp ON interactions(timestamp)');
@@ -245,7 +245,6 @@ export class DebugDatabaseManager {
       latency_ms: row.latency_ms,
       error_code: row.error_code,
       error_message: row.error_message,
-      failure_sample_path: row.failure_sample_path,
     };
   }
 }
@@ -254,7 +253,7 @@ function addCondition(
   conditions: string[],
   values: SQLInputValue[],
   clause: string,
-  value: SQLInputValue | undefined,
+  value: SQLInputValue | undefined
 ): void {
   if (value !== undefined) {
     conditions.push(clause);
@@ -263,7 +262,9 @@ function addCondition(
 }
 
 function countBy(db: DatabaseSync, column: 'action_type' | 'target_type'): Record<string, number> {
-  const rows = db.prepare(`SELECT ${column}, COUNT(*) as count FROM interactions GROUP BY ${column}`).all() as Array<{
+  const rows = db
+    .prepare(`SELECT ${column}, COUNT(*) as count FROM interactions GROUP BY ${column}`)
+    .all() as Array<{
     readonly [key: string]: string | number;
     readonly count: number;
   }>;

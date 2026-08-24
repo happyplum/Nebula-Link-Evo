@@ -286,9 +286,7 @@ export class AgentTaskModelExecutor {
     const requested = new Set(effectiveToolAllow);
     const selected: GatewayTool[] = [];
     const available = new Map(
-      this.options.toolRegistry
-        .getAvailableTools({ consumer: 'chat' })
-        .map((tool) => [tool.name, tool])
+      this.options.toolRegistry.getAvailableTools().map((tool) => [tool.name, tool])
     );
     for (const name of requested) {
       if (name === 'browser-control.operation_execute') continue;

@@ -287,6 +287,11 @@ describe('BrowserExecutionService', () => {
     });
 
     const domRef = operation.artifacts.find((artifact) => artifact.kind === 'dom_snapshot')!;
+    expect(domRef).toMatchObject({
+      mimeType: 'application/json',
+      sizeBytes: expect.any(Number),
+      snapshotId: 'snapshot-1',
+    });
     const domDownload = await service.getArtifactDownload(session.id, domRef.id);
     expect(JSON.parse(domDownload.bytes.toString('utf8'))).toMatchObject({
       snapshot_id: 'snapshot-1',
@@ -516,21 +521,21 @@ describe('BrowserExecutionService', () => {
     expect(leaseRow.token_hash).not.toBe(token);
   });
 
-  it('blocks legacy writes and direct capture only while a controlled session is active', async () => {
+  it('blocks direct writes and direct capture only while a controlled session is active', async () => {
     const { service } = makeService();
-    expect(() => service.assertLegacyBrowserAccess('write')).not.toThrow();
+    expect(() => service.assertDirectBrowserAccess('write')).not.toThrow();
     const { session, lease, token } = await createSessionAndLease(service);
 
-    expect(() => service.assertLegacyBrowserAccess('read')).not.toThrow();
-    expect(() => service.assertLegacyBrowserAccess('write')).toThrowError(BrowserExecutionError);
-    expect(() => service.assertLegacyBrowserAccess('capture')).toThrowError(BrowserExecutionError);
+    expect(() => service.assertDirectBrowserAccess('read')).not.toThrow();
+    expect(() => service.assertDirectBrowserAccess('write')).toThrowError(BrowserExecutionError);
+    expect(() => service.assertDirectBrowserAccess('capture')).toThrowError(BrowserExecutionError);
 
     await service.closeSession(session.id, 'close-1', {
       sessionId: session.id,
       leaseId: lease.id,
       leaseToken: token,
     });
-    expect(() => service.assertLegacyBrowserAccess('write')).not.toThrow();
+    expect(() => service.assertDirectBrowserAccess('write')).not.toThrow();
   });
 });
 

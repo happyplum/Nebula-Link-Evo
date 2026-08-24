@@ -139,7 +139,7 @@ export const test = base.extend<{
       isRunning: false,
       start: async () => {
         try {
-          const response = await fetch('http://localhost:3000/api/health');
+          const response = await fetch('http://localhost:3000/api/v1/health');
           manager.isRunning = response.ok;
         } catch {
           manager.isRunning = false;

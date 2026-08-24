@@ -2,8 +2,6 @@ import { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import { browserClient } from '../../../browser-client.js';
 import { screencastManager } from '../../../browser-engine/screencast.js';
 import { BrowserService } from '../../../browser-engine/services/browser-service.js';
-import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
 import { AppService } from '../../../services/index.js';
 import { DebugDatabaseManager } from '../../../debug-db.js';
 import debugStreamRoutes from './stream.js';
@@ -20,7 +18,7 @@ interface InteractionQuery {
 }
 
 interface DebugRoutesOptions {
-  browserExecutionService?: BrowserExecutionService;
+  browserExecutionService: BrowserExecutionService;
 }
 
 const CONTROLLED_SESSION_BLOCKED_ROUTES = new Set([
@@ -54,13 +52,13 @@ const debugRoutes: FastifyPluginAsyncTypebox<DebugRoutesOptions> = async (fastif
     );
     const routeKey = `${request.method} ${routePath}`;
     if (
-      options.browserExecutionService?.hasActiveSession() &&
+      options.browserExecutionService.hasActiveSession() &&
       CONTROLLED_SESSION_BLOCKED_ROUTES.has(routeKey)
     ) {
       return reply.code(409).send({
         success: false,
         code: 'browser_busy',
-        error: '受控浏览器会话活动期间，兼容调试写入和直接页面采集已禁用',
+        error: '受控浏览器会话活动期间，调试写入和直接页面采集已禁用',
       });
     }
   });
@@ -71,8 +69,6 @@ const debugRoutes: FastifyPluginAsyncTypebox<DebugRoutesOptions> = async (fastif
     '/api/health',
     {
       schema: {
-        description: 'Get detailed health status of all services',
-        tags: ['Debug'],
         response: {
           200: {
             type: 'object',
@@ -115,8 +111,6 @@ const debugRoutes: FastifyPluginAsyncTypebox<DebugRoutesOptions> = async (fastif
     '/api/playwright/open',
     {
       schema: {
-        description: 'Open browser instance',
-        tags: ['Debug'],
         response: {
           200: {
             type: 'object',
@@ -143,8 +137,6 @@ const debugRoutes: FastifyPluginAsyncTypebox<DebugRoutesOptions> = async (fastif
     '/api/playwright/close',
     {
       schema: {
-        description: 'Close browser instance',
-        tags: ['Debug'],
         response: {
           200: {
             type: 'object',
@@ -171,8 +163,6 @@ const debugRoutes: FastifyPluginAsyncTypebox<DebugRoutesOptions> = async (fastif
     '/api/playwright/status',
     {
       schema: {
-        description: 'Get browser status',
-        tags: ['Debug'],
         response: {
           200: {
             type: 'object',
@@ -201,8 +191,6 @@ const debugRoutes: FastifyPluginAsyncTypebox<DebugRoutesOptions> = async (fastif
     '/api/playwright/tabs',
     {
       schema: {
-        description: 'Get browser open tabs',
-        tags: ['Debug'],
         response: {
           200: {
             type: 'object',
@@ -240,8 +228,6 @@ const debugRoutes: FastifyPluginAsyncTypebox<DebugRoutesOptions> = async (fastif
     '/api/playwright/tabs/switch',
     {
       schema: {
-        description: 'Switch to a specific browser tab',
-        tags: ['Debug'],
         body: {
           type: 'object',
           properties: {
@@ -276,8 +262,6 @@ const debugRoutes: FastifyPluginAsyncTypebox<DebugRoutesOptions> = async (fastif
     '/api/playwright/navigate',
     {
       schema: {
-        description: 'Navigate browser to URL',
-        tags: ['Debug'],
         response: {
           200: {
             type: 'object',
@@ -304,10 +288,7 @@ const debugRoutes: FastifyPluginAsyncTypebox<DebugRoutesOptions> = async (fastif
   fastify.get(
     '/api/playwright/screenshot/stream',
     {
-      schema: {
-        description: 'Browser live MJPEG stream from in-process screencast engine',
-        tags: ['Debug'],
-      },
+      schema: {},
     },
     async (request, reply) => {
       // Serve MJPEG directly from the in-process screencast engine (migrated from playwright-server proxy)
@@ -353,8 +334,6 @@ const debugRoutes: FastifyPluginAsyncTypebox<DebugRoutesOptions> = async (fastif
     '/api/playwright/screenshot',
     {
       schema: {
-        description: 'Capture browser screenshot',
-        tags: ['Debug'],
         response: {
           200: {
             type: 'object',
@@ -391,10 +370,7 @@ const debugRoutes: FastifyPluginAsyncTypebox<DebugRoutesOptions> = async (fastif
   fastify.get(
     '/api/dom',
     {
-      schema: {
-        description: 'Get simplified DOM tree with vision markers',
-        tags: ['Debug'],
-      },
+      schema: {},
     },
     async (request, _reply) => {
       try {
@@ -426,8 +402,6 @@ const debugRoutes: FastifyPluginAsyncTypebox<DebugRoutesOptions> = async (fastif
     '/api/playwright/element-at',
     {
       schema: {
-        description: 'Get element information at specified coordinates',
-        tags: ['Debug'],
         querystring: {
           type: 'object',
           properties: {
@@ -456,8 +430,6 @@ const debugRoutes: FastifyPluginAsyncTypebox<DebugRoutesOptions> = async (fastif
     '/api/playwright/click-by-selector',
     {
       schema: {
-        description: 'Click element by selector',
-        tags: ['Debug'],
         body: {
           type: 'object',
           properties: {
@@ -492,8 +464,6 @@ const debugRoutes: FastifyPluginAsyncTypebox<DebugRoutesOptions> = async (fastif
     '/api/playwright/click',
     {
       schema: {
-        description: 'Click at coordinates',
-        tags: ['Debug'],
         response: {
           200: {
             type: 'object',
@@ -521,8 +491,6 @@ const debugRoutes: FastifyPluginAsyncTypebox<DebugRoutesOptions> = async (fastif
     '/api/playwright/execute-script',
     {
       schema: {
-        description: 'Execute script in browser context',
-        tags: ['Debug'],
         body: {
           type: 'object',
           properties: {
@@ -561,8 +529,6 @@ const debugRoutes: FastifyPluginAsyncTypebox<DebugRoutesOptions> = async (fastif
     '/api/playwright/cookies',
     {
       schema: {
-        description: 'Get document cookies from current page',
-        tags: ['Debug'],
         response: {
           200: {
             type: 'object',
@@ -599,8 +565,6 @@ const debugRoutes: FastifyPluginAsyncTypebox<DebugRoutesOptions> = async (fastif
     '/api/playwright/local-storage',
     {
       schema: {
-        description: 'Get localStorage data from current page',
-        tags: ['Debug'],
         response: {
           200: {
             type: 'object',
@@ -630,8 +594,6 @@ const debugRoutes: FastifyPluginAsyncTypebox<DebugRoutesOptions> = async (fastif
     '/api/playwright/type',
     {
       schema: {
-        description: 'Type text into element',
-        tags: ['Debug'],
         response: {
           200: {
             type: 'object',
@@ -658,8 +620,6 @@ const debugRoutes: FastifyPluginAsyncTypebox<DebugRoutesOptions> = async (fastif
     '/api/playwright/action',
     {
       schema: {
-        description: 'Execute element action (click, type, value, focus, blur, hover, dispatch)',
-        tags: ['Debug'],
         response: {
           200: {
             type: 'object',
@@ -700,8 +660,6 @@ const debugRoutes: FastifyPluginAsyncTypebox<DebugRoutesOptions> = async (fastif
     '/api/playwright/click-by-marker',
     {
       schema: {
-        description: 'Click element by marker ID',
-        tags: ['Debug'],
         body: {
           type: 'object',
           properties: {
@@ -736,8 +694,6 @@ const debugRoutes: FastifyPluginAsyncTypebox<DebugRoutesOptions> = async (fastif
     '/api/playwright/execute-by-marker',
     {
       schema: {
-        description: 'Execute action by marker ID',
-        tags: ['Debug'],
         body: {
           type: 'object',
           properties: {
@@ -813,8 +769,6 @@ const debugRoutes: FastifyPluginAsyncTypebox<DebugRoutesOptions> = async (fastif
     '/api/playwright/scroll',
     {
       schema: {
-        description: 'Scroll page',
-        tags: ['Debug'],
         response: {
           200: {
             type: 'object',
@@ -842,8 +796,6 @@ const debugRoutes: FastifyPluginAsyncTypebox<DebugRoutesOptions> = async (fastif
     '/api/mcp/status',
     {
       schema: {
-        description: 'Get MCP servers status (built-in providers and external servers)',
-        tags: ['Debug'],
         response: {
           200: {
             type: 'object',
@@ -876,8 +828,6 @@ const debugRoutes: FastifyPluginAsyncTypebox<DebugRoutesOptions> = async (fastif
     '/api/mcp/tools',
     {
       schema: {
-        description: 'Get available MCP tools (built-in and external)',
-        tags: ['Debug'],
         response: {
           200: {
             type: 'object',
@@ -919,8 +869,6 @@ const debugRoutes: FastifyPluginAsyncTypebox<DebugRoutesOptions> = async (fastif
     '/api/mcp/call',
     {
       schema: {
-        description: 'Call an MCP tool',
-        tags: ['Debug'],
         body: {
           type: 'object',
           properties: {
@@ -946,7 +894,7 @@ const debugRoutes: FastifyPluginAsyncTypebox<DebugRoutesOptions> = async (fastif
 
         const toolName = tool.includes('.') ? tool : `${server}.${tool}`;
         const gatewayTool = toolRegistry
-          .getAvailableTools({ consumer: 'mcp-server' })
+          .getAvailableTools()
           .find((candidate) => candidate.name === toolName);
 
         if (!gatewayTool) {
@@ -976,8 +924,6 @@ const debugRoutes: FastifyPluginAsyncTypebox<DebugRoutesOptions> = async (fastif
     '/api/interactions',
     {
       schema: {
-        description: 'Get interaction history',
-        tags: ['Debug'],
         querystring: {
           type: 'object',
           properties: {
@@ -1010,76 +956,12 @@ const debugRoutes: FastifyPluginAsyncTypebox<DebugRoutesOptions> = async (fastif
   fastify.get(
     '/api/interactions/stats',
     {
-      schema: {
-        description: 'Get interaction statistics',
-        tags: ['Debug'],
-      },
+      schema: {},
     },
     async (_request, _reply) => {
       const db = DebugDatabaseManager.getInstance();
       const stats = db.getStats();
       return { success: true, data: stats };
-    }
-  );
-
-  fastify.get<{ Querystring: { path: string } }>(
-    '/api/failure-sample',
-    {
-      schema: {
-        description: 'Get failure sample data',
-        tags: ['Debug'],
-        querystring: {
-          type: 'object',
-          properties: {
-            path: { type: 'string' },
-          },
-          required: ['path'],
-        },
-      },
-    },
-    async (request, _reply) => {
-      const { path } = request.query;
-      try {
-        if (!path || !existsSync(path)) {
-          return { success: false, error: '失败样本路径不存在' };
-        }
-
-        const screenshotPath = join(path, 'screenshot.png');
-        const domPath = join(path, 'dom.json');
-        const contextPath = join(path, 'context.json');
-
-        let screenshot = '';
-        let dom = null;
-        let context = null;
-
-        if (existsSync(screenshotPath)) {
-          const screenshotBuffer = readFileSync(screenshotPath);
-          screenshot = screenshotBuffer.toString('base64');
-        }
-
-        if (existsSync(domPath)) {
-          const domContent = readFileSync(domPath, 'utf-8');
-          dom = JSON.parse(domContent);
-        }
-
-        if (existsSync(contextPath)) {
-          const contextContent = readFileSync(contextPath, 'utf-8');
-          context = JSON.parse(contextContent);
-        }
-
-        return {
-          success: true,
-          data: {
-            path,
-            screenshot,
-            dom,
-            context,
-          },
-        };
-      } catch (error) {
-        request.log.error({ err: error }, '[Debug API] Error reading failure sample');
-        return { success: false, error: (error as Error).message };
-      }
     }
   );
 };

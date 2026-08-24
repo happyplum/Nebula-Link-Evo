@@ -142,7 +142,7 @@ describe('useChatStream', () => {
     it('connects to the correct SSE URL', () => {
       renderStreamHook('session-1');
       expect(mockEsInstance).toBeTruthy();
-      expect(mockEsInstance.url).toBe('/api/chat/sessions/session-1/stream');
+      expect(mockEsInstance.url).toBe('/api/v1/chat/sessions/session-1/stream');
     });
 
     it('sets isConnected to true on open', () => {
@@ -691,9 +691,7 @@ describe('useChatStream', () => {
         sessionId: 's1',
         seq: 0,
         lastSeq: 0,
-        messages: [
-          { id: 'm1', role: 'user', content: 'hello', created_at: '2026-01-01' },
-        ],
+        messages: [{ id: 'm1', role: 'user', content: 'hello', created_at: '2026-01-01' }],
         state: 'running',
         activeToolCalls: [
           {
@@ -748,7 +746,7 @@ describe('useChatStream', () => {
       expect(useChatStore.getState().streamingContent).toBe('partial');
 
       // Disable — should trigger resetStreaming
-      rerender({ sessionId: 's1', enabled: false });
+      rerender({ sessionId: 's1', enabled: false, allowResume: false });
       expect(useChatStore.getState().streamingContent).toBe('');
       expect(useChatStore.getState().streamingState).toBe('idle');
     });
@@ -774,7 +772,7 @@ describe('useChatStream', () => {
       });
       expect(useChatStore.getState().streamingToolCalls).toHaveLength(1);
 
-      rerender({ sessionId: null, enabled: true });
+      rerender({ sessionId: null, enabled: true, allowResume: false });
       expect(useChatStore.getState().streamingToolCalls).toHaveLength(0);
       expect(useChatStore.getState().streamingState).toBe('idle');
     });

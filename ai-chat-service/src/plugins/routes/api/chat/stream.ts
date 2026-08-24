@@ -7,7 +7,6 @@ import { Type } from '@sinclair/typebox';
 import type { ChatHandler } from '../../../../conversation/chat-handler.js';
 import type { ConversationManager } from '../../../../conversation/manager.js';
 import type { SessionEventsDAO } from '../../../../conversation/session-events-dao.js';
-import type { SessionStatus } from '../../../../conversation/types.js';
 import type { ChatSessionController } from '../../../../services/chat-session-controller.js';
 import type { SessionEvent, SessionSnapshotEvent, SessionState } from '@nebula-link-evo/shared';
 import { eventToSSEFormat } from '@nebula-link-evo/shared';
@@ -15,11 +14,7 @@ import type { ConversationJobQueue } from '../../../../services/conversation-job
 import { getRuntimeSessionState } from './runtime-state.js';
 import { BoundedSseWriter } from '../../../../services/sse-writer.js';
 
-function writeSSEEvent(
-  writer: BoundedSseWriter,
-  event: SessionEvent,
-  eventId: string
-): void {
+function writeSSEEvent(writer: BoundedSseWriter, event: SessionEvent, eventId: string): void {
   const formatted = eventToSSEFormat(event, eventId);
   writer.push(`event: ${formatted.event}\nid: ${eventId}\ndata: ${formatted.data}\n\n`);
 }
@@ -44,17 +39,11 @@ async function buildSnapshotEvent(
   conversationManager: ConversationManager,
   sessionId: string,
   sessionEventsDAO: SessionEventsDAO | null,
-  baseStatus?: SessionStatus,
   jobQueue?: ConversationJobQueue,
   controller?: ChatSessionController
 ): Promise<SessionSnapshotEvent> {
   const messages = conversationManager.getMessages(sessionId);
-  const runtimeState = await getRuntimeSessionState(
-    conversationManager,
-    sessionId,
-    baseStatus,
-    controller
-  );
+  const runtimeState = await getRuntimeSessionState(conversationManager, sessionId, controller);
   const activeToolCalls = conversationManager.getActiveToolCalls(sessionId);
   const pendingJobs = jobQueue?.getPendingJobs(sessionId) ?? [];
 
@@ -100,7 +89,8 @@ async function buildSnapshotEvent(
         // Extract tool_calls stored in message metadata for assistant messages,
         // merging tool results from tool-role messages so the snapshot is self-contained.
         if (m.role === 'assistant' && m.metadata?.tool_calls) {
-          const calls = m.metadata.tool_calls as import('@nebula-link-evo/shared/types/sse-events').ToolCall[];
+          const calls = m.metadata
+            .tool_calls as import('@nebula-link-evo/shared/types/sse-events').ToolCall[];
           result.tool_calls = calls.map((tc) => {
             const tcId = (tc as Record<string, unknown>).id as string | undefined;
             if (tcId && toolResultMap.has(tcId)) {
@@ -187,7 +177,6 @@ const streamRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           conversationManager,
           sessionId,
           sessionEventsDAO,
-          session.status,
           jobQueue,
           fastify.chatSessionController
         );

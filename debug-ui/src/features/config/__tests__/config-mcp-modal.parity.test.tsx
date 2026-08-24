@@ -11,11 +11,18 @@ const mockUseMcpCall = vi.fn();
 
 // Mock all config API hooks to prevent actual network calls
 vi.mock('@/features/config/api/config.queries.js', () => ({
-  useConfig: vi.fn(() => ({ data: { mode: 'dev', decision: { provider: 'openai', model: 'gpt-4o' } }, isLoading: false, error: null })),
-  useHealth: vi.fn(() => ({ data: { status: 'ok', services: { playwright: 'ok' }, mcp: { enabled: true, servers: [] } }, isLoading: false, error: null })),
+  useConfig: vi.fn(() => ({
+    data: { mode: 'dev', decision: { provider: 'openai', model: 'gpt-4o' } },
+    isLoading: false,
+    error: null,
+  })),
+  useHealth: vi.fn(() => ({
+    data: { status: 'ok', services: { playwright: 'ok' }, mcp: { enabled: true, servers: [] } },
+    isLoading: false,
+    error: null,
+  })),
   useMcpStatus: () => mockUseMcpStatus(),
   useMcpTools: () => mockUseMcpTools(),
-  useVerifyKeys: vi.fn(() => ({ data: { keys: [{ provider: 'openai', displayName: 'OpenAI', status: 'valid', keyPreview: 'sk-...xyz' }] }, isLoading: false, error: null })),
 }));
 
 // Mock mutations for McpCall
@@ -34,34 +41,37 @@ vi.mock('@/shared/ui/StatusIndicator.js', () => ({
 
 // Mock LoadingSpinner
 vi.mock('@/shared/ui/LoadingSpinner.js', () => ({
-  LoadingSpinner: ({ label }: { label?: string }) => <div data-testid="loading-spinner">{label}</div>,
+  LoadingSpinner: ({ label }: { label?: string }) => (
+    <div data-testid="loading-spinner">{label}</div>
+  ),
 }));
 
 // Setup default mock return values with type assertions to avoid complex TS types
-const mockQueryResult = <T,>(data: T | undefined, isLoading = false, error: Error | null = null) => ({
-  data,
-  isLoading,
-  error,
-  isError: !!error,
-  isPending: isLoading,
-  isSuccess: !isLoading && !error && data !== undefined,
-  isRefetching: false,
-  isRefetchError: false,
-  isLoadingError: false,
-  isPaused: false,
-  isFetched: false,
-  isFetchedAfterMount: false,
-  fetchStatus: isLoading ? 'fetching' : 'idle',
-  status: isLoading ? 'pending' : (error ? 'error' : 'success'),
-  refetch: vi.fn(),
-  hasNextPage: false,
-  hasPreviousPage: false,
-  isFetchingNextPage: false,
-  isFetchingPreviousPage: false,
-  fetchNextPage: vi.fn(),
-  fetchPreviousPage: vi.fn(),
-  remove: vi.fn(),
-} as unknown); // Type assertion to bypass strict TS checking for mocks
+const mockQueryResult = <T,>(data: T | undefined, isLoading = false, error: Error | null = null) =>
+  ({
+    data,
+    isLoading,
+    error,
+    isError: !!error,
+    isPending: isLoading,
+    isSuccess: !isLoading && !error && data !== undefined,
+    isRefetching: false,
+    isRefetchError: false,
+    isLoadingError: false,
+    isPaused: false,
+    isFetched: false,
+    isFetchedAfterMount: false,
+    fetchStatus: isLoading ? 'fetching' : 'idle',
+    status: isLoading ? 'pending' : error ? 'error' : 'success',
+    refetch: vi.fn(),
+    hasNextPage: false,
+    hasPreviousPage: false,
+    isFetchingNextPage: false,
+    isFetchingPreviousPage: false,
+    fetchNextPage: vi.fn(),
+    fetchPreviousPage: vi.fn(),
+    remove: vi.fn(),
+  }) as unknown; // Type assertion to bypass strict TS checking for mocks
 
 // Mock useMcpCall with isPending property
 mockUseMcpCall.mockReturnValue({
@@ -86,9 +96,7 @@ describe('P4-27-V: MCP Status List and Tools Modal - Parity', () => {
   const renderWithProviders = (ui: React.ReactElement) => {
     return render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
-          {ui}
-        </MemoryRouter>
+        <MemoryRouter>{ui}</MemoryRouter>
       </QueryClientProvider>
     );
   };
@@ -133,13 +141,15 @@ describe('P4-27-V: MCP Status List and Tools Modal - Parity', () => {
   describe('McpStatusList - Server Items', () => {
     it('renders server items with name, status, and tool count', async () => {
       const { McpStatusList } = await import('@/features/config/components/McpStatusList.js');
-      mockUseMcpStatus.mockReturnValue(mockQueryResult({
-        enabled: true,
-        servers: [
-          { name: 'server-1', running: true, state: 'running' as const, toolsCount: 3 },
-          { name: 'server-2', running: false, state: 'stopped' as const, toolsCount: 0 },
-        ],
-      }));
+      mockUseMcpStatus.mockReturnValue(
+        mockQueryResult({
+          enabled: true,
+          servers: [
+            { name: 'server-1', running: true, state: 'running' as const, toolsCount: 3 },
+            { name: 'server-2', running: false, state: 'stopped' as const, toolsCount: 0 },
+          ],
+        })
+      );
 
       renderWithProviders(<McpStatusList />);
 
@@ -157,14 +167,16 @@ describe('P4-27-V: MCP Status List and Tools Modal - Parity', () => {
 
     it('renders "查看工具" button for running servers with tools', async () => {
       const { McpStatusList } = await import('@/features/config/components/McpStatusList.js');
-      mockUseMcpStatus.mockReturnValue(mockQueryResult({
-        enabled: true,
-        servers: [
-          { name: 'running-server', running: true, state: 'running' as const, toolsCount: 5 },
-          { name: 'stopped-server', running: false, state: 'stopped' as const, toolsCount: 0 },
-          { name: 'no-tools-server', running: true, state: 'running' as const, toolsCount: 0 },
-        ],
-      }));
+      mockUseMcpStatus.mockReturnValue(
+        mockQueryResult({
+          enabled: true,
+          servers: [
+            { name: 'running-server', running: true, state: 'running' as const, toolsCount: 5 },
+            { name: 'stopped-server', running: false, state: 'stopped' as const, toolsCount: 0 },
+            { name: 'no-tools-server', running: true, state: 'running' as const, toolsCount: 0 },
+          ],
+        })
+      );
 
       const onSelectServer = vi.fn();
       renderWithProviders(<McpStatusList onSelectServer={onSelectServer} />);
@@ -176,20 +188,26 @@ describe('P4-27-V: MCP Status List and Tools Modal - Parity', () => {
       expect(within(serverItems[0]).getByText('查看工具')).toBeInTheDocument();
 
       // Stopped server - should not have button
-      expect(within(serverItems[1]).queryByTestId(testIds.mcpServerViewBtn)).not.toBeInTheDocument();
+      expect(
+        within(serverItems[1]).queryByTestId(testIds.mcpServerViewBtn)
+      ).not.toBeInTheDocument();
 
       // Running server with no tools - should not have button
-      expect(within(serverItems[2]).queryByTestId(testIds.mcpServerViewBtn)).not.toBeInTheDocument();
+      expect(
+        within(serverItems[2]).queryByTestId(testIds.mcpServerViewBtn)
+      ).not.toBeInTheDocument();
     });
 
     it('calls onSelectServer callback when "查看工具" button is clicked', async () => {
       const { McpStatusList } = await import('@/features/config/components/McpStatusList.js');
-      mockUseMcpStatus.mockReturnValue(mockQueryResult({
-        enabled: true,
-        servers: [
-          { name: 'test-server', running: true, state: 'running' as const, toolsCount: 2 },
-        ],
-      }));
+      mockUseMcpStatus.mockReturnValue(
+        mockQueryResult({
+          enabled: true,
+          servers: [
+            { name: 'test-server', running: true, state: 'running' as const, toolsCount: 2 },
+          ],
+        })
+      );
 
       const onSelectServer = vi.fn();
       renderWithProviders(<McpStatusList onSelectServer={onSelectServer} />);
@@ -203,12 +221,14 @@ describe('P4-27-V: MCP Status List and Tools Modal - Parity', () => {
 
     it('does not render "查看工具" button when onSelectServer is not provided', async () => {
       const { McpStatusList } = await import('@/features/config/components/McpStatusList.js');
-      mockUseMcpStatus.mockReturnValue(mockQueryResult({
-        enabled: true,
-        servers: [
-          { name: 'server-no-callback', running: true, state: 'running' as const, toolsCount: 5 },
-        ],
-      }));
+      mockUseMcpStatus.mockReturnValue(
+        mockQueryResult({
+          enabled: true,
+          servers: [
+            { name: 'server-no-callback', running: true, state: 'running' as const, toolsCount: 5 },
+          ],
+        })
+      );
 
       renderWithProviders(<McpStatusList />);
 
@@ -233,7 +253,9 @@ describe('P4-27-V: MCP Status List and Tools Modal - Parity', () => {
 
     it('renders error state', async () => {
       const { McpStatusList } = await import('@/features/config/components/McpStatusList.js');
-      mockUseMcpStatus.mockReturnValue(mockQueryResult(undefined, false, new Error('Network error')));
+      mockUseMcpStatus.mockReturnValue(
+        mockQueryResult(undefined, false, new Error('Network error'))
+      );
 
       renderWithProviders(<McpStatusList />);
 
@@ -310,25 +332,27 @@ describe('P4-27-V: MCP Status List and Tools Modal - Parity', () => {
   describe('McpToolsModal - Tool List', () => {
     it('renders tool list with filtered tools for serverName', async () => {
       const { McpToolsModal } = await import('@/features/config/components/McpToolsModal.js');
-      mockUseMcpTools.mockReturnValue(mockQueryResult({
-        tools: [
-          { name: 'server-1.tool-a', description: 'Tool A description' },
-          { name: 'server-1.tool-b', description: 'Tool B description' },
-          { name: 'server-2.tool-x', description: 'Tool X description' },
-        ],
-      }));
+      mockUseMcpTools.mockReturnValue(
+        mockQueryResult({
+          tools: [
+            { name: 'server-1.tool-a', description: 'Tool A description' },
+            { name: 'server-1.tool-b', description: 'Tool B description' },
+            { name: 'server-2.tool-x', description: 'Tool X description' },
+          ],
+        })
+      );
 
       renderWithProviders(<McpToolsModal serverName="server-1" onClose={vi.fn()} />);
 
       const modal = screen.getByTestId(testIds.mcpToolsModal);
       expect(within(modal).getByText('tool-a')).toBeInTheDocument();
-      
+
       // Click to expand tool-a to see description
       fireEvent.click(within(modal).getByText('tool-a'));
       expect(within(modal).getByText('Tool A description')).toBeInTheDocument();
-      
+
       expect(within(modal).getByText('tool-b')).toBeInTheDocument();
-      
+
       // Click to expand tool-b to see description
       fireEvent.click(within(modal).getByText('tool-b'));
       expect(within(modal).getByText('Tool B description')).toBeInTheDocument();
@@ -339,11 +363,11 @@ describe('P4-27-V: MCP Status List and Tools Modal - Parity', () => {
 
     it('renders empty state when no tools for server', async () => {
       const { McpToolsModal } = await import('@/features/config/components/McpToolsModal.js');
-      mockUseMcpTools.mockReturnValue(mockQueryResult({
-        tools: [
-          { name: 'server-2.tool-a', description: 'Tool A' },
-        ],
-      }));
+      mockUseMcpTools.mockReturnValue(
+        mockQueryResult({
+          tools: [{ name: 'server-2.tool-a', description: 'Tool A' }],
+        })
+      );
 
       renderWithProviders(<McpToolsModal serverName="server-1" onClose={vi.fn()} />);
 
@@ -364,7 +388,9 @@ describe('P4-27-V: MCP Status List and Tools Modal - Parity', () => {
 
     it('renders error state', async () => {
       const { McpToolsModal } = await import('@/features/config/components/McpToolsModal.js');
-      mockUseMcpTools.mockReturnValue(mockQueryResult(undefined, false, new Error('Failed to load')));
+      mockUseMcpTools.mockReturnValue(
+        mockQueryResult(undefined, false, new Error('Failed to load'))
+      );
 
       renderWithProviders(<McpToolsModal serverName="test" onClose={vi.fn()} />);
 
@@ -378,21 +404,23 @@ describe('P4-27-V: MCP Status List and Tools Modal - Parity', () => {
   describe('McpToolsModal - Tool Details', () => {
     it('shows input schema when tool is selected', async () => {
       const { McpToolsModal } = await import('@/features/config/components/McpToolsModal.js');
-      mockUseMcpTools.mockReturnValue(mockQueryResult({
-        tools: [
-          {
-            name: 'server.tool-with-schema',
-            description: 'Tool with input schema',
-            inputSchema: {
-              properties: {
-                param1: { type: 'string', description: 'First parameter' },
-                param2: { type: 'number', description: 'Second parameter' },
+      mockUseMcpTools.mockReturnValue(
+        mockQueryResult({
+          tools: [
+            {
+              name: 'server.tool-with-schema',
+              description: 'Tool with input schema',
+              inputSchema: {
+                properties: {
+                  param1: { type: 'string', description: 'First parameter' },
+                  param2: { type: 'number', description: 'Second parameter' },
+                },
+                required: ['param1'],
               },
-              required: ['param1'],
             },
-          },
-        ],
-      }));
+          ],
+        })
+      );
 
       renderWithProviders(<McpToolsModal serverName="server" onClose={vi.fn()} />);
 
@@ -411,11 +439,11 @@ describe('P4-27-V: MCP Status List and Tools Modal - Parity', () => {
 
     it('renders args input textarea', async () => {
       const { McpToolsModal } = await import('@/features/config/components/McpToolsModal.js');
-      mockUseMcpTools.mockReturnValue(mockQueryResult({
-        tools: [
-          { name: 'server.test-tool', description: 'Test tool' },
-        ],
-      }));
+      mockUseMcpTools.mockReturnValue(
+        mockQueryResult({
+          tools: [{ name: 'server.test-tool', description: 'Test tool' }],
+        })
+      );
 
       renderWithProviders(<McpToolsModal serverName="server" onClose={vi.fn()} />);
 
@@ -431,11 +459,11 @@ describe('P4-27-V: MCP Status List and Tools Modal - Parity', () => {
 
     it('renders execute button', async () => {
       const { McpToolsModal } = await import('@/features/config/components/McpToolsModal.js');
-      mockUseMcpTools.mockReturnValue(mockQueryResult({
-        tools: [
-          { name: 'server.exec-tool', description: 'Executable tool' },
-        ],
-      }));
+      mockUseMcpTools.mockReturnValue(
+        mockQueryResult({
+          tools: [{ name: 'server.exec-tool', description: 'Executable tool' }],
+        })
+      );
 
       renderWithProviders(<McpToolsModal serverName="server" onClose={vi.fn()} />);
 
@@ -449,11 +477,11 @@ describe('P4-27-V: MCP Status List and Tools Modal - Parity', () => {
 
     it('renders result section after execution', async () => {
       const { McpToolsModal } = await import('@/features/config/components/McpToolsModal.js');
-      mockUseMcpTools.mockReturnValue(mockQueryResult({
-        tools: [
-          { name: 'server.result-tool', description: 'Tool with result' },
-        ],
-      }));
+      mockUseMcpTools.mockReturnValue(
+        mockQueryResult({
+          tools: [{ name: 'server.result-tool', description: 'Tool with result' }],
+        })
+      );
 
       mockUseMcpCall.mockReturnValue({
         mutate: vi.fn(),
@@ -484,20 +512,22 @@ describe('P4-27-V: MCP Status List and Tools Modal - Parity', () => {
   describe('McpToolsModal - Structural Elements', () => {
     it('renders at least 5 structural elements for a tool', async () => {
       const { McpToolsModal } = await import('@/features/config/components/McpToolsModal.js');
-      mockUseMcpTools.mockReturnValue(mockQueryResult({
-        tools: [
-          {
-            name: 'server.structural-tool',
-            description: 'Tool for structure test',
-            inputSchema: {
-              properties: {
-                param1: { type: 'string', description: 'Parameter 1' },
+      mockUseMcpTools.mockReturnValue(
+        mockQueryResult({
+          tools: [
+            {
+              name: 'server.structural-tool',
+              description: 'Tool for structure test',
+              inputSchema: {
+                properties: {
+                  param1: { type: 'string', description: 'Parameter 1' },
+                },
+                required: [],
               },
-              required: [],
             },
-          },
-        ],
-      }));
+          ],
+        })
+      );
 
       renderWithProviders(<McpToolsModal serverName="server" onClose={vi.fn()} />);
 
@@ -524,19 +554,21 @@ describe('P4-27-V: MCP Status List and Tools Modal - Parity', () => {
       const { McpToolsModal } = await import('@/features/config/components/McpToolsModal.js');
 
       // Mock MCP status with running servers
-      mockUseMcpStatus.mockReturnValue(mockQueryResult({
-        enabled: true,
-        servers: [
-          { name: 'test-server', running: true, state: 'running' as const, toolsCount: 2 },
-        ],
-      }));
+      mockUseMcpStatus.mockReturnValue(
+        mockQueryResult({
+          enabled: true,
+          servers: [
+            { name: 'test-server', running: true, state: 'running' as const, toolsCount: 2 },
+          ],
+        })
+      );
 
       // Mock MCP tools
-      mockUseMcpTools.mockReturnValue(mockQueryResult({
-        tools: [
-          { name: 'test-server.tool-1', description: 'Tool 1' },
-        ],
-      }));
+      mockUseMcpTools.mockReturnValue(
+        mockQueryResult({
+          tools: [{ name: 'test-server.tool-1', description: 'Tool 1' }],
+        })
+      );
 
       // Render list with onSelectServer callback
       const onSelectServer = vi.fn();

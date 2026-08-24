@@ -7,7 +7,7 @@ class StaticProvider implements ToolProvider {
 
   constructor(
     readonly id: string,
-    private readonly tools: readonly GatewayTool[],
+    private readonly tools: readonly GatewayTool[]
   ) {}
 
   getTools(): GatewayTool[] {
@@ -23,11 +23,12 @@ class StaticProvider implements ToolProvider {
   removeListener(): void {}
 }
 
-function createTool(tool: Pick<GatewayTool, 'id' | 'name' | 'providerId'> & Partial<GatewayTool>): GatewayTool {
+function createTool(
+  tool: Pick<GatewayTool, 'id' | 'name' | 'providerId'> & Partial<GatewayTool>
+): GatewayTool {
   return {
     description: 'test tool',
     inputSchema: { type: 'object' },
-    exposeTo: ['chat'],
     isAvailable: true,
     execute: async () => 'ok',
     ...tool,
@@ -37,19 +38,23 @@ function createTool(tool: Pick<GatewayTool, 'id' | 'name' | 'providerId'> & Part
 describe('ToolRegistry MCP name collisions', () => {
   it('prefixes an external MCP tool with its server name when its raw name collides', () => {
     const registry = new ToolRegistry();
-    registry.registerProvider(new StaticProvider('local', [
-      createTool({ id: 'local:screenshot', name: 'screenshot', providerId: 'local' }),
-    ]));
-    registry.registerProvider(new StaticProvider('mcp-client', [
-      createTool({
-        id: 'mcp-client:gateway:screenshot',
-        name: 'screenshot',
-        providerId: 'mcp-client',
-        source: { type: 'mcp', serverName: 'gateway', toolName: 'screenshot' },
-      }),
-    ]));
+    registry.registerProvider(
+      new StaticProvider('local', [
+        createTool({ id: 'local:screenshot', name: 'screenshot', providerId: 'local' }),
+      ])
+    );
+    registry.registerProvider(
+      new StaticProvider('mcp-client', [
+        createTool({
+          id: 'mcp-client:gateway:screenshot',
+          name: 'screenshot',
+          providerId: 'mcp-client',
+          source: { type: 'mcp', serverName: 'gateway', toolName: 'screenshot' },
+        }),
+      ])
+    );
 
-    const tools = registry.getAvailableTools({ consumer: 'chat' });
+    const tools = registry.getAvailableTools();
 
     expect(tools.map((tool) => tool.name)).toEqual(['screenshot', 'gateway-screenshot']);
   });

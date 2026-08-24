@@ -94,7 +94,6 @@ export const testIds = {
   monitorMainDownloadBtn: 'monitor-main-download-btn',
   monitorMainRefreshBtn: 'monitor-main-refresh-btn',
   // Config — new components
-  configApiKeysStatus: 'config-api-keys-status',
   configConnectivityTest: 'config-connectivity-test',
   configAiTest: 'config-ai-test',
   configContent: 'config-content',
@@ -103,12 +102,6 @@ export const testIds = {
   domElementsGetDomBtn: 'dom-elements-get-dom-btn',
   domElementsContainer: 'dom-elements-container',
   domElementsEmptyState: 'dom-elements-empty-state',
-  // Failure Sample
-  failureSampleModal: 'failure-sample-modal',
-  failureSampleScreenshot: 'failure-sample-screenshot',
-  failureSampleContext: 'failure-sample-context',
-  failureSampleDom: 'failure-sample-dom',
-  failureSampleViewBtn: 'failure-sample-view-btn',
 } as const;
 
 export type TestId = (typeof testIds)[keyof typeof testIds];

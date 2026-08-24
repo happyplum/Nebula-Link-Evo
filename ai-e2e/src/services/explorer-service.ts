@@ -9,7 +9,7 @@
 import type { DatabaseManager } from '../database/db.js';
 import type { ExplorationSession } from '../database/repositories/exploration-session-repository.js';
 import type { URLModuleBinding } from '../database/repositories/url-module-binding-repository.js';
-import type { ProxyAdapterClient } from '../infrastructure/proxy-adapter-client.js';
+import type { AiE2eRuntimeClient } from '../infrastructure/ai-e2e-runtime-client.js';
 import type { PromptTemplateManager } from '../ai/prompt-manager.js';
 
 // ---------- Configuration ----------
@@ -98,7 +98,7 @@ interface ExplorerRuntimeClient {
 
 export class ExplorerService {
   private db: DatabaseManager;
-  private proxyClient: ExplorerRuntimeClient;
+  private runtimeClient: ExplorerRuntimeClient;
   private promptManager: PromptTemplateManager;
 
   /** Active explorations keyed by projectId */
@@ -106,11 +106,11 @@ export class ExplorerService {
 
   constructor(
     db: DatabaseManager,
-    proxyClient: ProxyAdapterClient,
-    promptManager: PromptTemplateManager,
+    runtimeClient: AiE2eRuntimeClient,
+    promptManager: PromptTemplateManager
   ) {
     this.db = db;
-    this.proxyClient = proxyClient;
+    this.runtimeClient = runtimeClient;
     this.promptManager = promptManager;
   }
 
@@ -122,7 +122,7 @@ export class ExplorerService {
    */
   async startExploration(
     projectId: string,
-    options?: ExplorationOptions,
+    options?: ExplorationOptions
   ): Promise<ExplorationSession> {
     const project = this.db.getProjectRepo().findById(projectId);
     if (!project) {
@@ -183,11 +183,11 @@ export class ExplorerService {
     try {
       // Pre-check browser availability before starting BFS
       try {
-        await this.proxyClient.getPageInfo();
+        await this.runtimeClient.getPageInfo();
       } catch (err) {
         throw new Error(
           `Browser not accessible — ensure proxy-adapter has an active Playwright session. ` +
-          (err instanceof Error ? err.message : String(err)),
+            (err instanceof Error ? err.message : String(err))
         );
       }
 
@@ -263,7 +263,7 @@ export class ExplorerService {
           functional_modules: JSON.stringify(functionalModules),
         });
 
-        const result = await this.proxyClient.generateText(prompt);
+        const result = await this.runtimeClient.generateText(prompt);
         const parsed = this.parseAIResponse<AIBindingResponse>(result.text);
 
         if (!parsed || parsed.unclassifiable || parsed.bindings.length === 0) {
@@ -272,9 +272,7 @@ export class ExplorerService {
 
         // Create binding for the primary module
         const primaryBinding = parsed.bindings[0];
-        const matchedModule = functionalModules.find(
-          m => m.name === primaryBinding?.module_name,
-        );
+        const matchedModule = functionalModules.find((m) => m.name === primaryBinding?.module_name);
 
         if (matchedModule) {
           const binding = this.db.getURLModuleBindingRepo().create({
@@ -354,16 +352,16 @@ export class ExplorerService {
     if (!active || active.abortController.signal.aborted) return false;
 
     // Navigate to the page with abort awareness
-    const navResult = await this.withAbort(active, () => this.proxyClient.navigate(item.url));
+    const navResult = await this.withAbort(active, () => this.runtimeClient.navigate(item.url));
     if (!navResult) return false;
     const currentUrl = navResult.url;
 
     // Get page info
-    const pageInfo = await this.withAbort(active, () => this.proxyClient.getPageInfo());
+    const pageInfo = await this.withAbort(active, () => this.runtimeClient.getPageInfo());
     if (!pageInfo) return false;
 
     // Get snapshot
-    const snapshot = await this.withAbort(active, () => this.proxyClient.getSnapshot());
+    const snapshot = await this.withAbort(active, () => this.runtimeClient.getSnapshot());
     if (!snapshot) return false;
 
     // Store discovered URL
@@ -378,7 +376,7 @@ export class ExplorerService {
     active.pagesVisited.push(currentUrl);
 
     const spaRoutes = await this.withAbort(active, () =>
-      this.discoverSPARoutes(currentUrl, snapshot.elements),
+      this.discoverSPARoutes(currentUrl, snapshot.elements)
     );
     if (spaRoutes) {
       for (const href of spaRoutes) {
@@ -393,11 +391,11 @@ export class ExplorerService {
         page_snapshot: JSON.stringify(snapshot.elements),
         visited_urls: JSON.stringify(Array.from(active.visited)),
         depth: String(item.depth),
-      }),
+      })
     );
     if (prompt === null) return false;
 
-    const result = await this.withAbort(active, () => this.proxyClient.generateText(prompt));
+    const result = await this.withAbort(active, () => this.runtimeClient.generateText(prompt));
     if (!result) return false;
 
     active.tokenCount += result.tokenUsage.promptTokens + result.tokenUsage.completionTokens;
@@ -444,18 +442,20 @@ export class ExplorerService {
    */
   private async discoverSPARoutes(
     currentUrl: string,
-    snapshotElements: Record<string, unknown>,
+    snapshotElements: Record<string, unknown>
   ): Promise<string[]> {
     const discovered = new Set<string>();
 
     this.collectRoutesFromSnapshot(snapshotElements, discovered);
 
-    if (!this.proxyClient.executeScript) {
+    if (!this.runtimeClient.executeScript) {
       return Array.from(discovered);
     }
 
     try {
-      const result = await this.proxyClient.executeScript(this.getSPADiscoveryScript(), [currentUrl]);
+      const result = await this.runtimeClient.executeScript(this.getSPADiscoveryScript(), [
+        currentUrl,
+      ]);
       this.collectRoutesFromSPADiscoveryResult(result.result, discovered);
     } catch {
       // SPA route discovery is a best-effort enhancement; keep traditional BFS intact.
@@ -464,7 +464,10 @@ export class ExplorerService {
     return Array.from(discovered);
   }
 
-  private collectRoutesFromSnapshot(elements: Record<string, unknown>, discovered: Set<string>): void {
+  private collectRoutesFromSnapshot(
+    elements: Record<string, unknown>,
+    discovered: Set<string>
+  ): void {
     const scan = (value: unknown, depth: number): void => {
       if (depth > 4 || value === null || typeof value !== 'object') return;
       if (Array.isArray(value)) {
@@ -540,13 +543,13 @@ export class ExplorerService {
     href: string,
     currentUrl: string,
     depth: number,
-    front = false,
+    front = false
   ): void {
     const fullUrl = this.resolveUrl(currentUrl || active.baseUrl, href);
     if (!fullUrl) return;
     if (!this.isSameOrigin(active.baseUrl, fullUrl)) return;
     if (active.visited.has(fullUrl)) return;
-    if (active.queue.some(item => item.url === fullUrl)) return;
+    if (active.queue.some((item) => item.url === fullUrl)) return;
 
     const queueItem = { url: fullUrl, depth };
     if (front) {

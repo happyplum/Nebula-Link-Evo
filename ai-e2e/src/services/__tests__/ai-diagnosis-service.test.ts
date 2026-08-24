@@ -1,12 +1,27 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { AIDiagnosisService } from '../ai-diagnosis-service.js';
-import type { ProxyAdapterClient } from '../../infrastructure/proxy-adapter-client.js';
+import type { AiE2eRuntimeClient } from '../../infrastructure/ai-e2e-runtime-client.js';
 import type { PromptTemplateManager } from '../../ai/prompt-manager.js';
-import type { ExecutionRunRepository, ExecutionRun } from '../../database/repositories/execution-run-repository.js';
-import type { AIInterventionLogRepository, AIInterventionLog } from '../../database/repositories/ai-intervention-log-repository.js';
-import type { BusinessModuleRepository, BusinessModule } from '../../database/repositories/business-module-repository.js';
-import type { FunctionalModuleRepository, FunctionalModule } from '../../database/repositories/functional-module-repository.js';
-import type { TestScenarioRepository, TestScenario } from '../../database/repositories/test-scenario-repository.js';
+import type {
+  ExecutionRunRepository,
+  ExecutionRun,
+} from '../../database/repositories/execution-run-repository.js';
+import type {
+  AIInterventionLogRepository,
+  AIInterventionLog,
+} from '../../database/repositories/ai-intervention-log-repository.js';
+import type {
+  BusinessModuleRepository,
+  BusinessModule,
+} from '../../database/repositories/business-module-repository.js';
+import type {
+  FunctionalModuleRepository,
+  FunctionalModule,
+} from '../../database/repositories/functional-module-repository.js';
+import type {
+  TestScenarioRepository,
+  TestScenario,
+} from '../../database/repositories/test-scenario-repository.js';
 import type { ScriptRepository, Script } from '../../database/repositories/script-repository.js';
 import type { ProjectDiagnosisReport } from '../../types/ai-intervention.js';
 
@@ -73,7 +88,9 @@ function createMockInterventionRepo(): AIInterventionLogRepository {
 }
 
 function createMockScriptRepo(originalContent?: string): ScriptRepository {
-  const content = originalContent ?? `import { test, expect } from "@playwright/test";
+  const content =
+    originalContent ??
+    `import { test, expect } from "@playwright/test";
 
 test("login flow", async ({ page }) => {
   // Step 1: Navigate to login page
@@ -137,22 +154,29 @@ test("login flow", async ({ page }) => {
   } as unknown as ScriptRepository;
 }
 
-function createMockProxyClient(response?: { text: string; tokenUsage: { promptTokens: number; completionTokens: number } }): ProxyAdapterClient {
+function createMockRuntimeClient(response?: {
+  text: string;
+  tokenUsage: { promptTokens: number; completionTokens: number };
+}): AiE2eRuntimeClient {
   return {
-    generateText: vi.fn(() => Promise.resolve({
-      text: JSON.stringify({
-        failure_type: 'selector',
-        direct_cause: 'Selector "#old-selector" not found',
-        root_cause: 'Page structure changed',
-        fix_suggestion: {
-          strategy: 'Update selector',
-          changes: [{ location: 'line 3', original: '#old-selector', suggested: '#new-selector' }],
-        },
-        confidence: 0.85,
-      }),
-      tokenUsage: { promptTokens: 100, completionTokens: 50 },
-      ...response,
-    })),
+    generateText: vi.fn(() =>
+      Promise.resolve({
+        text: JSON.stringify({
+          failure_type: 'selector',
+          direct_cause: 'Selector "#old-selector" not found',
+          root_cause: 'Page structure changed',
+          fix_suggestion: {
+            strategy: 'Update selector',
+            changes: [
+              { location: 'line 3', original: '#old-selector', suggested: '#new-selector' },
+            ],
+          },
+          confidence: 0.85,
+        }),
+        tokenUsage: { promptTokens: 100, completionTokens: 50 },
+        ...response,
+      })
+    ),
     navigate: vi.fn(),
     getSnapshot: vi.fn(),
     screenshot: vi.fn(),
@@ -167,12 +191,14 @@ function createMockProxyClient(response?: { text: string; tokenUsage: { promptTo
     getDOM: vi.fn(),
     openBrowser: vi.fn(),
     closeBrowser: vi.fn(),
-  } as unknown as ProxyAdapterClient;
+  } as unknown as AiE2eRuntimeClient;
 }
 
 function createMockPromptManager(): PromptTemplateManager {
   return {
-    render: vi.fn((_name: string, _vars: Record<string, string>) => Promise.resolve('rendered prompt')),
+    render: vi.fn((_name: string, _vars: Record<string, string>) =>
+      Promise.resolve('rendered prompt')
+    ),
     load: vi.fn(() => Promise.resolve('template content')),
     listTemplates: vi.fn(() => Promise.resolve(['failure-diagnosis', 'script-fix'])),
   } as unknown as PromptTemplateManager;
@@ -189,10 +215,14 @@ function createMockBusinessModuleRepo(modules: BusinessModule[] = []): BusinessM
   } as unknown as BusinessModuleRepository;
 }
 
-function createMockFunctionalModuleRepo(modules: FunctionalModule[] = []): FunctionalModuleRepository {
+function createMockFunctionalModuleRepo(
+  modules: FunctionalModule[] = []
+): FunctionalModuleRepository {
   return {
     findByProjectId: vi.fn(() => modules),
-    findByBusinessModuleId: vi.fn((businessModuleId: string) => modules.filter((module) => module.business_module_id === businessModuleId)),
+    findByBusinessModuleId: vi.fn((businessModuleId: string) =>
+      modules.filter((module) => module.business_module_id === businessModuleId)
+    ),
     findById: vi.fn((id: string) => modules.find((module) => module.id === id) ?? null),
     create: vi.fn(),
     updateBoundUrl: vi.fn(),
@@ -205,7 +235,9 @@ function createMockFunctionalModuleRepo(modules: FunctionalModule[] = []): Funct
 
 function createMockScenarioRepo(scenarios: TestScenario[] = []): TestScenarioRepository {
   return {
-    findByFunctionalModuleId: vi.fn((functionalModuleId: string) => scenarios.filter((scenario) => scenario.functional_module_id === functionalModuleId)),
+    findByFunctionalModuleId: vi.fn((functionalModuleId: string) =>
+      scenarios.filter((scenario) => scenario.functional_module_id === functionalModuleId)
+    ),
     findById: vi.fn((id: string) => scenarios.find((scenario) => scenario.id === id) ?? null),
     create: vi.fn(),
     delete: vi.fn(),
@@ -369,16 +401,22 @@ function createProjectDiagnosisFixture() {
 function createProjectDiagnosisService(fixture = createProjectDiagnosisFixture()) {
   const localRunRepo = {
     ...createMockRunRepo(),
-    findByScriptId: vi.fn((scriptId: string) => fixture.runs.filter((run) => run.script_id === scriptId)),
+    findByScriptId: vi.fn((scriptId: string) =>
+      fixture.runs.filter((run) => run.script_id === scriptId)
+    ),
     findById: vi.fn((id: string) => fixture.runs.find((run) => run.id === id) ?? null),
   } as unknown as ExecutionRunRepository;
   const localInterventionRepo = {
     ...createMockInterventionRepo(),
-    findByRunId: vi.fn((runId: string) => fixture.logs.filter((log) => log.execution_run_id === runId)),
+    findByRunId: vi.fn((runId: string) =>
+      fixture.logs.filter((log) => log.execution_run_id === runId)
+    ),
   } as unknown as AIInterventionLogRepository;
   const localScriptRepo = {
     ...createMockScriptRepo(),
-    findByScenarioId: vi.fn((scenarioId: string) => fixture.scripts.filter((script) => script.test_scenario_id === scenarioId)),
+    findByScenarioId: vi.fn((scenarioId: string) =>
+      fixture.scripts.filter((script) => script.test_scenario_id === scenarioId)
+    ),
     findById: vi.fn((id: string) => fixture.scripts.find((script) => script.id === id) ?? null),
   } as unknown as ScriptRepository;
   const localBusinessModuleRepo = createMockBusinessModuleRepo(fixture.businessModules);
@@ -386,11 +424,11 @@ function createProjectDiagnosisService(fixture = createProjectDiagnosisFixture()
   const localScenarioRepo = createMockScenarioRepo(fixture.scenarios);
 
   const diagnosisService = new ADS(
-    createMockProxyClient(),
+    createMockRuntimeClient(),
     createMockPromptManager(),
     localRunRepo,
     localInterventionRepo,
-    localScriptRepo,
+    localScriptRepo
   );
 
   Object.assign(diagnosisService as object, {
@@ -418,7 +456,7 @@ const { AIDiagnosisService: ADS } = await import('../ai-diagnosis-service.js');
 
 describe('AIDiagnosisService', () => {
   let service: AIDiagnosisService;
-  let proxyClient: ProxyAdapterClient;
+  let runtimeClient: AiE2eRuntimeClient;
   let promptManager: PromptTemplateManager;
   let runRepo: ExecutionRunRepository;
   let interventionRepo: AIInterventionLogRepository;
@@ -426,12 +464,12 @@ describe('AIDiagnosisService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    proxyClient = createMockProxyClient();
+    runtimeClient = createMockRuntimeClient();
     promptManager = createMockPromptManager();
     runRepo = createMockRunRepo();
     interventionRepo = createMockInterventionRepo();
     scriptRepo = createMockScriptRepo();
-    service = new ADS(proxyClient, promptManager, runRepo, interventionRepo, scriptRepo);
+    service = new ADS(runtimeClient, promptManager, runRepo, interventionRepo, scriptRepo);
   });
 
   // ===== diagnoseFailure =====
@@ -440,12 +478,12 @@ describe('AIDiagnosisService', () => {
     it('should collect context, call AI, and store intervention log', async () => {
       const result = await service.diagnoseFailure('run-1');
 
-      expect(proxyClient.generateText).toHaveBeenCalled();
+      expect(runtimeClient.generateText).toHaveBeenCalled();
       expect(interventionRepo.create).toHaveBeenCalledWith(
         expect.objectContaining({
           execution_run_id: 'run-1',
           action_taken: 'diagnose_only',
-        }),
+        })
       );
       expect(result).toHaveProperty('diagnosis');
     });
@@ -457,7 +495,9 @@ describe('AIDiagnosisService', () => {
 
     it('should throw if run has not failed', async () => {
       (runRepo.findById as ReturnType<typeof vi.fn>).mockReturnValueOnce({
-        id: 'run-pass', status: 'pass', script_id: 'script-1',
+        id: 'run-pass',
+        status: 'pass',
+        script_id: 'script-1',
       });
       await expect(service.diagnoseFailure('run-pass')).rejects.toThrow(/not in a failed/i);
     });
@@ -470,13 +510,13 @@ describe('AIDiagnosisService', () => {
           execution_run_id: 'run-1',
           action_taken: 'diagnose_only',
           failure_type: 'selector',
-        }),
+        })
       );
       expect(result.failureType).toBe('selector');
     });
 
     it('unrecognized failure_type defaults to unknown', async () => {
-      proxyClient = createMockProxyClient({
+      runtimeClient = createMockRuntimeClient({
         text: JSON.stringify({
           failure_type: 'network',
           direct_cause: 'Unexpected upstream issue',
@@ -484,7 +524,7 @@ describe('AIDiagnosisService', () => {
         }),
         tokenUsage: { promptTokens: 100, completionTokens: 50 },
       });
-      service = new ADS(proxyClient, promptManager, runRepo, interventionRepo, scriptRepo);
+      service = new ADS(runtimeClient, promptManager, runRepo, interventionRepo, scriptRepo);
 
       const result = await service.diagnoseFailure('run-1');
 
@@ -492,7 +532,7 @@ describe('AIDiagnosisService', () => {
         expect.objectContaining({
           execution_run_id: 'run-1',
           failure_type: 'unknown',
-        }),
+        })
       );
       expect(result.failureType).toBe('unknown');
     });
@@ -503,7 +543,10 @@ describe('AIDiagnosisService', () => {
   describe('attemptAutoFix', () => {
     it('should apply fix and create new script version when change is <30%', async () => {
       // AI returns a fix that only changes selectors (small diff)
-      const fixResponse: { text: string; tokenUsage: { promptTokens: number; completionTokens: number } } = {
+      const fixResponse: {
+        text: string;
+        tokenUsage: { promptTokens: number; completionTokens: number };
+      } = {
         text: `import { test, expect } from "@playwright/test";
 
 test("login flow", async ({ page }) => {
@@ -537,7 +580,7 @@ test("login flow", async ({ page }) => {
   await page.waitForSelector("#login-form");
 });`,
       };
-      const fixClient = createMockProxyClient(fixResponse);
+      const fixClient = createMockRuntimeClient(fixResponse);
       service = new ADS(fixClient, promptManager, runRepo, interventionRepo, scriptRepo);
 
       // Provide a prior diagnosis log
@@ -556,14 +599,17 @@ test("login flow", async ({ page }) => {
       expect(interventionRepo.create).toHaveBeenCalledWith(
         expect.objectContaining({
           action_taken: 'auto_fix_applied',
-        }),
+        })
       );
       expect(result).toHaveProperty('newScriptVersion');
     });
 
     it('should request human review when change is >=30%', async () => {
       // AI returns a drastically different script (>=30% line change)
-      const bigChangeResponse: { text: string; tokenUsage: { promptTokens: number; completionTokens: number } } = {
+      const bigChangeResponse: {
+        text: string;
+        tokenUsage: { promptTokens: number; completionTokens: number };
+      } = {
         text: `import { test } from "playwright";
 // This is a completely rewritten script
 test("completely new test", async ({ page }) => {
@@ -580,7 +626,7 @@ test("completely new test", async ({ page }) => {
   // Line 12
 });`,
       };
-      const bigChangeClient = createMockProxyClient(bigChangeResponse);
+      const bigChangeClient = createMockRuntimeClient(bigChangeResponse);
       service = new ADS(bigChangeClient, promptManager, runRepo, interventionRepo, scriptRepo);
 
       // Provide a prior diagnosis log
@@ -599,7 +645,7 @@ test("completely new test", async ({ page }) => {
       expect(interventionRepo.create).toHaveBeenCalledWith(
         expect.objectContaining({
           action_taken: 'pending_human_review',
-        }),
+        })
       );
     });
 
@@ -617,7 +663,7 @@ test("completely new test", async ({ page }) => {
       expect(interventionRepo.create).toHaveBeenCalledWith(
         expect.objectContaining({
           action_taken: 'pending_human_review',
-        }),
+        })
       );
     });
 
@@ -637,7 +683,7 @@ test("completely new test", async ({ page }) => {
         expect.objectContaining({
           execution_run_id: 'run-1',
           action_taken: 'pending_human_review',
-        }),
+        })
       );
     });
   });

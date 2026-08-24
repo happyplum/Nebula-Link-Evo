@@ -7,8 +7,6 @@ const healthRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     '/',
     {
       schema: {
-        description: 'Get service health status including config, MCP, and connected services',
-        tags: ['Health'],
         response: {
           200: HealthResponseSchema,
         },
@@ -16,7 +14,6 @@ const healthRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
     async () => {
       const appService = AppService.getInstance();
-      const config = appService.getConfig();
       const mcpStatus = appService.getMCPStatus();
 
       // Check in-process browser engine health (migrated from playwright-server HTTP probe)
@@ -30,7 +27,6 @@ const healthRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
 
       return {
         status: 'healthy',
-        config: config ? 'loaded' : 'not_loaded',
         mcp: mcpStatus,
         services: { playwright },
       };

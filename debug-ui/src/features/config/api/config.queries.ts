@@ -8,7 +8,6 @@ import {
   API_HEALTH,
   DEBUG_MCP_STATUS,
   DEBUG_MCP_TOOLS,
-  DEBUG_VERIFY_KEYS,
 } from '@/shared/api/endpoints.js';
 import { queryKeys } from '@/shared/query/query-keys.js';
 import type {
@@ -16,7 +15,6 @@ import type {
   HealthResponse,
   McpStatusResponse,
   McpToolsResponse,
-  VerifyKeysResponse,
 } from '../types/index.js';
 
 /** Application config (mode, decision provider) */
@@ -49,13 +47,5 @@ export function useMcpTools(options?: { enabled?: boolean }) {
     queryKey: queryKeys.mcp.tools,
     queryFn: () => apiClient.get<McpToolsResponse>(DEBUG_MCP_TOOLS),
     enabled: options?.enabled,
-  });
-}
-
-/** API key verification status for all providers */
-export function useVerifyKeys() {
-  return useQuery({
-    queryKey: ['verify-keys'] as const,
-    queryFn: () => apiClient.get<VerifyKeysResponse>(DEBUG_VERIFY_KEYS),
   });
 }

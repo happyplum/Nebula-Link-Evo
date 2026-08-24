@@ -39,7 +39,6 @@ describe('registerStreamableHttpMcpRoute', () => {
             required: ['operationId'],
           },
           providerId: 'contract',
-          exposeTo: ['mcp-server'],
           isAvailable: true,
           execute: async () => {
             throw new Error(

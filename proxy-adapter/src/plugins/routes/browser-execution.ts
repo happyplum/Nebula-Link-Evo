@@ -109,8 +109,6 @@ const browserExecutionRoutes: FastifyPluginAsync<BrowserExecutionRoutesOptions> 
     '/sessions',
     {
       schema: {
-        description: 'Create or bind the single visible browser execution session',
-        tags: ['Browser Execution'],
         headers: MutationHeadersSchema,
         body: SessionBodySchema,
         response: {
@@ -134,8 +132,6 @@ const browserExecutionRoutes: FastifyPluginAsync<BrowserExecutionRoutesOptions> 
     '/sessions/:sessionId',
     {
       schema: {
-        description: 'Read browser session, tabs, leases, and live-view summary',
-        tags: ['Browser Execution'],
         params: SessionParamsSchema,
         response: { 200: SuccessSchema, 404: ProblemSchema },
       },
@@ -151,8 +147,6 @@ const browserExecutionRoutes: FastifyPluginAsync<BrowserExecutionRoutesOptions> 
     '/sessions/:sessionId/event-log',
     {
       schema: {
-        description: 'Read durable browser session events after a sequence cursor',
-        tags: ['Browser Execution'],
         params: SessionParamsSchema,
         querystring: EventLogQuerySchema,
         response: { 200: SuccessSchema, 400: ProblemSchema, 404: ProblemSchema },
@@ -173,8 +167,6 @@ const browserExecutionRoutes: FastifyPluginAsync<BrowserExecutionRoutesOptions> 
     '/sessions/:sessionId/events',
     {
       schema: {
-        description: 'Stream a browser session snapshot followed by ordered durable events',
-        tags: ['Browser Execution', 'SSE'],
         params: SessionParamsSchema,
       },
     },
@@ -244,8 +236,6 @@ const browserExecutionRoutes: FastifyPluginAsync<BrowserExecutionRoutesOptions> 
     '/sessions/:sessionId/artifacts/:artifactId',
     {
       schema: {
-        description: 'Download a browser artifact after metadata and content integrity checks',
-        tags: ['Browser Execution'],
         params: ArtifactParamsSchema,
       },
     },
@@ -269,8 +259,6 @@ const browserExecutionRoutes: FastifyPluginAsync<BrowserExecutionRoutesOptions> 
     '/sessions/:sessionId',
     {
       schema: {
-        description: 'Close a browser execution session',
-        tags: ['Browser Execution'],
         params: SessionParamsSchema,
         headers: MutationHeadersSchema,
         response: {
@@ -304,8 +292,6 @@ const browserExecutionRoutes: FastifyPluginAsync<BrowserExecutionRoutesOptions> 
     '/sessions/:sessionId/leases',
     {
       schema: {
-        description: 'Issue a bounded observe or control lease',
-        tags: ['Browser Execution'],
         params: SessionParamsSchema,
         headers: MutationHeadersSchema,
         body: LeaseBodySchema,
@@ -334,8 +320,6 @@ const browserExecutionRoutes: FastifyPluginAsync<BrowserExecutionRoutesOptions> 
     '/sessions/:sessionId/leases/:leaseId',
     {
       schema: {
-        description: 'Revoke a browser lease',
-        tags: ['Browser Execution'],
         params: LeaseParamsSchema,
         headers: MutationHeadersSchema,
         response: {
@@ -364,8 +348,6 @@ const browserExecutionRoutes: FastifyPluginAsync<BrowserExecutionRoutesOptions> 
     '/operations/:operationId',
     {
       schema: {
-        description: 'Read a durable browser operation result',
-        tags: ['Browser Execution'],
         params: OperationParamsSchema,
         response: { 200: SuccessSchema, 404: ProblemSchema },
       },

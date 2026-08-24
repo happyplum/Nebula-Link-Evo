@@ -38,4 +38,20 @@ describe('ConversationDatabase', () => {
     expect(state?.status).toBe('idle');
     expect(seq).toBe(1);
   });
+
+  it('uses sessions_state as the only session status source', async () => {
+    const columns = (
+      db.connection().prepare('PRAGMA table_info(sessions)').all() as Array<{ name: string }>
+    ).map((column) => column.name);
+    expect(columns).not.toContain('status');
+    expect(columns).not.toContain('vision_provider');
+    expect(columns).not.toContain('vision_model');
+
+    const session = db.createSession({ title: 'state', provider: 'test', model: 'test' });
+    await db.getSessionStateDAO().get(session.id);
+    db.activateSession(session.id);
+    expect(await db.getSessionStateDAO().getStatus(session.id)).toBe('running');
+    expect(db.recoverRunningSessions()).toEqual([{ id: session.id, status: 'blocked' }]);
+    expect(await db.getSessionStateDAO().getStatus(session.id)).toBe('blocked');
+  });
 });

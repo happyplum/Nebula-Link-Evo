@@ -189,7 +189,15 @@ export class ConversationDatabase {
       `INSERT INTO messages (id, session_id, role, content, created_at, metadata, idempotency_key)
        VALUES (?, ?, ?, ?, ?, ?, ?)`
     );
-    stmt.run(id, params.session_id, params.role, params.content, now, metadata, params.idempotency_key ?? null);
+    stmt.run(
+      id,
+      params.session_id,
+      params.role,
+      params.content,
+      now,
+      metadata,
+      params.idempotency_key ?? null
+    );
 
     const updateStmt = db.prepare(
       'UPDATE sessions SET message_count = message_count + 1, updated_at = ? WHERE id = ?'
@@ -213,13 +221,19 @@ export class ConversationDatabase {
     return rows.map((row) => this.rowToMessage(row));
   }
 
-  getMessagesPaginated(sessionId: string, limit: number, offset: number): {
+  getMessagesPaginated(
+    sessionId: string,
+    limit: number,
+    offset: number
+  ): {
     readonly messages: Message[];
     readonly hasMore: boolean;
     readonly total: number;
   } {
     const db = this.getDb();
-    const stmt = db.prepare('SELECT * FROM messages WHERE session_id = ? ORDER BY created_at ASC LIMIT ? OFFSET ?');
+    const stmt = db.prepare(
+      'SELECT * FROM messages WHERE session_id = ? ORDER BY created_at ASC LIMIT ? OFFSET ?'
+    );
     const rows = stmt.all(sessionId, limit, offset) as unknown as MessageRow[];
     const countStmt = db.prepare('SELECT COUNT(*) as total FROM messages WHERE session_id = ?');
     const result = countStmt.get(sessionId) as { readonly total: number };
@@ -251,26 +265,29 @@ export class ConversationDatabase {
     return row ? this.rowToMessage(row) : null;
   }
 
-  updateSessionStatus(sessionId: string, status: SessionStatus): Session | null {
+  updateSessionStatus(sessionId: string, status: SessionStatus): void {
     const db = this.getDb();
-    const stmt = db.prepare('UPDATE sessions SET status = ?, updated_at = ? WHERE id = ?');
-    stmt.run(status, new Date().toISOString(), sessionId);
-    return this.getSession(sessionId);
+    const now = new Date().toISOString();
+    const stmt = db.prepare(
+      `UPDATE sessions_state
+       SET status = ?, last_active_at = ?, version = version + 1, updated_at = ?
+       WHERE session_id = ?`
+    );
+    stmt.run(status, now, now, sessionId);
   }
 
-  activateSession(sessionId: string): Session | null {
-    return this.updateSessionStatus(sessionId, 'running');
+  activateSession(sessionId: string): void {
+    this.updateSessionStatus(sessionId, 'running');
   }
 
   recoverRunningSessions(): Array<{ readonly id: string; readonly status: string }> {
     const db = this.getDb();
-    const stmt = db.prepare('SELECT id, status FROM sessions WHERE status = ?');
+    const stmt = db.prepare('SELECT session_id AS id, status FROM sessions_state WHERE status = ?');
     const rows = stmt.all('running') as Array<{ readonly id: string; readonly status: string }>;
     const recoveredSessions: Array<{ readonly id: string; readonly status: string }> = [];
 
     for (const row of rows) {
-      const stmtUpdate = db.prepare('UPDATE sessions SET status = ?, updated_at = ? WHERE id = ?');
-      stmtUpdate.run('blocked', new Date().toISOString(), row.id);
+      this.updateSessionStatus(row.id, 'blocked');
       recoveredSessions.push({ id: row.id, status: 'blocked' });
     }
 
@@ -296,10 +313,7 @@ export class ConversationDatabase {
         summary TEXT,
         message_count INTEGER DEFAULT 0,
         provider TEXT NOT NULL,
-        model TEXT NOT NULL,
-        status TEXT DEFAULT 'idle' CHECK(status IN ('idle', 'running', 'paused', 'blocked', 'interrupted', 'cancelled', 'completed')),
-        vision_provider TEXT,
-        vision_model TEXT
+        model TEXT NOT NULL
       )
     `);
     db.exec(`
@@ -315,10 +329,13 @@ export class ConversationDatabase {
       )
     `);
     db.exec('CREATE INDEX IF NOT EXISTS idx_sessions_updated_at ON sessions(updated_at DESC)');
-    db.exec('CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_messages_session_id ON messages(session_id)');
-    db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_idempotency_key ON messages(idempotency_key)');
-    db.exec('CREATE INDEX IF NOT EXISTS idx_messages_session_created ON messages(session_id, created_at ASC)');
+    db.exec(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_idempotency_key ON messages(idempotency_key)'
+    );
+    db.exec(
+      'CREATE INDEX IF NOT EXISTS idx_messages_session_created ON messages(session_id, created_at ASC)'
+    );
 
     db.exec(`
       CREATE TABLE IF NOT EXISTS sessions_state (
@@ -334,7 +351,9 @@ export class ConversationDatabase {
       )
     `);
     db.exec('CREATE INDEX IF NOT EXISTS idx_sessions_state_status ON sessions_state(status)');
-    db.exec('CREATE INDEX IF NOT EXISTS idx_sessions_state_last_active ON sessions_state(last_active_at DESC)');
+    db.exec(
+      'CREATE INDEX IF NOT EXISTS idx_sessions_state_last_active ON sessions_state(last_active_at DESC)'
+    );
     db.exec('CREATE INDEX IF NOT EXISTS idx_sessions_state_job_id ON sessions_state(job_id)');
 
     db.exec(`
@@ -350,7 +369,9 @@ export class ConversationDatabase {
         UNIQUE(session_id, seq)
       )
     `);
-    db.exec('CREATE INDEX IF NOT EXISTS idx_session_events_session_seq ON session_events(session_id, seq)');
+    db.exec(
+      'CREATE INDEX IF NOT EXISTS idx_session_events_session_seq ON session_events(session_id, seq)'
+    );
     db.exec('CREATE INDEX IF NOT EXISTS idx_session_events_ttl ON session_events(ttl_expires_at)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_session_events_type ON session_events(event_type)');
 
@@ -365,11 +386,40 @@ export class ConversationDatabase {
         error TEXT
       )
     `);
-    db.exec('CREATE INDEX IF NOT EXISTS idx_operation_logs_session_id ON operation_logs(session_id)');
-    db.exec('CREATE INDEX IF NOT EXISTS idx_operation_logs_start_time ON operation_logs(start_time DESC)');
+    db.exec(
+      'CREATE INDEX IF NOT EXISTS idx_operation_logs_session_id ON operation_logs(session_id)'
+    );
+    db.exec(
+      'CREATE INDEX IF NOT EXISTS idx_operation_logs_start_time ON operation_logs(start_time DESC)'
+    );
     applyHarnessProjectionMigration(db);
     applyHarnessDeletionMigration(db);
     applyHarnessSchedulerMigration(db);
+    this.assertCanonicalSessionSchema();
+  }
+
+  private assertCanonicalSessionSchema(): void {
+    const columns = (
+      this.getDb().prepare('PRAGMA table_info(sessions)').all() as Array<{ readonly name: string }>
+    ).map((column) => column.name);
+    const expected = [
+      'id',
+      'title',
+      'created_at',
+      'updated_at',
+      'summary',
+      'message_count',
+      'provider',
+      'model',
+    ];
+    if (
+      columns.length !== expected.length ||
+      columns.some((column, index) => column !== expected[index])
+    ) {
+      throw new Error(
+        'Unsupported conversations database schema; restore the verified backup and recreate the database'
+      );
+    }
   }
 
   createOperation(params: CreateOperationParams): TracedOperation {
@@ -382,7 +432,15 @@ export class ConversationDatabase {
       `INSERT INTO operation_logs (id, session_id, operation, start_time, end_time, status, error)
        VALUES (?, ?, ?, ?, ?, ?, ?)`
     );
-    stmt.run(traceId, params.sessionId, params.operation, startTime, null, status, params.error ?? null);
+    stmt.run(
+      traceId,
+      params.sessionId,
+      params.operation,
+      startTime,
+      null,
+      status,
+      params.error ?? null
+    );
 
     return this.getOperation(traceId) as TracedOperation;
   }
@@ -416,13 +474,17 @@ export class ConversationDatabase {
     }
 
     values.push(traceId);
-    const stmt = this.getDb().prepare(`UPDATE operation_logs SET ${updates.join(', ')} WHERE id = ?`);
+    const stmt = this.getDb().prepare(
+      `UPDATE operation_logs SET ${updates.join(', ')} WHERE id = ?`
+    );
     stmt.run(...(values as SQLInputValue[]));
     return this.getOperation(traceId);
   }
 
   getOperationsBySession(sessionId: string): TracedOperation[] {
-    const stmt = this.getDb().prepare('SELECT * FROM operation_logs WHERE session_id = ? ORDER BY start_time DESC');
+    const stmt = this.getDb().prepare(
+      'SELECT * FROM operation_logs WHERE session_id = ? ORDER BY start_time DESC'
+    );
     const rows = stmt.all(sessionId) as unknown as OperationLogRow[];
     return rows.map((row) => this.rowToOperation(row));
   }
@@ -483,9 +545,6 @@ export class ConversationDatabase {
       message_count: row.message_count,
       provider: row.provider,
       model: row.model,
-      vision_provider: row.vision_provider,
-      vision_model: row.vision_model,
-      status: row.status as SessionStatus | undefined,
     };
   }
 
@@ -523,9 +582,6 @@ interface SessionRow {
   readonly message_count: number;
   readonly provider: string;
   readonly model: string;
-  readonly vision_provider: string | null;
-  readonly vision_model: string | null;
-  readonly status: string | null;
 }
 
 interface MessageRow {

@@ -93,7 +93,7 @@ describe('BrowserClient', () => {
         false,
         { width: 1920, height: 1080 },
         9222,
-        'chat'
+        'debug-ui'
       );
     });
   });
@@ -102,7 +102,7 @@ describe('BrowserClient', () => {
     it('should call BrowserService.close with owner', async () => {
       mockBrowserService.close.mockResolvedValue(undefined);
       await client.closeBrowser();
-      expect(mockBrowserService.close).toHaveBeenCalledWith('chat');
+      expect(mockBrowserService.close).toHaveBeenCalledWith('debug-ui');
     });
   });
 
@@ -113,7 +113,7 @@ describe('BrowserClient', () => {
       expect(mockBrowserService.navigate).toHaveBeenCalledWith(
         'https://example.com',
         'networkidle',
-        'chat'
+        'debug-ui'
       );
     });
   });
@@ -129,7 +129,7 @@ describe('BrowserClient', () => {
         viewport: { width: 1920, height: 1080 },
       });
       const result = await client.screenshot();
-      expect(mockBrowserService.screenshot).toHaveBeenCalledWith(false, 'chat');
+      expect(mockBrowserService.screenshot).toHaveBeenCalledWith(false, 'debug-ui');
       expect(result).toEqual({ screenshot: 'base64', viewport: { width: 1920, height: 1080 } });
     });
 
@@ -139,7 +139,7 @@ describe('BrowserClient', () => {
         viewport: { width: 1920, height: 1080 },
       });
       await client.screenshot(true);
-      expect(mockBrowserService.screenshot).toHaveBeenCalledWith(true, 'chat');
+      expect(mockBrowserService.screenshot).toHaveBeenCalledWith(true, 'debug-ui');
     });
   });
 
@@ -149,14 +149,26 @@ describe('BrowserClient', () => {
 
   describe('getSimplifiedDOM', () => {
     it('should return DOM data from BrowserService', async () => {
-      const mockData = { snapshot_id: '123', elements_map: {}, version: '2.0' as const, annotated_screenshot_base64: '', simplified_dom: { elements: [], viewport: { width: 1920, height: 1080 } } };
+      const mockData = {
+        snapshot_id: '123',
+        elements_map: {},
+        version: '2.0' as const,
+        annotated_screenshot_base64: '',
+        simplified_dom: { elements: [], viewport: { width: 1920, height: 1080 } },
+      };
       mockBrowserService.getSimplifiedDOMV2.mockResolvedValue(mockData);
       const result = await client.getSimplifiedDOM();
       expect(result).toEqual(mockData);
     });
 
     it('should handle missing snapshot_id', async () => {
-      const mockData = { snapshot_id: '', elements_map: {}, version: '2.0' as const, annotated_screenshot_base64: '', simplified_dom: { elements: [], viewport: { width: 1920, height: 1080 } } };
+      const mockData = {
+        snapshot_id: '',
+        elements_map: {},
+        version: '2.0' as const,
+        annotated_screenshot_base64: '',
+        simplified_dom: { elements: [], viewport: { width: 1920, height: 1080 } },
+      };
       mockBrowserService.getSimplifiedDOMV2.mockResolvedValue(mockData);
       const result = await client.getSimplifiedDOM();
       expect(result).toEqual(mockData);
@@ -176,7 +188,7 @@ describe('BrowserClient', () => {
     it('should call click on BrowserService', async () => {
       mockBrowserService.click.mockResolvedValue(undefined);
       await client.click(100, 200);
-      expect(mockBrowserService.click).toHaveBeenCalledWith(100, 200, 'chat');
+      expect(mockBrowserService.click).toHaveBeenCalledWith(100, 200, 'debug-ui');
     });
 
     it('should retry click up to 3 times on failure', async () => {
@@ -197,7 +209,11 @@ describe('BrowserClient', () => {
     it('should call clickBySelector on BrowserService', async () => {
       mockBrowserService.clickBySelector.mockResolvedValue(undefined);
       await client.clickBySelector('#test');
-      expect(mockBrowserService.clickBySelector).toHaveBeenCalledWith('#test', undefined, 'chat');
+      expect(mockBrowserService.clickBySelector).toHaveBeenCalledWith(
+        '#test',
+        undefined,
+        'debug-ui'
+      );
     });
 
     it('should retry clickBySelector with force on failure', async () => {
@@ -206,13 +222,21 @@ describe('BrowserClient', () => {
         .mockResolvedValueOnce(undefined);
       await client.clickBySelector('#test');
       expect(mockBrowserService.clickBySelector).toHaveBeenCalledTimes(2);
-      expect(mockBrowserService.clickBySelector).toHaveBeenLastCalledWith('#test', { force: true }, 'chat');
+      expect(mockBrowserService.clickBySelector).toHaveBeenLastCalledWith(
+        '#test',
+        { force: true },
+        'debug-ui'
+      );
     });
 
     it('should call executeScript on BrowserService and return result', async () => {
       mockBrowserService.executeScript.mockResolvedValue({ ok: true });
       const result = await client.executeScript('return true', ['arg']);
-      expect(mockBrowserService.executeScript).toHaveBeenCalledWith('return true', ['arg'], 'chat');
+      expect(mockBrowserService.executeScript).toHaveBeenCalledWith(
+        'return true',
+        ['arg'],
+        'debug-ui'
+      );
       expect(result).toEqual({ ok: true });
     });
 
@@ -230,7 +254,7 @@ describe('BrowserClient', () => {
       expect(mockBrowserService.executeScript).toHaveBeenCalledWith(
         expect.any(String),
         [],
-        'chat'
+        'debug-ui'
       );
       expect(result).toEqual(cookies);
     });
@@ -245,49 +269,65 @@ describe('BrowserClient', () => {
     it('should call clickByMarker on BrowserService', async () => {
       mockBrowserService.clickByMarker.mockResolvedValue(SUCCESS_MARKER_RESULT);
       await client.clickByMarker('snap-1', 123);
-      expect(mockBrowserService.clickByMarker).toHaveBeenCalledWith('snap-1', 123, 'chat');
+      expect(mockBrowserService.clickByMarker).toHaveBeenCalledWith('snap-1', 123, 'debug-ui');
     });
 
     it('should call typeByMarker on BrowserService', async () => {
       mockBrowserService.typeByMarker.mockResolvedValue(SUCCESS_MARKER_RESULT);
       await client.typeByMarker('snap-1', 123, 'hello');
-      expect(mockBrowserService.typeByMarker).toHaveBeenCalledWith('snap-1', 123, 'hello', undefined, 'chat');
+      expect(mockBrowserService.typeByMarker).toHaveBeenCalledWith(
+        'snap-1',
+        123,
+        'hello',
+        undefined,
+        'debug-ui'
+      );
     });
 
     it('should call focusByMarker on BrowserService', async () => {
       mockBrowserService.focusByMarker.mockResolvedValue(SUCCESS_MARKER_RESULT);
       await client.focusByMarker('snap-1', 123);
-      expect(mockBrowserService.focusByMarker).toHaveBeenCalledWith('snap-1', 123, 'chat');
+      expect(mockBrowserService.focusByMarker).toHaveBeenCalledWith('snap-1', 123, 'debug-ui');
     });
 
     it('should call blurByMarker on BrowserService', async () => {
       mockBrowserService.blurByMarker.mockResolvedValue(SUCCESS_MARKER_RESULT);
       await client.blurByMarker('snap-1', 123);
-      expect(mockBrowserService.blurByMarker).toHaveBeenCalledWith('snap-1', 123, 'chat');
+      expect(mockBrowserService.blurByMarker).toHaveBeenCalledWith('snap-1', 123, 'debug-ui');
     });
 
     it('should call hoverByMarker on BrowserService', async () => {
       mockBrowserService.hoverByMarker.mockResolvedValue(SUCCESS_MARKER_RESULT);
       await client.hoverByMarker('snap-1', 123);
-      expect(mockBrowserService.hoverByMarker).toHaveBeenCalledWith('snap-1', 123, 'chat');
+      expect(mockBrowserService.hoverByMarker).toHaveBeenCalledWith('snap-1', 123, 'debug-ui');
     });
 
     it('should call setValueByMarker on BrowserService', async () => {
       mockBrowserService.setValueByMarker.mockResolvedValue(SUCCESS_MARKER_RESULT);
       await client.setValueByMarker('snap-1', 123, 'val');
-      expect(mockBrowserService.setValueByMarker).toHaveBeenCalledWith('snap-1', 123, 'val', 'chat');
+      expect(mockBrowserService.setValueByMarker).toHaveBeenCalledWith(
+        'snap-1',
+        123,
+        'val',
+        'debug-ui'
+      );
     });
 
     it('should call dispatchEventByMarker on BrowserService', async () => {
       mockBrowserService.dispatchEventByMarker.mockResolvedValue(SUCCESS_MARKER_RESULT);
       await client.dispatchEventByMarker('snap-1', 123, 'change');
-      expect(mockBrowserService.dispatchEventByMarker).toHaveBeenCalledWith('snap-1', 123, 'change', 'chat');
+      expect(mockBrowserService.dispatchEventByMarker).toHaveBeenCalledWith(
+        'snap-1',
+        123,
+        'change',
+        'debug-ui'
+      );
     });
 
     it('should call type on BrowserService', async () => {
       mockBrowserService.type.mockResolvedValue(undefined);
       await client.type('#test', 'hello');
-      expect(mockBrowserService.type).toHaveBeenCalledWith('#test', 'hello', undefined, 'chat');
+      expect(mockBrowserService.type).toHaveBeenCalledWith('#test', 'hello', undefined, 'debug-ui');
     });
 
     it('should retry type with force escalation on failure', async () => {
@@ -297,7 +337,12 @@ describe('BrowserClient', () => {
       await client.type('#test', 'hello');
       expect(mockBrowserService.type).toHaveBeenCalledTimes(2);
       // Second attempt should have force: true
-      expect(mockBrowserService.type).toHaveBeenLastCalledWith('#test', 'hello', { force: true }, 'chat');
+      expect(mockBrowserService.type).toHaveBeenLastCalledWith(
+        '#test',
+        'hello',
+        { force: true },
+        'debug-ui'
+      );
     });
 
     it('should throw after 3 failed type attempts', async () => {
@@ -309,37 +354,37 @@ describe('BrowserClient', () => {
     it('should call scroll on BrowserService', async () => {
       mockBrowserService.scroll.mockResolvedValue(undefined);
       await client.scroll(0, 500);
-      expect(mockBrowserService.scroll).toHaveBeenCalledWith(0, 500, 'chat');
+      expect(mockBrowserService.scroll).toHaveBeenCalledWith(0, 500, 'debug-ui');
     });
 
     it('should call focus on BrowserService', async () => {
       mockBrowserService.focus.mockResolvedValue(undefined);
       await client.focus('#test');
-      expect(mockBrowserService.focus).toHaveBeenCalledWith('#test', 'chat');
+      expect(mockBrowserService.focus).toHaveBeenCalledWith('#test', 'debug-ui');
     });
 
     it('should call blur on BrowserService', async () => {
       mockBrowserService.blur.mockResolvedValue(undefined);
       await client.blur('#test');
-      expect(mockBrowserService.blur).toHaveBeenCalledWith('#test', 'chat');
+      expect(mockBrowserService.blur).toHaveBeenCalledWith('#test', 'debug-ui');
     });
 
     it('should call hover on BrowserService', async () => {
       mockBrowserService.hover.mockResolvedValue(undefined);
       await client.hover('#test');
-      expect(mockBrowserService.hover).toHaveBeenCalledWith('#test', 'chat');
+      expect(mockBrowserService.hover).toHaveBeenCalledWith('#test', 'debug-ui');
     });
 
     it('should call setValue on BrowserService', async () => {
       mockBrowserService.setValue.mockResolvedValue(undefined);
       await client.setValue('#test', 'val');
-      expect(mockBrowserService.setValue).toHaveBeenCalledWith('#test', 'val', 'chat');
+      expect(mockBrowserService.setValue).toHaveBeenCalledWith('#test', 'val', 'debug-ui');
     });
 
     it('should call dispatchEvent on BrowserService', async () => {
       mockBrowserService.dispatchEvent.mockResolvedValue(undefined);
       await client.dispatchEvent('#test', 'change');
-      expect(mockBrowserService.dispatchEvent).toHaveBeenCalledWith('#test', 'change', 'chat');
+      expect(mockBrowserService.dispatchEvent).toHaveBeenCalledWith('#test', 'change', 'debug-ui');
     });
   });
 
@@ -358,35 +403,41 @@ describe('BrowserClient', () => {
       mockBrowserService.dispatchEvent.mockResolvedValue(undefined);
 
       await client.elementAction('#test', 'click');
-      expect(mockBrowserService.clickBySelector).toHaveBeenCalledWith('#test', undefined, 'chat');
+      expect(mockBrowserService.clickBySelector).toHaveBeenCalledWith(
+        '#test',
+        undefined,
+        'debug-ui'
+      );
 
       vi.clearAllMocks();
       await client.elementAction('#test', 'type', 'hello');
-      expect(mockBrowserService.type).toHaveBeenCalledWith('#test', 'hello', undefined, 'chat');
+      expect(mockBrowserService.type).toHaveBeenCalledWith('#test', 'hello', undefined, 'debug-ui');
 
       vi.clearAllMocks();
       await client.elementAction('#test', 'value', 'val');
-      expect(mockBrowserService.setValue).toHaveBeenCalledWith('#test', 'val', 'chat');
+      expect(mockBrowserService.setValue).toHaveBeenCalledWith('#test', 'val', 'debug-ui');
 
       vi.clearAllMocks();
       await client.elementAction('#test', 'focus');
-      expect(mockBrowserService.focus).toHaveBeenCalledWith('#test', 'chat');
+      expect(mockBrowserService.focus).toHaveBeenCalledWith('#test', 'debug-ui');
 
       vi.clearAllMocks();
       await client.elementAction('#test', 'blur');
-      expect(mockBrowserService.blur).toHaveBeenCalledWith('#test', 'chat');
+      expect(mockBrowserService.blur).toHaveBeenCalledWith('#test', 'debug-ui');
 
       vi.clearAllMocks();
       await client.elementAction('#test', 'hover');
-      expect(mockBrowserService.hover).toHaveBeenCalledWith('#test', 'chat');
+      expect(mockBrowserService.hover).toHaveBeenCalledWith('#test', 'debug-ui');
 
       vi.clearAllMocks();
       await client.elementAction('#test', 'dispatch', 'change');
-      expect(mockBrowserService.dispatchEvent).toHaveBeenCalledWith('#test', 'change', 'chat');
+      expect(mockBrowserService.dispatchEvent).toHaveBeenCalledWith('#test', 'change', 'debug-ui');
     });
 
     it('should throw on unknown action', async () => {
-      await expect(client.elementAction('#test', 'unknown')).rejects.toThrow('Unknown action: unknown');
+      await expect(client.elementAction('#test', 'unknown')).rejects.toThrow(
+        'Unknown action: unknown'
+      );
     });
   });
 
@@ -428,7 +479,7 @@ describe('BrowserClient', () => {
       const element = { tag: 'div', selector: 'div', isVisible: true, isInteractable: true };
       mockBrowserService.getElementAt.mockResolvedValue(element);
       const result = await client.getElementAt(100, 200);
-      expect(mockBrowserService.getElementAt).toHaveBeenCalledWith(100, 200, 'chat');
+      expect(mockBrowserService.getElementAt).toHaveBeenCalledWith(100, 200, 'debug-ui');
       expect(result).toEqual(element);
     });
 
@@ -466,7 +517,7 @@ describe('BrowserClient', () => {
     it('should call BrowserService.switchTab with id and owner', async () => {
       mockBrowserService.switchTab.mockResolvedValue(undefined);
       await client.switchTab('tab-1');
-      expect(mockBrowserService.switchTab).toHaveBeenCalledWith('tab-1', 'chat');
+      expect(mockBrowserService.switchTab).toHaveBeenCalledWith('tab-1', 'debug-ui');
     });
   });
 
@@ -504,7 +555,13 @@ describe('BrowserClient', () => {
         url: 'snap-1',
         title: 'Snapshot snap-1',
         elements: [
-          { tag: 'div', text: 'hello', bbox: { x: 0, y: 0, width: 10, height: 10 }, isVisible: true, isInteractable: true },
+          {
+            tag: 'div',
+            text: 'hello',
+            bbox: { x: 0, y: 0, width: 10, height: 10 },
+            isVisible: true,
+            isInteractable: true,
+          },
         ],
         viewport: { width: 1440, height: 900 },
         screenshot: 'base64',
@@ -540,7 +597,13 @@ describe('BrowserClient', () => {
         url: 'snap-2',
         title: 'Snapshot snap-2',
         elements: [
-          { tag: 'div', text: 'hello', bbox: { x: 0, y: 0, width: 10, height: 10 }, isVisible: true, isInteractable: true },
+          {
+            tag: 'div',
+            text: 'hello',
+            bbox: { x: 0, y: 0, width: 10, height: 10 },
+            isVisible: true,
+            isInteractable: true,
+          },
         ],
         viewport: { width: 1920, height: 1080 },
         screenshot: 'base64',

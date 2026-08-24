@@ -112,7 +112,7 @@ export function validateCreateAgentTaskRequest(value: unknown): ValidatedAgentTa
   if (
     allow.some((tool) => tool.startsWith('browser-control.') && tool !== CONTROLLED_EXECUTE_TOOL)
   ) {
-    fail('Legacy browser-control tools are not available to Agent tasks');
+    fail('Unsupported browser-control tools are not available to Agent tasks');
   }
 
   const browserBinding = validateBrowserBinding(request.browserBinding);

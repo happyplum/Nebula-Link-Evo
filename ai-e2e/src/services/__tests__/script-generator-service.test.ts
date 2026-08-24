@@ -1,11 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ScriptGeneratorService } from '../script-generator-service.js';
-import type { ProxyAdapterClient } from '../../infrastructure/proxy-adapter-client.js';
+import type { AiE2eRuntimeClient } from '../../infrastructure/ai-e2e-runtime-client.js';
 import type { PromptTemplateManager } from '../../ai/prompt-manager.js';
 import type { ScriptRepository, Script } from '../../database/repositories/script-repository.js';
-import type { TestScenarioRepository, TestScenario } from '../../database/repositories/test-scenario-repository.js';
+import type {
+  TestScenarioRepository,
+  TestScenario,
+} from '../../database/repositories/test-scenario-repository.js';
 import type { URLRepository, URLRecord } from '../../database/repositories/url-repository.js';
-import type { URLModuleBindingRepository, URLModuleBinding } from '../../database/repositories/url-module-binding-repository.js';
+import type {
+  URLModuleBindingRepository,
+  URLModuleBinding,
+} from '../../database/repositories/url-module-binding-repository.js';
 
 // ---------- mock factories ----------
 
@@ -42,7 +48,8 @@ function createMockURL(overrides: Partial<URLRecord> = {}): URLRecord {
     url: 'https://example.com/login',
     title: 'Login Page',
     discovered_method: 'crawl',
-    page_snapshot_json: '<html><body><form><input name="username"/><input name="password"/><button>Login</button></form></body></html>',
+    page_snapshot_json:
+      '<html><body><form><input name="username"/><input name="password"/><button>Login</button></form></body></html>',
     auth_required: 0,
     last_verified_at: null,
     created_at: '2026-01-01T00:00:00.000Z',
@@ -55,7 +62,8 @@ function createMockScript(overrides: Partial<Script> = {}): Script {
     id: 'script-1',
     test_scenario_id: 'scenario-1',
     version: 1,
-    content: "import { test, expect } from '@playwright/test';\ntest('login', async ({ page }) => { await page.goto('https://example.com/login'); });",
+    content:
+      "import { test, expect } from '@playwright/test';\ntest('login', async ({ page }) => { await page.goto('https://example.com/login'); });",
     language: 'ts',
     generated_by: 'ai_generated',
     status: 'generated',
@@ -95,7 +103,7 @@ const x = 1;`;
 // ---------- helpers ----------
 
 function createMocks() {
-  const proxyClient: ProxyAdapterClient = {
+  const runtimeClient: AiE2eRuntimeClient = {
     generateText: vi.fn(),
     navigate: vi.fn(),
     getSnapshot: vi.fn(),
@@ -111,7 +119,7 @@ function createMocks() {
     getDOM: vi.fn(),
     openBrowser: vi.fn(),
     closeBrowser: vi.fn(),
-  } as unknown as ProxyAdapterClient;
+  } as unknown as AiE2eRuntimeClient;
 
   const promptManager: PromptTemplateManager = {
     render: vi.fn(),
@@ -153,7 +161,7 @@ function createMocks() {
   } as unknown as URLModuleBindingRepository;
 
   const service = new ScriptGeneratorService({
-    proxyClient,
+    runtimeClient,
     promptManager,
     scriptRepo,
     scenarioRepo,
@@ -161,7 +169,15 @@ function createMocks() {
     urlBindingRepo,
   });
 
-  return { service, proxyClient, promptManager, scriptRepo, scenarioRepo, urlRepo, urlBindingRepo };
+  return {
+    service,
+    runtimeClient,
+    promptManager,
+    scriptRepo,
+    scenarioRepo,
+    urlRepo,
+    urlBindingRepo,
+  };
 }
 
 // ---------- tests ----------
@@ -187,20 +203,20 @@ describe('ScriptGeneratorService', () => {
       const result = mocks.service.validateScriptSyntax(INVALID_SCRIPT_NO_IMPORT);
       expect(result.valid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
-      expect(result.errors.some(e => e.includes('import'))).toBe(true);
+      expect(result.errors.some((e) => e.includes('import'))).toBe(true);
     });
 
     it('should detect missing test block', () => {
       const result = mocks.service.validateScriptSyntax(INVALID_SCRIPT_NO_TEST);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('test('))).toBe(true);
+      expect(result.errors.some((e) => e.includes('test('))).toBe(true);
     });
 
     it('should detect unbalanced braces', () => {
       const unbalanced = `import { test, expect } from '@playwright/test';\ntest('bad', async ({ page }) => {\n  await page.goto('/');\n});\n}`;
       const result = mocks.service.validateScriptSyntax(unbalanced);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('brace') || e.includes('Brace'))).toBe(true);
+      expect(result.errors.some((e) => e.includes('brace') || e.includes('Brace'))).toBe(true);
     });
   });
 
@@ -217,7 +233,10 @@ describe('ScriptGeneratorService', () => {
       mocks.urlBindingRepo.findByModuleId = vi.fn().mockReturnValue([binding]);
       mocks.urlRepo.findById = vi.fn().mockReturnValue(url);
       mocks.promptManager.render = vi.fn().mockResolvedValue('rendered prompt');
-      mocks.proxyClient.generateText = vi.fn().mockResolvedValue({ text: VALID_SCRIPT, tokenUsage: { promptTokens: 100, completionTokens: 200 } });
+      mocks.runtimeClient.generateText = vi.fn().mockResolvedValue({
+        text: VALID_SCRIPT,
+        tokenUsage: { promptTokens: 100, completionTokens: 200 },
+      });
       mocks.scriptRepo.createVersion = vi.fn().mockReturnValue(createdScript);
 
       const result = await mocks.service.generateScript('scenario-1');
@@ -226,20 +245,31 @@ describe('ScriptGeneratorService', () => {
       expect(mocks.scenarioRepo.findById).toHaveBeenCalledWith('scenario-1');
       expect(mocks.urlBindingRepo.findByModuleId).toHaveBeenCalledWith('module-1');
       expect(mocks.urlRepo.findById).toHaveBeenCalledWith('url-1');
-      expect(mocks.promptManager.render).toHaveBeenCalledWith('script-generation', expect.objectContaining({
-        scenario_name: scenario.name,
-        scenario_description: scenario.description,
-        page_url: url.url,
-      }));
-      expect(mocks.proxyClient.generateText).toHaveBeenCalledWith('rendered prompt', expect.any(Object));
-      expect(mocks.scriptRepo.createVersion).toHaveBeenCalledWith('scenario-1', VALID_SCRIPT, 'ai_generated');
+      expect(mocks.promptManager.render).toHaveBeenCalledWith(
+        'script-generation',
+        expect.objectContaining({
+          scenario_name: scenario.name,
+          scenario_description: scenario.description,
+          page_url: url.url,
+        })
+      );
+      expect(mocks.runtimeClient.generateText).toHaveBeenCalledWith(
+        'rendered prompt',
+        expect.any(Object)
+      );
+      expect(mocks.scriptRepo.createVersion).toHaveBeenCalledWith(
+        'scenario-1',
+        VALID_SCRIPT,
+        'ai_generated'
+      );
     });
 
     it('should throw if scenario not found', async () => {
       mocks.scenarioRepo.findById = vi.fn().mockReturnValue(null);
 
-      await expect(mocks.service.generateScript('nonexistent'))
-        .rejects.toThrow('Test scenario not found: nonexistent');
+      await expect(mocks.service.generateScript('nonexistent')).rejects.toThrow(
+        'Test scenario not found: nonexistent'
+      );
     });
 
     it('should throw if no URL bindings found for functional module', async () => {
@@ -247,8 +277,9 @@ describe('ScriptGeneratorService', () => {
       mocks.scenarioRepo.findById = vi.fn().mockReturnValue(scenario);
       mocks.urlBindingRepo.findByModuleId = vi.fn().mockReturnValue([]);
 
-      await expect(mocks.service.generateScript('scenario-1'))
-        .rejects.toThrow('No URL bindings found for functional module: module-1');
+      await expect(mocks.service.generateScript('scenario-1')).rejects.toThrow(
+        'No URL bindings found for functional module: module-1'
+      );
     });
 
     it('should retry on syntax validation failure and succeed on retry', async () => {
@@ -262,9 +293,16 @@ describe('ScriptGeneratorService', () => {
       mocks.promptManager.render = vi.fn().mockResolvedValue('rendered prompt');
 
       // First call returns invalid script, second returns valid
-      mocks.proxyClient.generateText = vi.fn()
-        .mockResolvedValueOnce({ text: INVALID_SCRIPT_NO_IMPORT, tokenUsage: { promptTokens: 100, completionTokens: 50 } })
-        .mockResolvedValueOnce({ text: VALID_SCRIPT, tokenUsage: { promptTokens: 150, completionTokens: 200 } });
+      mocks.runtimeClient.generateText = vi
+        .fn()
+        .mockResolvedValueOnce({
+          text: INVALID_SCRIPT_NO_IMPORT,
+          tokenUsage: { promptTokens: 100, completionTokens: 50 },
+        })
+        .mockResolvedValueOnce({
+          text: VALID_SCRIPT,
+          tokenUsage: { promptTokens: 150, completionTokens: 200 },
+        });
 
       const createdScript = createMockScript({ content: VALID_SCRIPT });
       mocks.scriptRepo.createVersion = vi.fn().mockReturnValue(createdScript);
@@ -272,9 +310,10 @@ describe('ScriptGeneratorService', () => {
       const result = await mocks.service.generateScript('scenario-1');
 
       expect(result.content).toBe(VALID_SCRIPT);
-      expect(mocks.proxyClient.generateText).toHaveBeenCalledTimes(2);
+      expect(mocks.runtimeClient.generateText).toHaveBeenCalledTimes(2);
       // Second prompt should include error feedback
-      const secondCallArgs = (mocks.proxyClient.generateText as ReturnType<typeof vi.fn>).mock.calls[1];
+      const secondCallArgs = (mocks.runtimeClient.generateText as ReturnType<typeof vi.fn>).mock
+        .calls[1];
       expect(secondCallArgs[0]).toContain('Previous Attempt Errors');
     });
 
@@ -289,13 +328,16 @@ describe('ScriptGeneratorService', () => {
       mocks.promptManager.render = vi.fn().mockResolvedValue('rendered prompt');
 
       // All calls return invalid script
-      mocks.proxyClient.generateText = vi.fn()
-        .mockResolvedValue({ text: INVALID_SCRIPT_NO_IMPORT, tokenUsage: { promptTokens: 100, completionTokens: 50 } });
+      mocks.runtimeClient.generateText = vi.fn().mockResolvedValue({
+        text: INVALID_SCRIPT_NO_IMPORT,
+        tokenUsage: { promptTokens: 100, completionTokens: 50 },
+      });
 
-      await expect(mocks.service.generateScript('scenario-1'))
-        .rejects.toThrow('Failed to generate valid script after 3 attempts');
+      await expect(mocks.service.generateScript('scenario-1')).rejects.toThrow(
+        'Failed to generate valid script after 3 attempts'
+      );
 
-      expect(mocks.proxyClient.generateText).toHaveBeenCalledTimes(3);
+      expect(mocks.runtimeClient.generateText).toHaveBeenCalledTimes(3);
     });
 
     it('should use page_snapshot from URL when available', async () => {
@@ -307,14 +349,20 @@ describe('ScriptGeneratorService', () => {
       mocks.urlBindingRepo.findByModuleId = vi.fn().mockReturnValue([binding]);
       mocks.urlRepo.findById = vi.fn().mockReturnValue(url);
       mocks.promptManager.render = vi.fn().mockResolvedValue('prompt');
-      mocks.proxyClient.generateText = vi.fn().mockResolvedValue({ text: VALID_SCRIPT, tokenUsage: { promptTokens: 0, completionTokens: 0 } });
+      mocks.runtimeClient.generateText = vi.fn().mockResolvedValue({
+        text: VALID_SCRIPT,
+        tokenUsage: { promptTokens: 0, completionTokens: 0 },
+      });
       mocks.scriptRepo.createVersion = vi.fn().mockReturnValue(createMockScript());
 
       await mocks.service.generateScript('scenario-1');
 
-      expect(mocks.promptManager.render).toHaveBeenCalledWith('script-generation', expect.objectContaining({
-        page_snapshot: '<html>snapshot</html>',
-      }));
+      expect(mocks.promptManager.render).toHaveBeenCalledWith(
+        'script-generation',
+        expect.objectContaining({
+          page_snapshot: '<html>snapshot</html>',
+        })
+      );
     });
 
     it('should use empty string for page_snapshot when not available', async () => {
@@ -326,14 +374,20 @@ describe('ScriptGeneratorService', () => {
       mocks.urlBindingRepo.findByModuleId = vi.fn().mockReturnValue([binding]);
       mocks.urlRepo.findById = vi.fn().mockReturnValue(url);
       mocks.promptManager.render = vi.fn().mockResolvedValue('prompt');
-      mocks.proxyClient.generateText = vi.fn().mockResolvedValue({ text: VALID_SCRIPT, tokenUsage: { promptTokens: 0, completionTokens: 0 } });
+      mocks.runtimeClient.generateText = vi.fn().mockResolvedValue({
+        text: VALID_SCRIPT,
+        tokenUsage: { promptTokens: 0, completionTokens: 0 },
+      });
       mocks.scriptRepo.createVersion = vi.fn().mockReturnValue(createMockScript());
 
       await mocks.service.generateScript('scenario-1');
 
-      expect(mocks.promptManager.render).toHaveBeenCalledWith('script-generation', expect.objectContaining({
-        page_snapshot: '',
-      }));
+      expect(mocks.promptManager.render).toHaveBeenCalledWith(
+        'script-generation',
+        expect.objectContaining({
+          page_snapshot: '',
+        })
+      );
     });
 
     it('should pass test_data_json from scenario to prompt', async () => {
@@ -345,14 +399,20 @@ describe('ScriptGeneratorService', () => {
       mocks.urlBindingRepo.findByModuleId = vi.fn().mockReturnValue([binding]);
       mocks.urlRepo.findById = vi.fn().mockReturnValue(url);
       mocks.promptManager.render = vi.fn().mockResolvedValue('prompt');
-      mocks.proxyClient.generateText = vi.fn().mockResolvedValue({ text: VALID_SCRIPT, tokenUsage: { promptTokens: 0, completionTokens: 0 } });
+      mocks.runtimeClient.generateText = vi.fn().mockResolvedValue({
+        text: VALID_SCRIPT,
+        tokenUsage: { promptTokens: 0, completionTokens: 0 },
+      });
       mocks.scriptRepo.createVersion = vi.fn().mockReturnValue(createMockScript());
 
       await mocks.service.generateScript('scenario-1');
 
-      expect(mocks.promptManager.render).toHaveBeenCalledWith('script-generation', expect.objectContaining({
-        test_data: '{"username":"admin"}',
-      }));
+      expect(mocks.promptManager.render).toHaveBeenCalledWith(
+        'script-generation',
+        expect.objectContaining({
+          test_data: '{"username":"admin"}',
+        })
+      );
     });
 
     it('should use default test_data when scenario has none', async () => {
@@ -364,14 +424,20 @@ describe('ScriptGeneratorService', () => {
       mocks.urlBindingRepo.findByModuleId = vi.fn().mockReturnValue([binding]);
       mocks.urlRepo.findById = vi.fn().mockReturnValue(url);
       mocks.promptManager.render = vi.fn().mockResolvedValue('prompt');
-      mocks.proxyClient.generateText = vi.fn().mockResolvedValue({ text: VALID_SCRIPT, tokenUsage: { promptTokens: 0, completionTokens: 0 } });
+      mocks.runtimeClient.generateText = vi.fn().mockResolvedValue({
+        text: VALID_SCRIPT,
+        tokenUsage: { promptTokens: 0, completionTokens: 0 },
+      });
       mocks.scriptRepo.createVersion = vi.fn().mockReturnValue(createMockScript());
 
       await mocks.service.generateScript('scenario-1');
 
-      expect(mocks.promptManager.render).toHaveBeenCalledWith('script-generation', expect.objectContaining({
-        test_data: 'No test data provided.',
-      }));
+      expect(mocks.promptManager.render).toHaveBeenCalledWith(
+        'script-generation',
+        expect.objectContaining({
+          test_data: 'No test data provided.',
+        })
+      );
     });
   });
 
@@ -388,7 +454,7 @@ describe('ScriptGeneratorService', () => {
       mocks.urlBindingRepo.findByModuleId = vi.fn().mockReturnValue([binding]);
       mocks.urlRepo.findById = vi.fn().mockReturnValue(url);
       mocks.promptManager.render = vi.fn().mockResolvedValue('rendered prompt');
-      mocks.proxyClient.generateText = vi.fn().mockResolvedValue({
+      mocks.runtimeClient.generateText = vi.fn().mockResolvedValue({
         text: '```json\n' + JSON.stringify(testDataResult) + '\n```',
         tokenUsage: { promptTokens: 50, completionTokens: 100 },
       });
@@ -396,17 +462,21 @@ describe('ScriptGeneratorService', () => {
       const result = await mocks.service.generateTestData('scenario-1');
 
       expect(result).toEqual(testDataResult);
-      expect(mocks.promptManager.render).toHaveBeenCalledWith('test-data-generation', expect.objectContaining({
-        scenario_name: scenario.name,
-        scenario_description: scenario.description,
-        page_fields: '{"fields":["username","password"]}',
-      }));
+      expect(mocks.promptManager.render).toHaveBeenCalledWith(
+        'test-data-generation',
+        expect.objectContaining({
+          scenario_name: scenario.name,
+          scenario_description: scenario.description,
+          page_fields: '{"fields":["username","password"]}',
+        })
+      );
     });
 
     it('should throw if scenario not found', async () => {
       mocks.scenarioRepo.findById = vi.fn().mockReturnValue(null);
-      await expect(mocks.service.generateTestData('nonexistent'))
-        .rejects.toThrow('Test scenario not found: nonexistent');
+      await expect(mocks.service.generateTestData('nonexistent')).rejects.toThrow(
+        'Test scenario not found: nonexistent'
+      );
     });
 
     it('should handle AI response without code fence', async () => {
@@ -419,7 +489,7 @@ describe('ScriptGeneratorService', () => {
       mocks.urlBindingRepo.findByModuleId = vi.fn().mockReturnValue([binding]);
       mocks.urlRepo.findById = vi.fn().mockReturnValue(url);
       mocks.promptManager.render = vi.fn().mockResolvedValue('rendered prompt');
-      mocks.proxyClient.generateText = vi.fn().mockResolvedValue({
+      mocks.runtimeClient.generateText = vi.fn().mockResolvedValue({
         text: JSON.stringify(testDataResult),
         tokenUsage: { promptTokens: 50, completionTokens: 100 },
       });
@@ -437,13 +507,14 @@ describe('ScriptGeneratorService', () => {
       mocks.urlBindingRepo.findByModuleId = vi.fn().mockReturnValue([binding]);
       mocks.urlRepo.findById = vi.fn().mockReturnValue(url);
       mocks.promptManager.render = vi.fn().mockResolvedValue('rendered prompt');
-      mocks.proxyClient.generateText = vi.fn().mockResolvedValue({
+      mocks.runtimeClient.generateText = vi.fn().mockResolvedValue({
         text: 'not valid json {{{',
         tokenUsage: { promptTokens: 50, completionTokens: 100 },
       });
 
-      await expect(mocks.service.generateTestData('scenario-1'))
-        .rejects.toThrow('Failed to parse test data');
+      await expect(mocks.service.generateTestData('scenario-1')).rejects.toThrow(
+        'Failed to parse test data'
+      );
     });
   });
 
@@ -462,20 +533,28 @@ describe('ScriptGeneratorService', () => {
       mocks.urlBindingRepo.findByModuleId = vi.fn().mockReturnValue([binding]);
       mocks.urlRepo.findById = vi.fn().mockReturnValue(url);
       mocks.promptManager.render = vi.fn().mockResolvedValue('prompt');
-      mocks.proxyClient.generateText = vi.fn().mockResolvedValue({ text: VALID_SCRIPT, tokenUsage: { promptTokens: 0, completionTokens: 0 } });
+      mocks.runtimeClient.generateText = vi.fn().mockResolvedValue({
+        text: VALID_SCRIPT,
+        tokenUsage: { promptTokens: 0, completionTokens: 0 },
+      });
       mocks.scriptRepo.createVersion = vi.fn().mockReturnValue(newScript);
 
       const result = await mocks.service.regenerateScript('script-old');
 
       expect(result).toEqual(newScript);
       expect(mocks.scriptRepo.findById).toHaveBeenCalledWith('script-old');
-      expect(mocks.scriptRepo.createVersion).toHaveBeenCalledWith('scenario-1', VALID_SCRIPT, 'ai_generated');
+      expect(mocks.scriptRepo.createVersion).toHaveBeenCalledWith(
+        'scenario-1',
+        VALID_SCRIPT,
+        'ai_generated'
+      );
     });
 
     it('should throw if script not found', async () => {
       mocks.scriptRepo.findById = vi.fn().mockReturnValue(null);
-      await expect(mocks.service.regenerateScript('nonexistent'))
-        .rejects.toThrow('Script not found: nonexistent');
+      await expect(mocks.service.regenerateScript('nonexistent')).rejects.toThrow(
+        'Script not found: nonexistent'
+      );
     });
   });
 
@@ -484,7 +563,12 @@ describe('ScriptGeneratorService', () => {
   describe('saveEditedScript', () => {
     it('should save a human-edited script as new version', async () => {
       const existingScript = createMockScript({ id: 'script-1', version: 1 });
-      const editedScript = createMockScript({ id: 'script-2', version: 2, generated_by: 'human_edited', status: 'edited' });
+      const editedScript = createMockScript({
+        id: 'script-2',
+        version: 2,
+        generated_by: 'human_edited',
+        status: 'edited',
+      });
 
       mocks.scriptRepo.findById = vi.fn().mockReturnValue(existingScript);
       mocks.scriptRepo.createVersion = vi.fn().mockReturnValue(editedScript);
@@ -492,21 +576,27 @@ describe('ScriptGeneratorService', () => {
       const result = await mocks.service.saveEditedScript('script-1', VALID_SCRIPT);
 
       expect(result).toEqual(editedScript);
-      expect(mocks.scriptRepo.createVersion).toHaveBeenCalledWith('scenario-1', VALID_SCRIPT, 'human_edited');
+      expect(mocks.scriptRepo.createVersion).toHaveBeenCalledWith(
+        'scenario-1',
+        VALID_SCRIPT,
+        'human_edited'
+      );
     });
 
     it('should throw if script not found', async () => {
       mocks.scriptRepo.findById = vi.fn().mockReturnValue(null);
-      await expect(mocks.service.saveEditedScript('nonexistent', VALID_SCRIPT))
-        .rejects.toThrow('Script not found: nonexistent');
+      await expect(mocks.service.saveEditedScript('nonexistent', VALID_SCRIPT)).rejects.toThrow(
+        'Script not found: nonexistent'
+      );
     });
 
     it('should throw if edited content has syntax errors', async () => {
       const existingScript = createMockScript();
       mocks.scriptRepo.findById = vi.fn().mockReturnValue(existingScript);
 
-      await expect(mocks.service.saveEditedScript('script-1', INVALID_SCRIPT_NO_IMPORT))
-        .rejects.toThrow('Script syntax validation failed');
+      await expect(
+        mocks.service.saveEditedScript('script-1', INVALID_SCRIPT_NO_IMPORT)
+      ).rejects.toThrow('Script syntax validation failed');
     });
   });
 
@@ -558,11 +648,13 @@ import assert from 'node:assert';
   }
 })();`;
 
-      mocks.proxyClient.generateText = vi.fn().mockResolvedValue({
+      mocks.runtimeClient.generateText = vi.fn().mockResolvedValue({
         text: testidScript,
         tokenUsage: { promptTokens: 100, completionTokens: 200 },
       });
-      mocks.scriptRepo.createVersion = vi.fn().mockReturnValue(createMockScript({ content: testidScript }));
+      mocks.scriptRepo.createVersion = vi
+        .fn()
+        .mockReturnValue(createMockScript({ content: testidScript }));
 
       await mocks.service.generateScript('scenario-1');
 

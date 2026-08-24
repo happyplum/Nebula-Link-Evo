@@ -1,88 +1,52 @@
-/**
- * ProxyAdapterClient — backward-compatible facade over the dual-backend client
- * layer.
- *
- * Historically ai-e2e reached a single backend (proxy-adapter) for both AI
- * generation and browser control. After the ai-chat-service split (M2/M3), AI
- * generation moved to `ai-chat-service` (:3001) while browser control stayed
- * on `proxy-adapter` (:3000).
- *
- * To keep the existing orchestration services and their tests stable, this
- * class preserves the original unified public API but delegates each call to
- * the appropriate client:
- *   - `generateText()`            → AiChatClient (:3001)
- *   - all browser/debug methods   → BrowserGatewayClient (:3000)
- *
- * New code SHOULD depend on `AiChatClient` or `BrowserGatewayClient` directly
- * when it only needs one backend. The facade exists so services that genuinely
- * use both (e.g. ExplorerService, which defines an ExplorerRuntimeClient that
- * combines AI + browser) keep a single injection point.
- */
 import { AiChatClient, type GenerateOptions, type TextGenerationResult } from './ai-chat-client.js';
 import { BrowserGatewayClient } from './browser-gateway-client.js';
 
 export type { GenerateOptions, TextGenerationResult };
 
-export interface ProxyAdapterClientConfig {
-  /** Base URL for ai-chat-service (:3001). When omitted, reads AI_CHAT_SERVICE_URL / AI_CHAT_URL. */
+export interface AiE2eRuntimeClientConfig {
+  /** ai-chat-service loopback base URL. */
   aiChatBaseUrl?: string;
-  /** Base URL for proxy-adapter browser gateway (:3000). When omitted, reads PROXY_ADAPTER_URL. */
+  /** proxy-adapter loopback base URL. */
   browserGatewayBaseUrl?: string;
-  /** Legacy single timeout applied to both AI and Playwright requests. */
-  timeout?: number;
-  /** Timeout for AI text generation requests (ms). */
   aiTimeout?: number;
-  /** Timeout for Playwright / debug requests (ms). */
   playwrightTimeout?: number;
   projectId?: string;
 }
 
-export class ProxyAdapterClient {
+/** Explicit ai-e2e application boundary over the AI core and browser gateway. */
+export class AiE2eRuntimeClient {
   private readonly aiChat: AiChatClient;
   private readonly browserGateway: BrowserGatewayClient;
 
-  constructor(config: ProxyAdapterClientConfig = {}) {
+  constructor(config: AiE2eRuntimeClientConfig = {}) {
     this.aiChat = new AiChatClient({
       baseUrl: config.aiChatBaseUrl,
-      aiTimeout: config.aiTimeout ?? config.timeout,
+      aiTimeout: config.aiTimeout,
       projectId: config.projectId,
     });
     this.browserGateway = new BrowserGatewayClient({
       baseUrl: config.browserGatewayBaseUrl,
-      playwrightTimeout: config.playwrightTimeout ?? config.timeout,
+      playwrightTimeout: config.playwrightTimeout,
       projectId: config.projectId,
     });
   }
 
-  /** The underlying ai-chat-service client (:3001). */
-  get aiChatClient(): AiChatClient {
-    return this.aiChat;
+  getServiceUrls(): { aiChat: string | null; browserGateway: string | null } {
+    return {
+      aiChat: this.aiChat.getBaseUrl(),
+      browserGateway: this.browserGateway.getBaseUrl(),
+    };
   }
 
-  /** The underlying browser-gateway client (:3000). */
-  get browserGatewayClient(): BrowserGatewayClient {
-    return this.browserGateway;
-  }
-
-  // ===== AI (ai-chat-service :3001) =====
-
-  async generateText(
-    prompt: string,
-    options?: GenerateOptions,
-  ): Promise<TextGenerationResult> {
+  async generateText(prompt: string, options?: GenerateOptions): Promise<TextGenerationResult> {
     return this.aiChat.generateText(prompt, options);
   }
-
-  // ===== Browser control (proxy-adapter :3000) =====
 
   async navigate(url: string): Promise<{ success: boolean; url: string }> {
     return this.browserGateway.navigate(url);
   }
 
-  async getSnapshot(): Promise<{
-    elements: Record<string, unknown>;
-    screenshot?: string;
-  }> {
+  async getSnapshot(): Promise<{ elements: Record<string, unknown>; screenshot?: string }> {
     return this.browserGateway.getSnapshot();
   }
 
@@ -102,10 +66,7 @@ export class ProxyAdapterClient {
     return this.browserGateway.screenshot();
   }
 
-  async executeScript(
-    script: string,
-    args?: unknown[],
-  ): Promise<{ result: unknown }> {
+  async executeScript(script: string, args?: unknown[]): Promise<{ result: unknown }> {
     return this.browserGateway.executeScript(script, args);
   }
 

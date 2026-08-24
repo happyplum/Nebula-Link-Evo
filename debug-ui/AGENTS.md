@@ -15,15 +15,15 @@ pnpm type-check   # tsc --noEmit
 
 ## Where To Look
 
-| Area        | Path                  | Notes                                                                                            |
-| ----------- | --------------------- | ------------------------------------------------------------------------------------------------ |
-| Vite config | `vite.config.ts`      | base `/debug/`, dev proxies chat/AI→`:3001`、browser/debug→`:3000`, `@/` alias                    |
-| App shell   | `src/app/`            | App.tsx, routes, layout                                                                          |
+| Area        | Path                  | Notes                                                                                   |
+| ----------- | --------------------- | --------------------------------------------------------------------------------------- |
+| Vite config | `vite.config.ts`      | base `/debug/`, dev proxies chat/AI→`:3001`、browser/debug→`:3000`, `@/` alias          |
+| App shell   | `src/app/`            | App.tsx, routes, layout                                                                 |
 | Features    | `src/features/`       | Feature-based architecture: layout, runtime, chat, playwright-control, config, liveview |
-| Shared UI   | `src/shared/`         | Reusable components, hooks, utilities, testids                                                   |
-| E2E         | `e2e/`                | Playwright specs, custom fixtures                              |
-| Styles      | `src/**/*.module.css` | CSS Modules for component styling                                                                |
-| Tests       | `src/**/*.test.tsx`   | Vitest unit tests                                                                                |
+| Shared UI   | `src/shared/`         | Reusable components, hooks, utilities, testids                                          |
+| E2E         | `e2e/`                | Playwright specs, custom fixtures                                                       |
+| Styles      | `src/**/*.module.css` | CSS Modules for component styling                                                       |
+| Tests       | `src/**/*.test.tsx`   | Vitest unit tests                                                                       |
 
 ## Tech Stack
 
@@ -38,7 +38,7 @@ pnpm type-check   # tsc --noEmit
 
 ## Runtime Model
 
-- **Dev**: Vite dev server (`:5173`), proxies chat/AI (`/api/chat`, `/api/ai`, `/api/test-ai`, `/api/verify-keys`) → `:3001`, browser/debug (`/api`, `/debug/api`, `/debug/stream`) → `:3000`
+- **Dev**: Vite dev server (`:5173`), proxies canonical AI routes (`/api/v1/chat`, `/api/v1/ai`, `/api/v1/test-ai`, `/api/v1/config`) → `:3001`, browser/debug (`/api`, `/debug/api`, `/debug/stream`, `/mcp`) → `:3000`
 - **Prod**: Standalone build, accessed directly (not served by proxy-adapter)
 - Routes: `/` → DebugPage, `/chat` → ChatPage (via HashRouter)
 - Modules use same-origin paths: `/api`, `/debug/api`
@@ -73,13 +73,13 @@ pnpm type-check   # tsc --noEmit
 - No CSS-in-JS or Tailwind (CSS Modules only).
 - No code splitting or lazy loading (Vite handles build optimization).
 - No SSR or server components (SPA with HashRouter).
-- No plain DOM or window.* global patterns (use React idioms).
+- No plain DOM or window.\* global patterns (use React idioms).
 
 ## Child AGENTS
 
 - `src/features/AGENTS.md` — feature-level guidance
 - `src/features/chat/AGENTS.md` — SSE + optimistic chat streaming
-- `src/features/config/AGENTS.md` — health, MCP tools, API keys, AI test
+- `src/features/config/AGENTS.md` — health, MCP tools, public AI config, AI test
 - `src/features/runtime/AGENTS.md` — runtime store and service status sync
 - `src/features/liveview/AGENTS.md` — MJPEG canvas and overlay rules
 - `src/features/playwright-control/AGENTS.md` — browser control/store rules

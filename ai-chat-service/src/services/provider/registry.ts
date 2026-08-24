@@ -89,16 +89,13 @@ export class ProviderRegistry {
     this.config = config;
   }
 
-  async resolve(
-    providerKey: string,
-    modelId: string,
-  ): Promise<LanguageModelV3> {
+  async resolve(providerKey: string, modelId: string): Promise<LanguageModelV3> {
     const providerConfig = this.config[providerKey];
     if (!providerConfig) {
       throw new ProviderError(
         PROVIDER_ERRORS.NOT_FOUND,
         providerKey,
-        `Provider '${providerKey}' not found in configuration`,
+        `Provider '${providerKey}' not found in configuration`
       );
     }
 
@@ -115,7 +112,7 @@ export class ProviderRegistry {
   /**
    * Checks whether a provider is available.
    * After probing, returns the probed availability state.
-   * Before probing, falls back to config-presence check for backward compat.
+   * Before startup probing completes, reports whether the provider is configured.
    */
   isAvailable(providerKey: string): boolean {
     const probed = this.availability.get(providerKey);
@@ -176,7 +173,7 @@ export class ProviderRegistry {
       throw new ProviderError(
         PROVIDER_ERRORS.NOT_FOUND,
         providerKey,
-        `Provider '${providerKey}' not found`,
+        `Provider '${providerKey}' not found`
       );
     }
     return cfg;
@@ -184,7 +181,7 @@ export class ProviderRegistry {
 
   private async loadProvider(
     providerKey: string,
-    providerConfig: ProviderConfig,
+    providerConfig: ProviderConfig
   ): Promise<ProviderFn> {
     // 1. Check alias-specific adapters first
     const aliasAdapter = ALIAS_ADAPTERS[providerKey];
@@ -202,7 +199,7 @@ export class ProviderRegistry {
       throw new ProviderError(
         PROVIDER_ERRORS.INIT_FAILED,
         providerKey,
-        `Package '${npmPackage}' does not export '${factoryName}'`,
+        `Package '${npmPackage}' does not export '${factoryName}'`
       );
     }
 
@@ -216,14 +213,12 @@ export class ProviderRegistry {
       sdkParams.headers = providerConfig.headers;
     }
 
-    const provider = (factory as (params: Record<string, unknown>) => unknown)(
-      sdkParams,
-    );
+    const provider = (factory as (params: Record<string, unknown>) => unknown)(sdkParams);
     if (typeof provider !== 'function') {
       throw new ProviderError(
         PROVIDER_ERRORS.INIT_FAILED,
         providerKey,
-        `Factory '${factoryName}' from '${npmPackage}' did not return a provider function`,
+        `Factory '${factoryName}' from '${npmPackage}' did not return a provider function`
       );
     }
 

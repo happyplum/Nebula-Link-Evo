@@ -78,7 +78,7 @@ function emit(type: string, data: unknown) {
 describe('useChatStream recovery', () => {
   it('always connects to the bare stream URL', () => {
     renderStream('s1');
-    expect(mockEs.url).toBe('/api/chat/sessions/s1/stream');
+    expect(mockEs.url).toBe('/api/v1/chat/sessions/s1/stream');
   });
 
   it('reconnects to the same bare stream URL after error', () => {
@@ -92,7 +92,7 @@ describe('useChatStream recovery', () => {
       vi.advanceTimersByTime(1000);
     });
 
-    expect(mockEs.url).toBe('/api/chat/sessions/s1/stream');
+    expect(mockEs.url).toBe('/api/v1/chat/sessions/s1/stream');
   });
 
   it('replaces stale in-memory messages with snapshot on reconnect', () => {
@@ -182,7 +182,7 @@ describe('useChatStream recovery', () => {
     rerender({ sessionId: 's2', enabled: true });
 
     expect(oldEs.close).toHaveBeenCalled();
-    expect(mockEs.url).toBe('/api/chat/sessions/s2/stream');
+    expect(mockEs.url).toBe('/api/v1/chat/sessions/s2/stream');
   });
 
   it('restores activeToolCalls from snapshot on reconnect', () => {

@@ -2,8 +2,14 @@ import { describe, expect, it, vi } from 'vitest';
 import { BrowserExecutionError } from '../browser-execution/errors.js';
 import type { BrowserExecutionService } from '../browser-execution/service.js';
 import { BrowserClient } from '../browser-client.js';
-import { createBrowserTools } from '../browser-tools/index.js';
 import { BrowserExecutionToolsProvider } from '../tools/providers/browser-execution-tools-provider.js';
+import type { GatewayTool } from '../tools/types.js';
+
+function requireTool(provider: BrowserExecutionToolsProvider, suffix: string): GatewayTool {
+  const tool = provider.getTools().find((candidate) => candidate.name.endsWith(suffix));
+  if (!tool) throw new Error(`Missing fixture tool ${suffix}`);
+  return tool;
+}
 
 describe('BrowserExecutionToolsProvider', () => {
   it('exposes only the three controlled MCP tools', async () => {
@@ -21,11 +27,6 @@ describe('BrowserExecutionToolsProvider', () => {
       'browser-control.operation_get',
       'browser-control.operation_cancel',
     ]);
-    expect(
-      provider
-        .getTools()
-        .every((tool) => tool.exposeTo.length === 1 && tool.exposeTo[0] === 'mcp-server')
-    ).toBe(true);
   });
 
   it('forwards the hidden execution envelope to the durable service', async () => {
@@ -38,7 +39,7 @@ describe('BrowserExecutionToolsProvider', () => {
     } as unknown as BrowserExecutionService;
     const provider = new BrowserExecutionToolsProvider(service);
     await provider.initialize();
-    const tool = provider.getTools().find((item) => item.name.endsWith('operation_execute'))!;
+    const tool = requireTool(provider, 'operation_execute');
 
     const output = await tool.execute({
       sessionId: 'session-1',
@@ -74,7 +75,7 @@ describe('BrowserExecutionToolsProvider', () => {
     } as unknown as BrowserExecutionService;
     const provider = new BrowserExecutionToolsProvider(service);
     await provider.initialize();
-    const tool = provider.getTools().find((item) => item.name.endsWith('operation_get'))!;
+    const tool = requireTool(provider, 'operation_get');
 
     await expect(tool.execute({ operationId: 'op-1', unexpected: true })).rejects.toThrow(
       'Unexpected browser execution tool fields'
@@ -92,7 +93,7 @@ describe('BrowserExecutionToolsProvider', () => {
     } as unknown as BrowserExecutionService;
     const provider = new BrowserExecutionToolsProvider(service);
     await provider.initialize();
-    const tool = provider.getTools().find((item) => item.name.endsWith('operation_get'))!;
+    const tool = requireTool(provider, 'operation_get');
 
     await expect(tool.execute({ operationId: 'op-1' })).rejects.toSatisfy((error: unknown) => {
       const problem = JSON.parse((error as Error).message) as Record<string, unknown>;
@@ -107,22 +108,19 @@ describe('BrowserExecutionToolsProvider', () => {
   });
 });
 
-describe('BrowserClient controlled-session gate', () => {
-  it('blocks legacy writes and direct capture before they reach Playwright', async () => {
+describe('BrowserClient direct-access arbiter', () => {
+  it('blocks direct writes and capture before they reach Playwright', async () => {
     const client = new BrowserClient();
     const gate = {
-      assertLegacyBrowserAccess: vi.fn((kind: 'read' | 'capture' | 'write') => {
+      assertDirectBrowserAccess: vi.fn((kind: 'read' | 'capture' | 'write') => {
         throw new BrowserExecutionError('browser_busy', `${kind} blocked`);
       }),
     };
-    client.setAccessGate(gate);
+    client.setAccessArbiter(gate);
 
     await expect(client.openBrowser()).rejects.toMatchObject({ code: 'browser_busy' });
     await expect(client.getSimplifiedDOM()).rejects.toMatchObject({ code: 'browser_busy' });
-    expect(gate.assertLegacyBrowserAccess).toHaveBeenNthCalledWith(1, 'write');
-    expect(gate.assertLegacyBrowserAccess).toHaveBeenNthCalledWith(2, 'capture');
-
-    const legacyTool = createBrowserTools(client)['browser-control.browser_open'];
-    expect(await legacyTool.execute({})).toBe('Error [browser_busy]: write blocked');
+    expect(gate.assertDirectBrowserAccess).toHaveBeenNthCalledWith(1, 'write');
+    expect(gate.assertDirectBrowserAccess).toHaveBeenNthCalledWith(2, 'capture');
   });
 });

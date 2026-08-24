@@ -9,10 +9,16 @@
  * - Max retries: 3 auto-fix attempts per execution
  * - Auto-fix only allowed for: selectors, wait strategies, assertion values
  */
-import type { ProxyAdapterClient } from '../infrastructure/proxy-adapter-client.js';
+import type { AiE2eRuntimeClient } from '../infrastructure/ai-e2e-runtime-client.js';
 import type { PromptTemplateManager } from '../ai/prompt-manager.js';
-import type { ExecutionRunRepository, ExecutionRun } from '../database/repositories/execution-run-repository.js';
-import type { AIInterventionLogRepository, AIInterventionLog } from '../database/repositories/ai-intervention-log-repository.js';
+import type {
+  ExecutionRunRepository,
+  ExecutionRun,
+} from '../database/repositories/execution-run-repository.js';
+import type {
+  AIInterventionLogRepository,
+  AIInterventionLog,
+} from '../database/repositories/ai-intervention-log-repository.js';
 import type { BusinessModuleRepository } from '../database/repositories/business-module-repository.js';
 import type { FunctionalModuleRepository } from '../database/repositories/functional-module-repository.js';
 import type { TestScenarioRepository } from '../database/repositories/test-scenario-repository.js';
@@ -56,14 +62,14 @@ export interface AutoFixResult {
 
 export class AIDiagnosisService {
   constructor(
-    private proxyClient: ProxyAdapterClient,
+    private runtimeClient: AiE2eRuntimeClient,
     private promptManager: PromptTemplateManager,
     private runRepo: ExecutionRunRepository,
     private interventionRepo: AIInterventionLogRepository,
     private scriptRepo: ScriptRepository,
     private businessModuleRepo?: Pick<BusinessModuleRepository, 'findByProjectId'>,
     private functionalModuleRepo?: Pick<FunctionalModuleRepository, 'findByProjectId'>,
-    private scenarioRepo?: Pick<TestScenarioRepository, 'findByFunctionalModuleId'>,
+    private scenarioRepo?: Pick<TestScenarioRepository, 'findByFunctionalModuleId'>
   ) {}
 
   /**
@@ -88,7 +94,7 @@ export class AIDiagnosisService {
 
     // Collect context
     const screenshots = run.screenshot_paths_json
-      ? JSON.parse(run.screenshot_paths_json) as string[]
+      ? (JSON.parse(run.screenshot_paths_json) as string[])
       : [];
     const consoleLogs = run.logs ?? '';
 
@@ -101,7 +107,7 @@ export class AIDiagnosisService {
     });
 
     // Call AI
-    const result = await this.proxyClient.generateText(prompt);
+    const result = await this.runtimeClient.generateText(prompt);
 
     // Parse structured diagnosis before persistence so validated metadata is stored.
     const diagnosis = result.text;
@@ -141,7 +147,7 @@ export class AIDiagnosisService {
     // Check max retries
     const previousLogs = this.interventionRepo.findByRunId(runId);
     const autoFixCount = previousLogs.filter(
-      (log) => log.action_taken === 'auto_fix_applied',
+      (log) => log.action_taken === 'auto_fix_applied'
     ).length;
 
     if (autoFixCount >= MAX_AUTO_FIX_RETRIES) {
@@ -154,9 +160,7 @@ export class AIDiagnosisService {
     }
 
     // Find the latest diagnosis
-    const diagnosisLog = [...previousLogs]
-      .reverse()
-      .find((log) => log.diagnosis);
+    const diagnosisLog = [...previousLogs].reverse().find((log) => log.diagnosis);
 
     if (!diagnosisLog || !diagnosisLog.diagnosis) {
       throw new Error('No diagnosis found. Run diagnoseFailure() first.');
@@ -176,11 +180,12 @@ export class AIDiagnosisService {
     const prompt = await this.promptManager.render('script-fix', {
       original_script: script.content,
       diagnosis: diagnosisLog.diagnosis,
-      fix_constraints: 'Only fix selectors, wait strategies, and assertion values. Do not rewrite logic.',
+      fix_constraints:
+        'Only fix selectors, wait strategies, and assertion values. Do not rewrite logic.',
     });
 
     // Call AI for fix
-    const result = await this.proxyClient.generateText(prompt);
+    const result = await this.runtimeClient.generateText(prompt);
     const fixedContent = result.text;
 
     // Calculate line diff ratio
@@ -202,7 +207,7 @@ export class AIDiagnosisService {
     const newVersion = this.scriptRepo.createVersion(
       script.test_scenario_id,
       fixedContent,
-      'ai_auto_fix',
+      'ai_auto_fix'
     );
 
     // Log the applied fix
@@ -279,12 +284,14 @@ export class AIDiagnosisService {
       const failureType = this.normalizeFailureType(latestDiagnosis.failure_type);
       failureDistribution.set(failureType, (failureDistribution.get(failureType) ?? 0) + 1);
 
-      return [{
-        runId: run.id,
-        failureType,
-        diagnosis: latestDiagnosis.diagnosis,
-        timestamp: latestDiagnosis.created_at,
-      }];
+      return [
+        {
+          runId: run.id,
+          failureType,
+          diagnosis: latestDiagnosis.diagnosis,
+          timestamp: latestDiagnosis.created_at,
+        },
+      ];
     });
 
     report.diagnosedRuns = diagnosedFailures.length;
@@ -292,8 +299,9 @@ export class AIDiagnosisService {
     report.failureDistribution = [...failureDistribution.entries()]
       .map(([type, count]) => ({ type, count }))
       .sort((left, right) => right.count - left.count || left.type.localeCompare(right.type));
-    report.recentFailures = diagnosedFailures
-      .sort((left, right) => right.timestamp.localeCompare(left.timestamp));
+    report.recentFailures = diagnosedFailures.sort((left, right) =>
+      right.timestamp.localeCompare(left.timestamp)
+    );
 
     return report;
   }
@@ -332,7 +340,7 @@ export class AIDiagnosisService {
 
   private normalizeFailureType(value: unknown): FailureTypeValue {
     return typeof value === 'string' && VALID_FAILURE_TYPES.has(value as FailureTypeValue)
-      ? value as FailureTypeValue
+      ? (value as FailureTypeValue)
       : FailureType.UNKNOWN;
   }
 
@@ -341,11 +349,14 @@ export class AIDiagnosisService {
       this.getDiagnosisAggregationDependencies();
 
     const businessModuleIds = new Set(
-      businessModuleRepo.findByProjectId(projectId).map((businessModule) => businessModule.id),
+      businessModuleRepo.findByProjectId(projectId).map((businessModule) => businessModule.id)
     );
     const functionalModules = functionalModuleRepo
       .findByProjectId(projectId)
-      .filter((functionalModule) => businessModuleIds.size === 0 || businessModuleIds.has(functionalModule.business_module_id));
+      .filter(
+        (functionalModule) =>
+          businessModuleIds.size === 0 || businessModuleIds.has(functionalModule.business_module_id)
+      );
 
     const runs: ExecutionRun[] = [];
 
@@ -369,7 +380,11 @@ export class AIDiagnosisService {
       scenarioRepo: this.scenarioRepo,
     };
 
-    if (!dependencies.businessModuleRepo || !dependencies.functionalModuleRepo || !dependencies.scenarioRepo) {
+    if (
+      !dependencies.businessModuleRepo ||
+      !dependencies.functionalModuleRepo ||
+      !dependencies.scenarioRepo
+    ) {
       throw new Error('Project diagnosis aggregation dependencies are not configured');
     }
 
@@ -405,6 +420,10 @@ export class AIDiagnosisService {
       return null;
     }
 
-    return [...diagnosisLogs].sort((left, right) => right.created_at.localeCompare(left.created_at))[0] ?? null;
+    return (
+      [...diagnosisLogs].sort((left, right) =>
+        right.created_at.localeCompare(left.created_at)
+      )[0] ?? null
+    );
   }
 }

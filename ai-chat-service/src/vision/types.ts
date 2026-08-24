@@ -2,6 +2,7 @@
 export interface VisionMatchResult {
   nebula_id: string | null;
   confidence: number;
+  ambiguous: boolean;
   reasoning: string;
 }
 

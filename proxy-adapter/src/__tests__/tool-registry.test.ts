@@ -7,7 +7,6 @@ function makeTool(overrides: Partial<GatewayTool> & { id: string; name: string }
     description: `${overrides.name} description`,
     inputSchema: { type: 'object', properties: {} },
     providerId: 'test',
-    exposeTo: ['chat', 'mcp-server'],
     isAvailable: true,
     execute: vi.fn(async () => 'ok'),
     ...overrides,
@@ -75,35 +74,12 @@ describe('ToolRegistry', () => {
       registry.registerProvider(provider);
 
       expect(() => registry.registerProvider(makeProvider({ id: 'dup' }))).toThrow(
-        'Provider "dup" already registered',
+        'Provider "dup" already registered'
       );
     });
   });
 
   describe('getAvailableTools', () => {
-    it('should filter by consumer type', () => {
-      const chatTool = makeTool({
-        id: 't1',
-        name: 'chat-only',
-        exposeTo: ['chat'],
-      });
-      const mcpTool = makeTool({
-        id: 't2',
-        name: 'mcp-only',
-        exposeTo: ['mcp-server'],
-      });
-
-      registry.registerProvider(
-        makeProvider({ id: 'p1', tools: [chatTool, mcpTool] }),
-      );
-
-      expect(registry.getAvailableTools({ consumer: 'chat' })).toHaveLength(1);
-      expect(registry.getAvailableTools({ consumer: 'chat' })[0].name).toBe('chat-only');
-
-      expect(registry.getAvailableTools({ consumer: 'mcp-server' })).toHaveLength(1);
-      expect(registry.getAvailableTools({ consumer: 'mcp-server' })[0].name).toBe('mcp-only');
-    });
-
     it('should skip unavailable tools', () => {
       const tool = makeTool({ id: 't1', name: 'unavailable', isAvailable: false });
       registry.registerProvider(makeProvider({ id: 'p1', tools: [tool] }));
@@ -111,13 +87,12 @@ describe('ToolRegistry', () => {
       expect(registry.getAvailableTools()).toHaveLength(0);
     });
 
-    it('should return all available tools when consumer is "all" or omitted', () => {
-      const t1 = makeTool({ id: 't1', name: 'a', exposeTo: ['chat'] });
-      const t2 = makeTool({ id: 't2', name: 'b', exposeTo: ['mcp-server'] });
+    it('should return every available controlled MCP tool', () => {
+      const t1 = makeTool({ id: 't1', name: 'a' });
+      const t2 = makeTool({ id: 't2', name: 'b' });
       registry.registerProvider(makeProvider({ id: 'p1', tools: [t1, t2] }));
 
       expect(registry.getAvailableTools()).toHaveLength(2);
-      expect(registry.getAvailableTools({ consumer: 'all' })).toHaveLength(2);
     });
   });
 
@@ -189,9 +164,7 @@ describe('ToolRegistry', () => {
     it('should return tools without availability or consumer filtering', () => {
       const available = makeTool({ id: 't1', name: 'av', isAvailable: true });
       const unavailable = makeTool({ id: 't2', name: 'unav', isAvailable: false });
-      registry.registerProvider(
-        makeProvider({ id: 'p1', tools: [available, unavailable] }),
-      );
+      registry.registerProvider(makeProvider({ id: 'p1', tools: [available, unavailable] }));
 
       const all = registry.getAllTools();
       expect(all).toHaveLength(2);

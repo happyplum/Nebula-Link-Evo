@@ -8,7 +8,7 @@
  * - Version management (each edit creates a new version)
  */
 
-import type { ProxyAdapterClient } from '../infrastructure/proxy-adapter-client.js';
+import type { AiE2eRuntimeClient } from '../infrastructure/ai-e2e-runtime-client.js';
 import type { PromptTemplateManager } from '../ai/prompt-manager.js';
 import type { ScriptRepository, Script } from '../database/repositories/script-repository.js';
 import type { TestScenarioRepository } from '../database/repositories/test-scenario-repository.js';
@@ -18,7 +18,7 @@ import type { URLModuleBindingRepository } from '../database/repositories/url-mo
 // ---------- types ----------
 
 export interface ScriptGeneratorDeps {
-  proxyClient: ProxyAdapterClient;
+  runtimeClient: AiE2eRuntimeClient;
   promptManager: PromptTemplateManager;
   scriptRepo: ScriptRepository;
   scenarioRepo: TestScenarioRepository;
@@ -40,7 +40,7 @@ const TEST_DATA_GENERATION_TEMPLATE = 'test-data-generation';
 // ---------- service ----------
 
 export class ScriptGeneratorService {
-  private readonly proxyClient: ProxyAdapterClient;
+  private readonly runtimeClient: AiE2eRuntimeClient;
   private readonly promptManager: PromptTemplateManager;
   private readonly scriptRepo: ScriptRepository;
   private readonly scenarioRepo: TestScenarioRepository;
@@ -48,7 +48,7 @@ export class ScriptGeneratorService {
   private readonly urlBindingRepo: URLModuleBindingRepository;
 
   constructor(deps: ScriptGeneratorDeps) {
-    this.proxyClient = deps.proxyClient;
+    this.runtimeClient = deps.runtimeClient;
     this.promptManager = deps.promptManager;
     this.scriptRepo = deps.scriptRepo;
     this.scenarioRepo = deps.scenarioRepo;
@@ -63,7 +63,8 @@ export class ScriptGeneratorService {
    *       validate syntax (retry up to MAX_GENERATION_ATTEMPTS) → store version 1
    */
   async generateScript(scenarioId: string): Promise<Script> {
-    const { scenario, pageUrl, pageSnapshot, testData } = await this.loadScenarioContext(scenarioId);
+    const { scenario, pageUrl, pageSnapshot, testData } =
+      await this.loadScenarioContext(scenarioId);
 
     const prompt = await this.promptManager.render(SCRIPT_GENERATION_TEMPLATE, {
       scenario_name: scenario.name,
@@ -77,7 +78,7 @@ export class ScriptGeneratorService {
     let currentPrompt = prompt;
 
     for (let attempt = 1; attempt <= MAX_GENERATION_ATTEMPTS; attempt++) {
-      const { text } = await this.proxyClient.generateText(currentPrompt, { temperature: 0.3 });
+      const { text } = await this.runtimeClient.generateText(currentPrompt, { temperature: 0.3 });
       const cleanedText = this.stripCodeFence(text);
       const validation = this.validateScriptSyntax(cleanedText);
 
@@ -90,13 +91,13 @@ export class ScriptGeneratorService {
       currentPrompt =
         `${prompt}\n\n## Previous Attempt Errors\n\n` +
         `The previous generated script had the following syntax errors:\n` +
-        lastErrors.map(e => `- ${e}`).join('\n') +
+        lastErrors.map((e) => `- ${e}`).join('\n') +
         '\n\nPlease fix these errors and generate a corrected complete script.';
     }
 
     throw new Error(
       `Failed to generate valid script after ${MAX_GENERATION_ATTEMPTS} attempts. ` +
-      `Last errors: ${lastErrors.join('; ')}`,
+        `Last errors: ${lastErrors.join('; ')}`
     );
   }
 
@@ -114,7 +115,7 @@ export class ScriptGeneratorService {
       page_fields: pageSnapshot,
     });
 
-    const { text } = await this.proxyClient.generateText(prompt, { temperature: 0.3 });
+    const { text } = await this.runtimeClient.generateText(prompt, { temperature: 0.3 });
 
     return this.extractJSON(text);
   }
@@ -149,7 +150,11 @@ export class ScriptGeneratorService {
       throw new Error(`Script syntax validation failed: ${validation.errors.join('; ')}`);
     }
 
-    return this.scriptRepo.createVersion(existingScript.test_scenario_id, newContent, 'human_edited');
+    return this.scriptRepo.createVersion(
+      existingScript.test_scenario_id,
+      newContent,
+      'human_edited'
+    );
   }
 
   /**
@@ -178,15 +183,24 @@ export class ScriptGeneratorService {
     const hasPwTestImport = /import\s*{[^}]*}\s*from\s*['"]@playwright\/test['"]/.test(content);
     const hasPwLibImport = /import\s*\{?\s*\w+.*\}?\s*from\s*['"]playwright['"]/.test(content);
     if (!hasPwTestImport && !hasPwLibImport) {
-      errors.push('Missing required import: must include `import { ... } from \'@playwright/test\'` or `import { chromium } from \'playwright\'`');
+      errors.push(
+        "Missing required import: must include `import { ... } from '@playwright/test'` or `import { chromium } from 'playwright'`"
+      );
     }
 
     // Check for test structure — either test() block OR chromium.launch() + browser operations
-    const nonImportLines = content.split('\n').filter(line => !line.trimStart().startsWith('import ')).join('\n');
+    const nonImportLines = content
+      .split('\n')
+      .filter((line) => !line.trimStart().startsWith('import '))
+      .join('\n');
     const hasTestBlock = /(?:^|\s)test\s*[\('"]/.test(nonImportLines);
-    const hasBrowserLaunch = /chromium\.launch|browser\.newPage|browser\.newContext/.test(nonImportLines);
+    const hasBrowserLaunch = /chromium\.launch|browser\.newPage|browser\.newContext/.test(
+      nonImportLines
+    );
     if (!hasTestBlock && !hasBrowserLaunch) {
-      errors.push('Missing test structure: must contain `test()` blocks or `chromium.launch()` with browser operations');
+      errors.push(
+        'Missing test structure: must contain `test()` blocks or `chromium.launch()` with browser operations'
+      );
     }
 
     // Check balanced braces
@@ -238,7 +252,9 @@ export class ScriptGeneratorService {
     // Find URL bound to this scenario's functional module
     const bindings = this.urlBindingRepo.findByModuleId(scenario.functional_module_id);
     if (bindings.length === 0) {
-      throw new Error(`No URL bindings found for functional module: ${scenario.functional_module_id}`);
+      throw new Error(
+        `No URL bindings found for functional module: ${scenario.functional_module_id}`
+      );
     }
 
     const urlRecord = this.urlRepo.findById(bindings[0].url_id);

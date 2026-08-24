@@ -40,7 +40,11 @@ describe('config.mutations', () => {
       mockPost.mockResolvedValue(response);
 
       const { result } = renderHook(() => useMcpCall(), { wrapper: createWrapper() });
-      result.current.mutate({ server: 'fs-server', tool: 'read_file', args: { path: '/test.txt' } });
+      result.current.mutate({
+        server: 'fs-server',
+        tool: 'read_file',
+        args: { path: '/test.txt' },
+      });
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
@@ -104,7 +108,7 @@ describe('config.mutations', () => {
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-      expect(mockPost).toHaveBeenCalledWith('/api/test-ai');
+      expect(mockPost).toHaveBeenCalledWith('/api/v1/test-ai');
       expect(result.current.data?.decision?.status).toBe('ok');
       expect(result.current.data?.decision?.provider).toBe('anthropic');
       expect(result.current.data?.decision?.responseTime).toBe(320);

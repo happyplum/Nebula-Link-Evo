@@ -1,15 +1,14 @@
 /**
  * REST endpoint constants. Only request-response endpoints are defined here.
- * SSE, WebSocket, and MJPEG endpoints are Phase 2 scope and intentionally absent.
+ * Streaming endpoints are assembled by their dedicated clients and intentionally absent.
  */
 
 // Config & Health
-export const API_CONFIG = '/api/config' as const;
-export const API_HEALTH = '/api/health' as const;
+export const API_CONFIG = '/api/v1/config' as const;
+export const API_HEALTH = '/api/v1/health' as const;
 
-// Debug API — AI & Keys
-export const DEBUG_TEST_AI = '/api/test-ai' as const;
-export const DEBUG_VERIFY_KEYS = '/api/verify-keys' as const;
+// Debug API — AI
+export const DEBUG_TEST_AI = '/api/v1/test-ai' as const;
 
 // Debug API — Playwright
 export const DEBUG_PLAYWRIGHT_STATUS = '/debug/api/playwright/status' as const;
@@ -30,7 +29,6 @@ export const DEBUG_PLAYWRIGHT_SWITCH_TAB = '/debug/api/playwright/tabs/switch' a
 // Debug API — DOM & Interactions
 export const DEBUG_DOM = '/debug/api/dom' as const;
 export const DEBUG_INTERACTIONS = '/debug/api/interactions' as const;
-export const DEBUG_FAILURE_SAMPLE = '/debug/api/failure-sample' as const;
 export const DEBUG_INTERACTION_STATS = '/debug/api/interactions/stats' as const;
 
 // Debug API — MCP
@@ -39,13 +37,15 @@ export const DEBUG_MCP_TOOLS = '/debug/api/mcp/tools' as const;
 export const DEBUG_MCP_CALL = '/debug/api/mcp/call' as const;
 
 // Chat Sessions
-export const API_CHAT_SESSIONS = '/api/chat/sessions' as const;
-export const apiChatSession = (id: string) => `/api/chat/sessions/${id}` as const;
-export const apiChatSessionMessages = (id: string) => `/api/chat/sessions/${id}/messages` as const;
+export const API_CHAT_SESSIONS = '/api/v1/chat/sessions' as const;
+export const apiChatSession = (id: string) => `/api/v1/chat/sessions/${id}` as const;
+export const apiChatSessionMessages = (id: string) =>
+  `/api/v1/chat/sessions/${id}/messages` as const;
 export const apiChatSessionInterrupt = (id: string) =>
-  `/api/chat/sessions/${id}/interrupt` as const;
-export const apiChatSessionCancel = (id: string) => `/api/chat/sessions/${id}/cancel` as const;
-export const apiChatSessionPause = (id: string) => `/api/chat/sessions/${id}/pause` as const;
-export const apiChatSessionResume = (id: string) => `/api/chat/sessions/${id}/resume` as const;
-export const apiChatSessionJob = (sessionId: string, jobId: string) => `/api/chat/sessions/${sessionId}/jobs/${jobId}` as const;
-export const API_CHAT_CONNECTIVITY_TEST = '/api/chat/connectivity-test' as const;
+  `/api/v1/chat/sessions/${id}/interrupt` as const;
+export const apiChatSessionCancel = (id: string) => `/api/v1/chat/sessions/${id}/cancel` as const;
+export const apiChatSessionPause = (id: string) => `/api/v1/chat/sessions/${id}/pause` as const;
+export const apiChatSessionResume = (id: string) => `/api/v1/chat/sessions/${id}/resume` as const;
+export const apiChatSessionJob = (sessionId: string, jobId: string) =>
+  `/api/v1/chat/sessions/${sessionId}/jobs/${jobId}` as const;
+export const API_CHAT_CONNECTIVITY_TEST = '/api/v1/chat/connectivity-test' as const;

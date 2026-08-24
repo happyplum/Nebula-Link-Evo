@@ -9,7 +9,7 @@
 - **`AgentTaskClient`** → `ai-chat-service` (:3001)：semantic v1 不可变 Agent task、结构化结果与命令同步。
 - **`SemanticBrowserClient`** → `proxy-adapter` (:3000)：semantic v1 browser session/lease/operation/artifact 控制面。
 
-历史统一入口 `ProxyAdapterClient` 仍存在，但现在是一个 **facade**，内部组合上述两个客户端：`generateText()` 路由到 :3001，所有浏览器方法路由到 :3000。需要单一后端能力的新代码应直接依赖 `AiChatClient` 或 `BrowserGatewayClient`。
+`AiE2eRuntimeClient` 是应用层显式组合边界：`generateText()` 路由到 :3001，浏览器调试方法路由到 :3000。无 `ProxyAdapterClient` 类名、客户端 getter、旧 URL env 别名或旧路径退回。需要单一后端能力的新代码应直接依赖 `AiChatClient` 或 `BrowserGatewayClient`。
 
 它的核心职责不是“浏览器自动化底座”，而是：
 
@@ -44,13 +44,13 @@ ai-e2e (:3002)
 ├── src/server.ts                     # 真实启动入口
 ├── src/server/index.ts               # createServer()/start()、DI、路由注册
 ├── AiChatClient (:3001)              # AI 能力入口
-│   └── POST /api/ai/generate
+│   └── POST /api/v1/ai/generate
 ├── BrowserGatewayClient (:3000)      # 浏览器能力入口
 │   └── /debug/api/playwright/*
 ├── AgentTaskClient (:3001)           # semantic v1 Agent task 控制面
 ├── SemanticBrowserClient (:3000)     # semantic v1 browser execution 控制面
 ├── SemanticCoordinatorService        # FIFO/outbox/Agent/browser/恢复/证据协调器
-├── ProxyAdapterClient (facade)       # 组合 AiChatClient + BrowserGatewayClient
+├── AiE2eRuntimeClient               # 显式组合 AiChatClient + BrowserGatewayClient
 ├── PromptTemplateManager             # prompts/*.md
 ├── TokenBudgetTracker                # token 预算统计
 ├── DatabaseManager                   # SQLite
@@ -61,7 +61,7 @@ ai-e2e (:3002)
 ## Startup Order
 
 1. 加载 `.env.local` / 上级 `.env` / 当前 `.env`
-2. 创建 `ProxyAdapterClient`
+2. 创建 `AiE2eRuntimeClient`
 3. 创建 `PromptTemplateManager`
 4. 创建 `TokenBudgetTracker`
 5. 初始化 `DatabaseManager`
@@ -75,7 +75,7 @@ ai-e2e (:3002)
 - 默认端口：`3002`
 - 默认数据库路径：`./data/ai-e2e.sqlite`
 - 当前 `start()` 读取的 env 名是：
-  - `AI_CHAT_SERVICE_URL`（ai-chat-service 基址，默认 `http://127.0.0.1:3001`；旧别名 `AI_CHAT_URL`）
+  - `AI_CHAT_SERVICE_URL`（ai-chat-service 基址，默认 `http://127.0.0.1:3001`）
   - `PROXY_ADAPTER_URL`（proxy-adapter 浏览器网关基址，默认 `http://127.0.0.1:3000`）
   - `AI_E2E_PORT`
   - `AI_E2E_DB_PATH`
@@ -87,22 +87,22 @@ ai-e2e (:3002)
 
 ## Where To Look
 
-| Area | Path | Notes |
-|---|---|---|
-| Runtime entry | `src/server.ts` | 仅负责调用 `start()` |
-| Bootstrap / DI | `src/server/index.ts` | 路由注册、静态 UI、SSE、env 读取 |
-| HTTP client (AI) | `src/infrastructure/ai-chat-client.ts` | ai-chat-service (:3001)：generateText / test-ai / verify-keys / chat sessions |
-| HTTP client (browser) | `src/infrastructure/browser-gateway-client.ts` | proxy-adapter (:3000)：browser control、debug DOM、health |
-| HTTP client (facade) | `src/infrastructure/proxy-adapter-client.ts` | 组合 AiChatClient + BrowserGatewayClient，保留历史统一 API |
-| HTTP client (semantic Agent) | `src/infrastructure/agent-task-client.ts` | ai-chat-service Agent task create/get/commands |
-| HTTP client (semantic browser) | `src/infrastructure/semantic-browser-client.ts` | proxy browser session/lease/operation/artifact |
-| Semantic coordinator | `src/services/semantic-coordinator-service.ts` | FIFO、outbox、恢复、验收和证据提升 |
-| HTTP client 共享工具 | `src/infrastructure/http-client-helpers.ts` | axios 创建、base URL 解析、错误映射 |
-| Services | `src/services/` | PRD 分析、探索、脚本、执行、诊断、状态机 |
-| Routes | `src/server/routes/` | 通过 plugin options 注入依赖 |
-| Prompts | `prompts/*.md` | 必须保留，属于稳定资产 |
-| Database | `src/database/` | SQLite、migrations、repos |
-| Frontend | `ui/src/` | SPA、流程页、AI 状态、执行面板 |
+| Area                           | Path                                            | Notes                                                        |
+| ------------------------------ | ----------------------------------------------- | ------------------------------------------------------------ |
+| Runtime entry                  | `src/server.ts`                                 | 仅负责调用 `start()`                                         |
+| Bootstrap / DI                 | `src/server/index.ts`                           | 路由注册、静态 UI、SSE、env 读取                             |
+| HTTP client (AI)               | `src/infrastructure/ai-chat-client.ts`          | ai-chat-service (:3001)：canonical `/api/v1/ai/generate`     |
+| HTTP client (browser)          | `src/infrastructure/browser-gateway-client.ts`  | proxy-adapter (:3000)：browser control、debug DOM、health    |
+| Application runtime client     | `src/infrastructure/ai-e2e-runtime-client.ts`   | 显式组合 AiChatClient + BrowserGatewayClient，不提供兼容别名 |
+| HTTP client (semantic Agent)   | `src/infrastructure/agent-task-client.ts`       | ai-chat-service Agent task create/get/commands               |
+| HTTP client (semantic browser) | `src/infrastructure/semantic-browser-client.ts` | proxy browser session/lease/operation/artifact               |
+| Semantic coordinator           | `src/services/semantic-coordinator-service.ts`  | FIFO、outbox、恢复、验收和证据提升                           |
+| HTTP client 共享工具           | `src/infrastructure/http-client-helpers.ts`     | axios 创建、base URL 解析、错误映射                          |
+| Services                       | `src/services/`                                 | PRD 分析、探索、脚本、执行、诊断、状态机                     |
+| Routes                         | `src/server/routes/`                            | 通过 plugin options 注入依赖                                 |
+| Prompts                        | `prompts/*.md`                                  | 必须保留，属于稳定资产                                       |
+| Database                       | `src/database/`                                 | SQLite、migrations、repos                                    |
+| Frontend                       | `ui/src/`                                       | SPA、流程页、AI 状态、执行面板                               |
 
 ## Route Groups
 
@@ -138,7 +138,7 @@ ai-e2e (:3002)
 
 ## Hard Boundaries
 
-- **不直连 AI provider**：Legacy AI 调用经 `AiChatClient`/facade 的 `POST /api/ai/generate`；semantic v1 经 `AgentTaskClient` 的 `/api/v1/agent-tasks`。
+- **不直连 AI provider**：单次文本 AI 调用经 `AiChatClient` 的 `POST /api/v1/ai/generate`；semantic v1 经 `AgentTaskClient` 的 `/api/v1/agent-tasks`。
 - **不直连 `proxy-adapter` 内进程浏览器引擎**：Legacy 浏览器调用经 `BrowserGatewayClient`/facade 的 `/debug/api/*`；semantic v1 经 `SemanticBrowserClient` 的 `/api/v1/browser-execution/*`。
 - **不引入 `@ai-sdk/*`**：ai-e2e 已被重构为零 AI SDK 依赖
 - **不共享 proxy-adapter / ai-chat-service 数据库**：ai-e2e 维护自己的 SQLite
@@ -147,7 +147,7 @@ ai-e2e (:3002)
 ## Conventions
 
 - 本地 TS import 保持 `.js` 后缀
-- `AiChatClient` (:3001) 与 `BrowserGatewayClient` (:3000) 是两个后端的直接入口；`ProxyAdapterClient` 是保留的 facade，组合二者
+- `AiChatClient` (:3001) 与 `BrowserGatewayClient` (:3000) 是两个后端的直接入口；`AiE2eRuntimeClient` 只是应用 DI 组合边界
 - 任一基址为空时，DB-only 路由继续工作，AI / Playwright 路由返回 `503`
 - `ServiceError.unavailable()` 用于服务缺失 / 降级场景
 - UI 通过 `/ai-e2e/` 前缀挂载，404 处理要兼顾 SPA 与 JSON API
@@ -183,7 +183,7 @@ ai-e2e (:3002)
 - **上下文（pending）**：大多数派发创建干净上下文；登出等可恢复中断可以由主代理在页面状态与副作用检查后续接原上下文，否则用检查点和授权变量重建干净上下文。
 - **串行调度与身份（shipped）**：持久 FIFO、全库单 active 槽、session/lease 派发、显式释放和重启收敛已接入；每个 session 固定一个 BrowserContext 和活动 actor，跨账号/角色只通过主代理显式编排认证脚本串行切换。
 - **环境与副作用策略（formal run shipped）**：正式 Run 已完成确定性风险投影、local/test 自动放行、staging 计划级审批/active grant、production 业务写拒绝，以及逐 effectId/数量/grant 跨服务门禁；Authoring 全流程统一门禁仍 pending。完整契约见 `docs/environment-side-effect-policy-contract.md`。
-- **编排/执行分层（shipped）**：页面任务图、页面/模块范围和验收标准由 ai-e2e 持有；模型、MCP 工具和 Skills 执行通过 ai-chat-service Agent task。Legacy 纯文本链保持兼容但不得与 semantic run 混用。
+- **编排/执行分层（shipped）**：页面任务图、页面/模块范围和验收标准由 ai-e2e 持有；模型、MCP 工具和 Skills 执行通过 ai-chat-service Agent task。semantic run 不得退回纯文本或 debug browser 执行链。
 - **跨服务协议（in-progress）**：三服务控制面、ai-e2e Authoring/Run API/SSE、outbox worker、opaque 关联与端到端重启协调已交付；Agent/browser 事件流消费和完整逐 effect 授权仍 pending。完整契约见 `docs/service-api-event-contract.md`。
 - **双模型与 Skills（in-progress）**：`ai-chat-service` 已交付本地只读、固定版本/hash、默认拒绝扩权的单 Skill runtime；目标 `vision.analyze_page`/`vision.resolve_target` 和本包消费链仍 pending。视觉结果只返回一次不可变快照的可序列化定位候选。完整契约见 `docs/ai-model-skill-contract.md`。
 - **迁移与切流（in-progress）**：015–017 已通过 checksum/状态账本增量创建目标表，失败 rollback、checksum 漂移拒绝且 legacy 表保持不动；001–014 结构 preflight/baseline、文件备份、legacy importer 与 capability cutover 仍 pending。同一 run 不混用 legacy 与 `semantic_v1`。完整契约见 `docs/migration-compatibility-acceptance-contract.md`。
@@ -273,7 +273,7 @@ ai-e2e (:3002)
 ### AI 超时配置
 
 - `config/config.json` `settings.timeout` 当前默认 180s
-- `proxy-adapter-client.ts` `DEFAULT_AI_TIMEOUT_MS` 当前默认 300s
+- 单次文本调用 timeout 由 `AiChatClient` 与 ai-chat-service 各自显式限制，不从 browser client 继承
 - 剩余技术债是按操作类型或 provider 响应特征拆分差异化超时预算
 
 ### PowerShell JSON 序列化陷阱

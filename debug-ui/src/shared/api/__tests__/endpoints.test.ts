@@ -3,13 +3,12 @@ import * as endpoints from '../endpoints.js';
 
 describe('REST endpoint constants', () => {
   it('should define config & health endpoints', () => {
-    expect(endpoints.API_CONFIG).toBe('/api/config');
-    expect(endpoints.API_HEALTH).toBe('/api/health');
+    expect(endpoints.API_CONFIG).toBe('/api/v1/config');
+    expect(endpoints.API_HEALTH).toBe('/api/v1/health');
   });
 
   it('should define debug AI endpoints', () => {
-    expect(endpoints.DEBUG_TEST_AI).toBe('/api/test-ai');
-    expect(endpoints.DEBUG_VERIFY_KEYS).toBe('/api/verify-keys');
+    expect(endpoints.DEBUG_TEST_AI).toBe('/api/v1/test-ai');
   });
 
   it('should define all playwright endpoints', () => {
@@ -36,14 +35,14 @@ describe('REST endpoint constants', () => {
   });
 
   it('should define chat session endpoints with dynamic IDs', () => {
-    expect(endpoints.API_CHAT_SESSIONS).toBe('/api/chat/sessions');
-    expect(endpoints.apiChatSession('s1')).toBe('/api/chat/sessions/s1');
-    expect(endpoints.apiChatSessionMessages('s1')).toBe('/api/chat/sessions/s1/messages');
-    expect(endpoints.apiChatSessionInterrupt('s1')).toBe('/api/chat/sessions/s1/interrupt');
-    expect(endpoints.apiChatSessionCancel('s1')).toBe('/api/chat/sessions/s1/cancel');
-    expect(endpoints.apiChatSessionPause('s1')).toBe('/api/chat/sessions/s1/pause');
-    expect(endpoints.apiChatSessionResume('s1')).toBe('/api/chat/sessions/s1/resume');
-    expect(endpoints.API_CHAT_CONNECTIVITY_TEST).toBe('/api/chat/connectivity-test');
+    expect(endpoints.API_CHAT_SESSIONS).toBe('/api/v1/chat/sessions');
+    expect(endpoints.apiChatSession('s1')).toBe('/api/v1/chat/sessions/s1');
+    expect(endpoints.apiChatSessionMessages('s1')).toBe('/api/v1/chat/sessions/s1/messages');
+    expect(endpoints.apiChatSessionInterrupt('s1')).toBe('/api/v1/chat/sessions/s1/interrupt');
+    expect(endpoints.apiChatSessionCancel('s1')).toBe('/api/v1/chat/sessions/s1/cancel');
+    expect(endpoints.apiChatSessionPause('s1')).toBe('/api/v1/chat/sessions/s1/pause');
+    expect(endpoints.apiChatSessionResume('s1')).toBe('/api/v1/chat/sessions/s1/resume');
+    expect(endpoints.API_CHAT_CONNECTIVITY_TEST).toBe('/api/v1/chat/connectivity-test');
   });
 
   it('should have all endpoints as const strings', () => {

@@ -146,7 +146,7 @@ export class BrowserExecutionService {
     return this.repository.findActiveSession()?.status === 'active';
   }
 
-  assertLegacyBrowserAccess(kind: 'read' | 'capture' | 'write'): void {
+  assertDirectBrowserAccess(kind: 'read' | 'capture' | 'write'): void {
     if (!this.hasActiveSession() || kind === 'read') {
       return;
     }
@@ -154,7 +154,7 @@ export class BrowserExecutionService {
       'browser_busy',
       kind === 'capture'
         ? 'Direct browser capture is disabled while a controlled browser session is active'
-        : 'Legacy browser writes are disabled while a controlled browser session is active',
+        : 'Direct browser writes are disabled while a controlled browser session is active',
       { retryable: true }
     );
   }
@@ -908,6 +908,8 @@ export class BrowserExecutionService {
         kind: artifact.kind,
         sha256: stored.sha256,
         mimeType: artifact.mimeType,
+        sizeBytes: stored.sizeBytes,
+        ...(raw.snapshotId ? { snapshotId: raw.snapshotId } : {}),
       },
     };
   }

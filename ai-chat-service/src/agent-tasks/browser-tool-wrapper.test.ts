@@ -1,6 +1,23 @@
 import { describe, expect, it, vi } from 'vitest';
 import { BrowserToolWrapper } from './browser-tool-wrapper.js';
 
+function operationResult(operationId: string, status: string, actual?: unknown) {
+  return {
+    schema: 'nebula.browser.operation-result/1.0',
+    operationId,
+    requestHash: 'hash-1',
+    sessionId: 'session-1',
+    leaseId: 'lease-1',
+    leaseSequence: 7,
+    tabId: 'tab-1',
+    kind: 'act',
+    operation: 'click',
+    status,
+    artifacts: [],
+    ...(actual === undefined ? {} : { actual }),
+  };
+}
+
 function createWrapper(callTool: ReturnType<typeof vi.fn>) {
   return new BrowserToolWrapper({
     taskId: 'task-1',
@@ -36,14 +53,63 @@ function createWrapper(callTool: ReturnType<typeof vi.fn>) {
 }
 
 describe('BrowserToolWrapper', () => {
+  it('projects a complete immutable Vision binding from a durable DOM snapshot', async () => {
+    const callTool = vi.fn(
+      async (_server: string, _tool: string, args: Record<string, unknown>) => ({
+        structuredContent: {
+          ...operationResult((args.request as { operationId: string }).operationId, 'succeeded'),
+          kind: 'observe',
+          operation: 'dom_snapshot',
+          artifacts: [
+            {
+              id: 'dom-1',
+              kind: 'dom_snapshot',
+              sha256: 'a'.repeat(64),
+              mimeType: 'application/json',
+              sizeBytes: 123,
+              snapshotId: 'snapshot-1',
+            },
+          ],
+        },
+      })
+    );
+    const wrapper = new BrowserToolWrapper({
+      taskId: 'task-vision',
+      binding: {
+        browserSessionId: 'session-1',
+        tabId: 'tab-1',
+        browserLeaseId: 'lease-1',
+        browserLeaseToken: 'secret',
+        browserLeaseSequence: 7,
+        access: 'observe',
+      },
+      steps: new Map([
+        ['observe', { stepId: 'observe', kind: 'observe', operation: 'dom_snapshot' }],
+      ]),
+      deadlineAt: Date.now() + 60_000,
+      maxToolCalls: 1,
+      mcpClient: { callTool },
+    });
+
+    await expect(wrapper.execute({ stepId: 'observe' }, 'vision-call')).resolves.toMatchObject({
+      visionSnapshotBinding: {
+        schema: 'nebula.vision-snapshot-binding/1.0',
+        sessionId: 'session-1',
+        tabId: 'tab-1',
+        snapshotId: 'snapshot-1',
+        domArtifact: { artifactId: 'dom-1', sizeBytes: 123 },
+      },
+    });
+  });
+
   it('injects hidden binding fields and uses a stable operationId', async () => {
     const callTool = vi.fn(
       async (_server: string, _tool: string, args: Record<string, unknown>) => ({
-        parsed: {
-          operationId: (args.request as { operationId: string }).operationId,
-          status: 'succeeded',
-          actual: { clicked: true },
-        },
+        structuredContent: operationResult(
+          (args.request as { operationId: string }).operationId,
+          'succeeded',
+          { clicked: true }
+        ),
       })
     );
     const wrapper = createWrapper(callTool);
@@ -87,7 +153,7 @@ describe('BrowserToolWrapper', () => {
         operationId = (args.request as { operationId: string }).operationId;
         throw new Error('transport closed');
       }
-      return { parsed: { operationId, status: 'succeeded', actual: { recovered: true } } };
+      return { parsed: operationResult(operationId, 'succeeded', { recovered: true }) };
     });
     const wrapper = createWrapper(callTool);
 
@@ -115,6 +181,22 @@ describe('BrowserToolWrapper', () => {
     ]);
   });
 
+  it('rejects a proxy result whose durable identity does not match the injected binding', async () => {
+    const callTool = vi.fn(
+      async (_server: string, _tool: string, args: Record<string, unknown>) => ({
+        parsed: {
+          ...operationResult((args.request as { operationId: string }).operationId, 'succeeded'),
+          sessionId: 'other-session',
+        },
+      })
+    );
+    const wrapper = createWrapper(callTool);
+
+    await expect(wrapper.execute({ stepId: 'login' }, 'call-drift')).rejects.toMatchObject({
+      code: 'outcome_unknown',
+    });
+  });
+
   it('does not query the ledger after a deterministic proxy rejection', async () => {
     const callTool = vi.fn(async () => {
       throw new Error(
@@ -136,7 +218,7 @@ describe('BrowserToolWrapper', () => {
   });
 
   it('keeps cancel internal and injects credentials', async () => {
-    const callTool = vi.fn(async () => ({ parsed: { operationId: 'op-1', status: 'cancelled' } }));
+    const callTool = vi.fn(async () => ({ parsed: operationResult('op-1', 'cancelled') }));
     const wrapper = createWrapper(callTool);
 
     await wrapper.cancel('op-1');

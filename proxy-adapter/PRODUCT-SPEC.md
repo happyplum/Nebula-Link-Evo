@@ -1,6 +1,6 @@
 # proxy-adapter — 产品规格 (PRODUCT-SPEC)
 
-> 一句话目标：作为整个平台的**纯浏览器 MCP 网关**，对外通过 MCP Server (StreamableHTTP) 暴露 `browser-control.*` 工具，并供应浏览器调试 REST 端点、LiveKit 令牌、配置与健康检查。零 AI 调用。
+> 一句话目标：作为整个平台的**纯浏览器 MCP 网关**，对外通过 MCP Server (StreamableHTTP) 只暴露受控 `browser-control.operation_execute/get/cancel`，并提供 browser-execution HTTP 控制面、调试观测面与 LiveKit 令牌。零 AI 调用。
 > 端口：`:3000` ｜ 角色：浏览器 MCP 网关（MCP Server + Playwright 控制器 + 调试流） ｜ 包内无 AI 对话逻辑
 
 ---
@@ -9,22 +9,22 @@
 
 ### 目标
 
-- 统一封装进程内 Playwright 与页面级 CDP 会话，提供浏览器分析、观测和操作能力；支持 12 种操作类型（click / type / focus / blur / hover / value / dispatch / scroll / navigate / wait / mcp_call / finish，对应 `shared/types/action.ts` 的 `Action` 联合类型）。
+- 统一封装进程内 Playwright 与页面级 CDP 会话，通过稳定 session/Tab、observe/control lease、FIFO 原子 operation 和幂等 ledger 提供严格白名单的观测与操作能力。
 - 提供实时调试观测面（MJPEG、DOM 快照、debug event stream）供 `debug-ui` 消费。
-- 通过 MCP 协议成为任意 AI 客户端（Claude Desktop / Cursor / aichat / `ai-chat-service`）及本地受控 CLI/Harness adapter 的浏览器能力底座。
+- 通过 MCP 协议成为 `ai-chat-service` 与部署期受信任 adapter 的浏览器能力底座；不向未持有 session/lease 的通用 MCP 客户端暴露裸点击、输入、导航或脚本工具。
 - 目标承载 ai-e2e 结构化语义功能脚本的唯一可视执行链，使动作、实时画面、步骤结果、交互记录和失败证据可关联、可理解、可复现；当前正式 MCP 工具仍以单步浏览器操作为主。
 
 ### 边界
 
-| Owns | Consumes | Does NOT own |
-|------|----------|--------------|
-| Playwright Chromium 生命周期、浏览器锁与 CDP 会话 | `@nebula-link-evo/shared` 的类型与工具 | AI 对话、会话、provider 编排（迁移到 `ai-chat-service`） |
-| MCP Server (StreamableHTTP) 与工具注册 | LiveKit 服务（外部） | Chat SSE、conversation/session |
-| browser-control 工具集 |  | 前端代码（前端在 `debug-ui`） |
-| 浏览器调试 REST 端点（MJPEG、DOM 快照、debug stream） |  | 任何 `src/static/debug/` 静态前端目录 |
-| LiveKit 令牌发放、配置、健康检查 |  | 共享数据库（`ai-chat-service` 独立 DB） |
-| DB 备份（`utils/db-backup.ts`） |  |  |
-| 通用浏览器执行会话、Tab、原子操作、实时画面与短期浏览器侧原始产物 | 上层传入的不透明可序列化关联信息 | PRD、场景依赖、功能脚本、代理调度、业务版本、deployment environment、副作用审批或长期业务证据目录 |
+| Owns                                                              | Consumes                               | Does NOT own                                                                                      |
+| ----------------------------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Playwright Chromium 生命周期、浏览器锁与 CDP 会话                 | `@nebula-link-evo/shared` 的类型与工具 | AI 对话、会话、provider 编排（迁移到 `ai-chat-service`）                                          |
+| MCP Server (StreamableHTTP) 与工具注册                            | LiveKit 服务（外部）                   | Chat SSE、conversation/session                                                                    |
+| browser-control 工具集                                            |                                        | 前端代码（前端在 `debug-ui`）                                                                     |
+| 浏览器调试 REST 端点（MJPEG、DOM 快照、debug stream）             |                                        | 任何 `src/static/debug/` 静态前端目录                                                             |
+| LiveKit 令牌发放、配置、健康检查                                  |                                        | 共享数据库（`ai-chat-service` 独立 DB）                                                           |
+| DB 备份（`utils/db-backup.ts`）                                   |                                        |                                                                                                   |
+| 通用浏览器执行会话、Tab、原子操作、实时画面与短期浏览器侧原始产物 | 上层传入的不透明可序列化关联信息       | PRD、场景依赖、功能脚本、代理调度、业务版本、deployment environment、副作用审批或长期业务证据目录 |
 
 ### 硬约束
 
@@ -33,7 +33,7 @@
 - 目标 E2E 执行不得存在上层独立启动 Playwright/Chromium 的不可视旁路；本包不因此持有 ai-e2e 的 PRD、业务版本、场景或代理概念。
 - 目标原子操作以唯一操作 ID 去重并可查询结果；无法确认副作用动作是否发生时返回结果不确定态，不得自动重复执行。
 - 目标页面控制必须校验执行会话、稳定 Tab 引用和短期控制租约；上层不得跨服务传递 `Page`、`Locator` 或 `ElementHandle`。
-- v1 每个 proxy 进程全局最多一个活动 browser execution session，每个 session 固定一个 BrowserContext，不支持会话内切换 Context 或导入 storage state；上游负责任务 FIFO、actor 和认证编排，本包只做不解释业务类型/身份的通用独占门禁。最多一个 `control` lease，`observe` 只在原子操作安全边界读取，UI live view 无控制权；会话活动期间 legacy MCP/debug 写工具返回 `browser_busy`。
+- v1 每个 proxy 进程全局最多一个活动 browser execution session，每个 session 固定一个 BrowserContext，不支持会话内切换 Context 或导入 storage state；上游负责任务 FIFO、actor 和认证编排，本包只做不解释业务类型/身份的通用独占门禁。最多一个 `control` lease，`observe` 只在原子操作安全边界读取，UI live view 无控制权；会话活动期间 debug 写入、直接 DOM/截图/脚本采集返回 `browser_busy`，只读状态与 live stream 可继续。
 - environment 风险矩阵、业务副作用投影和用户审批归 `ai-e2e`；本包不读取环境标签、不签发/解释 grant，只校验通用 lease/Tab/operation/target/args 与幂等账本。上游未授权的业务写不得取得可执行 control 请求。
 - 本包只生成并短期保留通用浏览器原始产物及内容校验信息；长期证据 manifest、业务关联、保留/pin 和决策归调用方，清理前必须提供可提升或明确过期的产物引用。
 - 不在 `src/` 下恢复 `static/debug/` 前端源码。
@@ -46,86 +46,81 @@
 
 ## 2. 模块清单
 
-| 模块 | 路径 | 状态 | 职责 | 边界/契约 |
-|------|------|------|------|----------|
-| 服务入口 | `src/server.ts` | shipped | Env 加载、插件注册、路由 autoload、启动 | 单一启动序列：env → DB backup init（非测试）→ 插件 → `AppService.initialize()` → browser-control provider → surfaces |
-| 应用服务 | `src/services/app-service.ts` | shipped | 浏览器会话管理、配置、单例 facade | 其他模块通过 AppService 访问能力 |
-| Action 执行 | `src/services/action-executor.ts` | shipped | 浏览器动作分发 | 12 种 action 类型的执行入口（见 `shared/types/action.ts` 的 `Action` 联合） |
-| 交互日志 | `src/services/interaction-logger.ts` | shipped | 记录 AI 交互历史 | 写入本地 DB |
-| LiveKit 发布 | `src/services/livekit-publisher.ts` | shipped | LiveKit 视频流发布 | 配合 `/api/livekit-token` |
-| Debug 事件中枢 | `src/services/debug-event-hub.ts` | shipped | SSE debug 事件总线 | 供 `/debug/stream` 与 `debug-ui` 消费 |
-| 失败样本收集 | `src/services/failure-sample-collector.ts` | shipped | 收集失败交互样本 | 用于诊断与改进 |
-| 日志 | `src/services/logger.ts` | shipped | 结构化日志 |  |
-| 配置 | `src/config/`（schema / loader / resolver / validator） | shipped | env + `config.json` 驱动的配置 | `defaults` 可选；缺 provider key 仅 warning，并保留 provider 记录（`apiKey: ""`） |
-| 工具注册 | `src/tools/`（registry / types / index / providers/browser-tools-provider / adapters/*） | shipped | ToolRegistry + 本地 browser-control provider + MCP Server 适配器 | 外部 MCP client/provider 已归 `ai-chat-service`；本包不存在 mcp-client-provider |
-| 浏览器工具适配 | `src/browser-tools/`（definitions / tool-map / param-adapter / result-adapter / types / index） | shipped | browser-control.* 工具定义与参数/结果适配 | 工具集含 screenshot、click、type 等；区别于 `Action` 联合类型（12 种） |
-| MCP Server | `src/mcp-server/`（index / transport） | shipped | StreamableHTTP 传输层 + MCP Server 入口 | 路径 `/mcp`；`ai-chat-service` 通过 `PROXY_ADAPTER_URL + /mcp` 接入 |
-| 浏览器执行控制面 | `src/browser-execution/`                                                                                                                                                                                             | in-progress | application-level session/Context/Tab、observe/control lease、通用独占 admission gate、白名单原子操作、持久 operation ledger 与短期 artifact/event 数据层 | 公共 session/lease/operation/target/capability/problem 复用 `shared/types/browser-execution.ts`；token hash、SQLite/bytes 等内部记录仍留本包；其余已交付边界不变 |
-| 浏览器引擎 | `src/browser-engine/`（services/{browser-lifecycle,browser-service,dom-extractor,page-actions,click-resolution,snapshot-cache,browser-lock} / screencast / locator-generator / marker-injector / dom-utils / index） | shipped | 进程内 Playwright Chromium 控制、可选远程调试端口、页面 CDP 会话、DOM 提取、点击解析、快照缓存、视觉标记注入、屏播 | 当前自行启动 Chromium，不存在外部 `playwright-server` 或 `connectOverCDP` 连接链；7 级目标链：nebula-id → role → testid → aria → text → css → xpath |
-| 插件 | `src/plugins/`（01-cors / 02-swagger / 03-error-handler / 10-routes-autoload / routes/{api/livekit-token, browser-execution, capabilities, debug/index, debug/stream, config, health}） | shipped | Fastify 插件与路由 | 浏览器控制路由通过 plugin options 注入领域服务；路由按编号约定加载顺序 |
-| Schemas | `src/schemas/`（health / config） | shipped | 健康检查与配置响应 schema |  |
-| Errors | `src/errors/`（http-errors / index） | shipped | HTTP 错误分类 |  |
-| DB 备份 | `src/utils/db-backup.ts` | shipped | SQLite 备份 | 测试环境跳过初始化 |
-| 类型 | `src/types.ts`、`src/types/`（fastify.d / node-sqlite.d / browser-client） | shipped | 包内共享类型与外部 .d 补充 |  |
-| 测试 | `src/__tests__/`、`src/browser-tools/__tests__/` | shipped | unit / integration / e2e 测试 | marker-mode-e2e、livekit-token、browser-client、mcp-config、tool-registry、adapters、app-service 等 |
-| 调试 DB 工具 | `src/debug-db.ts` | shipped | 本地调试 SQLite 工具 | 仅用于本地排障 |
+| 模块             | 路径                                                                                                                                                                                                                 | 状态    | 职责                                                                                                                                                      | 边界/契约                                                                                                                                           |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 服务入口         | `src/server.ts`                                                                                                                                                                                                      | shipped | Env 加载、显式路由注册与启动                                                                                                                              | 单一启动序列：env → DB backup init（非测试）→ browser-execution service/provider → canonical HTTP/MCP/debug surfaces                                |
+| 应用服务         | `src/services/app-service.ts`                                                                                                                                                                                        | shipped | 浏览器状态与工具 inventory 单例 facade                                                                                                                    | 其他模块通过 AppService 访问能力                                                                                                                    |
+| 交互日志         | `src/services/interaction-logger.ts`                                                                                                                                                                                 | shipped | 记录 AI 交互历史                                                                                                                                          | 写入本地 DB                                                                                                                                         |
+| LiveKit 发布     | `src/services/livekit-publisher.ts`                                                                                                                                                                                  | shipped | LiveKit 视频流发布                                                                                                                                        | 配合 `/api/v1/livekit-token`                                                                                                                        |
+| Debug 事件中枢   | `src/services/debug-event-hub.ts`                                                                                                                                                                                    | shipped | SSE debug 事件总线                                                                                                                                        | 供 `/debug/stream` 与 `debug-ui` 消费                                                                                                               |
+| 日志             | `src/services/logger.ts`                                                                                                                                                                                             | shipped | 结构化日志                                                                                                                                                |                                                                                                                                                     |
+| 运行配置         | `src/server.ts`                                                                                                                                                                                                      | shipped | 仅读取端口、loopback host、CORS、LiveKit、DB 与 artifact 路径等进程环境                                                                                   | 不解析 AI provider/config.json，不暴露配置路由                                                                                                      |
+| 工具注册         | `src/tools/`（registry / types / providers/browser-execution-tools-provider / adapters/\*）                                                                                                                          | shipped | ToolRegistry + 三个受控 operation 工具 + MCP Server 适配器                                                                                                | JSON Schema 编译为 strict validator；不保留 ToolConsumer、exposeTo、旧 provider 或参数/结果适配层                                                   |
+| MCP Server       | `src/mcp-server/`（index / transport）                                                                                                                                                                               | shipped | StreamableHTTP 传输层 + MCP Server 入口                                                                                                                   | 路径 `/mcp`；`ai-chat-service` 通过 `PROXY_ADAPTER_URL + /mcp` 接入                                                                                 |
+| 浏览器执行控制面 | `src/browser-execution/`                                                                                                                                                                                             | shipped | application-level session/Context/Tab、observe/control lease、通用独占 admission gate、白名单原子操作、持久 operation ledger 与短期 artifact/event 数据层 | 公共 session/lease/operation/target/capability/problem 复用 `shared/types/browser-execution.ts`；token hash、SQLite/bytes 等内部记录留本包          |
+| 浏览器引擎       | `src/browser-engine/`（services/{browser-lifecycle,browser-service,dom-extractor,page-actions,click-resolution,snapshot-cache,browser-lock} / screencast / locator-generator / marker-injector / dom-utils / index） | shipped | 进程内 Playwright Chromium 控制、可选远程调试端口、页面 CDP 会话、DOM 提取、点击解析、快照缓存、视觉标记注入、屏播                                        | 当前自行启动 Chromium，不存在外部 `playwright-server` 或 `connectOverCDP` 连接链；7 级目标链：nebula-id → role → testid → aria → text → css → xpath |
+| 路由             | `src/plugins/routes/{api/livekit-token,browser-execution,capabilities,debug,health}`                                                                                                                                 | shipped | Fastify 路由                                                                                                                                              | `server.ts` 显式注册；浏览器控制/调试路由通过 required options 注入领域服务，不保留 autoload/Swagger/旧 chat/config 插件栈                          |
+| Schemas          | `src/schemas/health.ts`                                                                                                                                                                                              | shipped | 健康检查响应 schema                                                                                                                                       |                                                                                                                                                     |
+| Errors           | `src/errors/`（http-errors / index）                                                                                                                                                                                 | shipped | HTTP 错误分类                                                                                                                                             |                                                                                                                                                     |
+| DB 备份          | `src/utils/db-backup.ts`                                                                                                                                                                                             | shipped | SQLite 备份                                                                                                                                               | 测试环境跳过初始化                                                                                                                                  |
+| 类型             | `src/types.ts`、`src/types/`（fastify.d / node-sqlite.d / browser-client）                                                                                                                                           | shipped | 包内共享类型与外部 .d 补充                                                                                                                                |                                                                                                                                                     |
+| 测试             | `src/__tests__/`、`src/browser-execution/**/*.test.ts`                                                                                                                                                               | shipped | unit / integration / e2e 测试                                                                                                                             | marker-mode-e2e、livekit-token、browser-client、MCP/schema、tool-registry、operation/artifact/recovery 等                                           |
+| 调试 DB 工具     | `src/debug-db.ts`                                                                                                                                                                                                    | shipped | 本地调试 SQLite 工具                                                                                                                                      | 仅用于本地排障                                                                                                                                      |
 
 ---
 
 ## 3. 路由登记（后端 API）
 
-| 路由 | 方法 | 状态 | 用途 | 关联模块 |
-|------|------|------|------|----------|
-| `/api/health` | GET | shipped | 健康检查 | plugins/routes/health、schemas/health |
-| `/api/config` | GET | shipped | 暴露当前运行配置 | plugins/routes/config、schemas/config |
-| `/api/livekit-token` | GET | shipped | LiveKit 令牌发放 | plugins/routes/api/livekit-token、services/livekit-publisher |
-| `/debug/stream` | GET (SSE) | shipped | Debug 事件流（MJPEG 元数据 + 交互事件） | plugins/routes/debug/stream、services/debug-event-hub |
-| `/debug/*` | * | shipped | 浏览器调试 REST 端点（MJPEG、DOM 快照） | plugins/routes/debug/index、browser-engine |
-| `/mcp` | POST (StreamableHTTP)；GET 返回 405 | shipped | 无状态 JSON MCP Server 入口，仅暴露 3 个受控 operation 工具；拒绝可选 GET SSE 通道并允许客户端回退到 POST | mcp-server/、tools/、browser-execution/ |
-| `/api/v1/browser-execution/sessions`、`/:sessionId` | POST/GET/DELETE | shipped | 创建/读取/关闭全局单活动可视浏览器执行会话 | 创建/关闭要求 `Idempotency-Key`；活动会话关闭要求 control bearer token |
-| `/api/v1/browser-execution/sessions/:sessionId/leases`、`/:leaseId` | POST/DELETE | shipped | 签发/撤销 observe/control 租约 | observe 最长 30 秒且单次使用，control 最长 5 分钟；token 仅首次响应明文，SQLite 只存 SHA-256 hash |
-| `/api/v1/browser-execution/operations/:operationId` | GET | shipped | 原子操作账本查询与未知结果恢复 | 已开始但重启前无终态的操作收敛为 `outcome_unknown`；queued 重启后取消 |
-| `/api/v1/browser-execution/sessions/:sessionId/events`、`event-log`、`artifacts/:artifactId` | GET/SSE               | shipped | snapshot-first 会话事件、按 `afterSeq` 持久事件查询与会话范围内短期原始产物读取              | artifact GET 返回前重新校验安全 storage ref、字节数与 SHA-256；SSE heartbeat 不占持久 seq                                                            |
-| `/api/v1/capabilities` | GET | shipped | 声明 browser-execution/operation `1.0`、动作/观测、持久账本、画面能力与 session/Context 限制 | `maxActiveBrowserSessions=1`、`maxBrowserContextsPerSession=1`、不支持 storage-state 切换；非 loopback 绑定时 `localControlPlane=false` 并禁用控制面 |
+| 路由                                                                                         | 方法                                | 状态    | 用途                                                                                                      | 关联模块                                                                                                                                             |
+| -------------------------------------------------------------------------------------------- | ----------------------------------- | ------- | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/api/v1/health`                                                                             | GET                                 | shipped | 健康检查                                                                                                  | plugins/routes/health、schemas/health                                                                                                                |
+| `/api/v1/livekit-token`                                                                      | GET                                 | shipped | LiveKit 令牌发放                                                                                          | plugins/routes/api/livekit-token、services/livekit-publisher                                                                                         |
+| `/debug/stream`                                                                              | GET (SSE)                           | shipped | Debug 事件流（MJPEG 元数据 + 交互事件）                                                                   | plugins/routes/debug/stream、services/debug-event-hub                                                                                                |
+| `/debug/*`                                                                                   | \*                                  | shipped | 浏览器调试 REST 端点（MJPEG、DOM 快照）                                                                   | plugins/routes/debug/index、browser-engine                                                                                                           |
+| `/mcp`                                                                                       | POST (StreamableHTTP)；GET 返回 405 | shipped | 无状态 JSON MCP Server 入口，仅暴露 3 个受控 operation 工具；拒绝可选 GET SSE 通道并允许客户端回退到 POST | mcp-server/、tools/、browser-execution/                                                                                                              |
+| `/api/v1/browser-execution/sessions`、`/:sessionId`                                          | POST/GET/DELETE                     | shipped | 创建/读取/关闭全局单活动可视浏览器执行会话                                                                | 创建/关闭要求 `Idempotency-Key`；活动会话关闭要求 control bearer token                                                                               |
+| `/api/v1/browser-execution/sessions/:sessionId/leases`、`/:leaseId`                          | POST/DELETE                         | shipped | 签发/撤销 observe/control 租约                                                                            | observe 最长 30 秒且单次使用，control 最长 5 分钟；token 仅首次响应明文，SQLite 只存 SHA-256 hash                                                    |
+| `/api/v1/browser-execution/operations/:operationId`                                          | GET                                 | shipped | 原子操作账本查询与未知结果恢复                                                                            | 已开始但重启前无终态的操作收敛为 `outcome_unknown`；queued 重启后取消                                                                                |
+| `/api/v1/browser-execution/sessions/:sessionId/events`、`event-log`、`artifacts/:artifactId` | GET/SSE                             | shipped | snapshot-first 会话事件、按 `afterSeq` 持久事件查询与会话范围内短期原始产物读取                           | artifact GET 返回前重新校验安全 storage ref、字节数与 SHA-256；SSE heartbeat 不占持久 seq                                                            |
+| `/api/v1/capabilities`                                                                       | GET                                 | shipped | 声明 browser-execution/operation `1.0`、动作/观测、持久账本、画面能力与 session/Context 限制              | `maxActiveBrowserSessions=1`、`maxBrowserContextsPerSession=1`、不支持 storage-state 切换；非 loopback 绑定时 `localControlPlane=false` 并禁用控制面 |
 
 ---
 
 ## 4. 功能清单
 
-| 功能 | 入口 | 状态 | 验收面 | 关联模块 |
-|------|------|------|--------|----------|
-| 浏览器控制（12 种 action：click / type / focus / blur / hover / value / dispatch / scroll / navigate / wait / mcp_call / finish） | browser-tools/definitions + browser-engine/services/page-actions | shipped | 单元测试 + 集成测试 | browser-tools、browser-engine、action-executor |
-| Playwright/CDP 浏览器通道 | browser-engine/services/browser-lifecycle + browser-engine/screencast | shipped | browser-service 单元测试 + screencast 生命周期测试 + 集成面 | 生命周期可按需开放 remote-debugging-port；浏览器打开/关闭同步启动/停止页面 `CDPSession` 屏播 |
-| MCP Server (StreamableHTTP) | mcp-server/ | shipped | `__tests__/adapters/mcp-server-adapter.test.ts` | tools/、mcp-server/ |
-| browser-control.* 工具暴露 | tools/providers/{browser-tools-provider,browser-execution-tools-provider} | shipped | provider tests + 真实 `/mcp` error contract test | MCP 仅暴露 `operation_execute/get/cancel`；旧 15 个 browser tools 仅保留包内实现且 `exposeTo=[]` |
-| 视觉标记系统（Vision Marker） | browser-engine/marker-injector、locator-generator | shipped | marker-mode-e2e + 集成测试 | browser-engine、shared/types/vision-marker |
-| 7 级目标定位链 | browser-engine/locator-generator、click-resolution | shipped | 集成测试 | browser-engine |
-| MJPEG 屏播 | browser-engine/screencast + plugins/routes/debug | shipped | SSE 助手测试 + debug-ui 集成 | browser-engine、debug-event-hub |
-| DOM 快照 v2.0（含 data-nebula-id） | browser-engine/dom-extractor、dom-utils | shipped | 集成测试 | browser-engine |
-| LiveKit 视频流 | services/livekit-publisher + /api/livekit-token | shipped | `__tests__/livekit-token.test.ts` | services、plugins/routes/api/livekit-token |
-| Debug 事件 SSE | services/debug-event-hub + /debug/stream | shipped | SSE 助手测试 | services、plugins/routes/debug/stream |
-| 交互日志 | services/interaction-logger | shipped | `__tests__/app-service-interaction-logging.test.ts` | services |
-| 失败样本采集 | services/failure-sample-collector | shipped | `__tests__/services/failure-sample-collector.test.ts` | services |
-| 配置加载与校验 | config/ | shipped | `__tests__/config/validator.test.ts`、unit/config/* | config |
-| DB 备份 | utils/db-backup | shipped | `__tests__/db-backup.test.ts` | utils |
-| 服务生命周期 | services/app-service | shipped | `__tests__/service-lifecycle.test.ts`、app-service-marker | services |
-| 通用浏览器执行会话与操作账本 | `src/browser-execution/` | shipped | service/repository 单元测试 + Fastify inject 契约测试 + 重启恢复测试 | 全局单 session/单 Context、lease token hash/process epoch、FIFO 原子边界、幂等冲突、queued cancel、`outcome_unknown`、脱敏请求账本和 legacy 门禁；不解释 E2E actor/environment/审批 |
-| 浏览器短期产物与会话事件运行时                                                                                                    | `src/browser-execution/{artifact-store,repository,service}.ts`、`plugins/routes/browser-execution.ts` | shipped     | repository/service/真实 Playwright/Fastify SSE 与下载契约测试                          | schema migration 2 记录 capture/产物/hold/清理资格和 session-scoped 单调 seq；截图/DOM bytes 以 SHA-256 内容寻址保存到 SQLite 外，操作可请求 before/after/DOM，失败操作自动尝试现场截图；提供 snapshot-first SSE、event-log 和带完整性复核的会话范围 artifact GET                                  |
-| Vision v2 证据生产边界 | browser-execution operation/artifact API | shipped | proxy operation/artifact tests + ai-chat snapshot-loader contract tests | proxy 继续作为 snapshot bytes/status/hash 的唯一权威生产者；`VisionSnapshotBindingV1` 只投影稳定引用与完整性字段，不向模型或 shared 暴露 lease token/artifact bytes |
-| 受限 MCP 原子工具 | tools/providers/browser-execution-tools-provider、browser-execution | shipped | provider test + 真实 `/mcp` error contract test | `browser-control.operation_execute/get/cancel` 是唯一 MCP 工具面；调用方隐藏注入 session/Tab/lease/token；BrowserExecutionError 通过 `isError: true` 的结构化 problem 传播 |
-| 语义脚本原子动作/观测覆盖                                                                                                         | browser-execution/playwright-browser、validation                                                      | in-progress | 真实 Playwright integration 测试                                                       | 已交付 10 种观测（page_state/dom_snapshot/target_state/url/title/text/value/attribute/count/tabs）和除 set_files 外 14 种动作，按 role/test-id/label/placeholder/text/css/xpath 候选解析并拒绝歧义；禁止任意 JS/CDP/裸坐标。截图/DOM capture 已生效，set_files、video segment 和操作动画待后续交付 |
-| 错误分类 | errors/http-errors | shipped | `__tests__/errors.test.ts` | errors |
+| 功能                               | 入口                                                                                                  | 状态        | 验收面                                                                  | 关联模块                                                                                                                                                                                                                                                                                           |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------- | ----------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 受控浏览器观测/操作                | browser-execution/playwright-browser、validation                                                      | shipped     | 单元测试 + 集成测试                                                     | 仅 capability 声明的 observe/act 白名单；禁止任意 JS/CDP/裸坐标                                                                                                                                                                                                                                    |
+| Playwright/CDP 浏览器通道          | browser-engine/services/browser-lifecycle + browser-engine/screencast                                 | shipped     | browser-service 单元测试 + screencast 生命周期测试 + 集成面             | 生命周期可按需开放 remote-debugging-port；浏览器打开/关闭同步启动/停止页面 `CDPSession` 屏播                                                                                                                                                                                                       |
+| MCP Server (StreamableHTTP)        | mcp-server/                                                                                           | shipped     | `__tests__/adapters/mcp-server-adapter.test.ts`                         | tools/、mcp-server/                                                                                                                                                                                                                                                                                |
+| browser-control.\* 工具暴露        | tools/providers/browser-execution-tools-provider                                                      | shipped     | provider tests + 真实 `/mcp` error contract test                        | MCP 仅暴露 `operation_execute/get/cancel`；旧 15 个工具、ToolConsumer、exposeTo 与适配层已物理删除                                                                                                                                                                                                 |
+| 视觉标记系统（Vision Marker）      | browser-engine/marker-injector、locator-generator                                                     | shipped     | marker-mode-e2e + 集成测试                                              | browser-engine、shared/types/vision-marker                                                                                                                                                                                                                                                         |
+| 7 级目标定位链                     | browser-engine/locator-generator、click-resolution                                                    | shipped     | 集成测试                                                                | browser-engine                                                                                                                                                                                                                                                                                     |
+| MJPEG 屏播                         | browser-engine/screencast + plugins/routes/debug                                                      | shipped     | SSE 助手测试 + debug-ui 集成                                            | browser-engine、debug-event-hub                                                                                                                                                                                                                                                                    |
+| DOM 快照 v2.0（含 data-nebula-id） | browser-engine/dom-extractor、dom-utils                                                               | shipped     | 集成测试                                                                | browser-engine                                                                                                                                                                                                                                                                                     |
+| LiveKit 视频流                     | services/livekit-publisher + /api/v1/livekit-token                                                    | shipped     | `__tests__/livekit-token.test.ts`                                       | services、plugins/routes/api/livekit-token                                                                                                                                                                                                                                                         |
+| Debug 事件 SSE                     | services/debug-event-hub + /debug/stream                                                              | shipped     | SSE 助手测试                                                            | services、plugins/routes/debug/stream                                                                                                                                                                                                                                                              |
+| 交互日志                           | services/interaction-logger                                                                           | shipped     | debug DB 测试                                                           | services                                                                                                                                                                                                                                                                                           |
+| DB 备份                            | utils/db-backup                                                                                       | shipped     | `__tests__/db-backup.test.ts`                                           | utils                                                                                                                                                                                                                                                                                              |
+| 服务生命周期                       | services/app-service                                                                                  | shipped     | `__tests__/service-lifecycle.test.ts`、app-service-marker               | services                                                                                                                                                                                                                                                                                           |
+| 通用浏览器执行会话与操作账本       | `src/browser-execution/`                                                                              | shipped     | service/repository 单元测试 + Fastify inject 契约测试 + 重启恢复测试    | 全局单 session/单 Context、lease token hash/process epoch、FIFO 原子边界、幂等冲突、queued cancel、`outcome_unknown`、脱敏请求账本和 debug 直连仲裁；不解释 E2E actor/environment/审批                                                                                                             |
+| 浏览器短期产物与会话事件运行时     | `src/browser-execution/{artifact-store,repository,service}.ts`、`plugins/routes/browser-execution.ts` | shipped     | repository/service/真实 Playwright/Fastify SSE 与下载契约测试           | schema migration 2 记录 capture/产物/hold/清理资格和 session-scoped 单调 seq；截图/DOM bytes 以 SHA-256 内容寻址保存到 SQLite 外，操作可请求 before/after/DOM，失败操作自动尝试现场截图；提供 snapshot-first SSE、event-log 和带完整性复核的会话范围 artifact GET                                  |
+| Vision v2 证据生产边界             | browser-execution operation/artifact API                                                              | shipped     | proxy operation/artifact tests + ai-chat snapshot-loader contract tests | proxy 继续作为 snapshot bytes/status/hash 的唯一权威生产者；`VisionSnapshotBindingV1` 只投影稳定引用与完整性字段，不向模型或 shared 暴露 lease token/artifact bytes                                                                                                                                |
+| 受限 MCP 原子工具                  | tools/providers/browser-execution-tools-provider、browser-execution                                   | shipped     | provider test + 真实 `/mcp` error contract test                         | `browser-control.operation_execute/get/cancel` 是唯一 MCP 工具面；调用方隐藏注入 session/Tab/lease/token；BrowserExecutionError 通过 `isError: true` 的结构化 problem 传播                                                                                                                         |
+| 语义脚本原子动作/观测覆盖          | browser-execution/playwright-browser、validation                                                      | in-progress | 真实 Playwright integration 测试                                        | 已交付 10 种观测（page_state/dom_snapshot/target_state/url/title/text/value/attribute/count/tabs）和除 set_files 外 14 种动作，按 role/test-id/label/placeholder/text/css/xpath 候选解析并拒绝歧义；禁止任意 JS/CDP/裸坐标。截图/DOM capture 已生效，set_files、video segment 和操作动画待后续交付 |
+| 错误分类                           | errors/http-errors                                                                                    | shipped     | `__tests__/errors.test.ts`                                              | errors                                                                                                                                                                                                                                                                                             |
 
 ---
 
 ## 5. 修改维护协议 [MUST-MAINTAIN]
 
 > **强制约束**：以下任何变更必须同步本文件，禁止漂移：
+>
 > 1. 新增 / 删除 / 重命名模块或顶级目录（`src/<dir>/`）
 > 2. 新增 / 删除 / 修改 MCP 工具（`browser-control.*`）
 > 3. 新增 / 删除 / 修改 HTTP 路由（包括 MCP Server 路径 `/mcp`）
 > 4. 修改启动顺序（env → DB backup → 插件 → AppService.initialize → preflight → surfaces）
-> 5. 修改 action 类型集合（当前 12 种）
+> 5. 修改 browser execution observe/act 操作白名单或 capability 声明
 > 6. 修改 7 级目标定位链顺序
 > 7. 与 `ai-chat-service` / `debug-ui` / `ai-e2e` 之间的契约变更
 > 8. 修改 Playwright/CDP 所有权、浏览器启动/连接方式或跨服务目标引用边界
@@ -136,29 +131,28 @@
 
 ### 维护检查清单
 
-| 变更场景 | 必须更新 |
-|----------|----------|
-| 新增 MCP 工具 | 模块清单 + 路由登记 + 功能清单 + 跨包契约（`docs/PRODUCT-SPEC-INDEX.md`） |
-| 新增 HTTP 路由 | 路由登记 + 功能清单 |
-| 新增 action 类型 | 模块清单（browser-tools/definitions） + 功能清单 + shared 类型 |
-| 修改启动顺序 | 包级目标与边界的"硬约束"列 + 启动序列说明 |
-| 修改 Playwright/CDP 拓扑 | 包级目标与边界 + 浏览器引擎模块 + 功能清单 + `docs/PRODUCT-SPEC-INDEX.md` |
-| 修改浏览器执行会话或原子操作协议 | 包级目标与边界 + 路由登记 + 功能清单 + `ai-e2e/docs/agent-browser-execution-contract.md` + `ai-e2e/docs/service-api-event-contract.md` + 所有消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
-| 修改 E2E 环境/副作用策略边界 | 包级目标与边界 + 功能清单 + `ai-e2e/docs/environment-side-effect-policy-contract.md` + `ai-e2e`/`ai-chat-service` PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md`；不得把环境矩阵或审批下沉本包 |
-| 修改浏览器原始产物与上层证据边界 | 包级目标与边界 + 功能清单 + `ai-e2e/docs/run-state-decision-evidence-contract.md` + 消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
-| 修改语义脚本动作映射 | 功能清单 + `ai-e2e/docs/semantic-script-schema.md` + `ai-e2e` PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
-| 跨包契约变更（端口、API 路径、SSE 事件） | 本文件 + 所有消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
+| 变更场景                                 | 必须更新                                                                                                                                                                                        |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 新增 MCP 工具                            | 模块清单 + 路由登记 + 功能清单 + 跨包契约（`docs/PRODUCT-SPEC-INDEX.md`）                                                                                                                       |
+| 新增 HTTP 路由                           | 路由登记 + 功能清单                                                                                                                                                                             |
+| 新增 browser operation                   | 模块清单 + 功能清单 + shared 线协议 + capability + 跨服务契约测试                                                                                                                               |
+| 修改启动顺序                             | 包级目标与边界的"硬约束"列 + 启动序列说明                                                                                                                                                       |
+| 修改 Playwright/CDP 拓扑                 | 包级目标与边界 + 浏览器引擎模块 + 功能清单 + `docs/PRODUCT-SPEC-INDEX.md`                                                                                                                       |
+| 修改浏览器执行会话或原子操作协议         | 包级目标与边界 + 路由登记 + 功能清单 + `ai-e2e/docs/agent-browser-execution-contract.md` + `ai-e2e/docs/service-api-event-contract.md` + 所有消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md` |
+| 修改 E2E 环境/副作用策略边界             | 包级目标与边界 + 功能清单 + `ai-e2e/docs/environment-side-effect-policy-contract.md` + `ai-e2e`/`ai-chat-service` PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md`；不得把环境矩阵或审批下沉本包     |
+| 修改浏览器原始产物与上层证据边界         | 包级目标与边界 + 功能清单 + `ai-e2e/docs/run-state-decision-evidence-contract.md` + 消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md`                                                          |
+| 修改语义脚本动作映射                     | 功能清单 + `ai-e2e/docs/semantic-script-schema.md` + `ai-e2e` PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md`                                                                                       |
+| 跨包契约变更（端口、API 路径、SSE 事件） | 本文件 + 所有消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md`                                                                                                                                 |
 
 ---
 
 ## 6. 已知缺口与技术债
 
-| 缺口 | 类型 | 状态 | 备注 |
-|------|------|------|------|
-| ToolConsumer 仍保留 legacy `chat` 值 | tech-debt | pending | `BrowserToolsProvider.exposeTo` 与 `GatewayTool` 类型仍含 `chat`，但本包已无 Chat 消费面；后续应在不影响 MCP Server 的前提下清理 |
+| 缺口                                     | 类型            | 状态    | 备注                                                                                                                                                                                  |
+| ---------------------------------------- | --------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 浏览器短期产物清理与脱敏 worker 未实现   | requirement-gap | pending | 真实截图/DOM、失败自动取证、内容寻址存储、完整性校验、SSE/event-log/artifact GET 已交付；TTL/opaque hold 目前只提供数据与清理资格，尚未自动删除文件或执行脱敏，video segment 也未开放 |
-| 剩余语义动作与演示效果未实现 | requirement-gap | pending | `set_files` 需要 artifact reference；`presentation.animation` 已校验但当前 capability 声明不支持操作动画，不能描述为已生效 |
-| 控制租约续租与账本保留清理 worker 未实现 | requirement-gap | pending | 当前 control 需撤销后重发，尚无不扩权续租；artifact 已支持 TTL、opaque upstream hold 与可删除资格查询，但 operation/idempotency 7 天保留和实际清理任务尚未实现 |
+| 剩余语义动作与演示效果未实现             | requirement-gap | pending | `set_files` 需要 artifact reference；`presentation.animation` 已校验但当前 capability 声明不支持操作动画，不能描述为已生效                                                            |
+| 控制租约续租与账本保留清理 worker 未实现 | requirement-gap | pending | 当前 control 需撤销后重发，尚无不扩权续租；artifact 已支持 TTL、opaque upstream hold 与可删除资格查询，但 operation/idempotency 7 天保留和实际清理任务尚未实现                        |
 
 ---
 
@@ -183,9 +177,11 @@
 
 - MJPEG 新监听者立即获得当前浏览器最近帧；LiveKit publisher 在页面静止时周期性重发最近帧，保证晚加入订阅者可解码首帧。
 - DOM Marker 必须包含无显式 `type` 的输入框，以及 text/email/password/search/url/tel/number/submit/button/checkbox/radio/file 等常见输入类型。
+
 ### Debug stream recovery [shipped]
 
 - `/debug/stream` 在浏览器页面仍可用但推流管理器尚未启动时，会基于当前页面惰性恢复 screencast；仅在不存在可用页面或恢复失败时返回 502。
+
 ### LiveKit publisher recovery [shipped]
 
-- `/api/livekit-token` 在当前浏览器页面仍可用且发布端未运行时，会异步恢复 LiveKit Publisher，支持 LiveKit 晚启动或发布端异常退出后的 WebRTC 重连。
+- `/api/v1/livekit-token` 在当前浏览器页面仍可用且发布端未运行时，会异步恢复 LiveKit Publisher，支持 LiveKit 晚启动或发布端异常退出后的 WebRTC 重连。

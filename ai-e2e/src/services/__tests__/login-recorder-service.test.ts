@@ -1,8 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { LoginScriptRepository, LoginScript as RepoLoginScript, CreateLoginScriptParams, UpdateLoginScriptParams } from '../../database/repositories/login-script-repository.js';
-import type { ProjectRepository, Project as RepoProject } from '../../database/repositories/project-repository.js';
+import type {
+  LoginScriptRepository,
+  LoginScript as RepoLoginScript,
+  CreateLoginScriptParams,
+  UpdateLoginScriptParams,
+} from '../../database/repositories/login-script-repository.js';
+import type {
+  ProjectRepository,
+  Project as RepoProject,
+} from '../../database/repositories/project-repository.js';
 import type { DatabaseManager } from '../../database/db.js';
-import type { ProxyAdapterClient } from '../../infrastructure/proxy-adapter-client.js';
+import type { AiE2eRuntimeClient } from '../../infrastructure/ai-e2e-runtime-client.js';
 import type { LoginStep } from '../../types/login-script.js';
 
 // ---------- Mock factories ----------
@@ -25,7 +33,7 @@ function createMockLoginScriptRepo(scripts?: Map<string, RepoLoginScript>): Logi
     }),
     findById: vi.fn((id: string) => store.get(id) ?? null),
     findByProjectId: vi.fn((projectId: string) =>
-      Array.from(store.values()).filter(s => s.project_id === projectId),
+      Array.from(store.values()).filter((s) => s.project_id === projectId)
     ),
     update: vi.fn((id: string, params: UpdateLoginScriptParams) => {
       const existing = store.get(id);
@@ -73,7 +81,7 @@ function createMockProjectRepo(store?: Map<string, RepoProject>): ProjectReposit
   } as unknown as ProjectRepository;
 }
 
-function createMockProxyClient(): ProxyAdapterClient {
+function createMockRuntimeClient(): AiE2eRuntimeClient {
   return {
     navigate: vi.fn(() => Promise.resolve({ success: true, url: 'https://example.com' })),
     click: vi.fn(() => Promise.resolve({ success: true })),
@@ -87,15 +95,17 @@ function createMockProxyClient(): ProxyAdapterClient {
     getDOM: vi.fn(() => Promise.resolve({ html: '<html></html>' })),
     getPageInfo: vi.fn(() => Promise.resolve({ url: 'https://example.com', title: 'Test' })),
     healthCheck: vi.fn(() => Promise.resolve(true)),
-    generateText: vi.fn(() => Promise.resolve({ text: '', tokenUsage: { promptTokens: 0, completionTokens: 0 } })),
+    generateText: vi.fn(() =>
+      Promise.resolve({ text: '', tokenUsage: { promptTokens: 0, completionTokens: 0 } })
+    ),
     openBrowser: vi.fn(() => Promise.resolve({ success: true })),
     closeBrowser: vi.fn(() => Promise.resolve({ success: true })),
-  } as unknown as ProxyAdapterClient;
+  } as unknown as AiE2eRuntimeClient;
 }
 
 function createMockDbManager(
   projectRepo: ProjectRepository,
-  loginScriptRepo: LoginScriptRepository,
+  loginScriptRepo: LoginScriptRepository
 ): DatabaseManager {
   return {
     getProjectRepo: vi.fn(() => projectRepo),
@@ -116,7 +126,7 @@ describe('LoginRecorderService', () => {
   let dbManager: DatabaseManager;
   let scriptStore: Map<string, RepoLoginScript>;
   let projectStore: Map<string, RepoProject>;
-  let mockClient: ProxyAdapterClient;
+  let mockClient: AiE2eRuntimeClient;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -125,7 +135,7 @@ describe('LoginRecorderService', () => {
     loginScriptRepo = createMockLoginScriptRepo(scriptStore);
     projectRepo = createMockProjectRepo(projectStore);
     dbManager = createMockDbManager(projectRepo, loginScriptRepo);
-    mockClient = createMockProxyClient();
+    mockClient = createMockRuntimeClient();
     service = new LoginRecorderService(dbManager, mockClient);
   });
 
@@ -155,7 +165,11 @@ describe('LoginRecorderService', () => {
       const project = projectRepo.create({ name: 'StepTest' });
       const script = service.startRecording(project.id);
 
-      const step: LoginStep = { type: 'navigate', description: 'Go to login page', url: 'https://app.com/login' };
+      const step: LoginStep = {
+        type: 'navigate',
+        description: 'Go to login page',
+        url: 'https://app.com/login',
+      };
       const updated = service.recordStep(project.id, step);
 
       expect(updated).not.toBeNull();
@@ -169,8 +183,17 @@ describe('LoginRecorderService', () => {
       const project = projectRepo.create({ name: 'MultiStep' });
       service.startRecording(project.id);
 
-      service.recordStep(project.id, { type: 'navigate', description: 'Go', url: 'https://app.com' });
-      service.recordStep(project.id, { type: 'fill', description: 'Username', selector: '#user', value: 'admin' });
+      service.recordStep(project.id, {
+        type: 'navigate',
+        description: 'Go',
+        url: 'https://app.com',
+      });
+      service.recordStep(project.id, {
+        type: 'fill',
+        description: 'Username',
+        selector: '#user',
+        value: 'admin',
+      });
       service.recordStep(project.id, { type: 'click', description: 'Submit', selector: '#submit' });
 
       const script = service.getLoginScript(project.id);
@@ -209,15 +232,37 @@ describe('LoginRecorderService', () => {
   // ===== replayLogin =====
 
   describe('replayLogin', () => {
-    it('should execute steps in order via ProxyAdapterClient', async () => {
+    it('should execute steps in order via AiE2eRuntimeClient', async () => {
       const project = projectRepo.create({ name: 'Replay' });
       service.startRecording(project.id);
 
-      service.recordStep(project.id, { type: 'navigate', description: 'Go', url: 'https://app.com/login' });
-      service.recordStep(project.id, { type: 'fill', description: 'User', selector: '#username', value: 'admin' });
-      service.recordStep(project.id, { type: 'fill', description: 'Pass', selector: '#password', value: 'secret' });
-      service.recordStep(project.id, { type: 'click', description: 'Login', selector: '#login-btn' });
-      service.recordStep(project.id, { type: 'wait', description: 'Wait for dashboard', duration: 2000 });
+      service.recordStep(project.id, {
+        type: 'navigate',
+        description: 'Go',
+        url: 'https://app.com/login',
+      });
+      service.recordStep(project.id, {
+        type: 'fill',
+        description: 'User',
+        selector: '#username',
+        value: 'admin',
+      });
+      service.recordStep(project.id, {
+        type: 'fill',
+        description: 'Pass',
+        selector: '#password',
+        value: 'secret',
+      });
+      service.recordStep(project.id, {
+        type: 'click',
+        description: 'Login',
+        selector: '#login-btn',
+      });
+      service.recordStep(project.id, {
+        type: 'wait',
+        description: 'Wait for dashboard',
+        duration: 2000,
+      });
 
       const result = await service.replayLogin(project.id);
 
@@ -235,12 +280,18 @@ describe('LoginRecorderService', () => {
       expect(result.error).toContain('not found');
     });
 
-    it('should handle ProxyAdapterClient errors gracefully', async () => {
+    it('should handle AiE2eRuntimeClient errors gracefully', async () => {
       const project = projectRepo.create({ name: 'FailReplay' });
       service.startRecording(project.id);
-      service.recordStep(project.id, { type: 'navigate', description: 'Go', url: 'https://bad.com' });
+      service.recordStep(project.id, {
+        type: 'navigate',
+        description: 'Go',
+        url: 'https://bad.com',
+      });
 
-      (mockClient.navigate as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Network error'));
+      (mockClient.navigate as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+        new Error('Network error')
+      );
 
       const result = await service.replayLogin(project.id);
       expect(result.success).toBe(false);
@@ -254,7 +305,11 @@ describe('LoginRecorderService', () => {
     it('should verify login by checking cookies', async () => {
       const project = projectRepo.create({ name: 'VerifyCookie' });
       service.startRecording(project.id);
-      service.recordStep(project.id, { type: 'navigate', description: 'Go', url: 'https://app.com' });
+      service.recordStep(project.id, {
+        type: 'navigate',
+        description: 'Go',
+        url: 'https://app.com',
+      });
 
       (mockClient.getCookies as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
         cookies: [{ name: 'session', value: 'abc123', domain: 'app.com' }],
@@ -271,7 +326,11 @@ describe('LoginRecorderService', () => {
     it('should fail verification when cookie not found', async () => {
       const project = projectRepo.create({ name: 'NoCookie' });
       service.startRecording(project.id);
-      service.recordStep(project.id, { type: 'navigate', description: 'Go', url: 'https://app.com' });
+      service.recordStep(project.id, {
+        type: 'navigate',
+        description: 'Go',
+        url: 'https://app.com',
+      });
 
       (mockClient.getCookies as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ cookies: [] });
 
@@ -286,7 +345,11 @@ describe('LoginRecorderService', () => {
     it('should verify login by checking localStorage', async () => {
       const project = projectRepo.create({ name: 'VerifyLS' });
       service.startRecording(project.id);
-      service.recordStep(project.id, { type: 'navigate', description: 'Go', url: 'https://app.com' });
+      service.recordStep(project.id, {
+        type: 'navigate',
+        description: 'Go',
+        url: 'https://app.com',
+      });
 
       (mockClient.getLocalStorage as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
         data: { token: 'jwt-token-123' },
@@ -303,7 +366,11 @@ describe('LoginRecorderService', () => {
     it('should verify login by checking element visibility', async () => {
       const project = projectRepo.create({ name: 'VerifyEl' });
       service.startRecording(project.id);
-      service.recordStep(project.id, { type: 'navigate', description: 'Go', url: 'https://app.com' });
+      service.recordStep(project.id, {
+        type: 'navigate',
+        description: 'Go',
+        url: 'https://app.com',
+      });
 
       (mockClient.executeScript as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
         result: true,
@@ -316,7 +383,7 @@ describe('LoginRecorderService', () => {
 
       expect(result.success).toBe(true);
       expect(mockClient.executeScript).toHaveBeenCalledWith(
-        expect.stringContaining('.user-avatar'),
+        expect.stringContaining('.user-avatar')
       );
     });
 

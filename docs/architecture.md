@@ -15,13 +15,13 @@ Browser ←→ Debug UI (:5173 dev)
     (GLM, OpenAI, Anthropic, Kimi, NVIDIA)
 
          AI E2E (:3002) — 自动化测试编排
-    AiChatClient(:3001) + BrowserGatewayClient(:3000)
+    AiE2eRuntimeClient(:3001) + BrowserGatewayClient(:3000)
 ```
 
 ### 核心产品分层
 
-- **浏览器能力层（proxy-adapter，shipped）**：Playwright/CDP 集成的唯一所有者；负责页面分析、DOM/截图证据和动作执行，并通过 MCP/调试 API 对外服务。
-- **AI 基础能力层（ai-chat-service，in-progress）**：分析/决策模型、视觉模型、MCP client/ToolRegistry、会话能力、Agent task 命令/事件控制面与本地只读声明式 Skills Runtime 已交付；完整副作用授权仍为 pending。
+- **浏览器能力层（proxy-adapter，shipped）**：Playwright/CDP 集成的唯一所有者；负责页面分析、DOM/截图证据和动作执行，只通过 `browser-control.operation_execute/get/cancel`、browser-execution HTTP 控制面及受仲裁调试面服务。
+- **AI 基础能力层（ai-chat-service，in-progress）**：唯一 AI 驱动核心；统一 DSH Agent Loop、分析/决策模型、不可变快照 Vision、MCP/ToolRuntime、Chat/Agent task、逐 effect 授权、持久化、声明式 Skills 与部署锁定插件已交付；生产恢复演练仍 pending。
 - **E2E 业务层（ai-e2e，in-progress）**：现有 PRD 分析、页面探索、URL binding、scenario 级 TypeScript 脚本和 run 级修复；目标是业务版本、URL+参数页面锚点、模块下多个功能脚本、跨模块场景调用图，以及主代理派发页面子代理的编排。
 
 目标主代理是 `ai-e2e` 内由 authoring/run 状态机驱动的持久工作流协调器，不依赖一个长期模型会话。首次 PRD + URL 依次完成需求抽取、页面发现/建模、模块需求、脚本/场景 candidate、静态校验、真实浏览器验证和原子激活；后续 recheck/repair 通过 revision dependency index 只重验和修复受影响闭包。
@@ -30,7 +30,7 @@ Browser ←→ Debug UI (:5173 dev)
 
 目标运行状态按测试流程、TODO、执行尝试、Agent 与浏览器操作分层；`ai-e2e` 以持久 snapshot、单调运行事件和不可变证据 manifest 作为业务真相。`proxy-adapter` 只保留可提升的短期浏览器原始产物，`ai-chat-service` 只保留 Agent/工具审计；运行决策、失败传播、长期证据和汇总仍归 `ai-e2e`。
 
-目标跨服务链使用 `ai-e2e /api/v1/runs` → `ai-chat-service /api/v1/agent-tasks` → `proxy-adapter /mcp` 与 `/api/v1/browser-execution/*`。所有外部写操作使用幂等键，`ai-e2e` 以 outbox 驱动并查询外部账本收敛；Run、Agent task、Browser session 各自目标使用 snapshot-first SSE 和独立单调序号。当前 proxy 浏览器控制、真实截图/DOM artifact、browser session event-log/snapshot-first SSE，以及 Agent task POST/GET/commands/events/event-log/capability/Skill catalog/runtime 已实现；ai-e2e 业务版本 create/list/get/copy 已实现，其 validate/assets、Authoring/Run、outbox 与跨服务业务编排仍未实现；现有 Chat/Debug/项目 SSE 保持兼容。
+跨服务链使用 `ai-e2e /api/v1/runs` → `ai-chat-service /api/v1/agent-tasks` → `proxy-adapter /mcp` 与 `/api/v1/browser-execution/*`。所有外部写操作使用幂等键，`ai-e2e` 以 outbox 驱动并查询外部账本收敛；Run、Agent task、Browser session 各自使用 snapshot-first SSE 和独立单调序号。核心服务只提供 canonical v1 HTTP 路径和三个 operation MCP 工具，不保留旧路径、旧工具或静默回退。
 
 目标迁移不原地改写旧执行资产：001–013 先结构校验并纳入正式 migration 账本，旧 TypeScript/login/run 只读保留，导入生成待复核业务版本/候选。新链按 business version opt-in，run 固定 `semantic_v1`，不与 legacy 子进程混合；三服务先通过 `/api/v1/capabilities` preflight。
 
@@ -38,13 +38,13 @@ Browser ←→ Debug UI (:5173 dev)
 
 ### 端口映射
 
-| 服务              | 端口     | 职责                                |
-| ----------------- | -------- | ----------------------------------- |
-| proxy-adapter     | 3000     | 纯浏览器 MCP 网关（内进程 Playwright 引擎 + browser-control.* 工具） |
-| ai-chat-service   | 3001     | AI 对话服务（会话管理、AI provider 编排、Chat SSE） |
-| debug-ui (dev)    | 5173     | 前端开发服务器                      |
-| debug-ui (prod)   | 独立部署 | 独立构建，不通过 proxy-adapter 托管 |
-| ai-e2e            | 3002     | AI E2E 自动化测试编排                |
+| 服务            | 端口     | 职责                                                              |
+| --------------- | -------- | ----------------------------------------------------------------- |
+| proxy-adapter   | 3000     | 浏览器能力网关（内进程 Playwright + 3 个受控 operation 工具）     |
+| ai-chat-service | 3001     | 唯一 AI 驱动核心（统一 Harness、Chat/Task、Vision、工具与持久化） |
+| debug-ui (dev)  | 5173     | 前端开发服务器                                                    |
+| debug-ui (prod) | 独立部署 | 独立构建，不通过 proxy-adapter 托管                               |
+| ai-e2e          | 3002     | AI E2E 自动化测试编排                                             |
 
 ## 开发模式 vs 生产模式
 
@@ -52,8 +52,8 @@ Browser ←→ Debug UI (:5173 dev)
 
 ```
 Browser (http://localhost:5173 /debug)
-     │ chat/AI: /api/chat, /api/ai, /api/test-ai, /api/verify-keys → ai-chat-service (:3001)
-     │ browser/debug: /api (其他), /debug/api → proxy-adapter (:3000)
+     │ chat/AI: /api/v1/chat, /api/v1/ai, /api/v1/test-ai → ai-chat-service (:3001)
+     │ browser/debug: /api/v1/browser-execution, /debug → proxy-adapter (:3000)
 ```
 
 debug-ui 通过 Vite dev server (`:5173`) 独立运行，chat/AI 请求代理到 ai-chat-service (`:3001`)，browser/debug 请求代理到 proxy-adapter (`:3000`)。proxy-adapter 不再反向代理 `/debug*` 到 Vite。
@@ -66,8 +66,9 @@ Browser → debug-ui (独立部署 / CDN)
      ▼
 proxy-adapter (:3000)
      │
-     ├─ API routes (health → config → chat → api/chat → debug)
-     └─ /debug/api/* → debugRoutes
+     ├─ /api/v1/{health,capabilities,livekit-token,browser-execution/*}
+     ├─ /mcp → controlled operation tools
+     └─ /debug/* → arbitrated debug routes
 ```
 
 **proxy-adapter 行为:**
