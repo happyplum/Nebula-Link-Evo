@@ -1,8 +1,6 @@
 /**
  * MCP Server adapter — registers GatewayTool instances on an McpServer.
  */
-import { z } from 'zod';
-
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { GatewayTool } from '../types.js';
 import { jsonPropertyToZod } from './json-schema-to-zod.js';
@@ -10,22 +8,6 @@ import { jsonPropertyToZod } from './json-schema-to-zod.js';
 // ---------------------------------------------------------------------------
 // JSON Schema → Zod shape (for McpServer.tool() paramsSchema)
 // ---------------------------------------------------------------------------
-
-function jsonSchemaToZodShape(schema: Record<string, unknown>): Record<string, z.ZodTypeAny> {
-  if (schema.type !== 'object' || !schema.properties) {
-    return {};
-  }
-
-  const required = new Set<string>(Array.isArray(schema.required) ? schema.required : []);
-  const shape: Record<string, z.ZodTypeAny> = {};
-
-  for (const [key, property] of Object.entries(schema.properties as Record<string, unknown>)) {
-    const zodProp = jsonPropertyToZod(property);
-    shape[key] = required.has(key) ? zodProp : zodProp.optional();
-  }
-
-  return shape;
-}
 
 // ---------------------------------------------------------------------------
 // Safe execution wrapper (MCP variant)
@@ -50,14 +32,47 @@ export function registerGatewayToolsToMcpServer(server: McpServer, tools: Gatewa
   for (const gatewayTool of tools) {
     if (!gatewayTool.isAvailable) continue;
 
-    const zodShape = jsonSchemaToZodShape(gatewayTool.inputSchema);
+    const inputSchema = jsonPropertyToZod(gatewayTool.inputSchema);
+    const outputSchema = gatewayTool.outputSchema
+      ? jsonPropertyToZod(gatewayTool.outputSchema)
+      : undefined;
 
-    server.tool(gatewayTool.name, gatewayTool.description, zodShape, async (args) => {
-      const result = await safeExecuteMcp(gatewayTool.execute, args);
-      return {
-        content: [{ type: 'text' as const, text: result.text }],
-        ...(result.isError ? { isError: true } : {}),
-      };
-    });
+    server.registerTool(
+      gatewayTool.name,
+      {
+        description: gatewayTool.description,
+        inputSchema,
+        ...(outputSchema ? { outputSchema } : {}),
+      },
+      async (args) => {
+        const result = await safeExecuteMcp(gatewayTool.execute, args);
+        if (!result.isError && outputSchema) {
+          try {
+            const structuredContent = outputSchema.parse(JSON.parse(result.text)) as Record<
+              string,
+              unknown
+            >;
+            return {
+              content: [{ type: 'text' as const, text: result.text }],
+              structuredContent,
+            };
+          } catch (error) {
+            return {
+              content: [
+                {
+                  type: 'text' as const,
+                  text: `Invalid tool output: ${error instanceof Error ? error.message : String(error)}`,
+                },
+              ],
+              isError: true,
+            };
+          }
+        }
+        return {
+          content: [{ type: 'text' as const, text: result.text }],
+          ...(result.isError ? { isError: true } : {}),
+        };
+      }
+    );
   }
 }

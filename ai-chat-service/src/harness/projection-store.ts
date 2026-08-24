@@ -52,7 +52,9 @@ export class HarnessProjectionStore {
       this.ensureProjection(sessionId);
       const state = this.getState(sessionId);
       if (state.deleted_at && !options.allowDeleted) {
-        throw new HarnessProjectionCorruptionError(`Session ${sessionId} is deleted and cannot be projected`);
+        throw new HarnessProjectionCorruptionError(
+          `Session ${sessionId} is deleted and cannot be projected`
+        );
       }
       if (state.projected_dsh_seq > durableDshSeq) {
         throw new HarnessProjectionCorruptionError(
@@ -92,7 +94,8 @@ export class HarnessProjectionStore {
         )
         .run(nextDshSeq, durableDshSeq, durableRevision ?? null, sessionId);
       this.db.exec('COMMIT');
-      for (const event of committedEvents) this.publicEvents.observeCommittedSeq(sessionId, event.seq ?? 0);
+      for (const event of committedEvents)
+        this.publicEvents.observeCommittedSeq(sessionId, event.seq ?? 0);
       return { projectedDshSeq: nextDshSeq, durableDshSeq, publicEvents: committedEvents };
     } catch (error) {
       this.db.exec('ROLLBACK');
@@ -141,7 +144,8 @@ export class HarnessProjectionStore {
          FROM harness_session_projection WHERE session_id = ?`
       )
       .get(sessionId) as ProjectionStateRow | undefined;
-    if (!row) throw new HarnessProjectionCorruptionError(`Projection state is missing for ${sessionId}`);
+    if (!row)
+      throw new HarnessProjectionCorruptionError(`Projection state is missing for ${sessionId}`);
     return row;
   }
 
@@ -196,7 +200,12 @@ export class HarnessProjectionStore {
     }
     if (event.type === 'assistant/message') {
       const id = assistantMessageId(sessionId, event.data.turn);
-      this.appendAssistantMessage(sessionId, id, visibleText(event.data.message.content), event.time);
+      this.appendAssistantMessage(
+        sessionId,
+        id,
+        visibleText(event.data.message.content),
+        event.time
+      );
       return undefined;
     }
     if (event.type === 'tool/call') {
@@ -227,7 +236,8 @@ export class HarnessProjectionStore {
         },
       };
     }
-    if (event.type === 'turn/end') return this.projectTurnEnd(sessionId, event.data.turn, event.data.reason);
+    if (event.type === 'turn/end')
+      return this.projectTurnEnd(sessionId, event.data.turn, event.data.reason);
     return undefined;
   }
 
@@ -271,10 +281,7 @@ export class HarnessProjectionStore {
     return { type: 'assistant.completed', payload: { ...common, terminal_reason: terminalReason } };
   }
 
-  private insertPublicEvent(
-    sessionId: string,
-    event: ProjectedPublicEvent
-  ): PublicSessionEvent {
+  private insertPublicEvent(sessionId: string, event: ProjectedPublicEvent): PublicSessionEvent {
     const seq = this.nextPublicSeq(sessionId);
     this.db
       .prepare(
@@ -308,7 +315,12 @@ export class HarnessProjectionStore {
     if (Number(result.changes) > 0) this.bumpMessageCount(sessionId);
   }
 
-  private appendAssistantMessage(sessionId: string, id: string, content: string, time: number): void {
+  private appendAssistantMessage(
+    sessionId: string,
+    id: string,
+    content: string,
+    time: number
+  ): void {
     const existing = this.db.prepare('SELECT id FROM messages WHERE id = ?').get(id);
     if (existing) {
       this.db.prepare('UPDATE messages SET content = content || ? WHERE id = ?').run(content, id);
@@ -325,7 +337,6 @@ export class HarnessProjectionStore {
 
   private updateStatus(sessionId: string, status: string): void {
     const now = new Date().toISOString();
-    this.db.prepare('UPDATE sessions SET status = ?, updated_at = ? WHERE id = ?').run(status, now, sessionId);
     this.db
       .prepare(
         `UPDATE sessions_state
@@ -370,5 +381,6 @@ function assistantMessageId(sessionId: string, turn: number): string {
 }
 
 function assertSeq(value: number, name: string): void {
-  if (!Number.isSafeInteger(value) || value < 0) throw new TypeError(`${name} must be a non-negative integer`);
+  if (!Number.isSafeInteger(value) || value < 0)
+    throw new TypeError(`${name} must be a non-negative integer`);
 }

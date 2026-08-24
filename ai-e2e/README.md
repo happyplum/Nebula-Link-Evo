@@ -70,45 +70,45 @@ ai-e2e 自己不负责：
 - 直连 Playwright 浏览器服务
 - 管理多 provider 配置
 
-这些都交给 `proxy-adapter`。ai-e2e 只关心：
+AI 能力交给 `ai-chat-service`，浏览器能力交给 `proxy-adapter`。ai-e2e 只关心：
 
 - 需求如何拆解
 - 页面如何探索
 - 脚本如何生成 / 编辑 / 执行
 - 失败如何诊断 / 修复
 
-### 2. `ProxyAdapterClient` 是唯一外部能力入口
+### 2. 外部能力按权威服务显式装配
 
 ```text
 ai-e2e
-  └── ProxyAdapterClient
-        ├── POST /api/ai/generate
-        └── /debug/api/playwright/*
-              ↓
-         proxy-adapter
+  ├── AiE2eRuntimeClient
+  │     ├── AiChatClient → ai-chat-service /api/v1/ai/generate
+  │     └── BrowserGatewayClient → proxy-adapter /debug/*
+  ├── AgentTaskClient → ai-chat-service /api/v1/agent-tasks
+  └── SemanticBrowserClient → proxy-adapter /api/v1/browser-execution/* + /mcp
 ```
 
 这样做的好处：
 
 - ai-e2e 不依赖 `@ai-sdk/*`
 - 浏览器操作契约统一
-- provider 切换、AI 参数、Playwright 接口演进由 proxy-adapter 统一吸收
+- provider/model 与 Agent Harness 演进由 ai-chat-service 吸收，Playwright/CDP 演进由 proxy-adapter 吸收
 - ai-e2e 的职责更清晰：只做测试编排，不做基础设施拼装
 
 ### 3. 服务层按工作流拆分
 
-| 服务 | 作用 |
-|---|---|
-| `ProjectService` | 项目与基础配置管理 |
-| `PRDAnalyzerService` | PRD → 业务模块 / 功能模块 / 测试场景 |
-| `TestScenarioService` | 测试场景 CRUD + 数据映射（preconditions ↔ expected_results） |
-| `ExplorerService` | 页面探索与 URL 绑定建议 |
-| `ScriptGeneratorService` | 测试脚本生成、再生成、保存人工编辑版本 |
-| `LoginRecorderService` | 登录步骤录制与回放支撑 |
-| `ExecutorService` | 运行脚本并收集产物 |
-| `AIDiagnosisService` | 单次运行失败诊断、自动修复、人工审核升级、项目级诊断聚合 |
-| `StateMachineService` | 项目状态流转与阶段门禁 |
-| `BusinessVersionService` | semantic 业务版本创建、查询与独立 copy |
+| 服务                     | 作用                                                         |
+| ------------------------ | ------------------------------------------------------------ |
+| `ProjectService`         | 项目与基础配置管理                                           |
+| `PRDAnalyzerService`     | PRD → 业务模块 / 功能模块 / 测试场景                         |
+| `TestScenarioService`    | 测试场景 CRUD + 数据映射（preconditions ↔ expected_results） |
+| `ExplorerService`        | 页面探索与 URL 绑定建议                                      |
+| `ScriptGeneratorService` | 测试脚本生成、再生成、保存人工编辑版本                       |
+| `LoginRecorderService`   | 登录步骤录制与回放支撑                                       |
+| `ExecutorService`        | 运行脚本并收集产物                                           |
+| `AIDiagnosisService`     | 单次运行失败诊断、自动修复、人工审核升级、项目级诊断聚合     |
+| `StateMachineService`    | 项目状态流转与阶段门禁                                       |
+| `BusinessVersionService` | semantic 业务版本创建、查询与独立 copy                       |
 
 ### 4. 用状态机约束交付物边界
 
@@ -129,7 +129,7 @@ draft → configuring → analyzing → analyzed → exploring → explored → 
 
 ai-e2e 是 `proxy-adapter` 的下游消费者：
 
-- AI 文本生成：`POST /api/ai/generate`
+- AI 文本生成：`POST /api/v1/ai/generate`
 - Playwright 操作：`/debug/api/playwright/*`
 - 简化 DOM / 页面状态等调试信息：通过 debug API 获取
 
@@ -137,7 +137,7 @@ ai-e2e 是 `proxy-adapter` 的下游消费者：
 
 - ai-e2e **不应该**引入新的 AI SDK 依赖
 - ai-e2e **不应该**直接请求 `proxy-adapter` 内部浏览器引擎，应通过 MCP 接口
-- proxy-adapter 是 ai-e2e 唯一外部能力网关
+- ai-chat-service 与 proxy-adapter 分别是 AI 和浏览器能力权威，ai-e2e 不聚合或绕过二者
 
 ## 失败诊断与自动修复
 
@@ -229,6 +229,7 @@ pnpm type-check   # tsc --noEmit
 - `/api/v1/projects/:projectId/runs`、`/api/v1/runs/:runId/*`
 
 semantic v1 的业务版本、局部 repair Authoring、正式 Run 与浏览器中心工作台已交付；写请求按接口要求携带 `Idempotency-Key`，状态命令同时携带 `If-Match`。完整 bootstrap/recheck、通用资产写接口和 legacy importer 尚未交付。
+
 - `/api/projects/:id/state`
 - `/api/projects/:id/events`
 
@@ -244,7 +245,7 @@ ai-e2e/
 │   │   ├── routes/             # 项目 / 分析 / 探索 / 脚本 / 执行 / 状态 / 事件
 │   │   └── plugins/            # 错误处理、SSE 等插件
 │   ├── services/               # 工作流核心服务
-│   ├── infrastructure/         # ProxyAdapterClient
+│   ├── infrastructure/         # AI runtime、Agent task、Browser gateway/semantic clients
 │   ├── ai/                     # PromptTemplateManager / TokenBudgetTracker
 │   ├── database/               # SQLite 初始化、repo、migrations
 │   └── types/                  # 后端领域类型 / API schema
@@ -323,35 +324,35 @@ proxy-adapter-client.ts:
 
 ### 批量操作策略
 
-| 操作 | 建议策略 | 原因 |
-|---|---|---|
-| 模块分解 (decompose-all) | 逐个调用 | 20 并发 + 40 RPM 限速 |
-| 场景生成 (generate-all-scenarios) | 逐个调用 | 同上 |
-| 脚本生成 (generate-all) | 20 并发 + 40 RPM 限速 | AI 调用密度高 |
-| 脚本执行 (run-all) | 顺序执行 | 并发导致假超时 |
-| PRD 上传 | curl --data-binary | PowerShell ConvertTo-Json 会破坏多行字符串 |
+| 操作                              | 建议策略              | 原因                                       |
+| --------------------------------- | --------------------- | ------------------------------------------ |
+| 模块分解 (decompose-all)          | 逐个调用              | 20 并发 + 40 RPM 限速                      |
+| 场景生成 (generate-all-scenarios) | 逐个调用              | 同上                                       |
+| 脚本生成 (generate-all)           | 20 并发 + 40 RPM 限速 | AI 调用密度高                              |
+| 脚本执行 (run-all)                | 顺序执行              | 并发导致假超时                             |
+| PRD 上传                          | curl --data-binary    | PowerShell ConvertTo-Json 会破坏多行字符串 |
 
 ### 超时预算
 
-| 阶段 | 单次 AI 调用 | 建议超时 |
-|---|---|---|
-| PRD 分析 | 30-120s | 180s |
-| 模块分解 | 30-90s | 180s |
-| 场景生成 | 30-90s | 180s |
-| 脚本生成 | 30-120s | 300s |
-| 脚本执行 | 10-60s | 120s |
+| 阶段     | 单次 AI 调用 | 建议超时 |
+| -------- | ------------ | -------- |
+| PRD 分析 | 30-120s      | 180s     |
+| 模块分解 | 30-90s       | 180s     |
+| 场景生成 | 30-90s       | 180s     |
+| 脚本生成 | 30-120s      | 300s     |
+| 脚本执行 | 10-60s       | 120s     |
 
 ## 首次 E2E 验收数据（2026-06-05）
 
-| 指标 | 数值 |
-|---|---|
-| 目标应用 | debug-ui（HashRouter SPA，2 个路由） |
-| 业务模块 | 6 |
-| 功能模块 | 28 |
-| 测试场景 | 287 |
-| 生成脚本 | 280 |
-| 执行结果 | 13 pass (4.6%), 268 fail (95.4%) |
-| 通过脚本特征 | 仅做页面加载 + viewport/title 检查 |
+| 指标         | 数值                                                |
+| ------------ | --------------------------------------------------- |
+| 目标应用     | debug-ui（HashRouter SPA，2 个路由）                |
+| 业务模块     | 6                                                   |
+| 功能模块     | 28                                                  |
+| 测试场景     | 287                                                 |
+| 生成脚本     | 280                                                 |
+| 执行结果     | 13 pass (4.6%), 268 fail (95.4%)                    |
+| 通过脚本特征 | 仅做页面加载 + viewport/title 检查                  |
 | 主要失败类型 | typescript 前缀(75), 选择器超时(54), 断言不匹配(33) |
 
 **关键发现**：完整链路已打通（PRD → 分析 → 探索 → 脚本 → 执行 → 诊断），但脚本质量严重依赖 DOM 快照数据完整性和 AI 模板约束执行力。

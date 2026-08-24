@@ -2,20 +2,15 @@
  * 统一工具注册系统实现
  */
 
-import { EventEmitter } from 'node:events';
 import { createWorkerLogger } from '../services/logger.js';
-import type {
-  GatewayTool,
-  ToolProvider,
-  ToolProviderStatus,
-} from './types.js';
+import type { GatewayTool, ToolProvider, ToolProviderStatus } from './types.js';
 
 const logger = createWorkerLogger('ToolRegistry');
 
 /**
  * 工具注册表 - 统一管理所有工具提供方
  */
-export class ToolRegistry extends EventEmitter {
+export class ToolRegistry {
   private providers: Map<string, ToolProvider> = new Map();
 
   /**
@@ -27,38 +22,10 @@ export class ToolRegistry extends EventEmitter {
     }
 
     this.providers.set(provider.id, provider);
-
-    provider.on('status-changed', (...args: unknown[]) => {
-      const newStatus = args[0] as ToolProviderStatus;
-      this.emit('provider:status-changed', provider.id, newStatus);
-      this.emit('tools:changed');
-    });
-
-    provider.on('tools-changed', () => {
-      this.emit('tools:changed');
-    });
   }
 
-  /**
-   * 注销工具提供方
-   */
-  unregisterProvider(id: string): void {
-    const provider = this.providers.get(id);
-    if (!provider) {
-      return;
-    }
-
-    this.providers.delete(id);
-    this.emit('tools:changed');
-  }
-
-  /**
-   * 按消费者类型获取可用工具
-   */
-  getAvailableTools(options?: {
-    consumer?: 'chat' | 'mcp-server' | 'all';
-  }): GatewayTool[] {
-    const consumer = options?.consumer ?? 'all';
+  /** 获取可投影到 Harness 的产品工具。 */
+  getAvailableTools(): GatewayTool[] {
     const tools: GatewayTool[] = [];
 
     for (const provider of this.providers.values()) {
@@ -67,23 +34,8 @@ export class ToolRegistry extends EventEmitter {
           continue;
         }
 
-        if (consumer === 'all' || tool.exposeTo.includes(consumer)) {
-          tools.push(tool);
-        }
+        tools.push(tool);
       }
-    }
-
-    return this.applyMcpCollisionRule(tools);
-  }
-
-  /**
-   * 获取所有工具（无过滤）
-   */
-  getAllTools(): GatewayTool[] {
-    const tools: GatewayTool[] = [];
-
-    for (const provider of this.providers.values()) {
-      tools.push(...provider.getTools());
     }
 
     return this.applyMcpCollisionRule(tools);
@@ -112,9 +64,7 @@ export class ToolRegistry extends EventEmitter {
    */
   async initializeAll(): Promise<void> {
     const results = await Promise.allSettled(
-      Array.from(this.providers.values()).map((provider) =>
-        provider.initialize(),
-      ),
+      Array.from(this.providers.values()).map((provider) => provider.initialize())
     );
 
     const providerKeys = Array.from(this.providers.keys());
@@ -130,7 +80,7 @@ export class ToolRegistry extends EventEmitter {
         }
         logger.warn(
           { providerId, error: result.reason },
-          'Tool provider initialization failed, set to degraded',
+          'Tool provider initialization failed, set to degraded'
         );
       }
     }
@@ -144,11 +94,7 @@ export class ToolRegistry extends EventEmitter {
    * 关闭所有工具提供方
    */
   async shutdownAll(): Promise<void> {
-    await Promise.all(
-      Array.from(this.providers.values()).map((provider) =>
-        provider.shutdown(),
-      ),
-    );
+    await Promise.all(Array.from(this.providers.values()).map((provider) => provider.shutdown()));
   }
 
   /**

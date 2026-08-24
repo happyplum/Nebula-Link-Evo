@@ -1,4 +1,4 @@
-import type { ProxyAdapterClient } from '../infrastructure/proxy-adapter-client.js';
+import type { AiE2eRuntimeClient } from '../infrastructure/ai-e2e-runtime-client.js';
 import type { PromptTemplateManager } from '../ai/prompt-manager.js';
 import type { TokenBudgetTracker } from '../ai/token-tracker.js';
 import type { DatabaseManager } from '../database/db.js';
@@ -56,10 +56,10 @@ export interface AnalysisResult {
 
 export class PRDAnalyzerService {
   constructor(
-    private readonly proxyClient: ProxyAdapterClient,
+    private readonly runtimeClient: AiE2eRuntimeClient,
     private readonly promptManager: PromptTemplateManager,
     private readonly tokenTracker: TokenBudgetTracker,
-    private readonly db: DatabaseManager,
+    private readonly db: DatabaseManager
   ) {}
 
   getTokenTracker(): TokenBudgetTracker {
@@ -72,7 +72,7 @@ export class PRDAnalyzerService {
   async analyzePRD(
     projectId: string,
     content: string,
-    format: string = 'markdown',
+    format: string = 'markdown'
   ): Promise<DBBusinessModule[]> {
     // Validate content
     if (!content || content.trim().length === 0) {
@@ -82,7 +82,11 @@ export class PRDAnalyzerService {
     // Truncate if needed
     let prdContent = content;
     if (content.length > MAX_PRD_LENGTH) {
-      prdContent = content.substring(0, MAX_PRD_LENGTH) + '\n\n[WARNING: PRD content truncated at ' + MAX_PRD_LENGTH + ' characters]';
+      prdContent =
+        content.substring(0, MAX_PRD_LENGTH) +
+        '\n\n[WARNING: PRD content truncated at ' +
+        MAX_PRD_LENGTH +
+        ' characters]';
     }
 
     // Store raw PRD document
@@ -99,10 +103,14 @@ export class PRDAnalyzerService {
       format: AI_RESPONSE_FORMAT,
     });
 
-    const result = await this.proxyClient.generateText(prompt);
+    const result = await this.runtimeClient.generateText(prompt);
 
     // Track token usage
-    this.tokenTracker.record('prd-analysis', result.tokenUsage.promptTokens, result.tokenUsage.completionTokens);
+    this.tokenTracker.record(
+      'prd-analysis',
+      result.tokenUsage.promptTokens,
+      result.tokenUsage.completionTokens
+    );
 
     // Parse and validate AI response
     const modules = this.parseAIResponse<L1ModuleAIResponse>(result.text);
@@ -110,10 +118,14 @@ export class PRDAnalyzerService {
     // Validate structure
     for (const mod of modules) {
       if (!mod.name || typeof mod.name !== 'string') {
-        throw new Error(`Invalid AI response: module missing "name" field. Got: ${JSON.stringify(mod)}`);
+        throw new Error(
+          `Invalid AI response: module missing "name" field. Got: ${JSON.stringify(mod)}`
+        );
       }
       if (!mod.description || typeof mod.description !== 'string') {
-        throw new Error(`Invalid AI response: module missing "description" field. Got: ${JSON.stringify(mod)}`);
+        throw new Error(
+          `Invalid AI response: module missing "description" field. Got: ${JSON.stringify(mod)}`
+        );
       }
     }
 
@@ -151,7 +163,7 @@ export class PRDAnalyzerService {
    */
   async decomposeBusinessModule(
     projectId: string,
-    businessModuleId: string,
+    businessModuleId: string
   ): Promise<DBFunctionalModule[]> {
     // Look up the business module
     const businessModuleRepo = this.db.getBusinessModuleRepo();
@@ -172,10 +184,14 @@ export class PRDAnalyzerService {
       prd_context: prdContext,
     });
 
-    const result = await this.proxyClient.generateText(prompt);
+    const result = await this.runtimeClient.generateText(prompt);
 
     // Track token usage
-    this.tokenTracker.record('prd-decomposition', result.tokenUsage.promptTokens, result.tokenUsage.completionTokens);
+    this.tokenTracker.record(
+      'prd-decomposition',
+      result.tokenUsage.promptTokens,
+      result.tokenUsage.completionTokens
+    );
 
     // Parse and validate
     const modules = this.parseAIResponse<L2ModuleAIResponse>(result.text);
@@ -204,7 +220,7 @@ export class PRDAnalyzerService {
    */
   async generateTestScenarios(
     projectId: string,
-    functionalModuleId: string,
+    functionalModuleId: string
   ): Promise<DBTestScenario[]> {
     // Look up the functional module
     const functionalModuleRepo = this.db.getFunctionalModuleRepo();
@@ -227,10 +243,14 @@ export class PRDAnalyzerService {
       business_context: businessContext,
     });
 
-    const result = await this.proxyClient.generateText(prompt);
+    const result = await this.runtimeClient.generateText(prompt);
 
     // Track token usage
-    this.tokenTracker.record('test-scenario-generation', result.tokenUsage.promptTokens, result.tokenUsage.completionTokens);
+    this.tokenTracker.record(
+      'test-scenario-generation',
+      result.tokenUsage.promptTokens,
+      result.tokenUsage.completionTokens
+    );
 
     // Parse and validate
     const scenarios = this.parseAIResponse<TestScenarioAIResponse>(result.text);

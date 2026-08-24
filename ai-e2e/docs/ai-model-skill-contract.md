@@ -8,11 +8,11 @@
 
 `ai-chat-service` 提供通用 AI 能力，不持有 `ai-e2e` 的项目、业务版本、场景、TODO、依赖图、最终断言裁决或浏览器生命周期。
 
-| 能力 | 权威输入 | 输出 | 禁止承担 |
-|---|---|---|---|
-| 分析/决策模型 | 调用方不可变任务、授权证据、工具/Skill 策略 | 结构化分析、下一步建议或受限工具调用结果 | 自行扩展场景、跳过硬断言、决定业务通过 |
-| 视觉模型 | 一次完整问题 + 一份不可变页面快照 | 页面状态摘要或可序列化目标候选 | 连续任务、流程状态、浏览器动作、脚本调度 |
-| Skills runtime | 固定版本 Skill manifest + 受限任务上下文 | 可审计的指令包和结构化结果 | 任意代码执行、秘密读取、浏览器所有权 |
+| 能力           | 权威输入                                    | 输出                                     | 禁止承担                                 |
+| -------------- | ------------------------------------------- | ---------------------------------------- | ---------------------------------------- |
+| 分析/决策模型  | 调用方不可变任务、授权证据、工具/Skill 策略 | 结构化分析、下一步建议或受限工具调用结果 | 自行扩展场景、跳过硬断言、决定业务通过   |
+| 视觉模型       | 一次完整问题 + 一份不可变页面快照           | 页面状态摘要或可序列化目标候选           | 连续任务、流程状态、浏览器动作、脚本调度 |
+| Skills runtime | 固定版本 Skill manifest + 受限任务上下文    | 可审计的指令包和结构化结果               | 任意代码执行、秘密读取、浏览器所有权     |
 
 主代理和页面子代理都可以调用视觉模型。主代理只在原子操作安全边界持有 `observe` lease；只有当前执行型页面子代理可以持有 `control` lease。UI live view 不构成租约，也不能操作页面。
 
@@ -57,9 +57,18 @@ interface PageAgentResultV1 {
   lastCompletedStepId?: string;
   facts: { kind: string; value: unknown; evidenceRefs: string[] }[];
   proposedOutputs: Record<string, unknown>;
-  sideEffects: { effectId: string; status: 'confirmed' | 'possible' | 'not_observed'; evidenceRefs: string[] }[];
+  sideEffects: {
+    effectId: string;
+    status: 'confirmed' | 'possible' | 'not_observed';
+    evidenceRefs: string[];
+  }[];
   downstreamImpact: { blockedTodoIds: string[]; unaffectedTodoIds: string[]; reason: string };
-  decisionRequest?: { category: string; question: string; options: string[]; recommendation?: string };
+  decisionRequest?: {
+    category: string;
+    question: string;
+    options: string[];
+    recommendation?: string;
+  };
 }
 ```
 
@@ -137,7 +146,7 @@ interface ResolveTargetResultV1 {
 - `locator_bundle` 由 proxy snapshot 生成，按稳定性提供 role/name、label、test id、稳定文本、CSS、XPath 候选；不能把快照临时 `nebula_id` 当作唯一长期定位器。
 - bbox 只作为视觉证据，`proxy-adapter` 不因候选 stale/歧义自动使用坐标。
 - `confidence` 低、候选冲突或目标不唯一时调用方必须停止并重新分析。
-- 生产工具表只包含 `vision.analyze_page` 与 `vision.resolve_target`；`vision.find_element` 只允许 test/dev compatibility adapter 使用。
+- 所有环境的工具表只包含 `vision.analyze_page` 与 `vision.resolve_target`；不存在 `vision.find_element` 适配器。
 
 ### 3.4 快照与预算
 
@@ -205,13 +214,13 @@ provider/runtime 可用工具
 
 ### 4.3 首期通用 Skill 清单
 
-| Skill ID | 用途 | 默认工具权限 |
-|---|---|---|
-| `document.requirements_extract` | 从 PRD 片段提取功能点、验收标准、假设和缺口 | 无浏览器写工具 |
-| `browser.page_understand` | 针对一个 snapshot 生成页面/DOM 状态摘要 | `vision.analyze_page` + 只读观测 |
-| `browser.target_resolve` | 针对一个动作解析可序列化目标候选 | `vision.resolve_target` + 只读观测 |
-| `browser.interaction_repair` | 在授权脚本与失败步骤内提出新的语义定位/交互修订 | 只读观测；验证阶段才由任务另行授予动作 |
-| `test.failure_classify` | 基于工具事实、断言和证据分类失败/阻塞/中断/未知结果 | 无浏览器写工具 |
+| Skill ID                        | 用途                                                | 默认工具权限                           |
+| ------------------------------- | --------------------------------------------------- | -------------------------------------- |
+| `document.requirements_extract` | 从 PRD 片段提取功能点、验收标准、假设和缺口         | 无浏览器写工具                         |
+| `browser.page_understand`       | 针对一个 snapshot 生成页面/DOM 状态摘要             | `vision.analyze_page` + 只读观测       |
+| `browser.target_resolve`        | 针对一个动作解析可序列化目标候选                    | `vision.resolve_target` + 只读观测     |
+| `browser.interaction_repair`    | 在授权脚本与失败步骤内提出新的语义定位/交互修订     | 只读观测；验证阶段才由任务另行授予动作 |
+| `test.failure_classify`         | 基于工具事实、断言和证据分类失败/阻塞/中断/未知结果 | 无浏览器写工具                         |
 
 这些 Skill 不包含场景 DAG、登录恢复、运行依赖传播、版本 copy 或 E2E 通过裁决。上述业务编排继续由 `ai-e2e` 持有；`ai-e2e` 可以把业务任务包装为通用 Skill 输入。
 
@@ -239,8 +248,8 @@ provider/runtime 可用工具
 
 ## 7. 当前实现差距
 
-- Chat 与 Agent Task 已共用每应用实例唯一的 DSH Agent Loop；各自使用独立 session/tool scope 和兼容公开控制面。raw proxy operation 仅存在于模型不可见 transport child scope。
-- `/api/ai/generate` 使用无 session、无 tool 的单次 `ctx.llm.stream()`。
+- Chat 与 Agent Task 已共用每应用实例唯一的 DSH Agent Loop；各自使用独立 session/tool scope 和 canonical v1 公开控制面。raw proxy operation 仅存在于模型不可见 transport child scope。
+- `/api/v1/ai/generate` 使用无 session、无 tool 的单次 `ctx.llm.stream()`。
 - Vision v2 与 proxy immutable snapshot binding 已交付；ai-e2e 通用 authoring/Run 消费仍需逐业务流程接入。
 - 当前 Skills Runtime 已支持本地只读目录加载、immutable registry/version/hash、task 单 Skill exact pin/policy hash、Schema/hash/path 校验、指令装载、权限/预算收缩、catalog 与执行事件；多 Skill 组合/嵌套调用不在 v1。
 - 当前 Agent browser wrapper 已冻结 `stepId/kind/operation/effectId` 并限制 observe/control，模糊失败先查询 operation ledger；仍没有 policy evaluation、风险投影 hash、active grant 与参数级数量的完整逐调用交集校验。

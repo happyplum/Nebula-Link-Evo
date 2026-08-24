@@ -2,7 +2,7 @@
 
 > 状态：已确认目标设计，部分实现。
 > 更新时间：2026-08-24。
-> 本文固定 `ai-e2e`、`ai-chat-service` 与 `proxy-adapter` 的目标调用面、事件信封、幂等和恢复语义。三服务已分别交付 browser capture/artifact/event、Agent task create/get/command/event/checkpoint/Skill runtime，以及 ai-e2e Authoring/Run 控制面、snapshot-first SSE 和基于 outbox/外部关联的跨服务协调器。现有 `/api/ai/generate`、项目级 SSE 和兼容浏览器 MCP 工具继续存在；各节必须按实际状态描述。
+> 本文固定 `ai-e2e`、`ai-chat-service` 与 `proxy-adapter` 的目标调用面、事件信封、幂等和恢复语义。三服务已分别交付 browser capture/artifact/event、Agent task create/get/command/event/checkpoint/Skill runtime，以及 ai-e2e Authoring/Run 控制面、snapshot-first SSE 和基于 outbox/外部关联的跨服务协调器。核心服务只提供 canonical v1 HTTP 路径与 `browser-control.operation_*` MCP 工具面，不保留旧路径、旧工具或静默回退。
 
 ## 1. 设计目标
 
@@ -10,7 +10,7 @@
 - `ai-chat-service` 只执行受限 Agent 任务、模型调用、单次视觉分析和 Skills，不解释 E2E 业务状态。
 - `proxy-adapter` 只托管浏览器执行会话、Tab、控制租约、原子操作、实时画面和短期原始产物。
 - 所有跨服务写操作可幂等重放，服务重启后可查询事实并收敛，不依赖一次 HTTP/SSE 连接持续存活。
-- 现有 Chat SSE、Debug SSE 与项目阶段 SSE 保持兼容；目标 Authoring、Run、Agent task 和 Browser session 四类 SSE 各自 snapshot-first、各自单调序号，不共享业务状态或恢复游标。
+- Chat SSE、Debug SSE 与项目阶段 SSE 各自保持已登记的 canonical 行为；Authoring、Run、Agent task 和 Browser session 四类 SSE 各自 snapshot-first、各自单调序号，不共享业务状态或恢复游标。
 
 ## 2. 通用传输规范
 
@@ -18,7 +18,7 @@
 
 - 新接口统一使用 `/api/v1`；MCP 仍通过 `POST /mcp` 暴露。
 - JSON 字段使用 camelCase，时间使用 UTC RFC 3339，身份使用不可猜测 UUID。
-- Schema ID 使用 `nebula.<domain>/<major>.<minor>`；同一 major 只允许向后兼容新增字段。
+- Schema ID 使用 `nebula.<domain>/<major>.<minor>`；服务只接受明确声明支持的版本，协议变化直接更新 capability 与全部调用方，不提供版本适配层。
 - 未知可选字段应忽略，未知枚举值和未知必填字段必须拒绝，不能静默降级。
 
 ### 2.2 成功与错误
@@ -52,11 +52,11 @@ interface ApiProblem {
 
 ### 2.3 请求头与并发控制
 
-| 请求头 | 规则 |
-|---|---|
-| `X-Correlation-ID` | 调用链关联；缺失时入口服务生成并在下游传播。 |
-| `Idempotency-Key` | 所有创建、复制、运行命令和外部任务创建必填；同 key 同请求 hash 返回原结果，不同 hash 返回 `409 idempotency_conflict`。 |
-| `If-Match` | 修改已有运行状态、回答决策、暂停/恢复/取消时携带当前 `stateVersion`；不匹配返回 `409 state_conflict`。 |
+| 请求头             | 规则                                                                                                                   |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| `X-Correlation-ID` | 调用链关联；缺失时入口服务生成并在下游传播。                                                                           |
+| `Idempotency-Key`  | 所有创建、复制、运行命令和外部任务创建必填；同 key 同请求 hash 返回原结果，不同 hash 返回 `409 idempotency_conflict`。 |
+| `If-Match`         | 修改已有运行状态、回答决策、暂停/恢复/取消时携带当前 `stateVersion`；不匹配返回 `409 state_conflict`。                 |
 
 幂等响应必须覆盖所属测试流程全部非终态生命周期，并在终态后默认保留 7 天；被未解决决定、`outcome_unknown` 或人工 pin 引用时继续保留。更长期审计由 `ai-e2e` 的 operation link/evidence manifest 保存，不要求 proxy 热账本与 30 天媒体保留期完全一致；记录不得因进程重启清空。
 
@@ -95,41 +95,41 @@ interface ServiceCapabilitiesV1 {
 
 路由状态：
 
-| Method | Path | 语义 |
-|---|---|---|
-| POST | `/api/v1/projects/:projectId/business-versions` | 创建空白业务版本或由指定来源复制；创建与 copy 都要求幂等键。 |
-| GET | `/api/v1/projects/:projectId/business-versions` | 查询业务版本列表。 |
-| GET | `/api/v1/business-versions/:versionId` | 读取版本、来源、部署/Git 标识、有效性和 current asset 摘要。 |
-| GET | `/api/v1/business-versions/:versionId/workspace` | 读取工作台聚合投影：current PRD、页面、业务/功能模块、功能脚本、场景及当前版本验证；不创建第二份业务状态。 |
-| POST | `/api/v1/business-versions/:versionId/copy` | 原子深复制当前有效资产并重建内部 ID。 |
-| POST | `/api/v1/business-versions/:versionId/validate` | 执行 Schema、引用、页面签名、调用图和待重检校验，不启动浏览器运行，也不能单独授予可运行 valid。 |
-| GET/POST | `/api/v1/business-versions/:versionId/pages` | 列表或创建页面定义。 |
-| GET/POST | `/api/v1/business-versions/:versionId/modules` | 列表或创建业务/功能模块。 |
-| GET/POST | `/api/v1/business-versions/:versionId/functional-scripts` | 列表或创建稳定脚本身份。 |
-| GET/POST | `/api/v1/business-versions/:versionId/scenarios` | 列表或创建稳定场景身份。 |
-| GET | `/api/v1/assets/:assetType/:assetId/revisions` | 查询不可变修订历史、current、静态校验和按 scope 派生的验证摘要。 |
-| GET | `/api/v1/assets/:assetType/:assetId/revisions/:revisionId` | 读取精确 payload/hash、来源、依赖闭包、验证记录与引用摘要。 |
-| POST | `/api/v1/assets/:assetType/:assetId/revisions` | 创建不可变修订；`assetType` 只允许登记的资产类型。 |
-| POST | `/api/v1/assets/:assetType/:assetId/revisions/:revisionId/activate` | 校验后切换唯一 current；功能脚本/场景还要求真实验证，copy 的 stale current 只能由系统事务创建；要求 `If-Match`。 |
+| Method   | Path                                                                | 语义                                                                                                             |
+| -------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| POST     | `/api/v1/projects/:projectId/business-versions`                     | 创建空白业务版本或由指定来源复制；创建与 copy 都要求幂等键。                                                     |
+| GET      | `/api/v1/projects/:projectId/business-versions`                     | 查询业务版本列表。                                                                                               |
+| GET      | `/api/v1/business-versions/:versionId`                              | 读取版本、来源、部署/Git 标识、有效性和 current asset 摘要。                                                     |
+| GET      | `/api/v1/business-versions/:versionId/workspace`                    | 读取工作台聚合投影：current PRD、页面、业务/功能模块、功能脚本、场景及当前版本验证；不创建第二份业务状态。       |
+| POST     | `/api/v1/business-versions/:versionId/copy`                         | 原子深复制当前有效资产并重建内部 ID。                                                                            |
+| POST     | `/api/v1/business-versions/:versionId/validate`                     | 执行 Schema、引用、页面签名、调用图和待重检校验，不启动浏览器运行，也不能单独授予可运行 valid。                  |
+| GET/POST | `/api/v1/business-versions/:versionId/pages`                        | 列表或创建页面定义。                                                                                             |
+| GET/POST | `/api/v1/business-versions/:versionId/modules`                      | 列表或创建业务/功能模块。                                                                                        |
+| GET/POST | `/api/v1/business-versions/:versionId/functional-scripts`           | 列表或创建稳定脚本身份。                                                                                         |
+| GET/POST | `/api/v1/business-versions/:versionId/scenarios`                    | 列表或创建稳定场景身份。                                                                                         |
+| GET      | `/api/v1/assets/:assetType/:assetId/revisions`                      | 查询不可变修订历史、current、静态校验和按 scope 派生的验证摘要。                                                 |
+| GET      | `/api/v1/assets/:assetType/:assetId/revisions/:revisionId`          | 读取精确 payload/hash、来源、依赖闭包、验证记录与引用摘要。                                                      |
+| POST     | `/api/v1/assets/:assetType/:assetId/revisions`                      | 创建不可变修订；`assetType` 只允许登记的资产类型。                                                               |
+| POST     | `/api/v1/assets/:assetType/:assetId/revisions/:revisionId/activate` | 校验后切换唯一 current；功能脚本/场景还要求真实验证，copy 的 stale current 只能由系统事务创建；要求 `If-Match`。 |
 
 部署 profile 是 project-scoped 稳定资产，通过 `/api/v1/projects/:projectId/deployment-profiles` 及其 revision 路由管理；业务版本只绑定精确 deployment revision，不复制 secret 值。
 
 资产生成/复核/修复使用独立耐久工作流：
 
-| Method | Path | 语义 |
-|---|---|---|
-| POST | `/api/v1/business-versions/:versionId/authoring-jobs` | 创建 bootstrap/recheck/repair/import_conversion job；`intent` 默认为 `author_assets`，`locate_in_browser` 只创建 navigation-only task。 |
-| GET | `/api/v1/authoring-jobs/:jobId` | 读取 authoring snapshot、coverage 和 active task。 |
-| POST | `/api/v1/authoring-jobs/:jobId/commands` | `start/pause/resume/cancel`。 |
-| GET | `/api/v1/authoring-jobs/:jobId/events` | snapshot-first authoring SSE。 |
-| GET | `/api/v1/authoring-jobs/:jobId/event-log?afterSeq=N&limit=M` | 持久 authoring event log。 |
-| POST | `/api/v1/authoring-jobs/:jobId/decisions/:decisionId/answer` | 回答 authoring decision；长期影响同步 version decision。 |
-| POST | `/api/v1/authoring-jobs/:jobId/context-threads` | 绑定 URL/页面/当前模块/base revision scope；新 scope 自动使旧候选 stale。 |
-| GET/POST | `/api/v1/authoring-context-threads/:threadId/messages` | 读取/追加 Chat 审计消息；文本不直接改变资产状态。 |
-| GET/POST | `/api/v1/authoring-jobs/:jobId/amendments` | 列表/创建精确 base→candidate 的结构化修改；写要求幂等键。 |
-| GET | `/api/v1/authoring-amendments/:amendmentId` | 读取 diff、影响范围、审批、验证计划与候选状态。 |
-| POST | `/api/v1/authoring-amendments/:amendmentId/decisions/:decisionId/answer` | 批准或拒绝同页跨模块/跨 URL 范围扩展。 |
-| POST | `/api/v1/authoring-amendments/:amendmentId/commands` | 用户请求安全边界应用或拒绝；协调器内部开始真实验证，验证成功后原子激活，失败保持 current。 |
+| Method   | Path                                                                     | 语义                                                                                                                                    |
+| -------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| POST     | `/api/v1/business-versions/:versionId/authoring-jobs`                    | 创建 bootstrap/recheck/repair/import_conversion job；`intent` 默认为 `author_assets`，`locate_in_browser` 只创建 navigation-only task。 |
+| GET      | `/api/v1/authoring-jobs/:jobId`                                          | 读取 authoring snapshot、coverage 和 active task。                                                                                      |
+| POST     | `/api/v1/authoring-jobs/:jobId/commands`                                 | `start/pause/resume/cancel`。                                                                                                           |
+| GET      | `/api/v1/authoring-jobs/:jobId/events`                                   | snapshot-first authoring SSE。                                                                                                          |
+| GET      | `/api/v1/authoring-jobs/:jobId/event-log?afterSeq=N&limit=M`             | 持久 authoring event log。                                                                                                              |
+| POST     | `/api/v1/authoring-jobs/:jobId/decisions/:decisionId/answer`             | 回答 authoring decision；长期影响同步 version decision。                                                                                |
+| POST     | `/api/v1/authoring-jobs/:jobId/context-threads`                          | 绑定 URL/页面/当前模块/base revision scope；新 scope 自动使旧候选 stale。                                                               |
+| GET/POST | `/api/v1/authoring-context-threads/:threadId/messages`                   | 读取/追加 Chat 审计消息；文本不直接改变资产状态。                                                                                       |
+| GET/POST | `/api/v1/authoring-jobs/:jobId/amendments`                               | 列表/创建精确 base→candidate 的结构化修改；写要求幂等键。                                                                               |
+| GET      | `/api/v1/authoring-amendments/:amendmentId`                              | 读取 diff、影响范围、审批、验证计划与候选状态。                                                                                         |
+| POST     | `/api/v1/authoring-amendments/:amendmentId/decisions/:decisionId/answer` | 批准或拒绝同页跨模块/跨 URL 范围扩展。                                                                                                  |
+| POST     | `/api/v1/authoring-amendments/:amendmentId/commands`                     | 用户请求安全边界应用或拒绝；协调器内部开始真实验证，验证成功后原子激活，失败保持 current。                                              |
 
 当前实现：job 创建会立即生成首个 task；snapshot/event-log/snapshot-first SSE、context thread、Chat 审计、结构化 amendment、范围审批与安全边界命令已交付。协调器会为 repair task 创建受限 Agent task 和 observe lease，将输出固化为 draft candidate；用户应用后重新调度真实浏览器验证，成功才原子激活。`locate_in_browser` 使用同一 FIFO 和 control lease，只允许 `navigate`/`page_state`，完成后不生成 amendment、不改 current 资产。完整 bootstrap/recheck 阶段图与 job 自身 pause/resume/cancel 仍未交付。
 
@@ -159,18 +159,18 @@ verification scope 由服务端从精确 deployment revision、冻结的 Git/bui
 
 场景 actor、初始认证态和每个调用的认证前置/结果状态来自精确场景修订；`secretRefs` 只解析显式登录脚本所需的凭据输入。创建计划时必须证明认证变化节点形成单一依赖链并可从初始态到达，不能由客户端传一个“当前已登录”标志绕过页面复检。
 
-| Method | Path | 语义 |
-|---|---|---|
-| POST | `/api/v1/projects/:projectId/runs` | 创建流程、冻结计划并展开 TODO；不隐式开始。 |
-| GET | `/api/v1/runs/:runId` | 返回权威 `RunSnapshotV1`。 |
-| GET | `/api/v1/runs/:runId/plan` | 返回基础计划和追加式 amendments。 |
-| GET | `/api/v1/runs/:runId/todos` | 返回 TODO、依赖、尝试和下游影响投影。 |
-| GET | `/api/v1/runs/:runId/decisions` | 返回决策请求和答案。 |
-| GET | `/api/v1/runs/:runId/evidence` | 返回 manifest 和授权后的产物链接，不内联大媒体。 |
-| POST | `/api/v1/runs/:runId/commands` | 提交 `start/pause/resume/cancel/close_browser` 命令。 |
-| POST | `/api/v1/runs/:runId/decisions/:decisionId/answer` | 回答一次开放决策；影响需求的答案应用时追加版本决定。 |
-| GET | `/api/v1/runs/:runId/events` | Run SSE；每次连接先发完整 snapshot，再发 live event。 |
-| GET | `/api/v1/runs/:runId/event-log?afterSeq=N&limit=M` | 审计和补洞读取持久事件，不替代 snapshot bootstrap。 |
+| Method | Path                                               | 语义                                                  |
+| ------ | -------------------------------------------------- | ----------------------------------------------------- |
+| POST   | `/api/v1/projects/:projectId/runs`                 | 创建流程、冻结计划并展开 TODO；不隐式开始。           |
+| GET    | `/api/v1/runs/:runId`                              | 返回权威 `RunSnapshotV1`。                            |
+| GET    | `/api/v1/runs/:runId/plan`                         | 返回基础计划和追加式 amendments。                     |
+| GET    | `/api/v1/runs/:runId/todos`                        | 返回 TODO、依赖、尝试和下游影响投影。                 |
+| GET    | `/api/v1/runs/:runId/decisions`                    | 返回决策请求和答案。                                  |
+| GET    | `/api/v1/runs/:runId/evidence`                     | 返回 manifest 和授权后的产物链接，不内联大媒体。      |
+| POST   | `/api/v1/runs/:runId/commands`                     | 提交 `start/pause/resume/cancel/close_browser` 命令。 |
+| POST   | `/api/v1/runs/:runId/decisions/:decisionId/answer` | 回答一次开放决策；影响需求的答案应用时追加版本决定。  |
+| GET    | `/api/v1/runs/:runId/events`                       | Run SSE；每次连接先发完整 snapshot，再发 live event。 |
+| GET    | `/api/v1/runs/:runId/event-log?afterSeq=N&limit=M` | 审计和补洞读取持久事件，不替代 snapshot bootstrap。   |
 
 当前实现：正式 Run 公开创建、start/pause/resume/cancel/close-browser 命令、TODO page task/attempt/显式恢复、决策回答，以及 snapshot、plan、TODO、decision、evidence、event-log 与 snapshot-first SSE 已交付。Run 创建只接受精确 valid business-version validation 与 current verified scenario/script revision；跨服务协调器已把冻结脚本投影为受限 Agent task，通过 control lease 可视执行并以业务验收结果收敛 TODO。
 
@@ -195,14 +195,14 @@ interface RunCommandRequestV1 {
 
 目标路由：
 
-| Method | Path | 语义 |
-|---|---|---|
-| POST | `/api/v1/agent-tasks` | shipped：幂等创建并开始一个受限任务。 |
-| GET | `/api/v1/agent-tasks/:taskId` | shipped：读取任务状态、预算、结构化结果和终止原因。 |
-| POST | `/api/v1/agent-tasks/:taskId/commands` | shipped：以 command ID/hash 幂等和 `expectedStateVersion` 乐观并发执行 `pause/resume/interrupt/cancel`；不推断浏览器操作回滚。 |
-| GET | `/api/v1/agent-tasks/:taskId/events` | shipped：Agent 任务 SSE；先发当前 `agent_task.snapshot`，再发提交后的单调 live event。 |
-| GET | `/api/v1/agent-tasks/:taskId/event-log?afterSeq=N&limit=M` | shipped：读取持久 Agent 审计事件，用于诊断与受控补洞。 |
-| GET | `/api/v1/skills` | shipped：读取当前已加载 Skill 的安全 catalog；不返回指令正文、sourceRef 或文件路径。 |
+| Method | Path                                                       | 语义                                                                                                                           |
+| ------ | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| POST   | `/api/v1/agent-tasks`                                      | shipped：幂等创建并开始一个受限任务。                                                                                          |
+| GET    | `/api/v1/agent-tasks/:taskId`                              | shipped：读取任务状态、预算、结构化结果和终止原因。                                                                            |
+| POST   | `/api/v1/agent-tasks/:taskId/commands`                     | shipped：以 command ID/hash 幂等和 `expectedStateVersion` 乐观并发执行 `pause/resume/interrupt/cancel`；不推断浏览器操作回滚。 |
+| GET    | `/api/v1/agent-tasks/:taskId/events`                       | shipped：Agent 任务 SSE；先发当前 `agent_task.snapshot`，再发提交后的单调 live event。                                         |
+| GET    | `/api/v1/agent-tasks/:taskId/event-log?afterSeq=N&limit=M` | shipped：读取持久 Agent 审计事件，用于诊断与受控补洞。                                                                         |
+| GET    | `/api/v1/skills`                                           | shipped：读取当前已加载 Skill 的安全 catalog；不返回指令正文、sourceRef 或文件路径。                                           |
 
 当前控制语义：pause 只允许首个工具调用开始前，并与 `safe_pause` checkpoint 在同一事务落盘；工具已开始时 pause 返回结构化 conflict，调用方应选择 interrupt/cancel。interrupt/cancel 立即形成任务终态且不推断外部副作用回滚。服务重启将 created/running/paused 收敛为 interrupted，并将遗留 accepted command 收敛为 rejected；paused 只在同一进程仍保有安全运行上下文时允许 resume。capability 声明 `taskCommands=true/taskEvents=true`。
 
@@ -247,28 +247,28 @@ interface CreateAgentTaskRequestV1 {
 - `responseSchema` 必须受平台大小、深度和关键字白名单约束，防止任意递归 Schema。
 - `browserBinding` 是模型不可见的执行能力；`observe` 只能读取 snapshot/页面状态，`control` 才能提交 act。租约 token 只存在于受限任务运行态或 secret store，不进入模型消息、普通日志、事件 payload 或数据库明文字段。
 - `browserLeaseSequence` 是 proxy 防重放所需的模型不可见租约序号；与 session/lease/token/tab 一并由 wrapper 注入，模型不能提交或覆盖。
-- 当前 shipped wrapper 只执行 `toolPolicy.constraints['browser-control.operation_execute'].steps` 冻结的 `stepId/kind/operation/effectId`，写步骤只接受单项数量边界；step 可预授权真实 `beforeScreenshot/afterScreenshot/domSnapshot` capture，`videoSegment=true` 仍在 ai-chat-service 请求边界拒绝。普通工具按精确 allowlist 求交集。Skills Runtime 允许每 task 一个当前 Skill，要求当前 catalog 精确 id/version/hash、输入/输出 Schema 匹配，并再与 Skill patterns 和更小预算求交集；v1 Skill 工具只允许 `vision.*` 与受控 operation execute。policy evaluation/风险投影/active grant 与参数级数量交集仍未实现，相关输入在实现前不得被宣称已校验。
+- shipped wrapper 只执行 `toolPolicy.constraints['browser-control.operation_execute'].steps` 冻结的 `stepId/kind/operation/effectId`，写步骤只接受单项数量边界；step 可预授权真实 `beforeScreenshot/afterScreenshot/domSnapshot` capture，`videoSegment=true` 仍在 ai-chat-service 请求边界拒绝。普通工具按精确 allowlist 求交集。Skills Runtime 允许每 task 一个当前 Skill，要求当前 catalog 精确 id/version/hash、输入/输出 Schema 匹配，并再与 Skill patterns 和更小预算求交集；v1 Skill 工具只允许 `vision.*` 与受控 operation execute。每次 dispatch 均校验 policy evaluation、风险投影、active grant、effectId、参数数量和 lease 的交集并持久化操作记录。
 - 工具包装层注入 session、Tab、租约、operation/correlation 元数据，并在每次调用前校验“task allowlist ∩ 当前语义步骤 ∩ effectId/数量边界 ∩ active grant ∩ browser lease”；模型不能覆盖、替换 effectId 或把只读步骤改为写步骤。
 - 默认每个页面任务创建新 Agent task。恢复只接受调用方提供的显式 checkpoint，不依赖旧对话隐式记忆。
 
 任务状态为 `created/running/paused/completed/failed/interrupted/cancelled/blocked`。终态结果至少包含 `status`、`terminationReason`、符合 `responseSchema` 的 `output`、工具调用摘要、Skill 版本/hash 和预算消耗。Agent task 的 `completed` 只表示结构化任务完成，不等于 E2E TODO 通过。
 
-现有 `POST /api/ai/generate` 继续服务纯文本生成；它不得被扩展为隐式拥有无限工具的 E2E 执行入口。
+`POST /api/v1/ai/generate` 服务无 session、无 tool 的单次纯文本生成；它不得被扩展为隐式拥有无限工具的 E2E 执行入口。
 
 ## 5. `proxy-adapter` 浏览器执行控制面
 
 ### 5.1 HTTP 生命周期与查询
 
-| Method | Path | 语义 |
-|---|---|---|
-| POST | `/api/v1/browser-execution/sessions` | 创建或绑定一个可视浏览器执行会话；v1 会话固定一个 BrowserContext。 |
-| GET | `/api/v1/browser-execution/sessions/:sessionId` | 读取会话、Tab、active observe/control lease 和画面能力摘要。 |
-| DELETE | `/api/v1/browser-execution/sessions/:sessionId` | 显式关闭；需要生命周期权限与幂等键。 |
-| POST | `/api/v1/browser-execution/sessions/:sessionId/leases` | 签发 `observe/control` 租约，限制 Tab、操作与期限；首期最多一个 control。 |
-| DELETE | `/api/v1/browser-execution/sessions/:sessionId/leases/:leaseId` | 撤销租约；已开始操作继续到安全边界。 |
-| GET | `/api/v1/browser-execution/sessions/:sessionId/events` | 浏览器会话 SSE；先发 `browser_session.snapshot`。 |
-| GET | `/api/v1/browser-execution/sessions/:sessionId/event-log?afterSeq=N&limit=M` | 查询持久操作事件。 |
-| GET | `/api/v1/browser-execution/operations/:operationId` | 查询原子操作账本和最终/不确定结果。 |
+| Method | Path                                                                         | 语义                                                                      |
+| ------ | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| POST   | `/api/v1/browser-execution/sessions`                                         | 创建或绑定一个可视浏览器执行会话；v1 会话固定一个 BrowserContext。        |
+| GET    | `/api/v1/browser-execution/sessions/:sessionId`                              | 读取会话、Tab、active observe/control lease 和画面能力摘要。              |
+| DELETE | `/api/v1/browser-execution/sessions/:sessionId`                              | 显式关闭；需要生命周期权限与幂等键。                                      |
+| POST   | `/api/v1/browser-execution/sessions/:sessionId/leases`                       | 签发 `observe/control` 租约，限制 Tab、操作与期限；首期最多一个 control。 |
+| DELETE | `/api/v1/browser-execution/sessions/:sessionId/leases/:leaseId`              | 撤销租约；已开始操作继续到安全边界。                                      |
+| GET    | `/api/v1/browser-execution/sessions/:sessionId/events`                       | 浏览器会话 SSE；先发 `browser_session.snapshot`。                         |
+| GET    | `/api/v1/browser-execution/sessions/:sessionId/event-log?afterSeq=N&limit=M` | 查询持久操作事件。                                                        |
+| GET    | `/api/v1/browser-execution/operations/:operationId`                          | 查询原子操作账本和最终/不确定结果。                                       |
 | GET    | `/api/v1/browser-execution/sessions/:sessionId/artifacts/:artifactId`        | 在会话边界内读取短期原始产物；返回前复核 storage ref、size 与 SHA-256。   |
 
 当前实现状态：session 创建/读取/关闭、lease 签发/撤销、operation 查询、真实 before/after screenshot、DOM capture、失败截图、内容寻址短期存储、session SSE、event-log 与 artifact GET 已交付。observe/control 创建、opaque token hash/process epoch、单 session 门禁和 SQLite operation ledger 已生效；control 原地续租、脱敏/清理 worker、video 与动画尚未实现。
@@ -279,7 +279,7 @@ interface CreateAgentTaskRequestV1 {
 
 v1 每个 application session 从创建到释放只能绑定一个 `BrowserContext`。同一 Context 可串行操作多个 Tab，但 API 不提供运行中 Context 切换、storage-state 导入/替换或并存认证 Context；业务 actor 由 `ai-e2e` 根据登录/退出脚本的确定性断言维护，不能下沉给 proxy 解释。
 
-活动 application session 期间，现有兼容 MCP/debug 写工具必须返回 `browser_busy`，不能绕过 lease 操作同一 Context。MJPEG/LiveKit/事件等只读实时流继续可用；直接 DOM/截图观测只能走受控 observe operation，或返回最近一次已封存的安全快照。session 释放后 legacy 工具恢复原行为。
+活动 application session 期间，debug 直接写、DOM 或截图请求必须返回 `browser_busy`，不能绕过 lease 操作或捕获同一 Context。MJPEG/LiveKit/事件等只读实时流继续可用；DOM/截图观测只能走受控 observe operation，或返回最近一次已封存的安全快照。session 释放后直接调试面才重新开放。
 
 正式 run 触发的 repair 作为关联 `parentRunId` 的嵌套 authoring job，在安全边界沿用父 run 当前 browser job/session，不创建第二个活动 session，也不排入父 run 自己后方；无关 job 仍留在 FIFO。父 run 暂停并释放 control 后，内部 verification run 才可取得 control；repair 验证成功并释放子租约后，由 `ai-e2e` 追加精确 revision 的 run plan amendment。
 
@@ -295,11 +295,11 @@ v1 每个 application session 从创建到释放只能绑定一个 `BrowserConte
 
 proxy MCP Server 只暴露以下 3 个受控工具；旧 15 个 browser tools 不进入 MCP consumer。`ai-chat-service` 将原始工具隔离在模型不可见的 DSH transport scope，E2E 受限任务模型只提交冻结 `stepId`，由 wrapper 注入 target/args、browser binding 与授权快照：
 
-| MCP tool | 语义 |
-|---|---|
-| `browser-control.operation_execute` | 执行一次白名单观测或动作，使用 `operationId` 幂等。 |
-| `browser-control.operation_get` | 查询已提交操作，恢复时必须先查账本。 |
-| `browser-control.operation_cancel` | 只取消尚未开始的 queued 操作；已开始操作返回不可取消。 |
+| MCP tool                            | 语义                                                   |
+| ----------------------------------- | ------------------------------------------------------ |
+| `browser-control.operation_execute` | 执行一次白名单观测或动作，使用 `operationId` 幂等。    |
+| `browser-control.operation_get`     | 查询已提交操作，恢复时必须先查账本。                   |
+| `browser-control.operation_cancel`  | 只取消尚未开始的 queued 操作；已开始操作返回不可取消。 |
 
 `operation_execute` 的逻辑输入：
 
@@ -395,7 +395,7 @@ interface RunEventV1 {
 - `Last-Event-ID` 可以作为网络优化提示，但不是正确性契约；服务可以忽略。
 - `event-log?afterSeq=` 供审计、诊断和受控补洞，不允许只靠增量重建未知起点状态。
 - heartbeat 不占业务 seq，不写持久事件表。
-- 现有 Chat SSE 的 `session.snapshot → live` 行为保持不变；现有项目 SSE 和 Debug SSE 在目标 UI 迁移完成前继续兼容。
+- Chat SSE 的 `session.snapshot → live` 行为是 canonical 契约；项目 SSE 与 Debug SSE 只按各自已登记路径提供，不存在旧路径并行面。
 
 ## 7. 跨服务编排与恢复
 
@@ -429,12 +429,13 @@ ai-e2e 持久化 intent/outbox
 
 当前实现通过 500ms 确定性协调循环执行上述核对：启动时把遗留 `dispatching` outbox 恢复为可重放状态，外部 create/command 使用稳定幂等键，session/lease/Agent/operation/artifact 只保存 opaque ref 与哈希；一次性 lease token 仅保存在本机 AES-GCM secret store。若 token 或 Agent 创建确认事实不可恢复，则显式落 `interrupted/failed`，不盲目生成第二个副作用任务。
 
-## 8. 兼容与迁移边界
+## 8. 资产迁移与核心服务切换边界
 
 - `ai-e2e` legacy `/api/projects/:id/events` 仍只发布易失项目阶段事件；semantic 工作台必须使用已交付的 `/api/v1/runs/:runId/events` snapshot-first SSE 与 event-log 才能依赖断线恢复。
 - 当前 `/api/projects/:projectId/execution/*` 和 `ExecutorService` 是旧 scenario-level TypeScript 执行面；在语义运行链验收前继续存在，但新业务版本不得生成新的不可视旁路依赖。
-- `ai-chat-service` 当前 `/api/ai/generate` 是无工具的纯文本调用；目标 Agent API 应作为独立路由和持久任务模型实现。
-- `proxy-adapter` 当前 MCP transport 无会话，浏览器服务是进程级实例；目标应用层 session/lease/operation ledger 不得依赖 MCP transport session。
+- `ai-chat-service` 的 `/api/v1/ai/generate` 是无工具的纯文本调用；持久 Agent task API 已作为独立 canonical v1 路由交付。
+- `proxy-adapter` MCP transport 无会话，浏览器服务是进程级实例；应用层 session/lease/operation ledger 不依赖 MCP transport session，MCP 仅保留三个受控 operation 工具。
+- ai-e2e 旧 TypeScript 资产与运行记录属于业务数据迁移域；它们不得要求 ai-chat-service 或 proxy-adapter 保留旧路由、旧工具、双写或适配层。
 - 新 API 与旧 API 并存期间，UI 必须按项目/业务版本能力标志选择整条执行链，禁止在同一 run 中混用新旧执行器。
 
 ## 9. 验收原则

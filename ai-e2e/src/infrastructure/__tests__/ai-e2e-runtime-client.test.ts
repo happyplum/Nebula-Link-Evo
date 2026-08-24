@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import axios, { isAxiosError } from 'axios';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ProxyAdapterClient } from '../proxy-adapter-client.js';
+import { AiE2eRuntimeClient } from '../ai-e2e-runtime-client.js';
 import { ServiceError } from '../../services/service-error.js';
 
 vi.mock('axios');
@@ -30,7 +30,7 @@ function expectHeaders(options: unknown, projectId?: string, timeout?: number) {
   });
 }
 
-describe('ProxyAdapterClient', () => {
+describe('AiE2eRuntimeClient', () => {
   const originalProxyAdapterUrl = process.env.PROXY_ADAPTER_URL;
   const originalAiChatUrl = process.env.AI_CHAT_SERVICE_URL;
 
@@ -62,7 +62,7 @@ describe('ProxyAdapterClient', () => {
     const mockAxiosInstance = createAxiosInstance();
     mockedAxios.create.mockReturnValue(mockAxiosInstance as never);
 
-    new ProxyAdapterClient({ projectId: 'proj-1' });
+    new AiE2eRuntimeClient({ projectId: 'proj-1' });
 
     expect(mockedAxios.create).toHaveBeenCalledWith({
       baseURL: 'http://proxy-adapter.local:3000',
@@ -79,16 +79,16 @@ describe('ProxyAdapterClient', () => {
     });
     mockedAxios.create.mockReturnValue(mockAxiosInstance as never);
 
-    const client = new ProxyAdapterClient();
+    const client = new AiE2eRuntimeClient();
     await client.getPageInfo();
 
     // Facade creates two axios clients; browser gateway defaults to 127.0.0.1:3000.
     expect(mockedAxios.create).toHaveBeenCalledWith(
-      expect.objectContaining({ baseURL: 'http://127.0.0.1:3000' }),
+      expect.objectContaining({ baseURL: 'http://127.0.0.1:3000' })
     );
     // AI chat client defaults to 127.0.0.1:3001.
     expect(mockedAxios.create).toHaveBeenCalledWith(
-      expect.objectContaining({ baseURL: 'http://127.0.0.1:3001' }),
+      expect.objectContaining({ baseURL: 'http://127.0.0.1:3001' })
     );
   });
 
@@ -104,7 +104,7 @@ describe('ProxyAdapterClient', () => {
     });
     mockedAxios.create.mockReturnValue(mockAxiosInstance as never);
 
-    const client = new ProxyAdapterClient({ projectId: 'proj-1' });
+    const client = new AiE2eRuntimeClient({ projectId: 'proj-1' });
     const result = await client.generateText('Hello', {
       temperature: 0.3,
       maxTokens: 128,
@@ -115,7 +115,7 @@ describe('ProxyAdapterClient', () => {
       tokenUsage: { promptTokens: 11, completionTokens: 7 },
     });
     expect(mockAxiosInstance.post).toHaveBeenCalledWith(
-      '/api/ai/generate',
+      '/api/v1/ai/generate',
       { prompt: 'Hello', temperature: 0.3, maxTokens: 128 },
       expect.any(Object)
     );
@@ -129,7 +129,7 @@ describe('ProxyAdapterClient', () => {
     });
     mockedAxios.create.mockReturnValue(mockAxiosInstance as never);
 
-    const client = new ProxyAdapterClient({ projectId: 'proj-1' });
+    const client = new AiE2eRuntimeClient({ projectId: 'proj-1' });
     const result = await client.navigate('https://example.com');
 
     expect(result).toEqual({ success: true, url: 'https://example.com' });
@@ -158,7 +158,7 @@ describe('ProxyAdapterClient', () => {
     });
     mockedAxios.create.mockReturnValue(mockAxiosInstance as never);
 
-    const client = new ProxyAdapterClient({ projectId: 'proj-1' });
+    const client = new AiE2eRuntimeClient({ projectId: 'proj-1' });
     const result = await client.getSnapshot();
 
     expect(result).toEqual({
@@ -174,7 +174,7 @@ describe('ProxyAdapterClient', () => {
     mockAxiosInstance.post.mockResolvedValue({ data: { success: true, message: 'clicked' } });
     mockedAxios.create.mockReturnValue(mockAxiosInstance as never);
 
-    const client = new ProxyAdapterClient();
+    const client = new AiE2eRuntimeClient();
     const result = await client.click(10, 20);
 
     expect(result).toEqual({ success: true });
@@ -190,7 +190,7 @@ describe('ProxyAdapterClient', () => {
     mockAxiosInstance.post.mockResolvedValue({ data: { success: true, message: 'clicked' } });
     mockedAxios.create.mockReturnValue(mockAxiosInstance as never);
 
-    const client = new ProxyAdapterClient();
+    const client = new AiE2eRuntimeClient();
     const result = await client.clickBySelector('#login');
 
     expect(result).toEqual({ success: true });
@@ -206,7 +206,7 @@ describe('ProxyAdapterClient', () => {
     mockAxiosInstance.post.mockResolvedValue({ data: { success: true, message: 'typed' } });
     mockedAxios.create.mockReturnValue(mockAxiosInstance as never);
 
-    const client = new ProxyAdapterClient();
+    const client = new AiE2eRuntimeClient();
     const result = await client.type('#email', 'hello');
 
     expect(result).toEqual({ success: true });
@@ -228,7 +228,7 @@ describe('ProxyAdapterClient', () => {
     });
     mockedAxios.create.mockReturnValue(mockAxiosInstance as never);
 
-    const client = new ProxyAdapterClient();
+    const client = new AiE2eRuntimeClient();
     const result = await client.screenshot();
 
     expect(result).toEqual({ base64: 'screen-base64' });
@@ -245,7 +245,7 @@ describe('ProxyAdapterClient', () => {
     });
     mockedAxios.create.mockReturnValue(mockAxiosInstance as never);
 
-    const client = new ProxyAdapterClient();
+    const client = new AiE2eRuntimeClient();
     const result = await client.executeScript('return arguments[0]', ['value']);
 
     expect(result).toEqual({ result: { ok: true } });
@@ -262,7 +262,7 @@ describe('ProxyAdapterClient', () => {
     mockAxiosInstance.get.mockResolvedValue({ data: { success: true, cookies } });
     mockedAxios.create.mockReturnValue(mockAxiosInstance as never);
 
-    const client = new ProxyAdapterClient();
+    const client = new AiE2eRuntimeClient();
     const result = await client.getCookies();
 
     expect(result).toEqual({ cookies });
@@ -279,7 +279,7 @@ describe('ProxyAdapterClient', () => {
     });
     mockedAxios.create.mockReturnValue(mockAxiosInstance as never);
 
-    const client = new ProxyAdapterClient();
+    const client = new AiE2eRuntimeClient();
     const result = await client.getLocalStorage();
 
     expect(result).toEqual({ data: { token: 'abc123' } });
@@ -301,7 +301,7 @@ describe('ProxyAdapterClient', () => {
     });
     mockedAxios.create.mockReturnValue(mockAxiosInstance as never);
 
-    const client = new ProxyAdapterClient();
+    const client = new AiE2eRuntimeClient();
     const result = await client.getPageInfo();
 
     expect(result).toEqual({ url: 'https://example.com', title: 'Example' });
@@ -318,7 +318,7 @@ describe('ProxyAdapterClient', () => {
     });
     mockedAxios.create.mockReturnValue(mockAxiosInstance as never);
 
-    const client = new ProxyAdapterClient();
+    const client = new AiE2eRuntimeClient();
     const result = await client.getDOM();
 
     expect(result).toEqual({ html: '<html><body>ok</body></html>' });
@@ -334,13 +334,18 @@ describe('ProxyAdapterClient', () => {
     mockAxiosInstance.get.mockResolvedValue({
       data: {
         services: {
-          playwright: { isOpen: true, url: 'https://example.com', title: 'Example', status: 'healthy' },
+          playwright: {
+            isOpen: true,
+            url: 'https://example.com',
+            title: 'Example',
+            status: 'healthy',
+          },
         },
       },
     });
     mockedAxios.create.mockReturnValue(mockAxiosInstance as never);
 
-    const client = new ProxyAdapterClient({ projectId: 'proj-1' });
+    const client = new AiE2eRuntimeClient({ projectId: 'proj-1' });
     await expect(client.healthCheck()).resolves.toBe(true);
 
     expect(mockAxiosInstance.get).toHaveBeenCalledWith('/debug/api/health', expect.any(Object));
@@ -354,7 +359,7 @@ describe('ProxyAdapterClient', () => {
       .mockResolvedValueOnce({ data: { success: true, message: 'closed' } });
     mockedAxios.create.mockReturnValue(mockAxiosInstance as never);
 
-    const client = new ProxyAdapterClient();
+    const client = new AiE2eRuntimeClient();
 
     await expect(client.openBrowser()).resolves.toEqual({ success: true });
     await expect(client.closeBrowser()).resolves.toEqual({ success: true });
@@ -380,7 +385,7 @@ describe('ProxyAdapterClient', () => {
     });
     mockedAxios.create.mockReturnValue(mockAxiosInstance as never);
 
-    const client = new ProxyAdapterClient();
+    const client = new AiE2eRuntimeClient();
 
     await expect(client.clickBySelector('#missing')).rejects.toMatchObject({
       name: 'ServiceError',
@@ -403,13 +408,13 @@ describe('ProxyAdapterClient', () => {
     mockAxiosInstance.post.mockRejectedValue(error);
     mockedAxios.create.mockReturnValue(mockAxiosInstance as never);
 
-    const client = new ProxyAdapterClient();
+    const client = new AiE2eRuntimeClient();
 
     await expect(client.generateText('Hello')).rejects.toMatchObject({
       name: 'ServiceError',
       message: 'ai-chat-service unavailable',
-      statusCode: 500,
-      code: 'INTERNAL_ERROR',
+      statusCode: 503,
+      code: 'SERVICE_UNAVAILABLE',
     } satisfies Partial<ServiceError>);
   });
 
@@ -426,7 +431,7 @@ describe('ProxyAdapterClient', () => {
     mockAxiosInstance.post.mockRejectedValue(error);
     mockedAxios.create.mockReturnValue(mockAxiosInstance as never);
 
-    const client = new ProxyAdapterClient();
+    const client = new AiE2eRuntimeClient();
 
     await expect(client.generateText('Hello')).rejects.toMatchObject({
       name: 'ServiceError',
@@ -449,7 +454,7 @@ describe('ProxyAdapterClient', () => {
     mockAxiosInstance.post.mockRejectedValue(error);
     mockedAxios.create.mockReturnValue(mockAxiosInstance as never);
 
-    const client = new ProxyAdapterClient();
+    const client = new AiE2eRuntimeClient();
 
     await expect(client.generateText('Hello')).rejects.toMatchObject({
       name: 'ServiceError',
@@ -472,7 +477,7 @@ describe('ProxyAdapterClient', () => {
     mockAxiosInstance.post.mockRejectedValue(error);
     mockedAxios.create.mockReturnValue(mockAxiosInstance as never);
 
-    const client = new ProxyAdapterClient();
+    const client = new AiE2eRuntimeClient();
 
     await expect(client.generateText('Hello')).rejects.toMatchObject({
       name: 'ServiceError',
@@ -495,7 +500,7 @@ describe('ProxyAdapterClient', () => {
     mockAxiosInstance.post.mockRejectedValue(error);
     mockedAxios.create.mockReturnValue(mockAxiosInstance as never);
 
-    const client = new ProxyAdapterClient();
+    const client = new AiE2eRuntimeClient();
 
     await expect(client.generateText('Hello')).rejects.toMatchObject({
       name: 'ServiceError',
@@ -518,7 +523,7 @@ describe('ProxyAdapterClient', () => {
     mockAxiosInstance.post.mockRejectedValue(error);
     mockedAxios.create.mockReturnValue(mockAxiosInstance as never);
 
-    const client = new ProxyAdapterClient();
+    const client = new AiE2eRuntimeClient();
 
     await expect(client.generateText('Hello')).rejects.toMatchObject({
       name: 'ServiceError',
@@ -541,7 +546,7 @@ describe('ProxyAdapterClient', () => {
     mockAxiosInstance.post.mockRejectedValue(error);
     mockedAxios.create.mockReturnValue(mockAxiosInstance as never);
 
-    const client = new ProxyAdapterClient();
+    const client = new AiE2eRuntimeClient();
 
     await expect(client.generateText('Hello')).rejects.toMatchObject({
       name: 'ServiceError',
@@ -564,7 +569,7 @@ describe('ProxyAdapterClient', () => {
     mockAxiosInstance.post.mockRejectedValue(error);
     mockedAxios.create.mockReturnValue(mockAxiosInstance as never);
 
-    const client = new ProxyAdapterClient();
+    const client = new AiE2eRuntimeClient();
 
     await expect(client.generateText('Hello')).rejects.toMatchObject({
       name: 'ServiceError',
@@ -587,7 +592,7 @@ describe('ProxyAdapterClient', () => {
     mockAxiosInstance.post.mockRejectedValue(error);
     mockedAxios.create.mockReturnValue(mockAxiosInstance as never);
 
-    const client = new ProxyAdapterClient();
+    const client = new AiE2eRuntimeClient();
 
     await expect(client.generateText('Hello')).rejects.toMatchObject({
       name: 'ServiceError',
@@ -607,7 +612,7 @@ describe('ProxyAdapterClient', () => {
     mockAxiosInstance.post.mockRejectedValue(error);
     mockedAxios.create.mockReturnValue(mockAxiosInstance as never);
 
-    const client = new ProxyAdapterClient();
+    const client = new AiE2eRuntimeClient();
 
     await expect(client.clickBySelector('#login')).rejects.toMatchObject({
       name: 'ServiceError',
@@ -629,7 +634,7 @@ describe('ProxyAdapterClient', () => {
     mockAxiosInstance.post.mockRejectedValue(error);
     mockedAxios.create.mockReturnValue(mockAxiosInstance as never);
 
-    const client = new ProxyAdapterClient();
+    const client = new AiE2eRuntimeClient();
 
     await expect(client.clickBySelector('#bad')).rejects.toMatchObject({
       name: 'ServiceError',
@@ -652,7 +657,7 @@ describe('ProxyAdapterClient', () => {
     mockAxiosInstance.get.mockRejectedValue(error);
     mockedAxios.create.mockReturnValue(mockAxiosInstance as never);
 
-    const client = new ProxyAdapterClient();
+    const client = new AiE2eRuntimeClient();
 
     await expect(client.getCookies()).rejects.toMatchObject({
       name: 'ServiceError',
@@ -675,7 +680,7 @@ describe('ProxyAdapterClient', () => {
     mockAxiosInstance.post.mockRejectedValue(error);
     mockedAxios.create.mockReturnValue(mockAxiosInstance as never);
 
-    const client = new ProxyAdapterClient();
+    const client = new AiE2eRuntimeClient();
 
     await expect(client.click(10, 20)).rejects.toMatchObject({
       name: 'ServiceError',
@@ -698,13 +703,13 @@ describe('ProxyAdapterClient', () => {
     mockAxiosInstance.get.mockRejectedValue(error);
     mockedAxios.create.mockReturnValue(mockAxiosInstance as never);
 
-    const client = new ProxyAdapterClient();
+    const client = new AiE2eRuntimeClient();
 
     await expect(client.screenshot()).rejects.toMatchObject({
       name: 'ServiceError',
       message: 'proxy-adapter unavailable',
-      statusCode: 500,
-      code: 'INTERNAL_ERROR',
+      statusCode: 503,
+      code: 'SERVICE_UNAVAILABLE',
     } satisfies Partial<ServiceError>);
   });
 
@@ -714,7 +719,7 @@ describe('ProxyAdapterClient', () => {
     const mockAxiosInstance = createAxiosInstance();
     mockedAxios.create.mockReturnValue(mockAxiosInstance as never);
 
-    const client = new ProxyAdapterClient();
+    const client = new AiE2eRuntimeClient();
 
     // generateText routes to ai-chat-service (:3001), disabled by AI_CHAT_SERVICE_URL=''.
     await expect(client.generateText('Hello')).rejects.toMatchObject({

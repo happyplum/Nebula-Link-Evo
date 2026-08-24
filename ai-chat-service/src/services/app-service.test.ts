@@ -8,9 +8,7 @@ function buildServiceWithVisionState(options: {
   const service = new AppService();
   const serviceInternals = service as unknown as {
     toolRegistry: {
-      getAvailableTools(options?: {
-        consumer?: 'chat' | 'mcp-server' | 'all';
-      }): Array<{ name: string }>;
+      getAvailableTools(): Array<{ name: string }>;
     };
   };
 

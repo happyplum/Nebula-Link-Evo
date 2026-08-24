@@ -4,6 +4,7 @@
 - [shipped] ai-chat-service 精确固定 `@deepseek-ai/dsh-* 0.1.1-rc.2`、`@earendil-works/pi-ai 0.82.1`、Node `^22.19.0 || >=24.0.0`；`harness-bom.json` 与 `verify:harness-bom` 校验完整 peer closure、license、koffi/native build 和 pnpm patch hash。
 - [shipped] DSH zstd JSONL append-only log 是模型 transcript 事实源；SQLite 只保存控制面、幂等、公开 event projection 与 `projectedDshSeq` watermark。flush 后才投影，cursor 越过 durable seq 时 fail closed。
 - [shipped] ai-chat-service 已删除旧 `MCPSDKClient/MCPClientProvider` 双 transport；MCP discovery、schema quarantine、timeout/cancel 与模型 ToolRuntime 投影统一由 DSH transport 管理，原始 operation 工具留在模型不可见 child scope。
+- [shipped] 每个 MCP plugin 启动受 discovery watchdog 约束；超时或启动失败必须 dispose 并等待 fiber 关闭，禁止迟到工具注册。Vision 产品工具只在启动期一次性投影；运行期禁止 HMR/hot-sync，更新必须改 lock/配置并重启。
 - [shipped] 上游 persistence/jsonl 的最小 pnpm patch 提供同 session 串行 `purge(sessionId, expectedRevision)`：等待 retirement、拒绝 live owner、清 controller/preparation/cache、拒绝 symlink/reparse 越界并经 GC trash 安全删除；patch hash 纳入 BOM。
 - [shipped] `trusted-harness-plugins.lock.json` 支持部署期可信工具/prompt/hook/LLM adapter/Skill provider/MCP 扩展；校验 direct dependency、canonical realpath、精确版本、entry/tree/config digest、DSH/Cordis ABI 与 peer closure。全部 required，运行期禁止 install/HMR/组合树修改。
 - [shipped] `THIRD_PARTY_NOTICES.md` 保留 DeepSeek Harness、Cordis、Pi 及递归 DSH 包的 MIT notice；Nebula 自有代码继续 `AGPL-3.0-only`。

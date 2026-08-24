@@ -2,7 +2,7 @@
 
 ## Overview
 
-AI-assisted browser automation platform. `proxy-adapter` is the browser MCP gateway and the sole owner of Playwright/CDP integration. `ai-chat-service` is the reusable AI capability layer (analysis/decision model, vision model, MCP client/tool orchestration, Chat SSE, scoped Agent task command/event control plane, and a local read-only declarative Skills runtime; general vision v2 and complete side-effect authorization remain pending). `debug-ui` provides the primary web UI. `ai-e2e` is the E2E business layer with its own React SPA at `/ai-e2e/`.
+AI-assisted browser automation platform. `proxy-adapter` is the browser capability gateway and the sole owner of Playwright/CDP integration. `ai-chat-service` is the unique reusable AI driving core: analysis/decision model, immutable-snapshot Vision enhancement, unified DSH Agent Loop, MCP/tool orchestration, Chat/Agent task control planes, persistence, authorization/budget enforcement, declarative Skills, and deployment-locked plugins. `debug-ui` provides the primary web UI. `ai-e2e` is the E2E business layer with its own React SPA at `/ai-e2e/`.
 
 ## Structure
 
@@ -11,7 +11,6 @@ shared/             Shared types and utilities (no src/ dir — source at packag
 proxy-adapter/      Browser MCP gateway — MCP Server, Playwright control, debug streams (:3000)
   src/mcp-server/   MCP Server transport (StreamableHTTP)
   src/tools/        ToolRegistry + providers + MCP Server adapter
-  src/browser-tools/ browser-control tool definitions
 ai-chat-service/    AI chat backend — conversation, provider orchestration, Chat SSE (:3001)
 debug-ui/           Primary web UI — React SPA, Vite (:5173 dev)
 ai-e2e/             AI E2E test orchestration (:3002)
@@ -26,15 +25,15 @@ docs/               Architecture docs, API references, skill docs (not a package
 
 ## Core product boundaries
 
-- `proxy-adapter` owns browser analysis and actions through in-process Playwright plus CDP sessions, and exposes those capabilities as `browser-control.*` over MCP. No upstream package may import or bypass its browser engine.
+- `proxy-adapter` owns browser analysis and actions through in-process Playwright plus CDP sessions, and exposes only `browser-control.operation_execute/get/cancel` over MCP plus the canonical browser-execution HTTP control plane. No upstream package may import or bypass its browser engine.
 - `integrations/browser-control-client` consumes only the existing loopback browser-execution HTTP control plane and `/mcp`; `integrations/deepseek-harness-plugin` consumes that client and must not add DeepSeek-specific behavior to proxy-adapter.
 - `ai-chat-service` owns reusable AI capabilities. The analysis/decision model understands requirements and browser evidence, plans the next test action, and consumes MCP/vision tools; the vision model interprets screenshots together with DOM evidence for text-only analysis models.
-- MCP client/tool orchestration belongs in `ai-chat-service`. Its shipped reusable Skills runtime loads only local immutable declarative packages, pins id/version/content hash, permits at most one current Skill per Agent task, and can only shrink the task's tool and budget authority. General vision v2 and complete policy/grant intersection remain pending.
+- MCP client/tool orchestration belongs in `ai-chat-service`. Its shipped reusable Skills runtime loads only local immutable declarative packages, pins id/version/content hash, permits at most one current Skill per Agent task, and can only shrink the task's tool and budget authority. Vision v2 and per-effect policy/grant intersection are shipped; Vision remains a stateless immutable-snapshot evidence helper and never owns browser execution.
 - `ai-e2e` owns PRD-driven E2E product orchestration, not generic AI or browser infrastructure. A page contains functional modules, a functional module contains multiple reusable functional scripts, and scenarios compose script calls across modules/pages.
 - Target agent orchestration is page-scoped: the main AI owns flow/TODO dependencies, shared run variables, decisions and dispatch; each child AI executes only its assigned page-scene fragment. Default to a clean child context, but allow the main AI to resume an interrupted context after explicit state and side-effect checks.
 - The target E2E authority is a structured semantic script executed visibly through `proxy-adapter`; do not extend ai-e2e's current `npx tsx` subprocess executor as the target browser execution path.
 - The target ai-e2e main agent is a durable workflow coordinator backed by authoring job/task/attempt/event state, not a long-lived model conversation. Bootstrap, recheck, repair and legacy conversion must separate candidate generation, static validation, real browser verification and atomic activation; see `ai-e2e/docs/asset-authoring-repair-contract.md`.
-- Cross-service APIs, scoped Agent tasks, browser operation tools, snapshot-first events, idempotency and recovery are fixed in `ai-e2e/docs/service-api-event-contract.md`; dual-model and declarative Skill rules are fixed in `ai-e2e/docs/ai-model-skill-contract.md`. Proxy session/lease/operation、截图/DOM 与 browser events，ai-chat-service Agent task/Skill runtime，以及 ai-e2e Authoring/Run API、outbox 协调、可视语义执行和证据提升均已交付；完整 bootstrap/recheck、Agent/browser 事件流消费、通用视觉 v2、完整逐 effect 授权与生产工作台仍 pending。
+- Cross-service APIs, scoped Agent tasks, browser operation tools, snapshot-first events, idempotency and recovery are fixed in `ai-e2e/docs/service-api-event-contract.md`; dual-model and declarative Skill rules are fixed in `ai-e2e/docs/ai-model-skill-contract.md`. Proxy session/lease/operation、截图/DOM 与 browser events，ai-chat-service Agent task/Skill/Vision v2/逐 effect 授权，以及 ai-e2e Authoring/Run API、outbox 协调、可视语义执行和证据提升均已交付；完整 bootstrap/recheck、Agent/browser 事件流消费和生产工作台仍 pending。
 - v1 has one active browser execution session per `proxy-adapter` process. Authoring verification and test runs share one FIFO; the main agent may observe only at atomic-operation safe boundaries, only the active child holds control, and the live UI is read-only.
 - Legacy ai-e2e data is migrated additively: old TypeScript/login/run records stay readable, imports create review candidates, and a run is always either legacy or `semantic_v1`. Migration/cutover/release gates: `ai-e2e/docs/migration-compatibility-acceptance-contract.md`.
 
@@ -58,9 +57,9 @@ pnpm format         # prettier --write debug-ui/src proxy-adapter/src ai-chat-se
 
 - Build order is strict: `shared` → `browser-control-client` → `deepseek-harness-plugin` → `debug-ui` → `proxy-adapter` → `ai-chat-service` → `ai-e2e`.
 - `start.bat` is not a thin wrapper around `pnpm build`: it builds `shared`, starts LiveKit, verifies ports, then builds/starts `proxy-adapter` and `ai-chat-service` (if applicable).
-- `proxy-adapter` startup order matters: env/config load → DB backup init outside tests → plugin registration → `AppService.initialize()` → browser-control provider → MCP/debug surfaces.
+- `proxy-adapter` startup order matters: env load → DB backup init outside tests → plugin registration → `AppService.initialize()` → browser-execution provider → MCP/debug surfaces.
 - Chat reconnect always reboots from a fresh `session.snapshot`; there is no `Last-Event-ID` replay contract to preserve.
-- `proxy-adapter` 与 `ai-chat-service` 的配置加载器只按工作目录依次搜索 `config/config.json`、`../config/config.json`、`../../config/config.json`、`nebula-link-evo/config/config.json`（显式 `configPath` 优先）；不会自动搜索包内 `proxy-adapter/config/` 或 `ai-chat-service/config/`。
+- `ai-chat-service` 配置加载器只按工作目录依次搜索 `config/config.json`、`../config/config.json`、`../../config/config.json`、`nebula-link-evo/config/config.json`（显式 `configPath` 优先）；不会自动搜索包内配置。`proxy-adapter` 不读取 AI provider 配置。
 - 升级被 `pnpm-workspace.yaml#patchedDependencies` 覆盖的依赖时，必须同步评估对应 patch：上游已包含所需行为时删除 patch 配置与文件，否则针对新版本重建 patch；两种情况都必须重新生成并校验 lockfile、Harness BOM/patch hash 及相关持久化测试，不得留下失效或无引用 patch。
 
 ## Repository-wide constraints
@@ -123,6 +122,7 @@ pnpm format         # prettier --write debug-ui/src proxy-adapter/src ai-chat-se
 - `integrations/deepseek-harness-plugin/PRODUCT-SPEC.md`
 
 <!-- shipped-workflow:start -->
+
 ## shipped 清单工作流（防回退 / 漂移）
 
 - shipped root：`docs/shipped/`（本项目的 shipped 清单目录）

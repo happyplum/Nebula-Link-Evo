@@ -39,6 +39,7 @@ import type {
 } from './types.js';
 import { NebulaGlmLlmAdapter } from './glm-adapter.js';
 import { loadTrustedHarnessPlugins } from './trusted-plugin-loader.js';
+import { awaitMcpStartup } from './mcp-startup.js';
 import { createHash, randomUUID } from 'node:crypto';
 
 const CANCEL_CAUSES: Record<'user' | 'timeout' | 'shutdown', AgentCancelCause> = {
@@ -103,7 +104,10 @@ export async function createHarnessRuntime(
         mcp: options.mcp,
       });
     }
-    for (const server of options.mcp) await transportContext.plugin(mcpClient, server);
+    for (const server of options.mcp) {
+      const fiber = transportContext.plugin(mcpClient, server);
+      await awaitMcpStartup(fiber, server.serverName);
+    }
     for (const schema of transportContext.tools.schemas()) {
       if (isRawProxyTool(options.mcp, schema.name)) continue;
       context.tools.register({

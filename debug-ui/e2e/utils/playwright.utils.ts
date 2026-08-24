@@ -233,7 +233,7 @@ export async function restoreAPIEndpoints(page: Page): Promise<void> {
 export async function isBrowserConnected(page: Page): Promise<boolean> {
   try {
     const response = await page.evaluate(async () => {
-      const res = await fetch('http://localhost:3000/api/health');
+      const res = await fetch('http://localhost:3000/api/v1/health');
       return res.ok;
     });
     return response;

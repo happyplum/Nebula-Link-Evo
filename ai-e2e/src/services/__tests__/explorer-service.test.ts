@@ -1,12 +1,31 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { URLRepository, URLRecord, CreateURLParams } from '../../database/repositories/url-repository.js';
-import type { URLModuleBindingRepository, URLModuleBinding, CreateURLModuleBindingParams } from '../../database/repositories/url-module-binding-repository.js';
-import type { ExplorationSessionRepository, ExplorationSession, CreateExplorationSessionParams, UpdateExplorationSessionParams } from '../../database/repositories/exploration-session-repository.js';
-import type { FunctionalModuleRepository, FunctionalModule } from '../../database/repositories/functional-module-repository.js';
-import type { BusinessModuleRepository, BusinessModule } from '../../database/repositories/business-module-repository.js';
+import type {
+  URLRepository,
+  URLRecord,
+  CreateURLParams,
+} from '../../database/repositories/url-repository.js';
+import type {
+  URLModuleBindingRepository,
+  URLModuleBinding,
+  CreateURLModuleBindingParams,
+} from '../../database/repositories/url-module-binding-repository.js';
+import type {
+  ExplorationSessionRepository,
+  ExplorationSession,
+  CreateExplorationSessionParams,
+  UpdateExplorationSessionParams,
+} from '../../database/repositories/exploration-session-repository.js';
+import type {
+  FunctionalModuleRepository,
+  FunctionalModule,
+} from '../../database/repositories/functional-module-repository.js';
+import type {
+  BusinessModuleRepository,
+  BusinessModule,
+} from '../../database/repositories/business-module-repository.js';
 import type { ProjectRepository, Project } from '../../database/repositories/project-repository.js';
 import type { DatabaseManager } from '../../database/db.js';
-import type { ProxyAdapterClient } from '../../infrastructure/proxy-adapter-client.js';
+import type { AiE2eRuntimeClient } from '../../infrastructure/ai-e2e-runtime-client.js';
 import type { PromptTemplateManager } from '../../ai/prompt-manager.js';
 
 // ---------- Mock factories ----------
@@ -30,8 +49,12 @@ function createMockUrlRepo(store?: Map<string, URLRecord>): URLRepository {
       return rec;
     }),
     findById: vi.fn((id: string) => urls.get(id) ?? null),
-    findByProjectId: vi.fn((pid: string) => Array.from(urls.values()).filter(u => u.project_id === pid)),
-    findUnbound: vi.fn((pid: string) => Array.from(urls.values()).filter(u => u.project_id === pid)),
+    findByProjectId: vi.fn((pid: string) =>
+      Array.from(urls.values()).filter((u) => u.project_id === pid)
+    ),
+    findUnbound: vi.fn((pid: string) =>
+      Array.from(urls.values()).filter((u) => u.project_id === pid)
+    ),
     delete: vi.fn(),
   } as unknown as URLRepository;
 }
@@ -64,7 +87,9 @@ function createMockBindingRepo(store?: Map<string, URLModuleBinding>): URLModule
   } as unknown as URLModuleBindingRepository;
 }
 
-function createMockSessionRepo(store?: Map<string, ExplorationSession>): ExplorationSessionRepository {
+function createMockSessionRepo(
+  store?: Map<string, ExplorationSession>
+): ExplorationSessionRepository {
   const sessions = store ?? new Map<string, ExplorationSession>();
   return {
     create: vi.fn((params: CreateExplorationSessionParams): ExplorationSession => {
@@ -83,9 +108,11 @@ function createMockSessionRepo(store?: Map<string, ExplorationSession>): Explora
       return s;
     }),
     findById: vi.fn((id: string) => sessions.get(id) ?? null),
-    findByProjectId: vi.fn((pid: string) => Array.from(sessions.values()).filter(s => s.project_id === pid)),
+    findByProjectId: vi.fn((pid: string) =>
+      Array.from(sessions.values()).filter((s) => s.project_id === pid)
+    ),
     findLatest: vi.fn((pid: string) => {
-      const arr = Array.from(sessions.values()).filter(s => s.project_id === pid);
+      const arr = Array.from(sessions.values()).filter((s) => s.project_id === pid);
       return arr.length > 0 ? arr[arr.length - 1] : null;
     }),
     update: vi.fn((id: string, params: UpdateExplorationSessionParams) => {
@@ -93,7 +120,8 @@ function createMockSessionRepo(store?: Map<string, ExplorationSession>): Explora
       if (!s) return null;
       if (params.completed_at !== undefined) s.completed_at = params.completed_at;
       if (params.pages_visited_json !== undefined) s.pages_visited_json = params.pages_visited_json;
-      if (params.urls_discovered_json !== undefined) s.urls_discovered_json = params.urls_discovered_json;
+      if (params.urls_discovered_json !== undefined)
+        s.urls_discovered_json = params.urls_discovered_json;
       if (params.token_count !== undefined) s.token_count = params.token_count;
       return s;
     }),
@@ -105,8 +133,10 @@ function createMockFunctionalModuleRepo(modules?: FunctionalModule[]): Functiona
   const store = modules ?? [];
   return {
     create: vi.fn(),
-    findById: vi.fn((id: string) => store.find(m => m.id === id) ?? null),
-    findByBusinessModuleId: vi.fn((bid: string) => store.filter(m => m.business_module_id === bid)),
+    findById: vi.fn((id: string) => store.find((m) => m.id === id) ?? null),
+    findByBusinessModuleId: vi.fn((bid: string) =>
+      store.filter((m) => m.business_module_id === bid)
+    ),
     updateBoundUrl: vi.fn(),
     delete: vi.fn(),
   } as unknown as FunctionalModuleRepository;
@@ -117,7 +147,7 @@ function createMockBusinessModuleRepo(modules?: BusinessModule[]): BusinessModul
   return {
     create: vi.fn(),
     findById: vi.fn(),
-    findByProjectId: vi.fn((pid: string) => store.filter(m => m.project_id === pid)),
+    findByProjectId: vi.fn((pid: string) => store.filter((m) => m.project_id === pid)),
     delete: vi.fn(),
     reorder: vi.fn(),
   } as unknown as BusinessModuleRepository;
@@ -154,7 +184,7 @@ function createMockDbManager(deps: {
   } as unknown as DatabaseManager;
 }
 
-function createMockProxyClient(aiResponseText?: string): ProxyAdapterClient {
+function createMockRuntimeClient(aiResponseText?: string): AiE2eRuntimeClient {
   const defaultAiResponse = JSON.stringify({
     analysis: 'Test page with navigation links',
     discovered_links: [],
@@ -184,7 +214,7 @@ function createMockProxyClient(aiResponseText?: string): ProxyAdapterClient {
     getDOM: vi.fn(async () => ({ elements: [], screenshot: '' })),
     openBrowser: vi.fn(async () => ({ success: true })),
     closeBrowser: vi.fn(async () => ({ success: true })),
-  } as unknown as ProxyAdapterClient;
+  } as unknown as AiE2eRuntimeClient;
 }
 
 function createMockPromptManager(): PromptTemplateManager {
@@ -213,7 +243,7 @@ describe('ExplorerService', () => {
   let bizModuleRepo: BusinessModuleRepository;
   let projectRepo: ProjectRepository;
   let dbManager: DatabaseManager;
-  let proxyClient: ProxyAdapterClient;
+  let runtimeClient: AiE2eRuntimeClient;
   let promptManager: PromptTemplateManager;
 
   const PROJECT_ID = 'proj-1';
@@ -241,11 +271,18 @@ describe('ExplorerService', () => {
     funcModuleRepo = createMockFunctionalModuleRepo();
     bizModuleRepo = createMockBusinessModuleRepo();
     projectRepo = createMockProjectRepo(projectStore);
-    dbManager = createMockDbManager({ urlRepo, bindingRepo, sessionRepo, funcModuleRepo, bizModuleRepo, projectRepo });
-    proxyClient = createMockProxyClient(aiResponse);
+    dbManager = createMockDbManager({
+      urlRepo,
+      bindingRepo,
+      sessionRepo,
+      funcModuleRepo,
+      bizModuleRepo,
+      projectRepo,
+    });
+    runtimeClient = createMockRuntimeClient(aiResponse);
     promptManager = createMockPromptManager();
 
-    service = new ExplorerService(dbManager, proxyClient, promptManager);
+    service = new ExplorerService(dbManager, runtimeClient, promptManager);
   }
 
   beforeEach(() => {
@@ -265,7 +302,7 @@ describe('ExplorerService', () => {
         expect.objectContaining({
           project_id: PROJECT_ID,
           strategy_used: 'bfs',
-        }),
+        })
       );
     });
 
@@ -275,12 +312,11 @@ describe('ExplorerService', () => {
       });
 
       // navigate should be called at least for the base URL
-      expect(proxyClient.navigate).toHaveBeenCalled();
+      expect(runtimeClient.navigate).toHaveBeenCalled();
     });
 
     it('should throw if project not found', async () => {
-      await expect(service.startExploration('nonexistent'))
-        .rejects.toThrow(/not found/i);
+      await expect(service.startExploration('nonexistent')).rejects.toThrow(/not found/i);
     });
 
     it('should stop after reaching maxPages', async () => {
@@ -296,49 +332,55 @@ describe('ExplorerService', () => {
       setupService(linkResponse);
 
       // Override navigate to return different URLs
-      (proxyClient.navigate as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) => ({
-        success: true,
-        url,
-      }));
+      (runtimeClient.navigate as ReturnType<typeof vi.fn>).mockImplementation(
+        async (url: string) => ({
+          success: true,
+          url,
+        })
+      );
 
       const session = await service.startExploration(PROJECT_ID, { maxPages: 2 });
       expect(session).not.toBeNull();
     });
 
     it('should respect maxDepth configuration', async () => {
-      setupService(JSON.stringify({
-        analysis: 'Deep link',
-        discovered_links: [
-          { text: 'Deep', href: '/deep/page', purpose: 'link' },
-        ],
-        navigation_decision: { action: 'navigate', target: '/deep/page', reason: 'explore' },
-      }));
+      setupService(
+        JSON.stringify({
+          analysis: 'Deep link',
+          discovered_links: [{ text: 'Deep', href: '/deep/page', purpose: 'link' }],
+          navigation_decision: { action: 'navigate', target: '/deep/page', reason: 'explore' },
+        })
+      );
 
-      (proxyClient.navigate as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) => ({
-        success: true,
-        url,
-      }));
+      (runtimeClient.navigate as ReturnType<typeof vi.fn>).mockImplementation(
+        async (url: string) => ({
+          success: true,
+          url,
+        })
+      );
 
       const session = await service.startExploration(PROJECT_ID, { maxDepth: 1, maxPages: 10 });
       expect(session).not.toBeNull();
     });
 
     it('should discover HashRouter routes from rendered SPA links without AI links', async () => {
-      setupService(JSON.stringify({
-        analysis: 'SPA shell without static HTML links',
-        discovered_links: [],
-        navigation_decision: { action: 'complete', target: '', reason: 'done' },
-      }));
+      setupService(
+        JSON.stringify({
+          analysis: 'SPA shell without static HTML links',
+          discovered_links: [],
+          navigation_decision: { action: 'complete', target: '', reason: 'done' },
+        })
+      );
 
-      (proxyClient.navigate as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) => ({
-        success: true,
-        url,
-      }));
-      (proxyClient.executeScript as ReturnType<typeof vi.fn>).mockResolvedValue({
+      (runtimeClient.navigate as ReturnType<typeof vi.fn>).mockImplementation(
+        async (url: string) => ({
+          success: true,
+          url,
+        })
+      );
+      (runtimeClient.executeScript as ReturnType<typeof vi.fn>).mockResolvedValue({
         result: {
-          links: [
-            { text: 'Dashboard', href: '#/dashboard', source: 'rendered-link' },
-          ],
+          links: [{ text: 'Dashboard', href: '#/dashboard', source: 'rendered-link' }],
           routes: [],
           observedUrls: [],
         },
@@ -346,22 +388,26 @@ describe('ExplorerService', () => {
 
       await service.startExploration(PROJECT_ID, { maxDepth: 1, maxPages: 3 });
 
-      expect(proxyClient.executeScript).toHaveBeenCalled();
-      expect(proxyClient.navigate).toHaveBeenCalledWith(`${BASE_URL}/#/dashboard`);
+      expect(runtimeClient.executeScript).toHaveBeenCalled();
+      expect(runtimeClient.navigate).toHaveBeenCalledWith(`${BASE_URL}/#/dashboard`);
     });
 
     it('should discover History API SPA routes from browser-side router metadata', async () => {
-      setupService(JSON.stringify({
-        analysis: 'SPA shell with client router only',
-        discovered_links: [],
-        navigation_decision: { action: 'complete', target: '', reason: 'done' },
-      }));
+      setupService(
+        JSON.stringify({
+          analysis: 'SPA shell with client router only',
+          discovered_links: [],
+          navigation_decision: { action: 'complete', target: '', reason: 'done' },
+        })
+      );
 
-      (proxyClient.navigate as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) => ({
-        success: true,
-        url,
-      }));
-      (proxyClient.executeScript as ReturnType<typeof vi.fn>).mockResolvedValue({
+      (runtimeClient.navigate as ReturnType<typeof vi.fn>).mockImplementation(
+        async (url: string) => ({
+          success: true,
+          url,
+        })
+      );
+      (runtimeClient.executeScript as ReturnType<typeof vi.fn>).mockResolvedValue({
         result: {
           links: [],
           routes: ['/settings', { path: '/reports' }],
@@ -371,9 +417,9 @@ describe('ExplorerService', () => {
 
       await service.startExploration(PROJECT_ID, { maxDepth: 1, maxPages: 4 });
 
-      expect(proxyClient.executeScript).toHaveBeenCalled();
-      expect(proxyClient.navigate).toHaveBeenCalledWith(`${BASE_URL}/settings`);
-      expect(proxyClient.navigate).toHaveBeenCalledWith(`${BASE_URL}/reports`);
+      expect(runtimeClient.executeScript).toHaveBeenCalled();
+      expect(runtimeClient.navigate).toHaveBeenCalledWith(`${BASE_URL}/settings`);
+      expect(runtimeClient.navigate).toHaveBeenCalledWith(`${BASE_URL}/reports`);
     });
   });
 
@@ -463,16 +509,27 @@ describe('ExplorerService', () => {
         sessionRepo: createMockSessionRepo(),
         funcModuleRepo: createMockFunctionalModuleRepo(),
         bizModuleRepo: createMockBusinessModuleRepo(),
-        projectRepo: createMockProjectRepo(new Map([[PROJECT_ID, {
-          id: PROJECT_ID, name: 'Test', target_base_url: BASE_URL, auth_config_json: null,
-          status: 'exploring', created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-        }]])),
+        projectRepo: createMockProjectRepo(
+          new Map([
+            [
+              PROJECT_ID,
+              {
+                id: PROJECT_ID,
+                name: 'Test',
+                target_base_url: BASE_URL,
+                auth_config_json: null,
+                status: 'exploring',
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              },
+            ],
+          ])
+        ),
       };
       dbManager = createMockDbManager(newDeps);
-      service = new ExplorerService(dbManager, proxyClient, promptManager);
+      service = new ExplorerService(dbManager, runtimeClient, promptManager);
 
-      await expect(service.proposeBindings(PROJECT_ID))
-        .rejects.toThrow(/no functional modules/i);
+      await expect(service.proposeBindings(PROJECT_ID)).rejects.toThrow(/no functional modules/i);
     });
 
     it('should create AI-proposed bindings for unbound URLs', async () => {
@@ -525,23 +582,37 @@ describe('ExplorerService', () => {
         sessionRepo: createMockSessionRepo(),
         funcModuleRepo,
         bizModuleRepo,
-        projectRepo: createMockProjectRepo(new Map([[PROJECT_ID, {
-          id: PROJECT_ID, name: 'Test', target_base_url: BASE_URL, auth_config_json: null,
-          status: 'exploring', created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-        }]])),
+        projectRepo: createMockProjectRepo(
+          new Map([
+            [
+              PROJECT_ID,
+              {
+                id: PROJECT_ID,
+                name: 'Test',
+                target_base_url: BASE_URL,
+                auth_config_json: null,
+                status: 'exploring',
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              },
+            ],
+          ])
+        ),
       };
       dbManager = createMockDbManager(newDeps);
 
       // AI response for binding
       const bindResponse = JSON.stringify({
-        bindings: [{ module_name: 'User Authentication', confidence: 0.92, evidence: 'Login form detected' }],
+        bindings: [
+          { module_name: 'User Authentication', confidence: 0.92, evidence: 'Login form detected' },
+        ],
         primary_module: 'User Authentication',
         unclassifiable: false,
       });
-      proxyClient = createMockProxyClient(bindResponse);
+      runtimeClient = createMockRuntimeClient(bindResponse);
       promptManager = createMockPromptManager();
 
-      service = new ExplorerService(dbManager, proxyClient, promptManager);
+      service = new ExplorerService(dbManager, runtimeClient, promptManager);
 
       const bindings = await service.proposeBindings(PROJECT_ID);
 
@@ -575,7 +646,7 @@ describe('ExplorerService', () => {
         projectRepo: createMockProjectRepo(),
       };
       dbManager = createMockDbManager(newDeps);
-      service = new ExplorerService(dbManager, proxyClient, promptManager);
+      service = new ExplorerService(dbManager, runtimeClient, promptManager);
 
       const result = service.confirmBinding('bind-0');
 
@@ -614,7 +685,7 @@ describe('ExplorerService', () => {
         projectRepo: createMockProjectRepo(),
       };
       dbManager = createMockDbManager(newDeps);
-      service = new ExplorerService(dbManager, proxyClient, promptManager);
+      service = new ExplorerService(dbManager, runtimeClient, promptManager);
 
       const result = service.rejectBinding('bind-0');
 
@@ -642,15 +713,17 @@ describe('ExplorerService', () => {
       });
       setupService(externalLinkResponse);
 
-      (proxyClient.navigate as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) => ({
-        success: true,
-        url,
-      }));
+      (runtimeClient.navigate as ReturnType<typeof vi.fn>).mockImplementation(
+        async (url: string) => ({
+          success: true,
+          url,
+        })
+      );
 
       await service.startExploration(PROJECT_ID);
 
       // Verify navigate was never called with an external URL
-      const calls = (proxyClient.navigate as ReturnType<typeof vi.fn>).mock.calls;
+      const calls = (runtimeClient.navigate as ReturnType<typeof vi.fn>).mock.calls;
       for (const call of calls) {
         const url: string = call[0];
         expect(url.startsWith(BASE_URL) || url.startsWith('/')).toBe(true);
@@ -664,16 +737,14 @@ describe('ExplorerService', () => {
     it('should abort exploration after timeout', async () => {
       const response = JSON.stringify({
         analysis: 'Page',
-        discovered_links: [
-          { text: 'Next', href: '/next', purpose: 'link' },
-        ],
+        discovered_links: [{ text: 'Next', href: '/next', purpose: 'link' }],
         navigation_decision: { action: 'navigate', target: '/next', reason: 'continue' },
       });
       setupService(response);
 
       // Navigate resolves quickly, but we have many pages to explore
       let callCount = 0;
-      (proxyClient.navigate as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+      (runtimeClient.navigate as ReturnType<typeof vi.fn>).mockImplementation(async () => {
         callCount++;
         return { success: true, url: `${BASE_URL}/page-${callCount}` };
       });

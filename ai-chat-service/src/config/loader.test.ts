@@ -51,7 +51,7 @@ describe('loadConfig gateway MCP registration', () => {
     }
   });
 
-  it('auto-registers the proxy gateway as an HTTP MCP server when MCP is enabled', () => {
+  it('registers the proxy gateway as a required HTTP MCP server', () => {
     const configPath = writeConfig(createConfig({ enabled: true, servers: {} }));
 
     const result = loadConfig(configPath);
@@ -65,22 +65,34 @@ describe('loadConfig gateway MCP registration', () => {
     });
   });
 
-  it('does not override an explicitly disabled gateway server', () => {
-    const configPath = writeConfig(createConfig({
-      enabled: true,
-      servers: {
-        gateway: {
-          enabled: false,
-          command: '',
-          args: [],
-          env: {},
-          url: 'http://127.0.0.1:3000/mcp',
-        },
-      },
-    }));
+  it('registers the required gateway even when extension MCP is disabled', () => {
+    const configPath = writeConfig(createConfig({ enabled: false, servers: {} }));
 
     const result = loadConfig(configPath);
 
-    expect(result.config?.mcp.servers.gateway?.enabled).toBe(false);
+    expect(result.config?.mcp.enabled).toBe(true);
+    expect(result.config?.mcp.servers.gateway?.enabled).toBe(true);
+  });
+
+  it('rejects a configured server that tries to occupy the reserved gateway name', () => {
+    const configPath = writeConfig(
+      createConfig({
+        enabled: true,
+        servers: {
+          gateway: {
+            enabled: false,
+            command: '',
+            args: [],
+            env: {},
+            url: 'http://127.0.0.1:3000/mcp',
+          },
+        },
+      })
+    );
+
+    const result = loadConfig(configPath);
+
+    expect(result.config).toBeNull();
+    expect(result.result.success).toBe(false);
   });
 });

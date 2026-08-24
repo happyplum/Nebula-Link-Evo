@@ -37,7 +37,7 @@ export function normalizeBaseUrl(value: string | undefined | null): string | nul
 export function resolveBaseUrl(
   explicit: string | undefined,
   envVar: string | undefined,
-  defaultValue: string,
+  defaultValue: string
 ): string | null {
   if (explicit !== undefined) {
     return normalizeBaseUrl(explicit);
@@ -59,7 +59,9 @@ export function createJsonClient(baseUrl: string | null): AxiosInstance {
 }
 
 /** Builds per-request headers including a fresh request id and optional project id. */
-export function buildRequestHeaders(options: ClientHeaderOptions | undefined): Record<string, string> {
+export function buildRequestHeaders(
+  options: ClientHeaderOptions | undefined
+): Record<string, string> {
   const headers: Record<string, string> = {
     'x-request-id': crypto.randomUUID(),
   };
@@ -80,7 +82,7 @@ export function mapAxiosToServiceError(
   error: unknown,
   serviceLabel: string,
   fallback: string,
-  badGatewayMessage?: string,
+  badGatewayMessage?: string
 ): ServiceError {
   if (error instanceof ServiceError) {
     return error;
@@ -108,15 +110,13 @@ export function mapAxiosToServiceError(
     return mapHttpStatusToServiceError(status, message, serviceLabel);
   }
 
-  return ServiceError.internal(
-    error instanceof Error ? error.message : fallback,
-  );
+  return ServiceError.internal(error instanceof Error ? error.message : fallback);
 }
 
 /** Extracts a human-readable message from an axios error response body. */
 export function extractServerMessage(
   error: { response?: { data?: { error?: string; message?: string } } },
-  fallback: string,
+  fallback: string
 ): string {
   const body = error.response?.data;
   return body?.error ?? body?.message ?? fallback;
@@ -126,7 +126,7 @@ export function extractServerMessage(
 export function mapHttpStatusToServiceError(
   status: number,
   message: string,
-  serviceLabel: string,
+  serviceLabel: string
 ): ServiceError {
   switch (status) {
     case 400:
@@ -140,9 +140,7 @@ export function mapHttpStatusToServiceError(
     case 409:
       return ServiceError.conflict(message);
     case 503:
-      // Preserve legacy contract: 503 maps to a fixed "unavailable" message
-      // with internal (500) status code, not ServiceError.unavailable (503).
-      return ServiceError.internal(`${serviceLabel} unavailable`);
+      return ServiceError.unavailable(`${serviceLabel} unavailable`);
     default:
       return ServiceError.internal(message);
   }

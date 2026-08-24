@@ -299,7 +299,7 @@ describe('browser execution HTTP contract', () => {
     expect(new TextDecoder().decode(firstChunk.value)).toContain('event: browser_session.snapshot');
   });
 
-  it('returns browser_busy from legacy debug mutation and direct capture routes', async () => {
+  it('returns browser_busy when direct debug mutation or capture would bypass a controlled session', async () => {
     await app.inject({
       method: 'POST',
       url: '/api/v1/browser-execution/sessions',

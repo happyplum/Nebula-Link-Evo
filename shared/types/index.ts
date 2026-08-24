@@ -4,36 +4,6 @@
  * Central export point for all shared type definitions.
  * This module re-exports all types from the shared/types directory.
  */
-// Action types (precise discriminated union)
-export type {
-  Action,
-  ClickAction,
-  TypeAction,
-  FocusAction,
-  BlurAction,
-  HoverAction,
-  ValueAction,
-  DispatchAction,
-  ScrollAction,
-  NavigateAction,
-  WaitAction,
-  MCPAction,
-  FinishAction,
-  ClickActionParams,
-  TypeActionParams,
-  FocusActionParams,
-  BlurActionParams,
-  HoverActionParams,
-  ValueActionParams,
-  DispatchActionParams,
-  ScrollActionParams,
-  NavigateActionParams,
-  WaitActionParams,
-  MCPActionParams,
-  FinishActionParams,
-  ResolvedTarget,
-} from './action.js';
-
 // Vision Marker types (DOM, elements, locators)
 export type {
   BoundingBox,
@@ -66,9 +36,7 @@ export type {
   ToolCall,
 } from './sse-events.js';
 
-export {
-  eventToSSEFormat,
-} from './sse-events.js';
+export { eventToSSEFormat } from './sse-events.js';
 
 // Debug SSE event types
 export type {

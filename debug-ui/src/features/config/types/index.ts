@@ -8,6 +8,7 @@
 export interface ConfigResponse {
   mode?: string;
   decision?: { provider: string; model: string };
+  vision?: { provider: string; model: string };
   providers?: string[];
   error?: string;
 }
@@ -32,7 +33,6 @@ export interface McpServerStatus {
 
 export interface HealthResponse {
   status: string;
-  config: string;
   mcp: {
     enabled: boolean;
     servers: McpServerStatus[];
@@ -97,20 +97,6 @@ export interface McpCallResponse {
   success: boolean;
   result?: unknown;
   error?: string;
-}
-
-// --- Verify Keys ---
-
-export interface KeyStatus {
-  provider: string;
-  displayName?: string;
-  status: 'valid' | 'not_set';
-  keyPreview: string;
-  error?: string;
-}
-
-export interface VerifyKeysResponse {
-  keys: KeyStatus[];
 }
 
 // --- Test AI ---

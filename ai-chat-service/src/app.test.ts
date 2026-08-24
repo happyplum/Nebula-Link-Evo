@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { buildApp } from './app.js';
 import type { AiChatServiceConfig } from './config/service-config.js';
+import { createHarnessRuntime, publicMcpToolName } from './harness/index.js';
 
 const roots: string[] = [];
 
@@ -60,7 +61,15 @@ describe('buildApp', () => {
       gatewayUrl: 'http://127.0.0.1:3000',
       corsOrigins: [],
       skillDirectories: [],
-      providers: {},
+    };
+    const harnessFactory: typeof createHarnessRuntime = async (options) => {
+      const runtime = await createHarnessRuntime({ ...options, mcp: [] });
+      const toolNames = [
+        'browser-control.operation_execute',
+        'browser-control.operation_get',
+        'browser-control.operation_cancel',
+      ].map((toolName) => publicMcpToolName('gateway', toolName));
+      return { ...runtime, transportToolNames: () => toolNames };
     };
     const first = await buildApp({
       configPath,
@@ -69,6 +78,7 @@ describe('buildApp', () => {
       skipBackups: true,
       skipPreflight: true,
       trustedPluginLockPath,
+      harnessFactory,
     });
     const second = await buildApp({
       configPath,
@@ -77,6 +87,7 @@ describe('buildApp', () => {
       skipBackups: true,
       skipPreflight: true,
       trustedPluginLockPath,
+      harnessFactory,
     });
     try {
       await Promise.all([first.ready(), second.ready()]);
@@ -93,6 +104,13 @@ describe('buildApp', () => {
       await expect(first.inject({ method: 'GET', url: '/health' })).resolves.toMatchObject({
         statusCode: 200,
       });
+      const removedRoutes = await Promise.all([
+        first.inject({ method: 'GET', url: '/api/chat/sessions' }),
+        first.inject({ method: 'POST', url: '/api/ai/generate', payload: { prompt: 'old' } }),
+        first.inject({ method: 'POST', url: '/api/test-ai', payload: {} }),
+        first.inject({ method: 'GET', url: '/api/verify-keys' }),
+      ]);
+      expect(removedRoutes.map((response) => response.statusCode)).toEqual([404, 404, 404, 404]);
     } finally {
       await Promise.all([first.close(), second.close()]);
       if (previousKey === undefined) delete process.env.NEBULA_BUILD_APP_KEY;

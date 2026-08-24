@@ -36,9 +36,7 @@ describe('P4-25-V: DOM Elements Content Parity', () => {
   const renderWithProviders = (ui: React.ReactElement) => {
     return render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
-          {ui}
-        </MemoryRouter>
+        <MemoryRouter>{ui}</MemoryRouter>
       </QueryClientProvider>
     );
   };
@@ -145,9 +143,15 @@ describe('P4-25-V: DOM Elements Content Parity', () => {
     mockFetchDomSnapshot.mockResolvedValue({
       success: true,
       dom: {
-        elements_map: [
-          [1, { tag: 'div', 'data-nebula-id': 'test-1', text: 'Test 1', bbox: { x: 0, y: 0, width: 100, height: 100 }, isVisible: true, isInteractable: true, locatorBundle: {} }],
-        ],
+        elements_map: {
+          '1': {
+            id: '1',
+            tag: 'div',
+            text: 'Test 1',
+            bbox: { x: 0, y: 0, width: 100, height: 100 },
+            locator_bundle: {},
+          },
+        },
         snapshot_id: 'test-snapshot-123',
       },
     });
@@ -171,10 +175,22 @@ describe('P4-25-V: DOM Elements Content Parity', () => {
     mockFetchDomSnapshot.mockResolvedValue({
       success: true,
       dom: {
-        elements_map: [
-          [1, { tag: 'div', 'data-nebula-id': 'test-1', text: 'Test 1', bbox: { x: 0, y: 0, width: 100, height: 100 }, isVisible: true, isInteractable: true, locatorBundle: {} }],
-          [2, { tag: 'button', 'data-nebula-id': 'test-2', text: 'Test 2', bbox: { x: 0, y: 100, width: 200, height: 50 }, isVisible: true, isInteractable: true, locatorBundle: {} }],
-        ],
+        elements_map: {
+          '1': {
+            id: '1',
+            tag: 'div',
+            text: 'Test 1',
+            bbox: { x: 0, y: 0, width: 100, height: 100 },
+            locator_bundle: {},
+          },
+          '2': {
+            id: '2',
+            tag: 'button',
+            text: 'Test 2',
+            bbox: { x: 0, y: 100, width: 200, height: 50 },
+            locator_bundle: {},
+          },
+        },
         snapshot_id: 'test-snapshot-456',
       },
     });
@@ -226,9 +242,15 @@ describe('P4-25-V: DOM Elements Content Parity', () => {
     mockFetchDomSnapshot.mockResolvedValue({
       success: true,
       dom: {
-        elements_map: [
-          [1, { tag: 'div', 'data-nebula-id': 'test-1', text: 'Test 1', bbox: { x: 0, y: 0, width: 100, height: 100 }, isVisible: true, isInteractable: true, locatorBundle: {} }],
-        ],
+        elements_map: {
+          '1': {
+            id: '1',
+            tag: 'div',
+            text: 'Test 1',
+            bbox: { x: 0, y: 0, width: 100, height: 100 },
+            locator_bundle: {},
+          },
+        },
         snapshot_id: 'test-snapshot-789',
       },
     });

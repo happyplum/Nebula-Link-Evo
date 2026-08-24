@@ -21,7 +21,6 @@ import {
   HealthStatusCard,
   McpStatusList,
   McpToolsModal,
-  ApiKeysStatus,
   ConnectivityTest,
   AiTest,
 } from '@/features/config/components/index.js';
@@ -158,7 +157,6 @@ export default function DebugPage() {
                 <ConfigPanel />
                 <HealthStatusCard />
                 <McpStatusList onSelectServer={setSelectedMcpServer} />
-                <ApiKeysStatus />
                 <ConnectivityTest />
                 <AiTest />
               </div>

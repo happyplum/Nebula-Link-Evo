@@ -70,21 +70,25 @@ export default function LiveKitView({
       if (now - lastCaptureTimeRef.current < 1000) return;
       lastCaptureTimeRef.current = now;
 
-      canvas.toBlob((blob) => {
-        if (!blob) return;
-        if (
-          lastScreenshotUrlRef.current &&
-          lastScreenshotUrlRef.current.startsWith('blob:') &&
-          typeof URL.revokeObjectURL === 'function'
-        ) {
-          URL.revokeObjectURL(lastScreenshotUrlRef.current);
-        }
-        const url = URL.createObjectURL(blob);
-        lastScreenshotUrlRef.current = url;
-        setLastScreenshotDataUrl(url);
-      }, 'image/jpeg', 0.9);
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) return;
+          if (
+            lastScreenshotUrlRef.current &&
+            lastScreenshotUrlRef.current.startsWith('blob:') &&
+            typeof URL.revokeObjectURL === 'function'
+          ) {
+            URL.revokeObjectURL(lastScreenshotUrlRef.current);
+          }
+          const url = URL.createObjectURL(blob);
+          lastScreenshotUrlRef.current = url;
+          setLastScreenshotDataUrl(url);
+        },
+        'image/jpeg',
+        0.9
+      );
     },
-    [setLastScreenshotDataUrl],
+    [setLastScreenshotDataUrl]
   );
 
   /** Draw a CanvasImageSource (video or offscreen canvas) to the display canvas with fit-rect.
@@ -117,15 +121,9 @@ export default function LiveKitView({
 
       setFitRect(fit);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(
-        source,
-        fit.offsetX * dpr,
-        fit.offsetY * dpr,
-        fit.drawW * dpr,
-        fit.drawH * dpr,
-      );
+      ctx.drawImage(source, fit.offsetX * dpr, fit.offsetY * dpr, fit.drawW * dpr, fit.drawH * dpr);
     },
-    [],
+    []
   );
 
   /** Cache the current video frame to an offscreen canvas for later resize redraw. */
@@ -148,13 +146,10 @@ export default function LiveKitView({
   /** Cancel any active rVFC or RAF loop. */
   const cancelVideoFrameLoop = useCallback(() => {
     const video = videoRef.current;
-    if (
-      video &&
-      videoFrameCallbackIdRef.current !== null &&
-      'cancelVideoFrameCallback' in video
-    ) {
-      (video as HTMLVideoElement & { cancelVideoFrameCallback: (id: number) => void })
-        .cancelVideoFrameCallback(videoFrameCallbackIdRef.current);
+    if (video && videoFrameCallbackIdRef.current !== null && 'cancelVideoFrameCallback' in video) {
+      (
+        video as HTMLVideoElement & { cancelVideoFrameCallback: (id: number) => void }
+      ).cancelVideoFrameCallback(videoFrameCallbackIdRef.current);
     }
     videoFrameCallbackIdRef.current = null;
 
@@ -177,8 +172,7 @@ export default function LiveKitView({
       if (videoWidth === 0 || videoHeight === 0) {
         // Don't clear fitRect — preserve overlay during transient video pauses
         if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
-          videoFrameCallbackIdRef.current =
-            currentVideo.requestVideoFrameCallback(renderFrame);
+          videoFrameCallbackIdRef.current = currentVideo.requestVideoFrameCallback(renderFrame);
         }
         return;
       }
@@ -189,8 +183,7 @@ export default function LiveKitView({
       debugCounterRef.current?.recordFrame();
 
       if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
-        videoFrameCallbackIdRef.current =
-          currentVideo.requestVideoFrameCallback(renderFrame);
+        videoFrameCallbackIdRef.current = currentVideo.requestVideoFrameCallback(renderFrame);
         return;
       }
 
@@ -222,7 +215,7 @@ export default function LiveKitView({
 
     let cancelled = false;
 
-    fetch('/api/livekit-token')
+    fetch('/api/v1/livekit-token')
       .then((response) => response.json() as Promise<{ token?: string; url?: string }>)
       .then((data) => {
         if (cancelled) return;
@@ -237,7 +230,7 @@ export default function LiveKitView({
       .catch((error: unknown) => {
         if (!cancelled) {
           onRenderError?.(
-            error instanceof Error ? error : new Error('Failed to fetch LiveKit token'),
+            error instanceof Error ? error : new Error('Failed to fetch LiveKit token')
           );
         }
       });
@@ -296,10 +289,10 @@ export default function LiveKitView({
   // Manage video element attachment and render loop lifecycle
   useEffect(() => {
     videoRef.current = videoElement;
+    const container = containerRef.current;
 
     if (videoElement) {
       // Append to container - video element will be hidden by CSS
-      const container = containerRef.current;
       if (container) {
         container.appendChild(videoElement);
         startVideoFrameLoop();
@@ -309,8 +302,8 @@ export default function LiveKitView({
     return () => {
       cancelVideoFrameLoop();
       // Only remove from our container, don't modify the element itself
-      if (videoElement && containerRef.current?.contains(videoElement)) {
-        containerRef.current.removeChild(videoElement);
+      if (videoElement && container?.contains(videoElement)) {
+        container.removeChild(videoElement);
       }
       // Only clear overlay on confirmed close, not during optimistic bootstrap
       if (isConfirmedClosedRef.current) {

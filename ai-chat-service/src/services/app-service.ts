@@ -8,13 +8,6 @@ import { createWorkerLogger } from './logger.js';
 import type { ToolRegistry } from '../tools/registry.js';
 import { GATEWAY_MCP_SERVER_NAME } from '../config/service-config.js';
 
-export interface ApiKeyStatus {
-  readonly provider: string;
-  readonly displayName: string;
-  readonly status: 'configured' | 'missing' | 'disabled';
-  readonly keyPreview: string;
-}
-
 export class AppService {
   private static instance: AppService | null = null;
   private config: ResolvedConfig | null = null;
@@ -41,8 +34,8 @@ export class AppService {
     AppService.instance = instance;
   }
 
-  async initialize(configPath?: string): Promise<void> {
-    const loadResult = loadConfig(configPath);
+  async initialize(configPath?: string, gatewayUrl?: string): Promise<void> {
+    const loadResult = loadConfig(configPath, gatewayUrl);
     this.config = loadResult.config;
     this.configPath = loadResult.configPath;
 
@@ -135,22 +128,6 @@ export class AppService {
 
   async shutdown(): Promise<void> {}
 
-  getApiKeyStatuses(): ApiKeyStatus[] {
-    if (!this.config?.providers) {
-      return [];
-    }
-
-    return Object.entries(this.config.providers).map(([provider, config]) => {
-      const hasKey = Boolean(config.apiKey) && !config.apiKey.startsWith('{');
-      return {
-        provider,
-        displayName: this.getProviderDisplayName(provider),
-        status: config.enabled ? (hasKey ? 'configured' : 'missing') : 'disabled',
-        keyPreview: hasKey ? this.previewKey(config.apiKey) : '',
-      };
-    });
-  }
-
   async testAIConnectivity(): Promise<{
     readonly decision: {
       readonly status: string;
@@ -229,9 +206,8 @@ export class AppService {
 
     const visionStartedAt = Date.now();
     const visionTools =
-      this.toolRegistry
-        ?.getAvailableTools({ consumer: 'chat' })
-        .filter((tool) => tool.name.startsWith('vision.')) ?? [];
+      this.toolRegistry?.getAvailableTools().filter((tool) => tool.name.startsWith('vision.')) ??
+      [];
     const gatewayServer = this.mcpServers.find((server) => server.name === GATEWAY_MCP_SERVER_NAME);
     const gatewayRunning = gatewayServer?.running === true;
     const visionStatus = visionTools.length > 0 && gatewayRunning ? 'connected' : 'degraded';
@@ -249,25 +225,6 @@ export class AppService {
     };
 
     return { decision, visionAgent, totalResponseTime: Date.now() - startedAt };
-  }
-
-  private getProviderDisplayName(provider: string): string {
-    const names: Record<string, string> = {
-      kimi: 'Moonshot AI',
-      glm: '智谱 AI',
-      nvidia: 'NVIDIA',
-      openai: 'OpenAI',
-      anthropic: 'Anthropic',
-      google: 'Google',
-    };
-    return names[provider] || provider;
-  }
-
-  private previewKey(apiKey: string): string {
-    if (apiKey.length <= 8) {
-      return '***';
-    }
-    return `${apiKey.slice(0, 4)}...${apiKey.slice(-4)}`;
   }
 }
 

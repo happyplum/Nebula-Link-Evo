@@ -4,7 +4,14 @@ export interface MessageMetadata {
   [key: string]: unknown;
 }
 
-export type SessionStatus = 'idle' | 'running' | 'paused' | 'blocked' | 'interrupted' | 'cancelled' | 'completed';
+export type SessionStatus =
+  | 'idle'
+  | 'running'
+  | 'paused'
+  | 'blocked'
+  | 'interrupted'
+  | 'cancelled'
+  | 'completed';
 
 export interface Session {
   id: string;
@@ -15,11 +22,6 @@ export interface Session {
   message_count: number;
   provider: string;
   model: string;
-  /** @deprecated Legacy session field retained for database backward compatibility only. */
-  vision_provider: string | null;
-  /** @deprecated Legacy session field retained for database backward compatibility only. */
-  vision_model: string | null;
-  status?: SessionStatus;
 }
 
 export interface Message {
@@ -55,7 +57,17 @@ export interface UpdateSessionParams {
   model?: string;
 }
 
-export type ControlCommandType = 'create' | 'interrupt' | 'cancel' | 'cleanup' | 'pause' | 'resume' | 'set_current_job' | 'update_metadata' | 'set_pause_flags' | 'mark_as_paused';
+export type ControlCommandType =
+  | 'create'
+  | 'interrupt'
+  | 'cancel'
+  | 'cleanup'
+  | 'pause'
+  | 'resume'
+  | 'set_current_job'
+  | 'update_metadata'
+  | 'set_pause_flags'
+  | 'mark_as_paused';
 
 export type OperationStatus = 'pending' | 'success' | 'failed';
 

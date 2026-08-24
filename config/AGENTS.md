@@ -2,7 +2,7 @@
 
 ## Scope
 
-- This directory is for operator-facing config payloads, not TypeScript config loaders. Runtime resolution logic lives under `proxy-adapter/src/config/`.
+- This directory is for operator-facing AI/provider payloads. Runtime resolution and validation live under `ai-chat-service/src/config/`; `proxy-adapter` uses process environment only and does not read these files.
 
 ## Non-obvious constraints
 
@@ -13,4 +13,4 @@
 ## Editing traps
 
 - Do not commit real API keys here.
-- Do not “clean up” placeholder strings, defaults, or provider blocks without checking how `proxy-adapter/src/config/resolver.ts` and startup preflight consume them.
+- Do not “clean up” placeholder strings, defaults, model capabilities, or provider blocks without checking `ai-chat-service/src/config/{resolver,validator}.ts`, Harness mapping and startup preflight.

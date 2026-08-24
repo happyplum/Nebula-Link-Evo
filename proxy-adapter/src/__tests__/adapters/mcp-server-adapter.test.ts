@@ -15,7 +15,6 @@ function makeTool(overrides: Partial<GatewayTool> & { name: string }): GatewayTo
       required: ['url'],
     },
     providerId: 'test',
-    exposeTo: ['mcp-server'],
     isAvailable: true,
     execute: vi.fn(async () => 'result-ok'),
     ...overrides,
@@ -24,7 +23,7 @@ function makeTool(overrides: Partial<GatewayTool> & { name: string }): GatewayTo
 
 function makeMockServer() {
   return {
-    tool: vi.fn(),
+    registerTool: vi.fn(),
   };
 }
 
@@ -35,10 +34,10 @@ describe('registerGatewayToolsToMcpServer', () => {
 
     registerGatewayToolsToMcpServer(server as never, [tool]);
 
-    expect(server.tool).toHaveBeenCalledOnce();
-    const [name, description, , handler] = server.tool.mock.calls[0];
+    expect(server.registerTool).toHaveBeenCalledOnce();
+    const [name, config, handler] = server.registerTool.mock.calls[0];
     expect(name).toBe('browser-control.click');
-    expect(description).toBe('desc');
+    expect(config.description).toBe('desc');
     expect(handler).toBeTypeOf('function');
   });
 
@@ -48,7 +47,7 @@ describe('registerGatewayToolsToMcpServer', () => {
 
     registerGatewayToolsToMcpServer(server as never, [tool]);
 
-    expect(server.tool).not.toHaveBeenCalled();
+    expect(server.registerTool).not.toHaveBeenCalled();
   });
 
   it('should return an MCP error result when execute throws', async () => {
@@ -62,7 +61,7 @@ describe('registerGatewayToolsToMcpServer', () => {
 
     registerGatewayToolsToMcpServer(server as never, [tool]);
 
-    const handler = server.tool.mock.calls[0][3];
+    const handler = server.registerTool.mock.calls[0][2];
     const result = await handler({ url: 'http://x' });
 
     expect(result).toEqual({
@@ -82,7 +81,7 @@ describe('registerGatewayToolsToMcpServer', () => {
 
     registerGatewayToolsToMcpServer(server as never, [tool]);
 
-    const handler = server.tool.mock.calls[0][3];
+    const handler = server.registerTool.mock.calls[0][2];
     const result = await handler({});
 
     expect(result).toEqual({
@@ -106,10 +105,9 @@ describe('registerGatewayToolsToMcpServer', () => {
 
     registerGatewayToolsToMcpServer(server as never, [tool]);
 
-    expect(server.tool).toHaveBeenCalledOnce();
-    // zodShape is passed as 3rd arg — just verify the call happened
-    const zodShape = server.tool.mock.calls[0][2];
-    expect(zodShape).toBeDefined();
+    expect(server.registerTool).toHaveBeenCalledOnce();
+    const config = server.registerTool.mock.calls[0][1];
+    expect(config.inputSchema.parse({ mode: 'fast' })).toEqual({ mode: 'fast' });
   });
 
   it('should register no tools for empty array', () => {
@@ -117,6 +115,60 @@ describe('registerGatewayToolsToMcpServer', () => {
 
     registerGatewayToolsToMcpServer(server as never, []);
 
-    expect(server.tool).not.toHaveBeenCalled();
+    expect(server.registerTool).not.toHaveBeenCalled();
+  });
+
+  it('compiles additionalProperties false into strict nested validation', () => {
+    const server = makeMockServer();
+    const tool = makeTool({
+      name: 'strict-tool',
+      inputSchema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          request: {
+            type: 'object',
+            additionalProperties: false,
+            properties: { operationId: { type: 'string' } },
+            required: ['operationId'],
+          },
+        },
+        required: ['request'],
+      },
+    });
+
+    registerGatewayToolsToMcpServer(server as never, [tool]);
+    const inputSchema = server.registerTool.mock.calls[0][1].inputSchema;
+    expect(() => inputSchema.parse({ request: { operationId: 'op-1', injected: true } })).toThrow();
+  });
+
+  it('compiles unions, integer bounds, string patterns and strict empty objects', () => {
+    const server = makeMockServer();
+    const tool = makeTool({
+      name: 'constraint-tool',
+      inputSchema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          selector: {
+            oneOf: [
+              { type: 'string', pattern: '^css:', minLength: 5 },
+              { type: 'integer', minimum: 1, maximum: 2 },
+            ],
+          },
+          empty: { type: 'object', additionalProperties: false },
+        },
+        required: ['selector', 'empty'],
+      },
+    });
+
+    registerGatewayToolsToMcpServer(server as never, [tool]);
+    const inputSchema = server.registerTool.mock.calls[0][1].inputSchema;
+    expect(inputSchema.parse({ selector: 'css:a', empty: {} })).toEqual({
+      selector: 'css:a',
+      empty: {},
+    });
+    expect(() => inputSchema.parse({ selector: 3, empty: {} })).toThrow();
+    expect(() => inputSchema.parse({ selector: 'xpath:a', empty: { injected: true } })).toThrow();
   });
 });

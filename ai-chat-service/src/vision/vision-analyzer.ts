@@ -25,7 +25,7 @@ export class VisionAnalyzer {
 
   async resolveTarget(
     snapshot: DOMSnapshotResponse,
-    description: string,
+    description: string
   ): Promise<VisionMatchResult> {
     const elementsContext = buildElementsContext(snapshot.elements_map);
     const prompt = buildFindingPrompt(elementsContext, description);
@@ -34,13 +34,17 @@ export class VisionAnalyzer {
       return {
         nebula_id: null,
         confidence: 0,
+        ambiguous: true,
         reasoning: `Vision model returned invalid nebula_id "${parsed.nebula_id}"`,
       };
     }
     return parsed;
   }
 
-  async analyzePage(snapshot: DOMSnapshotResponse, objective?: string): Promise<VisionPageAnalysis> {
+  async analyzePage(
+    snapshot: DOMSnapshotResponse,
+    objective?: string
+  ): Promise<VisionPageAnalysis> {
     const elementsContext = buildElementsContext(snapshot.elements_map);
     return this.generateJson(
       snapshot,
@@ -82,11 +86,11 @@ export class VisionAnalyzer {
             message.includes('timeout') ||
             message.includes('aborted') ||
             message.includes('AbortError') ||
-            error instanceof DOMException && error.name === 'TimeoutError';
+            (error instanceof DOMException && error.name === 'TimeoutError');
           throw new VisionAnalysisError(
             isTimeout
               ? { code: 'VISION_TIMEOUT', message, retryable: true }
-              : { code: 'VISION_ERROR', message, retryable: false },
+              : { code: 'VISION_ERROR', message, retryable: false }
           );
         }
       }
@@ -140,6 +144,7 @@ function normalizeTargetResult(value: unknown): VisionMatchResult {
     return {
       nebula_id: null,
       confidence: 0,
+      ambiguous: true,
       reasoning: 'Vision response is not a JSON object',
     };
   }
@@ -151,7 +156,14 @@ function normalizeTargetResult(value: unknown): VisionMatchResult {
       obj.nebula_id === null || typeof obj.nebula_id === 'string'
         ? (obj.nebula_id as string | null)
         : null,
-    confidence: typeof obj.confidence === 'number' ? obj.confidence : 0,
+    confidence:
+      typeof obj.confidence === 'number' &&
+      Number.isFinite(obj.confidence) &&
+      obj.confidence >= 0 &&
+      obj.confidence <= 1
+        ? obj.confidence
+        : 0,
+    ambiguous: obj.ambiguous === false ? false : true,
     reasoning: typeof obj.reasoning === 'string' ? obj.reasoning : 'No reasoning provided',
   };
 }
@@ -166,11 +178,13 @@ function normalizePageAnalysis(value: unknown): VisionPageAnalysis {
         if (!item || typeof item !== 'object' || Array.isArray(item)) return [];
         const element = item as Record<string, unknown>;
         return typeof element.nebula_id === 'string' && typeof element.description === 'string'
-          ? [{
-              nebula_id: element.nebula_id,
-              description: element.description,
-              confidence: typeof element.confidence === 'number' ? element.confidence : 0,
-            }]
+          ? [
+              {
+                nebula_id: element.nebula_id,
+                description: element.description,
+                confidence: typeof element.confidence === 'number' ? element.confidence : 0,
+              },
+            ]
           : [];
       })
     : [];

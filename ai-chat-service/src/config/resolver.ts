@@ -1,18 +1,5 @@
-import {
-  Config,
-  ResolvedConfig,
-  ResolvedProvider,
-  ModelConfig,
-  ModelSelector,
-} from './schema.js';
+import { Config, ResolvedConfig, ResolvedProvider, ModelSelector } from './schema.js';
 import { normalizeNpmPackage } from '../services/provider/errors.js';
-import {
-  DEFAULT_LOOP_GUARD_CONFIG,
-} from '../services/loop-guard/types.js';
-import type {
-  RawLoopGuardConfig,
-  LoopGuardConfig,
-} from '../services/loop-guard/types.js';
 
 export interface ResolverOptions {
   env?: Record<string, string>;
@@ -47,8 +34,6 @@ export function resolveConfig(
   const visionSelector = config.defaults.vision
     ? parseProviderModelString(config.defaults.vision, 'vision', result)
     : null;
-  const decisionProviderName = decisionSelector.provider;
-
   const resolvedProviders: Record<string, ResolvedProvider> = {};
 
   for (const [key, provider] of Object.entries(config.providers)) {
@@ -62,19 +47,14 @@ export function resolveConfig(
     }
 
     const apiKeyResult = resolveVariable(provider.apiKey, env, defaults);
-    if (!apiKeyResult.success) {
-      // Decision provider failure is fatal; others are non-fatal warnings
-      if (key === decisionProviderName) {
-        result.errors.push(`Provider ${key}: ${apiKeyResult.error}`);
-      } else {
-        result.warnings.push(`Provider ${key}: ${apiKeyResult.error} (non-decision provider, skipping)`);
-      }
+    if (!apiKeyResult.success || apiKeyResult.value === undefined) {
+      result.errors.push(`Provider ${key}: ${apiKeyResult.error}`);
       continue;
     }
 
     const resolvedProvider: ResolvedProvider = {
       ...provider,
-      apiKey: apiKeyResult.value!,
+      apiKey: apiKeyResult.value,
       models: provider.models ?? {},
     };
 
@@ -84,15 +64,16 @@ export function resolveConfig(
   }
 
   const resolvedSettings = {
-    timeout: resolveSetting(config.settings.timeout, env, defaults, 30000),
-    maxRetries: resolveSetting(config.settings.maxRetries, env, defaults, 3),
-    temperature: resolveSetting(config.settings.temperature, env, defaults, 0.2),
-    maxTokens: resolveSetting(config.settings.maxTokens, env, defaults, 1000),
-    maxSteps: resolveSetting(config.settings.maxSteps, env, defaults, 1),
-    contextWindowTokens: resolveSetting(config.settings.contextWindowTokens ?? 131072, env, defaults, 131072),
-    loopGuard: config.settings.loopGuard
-      ? resolveLoopGuard(config.settings.loopGuard)
-      : undefined,
+    timeout: resolveSetting(config.settings.timeout, env, defaults),
+    maxRetries: resolveSetting(config.settings.maxRetries, env, defaults),
+    temperature: resolveSetting(config.settings.temperature, env, defaults),
+    maxTokens: resolveSetting(config.settings.maxTokens, env, defaults),
+    maxSteps: resolveSetting(config.settings.maxSteps, env, defaults),
+    contextWindowTokens: resolveSetting(
+      config.settings.contextWindowTokens ?? 131072,
+      env,
+      defaults
+    ),
   };
 
   const resolvedConfig: ResolvedConfig = {
@@ -160,52 +141,23 @@ function resolveVariable(
 function resolveSetting(
   value: number | string,
   env: Record<string, string>,
-  defaults: Record<string, string>,
-  fallback: number
+  defaults: Record<string, string>
 ): number {
   if (typeof value === 'number') {
     return value;
   }
 
   const result = resolveVariable(value, env, defaults);
-  if (result.success && result.value !== undefined) {
-    const parsed = parseInt(result.value, 10);
-    if (!isNaN(parsed)) {
-      return parsed;
-    }
+  if (!result.success || result.value === undefined) {
+    throw new Error(result.error ?? 'Configuration setting could not be resolved');
   }
-
-  return fallback;
-}
-
-export function getProviderModel(
-  config: ResolvedConfig,
-  providerName: string,
-  modelName: string
-): { provider: ResolvedProvider; model: ModelConfig } | null {
-  const provider = config.providers[providerName];
-  if (!provider) {
-    return null;
+  const parsed = Number(result.value);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(
+      `Configuration setting must resolve to a finite number, received ${result.value}`
+    );
   }
-
-  const model: ModelConfig = {
-    type: 'multimodal',
-    capabilities: ['vision', 'decision'],
-  };
-
-  return { provider, model: provider.models[modelName] || model };
-}
-
-export function getDefaultDecisionModel(
-  config: ResolvedConfig
-): { provider: string; model: string } | null {
-  return config.defaults.decision;
-}
-
-export function isUnifiedMode(_config: ResolvedConfig): boolean {
-  // Unified mode is the only supported mode since vision-mcp-server removal.
-  // Kept as explicit function for downstream consumers that may need mode checks.
-  return true;
+  return parsed;
 }
 
 function parseProviderModelString(
@@ -223,29 +175,4 @@ function parseProviderModelString(
   }
 
   return { provider, model };
-}
-
-function safeParseInt(value: unknown, fallback: number): number {
-  if (typeof value === 'number') return Number.isFinite(value) ? value : fallback;
-  if (typeof value === 'string') { const n = parseInt(value, 10); return Number.isFinite(n) ? n : fallback; }
-  return fallback;
-}
-
-function resolveLoopGuard(raw: RawLoopGuardConfig): LoopGuardConfig {
-  return {
-    identicalAction: {
-      warnAt: raw.identicalAction?.warnAt ?? DEFAULT_LOOP_GUARD_CONFIG.identicalAction.warnAt,
-      blockAt: raw.identicalAction?.blockAt ?? DEFAULT_LOOP_GUARD_CONFIG.identicalAction.blockAt,
-    },
-    noProgress: {
-      warnAt: raw.noProgress?.warnAt ?? DEFAULT_LOOP_GUARD_CONFIG.noProgress.warnAt,
-      blockAt: raw.noProgress?.blockAt ?? DEFAULT_LOOP_GUARD_CONFIG.noProgress.blockAt,
-    },
-    pingPong: {
-      warnAt: raw.pingPong?.warnAt ?? DEFAULT_LOOP_GUARD_CONFIG.pingPong.warnAt,
-      blockAt: raw.pingPong?.blockAt ?? DEFAULT_LOOP_GUARD_CONFIG.pingPong.blockAt,
-    },
-    hardCap: safeParseInt(raw.hardCap, DEFAULT_LOOP_GUARD_CONFIG.hardCap),
-    windowSize: safeParseInt(raw.windowSize, DEFAULT_LOOP_GUARD_CONFIG.windowSize),
-  };
 }

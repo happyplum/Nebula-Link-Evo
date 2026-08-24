@@ -4,11 +4,7 @@
 
 import { EventEmitter } from 'node:events';
 import { createWorkerLogger } from '../services/logger.js';
-import type {
-  GatewayTool,
-  ToolProvider,
-  ToolProviderStatus,
-} from './types.js';
+import type { GatewayTool, ToolProvider, ToolProviderStatus } from './types.js';
 
 const logger = createWorkerLogger('ToolRegistry');
 
@@ -53,12 +49,9 @@ export class ToolRegistry extends EventEmitter {
   }
 
   /**
-   * 按消费者类型获取可用工具
+   * 获取所有可用的受控 MCP 工具。
    */
-  getAvailableTools(options?: {
-    consumer?: 'chat' | 'mcp-server' | 'all';
-  }): GatewayTool[] {
-    const consumer = options?.consumer ?? 'all';
+  getAvailableTools(): GatewayTool[] {
     const tools: GatewayTool[] = [];
 
     for (const provider of this.providers.values()) {
@@ -67,9 +60,7 @@ export class ToolRegistry extends EventEmitter {
           continue;
         }
 
-        if (consumer === 'all' || tool.exposeTo.includes(consumer)) {
-          tools.push(tool);
-        }
+        tools.push(tool);
       }
     }
 
@@ -94,9 +85,7 @@ export class ToolRegistry extends EventEmitter {
    */
   async initializeAll(): Promise<void> {
     const results = await Promise.allSettled(
-      Array.from(this.providers.values()).map((provider) =>
-        provider.initialize(),
-      ),
+      Array.from(this.providers.values()).map((provider) => provider.initialize())
     );
 
     const providerKeys = Array.from(this.providers.keys());
@@ -112,7 +101,7 @@ export class ToolRegistry extends EventEmitter {
         }
         logger.warn(
           { providerId, error: result.reason },
-          'Tool provider initialization failed, set to degraded',
+          'Tool provider initialization failed, set to degraded'
         );
       }
     }
@@ -126,11 +115,7 @@ export class ToolRegistry extends EventEmitter {
    * 关闭所有工具提供方
    */
   async shutdownAll(): Promise<void> {
-    await Promise.all(
-      Array.from(this.providers.values()).map((provider) =>
-        provider.shutdown(),
-      ),
-    );
+    await Promise.all(Array.from(this.providers.values()).map((provider) => provider.shutdown()));
   }
 
   /**

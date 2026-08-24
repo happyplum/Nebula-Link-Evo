@@ -16,17 +16,16 @@ pnpm test:e2e     # Playwright e2e
 
 ## Where To Look
 
-| Area             | Path                                | Notes                                                 |
-| ---------------- | ----------------------------------- | ----------------------------------------------------- |
-| Server entry     | `src/server.ts`                     | Env load, plugins, route registration                 |
-| App service      | `src/services/app-service.ts`       | Browser session management, config, singleton facade  |
-| Action execution | `src/services/action-executor.ts`   | Browser action dispatch                               |
-| Tool registry    | `src/tools/`                        | ToolRegistry + browser-control provider + MCP Server adapters |
-| Browser tools    | `src/browser-tools/`                | Action definitions, param/result adapters, tool-map   |
-| MCP Server       | `src/mcp-server/`                   | StreamableHTTP plugin + transport                     |
-| Browser engine   | `src/browser-engine/`               | Playwright Chromium lifecycle                         |
-| Config           | `src/config/`                       | Schema, loader, resolver, validator                   |
-| Tests            | `src/__tests__/`                    | Unit, integration, e2e                                |
+| Area             | Path                                                      | Notes                                                         |
+| ---------------- | --------------------------------------------------------- | ------------------------------------------------------------- |
+| Server entry     | `src/server.ts`                                           | Env load, plugins, route registration                         |
+| App service      | `src/services/app-service.ts`                             | Browser session management, config, singleton facade          |
+| Tool registry    | `src/tools/`                                              | ToolRegistry + browser-control provider + MCP Server adapters |
+| Controlled tools | `src/tools/providers/browser-execution-tools-provider.ts` | Only operation_execute/get/cancel                             |
+| Execution plane  | `src/browser-execution/`                                  | Session/Tab/lease/operation/artifact/event ledger             |
+| MCP Server       | `src/mcp-server/`                                         | StreamableHTTP plugin + transport                             |
+| Browser engine   | `src/browser-engine/`                                     | Playwright Chromium lifecycle                                 |
+| Tests            | `src/__tests__/`                                          | Unit, integration, e2e                                        |
 
 ## Boundaries
 
@@ -60,7 +59,7 @@ pnpm test:e2e     # Playwright e2e
 - No blind replay of a side-effecting operation after timeout/disconnect, and no stale-marker fallback to unrecorded coordinate clicks.
 - No coupling application-level browser sessions or operation ledgers to the stateless MCP transport session; no lease token or upstream business payload in model-visible tool arguments, ordinary events, or logs.
 - No logical multi-session facade over the singleton Context, and no concurrent application control owners. Multi-Context or multi-Tab concurrency requires a separately versioned capability and scheduler.
-- While an application session is active, legacy MCP/debug mutation tools must return `browser_busy`; read-only live streams may continue, while direct observations use the controlled snapshot path or a safe cached snapshot. Legacy tools resume normal behavior only after session release.
+- While an application session is active, direct debug mutation, script execution, DOM and screenshot capture must return `browser_busy`; read-only status and live streams may continue. MCP has no direct browser tools outside the three lease-bound operation tools.
 
 ## Child AGENTS
 

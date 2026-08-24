@@ -18,7 +18,7 @@ Playwright-control owns browser state, DOM snapshot normalization, marker toggle
 - Treat `snapshotId` plus normalized DOM elements as the source of truth for marker-based actions.
 - Preserve marker-toggle persistence in `localStorage`.
 - Keep console/action history capped.
-- Normalize both legacy marker-number and `dataNebulaId` forms before selection/execution.
+- Accept only the shared DOM snapshot v2 record (`elements_map[id] -> ElementLocator`); do not add tuple/camelCase fallback parsing.
 
 ## Contributor Traps
 

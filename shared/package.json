@@ -24,10 +24,6 @@
       "types": "./dist/types/vision-marker.d.ts",
       "import": "./dist/types/vision-marker.js"
     },
-    "./types/action": {
-      "types": "./dist/types/action.d.ts",
-      "import": "./dist/types/action.js"
-    },
     "./types/debug-events": {
       "types": "./dist/types/debug-events.d.ts",
       "import": "./dist/types/debug-events.js"

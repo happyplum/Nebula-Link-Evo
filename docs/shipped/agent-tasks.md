@@ -21,6 +21,6 @@
 - [shipped] `submit_result` 先形成 pending result；只有同 callId/hash 的 DSH tool result 已 durable 后才完成。终态按 flush → projection catch-up → 同一 SQLite 事务写结构化结果/usage/status/terminal event/cursor；崩溃未持久化结果收敛为 interrupted。
 - [shipped] 全局持久调度默认 `maxActiveModelRuns=4`、`maxQueuedRuns=1000`；run identity/idempotency/queueSeq 与 capacity 在同一 `BEGIN IMMEDIATE` 事务维护。token 预算先按 estimated input + output cap CAS reservation，实际 usage 后结算，崩溃 reservation 保守计耗。
 - [shipped] 浏览器调用在 dispatch 前持久化 toolCallId/operationId、canonical args/request hash、Quantity、task/Skill/budget/冻结 step 授权快照以及无 token 的 browser binding；reserved/dispatched 重启分别收敛为 interrupted/outcome_unknown，身份漂移拒绝。
-- [shipped] 通用视觉 v2 已由 `vision.analyze_page`/`vision.resolve_target` 提供并使用 `VisionSnapshotBindingV1`；`vision.find_element` 不在生产工具表。
-- [pending] 完整 policy evaluation/风险投影/active grant/参数级数量交集仍未实现；多 Skill 组合/嵌套调用也不在 v1，必须由调用方拆为独立 task。
+- [shipped] 通用视觉 v2 已由 `vision.analyze_page`/`vision.resolve_target` 提供并使用 `VisionSnapshotBindingV1`；所有环境均无旧视觉定位工具或 raw screenshot 适配输入。
+- [shipped] policy evaluation/风险投影 hash/active grant/effectId/参数与数量边界已在 dispatch 前与 task、Skill、budget、冻结 step、browser binding/lease 逐调用求交，并持久化 authorization snapshot。多 Skill 组合/嵌套调用不在 v1，必须由调用方拆为独立 task。
 - [pending] 操作动画不在本阶段；browser operation 固定注入 `animation=off`，proxy capability 仍声明 `operationPresentationAnimation=false`。

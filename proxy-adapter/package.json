@@ -16,10 +16,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@fastify/autoload": "catalog:",
     "@fastify/cors": "catalog:",
-    "@fastify/swagger": "catalog:",
-    "@fastify/swagger-ui": "catalog:",
     "@fastify/type-provider-typebox": "catalog:",
     "@livekit/rtc-node": "catalog:",
     "@modelcontextprotocol/sdk": "^1.30.0",

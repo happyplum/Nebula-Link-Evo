@@ -5,12 +5,24 @@
     "kimi": {
       "baseUrl": "https://api.moonshot.cn/v1",
       "apiKey": "{KIMI_API_KEY}",
-      "enabled": true
+      "enabled": true,
+      "models": {
+        "moonshot-v1-vision-k2.5": {
+          "type": "multimodal",
+          "capabilities": ["decision", "vision"]
+        }
+      }
     },
     "glm": {
       "baseUrl": "https://open.bigmodel.cn/api/paas/v4",
       "apiKey": "{GLM_API_KEY}",
-      "enabled": true
+      "enabled": true,
+      "models": {
+        "glm-4.5v": {
+          "type": "vision",
+          "capabilities": ["vision"]
+        }
+      }
     },
     "nvidia": {
       "baseUrl": "https://integrate.api.nvidia.com/v1",

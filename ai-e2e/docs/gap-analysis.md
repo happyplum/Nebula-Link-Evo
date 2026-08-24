@@ -166,12 +166,12 @@
 
 #### 验收数据
 
-| 指标 | 数值 |
-|---|---|
-| 目标应用 | debug-ui（HashRouter SPA，2 个路由） |
-| 测试脚本数 | 280 |
-| 通过数 | 13 (4.6%) |
-| 失败数 | 268 (95.4%) |
+| 指标         | 数值                                                                                       |
+| ------------ | ------------------------------------------------------------------------------------------ |
+| 目标应用     | debug-ui（HashRouter SPA，2 个路由）                                                       |
+| 测试脚本数   | 280                                                                                        |
+| 通过数       | 13 (4.6%)                                                                                  |
+| 失败数       | 268 (95.4%)                                                                                |
 | 主要失败类型 | typescript 前缀(75), 选择器超时(54), 断言不匹配(33), strict_mode(33), waitForLoadState(26) |
 
 **结论**：完整链路已打通，但脚本质量严重依赖快照数据完整性和 AI 模板约束执行力。
@@ -190,7 +190,7 @@
 
 **原问题**：BFS 爬取策略对 HashRouter/History API SPA 发现 0 个 URL。探索阶段对 SPA 应用完全无效。
 
-**当前实现**：`ExplorerService` 保留原有 BFS/AI 链路，同时通过 `ProxyAdapterClient.executeScript()` 安装 History API / `hashchange` 观察器，读取渲染后 DOM 链接与常见 router 属性，并扫描可访问的 router 配置对象来补充 SPA 路由。
+**当前实现**：`ExplorerService` 保留既有 BFS/AI 链路，同时通过显式装配的 `AiE2eRuntimeClient.executeScript()` 安装 History API / `hashchange` 观察器，读取渲染后 DOM 链接与常见 router 属性，并扫描可访问的 router 配置对象来补充 SPA 路由。
 
 **影响**：SPA URL 不再只能手动添加，探索阶段可为 URL 绑定与快照链路提供更多自动发现入口。
 

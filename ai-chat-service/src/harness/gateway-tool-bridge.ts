@@ -20,49 +20,20 @@ export function installGatewayToolBridge(
   context: Context,
   registry: ToolRegistry
 ): GatewayToolBridge {
-  let current: Array<{ definition: ToolDefinition; dispose: () => void }> = [];
-  let productToSafe = new Map<string, string>();
-  let queued = false;
-
-  const synchronize = (): void => {
-    const next = prepareGeneration(registry.getAvailableTools({ consumer: 'chat' }));
-    for (const entry of current) entry.dispose();
-    const registered: typeof current = [];
-    try {
-      for (const definition of next.definitions) {
-        registered.push({ definition, dispose: context.tools.register(definition) });
-      }
-      current = registered;
-      productToSafe = next.mappings;
-    } catch (error) {
-      for (const entry of registered) entry.dispose();
-      current = [];
-      productToSafe = new Map();
-      throw error;
+  const generation = prepareGeneration(registry.getAvailableTools());
+  const registrations: Array<() => void> = [];
+  try {
+    for (const definition of generation.definitions) {
+      registrations.push(context.tools.register(definition));
     }
-  };
-  const onChanged = (): void => {
-    if (queued) return;
-    queued = true;
-    queueMicrotask(() => {
-      queued = false;
-      try {
-        synchronize();
-      } catch (error) {
-        context.logger.error(`Gateway tool generation was quarantined: ${String(error)}`);
-      }
-    });
-  };
-
-  synchronize();
-  registry.on('tools:changed', onChanged);
+  } catch (error) {
+    for (const dispose of registrations) dispose();
+    throw error;
+  }
   return {
-    mappings: () => new Map(productToSafe),
+    mappings: () => new Map(generation.mappings),
     dispose() {
-      registry.removeListener('tools:changed', onChanged);
-      for (const entry of current) entry.dispose();
-      current = [];
-      productToSafe = new Map();
+      for (const dispose of registrations) dispose();
     },
   };
 }
@@ -77,7 +48,8 @@ function prepareGeneration(tools: readonly GatewayTool[]): {
   for (const tool of tools) {
     if (RAW_PROXY_OPERATIONS.has(tool.name)) continue;
     const safeName = dshSafeToolName(tool.name);
-    if (safeNames.has(safeName)) throw new Error(`Product tool safe-name collision for ${tool.name}`);
+    if (safeNames.has(safeName))
+      throw new Error(`Product tool safe-name collision for ${tool.name}`);
     try {
       assertObjectJsonSchema(tool.inputSchema);
     } catch {

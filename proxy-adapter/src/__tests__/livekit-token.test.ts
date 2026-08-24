@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-describe('GET /api/livekit-token (inline signing)', () => {
+describe('GET /api/v1/livekit-token (inline signing)', () => {
   const savedEnv = { ...process.env };
 
   beforeEach(() => {
@@ -24,10 +24,10 @@ describe('GET /api/livekit-token (inline signing)', () => {
     const Fastify = (await import('fastify')).default;
     const livekitTokenRoute = (await import('../plugins/routes/api/livekit-token.js')).default;
     const app = Fastify();
-    await app.register(livekitTokenRoute, { prefix: '/api' });
+    await app.register(livekitTokenRoute, { prefix: '/api/v1' });
     await app.ready();
 
-    const response = await app.inject({ method: 'GET', url: '/api/livekit-token' });
+    const response = await app.inject({ method: 'GET', url: '/api/v1/livekit-token' });
 
     expect(response.statusCode).toBe(200);
     const body = response.json();
@@ -48,10 +48,10 @@ describe('GET /api/livekit-token (inline signing)', () => {
     const Fastify = (await import('fastify')).default;
     const livekitTokenRoute = (await import('../plugins/routes/api/livekit-token.js')).default;
     const app = Fastify();
-    await app.register(livekitTokenRoute, { prefix: '/api' });
+    await app.register(livekitTokenRoute, { prefix: '/api/v1' });
     await app.ready();
 
-    const response = await app.inject({ method: 'GET', url: '/api/livekit-token' });
+    const response = await app.inject({ method: 'GET', url: '/api/v1/livekit-token' });
 
     expect(response.statusCode).toBe(500);
 

@@ -14,7 +14,7 @@
 │                   ai-chat-service (:3001)                        │
 │  ┌──────────┐  ┌──────────┐  ┌───────────┐                      │
 │  │ Chat API │  │ Provider │  │ SSE Stream │                      │
-│  │/api/chat │  │ Preflight│  │/api/chat/  │                      │
+│  │/api/v1/  │  │ Preflight│  │/api/v1/  │                      │
 │  └────┬─────┘  └────┬─────┘  └─────┬─────┘                      │
 │       │              │              │                             │
 │  ┌────▼──────────────▼──────────────▼──────────────────────────┐ │
@@ -108,13 +108,13 @@ proxy-adapter
 ```
 Session Lifecycle
     │
-    ├─ POST /api/chat/sessions          → Create session (provider+model validation)
-    ├─ GET  /api/chat/sessions          → List sessions
-    ├─ GET  /api/chat/sessions/:id      → Get session
-    ├─ DELETE /api/chat/sessions/:id    → Delete session
+    ├─ POST /api/v1/chat/sessions          → Create session (provider+model validation)
+    ├─ GET  /api/v1/chat/sessions          → List sessions
+    ├─ GET  /api/v1/chat/sessions/:id      → Get session
+    ├─ DELETE /api/v1/chat/sessions/:id    → Delete session
     │
     ▼
-POST /api/chat/sessions/:id/messages
+POST /api/v1/chat/sessions/:id/messages
     │
     ├─ SessionLock (prevent concurrent sends)
     ├─ ConnectivityGate (verify provider reachable)
@@ -143,7 +143,7 @@ ChatHandler.executeAIResponse()  [recursive, max 10 tool loops]
     └─ Checkpoint: pauseAfterGeneration / pauseAfterExecution
 ```
 
-### SSE Streaming (GET /api/chat/sessions/:id/stream)
+### SSE Streaming (GET /api/v1/chat/sessions/:id/stream)
 
 ```
 Client connects ──▶ SessionEventHub.subscribe()
@@ -156,17 +156,17 @@ Client connects ──▶ SessionEventHub.subscribe()
 
 ### SSE Event Types
 
-| Event | Description |
-|---|---|
-| `session.snapshot` | Full session state on first connect |
-| `message.created` | New message persisted to DB |
-| `assistant.started` | AI response generation begins |
-| `assistant.delta` | Streaming token chunk |
-| `assistant.completed` | AI response finished |
-| `assistant.thinking` | AI reasoning/thinking content |
-| `assistant.tool_call` | AI requests tool execution |
-| `assistant.tool_result` | Tool execution result returned |
-| `run.error` | Runtime error during generation |
+| Event                   | Description                         |
+| ----------------------- | ----------------------------------- |
+| `session.snapshot`      | Full session state on first connect |
+| `message.created`       | New message persisted to DB         |
+| `assistant.started`     | AI response generation begins       |
+| `assistant.delta`       | Streaming token chunk               |
+| `assistant.completed`   | AI response finished                |
+| `assistant.thinking`    | AI reasoning/thinking content       |
+| `assistant.tool_call`   | AI requests tool execution          |
+| `assistant.tool_result` | Tool execution result returned      |
+| `run.error`             | Runtime error during generation     |
 
 ---
 
@@ -211,55 +211,55 @@ Client connects ──▶ SessionEventHub.subscribe()
 
 ### Chat Session API
 
-| Method | Path | Description |
-|---|---|---|
-| POST | `/api/chat/sessions` | Create session |
-| GET | `/api/chat/sessions` | List all sessions |
-| GET | `/api/chat/sessions/:id` | Get session details |
-| DELETE | `/api/chat/sessions/:id` | Delete session |
-| GET | `/api/chat/sessions/:id/messages` | Get session messages |
-| POST | `/api/chat/sessions/:id/messages` | Send message (async) |
+| Method | Path                                 | Description          |
+| ------ | ------------------------------------ | -------------------- |
+| POST   | `/api/v1/chat/sessions`              | Create session       |
+| GET    | `/api/v1/chat/sessions`              | List all sessions    |
+| GET    | `/api/v1/chat/sessions/:id`          | Get session details  |
+| DELETE | `/api/v1/chat/sessions/:id`          | Delete session       |
+| GET    | `/api/v1/chat/sessions/:id/messages` | Get session messages |
+| POST   | `/api/v1/chat/sessions/:id/messages` | Send message (async) |
 
 ### Chat Control API
 
-| Method | Path | Description |
-|---|---|---|
-| POST | `/api/chat/sessions/:id/interrupt` | Interrupt generation |
-| POST | `/api/chat/sessions/:id/cancel` | Cancel session |
-| POST | `/api/chat/sessions/:id/pause` | Pause (wait-to-complete) |
-| POST | `/api/chat/sessions/:id/resume` | Resume paused session |
-| GET | `/api/chat/sessions/:id/status` | Runtime session state |
-| GET | `/api/chat/sessions/:id/operations` | Available operations |
+| Method | Path                                   | Description              |
+| ------ | -------------------------------------- | ------------------------ |
+| POST   | `/api/v1/chat/sessions/:id/interrupt`  | Interrupt generation     |
+| POST   | `/api/v1/chat/sessions/:id/cancel`     | Cancel session           |
+| POST   | `/api/v1/chat/sessions/:id/pause`      | Pause (wait-to-complete) |
+| POST   | `/api/v1/chat/sessions/:id/resume`     | Resume paused session    |
+| GET    | `/api/v1/chat/sessions/:id/status`     | Runtime session state    |
+| GET    | `/api/v1/chat/sessions/:id/operations` | Available operations     |
 
 ### Chat Stream API
 
-| Method | Path | Description |
-|---|---|---|
-| GET | `/api/chat/sessions/:id/stream` | SSE event stream |
-| GET | `/api/chat/connectivity-test` | Provider connectivity check |
+| Method | Path                               | Description                 |
+| ------ | ---------------------------------- | --------------------------- |
+| GET    | `/api/v1/chat/sessions/:id/stream` | SSE event stream            |
+| POST   | `/api/v1/chat/connectivity-test`   | Provider connectivity check |
 
 ### Debug API
 
-| Method | Path | Description |
-|---|---|---|
-| GET | `/debug/api/health` | Service health check |
-| POST | `/debug/api/ai/test` | Test AI provider connectivity |
-| POST | `/debug/api/key/verify` | Verify API keys |
-| GET | `/debug/api/playwright/status` | Browser service status |
-| POST | `/debug/api/playwright/navigate` | Navigate browser |
-| POST | `/debug/api/playwright/screenshot` | Take screenshot |
-| GET | `/debug/api/dom` | Get current page DOM |
-| GET | `/debug/api/element-at` | Get element at coordinates |
-| POST | `/debug/api/click` | Click element |
-| POST | `/debug/api/type` | Type text |
-| POST | `/debug/api/action` | Execute generic action |
-| POST | `/debug/api/marker` | Marker operations |
-| POST | `/debug/api/scroll` | Scroll page |
-| GET | `/debug/api/mcp/status` | MCP service status |
-| GET | `/debug/api/mcp/tools` | List MCP tools |
-| POST | `/debug/api/mcp/call` | Call MCP tool |
-| GET | `/debug/api/interactions/stats` | Interaction statistics |
-| GET | `/debug/api/failure-samples` | Failure sample collection |
+| Method | Path                               | Description                   |
+| ------ | ---------------------------------- | ----------------------------- |
+| GET    | `/debug/api/health`                | Service health check          |
+| POST   | `/debug/api/ai/test`               | Test AI provider connectivity |
+| POST   | `/debug/api/key/verify`            | Verify API keys               |
+| GET    | `/debug/api/playwright/status`     | Browser service status        |
+| POST   | `/debug/api/playwright/navigate`   | Navigate browser              |
+| POST   | `/debug/api/playwright/screenshot` | Take screenshot               |
+| GET    | `/debug/api/dom`                   | Get current page DOM          |
+| GET    | `/debug/api/element-at`            | Get element at coordinates    |
+| POST   | `/debug/api/click`                 | Click element                 |
+| POST   | `/debug/api/type`                  | Type text                     |
+| POST   | `/debug/api/action`                | Execute generic action        |
+| POST   | `/debug/api/marker`                | Marker operations             |
+| POST   | `/debug/api/scroll`                | Scroll page                   |
+| GET    | `/debug/api/mcp/status`            | MCP service status            |
+| GET    | `/debug/api/mcp/tools`             | List MCP tools                |
+| POST   | `/debug/api/mcp/call`              | Call MCP tool                 |
+| GET    | `/debug/api/interactions/stats`    | Interaction statistics        |
+| GET    | `/debug/api/failure-samples`       | Failure sample collection     |
 
 ---
 
@@ -282,10 +282,10 @@ SessionEventHub (SSE streaming)
 
 ## Data Persistence
 
-| Layer | Storage | Content |
-|---|---|---|
-| Sessions | SQLite | Session metadata, config, state |
-| Messages | SQLite | User + assistant + tool messages |
-| Events | SQLite | `session.snapshot` 恢复所需的 thinking / tool 历史；不用于 cursor replay |
-| Failure Samples | Filesystem | Interaction failure logs |
-| Live Event Hub | Memory | 只转发给在线 subscriber，不缓存、不重放 |
+| Layer           | Storage    | Content                                                                  |
+| --------------- | ---------- | ------------------------------------------------------------------------ |
+| Sessions        | SQLite     | Session metadata, config, state                                          |
+| Messages        | SQLite     | User + assistant + tool messages                                         |
+| Events          | SQLite     | `session.snapshot` 恢复所需的 thinking / tool 历史；不用于 cursor replay |
+| Failure Samples | Filesystem | Interaction failure logs                                                 |
+| Live Event Hub  | Memory     | 只转发给在线 subscriber，不缓存、不重放                                  |

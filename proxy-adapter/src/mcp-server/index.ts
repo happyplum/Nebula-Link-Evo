@@ -14,28 +14,25 @@ export interface McpServerPluginOptions {
   prefix?: string;
 }
 
-const mcpServerPlugin: FastifyPluginAsync<McpServerPluginOptions> = async (
-  fastify,
-  options,
-) => {
+const mcpServerPlugin: FastifyPluginAsync<McpServerPluginOptions> = async (fastify, options) => {
   const { toolRegistry, prefix = '/mcp' } = options;
 
   // Cache tools at plugin init — avoids repeated registry queries per request.
-  const cachedTools = toolRegistry.getAvailableTools({ consumer: 'mcp-server' });
+  const cachedTools = toolRegistry.getAvailableTools();
 
   await registerStreamableHttpMcpRoute(
     fastify,
     () => {
       const server = new McpServer(
         { name: 'nebula-link-evo', version: '1.0.0' },
-        { capabilities: { tools: {} } },
+        { capabilities: { tools: {} } }
       );
 
       registerGatewayToolsToMcpServer(server, cachedTools);
 
       return server;
     },
-    prefix,
+    prefix
   );
 };
 

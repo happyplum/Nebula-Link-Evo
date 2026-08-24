@@ -26,6 +26,5 @@ export const queryKeys = {
   interactions: {
     list: (params?: Record<string, string>) => ['interactions', params] as const,
     stats: ['interactions', 'stats'] as const,
-    failureSample: (path: string) => ['interactions', 'failureSample', path] as const,
   },
 } as const;

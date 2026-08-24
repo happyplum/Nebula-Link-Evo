@@ -7,11 +7,7 @@ import { Type } from '@sinclair/typebox';
 import type { ChatHandler } from '../../../../conversation/chat-handler.js';
 import type { ConversationManager } from '../../../../conversation/manager.js';
 import { SessionNotFoundError } from '../../../../services/chat-session-controller.js';
-import {
-  AgentStateSchema,
-  SessionStatusSchema,
-  getRuntimeSessionState,
-} from './runtime-state.js';
+import { AgentStateSchema, SessionStatusSchema, getRuntimeSessionState } from './runtime-state.js';
 
 // Schemas
 const SessionIdParams = Type.Object({
@@ -52,11 +48,7 @@ const OperationResponse = Type.Object({
   ]),
   startTime: Type.Integer(),
   endTime: Type.Optional(Type.Integer()),
-  status: Type.Union([
-    Type.Literal('pending'),
-    Type.Literal('success'),
-    Type.Literal('failed'),
-  ]),
+  status: Type.Union([Type.Literal('pending'), Type.Literal('success'), Type.Literal('failed')]),
   error: Type.Optional(Type.String()),
 });
 
@@ -65,8 +57,9 @@ const OperationsResponse = Type.Array(OperationResponse);
 const controlRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
   const controller = fastify.chatSessionController;
   const chatHandler = (fastify as typeof fastify & { chatHandler: ChatHandler }).chatHandler;
-  const conversationManager = (fastify as typeof fastify & { conversationManager: ConversationManager })
-    .conversationManager;
+  const conversationManager = (
+    fastify as typeof fastify & { conversationManager: ConversationManager }
+  ).conversationManager;
 
   // POST /:id/interrupt - Interrupt a running session
   fastify.post<{ Params: typeof SessionIdParams.static }>(
@@ -248,11 +241,12 @@ const controlRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       const { id: sessionId } = request.params;
 
       try {
-        const session = conversationManager.getSession(sessionId);
+        if (!conversationManager.getSession(sessionId)) {
+          throw new SessionNotFoundError(sessionId);
+        }
         const runtimeState = await getRuntimeSessionState(
           conversationManager,
           sessionId,
-          session?.status,
           controller
         );
         return {

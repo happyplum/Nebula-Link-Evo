@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { LocatorBundle } from '@nebula-link-evo/shared';
 
 export interface BBox {
   x: number;
@@ -26,7 +27,7 @@ export interface DomElement {
   isVisible?: boolean;
   isInteractable?: boolean;
   dataNebulaId?: string;
-  locatorBundle?: Record<string, string>;
+  locatorBundle?: LocatorBundle;
 }
 
 export interface ConsoleMessage {

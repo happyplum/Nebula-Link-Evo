@@ -8,7 +8,6 @@ const MCPServerSchema = Type.Object({
 
 export const HealthResponseSchema = Type.Object({
   status: Type.String(),
-  config: Type.String(),
   mcp: Type.Object({
     enabled: Type.Boolean(),
     servers: Type.Array(MCPServerSchema),

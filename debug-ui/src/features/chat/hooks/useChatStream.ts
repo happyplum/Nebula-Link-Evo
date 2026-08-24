@@ -46,9 +46,10 @@ function adaptSnapshotMessage(m: SessionSnapshotEvent['messages'][number]): Chat
       return {
         id: (rec.id as string) ?? `tc-${Date.now()}`,
         name: fn ? (fn.name as string) : 'unknown',
-        arguments: typeof fn?.arguments === 'string'
-          ? (fn.arguments as string)
-          : JSON.stringify(fn?.arguments ?? rec.arguments),
+        arguments:
+          typeof fn?.arguments === 'string'
+            ? (fn.arguments as string)
+            : JSON.stringify(fn?.arguments ?? rec.arguments),
         result: typeof rec.result === 'string' ? rec.result : undefined,
         status: 'completed' as const,
       };
@@ -67,7 +68,10 @@ function adaptToolCall(evt: AssistantToolCallEvent): LocalToolCall | null {
   return {
     id: evt.toolCallId,
     name: (fn?.name as string | undefined) ?? 'unknown',
-    arguments: typeof fn?.arguments === 'string' ? (fn.arguments as string) : JSON.stringify(fn?.arguments ?? tc),
+    arguments:
+      typeof fn?.arguments === 'string'
+        ? (fn.arguments as string)
+        : JSON.stringify(fn?.arguments ?? tc),
     status: 'running',
   };
 }
@@ -78,9 +82,10 @@ function adaptActiveToolCall(tc: ToolCall): LocalToolCall {
   return {
     id: (rec.id as string) ?? `tc-${Date.now()}`,
     name: fn ? (fn.name as string) : 'unknown',
-    arguments: typeof fn?.arguments === 'string'
-      ? (fn.arguments as string)
-      : JSON.stringify(fn?.arguments ?? rec.arguments),
+    arguments:
+      typeof fn?.arguments === 'string'
+        ? (fn.arguments as string)
+        : JSON.stringify(fn?.arguments ?? rec.arguments),
     status: 'running',
   };
 }
@@ -179,7 +184,7 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
       currentMessageIdRef.current = null;
       receivedLiveEventsRef.current = false;
 
-      const es = new EventSource(`/api/chat/sessions/${sid}/stream`);
+      const es = new EventSource(`/api/v1/chat/sessions/${sid}/stream`);
       esRef.current = es;
 
       es.onopen = () => {

@@ -82,9 +82,8 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
   ).conversationManager;
   const chatHandler = (fastify as typeof fastify & { chatHandler: ChatHandler }).chatHandler;
   const jobQueue = (fastify as typeof fastify & { jobQueue: ConversationJobQueue }).jobQueue;
-  const deletionService = (
-    fastify as typeof fastify & { deletionService: HarnessDeletionService }
-  ).deletionService;
+  const deletionService = (fastify as typeof fastify & { deletionService: HarnessDeletionService })
+    .deletionService;
 
   // POST / - Create a new session
   fastify.post<{ Body: Static<typeof CreateSessionBodySchema> }>(
@@ -199,7 +198,6 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
             const runtimeState = await getRuntimeSessionState(
               conversationManager,
               session.id,
-              session.status,
               fastify.chatSessionController
             );
             return {
@@ -250,7 +248,6 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         const runtimeState = await getRuntimeSessionState(
           conversationManager,
           sessionId,
-          session.status,
           fastify.chatSessionController
         );
 
@@ -294,7 +291,8 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       if ('vision' in body) {
         reply.status(400);
         return {
-          error: 'vision model override has been removed; vision is configured via defaults.vision in config',
+          error:
+            'vision model override has been removed; vision is configured via defaults.vision in config',
         };
       }
 

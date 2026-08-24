@@ -12,9 +12,6 @@ import {
 
 const logger = createWorkerLogger('LocatorGenerator');
 
-// Re-export for backward compatibility (tests import getElementAttributes from this module)
-export { doGetElementAttributes as getElementAttributes };
-
 /**
  * Generate multiple locator strategies for an element in priority order.
  * Returns the best available locators with role > testid > aria > text > css > xpath.
@@ -22,9 +19,7 @@ export { doGetElementAttributes as getElementAttributes };
  * @param element - Playwright ElementHandle to generate locators for
  * @returns Promise<LocatorBundle> object with multiple selector strategies
  */
-export async function generateLocatorBundle(
-  element: ElementHandle
-): Promise<LocatorBundle> {
+export async function generateLocatorBundle(element: ElementHandle): Promise<LocatorBundle> {
   const bundle: LocatorBundle = {};
 
   try {
@@ -94,9 +89,7 @@ export async function generateLocatorBundle(
  * @param element - Playwright ElementHandle to generate selector for
  * @returns Promise<string> the best available selector
  */
-export async function generateStableSelector(
-  element: ElementHandle
-): Promise<string> {
+export async function generateStableSelector(element: ElementHandle): Promise<string> {
   try {
     const bundle = await generateLocatorBundle(element);
 
@@ -140,10 +133,7 @@ export async function generateStableSelector(
  * @param selector - CSS selector to check
  * @returns Promise<boolean> true if selector matches exactly one element
  */
-export async function isUniqueSelector(
-  page: Page,
-  selector: string
-): Promise<boolean> {
+export async function isUniqueSelector(page: Page, selector: string): Promise<boolean> {
   try {
     const count = await page.locator(selector).count();
     return count === 1;
@@ -159,9 +149,7 @@ export async function isUniqueSelector(
  * @param element - Playwright ElementHandle to generate CSS selector for
  * @returns Promise<string> CSS selector string, empty if unavailable
  */
-export async function generateCssSelector(
-  element: ElementHandle
-): Promise<string> {
+export async function generateCssSelector(element: ElementHandle): Promise<string> {
   try {
     const attributes = await doGetElementAttributes(element);
     const tagName = await getElementTagName(element);
@@ -260,9 +248,7 @@ export async function generateXPath(element: ElementHandle): Promise<string> {
 
     // Add data-testid attribute
     if (attributes['data-testid']) {
-      attrFilters.push(
-        `@data-testid='${escapeXPath(attributes['data-testid'])}'`
-      );
+      attrFilters.push(`@data-testid='${escapeXPath(attributes['data-testid'])}'`);
     }
 
     // Add type attribute for inputs

@@ -6,7 +6,7 @@ import dotenv from 'dotenv';
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseManager } from '../database/db.js';
-import { ProxyAdapterClient } from '../infrastructure/proxy-adapter-client.js';
+import { AiE2eRuntimeClient } from '../infrastructure/ai-e2e-runtime-client.js';
 import { PromptTemplateManager, TokenBudgetTracker } from '../ai/index.js';
 import { LoginRecorderService } from '../services/login-recorder-service.js';
 import { StateMachineService } from '../services/state-machine-service.js';
@@ -66,7 +66,7 @@ function ensureDatabaseDirectory(dbPath: string): void {
 }
 
 export interface ServerOptions {
-  proxyClient?: ProxyAdapterClient | null;
+  runtimeClient?: AiE2eRuntimeClient | null;
   promptManager?: PromptTemplateManager;
   tokenTracker?: TokenBudgetTracker;
   loginRecorder?: LoginRecorderService;
@@ -93,29 +93,45 @@ export function createServer(options: Partial<ServerOptions> = {}) {
   app.register(errorHandlerPlugin);
   app.register(sseEmitterPlugin);
   app.register(projectRoutes, { prefix: '/api/projects' });
-  app.register(projectConfigRoutes, { prefix: '/api/projects/:id/config', loginRecorder: options.loginRecorder });
+  app.register(projectConfigRoutes, {
+    prefix: '/api/projects/:id/config',
+    loginRecorder: options.loginRecorder,
+  });
   app.register(projectAnalysisRoutes, {
     prefix: '/api/projects/:id/analysis',
-    proxyClient: options.proxyClient,
+    runtimeClient: options.runtimeClient,
     promptManager: options.promptManager,
     tokenTracker: options.tokenTracker,
     stateMachine: options.stateMachine,
   });
-  app.register(executionRoutes, { prefix: '/api/projects/:id/execution', executor: options.executorService, diagnosis: options.diagnosisService });
-  app.register(stateRoutes, { prefix: '/api/projects/:id/state', stateMachine: options.stateMachine });
+  app.register(executionRoutes, {
+    prefix: '/api/projects/:id/execution',
+    executor: options.executorService,
+    diagnosis: options.diagnosisService,
+  });
+  app.register(stateRoutes, {
+    prefix: '/api/projects/:id/state',
+    stateMachine: options.stateMachine,
+  });
   app.register(explorationRoutes, {
     prefix: '/api/projects/:id/exploration',
-    proxyClient: options.proxyClient,
+    runtimeClient: options.runtimeClient,
     promptManager: options.promptManager,
   });
   app.register(scriptsRoutes, {
     prefix: '/api/projects/:id/scripts',
-    proxyClient: options.proxyClient,
+    runtimeClient: options.runtimeClient,
     promptManager: options.promptManager,
   });
   app.register(eventsRoutes, { prefix: '/api/projects/:id/events' });
-  app.register(scenarioRoutes, { prefix: '/api/projects/:id', scenarioService: options.scenarioService });
-  app.register(diagnosisReportRoutes, { prefix: '/api/projects/:id/diagnosis', diagnosisService: options.diagnosisService });
+  app.register(scenarioRoutes, {
+    prefix: '/api/projects/:id',
+    scenarioService: options.scenarioService,
+  });
+  app.register(diagnosisReportRoutes, {
+    prefix: '/api/projects/:id/diagnosis',
+    diagnosisService: options.diagnosisService,
+  });
   app.register(businessVersionRoutes, {
     prefix: '/api/v1',
     service: options.businessVersionService,
@@ -192,11 +208,7 @@ function registerGracefulShutdown(app: AppServer, databaseManager: DatabaseManag
 }
 
 export async function start() {
-  // Create AI service instances.
-  // ProxyAdapterClient is now a facade over AiChatClient (:3001) and
-  // BrowserGatewayClient (:3000); each resolves its own base URL from env
-  // (AI_CHAT_SERVICE_URL / PROXY_ADAPTER_URL respectively).
-  const proxyClient = new ProxyAdapterClient();
+  const runtimeClient = new AiE2eRuntimeClient();
   const promptsDir = path.join(process.cwd(), 'prompts');
   const promptManager = new PromptTemplateManager(promptsDir);
   const tokenTracker = new TokenBudgetTracker(DEFAULT_TOKEN_BUDGET);
@@ -209,8 +221,8 @@ export async function start() {
   ensureDatabaseDirectory(dbPath);
   databaseManager.init(dbPath);
 
-  // Create login recorder service (depends on DB and proxyClient)
-  const loginRecorder = new LoginRecorderService(databaseManager, proxyClient);
+  // Create login recorder service (depends on DB and the browser gateway).
+  const loginRecorder = new LoginRecorderService(databaseManager, runtimeClient);
 
   // Create state machine service (depends on DB)
   const stateMachine = new StateMachineService(databaseManager);
@@ -218,22 +230,22 @@ export async function start() {
   // Create test scenario service (depends on DB)
   const testScenarioService = new TestScenarioService(databaseManager.getTestScenarioRepo());
 
-  // Create AI diagnosis service (depends on DB, proxyClient, promptManager)
+  // Create AI diagnosis service (depends on DB, AI runtime, and prompt manager).
   const aiDiagnosisService = new AIDiagnosisService(
-    proxyClient,
+    runtimeClient,
     promptManager,
     databaseManager.getExecutionRunRepo(),
     databaseManager.getAIInterventionLogRepo(),
     databaseManager.getScriptRepo(),
     databaseManager.getBusinessModuleRepo(),
     databaseManager.getFunctionalModuleRepo(),
-    databaseManager.getTestScenarioRepo(),
+    databaseManager.getTestScenarioRepo()
   );
 
   // Create executor service (depends on DB)
   const executorService = new ExecutorService(
     databaseManager.getScriptRepo(),
-    databaseManager.getExecutionRunRepo(),
+    databaseManager.getExecutionRunRepo()
   );
 
   const businessVersionService = new BusinessVersionService(
@@ -263,7 +275,7 @@ export async function start() {
 
   // Create server with all dependencies
   const app = createServer({
-    proxyClient,
+    runtimeClient,
     promptManager,
     tokenTracker,
     loginRecorder,
@@ -292,10 +304,9 @@ export async function start() {
     app.log.info({ port, dbPath }, 'AI E2E server listening');
     app.log.info(
       {
-        aiChat: proxyClient.aiChatClient.getBaseUrl(),
-        browserGateway: proxyClient.browserGatewayClient.getBaseUrl(),
+        ...runtimeClient.getServiceUrls(),
       },
-      'Backend topology',
+      'Backend topology'
     );
     app.log.info(`UI: http://localhost:${port}/ai-e2e/`);
     return app;
@@ -307,15 +318,14 @@ export async function start() {
   }
 }
 
-function startCoordinatorLoop(
-  app: AppServer,
-  coordinator: SemanticCoordinatorService
-): void {
+function startCoordinatorLoop(app: AppServer, coordinator: SemanticCoordinatorService): void {
   const configured = Number.parseInt(
     process.env.AI_E2E_COORDINATOR_INTERVAL_MS ?? `${DEFAULT_COORDINATOR_INTERVAL_MS}`,
     10
   );
-  const intervalMs = Number.isFinite(configured) ? Math.max(100, configured) : DEFAULT_COORDINATOR_INTERVAL_MS;
+  const intervalMs = Number.isFinite(configured)
+    ? Math.max(100, configured)
+    : DEFAULT_COORDINATOR_INTERVAL_MS;
   let lastErrorLogAt = 0;
   const run = async () => {
     try {

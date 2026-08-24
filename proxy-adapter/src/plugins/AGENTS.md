@@ -2,33 +2,24 @@
 
 ## Overview
 
-Fastify plugins and route tree for API, chat, and debug endpoints.
+Canonical Fastify route tree for browser execution, capability, health, LiveKit, and debug endpoints.
 
 ## Structure
 
 ```
 plugins/
-├── 01-cors.plugin.ts           # CORS setup
-├── 02-swagger.plugin.ts       # OpenAPI/docs
-├── 03-error-handler.plugin.ts # Error normalization
-├── 10-routes-autoload.plugin.ts # Plugin/route registration order
 └── routes/
-    ├── health.ts               # GET /api/health
-    ├── config.ts               # GET /api/config
-    ├── api/chat/               # Session/message/stream/control APIs
-    │   ├── sessions.ts         # Session CRUD
-    │   ├── stream.ts           # SSE streaming
-    │   ├── control.ts          # Resume/pause/interrupt
-    │   ├── connectivity-test.ts
-    │   └── runtime-state.ts
-    └── debug/                  # /debug/api/* (health, test-ai, playwright, dom, mcp)
-        └── index.ts
+    ├── health.ts               # GET /api/v1/health
+    ├── capabilities.ts         # GET /api/v1/capabilities
+    ├── browser-execution.ts    # /api/v1/browser-execution/*
+    ├── api/livekit-token.ts    # GET /api/v1/livekit-token
+    └── debug/                  # /debug/* arbitrated diagnostics and live streams
 ```
 
 ## Working Rules
 
 - Keep handlers thin — delegate to services/chat handlers.
-- Preserve route registration order for `/debug`, `/api/chat`.
+- Routes are registered explicitly by `server.ts`; do not reintroduce autoload or an unused plugin barrel.
 - Use TypeBox/Fastify schema where existing routes already do.
 
 ## Anti-Patterns
@@ -37,5 +28,3 @@ plugins/
 - No stale references to old embedded Debug UI layout.
 
 ## Child AGENTS
-
-- `routes/api/chat/AGENTS.md`

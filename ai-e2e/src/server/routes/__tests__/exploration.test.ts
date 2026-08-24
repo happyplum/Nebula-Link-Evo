@@ -7,7 +7,7 @@ import { DatabaseManager } from '../../../database/db.js';
 import errorHandlerPlugin from '../../plugins/error-handler.js';
 import sseEmitterPlugin from '../../plugins/sse-emitter.js';
 import { default as explorationRoutes } from '../exploration.js';
-import type { ProxyAdapterClient } from '../../../infrastructure/proxy-adapter-client.js';
+import type { AiE2eRuntimeClient } from '../../../infrastructure/ai-e2e-runtime-client.js';
 import type { PromptTemplateManager } from '../../../ai/prompt-manager.js';
 
 // ---------- Mocks ----------
@@ -23,10 +23,12 @@ const mockExplorerService = {
 };
 
 vi.mock('../../../services/explorer-service.js', () => ({
-  ExplorerService: vi.fn(function () { return mockExplorerService; }),
+  ExplorerService: vi.fn(function () {
+    return mockExplorerService;
+  }),
 }));
 
-const mockProxyClient = {
+const mockRuntimeClient = {
   generateText: vi.fn(),
   navigate: vi.fn(),
   getSnapshot: vi.fn(),
@@ -42,7 +44,7 @@ const mockProxyClient = {
   getDOM: vi.fn(),
   openBrowser: vi.fn(),
   closeBrowser: vi.fn(),
-} as unknown as ProxyAdapterClient;
+} as unknown as AiE2eRuntimeClient;
 
 const mockPromptManager = {
   render: vi.fn(),
@@ -65,7 +67,7 @@ async function buildApp(): Promise<FastifyInstance> {
   app.register(sseEmitterPlugin);
   app.register(explorationRoutes, {
     prefix: '/api/projects/:id/exploration',
-    proxyClient: mockProxyClient,
+    runtimeClient: mockRuntimeClient,
     promptManager: mockPromptManager,
   });
   await app.ready();
@@ -83,7 +85,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   DatabaseManager.resetInstance();
-  await Promise.all(Array.from(apps, async app => app.close()));
+  await Promise.all(Array.from(apps, async (app) => app.close()));
   apps.clear();
 });
 
@@ -94,9 +96,11 @@ describe('GET /status', () => {
     const app = await buildApp();
 
     const db = DatabaseManager.getInstance();
-    db.getDatabase().prepare(
-      "INSERT OR IGNORE INTO projects (id, name, status, created_at, updated_at) VALUES (?, 'Test', 'exploring', datetime('now'), datetime('now'))"
-    ).run(PROJECT_ID);
+    db.getDatabase()
+      .prepare(
+        "INSERT OR IGNORE INTO projects (id, name, status, created_at, updated_at) VALUES (?, 'Test', 'exploring', datetime('now'), datetime('now'))"
+      )
+      .run(PROJECT_ID);
 
     // Seed 2 URLs for this project
     db.getURLRepo().create({ project_id: PROJECT_ID, url: 'https://example.com/' });
@@ -118,9 +122,11 @@ describe('GET /status', () => {
     const app = await buildApp();
 
     const db = DatabaseManager.getInstance();
-    db.getDatabase().prepare(
-      "INSERT OR IGNORE INTO projects (id, name, status, created_at, updated_at) VALUES (?, 'Test', 'draft', datetime('now'), datetime('now'))"
-    ).run(PROJECT_ID);
+    db.getDatabase()
+      .prepare(
+        "INSERT OR IGNORE INTO projects (id, name, status, created_at, updated_at) VALUES (?, 'Test', 'draft', datetime('now'), datetime('now'))"
+      )
+      .run(PROJECT_ID);
 
     const res = await app.inject({
       method: 'GET',
@@ -197,7 +203,13 @@ describe('GET /urls', () => {
     const app = await buildApp();
 
     const urls = [
-      { id: 'url-001', project_id: PROJECT_ID, url: 'https://example.com/', title: 'Home', created_at: '2026-01-01T00:00:00.000Z' },
+      {
+        id: 'url-001',
+        project_id: PROJECT_ID,
+        url: 'https://example.com/',
+        title: 'Home',
+        created_at: '2026-01-01T00:00:00.000Z',
+      },
     ];
     mockExplorerService.getDiscoveredURLs.mockReturnValue(urls);
 
@@ -218,12 +230,16 @@ describe('GET /bindings', () => {
 
     const db = DatabaseManager.getInstance();
     // Seed parent records for FK constraints
-    db.getDatabase().prepare(
-      "INSERT OR IGNORE INTO projects (id, name, status, created_at, updated_at) VALUES (?, 'Test', 'draft', datetime('now'), datetime('now'))"
-    ).run(PROJECT_ID);
-    db.getDatabase().prepare(
-      "INSERT OR IGNORE INTO business_modules (id, project_id, name, created_at) VALUES (?, ?, 'BM1', datetime('now'))"
-    ).run('bm-001', PROJECT_ID);
+    db.getDatabase()
+      .prepare(
+        "INSERT OR IGNORE INTO projects (id, name, status, created_at, updated_at) VALUES (?, 'Test', 'draft', datetime('now'), datetime('now'))"
+      )
+      .run(PROJECT_ID);
+    db.getDatabase()
+      .prepare(
+        "INSERT OR IGNORE INTO business_modules (id, project_id, name, created_at) VALUES (?, ?, 'BM1', datetime('now'))"
+      )
+      .run('bm-001', PROJECT_ID);
     const url = db.getURLRepo().create({ project_id: PROJECT_ID, url: 'https://example.com/' });
     const fm = db.getFunctionalModuleRepo().create({ business_module_id: 'bm-001', name: 'FM1' });
     const binding = db.getURLModuleBindingRepo().create({
@@ -314,9 +330,11 @@ describe('POST /urls', () => {
     const app = await buildApp();
 
     const db = DatabaseManager.getInstance();
-    db.getDatabase().prepare(
-      "INSERT OR IGNORE INTO projects (id, name, status, created_at, updated_at) VALUES (?, 'Test', 'draft', datetime('now'), datetime('now'))"
-    ).run(PROJECT_ID);
+    db.getDatabase()
+      .prepare(
+        "INSERT OR IGNORE INTO projects (id, name, status, created_at, updated_at) VALUES (?, 'Test', 'draft', datetime('now'), datetime('now'))"
+      )
+      .run(PROJECT_ID);
 
     const res = await app.inject({
       method: 'POST',
@@ -337,12 +355,16 @@ describe('POST /bind', () => {
     const app = await buildApp();
 
     const db = DatabaseManager.getInstance();
-    db.getDatabase().prepare(
-      "INSERT OR IGNORE INTO projects (id, name, status, created_at, updated_at) VALUES (?, 'Test', 'draft', datetime('now'), datetime('now'))"
-    ).run(PROJECT_ID);
-    db.getDatabase().prepare(
-      "INSERT OR IGNORE INTO business_modules (id, project_id, name, created_at) VALUES (?, ?, 'BM1', datetime('now'))"
-    ).run('bm-001', PROJECT_ID);
+    db.getDatabase()
+      .prepare(
+        "INSERT OR IGNORE INTO projects (id, name, status, created_at, updated_at) VALUES (?, 'Test', 'draft', datetime('now'), datetime('now'))"
+      )
+      .run(PROJECT_ID);
+    db.getDatabase()
+      .prepare(
+        "INSERT OR IGNORE INTO business_modules (id, project_id, name, created_at) VALUES (?, ?, 'BM1', datetime('now'))"
+      )
+      .run('bm-001', PROJECT_ID);
     const url = db.getURLRepo().create({ project_id: PROJECT_ID, url: 'https://example.com/' });
     const fm = db.getFunctionalModuleRepo().create({ business_module_id: 'bm-001', name: 'FM1' });
 
@@ -367,12 +389,16 @@ describe('DELETE /bindings/:bindingId', () => {
     const app = await buildApp();
 
     const db = DatabaseManager.getInstance();
-    db.getDatabase().prepare(
-      "INSERT OR IGNORE INTO projects (id, name, status, created_at, updated_at) VALUES (?, 'Test', 'draft', datetime('now'), datetime('now'))"
-    ).run(PROJECT_ID);
-    db.getDatabase().prepare(
-      "INSERT OR IGNORE INTO business_modules (id, project_id, name, created_at) VALUES (?, ?, 'BM1', datetime('now'))"
-    ).run('bm-001', PROJECT_ID);
+    db.getDatabase()
+      .prepare(
+        "INSERT OR IGNORE INTO projects (id, name, status, created_at, updated_at) VALUES (?, 'Test', 'draft', datetime('now'), datetime('now'))"
+      )
+      .run(PROJECT_ID);
+    db.getDatabase()
+      .prepare(
+        "INSERT OR IGNORE INTO business_modules (id, project_id, name, created_at) VALUES (?, ?, 'BM1', datetime('now'))"
+      )
+      .run('bm-001', PROJECT_ID);
     const url = db.getURLRepo().create({ project_id: PROJECT_ID, url: 'https://example.com/' });
     const fm = db.getFunctionalModuleRepo().create({ business_module_id: 'bm-001', name: 'FM1' });
     const binding = db.getURLModuleBindingRepo().create({

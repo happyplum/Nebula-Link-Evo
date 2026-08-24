@@ -11,7 +11,6 @@ import { ConversationDatabase } from './db/ConversationDatabase.js';
 import { AppService } from './services/app-service.js';
 import { ConversationManager } from './conversation/manager.js';
 import { ChatHandler } from './conversation/chat-handler.js';
-import { createCompressionClient } from './clients/compression.js';
 import { ChatSessionController } from './services/chat-session-controller.js';
 import { SessionEventHub } from './conversation/session-event-hub.js';
 import { ToolRegistry } from './tools/registry.js';
@@ -41,6 +40,10 @@ import { HarnessRunScheduler } from './harness/run-scheduler.js';
 import { ConnectivityGateService } from './services/connectivity-gate-service.js';
 import { HarnessBackupService } from './harness/backup-service.js';
 import { HarnessRetentionService } from './harness/retention-service.js';
+import {
+  requireProxyBrowserCapabilities,
+  requireProxyMcpTools,
+} from './services/proxy-capabilities.js';
 
 export const SERVICE_VERSION = '0.1.0';
 
@@ -51,11 +54,15 @@ export interface BuildAppOptions {
   skipBackups?: boolean;
   skipPreflight?: boolean;
   trustedPluginLockPath?: string;
+  harnessFactory?: typeof createHarnessRuntime;
 }
 
 /** Builds one fully isolated Fastify + Cordis Harness lifetime. */
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
   const serviceConfig = options.serviceConfig ?? loadServiceConfig();
+  if (!isLoopbackHost(serviceConfig.host)) {
+    throw new Error('ai-chat-service must bind to a loopback host');
+  }
   const dataDir = options.dataDir ?? join(process.cwd(), 'data', 'ai-chat-service');
   const conversationsPath = join(dataDir, 'conversations.sqlite');
   const agentTasksPath = join(dataDir, 'agent-tasks.sqlite');
@@ -117,9 +124,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     });
 
     const testMode = process.env.TEST_MODE === 'true' || process.env.NODE_ENV === 'test';
+    if (!testMode) {
+      await requireProxyBrowserCapabilities(serviceConfig.gatewayUrl);
+    }
     database.initialize(conversationsPath);
     runScheduler = new HarnessRunScheduler(database.connection());
-    await localAppService.initialize(options.configPath);
+    await localAppService.initialize(options.configPath, serviceConfig.gatewayUrl);
     const providerRegistry = localAppService.getRegistry();
     const providerConfig = localAppService.getConfig();
     if (!providerConfig || !providerRegistry) {
@@ -132,13 +142,16 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       await runPreflight(providerRegistry, providerKeys);
     }
 
-    const rawLoad = loadRawConfig(options.configPath ?? localAppService.getConfigPath());
+    const rawLoad = loadRawConfig(
+      options.configPath ?? localAppService.getConfigPath(),
+      serviceConfig.gatewayUrl
+    );
     if (!rawLoad.config) {
       throw new Error(`Raw AI configuration is unavailable: ${rawLoad.errors.join(', ')}`);
     }
     const harnessConfig = mapHarnessConfig(rawLoad.config, { dataDir });
     const packageRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
-    harness = await createHarnessRuntime({
+    harness = await (options.harnessFactory ?? createHarnessRuntime)({
       ...harnessConfig,
       trustedPlugins: {
         packageRoot,
@@ -146,14 +159,13 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
           options.trustedPluginLockPath ?? join(packageRoot, 'trusted-harness-plugins.lock.json'),
       },
     });
+    requireProxyMcpTools(harness.transportToolNames());
     localAppService.setHarnessMcpInventory(
       harnessConfig.mcp.map((server) => server.serverName),
       harness.transportToolNames()
     );
 
     conversationManager = new ConversationManager(conversationsPath, database);
-    const compressionClient = createCompressionClient(null);
-    if (compressionClient) conversationManager.setAiClient(compressionClient);
 
     const sessionController = new ChatSessionController(database);
     sessionController.initialize();
@@ -161,32 +173,28 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     toolRegistry = new ToolRegistry();
     const visionDefaults = providerConfig.defaults.vision;
     if (visionDefaults) {
-      try {
-        const visionModel = await providerRegistry.resolve(
-          visionDefaults.provider,
-          visionDefaults.model
-        );
-        const { VisionAnalyzer, VisionSnapshotLoader } = await import('./vision/index.js');
-        const { VisionToolProvider } = await import('./tools/providers/vision-tool-provider.js');
-        const visionConfig = {
-          maxTokens: providerConfig.settings.maxTokens,
-          temperature: providerConfig.settings.temperature,
-          timeoutMs: providerConfig.settings.timeout,
-          maxRetries: providerConfig.settings.maxRetries,
-        };
-        toolRegistry.registerProvider(
-          new VisionToolProvider(
-            new VisionAnalyzer(visionModel, visionConfig),
-            new VisionSnapshotLoader({
-              gatewayUrl: serviceConfig.gatewayUrl,
-              mcpClient: harness,
-              attachments: harness.context.attachments,
-            })
-          )
-        );
-      } catch (error) {
-        app.log.warn({ err: error }, 'Vision tool provider initialization failed');
-      }
+      const visionModel = await providerRegistry.resolve(
+        visionDefaults.provider,
+        visionDefaults.model
+      );
+      const { VisionAnalyzer, VisionSnapshotLoader } = await import('./vision/index.js');
+      const { VisionToolProvider } = await import('./tools/providers/vision-tool-provider.js');
+      const visionConfig = {
+        maxTokens: providerConfig.settings.maxTokens,
+        temperature: providerConfig.settings.temperature,
+        timeoutMs: providerConfig.settings.timeout,
+        maxRetries: providerConfig.settings.maxRetries,
+      };
+      toolRegistry.registerProvider(
+        new VisionToolProvider(
+          new VisionAnalyzer(visionModel, visionConfig),
+          new VisionSnapshotLoader({
+            gatewayUrl: serviceConfig.gatewayUrl,
+            mcpClient: harness,
+            attachments: harness.context.attachments,
+          })
+        )
+      );
     }
     await toolRegistry.initializeAll();
     const gatewayToolBridge = installGatewayToolBridge(harness.context, toolRegistry);
@@ -224,9 +232,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     }, 60_000);
     retentionTimer.unref();
     const skillRuntime = new SkillRuntime(agentTaskRepository);
-    const skillAvailableTools = new Set(
-      toolRegistry.getAvailableTools({ consumer: 'chat' }).map((tool) => tool.name)
-    );
+    const skillAvailableTools = new Set(toolRegistry.getAvailableTools().map((tool) => tool.name));
     if (
       harnessConfig.mcp.some((server) =>
         harness
@@ -311,25 +317,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       service: 'ai-chat-service',
       version: SERVICE_VERSION,
     }));
-    app.get('/config', async () => ({
-      service: 'ai-chat-service',
-      version: SERVICE_VERSION,
-      port: serviceConfig.port,
-      host: serviceConfig.host,
-      logLevel: serviceConfig.logLevel,
-      gatewayUrl: serviceConfig.gatewayUrl,
-      providers: Object.fromEntries(
-        Object.entries(serviceConfig.providers).map(([alias, provider]) => [
-          alias,
-          {
-            enabled: provider.enabled,
-            baseUrl: provider.baseUrl,
-            apiKeyConfigured: provider.apiKey.length > 0,
-          },
-        ])
-      ),
-    }));
-
     const aiRouteOptions = {
       harness,
       decision: harnessConfig.decision,
@@ -345,9 +332,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       localControlPlane: isLoopbackHost(serviceConfig.host),
       skillCatalog,
     });
-    await app.register(aiServiceRoutes, { prefix: '/api/ai', ...aiRouteOptions });
-    await app.register(chatRoutes, { prefix: '/api/chat' });
-    await app.register(debugAiRoutes, { prefix: '/api' });
     return app;
   } catch (error) {
     await disposeResources();

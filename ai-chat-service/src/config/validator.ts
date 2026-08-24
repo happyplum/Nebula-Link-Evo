@@ -47,9 +47,9 @@ export function validateConfig(config: ResolvedConfig): ValidationResult {
       errors.push('Unified mode requires decision.model');
     }
 
-    const decisionProvider = config.providers[config.defaults.decision.provider];
-    if (decisionProvider && !decisionProvider.enabled) {
-      warnings.push(`Default decision provider ${config.defaults.decision.provider} is disabled`);
+    validateDefaultModel(config, config.defaults.decision, 'decision', errors);
+    if (config.defaults.vision) {
+      validateDefaultModel(config, config.defaults.vision, 'vision', errors);
     }
   }
 
@@ -76,9 +76,6 @@ export function validateConfig(config: ResolvedConfig): ValidationResult {
       }
       if (r.maxDelayMs !== undefined && r.maxDelayMs < 0) {
         errors.push('mcp.reconnect.maxDelayMs must be >= 0');
-      }
-      if (r.jitterMs !== undefined && r.jitterMs < 0) {
-        errors.push('mcp.reconnect.jitterMs must be >= 0');
       }
     }
   }
@@ -121,35 +118,27 @@ export function validateProviderModel(
   return { valid: errors.length === 0, errors };
 }
 
-export function canProviderDo(
-  provider: string,
-  model: string,
+function validateDefaultModel(
+  config: ResolvedConfig,
+  selector: { provider: string; model: string },
   capability: 'vision' | 'decision',
-  config: ResolvedConfig
-): boolean {
-  // --- Declaration-layer checks ---
-  const providerConfig = config.providers[provider];
-  if (!providerConfig || !providerConfig.enabled) {
-    return false;
+  errors: string[]
+): void {
+  const provider = config.providers[selector.provider];
+  if (!provider) {
+    errors.push(`Default ${capability} provider ${selector.provider} was not found`);
+    return;
   }
-
-  if (!model || model.trim().length === 0) {
-    return false;
+  if (!provider.enabled) {
+    errors.push(`Default ${capability} provider ${selector.provider} is disabled`);
+    return;
   }
-
-  // --- Resolved-layer checks ---
-  const resolvedModels = getResolvedModels(config, provider);
-  if (resolvedModels && Object.keys(resolvedModels).length > 0) {
-    const modelConfig = resolvedModels[model];
-    if (!modelConfig) {
-      return false;
-    }
-
-    // Check capability support if model declares capabilities
-    if (modelConfig.capabilities && modelConfig.capabilities.length > 0) {
-      return modelConfig.capabilities.includes(capability);
-    }
+  const declared = provider.models[selector.model];
+  if (Object.keys(provider.models).length > 0 && !declared) {
+    errors.push(
+      `Default ${capability} model ${selector.model} was not declared by ${selector.provider}`
+    );
+  } else if (declared && !declared.capabilities.includes(capability)) {
+    errors.push(`Default ${capability} model ${selector.model} lacks the ${capability} capability`);
   }
-
-  return capability === 'vision' || capability === 'decision';
 }

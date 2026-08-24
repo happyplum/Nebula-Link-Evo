@@ -1,22 +1,3 @@
-import type {
-  UIElement,
-  SimplifiedDOM,
-  DOMElement,
-  Action,
-  ActionResult,
-} from '../types.js';
-import type { DOMSnapshotResponse as SharedDOMSnapshotResponse } from '@nebula-link-evo/shared';
-
-export type {
-  UIElement,
-  SimplifiedDOM,
-  DOMElement,
-  Action,
-  ActionResult,
-};
-
-export type DOMSnapshotResponse = SharedDOMSnapshotResponse;
-
 export interface Config {
   $schema?: string;
   version: string;
@@ -37,8 +18,6 @@ export interface FlatProvider {
   models?: Record<string, ModelConfig>;
 }
 
-
-
 export interface ModelConfig {
   type: 'vision' | 'decision' | 'multimodal';
   capabilities: ('vision' | 'decision')[];
@@ -55,8 +34,6 @@ export interface MCPReconnectConfig {
   baseDelayMs?: number;
   /** Maximum delay cap in ms. Default: 30000 */
   maxDelayMs?: number;
-  /** Random jitter in ms added to each delay. Default: 500 */
-  jitterMs?: number;
 }
 
 export interface MCPConfig {
@@ -75,7 +52,6 @@ export interface MCPServerConfig {
   optional?: boolean;
   /** Canonicalized before a trusted stdio server is started. */
   cwd?: string;
-  stdin?: boolean;
   url?: string;
 }
 
@@ -105,7 +81,6 @@ export interface RawSettingsConfig {
   /** Maximum context window in tokens for the decision model. Used to truncate
    *  conversation history before it overflows the model's input limit. */
   contextWindowTokens?: number | string;
-  loopGuard?: import('../services/loop-guard/types.js').RawLoopGuardConfig;
 }
 
 export interface SettingsConfig {
@@ -116,7 +91,6 @@ export interface SettingsConfig {
   maxSteps: number;
   /** Maximum context window in tokens for the decision model. */
   contextWindowTokens: number;
-  loopGuard?: import('../services/loop-guard/types.js').LoopGuardConfig;
 }
 
 export interface ResolvedConfig extends Omit<Config, 'defaults' | 'settings' | 'providers'> {

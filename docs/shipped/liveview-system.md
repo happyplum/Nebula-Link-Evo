@@ -10,5 +10,5 @@
 - [shipped] 覆盖层：`debug-ui/src/features/liveview/components/LiveViewOverlayLayer.tsx`。
 - [shipped] 传输切换：`debug-ui/src/features/liveview/components/TransportToggle.tsx`。
 - [shipped] 坐标工具：`debug-ui/src/features/liveview/lib/coordinates.ts`。
-- [shipped] LiveKit 令牌提供方（proxy-adapter）：`GET /api/livekit-token` + `proxy-adapter/src/services/livekit-publisher.ts`。
+- [shipped] LiveKit 令牌提供方（proxy-adapter）：`GET /api/v1/livekit-token` + `proxy-adapter/src/services/livekit-publisher.ts`。
 - [shipped] 验收面：`LiveKitView.test.tsx`、`useLiveKit.test.ts`、`picker-liveview-integration.parity.test.tsx`。

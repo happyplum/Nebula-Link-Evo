@@ -36,10 +36,10 @@ export function buildFindingPrompt(elementsContext: string, description: string)
     `Find the element matching this description: "${description}"`,
     '',
     'Respond ONLY with a JSON object (no markdown, no extra text):',
-    '{ "nebula_id": "<id>", "confidence": <0-1>, "reasoning": "<brief explanation>" }',
+    '{ "nebula_id": "<id>", "confidence": <0-1>, "ambiguous": false, "reasoning": "<brief visual evidence>" }',
     '',
     'If no element matches, respond with:',
-    '{ "nebula_id": null, "confidence": 0, "reasoning": "<why no match>" }',
+    '{ "nebula_id": null, "confidence": 0, "ambiguous": <true if multiple plausible elements>, "reasoning": "<why no unique match>" }',
   ].join('\n');
 }
 
@@ -50,7 +50,9 @@ export function buildAnalyzePagePrompt(elementsContext: string, objective?: stri
     'Labeled interactive elements:',
     elementsContext,
     '',
-    objective ? `Analysis objective: ${JSON.stringify(objective)}` : 'Summarize the current page state.',
+    objective
+      ? `Analysis objective: ${JSON.stringify(objective)}`
+      : 'Summarize the current page state.',
     '',
     'Respond ONLY with JSON:',
     '{"summary":"...","notable_elements":[{"nebula_id":"...","description":"...","confidence":0.0}],"risks":["..."],"reasoning":"..."}',

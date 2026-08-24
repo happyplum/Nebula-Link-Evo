@@ -3,6 +3,7 @@
  * All browser control goes through proxy-adapter REST API endpoints.
  */
 import { apiClient } from '@/shared/api/client.js';
+import type { ElementLocator } from '@nebula-link-evo/shared';
 import {
   DEBUG_DOM,
   DEBUG_PLAYWRIGHT_ACTION,
@@ -87,24 +88,14 @@ export interface ElementAtResponse {
   error?: string;
 }
 
-export interface DomSnapshotElementInfo {
-  tag: string;
-  bbox: { x: number; y: number; width: number; height: number };
-  isVisible?: boolean;
-  isInteractable?: boolean;
-  text?: string;
-  'data-nebula-id'?: string;
-  locatorBundle?: Record<string, string>;
-}
+export type DomSnapshotElementInfo = ElementLocator;
 
 export interface DomSnapshotResponse {
   success: boolean;
   dom?: {
     version?: string;
     annotated_screenshot_base64?: string;
-    elements_map?:
-      | [number, DomSnapshotElementInfo][]
-      | Record<string, DomSnapshotElementInfo>;
+    elements_map?: Record<string, DomSnapshotElementInfo>;
     snapshot_id?: string;
   };
   error?: string;
@@ -119,7 +110,7 @@ export interface ConsoleResponse {
 /** Execute a browser action (click, type, scroll, navigate, etc.) */
 export async function executeAction(
   action: string,
-  args?: Record<string, unknown>,
+  args?: Record<string, unknown>
 ): Promise<ActionResponse> {
   const x = typeof args?.x === 'number' ? args.x : undefined;
   const y = typeof args?.y === 'number' ? args.y : undefined;
@@ -177,26 +168,20 @@ export async function executeAction(
 }
 
 /** Run JavaScript expression in the browser context */
-export async function evaluateExpression(
-  expression: string,
-): Promise<EvaluateResponse> {
+export async function evaluateExpression(expression: string): Promise<EvaluateResponse> {
   return apiClient.post<EvaluateResponse>('/debug/api/playwright/evaluate', {
     expression,
   });
 }
 
 /** Take a screenshot, optionally scoped to a selector */
-export async function takeScreenshot(
-  selector?: string,
-): Promise<ScreenshotResponse> {
+export async function takeScreenshot(selector?: string): Promise<ScreenshotResponse> {
   const params = selector ? { selector } : undefined;
   return apiClient.get<ScreenshotResponse>(DEBUG_PLAYWRIGHT_SCREENSHOT, params);
 }
 
 /** Get DOM elements matching a CSS selector */
-export async function getElements(
-  selector: string,
-): Promise<ElementsResponse> {
+export async function getElements(selector: string): Promise<ElementsResponse> {
   return apiClient.get<ElementsResponse>('/debug/api/playwright/elements', {
     selector,
   });

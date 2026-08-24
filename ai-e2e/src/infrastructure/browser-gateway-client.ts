@@ -22,9 +22,9 @@
  *   - POST /debug/api/playwright/open
  *   - POST /debug/api/playwright/close
  *
- * Defaults to http://127.0.0.1:3000; overridable via `PROXY_ADAPTER_URL`
- * (unchanged from the legacy contract). An explicit empty string disables the
- * client and browser-dependent routes degrade to 503.
+ * Defaults to http://127.0.0.1:3000; overridable via `PROXY_ADAPTER_URL`.
+ * An explicit empty string disables the client and browser-dependent routes
+ * degrade to 503.
  */
 import type { AxiosInstance } from 'axios';
 import { ServiceError } from '../services/service-error.js';
@@ -62,7 +62,7 @@ export class BrowserGatewayClient {
     this.baseUrl = resolveBaseUrl(
       config.baseUrl,
       process.env.PROXY_ADAPTER_URL,
-      DEFAULT_PROXY_ADAPTER_URL,
+      DEFAULT_PROXY_ADAPTER_URL
     );
     this.projectId = config.projectId;
     this.playwrightTimeout = config.playwrightTimeout ?? DEFAULT_PLAYWRIGHT_TIMEOUT_MS;
@@ -118,18 +118,15 @@ export class BrowserGatewayClient {
 
   async screenshot(): Promise<{ base64: string }> {
     const response = await this.getDebug<{ screenshot?: string }>(
-      '/debug/api/playwright/screenshot',
+      '/debug/api/playwright/screenshot'
     );
     return { base64: response.screenshot ?? '' };
   }
 
-  async executeScript(
-    script: string,
-    args?: unknown[],
-  ): Promise<{ result: unknown }> {
+  async executeScript(script: string, args?: unknown[]): Promise<{ result: unknown }> {
     const response = await this.postDebug<{ result: unknown }>(
       '/debug/api/playwright/execute-script',
-      args ? { script, args } : { script },
+      args ? { script, args } : { script }
     );
     return { result: response.result };
   }
@@ -145,14 +142,14 @@ export class BrowserGatewayClient {
 
   async getLocalStorage(): Promise<{ data: Record<string, string> }> {
     const response = await this.getDebug<{ data?: Record<string, string> }>(
-      '/debug/api/playwright/local-storage',
+      '/debug/api/playwright/local-storage'
     );
     return { data: response.data ?? {} };
   }
 
   async getPageInfo(): Promise<{ url: string; title: string }> {
     const response = await this.getDebug<{ url?: string; title?: string }>(
-      '/debug/api/playwright/status',
+      '/debug/api/playwright/status'
     );
     return {
       url: response.url ?? '',
@@ -203,14 +200,14 @@ export class BrowserGatewayClient {
     try {
       const response = await this.client.get<DebugSuccessEnvelope & T>(
         path,
-        this.getRequestConfig(this.playwrightTimeout),
+        this.getRequestConfig(this.playwrightTimeout)
       );
       return this.unwrapDebugEnvelope(response.data);
     } catch (error) {
       throw mapAxiosToServiceError(
         error,
         'proxy-adapter',
-        'proxy-adapter Playwright request failed',
+        'proxy-adapter Playwright request failed'
       );
     }
   }
@@ -222,14 +219,14 @@ export class BrowserGatewayClient {
       const response = await this.client.post<DebugSuccessEnvelope & T>(
         path,
         body,
-        this.getRequestConfig(this.playwrightTimeout),
+        this.getRequestConfig(this.playwrightTimeout)
       );
       return this.unwrapDebugEnvelope(response.data);
     } catch (error) {
       throw mapAxiosToServiceError(
         error,
         'proxy-adapter',
-        'proxy-adapter Playwright request failed',
+        'proxy-adapter Playwright request failed'
       );
     }
   }
@@ -237,7 +234,7 @@ export class BrowserGatewayClient {
   private unwrapDebugEnvelope<T extends object>(data: DebugSuccessEnvelope & T): T {
     if (data.success === false) {
       throw ServiceError.internal(
-        extractServerMessage({ response: { data } }, 'proxy-adapter Playwright request failed'),
+        extractServerMessage({ response: { data } }, 'proxy-adapter Playwright request failed')
       );
     }
     return data;

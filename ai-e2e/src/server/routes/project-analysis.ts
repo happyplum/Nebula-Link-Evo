@@ -7,23 +7,19 @@
 import { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import fp from '../plugins/fastify-plugin.js';
 import { Type } from '@sinclair/typebox';
-import {
-  IdParamSchema,
-  BusinessModuleSchema,
-  ErrorResponseSchema,
-} from '../../types/api.js';
+import { IdParamSchema, BusinessModuleSchema, ErrorResponseSchema } from '../../types/api.js';
 import { PRDAnalyzerService } from '../../services/prd-analyzer-service.js';
 import { DatabaseManager } from '../../database/db.js';
 import { ServiceError } from '../../services/service-error.js';
 import { withRetry } from '../../utils/retry.js';
-import type { ProxyAdapterClient } from '../../infrastructure/proxy-adapter-client.js';
+import type { AiE2eRuntimeClient } from '../../infrastructure/ai-e2e-runtime-client.js';
 import type { PromptTemplateManager } from '../../ai/prompt-manager.js';
 import type { TokenBudgetTracker } from '../../ai/token-tracker.js';
 import type { SourceOrigin } from '../../types/business-module.js';
 import type { StateMachineService } from '../../services/state-machine-service.js';
 
 export interface AnalysisRouteOptions {
-  proxyClient?: ProxyAdapterClient | null;
+  runtimeClient?: AiE2eRuntimeClient | null;
   promptManager?: PromptTemplateManager;
   tokenTracker?: TokenBudgetTracker;
   stateMachine?: StateMachineService;
@@ -115,12 +111,20 @@ function requireProject(projectId: string): void {
   }
 }
 
-const analysisRoutes: FastifyPluginAsyncTypebox<AnalysisRouteOptions> = async (fastify, options) => {
-  const { proxyClient = null, promptManager: promptManagerOpt, tokenTracker: tokenTrackerOpt, stateMachine } = options;
+const analysisRoutes: FastifyPluginAsyncTypebox<AnalysisRouteOptions> = async (
+  fastify,
+  options
+) => {
+  const {
+    runtimeClient = null,
+    promptManager: promptManagerOpt,
+    tokenTracker: tokenTrackerOpt,
+    stateMachine,
+  } = options;
 
   function getAnalyzer(): PRDAnalyzerService {
-    if (!proxyClient) {
-      throw ServiceError.unavailable('AI service not configured (PROXY_ADAPTER_URL is empty)');
+    if (!runtimeClient) {
+      throw ServiceError.unavailable('AI service is not configured');
     }
     if (!promptManagerOpt) {
       throw ServiceError.internal('Prompt manager not configured');
@@ -129,7 +133,7 @@ const analysisRoutes: FastifyPluginAsyncTypebox<AnalysisRouteOptions> = async (f
       throw ServiceError.internal('Token tracker not configured');
     }
     const db = DatabaseManager.getInstance();
-    return new PRDAnalyzerService(proxyClient, promptManagerOpt, tokenTrackerOpt, db);
+    return new PRDAnalyzerService(runtimeClient, promptManagerOpt, tokenTrackerOpt, db);
   }
 
   // GET /documents — list PRD documents for a project
@@ -230,7 +234,11 @@ const analysisRoutes: FastifyPluginAsyncTypebox<AnalysisRouteOptions> = async (f
           if (project?.status === 'configuring') {
             stateMachine.transition(projectId, 'analyzing');
           }
-          if (project?.status === 'analyzing' || DatabaseManager.getInstance().getProjectRepo().findById(projectId)?.status === 'analyzing') {
+          if (
+            project?.status === 'analyzing' ||
+            DatabaseManager.getInstance().getProjectRepo().findById(projectId)?.status ===
+              'analyzing'
+          ) {
             stateMachine.transition(projectId, 'analyzed');
           }
         } catch {
@@ -337,8 +345,12 @@ const analysisRoutes: FastifyPluginAsyncTypebox<AnalysisRouteOptions> = async (f
       const fmRepo = db.getFunctionalModuleRepo();
       const fm = fmRepo.findById(moduleId);
       if (fm) {
-        if (name) { fmRepo.updateName(moduleId, name); }
-        if (description) { fmRepo.updateDescription(moduleId, description); }
+        if (name) {
+          fmRepo.updateName(moduleId, name);
+        }
+        if (description) {
+          fmRepo.updateDescription(moduleId, description);
+        }
         return { success: true };
       }
 
@@ -454,15 +466,17 @@ const analysisRoutes: FastifyPluginAsyncTypebox<AnalysisRouteOptions> = async (f
         params: ModuleIdParamSchema,
         response: {
           200: Type.Object({
-            functional_modules: Type.Array(Type.Object({
-              id: Type.String(),
-              business_module_id: Type.String(),
-              name: Type.String(),
-              description: Type.Optional(Type.String()),
-              sort_order: Type.Number(),
-              source: Type.String(),
-              created_at: Type.String(),
-            })),
+            functional_modules: Type.Array(
+              Type.Object({
+                id: Type.String(),
+                business_module_id: Type.String(),
+                name: Type.String(),
+                description: Type.Optional(Type.String()),
+                sort_order: Type.Number(),
+                source: Type.String(),
+                created_at: Type.String(),
+              })
+            ),
           }),
           404: ErrorResponseSchema,
         },
@@ -477,11 +491,15 @@ const analysisRoutes: FastifyPluginAsyncTypebox<AnalysisRouteOptions> = async (f
 
       fastify.sseEmitter.emit({
         type: 'prd.decomposition_complete',
-        data: { projectId, businessModuleId: moduleId, functionalModules: modules.map(m => m.id) },
+        data: {
+          projectId,
+          businessModuleId: moduleId,
+          functionalModules: modules.map((m) => m.id),
+        },
       });
 
       return {
-        functional_modules: modules.map(m => ({
+        functional_modules: modules.map((m) => ({
           id: m.id,
           business_module_id: m.business_module_id,
           name: m.name,
@@ -507,16 +525,22 @@ const analysisRoutes: FastifyPluginAsyncTypebox<AnalysisRouteOptions> = async (f
             total: Type.Number(),
             succeeded: Type.Number(),
             failed: Type.Number(),
-            results: Type.Array(Type.Object({
-              business_module_id: Type.String(),
-              business_module_name: Type.String(),
-              functional_modules: Type.Optional(Type.Array(Type.Object({
-                id: Type.String(),
-                name: Type.String(),
-                description: Type.Optional(Type.String()),
-              }))),
-              error: Type.Optional(Type.String()),
-            })),
+            results: Type.Array(
+              Type.Object({
+                business_module_id: Type.String(),
+                business_module_name: Type.String(),
+                functional_modules: Type.Optional(
+                  Type.Array(
+                    Type.Object({
+                      id: Type.String(),
+                      name: Type.String(),
+                      description: Type.Optional(Type.String()),
+                    })
+                  )
+                ),
+                error: Type.Optional(Type.String()),
+              })
+            ),
           }),
           404: ErrorResponseSchema,
         },
@@ -542,7 +566,7 @@ const analysisRoutes: FastifyPluginAsyncTypebox<AnalysisRouteOptions> = async (f
           results.push({
             business_module_id: bm.id,
             business_module_name: bm.name,
-            functional_modules: existing.map(fm => ({
+            functional_modules: existing.map((fm) => ({
               id: fm.id,
               name: fm.name,
               description: fm.description ?? undefined,
@@ -554,12 +578,12 @@ const analysisRoutes: FastifyPluginAsyncTypebox<AnalysisRouteOptions> = async (f
         try {
           const modules = await withRetry(
             () => analyzer.decomposeBusinessModule(projectId, bm.id),
-            { maxRetries: 2, baseDelayMs: 1000 },
+            { maxRetries: 2, baseDelayMs: 1000 }
           );
           results.push({
             business_module_id: bm.id,
             business_module_name: bm.name,
-            functional_modules: modules.map(m => ({
+            functional_modules: modules.map((m) => ({
               id: m.id,
               name: m.name,
               description: m.description ?? undefined,
@@ -574,7 +598,7 @@ const analysisRoutes: FastifyPluginAsyncTypebox<AnalysisRouteOptions> = async (f
         }
       }
 
-      const failedCount = results.filter(r => r.error).length;
+      const failedCount = results.filter((r) => r.error).length;
       const succeededCount = results.length - failedCount;
 
       fastify.sseEmitter.emit({
@@ -606,15 +630,17 @@ const analysisRoutes: FastifyPluginAsyncTypebox<AnalysisRouteOptions> = async (f
         params: ModuleIdParamSchema,
         response: {
           200: Type.Object({
-            scenarios: Type.Array(Type.Object({
-              id: Type.String(),
-              functional_module_id: Type.String(),
-              name: Type.String(),
-              description: Type.Optional(Type.String()),
-              sort_order: Type.Number(),
-              source: Type.String(),
-              created_at: Type.String(),
-            })),
+            scenarios: Type.Array(
+              Type.Object({
+                id: Type.String(),
+                functional_module_id: Type.String(),
+                name: Type.String(),
+                description: Type.Optional(Type.String()),
+                sort_order: Type.Number(),
+                source: Type.String(),
+                created_at: Type.String(),
+              })
+            ),
           }),
           404: ErrorResponseSchema,
         },
@@ -628,7 +654,7 @@ const analysisRoutes: FastifyPluginAsyncTypebox<AnalysisRouteOptions> = async (f
       const scenarios = await analyzer.generateTestScenarios(projectId, moduleId);
 
       return {
-        scenarios: scenarios.map(s => ({
+        scenarios: scenarios.map((s) => ({
           id: s.id,
           functional_module_id: s.functional_module_id,
           name: s.name,
@@ -654,16 +680,22 @@ const analysisRoutes: FastifyPluginAsyncTypebox<AnalysisRouteOptions> = async (f
             total: Type.Number(),
             succeeded: Type.Number(),
             failed: Type.Number(),
-            results: Type.Array(Type.Object({
-              functional_module_id: Type.String(),
-              functional_module_name: Type.String(),
-              scenarios: Type.Optional(Type.Array(Type.Object({
-                id: Type.String(),
-                name: Type.String(),
-                description: Type.Optional(Type.String()),
-              }))),
-              error: Type.Optional(Type.String()),
-            })),
+            results: Type.Array(
+              Type.Object({
+                functional_module_id: Type.String(),
+                functional_module_name: Type.String(),
+                scenarios: Type.Optional(
+                  Type.Array(
+                    Type.Object({
+                      id: Type.String(),
+                      name: Type.String(),
+                      description: Type.Optional(Type.String()),
+                    })
+                  )
+                ),
+                error: Type.Optional(Type.String()),
+              })
+            ),
           }),
           404: ErrorResponseSchema,
         },
@@ -691,7 +723,7 @@ const analysisRoutes: FastifyPluginAsyncTypebox<AnalysisRouteOptions> = async (f
             results.push({
               functional_module_id: fm.id,
               functional_module_name: fm.name,
-              scenarios: existing.map(s => ({
+              scenarios: existing.map((s) => ({
                 id: s.id,
                 name: s.name,
                 description: s.description ?? undefined,
@@ -703,12 +735,12 @@ const analysisRoutes: FastifyPluginAsyncTypebox<AnalysisRouteOptions> = async (f
           try {
             const scenarios = await withRetry(
               () => analyzer.generateTestScenarios(projectId, fm.id),
-              { maxRetries: 2, baseDelayMs: 1000 },
+              { maxRetries: 2, baseDelayMs: 1000 }
             );
             results.push({
               functional_module_id: fm.id,
               functional_module_name: fm.name,
-              scenarios: scenarios.map(s => ({
+              scenarios: scenarios.map((s) => ({
                 id: s.id,
                 name: s.name,
                 description: s.description ?? undefined,
@@ -724,7 +756,7 @@ const analysisRoutes: FastifyPluginAsyncTypebox<AnalysisRouteOptions> = async (f
         }
       }
 
-      const failedCount = results.filter(r => r.error).length;
+      const failedCount = results.filter((r) => r.error).length;
       const succeededCount = results.length - failedCount;
 
       fastify.sseEmitter.emit({
@@ -780,4 +812,8 @@ const analysisRoutes: FastifyPluginAsyncTypebox<AnalysisRouteOptions> = async (f
   );
 };
 
-export default fp(analysisRoutes, { fastify: '5.x', name: 'project-analysis-routes', encapsulate: true });
+export default fp(analysisRoutes, {
+  fastify: '5.x',
+  name: 'project-analysis-routes',
+  encapsulate: true,
+});

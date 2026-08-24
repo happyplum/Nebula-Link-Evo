@@ -2,12 +2,12 @@
  * Login Recorder Service
  *
  * Records login steps, stores them as LoginScript, and provides
- * replay and verification via ProxyAdapterClient.
+ * replay and verification through the explicit ai-e2e runtime client.
  */
 
 import type { DatabaseManager } from '../database/db.js';
 import type { LoginScript } from '../database/repositories/login-script-repository.js';
-import type { ProxyAdapterClient } from '../infrastructure/proxy-adapter-client.js';
+import type { AiE2eRuntimeClient } from '../infrastructure/ai-e2e-runtime-client.js';
 import type { LoginStep } from '../types/login-script.js';
 
 export interface ReplayResult {
@@ -33,11 +33,11 @@ export interface VerificationResult {
 
 export class LoginRecorderService {
   private db: DatabaseManager;
-  private client: ProxyAdapterClient;
+  private client: AiE2eRuntimeClient;
 
-  constructor(dbManager: DatabaseManager, proxyClient: ProxyAdapterClient) {
+  constructor(dbManager: DatabaseManager, runtimeClient: AiE2eRuntimeClient) {
     this.db = dbManager;
-    this.client = proxyClient;
+    this.client = runtimeClient;
   }
 
   private projectRepo() {
@@ -91,7 +91,7 @@ export class LoginRecorderService {
   }
 
   /**
-   * Replay a login script by executing each step via ProxyAdapterClient.
+   * Replay a login script through proxy-adapter browser operations.
    * Supports: navigate, fill, click, wait, screenshot.
    */
   async replayLogin(projectId: string): Promise<ReplayResult> {
@@ -144,10 +144,7 @@ export class LoginRecorderService {
    * Verify login success by checking cookies, localStorage, or element presence.
    * Must be called after replayLogin.
    */
-  async verifyLogin(
-    projectId: string,
-    config: VerificationConfig,
-  ): Promise<VerificationResult> {
+  async verifyLogin(projectId: string, config: VerificationConfig): Promise<VerificationResult> {
     const script = this.getLoginScript(projectId);
     if (!script) {
       return { success: false, error: `Login script not found for project: ${projectId}` };
@@ -171,7 +168,7 @@ export class LoginRecorderService {
         }
         case 'element': {
           const result = await this.client.executeScript(
-            `!!document.querySelector('${config.selector}')`,
+            `!!document.querySelector('${config.selector}')`
           );
           const visible = !!result.result;
           return visible

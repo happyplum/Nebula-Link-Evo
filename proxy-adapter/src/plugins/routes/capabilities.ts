@@ -33,8 +33,6 @@ const capabilitiesRoutes: FastifyPluginAsync<CapabilitiesRoutesOptions> = async 
     '/capabilities',
     {
       schema: {
-        description: 'Advertise proxy-adapter browser execution capabilities',
-        tags: ['Capabilities'],
         response: { 200: CapabilitiesSchema },
       },
     },

@@ -23,26 +23,26 @@ Browser ←→ Debug UI (:5173 dev)
               └── controlled client ──→ :3000 HTTP + /mcp
 
          AI E2E (:3002) — 自动化测试编排
-    AiChatClient(:3001) + BrowserGatewayClient(:3000)
+    AiE2eRuntimeClient(:3001) + BrowserGatewayClient(:3000)
 ```
 
 ## Core Features
 
 ### 手眼协调
 
-**感知层**：通过带标注的截图和简化 DOM v2.0（含 data-nebula-id 属性）实现页面感知。`proxy-adapter` 通过 `browser-control.*` 工具（`browser_screenshot`、`dom_snapshot` 等）提供截图和 DOM 快照能力。视觉分析由 `ai-chat-service` 内部的 `VisionAnalyzer` 负责，以 `vision.find_element` 工具对 Chat 暴露元素匹配能力。系统支持 12 种操作类型（对应 `shared/types/action.ts` 的 `Action` 联合）：click、type、focus、blur、hover、value、dispatch、scroll、navigate、wait、mcp_call、finish。
+**感知层**：`proxy-adapter` 是 DOM、截图和浏览器操作的唯一事实源，只通过 browser-execution HTTP 控制面与 `browser-control.operation_execute/get/cancel` MCP 工具提供受控能力。`ai-chat-service` 的 Vision 只读取经 `VisionSnapshotBindingV1` 校验的不可变 proxy snapshot，通过 `vision.analyze_page` 和 `vision.resolve_target` 补充页面理解与候选定位；它不保存流程状态、不调用 MCP、不操作浏览器。
 
 **目标定位**：采用 7 级目标链，依次尝试 nebula-id → role → testid → aria → text → css → xpath 选择器，确保精准定位页面元素。
 
-**视觉标记**：Vision Marker System 将操作坐标与 DOM 元素关联；标注截图由 `proxy-adapter` 的 `browser-control.dom_snapshot` 工具生成，视觉模型元素匹配由 `ai-chat-service` 的 `VisionAnalyzer` 完成。Vision 配置通过 `ai-chat-service` 的 `config.json` `defaults.vision` 字段指定 provider/model，由 resolver 自动解析对应的 apiKey 和 baseUrl；配置缺失或初始化失败时降级为不可用工具而不阻断服务启动。
+**视觉标记**：Vision Marker System 使用 `data-nebula-id` 将操作坐标与 DOM 元素关联。截图/DOM 只能由预授权 operation 产生；Vision binding 必须匹配 session、Tab、operation、artifact、request hash、状态、SHA、MIME 与 size。Vision 配置通过 `config/config.json` 的 `defaults.vision` 指定角色模型；缺少模型能力或 secret 时 fail closed，不发布对应工具。
 
 ### Agent Chat 会话
 
 **会话状态机**：idle → running ↔ paused，interrupt → interrupted，cancel → cancelled，completed。每个会话通过互斥锁保证同一时间只有一个活跃执行，支持暂停、恢复、中断等操作。
 
-**工具与扩展**：MCP（Model Context Protocol）提供丰富的扩展能力。Chat 中 `browser-control.*` 工具由 ai-chat-service 通过 MCP-over-HTTP 自动连接 `proxy-adapter` 的 `gateway` 服务器（默认 `PROXY_ADAPTER_URL` + `/mcp`）获取；视觉分析工具 `vision.find_element` 由 ai-chat-service 内部提供，不通过 MCP 暴露。其他外部 MCP 工具可继续通过 stdio 或 StreamableHTTP 协议动态注册与调用。外部 MCP 工具默认保留原始工具名，若与已注册工具同名则按 `<serverName>-<toolName>` 前缀规则暴露。MCP 客户端具备崩溃恢复机制：状态机管理 server 生命周期，事件驱动检测断链，指数退避自动重连（最多 5 次），`toolsChanged` 事件通知工具变更。
+**工具与扩展**：Chat 与 Agent Task 共用每个 Fastify 实例唯一的 DSH Agent Loop。ai-chat-service 通过模型不可见的 DSH MCP transport 连接 proxy `/mcp`，启动时把严格 Schema 校验后的产品 wrapper 一次性投影到 ToolRuntime；模型只选择已授权 step，运行时注入 session/Tab/lease/token/target/args。扩展只允许部署期精确锁定的同进程插件或已配置 MCP server，运行期不安装、不热同步组合树；required gateway 发现、Schema 或 capability 不满足即启动失败。
 
-**上下文管理**：消息数超过 20 时自动压缩上下文，Chat SSE 每次建连都会先发送完整 `session.snapshot` 再继续 live stream，后台任务队列支持 3 次重试和 10 分钟空闲清理。
+**上下文管理**：DSH compaction、retry、token meter 与持久 JSONL transcript 统一承载上下文；SQLite 保存控制面和公开事件投影。Chat SSE 每次建连先发送完整 `session.snapshot` 再继续 live stream。
 
 ### 实时观测与控制
 
@@ -67,22 +67,22 @@ Browser ←→ Debug UI (:5173 dev)
 
 ## Packages
 
-| Package | Port | Role |
-|---------|------|------|
-| `proxy-adapter` | :3000 | 纯浏览器 MCP 网关（browser-control.* 工具、调试流、LiveKit 令牌、配置与健康检查） |
-| `ai-chat-service` | :3001 | AI 对话服务（会话管理、AI provider 编排、Chat SSE、provider preflight、视觉分析、数据库备份） |
-| `debug-ui` | :5173 | 实时调试监控面板（chat SSE → :3001, browser/debug → :3000） |
-| `ai-e2e` | :3002 | AI 驱动的 E2E 编排；Legacy 使用 AiChat/BrowserGateway，semantic v1 使用 AgentTask/SemanticBrowser 客户端 |
-| `shared` | — | 共享类型和工具库 |
-| `integrations/browser-control-client` | — | 受控 HTTP/MCP 客户端、自动会话控制器与 `nebula-browser` CLI |
-| `integrations/deepseek-harness-plugin` | — | 仅暴露 observe/act 的 DeepSeek Harness bundle；act 逐次审批 |
+| Package                                | Port  | Role                                                                                                     |
+| -------------------------------------- | ----- | -------------------------------------------------------------------------------------------------------- |
+| `proxy-adapter`                        | :3000 | 浏览器能力网关（3 个受控 operation MCP 工具、browser-execution 控制面、受仲裁调试流、LiveKit、健康检查） |
+| `ai-chat-service`                      | :3001 | 唯一 AI 驱动核心（统一 Harness、Chat/Agent Task、模型、Vision、MCP/Skills、预算、持久化与插件装配）      |
+| `debug-ui`                             | :5173 | 实时调试监控面板（chat SSE → :3001, browser/debug → :3000）                                              |
+| `ai-e2e`                               | :3002 | AI 驱动的 E2E 业务编排；通过 AiE2eRuntimeClient 与 BrowserGateway/SemanticBrowser 消费两个基础服务       |
+| `shared`                               | —     | 共享类型和工具库                                                                                         |
+| `integrations/browser-control-client`  | —     | 受控 HTTP/MCP 客户端、自动会话控制器与 `nebula-browser` CLI                                              |
+| `integrations/deepseek-harness-plugin` | —     | 仅暴露 observe/act 的 DeepSeek Harness bundle；act 逐次审批                                              |
 
 ## Quick Start
 
 **环境要求**：
 
-- Node.js >= 22.13.0
-- pnpm >= 8
+- Node.js ^22.19.0 或 >=24.0.0
+- pnpm 10.34.5
 
 **安装依赖**：
 
@@ -115,7 +115,7 @@ start.bat
 **验证安装**：
 
 ```bash
-curl http://localhost:3000/api/health
+curl http://localhost:3000/api/v1/health
 ```
 
 ## Project Structure
@@ -124,8 +124,7 @@ curl http://localhost:3000/api/health
 debug-ui/           # Frontend (React 19 + TypeScript + Vite)
 proxy-adapter/      # Browser MCP gateway (Fastify, MCP Server, Playwright control)
   src/mcp-server/   #   MCP Server transport (StreamableHTTP)
-  src/tools/        #   ToolRegistry + browser-control providers
-  src/browser-tools/#   browser-control tool definitions
+  src/tools/        #   ToolRegistry + browser-execution provider
 ai-chat-service/    # AI chat backend (Fastify, conversation, chat SSE, provider orchestration)
 ai-e2e/             # E2E automation orchestrator (consumes proxy-adapter and ai-chat-service HTTP APIs)
 shared/             # Shared types & utils (@nebula-link-evo/shared)
@@ -178,9 +177,9 @@ AGPL 允许个人和企业使用、修改与分发软件，但必须遵守其开
 
 系统按“浏览器能力 → AI 基础能力 → E2E 业务”三层演进，层间职责不得倒置：
 
-- **`proxy-adapter`（shipped）**：Playwright/CDP 集成的唯一所有者，负责页面分析、DOM/截图证据和浏览器动作，并通过 `browser-control.*` MCP 工具及调试 API 对外提供服务。当前实现由进程内 Playwright 启动 Chromium，可选开放 remote-debugging-port，并通过页面 `CDPSession` 获取屏播帧；没有外部 `playwright-server` 或 `connectOverCDP` 链路。
+- **`proxy-adapter`（shipped）**：Playwright/CDP 集成的唯一所有者，负责页面分析、DOM/截图证据和浏览器动作，只通过 `browser-control.operation_execute/get/cancel`、browser-execution HTTP 控制面及受仲裁调试 API 对外服务。活动受控 session 期间，直接调试写、DOM 和截图会 fail closed 为 `browser_busy`，实时只读画面仍可供人类观察，为后续显式共享控制保留安全边界。
 - **`integrations/*`（shipped）**：`browser-control-client` 只通过既有 loopback HTTP 控制面与 `/mcp` 管理受控浏览器会话，提供 `nebula-browser` CLI；DeepSeek Harness bundle 只暴露收窄后的 observe/act 工具、隐藏 binding 并对每个 act 使用原生一次性审批。两者都不拥有 Playwright/CDP，也不替代 `ai-chat-service` 或 `ai-e2e` 编排。
-- **`ai-chat-service`（in-progress）**：可复用 AI 基础能力层。分析/决策模型负责理解需求、文档和浏览器证据并规划下一步测试动作；主代理和子代理都可调用视觉模型，但视觉模型每次只完成一个具有完整输入的分析问题，不保存流程状态或连续执行。跨服务只传递 `snapshot_id`、`nebula_id`、`locator_bundle`、置信度等可序列化目标引用，不传递进程内 Playwright 对象。MCP 统一由 DSH transport/ToolRuntime 管理，受限 Agent task、正式 Run 的逐 effect 授权闭环和本地只读声明式 Skills Runtime 已交付；通用视觉 v2 的全业务接入仍为 `pending`。
+- **`ai-chat-service`（in-progress）**：唯一可复用 AI 驱动核心。分析/决策模型理解需求、文档和浏览器证据并规划动作；Vision 每次只处理一个完整、不可变且经 proxy binding 校验的 snapshot，输出页面摘要或可序列化 locator candidates，不保存流程状态、不连续执行、不调用 MCP、不操作浏览器。每应用实例唯一 DSH loop、MCP/ToolRuntime、受限 Agent task、逐 effect 授权、Vision v2、声明式 Skills、持久化与部署锁定插件均已交付；生产备份恢复演练仍 pending。
 - **`ai-e2e`（in-progress）**：面向 E2E 的业务层，通过 PRD 与真实网页建立业务版本、页面、功能模块、功能脚本和测试场景。Legacy TypeScript 链保持兼容；semantic 业务版本、结构化 Authoring/Run、主/页面任务协调、可视语义执行与证据闭环已交付。完整 bootstrap/recheck、生产 UI 和 legacy importer 仍需实现。
 
 **领域层级**：逻辑页面由不含部署 Origin 的规范化路由模板与身份参数约束标识；实际运行再绑定部署、动态参数和参考基线。一个页面包含多个功能模块，一个模块包含多个可复用、可独立验证和修复的功能脚本。首期脚本采用显式输入、线性步骤、硬业务断言、成功后输出和声明副作用；场景使用无环调用图负责跨模块/页面的顺序、重复、分支、依赖和数据传递。PRD 形成场景定义与 TODO 模板，每次执行冻结独立运行计划并产生运行 TODO 和执行尝试。
@@ -196,7 +195,7 @@ AGPL 允许个人和企业使用、修改与分发软件，但必须遵守其开
 ### AI E2E 需求基线
 
 - `ai-e2e` 当前定位是 **PRD 驱动的 E2E 自动化测试编排器**，不是新的浏览器底座；它负责把 **需求分析 → 页面探索 → URL 绑定 → 脚本生成 → 执行 → 单次失败诊断 → 可选自动修复** 串成闭环。
-- `ai-e2e` 必须继续作为 `proxy-adapter` 与 `ai-chat-service` 的纯消费者：Legacy 经 `AiChatClient`/`BrowserGatewayClient`，semantic v1 经 `AgentTaskClient`/`SemanticBrowserClient`；不得重新引入直连 provider、Playwright 或 CDP 的实现。
+- `ai-e2e` 必须继续作为 `proxy-adapter` 与 `ai-chat-service` 的纯消费者：显式装配的 `AiE2eRuntimeClient` 组合纯文本与 Agent task 客户端，浏览器调用经 `BrowserGatewayClient`/`SemanticBrowserClient`；不得重新引入聚合 facade、直连 provider、Playwright 或 CDP。
 - 当前已实现主链路：L1/L2 模块分析、测试场景生成、URL 绑定建议与人工调整、脚本生成、脚本人工编辑与版本历史、脚本执行、run 级失败诊断、自动修复审批/拒绝、`/ai-e2e/` 包级 UI。
 - 探索阶段已支持 SPA-aware URL 发现：在原有 AI/BFS 基础上，补充使用渲染后 DOM、HashRouter、History API 观察器和可访问 router 配置发现客户端路由；非 SPA 站点保持原有 BFS 行为。
 - 上述 3 个已知缺口现已全部实现：
@@ -225,7 +224,7 @@ AGPL 允许个人和企业使用、修改与分发软件，但必须遵守其开
 - `sendMessage()` performs optimistic incremental append (no full message-list DOM wipe).
 - `assistant.started` / stream fallback placeholders append incrementally instead of forcing `renderCurrentSessionMessages()`.
 - `message.created` confirms optimistic user messages by transitioning temp DOM `data-id` to server ID, avoiding duplicate user bubbles.
-- `/#/chat` uses SSE as the only history and live source; it must not call `GET /api/chat/sessions/:id/messages` to hydrate visible chat history.
+- `/#/chat` uses SSE as the only history and live source; it must not call `GET /api/v1/chat/sessions/:id/messages` to hydrate visible chat history.
 - Every chat SSE connection must bootstrap with a full `session.snapshot`, then continue with live events only; no `lastEventId` / `Last-Event-ID` resume contract remains in the product behavior.
 - `session.snapshot` is responsible for carrying restorable assistant thinking/history, so reconnects and page re-entry rebuild from snapshot rather than cursor-based replay.
 
@@ -261,22 +260,23 @@ AGPL 允许个人和企业使用、修改与分发软件，但必须遵守其开
 **当前架构**：
 
 ```
-proxy-adapter (:3000) — 纯浏览器 MCP 网关
-  ├── MCP Server (StreamableHTTP) 对外暴露 browser-control.*
+proxy-adapter (:3000) — 纯浏览器能力网关
+  ├── MCP Server (StreamableHTTP) 仅暴露 browser-control.operation_execute/get/cancel
   ├── 浏览器调试 REST 端点（MJPEG、DOM 快照）
   ├── LiveKit 令牌
-  └── 配置与健康检查
+  └── canonical v1 健康与 capability
 
-ai-chat-service (:3001) — AI 对话服务
+ai-chat-service (:3001) — 唯一 AI 驱动核心
   ├── DSH MCP transport → proxy-adapter MCP Server（仅获取受控操作工具）
   ├── AI provider 编排（多模型、流式）
   ├── 会话（conversation/session）管理
   ├── Chat SSE → debug-ui
-  ├── Provider preflight（/test-ai、/verify-keys）
+  ├── Provider/capability preflight（/api/v1/test-ai）
   └── 数据库备份
 ```
 
 **完成项**：
+
 - proxy-adapter 退化为纯浏览器 MCP 网关，移除所有 AI 对话逻辑
 - ai-chat-service 承载所有 AI 对话、provider 编排、会话管理
 - `playwright-server` 已移除，proxy-adapter 内联 Playwright 控制 Chromium
@@ -289,9 +289,9 @@ ai-chat-service (:3001) — AI 对话服务
 
 ### Tech Debt
 
-- [tech-debt] Root `pnpm lint` reports ~345 ESLint problems (155 errors, 190 warnings). ~139 errors are test-file parsing issues (tests excluded from tsconfig). ~12 source errors are React Compiler warnings in debug-ui (purity/memoization rules, not dead code). Remaining ~4 are style issues in non-test source.
-- [tech-debt] Root `pnpm format:check` reports 184 pre-existing source files that do not match the current Prettier configuration; repository governance files are checked separately in CI until that baseline is repaired.
-- [tech-debt] Root `pnpm test` occasionally flakes due to resource contention on Windows (LiveKit canvas timeout, marker-injector hook timeout). Individual package runs are stable.
+- [tech-debt] Root `pnpm lint` exits successfully with 0 errors and 207 existing warnings, concentrated in historical test assertions and a small set of existing non-null/`any` declarations. Test files are parsed by the active TypeScript ESLint project; this change introduces no new warning.
+- [tech-debt] Root `pnpm format:check` reports 117 pre-existing source files that do not match the current Prettier configuration; every file changed by the Harness/browser cutover is formatted.
+- [tech-debt] Parallel root `pnpm test` occasionally hits Windows Vitest hook/resource timeouts (including UI execution hooks, LiveKit canvas, or marker injection). The full serial workspace run is stable and is the release gate on Windows.
 
 ### Known Behaviors
 

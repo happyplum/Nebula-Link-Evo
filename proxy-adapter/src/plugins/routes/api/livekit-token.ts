@@ -1,10 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { AccessToken } from 'livekit-server-sdk';
 import { BrowserService } from '../../../browser-engine/services/browser-service.js';
-import {
-  isPublisherActive,
-  startPublisher,
-} from '../../../services/livekit-publisher.js';
+import { isPublisherActive, startPublisher } from '../../../services/livekit-publisher.js';
 
 // Env vars are read at call sites, not module level, to ensure dotenv has loaded.
 
@@ -13,8 +10,6 @@ const routes: FastifyPluginAsync = async (fastify) => {
     '/livekit-token',
     {
       schema: {
-        description: 'Sign a LiveKit access token inline for debug-ui/ai-e2e',
-        tags: ['LiveKit'],
         summary: 'Get LiveKit token',
         response: {
           200: {

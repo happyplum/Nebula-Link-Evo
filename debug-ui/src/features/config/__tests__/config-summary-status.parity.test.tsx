@@ -7,17 +7,34 @@ import { testIds } from '@/shared/testing/testids.js';
 
 // Mock all config API hooks to prevent actual network calls
 vi.mock('@/features/config/api/config.queries.js', () => ({
-  useConfig: vi.fn(() => ({ data: { mode: 'dev', decision: { provider: 'openai', model: 'gpt-4o' } }, isLoading: false, error: null })),
-  useHealth: vi.fn(() => ({ data: { status: 'ok', services: { playwright: 'ok' }, mcp: { enabled: true, servers: [] } }, isLoading: false, error: null })),
-  useMcpStatus: vi.fn(() => ({ data: { enabled: true, servers: [] }, isLoading: false, error: null })),
-  useVerifyKeys: vi.fn(() => ({ data: { keys: [{ provider: 'openai', displayName: 'OpenAI', status: 'valid', keyPreview: 'sk-...xyz' }] }, isLoading: false, error: null })),
+  useConfig: vi.fn(() => ({
+    data: { mode: 'dev', decision: { provider: 'openai', model: 'gpt-4o' } },
+    isLoading: false,
+    error: null,
+  })),
+  useHealth: vi.fn(() => ({
+    data: { status: 'ok', services: { playwright: 'ok' }, mcp: { enabled: true, servers: [] } },
+    isLoading: false,
+    error: null,
+  })),
+  useMcpStatus: vi.fn(() => ({
+    data: { enabled: true, servers: [] },
+    isLoading: false,
+    error: null,
+  })),
 }));
 
 // Mock mutations for ConnectivityTest and AiTest
 vi.mock('@/features/config/api/config.mutations.js', () => {
   const mockMutate = vi.fn();
   return {
-    useTestAi: vi.fn(() => ({ mutate: mockMutate, mutateAsync: vi.fn(), isPending: false, isError: false, error: null })),
+    useTestAi: vi.fn(() => ({
+      mutate: mockMutate,
+      mutateAsync: vi.fn(),
+      isPending: false,
+      isError: false,
+      error: null,
+    })),
   };
 });
 
@@ -26,7 +43,13 @@ vi.mock('@tanstack/react-query', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-query')>();
   return {
     ...actual,
-    useMutation: vi.fn(() => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false, isError: false, error: null })),
+    useMutation: vi.fn(() => ({
+      mutate: vi.fn(),
+      mutateAsync: vi.fn(),
+      isPending: false,
+      isError: false,
+      error: null,
+    })),
   };
 });
 
@@ -41,31 +64,30 @@ vi.mock('@/shared/ui/StatusIndicator.js', () => ({
 
 // Mock LoadingSpinner
 vi.mock('@/shared/ui/LoadingSpinner.js', () => ({
-  LoadingSpinner: ({ label }: { label?: string }) => <div data-testid="mock-loading-spinner">{label}</div>,
+  LoadingSpinner: ({ label }: { label?: string }) => (
+    <div data-testid="mock-loading-spinner">{label}</div>
+  ),
 }));
 
 /**
- * Parity test for P4-26: Config summary and service/API-key status blocks.
+ * Parity test for config summary and service status blocks.
  *
- * Tests structural rendering and testid placement for all 6 config components:
+ * Tests structural rendering and testid placement for all 5 config components:
  * - ConfigPanel
  * - HealthStatusCard
  * - McpStatusList
- * - ApiKeysStatus
  * - ConnectivityTest
  * - AiTest
  *
  * Verifies that all components render with correct testids in the config tab.
  */
-describe('P4-26: Config Summary and Service/API-Key Status Blocks - Parity', () => {
+describe('Config Summary and Service Status Blocks', () => {
   let queryClient: QueryClient;
 
   const renderWithProviders = (ui: React.ReactElement) => {
     return render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
-          {ui}
-        </MemoryRouter>
+        <MemoryRouter>{ui}</MemoryRouter>
       </QueryClientProvider>
     );
   };
@@ -81,13 +103,6 @@ describe('P4-26: Config Summary and Service/API-Key Status Blocks - Parity', () 
         },
       },
     });
-  });
-
-  // Test: ApiKeysStatus component renders with correct testid
-  it('renders ApiKeysStatus component (testid: configApiKeysStatus)', async () => {
-    const { ApiKeysStatus } = await import('@/features/config/components/ApiKeysStatus.js');
-    renderWithProviders(<ApiKeysStatus />);
-    expect(screen.getByTestId(testIds.configApiKeysStatus)).toBeInTheDocument();
   });
 
   // Test: ConnectivityTest component renders with correct testid
@@ -125,33 +140,25 @@ describe('P4-26: Config Summary and Service/API-Key Status Blocks - Parity', () 
     expect(screen.getByTestId(testIds.mcpStatusList)).toBeInTheDocument();
   });
 
-  // Comprehensive test: all 6 config components render with correct testids
-  it('renders all 6 config components with correct testids', async () => {
-    const {
-      ConfigPanel,
-      HealthStatusCard,
-      McpStatusList,
-      ApiKeysStatus,
-      ConnectivityTest,
-      AiTest,
-    } = await import('@/features/config/components/index.js');
+  // Comprehensive test: all config components render with correct testids
+  it('renders all 5 config components with correct testids', async () => {
+    const { ConfigPanel, HealthStatusCard, McpStatusList, ConnectivityTest, AiTest } =
+      await import('@/features/config/components/index.js');
 
     renderWithProviders(
       <>
         <ConfigPanel />
         <HealthStatusCard />
         <McpStatusList />
-        <ApiKeysStatus />
         <ConnectivityTest />
         <AiTest />
       </>
     );
 
-    // Verify all 6 components render with correct testids
+    // Verify all components render with correct testids
     expect(screen.getByTestId(testIds.configPanel)).toBeInTheDocument();
     expect(screen.getByTestId(testIds.healthStatusCard)).toBeInTheDocument();
     expect(screen.getByTestId(testIds.mcpStatusList)).toBeInTheDocument();
-    expect(screen.getByTestId(testIds.configApiKeysStatus)).toBeInTheDocument();
     expect(screen.getByTestId(testIds.configConnectivityTest)).toBeInTheDocument();
     expect(screen.getByTestId(testIds.configAiTest)).toBeInTheDocument();
   });

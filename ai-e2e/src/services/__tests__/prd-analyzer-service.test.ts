@@ -3,13 +3,13 @@ import { PRDAnalyzerService } from '../prd-analyzer-service.js';
 import { DatabaseManager } from '../../database/db.js';
 import { PromptTemplateManager } from '../../ai/prompt-manager.js';
 import { TokenBudgetTracker } from '../../ai/token-tracker.js';
-import type { ProxyAdapterClient } from '../../infrastructure/proxy-adapter-client.js';
+import type { AiE2eRuntimeClient } from '../../infrastructure/ai-e2e-runtime-client.js';
 
-// ---------- Mock ProxyAdapterClient ----------
+// ---------- Mock AiE2eRuntimeClient ----------
 
 const mockGenerateText = vi.fn();
 
-function createMockProxyClient(): ProxyAdapterClient {
+function createMockRuntimeClient(): AiE2eRuntimeClient {
   return {
     generateText: mockGenerateText,
     navigate: vi.fn(),
@@ -26,7 +26,7 @@ function createMockProxyClient(): ProxyAdapterClient {
     getDOM: vi.fn(),
     openBrowser: vi.fn(),
     closeBrowser: vi.fn(),
-  } as unknown as ProxyAdapterClient;
+  } as unknown as AiE2eRuntimeClient;
 }
 
 // ---------- Helpers ----------
@@ -35,13 +35,13 @@ const PROMPTS_DIR = 'prompts';
 
 function seedProject(projectId: string): void {
   const db = DatabaseManager.getInstance();
-  db.getDatabase().prepare(
-    'INSERT OR IGNORE INTO projects (id, name, status) VALUES (?, ?, ?)',
-  ).run(projectId, `Project ${projectId}`, 'draft');
+  db.getDatabase()
+    .prepare('INSERT OR IGNORE INTO projects (id, name, status) VALUES (?, ?, ?)')
+    .run(projectId, `Project ${projectId}`, 'draft');
 }
 
 function createService(): PRDAnalyzerService {
-  const proxyClient = createMockProxyClient();
+  const runtimeClient = createMockRuntimeClient();
   const promptManager = new PromptTemplateManager(PROMPTS_DIR);
   const tokenTracker = new TokenBudgetTracker(100000);
   const db = DatabaseManager.getInstance();
@@ -49,7 +49,7 @@ function createService(): PRDAnalyzerService {
   seedProject('proj-1');
   seedProject('proj-2');
   seedProject('proj-3');
-  return new PRDAnalyzerService(proxyClient, promptManager, tokenTracker, db);
+  return new PRDAnalyzerService(runtimeClient, promptManager, tokenTracker, db);
 }
 
 // ---------- Sample Data ----------
@@ -73,8 +73,18 @@ const L1_AI_RESPONSE = JSON.stringify([
 ]);
 
 const L2_AI_RESPONSE = JSON.stringify([
-  { name: '用户注册', description: '新用户注册账号功能', pages: ['/register'], key_elements: ['注册表单', '验证码'] },
-  { name: '用户登录', description: '用户登录系统功能', pages: ['/login'], key_elements: ['登录表单', '记住我'] },
+  {
+    name: '用户注册',
+    description: '新用户注册账号功能',
+    pages: ['/register'],
+    key_elements: ['注册表单', '验证码'],
+  },
+  {
+    name: '用户登录',
+    description: '用户登录系统功能',
+    pages: ['/login'],
+    key_elements: ['登录表单', '记住我'],
+  },
 ]);
 
 const SCENARIO_AI_RESPONSE = JSON.stringify([
@@ -158,7 +168,9 @@ describe('PRDAnalyzerService', () => {
 
     it('should throw on empty PRD content', async () => {
       await expect(service.analyzePRD('proj-1', '')).rejects.toThrow('PRD content cannot be empty');
-      await expect(service.analyzePRD('proj-1', '   ')).rejects.toThrow('PRD content cannot be empty');
+      await expect(service.analyzePRD('proj-1', '   ')).rejects.toThrow(
+        'PRD content cannot be empty'
+      );
     });
 
     it('should truncate long PRD and include warning', async () => {
@@ -237,9 +249,9 @@ describe('PRDAnalyzerService', () => {
     });
 
     it('should throw on non-existent business module', async () => {
-      await expect(
-        service.decomposeBusinessModule('proj-1', 'non-existent-id'),
-      ).rejects.toThrow(/not found/i);
+      await expect(service.decomposeBusinessModule('proj-1', 'non-existent-id')).rejects.toThrow(
+        /not found/i
+      );
     });
 
     it('should track token usage for decomposition', async () => {
@@ -273,9 +285,7 @@ describe('PRDAnalyzerService', () => {
         tokenUsage: { promptTokens: 10, completionTokens: 5 },
       });
 
-      await expect(
-        service.decomposeBusinessModule('proj-1', l1Modules[0].id),
-      ).rejects.toThrow();
+      await expect(service.decomposeBusinessModule('proj-1', l1Modules[0].id)).rejects.toThrow();
     });
   });
 
@@ -311,9 +321,9 @@ describe('PRDAnalyzerService', () => {
     });
 
     it('should throw on non-existent functional module', async () => {
-      await expect(
-        service.generateTestScenarios('proj-1', 'non-existent-id'),
-      ).rejects.toThrow(/not found/i);
+      await expect(service.generateTestScenarios('proj-1', 'non-existent-id')).rejects.toThrow(
+        /not found/i
+      );
     });
 
     it('should track token usage for scenario generation', async () => {

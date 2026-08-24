@@ -19,7 +19,7 @@ PRD 驱动的 E2E 自动化测试编排器。把"需求分析 → 页面探索 �
 - [shipped] 项目状态机：`draft → configuring → analyzing → analyzed → exploring → explored → generating → ready → running → completed`。入口：StateMachineService。
 - [shipped] SSE 阶段事件推送：`ai-e2e/src/server/plugins/`（SSE）+ `ai-e2e/ui/src/hooks/use-sse.ts`。路由 `GET /api/projects/:id/events`。
 - [shipped] 登录步骤录制与回放：LoginRecorderService。
-- [shipped] 双后端 HTTP 客户端：`AiChatClient`（→ ai-chat-service :3001 `POST /api/ai/generate`）、`BrowserGatewayClient`（→ proxy-adapter :3000 `/debug/api/*`）。`ProxyAdapterClient` 为 facade。
+- [shipped] `AiE2eRuntimeClient` 显式组合 `AiChatClient`（→ ai-chat-service :3001 `POST /api/v1/ai/generate`）与 `AgentTaskClient`（→ `/api/v1/agent-tasks`）；`BrowserGatewayClient`/`SemanticBrowserClient` 分别消费 proxy 调试面与 browser-execution 控制面。不存在跨 AI/proxy 的聚合 facade。
 - [shipped] 独立 SQLite（项目 / scenario / script / run / diagnosis）：`ai-e2e/src/database/`。不与 proxy-adapter / ai-chat-service 共享。
 - [shipped] Prompt 模板（稳定资产）：`ai-e2e/prompts/*.md`。脚本生成模板按 DOM 快照 v2 的 `elements_map[*].locator_bundle` 读取定位候选，优先使用真实 `testid`，不会把元素 ID 当作 testid。必须保留。
 - [shipped] SPA UI 挂载前缀 `/ai-e2e/`：HomePage（`/`）+ ProjectPage（`/project/:projectId`），项目页为四步向导。
