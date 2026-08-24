@@ -91,6 +91,68 @@ describe('Agent task routes', () => {
     expect(skills.json()).toEqual([]);
   });
 
+  it('accepts the caller-frozen side-effect authorization envelope', async () => {
+    const app = await setup();
+    const request = body();
+    const create = await app.inject({
+      method: 'POST',
+      url: '/api/v1/agent-tasks',
+      payload: {
+        ...request,
+        toolPolicy: {
+          allow: ['browser-control.operation_execute'],
+          constraints: {
+            'browser-control.operation_execute': {
+              steps: [
+                {
+                  stepId: 'step-1',
+                  kind: 'act',
+                  operation: 'navigate',
+                  args: { url: 'http://example.test/' },
+                  effectId: 'effect-1',
+                  maxAffectedItems: 1,
+                },
+              ],
+            },
+          },
+        },
+        browserBinding: {
+          browserSessionId: 'session-1',
+          tabId: 'tab-1',
+          browserLeaseId: 'lease-1',
+          browserLeaseToken: 'token-1',
+          browserLeaseSequence: 1,
+          access: 'control',
+        },
+        sideEffectAuthorization: {
+          contextType: 'run',
+          contextId: 'run-1',
+          environment: 'test',
+          policyVersion: 'side-effect-policy/1.0',
+          policyEvaluationId: 'evaluation-1',
+          policyResult: 'auto_allowed',
+          projectionSha256: 'a'.repeat(64),
+          effects: [
+            {
+              stepId: 'step-1',
+              effectId: 'effect-1',
+              kind: 'update',
+              maxAffectedItems: 1,
+              reversibility: 'reversible',
+            },
+          ],
+        },
+        correlation: { runId: 'run-1' },
+      },
+    });
+
+    expect(create.statusCode).toBe(202);
+    expect(create.json().request.sideEffectAuthorization).toMatchObject({
+      contextId: 'run-1',
+      policyEvaluationId: 'evaluation-1',
+    });
+  });
+
   it('returns a structured conflict and refuses non-loopback control-plane exposure', async () => {
     const app = await setup();
     await app.inject({
