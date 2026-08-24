@@ -51,6 +51,7 @@ export class AgentTaskService {
     }
   >();
   private readonly controllers = new Map<string, AbortController>();
+  private readonly operationCancellers = new Map<string, () => Promise<void>>();
   private readonly runs = new Set<Promise<void>>();
   private readonly taskRuns = new Map<string, Promise<void>>();
   private readonly commandRuns = new Map<
@@ -304,6 +305,14 @@ export class AgentTaskService {
         settleOperation: (toolCallId, status, proxyStatus) => {
           this.repository.settleOperation(taskId, toolCallId, status, proxyStatus);
         },
+        registerOperationCanceller: (cancel) => {
+          this.operationCancellers.set(taskId, cancel);
+          return () => {
+            if (this.operationCancellers.get(taskId) === cancel) {
+              this.operationCancellers.delete(taskId);
+            }
+          };
+        },
       });
       if (this.controlActions.has(taskId) || this.repository.get(taskId)?.status !== 'running') {
         return;
@@ -345,6 +354,7 @@ export class AgentTaskService {
       this.runScheduler?.complete(taskId);
       clearTimeout(timeout);
       this.controllers.delete(taskId);
+      this.operationCancellers.delete(taskId);
       const status = this.repository.get(taskId)?.status;
       if (status !== 'paused' && this.controlActions.get(taskId) !== 'pause') {
         this.activeRequests.delete(taskId);
@@ -478,6 +488,7 @@ export class AgentTaskService {
           : 'Agent task was interrupted by command',
       retryable: command.type === 'interrupt',
     });
+    await this.operationCancellers.get(taskId)?.();
     this.controllers.get(taskId)?.abort();
     this.runScheduler?.cancel(taskId);
     await this.taskRuns.get(taskId);

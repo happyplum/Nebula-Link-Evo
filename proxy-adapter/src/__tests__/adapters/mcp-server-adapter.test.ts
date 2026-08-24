@@ -51,7 +51,7 @@ describe('registerGatewayToolsToMcpServer', () => {
     expect(server.tool).not.toHaveBeenCalled();
   });
 
-  it('should return error string when execute throws', async () => {
+  it('should return an MCP error result when execute throws', async () => {
     const server = makeMockServer();
     const tool = makeTool({
       name: 'failing',
@@ -67,6 +67,7 @@ describe('registerGatewayToolsToMcpServer', () => {
 
     expect(result).toEqual({
       content: [{ type: 'text', text: 'execution failed' }],
+      isError: true,
     });
   });
 
@@ -75,7 +76,7 @@ describe('registerGatewayToolsToMcpServer', () => {
     const tool = makeTool({
       name: 'throw-string',
       execute: async () => {
-        throw 'oops'; // eslint-disable-line no-throw-literal
+        throw 'oops';
       },
     });
 
@@ -86,6 +87,7 @@ describe('registerGatewayToolsToMcpServer', () => {
 
     expect(result).toEqual({
       content: [{ type: 'text', text: 'oops' }],
+      isError: true,
     });
   });
 

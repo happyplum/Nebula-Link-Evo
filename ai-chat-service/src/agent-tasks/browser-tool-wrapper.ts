@@ -47,6 +47,7 @@ export interface BrowserToolWrapperOptions {
 export class BrowserToolWrapper {
   readonly summaries: AgentTaskToolCallSummary[] = [];
   private toolCallCount = 0;
+  private readonly pendingOperationIds = new Set<string>();
 
   constructor(private readonly options: BrowserToolWrapperOptions) {}
 
@@ -54,8 +55,7 @@ export class BrowserToolWrapper {
     return {
       id: 'agent-task:browser-operation-execute',
       name: EXECUTE_TOOL,
-      description:
-        'Execute one pre-authorized browser step. Choose only stepId, target and operation arguments.',
+      description: 'Execute one immutable pre-authorized browser step. Choose only its stepId.',
       inputSchema: {
         type: 'object',
         additionalProperties: false,
@@ -67,8 +67,6 @@ export class BrowserToolWrapper {
               .map((step) => `${step.stepId}: ${step.kind}/${step.operation}`)
               .join('; '),
           },
-          target: { type: 'object' },
-          args: { type: 'object' },
         },
         required: ['stepId'],
       },
@@ -80,16 +78,20 @@ export class BrowserToolWrapper {
         if (!toolCallId) {
           throw new AgentTaskError('execution_failed', 'Browser tool call is missing toolCallId');
         }
-        return JSON.stringify(await this.execute(args, toolCallId));
+        return JSON.stringify(await this.execute(args, toolCallId, context.abortSignal));
       },
     };
   }
 
-  async execute(rawInput: unknown, toolCallId: string): Promise<BrowserOperationRecord> {
+  async execute(
+    rawInput: unknown,
+    toolCallId: string,
+    signal?: AbortSignal
+  ): Promise<BrowserOperationRecord> {
     this.options.beforeToolCall?.();
     this.consumeBudget();
     const input = requireObject(rawInput, 'Browser tool input');
-    assertAllowedKeys(input, ['stepId', 'target', 'args'], 'Browser tool input');
+    assertAllowedKeys(input, ['stepId'], 'Browser tool input');
     const stepId = requireString(input.stepId, 'stepId');
     const step = this.options.steps.get(stepId);
     if (!step)
@@ -113,15 +115,15 @@ export class BrowserToolWrapper {
       deadlineAt: new Date(Math.min(this.options.deadlineAt, Date.now() + 30_000)).toISOString(),
       kind: step.kind,
       operation: step.operation,
-      ...(input.target !== undefined ? { target: requireObject(input.target, 'target') } : {}),
-      ...(input.args !== undefined ? { args: requireObject(input.args, 'args') } : {}),
+      ...(step.target ? { target: step.target } : {}),
+      ...(step.args ? { args: step.args } : {}),
       ...(step.capture ? { capture: step.capture } : {}),
       presentation: { animation: 'off' },
     };
     const canonicalArgs = {
       stepId,
-      ...(input.target !== undefined ? { target: requireObject(input.target, 'target') } : {}),
-      ...(input.args !== undefined ? { args: requireObject(input.args, 'args') } : {}),
+      ...(step.target ? { target: step.target } : {}),
+      ...(step.args ? { args: step.args } : {}),
     };
     const browserBinding = {
       browserSessionId: this.options.binding.browserSessionId,
@@ -152,6 +154,8 @@ export class BrowserToolWrapper {
           operation: step.operation,
           ...(step.effectId ? { effectId: step.effectId } : {}),
           maxAffectedItems: step.maxAffectedItems ?? 1,
+          targetHash: step.target ? sha256(step.target) : null,
+          argsHash: step.args ? sha256(step.args) : null,
         },
       },
       browserBinding,
@@ -163,13 +167,18 @@ export class BrowserToolWrapper {
       try {
         this.options.markOperationDispatched?.(toolCallId);
         dispatchRecorded = true;
-        operation = await this.callOperation(EXECUTE_TOOL, {
-          sessionId: this.options.binding.browserSessionId,
-          leaseId: this.options.binding.browserLeaseId,
-          leaseToken: this.options.binding.browserLeaseToken,
-          tabId: this.options.binding.tabId,
-          request,
-        });
+        this.pendingOperationIds.add(operationId);
+        operation = await this.callOperation(
+          EXECUTE_TOOL,
+          {
+            sessionId: this.options.binding.browserSessionId,
+            leaseId: this.options.binding.browserLeaseId,
+            leaseToken: this.options.binding.browserLeaseToken,
+            tabId: this.options.binding.tabId,
+            request,
+          },
+          signal
+        );
       } catch (executeError) {
         operation = await this.recoverOperation(operationId, executeError);
       }
@@ -190,6 +199,7 @@ export class BrowserToolWrapper {
             : 'failed',
         operation.status
       );
+      this.pendingOperationIds.delete(operationId);
       return operation;
     } catch (error) {
       const taskError =
@@ -203,6 +213,7 @@ export class BrowserToolWrapper {
       if (dispatchRecorded) {
         this.options.settleOperation?.(toolCallId, summary.status, summary.status);
       }
+      if (taskError.code !== 'outcome_unknown') this.pendingOperationIds.delete(operationId);
       throw taskError;
     }
   }
@@ -216,10 +227,17 @@ export class BrowserToolWrapper {
     });
   }
 
+  async cancelPending(): Promise<void> {
+    const pending = [...this.pendingOperationIds];
+    await Promise.allSettled(pending.map((operationId) => this.cancel(operationId)));
+  }
+
   private async recoverOperation(
     operationId: string,
     executeError: unknown
   ): Promise<BrowserOperationRecord> {
+    const deterministic = toDeterministicProxyError(executeError);
+    if (deterministic) throw deterministic;
     try {
       const operation = await this.callOperation(GET_TOOL, { operationId });
       if (TERMINAL_STATUSES.has(operation.status)) return operation;
@@ -246,9 +264,12 @@ export class BrowserToolWrapper {
 
   private async callOperation(
     toolName: string,
-    args: Record<string, unknown>
+    args: Record<string, unknown>,
+    signal?: AbortSignal
   ): Promise<BrowserOperationRecord> {
-    const raw = await this.options.mcpClient.callTool(GATEWAY_MCP_SERVER_NAME, toolName, args);
+    const raw = signal
+      ? await this.options.mcpClient.callTool(GATEWAY_MCP_SERVER_NAME, toolName, args, { signal })
+      : await this.options.mcpClient.callTool(GATEWAY_MCP_SERVER_NAME, toolName, args);
     const parsed = extractParsedResult(raw);
     if (!parsed || typeof parsed.operationId !== 'string' || typeof parsed.status !== 'string') {
       throw new AgentTaskError(
@@ -316,6 +337,62 @@ function stableStringify(value: unknown): string {
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([key, nested]) => `${JSON.stringify(key)}:${stableStringify(nested)}`)
     .join(',')}}`;
+}
+
+function sha256(value: unknown): string {
+  return createHash('sha256').update(stableStringify(value)).digest('hex');
+}
+
+function toDeterministicProxyError(error: unknown): AgentTaskError | null {
+  const problem = extractProblem(error);
+  if (!problem) return null;
+  const proxyCode = String(problem.code);
+  const code =
+    proxyCode === 'validation_failed'
+      ? 'validation_failed'
+      : ['permission_denied', 'lease_expired'].includes(proxyCode)
+        ? 'tool_not_allowed'
+        : ['state_conflict', 'idempotency_conflict', 'browser_busy', 'not_found'].includes(
+              proxyCode
+            )
+          ? 'conflict'
+          : proxyCode === 'dependency_unavailable'
+            ? 'dependency_unavailable'
+            : null;
+  if (!code) return null;
+  return new AgentTaskError(
+    code,
+    typeof problem.message === 'string' ? problem.message : 'Proxy rejected browser operation',
+    problem.retryable === true,
+    {
+      proxyCode,
+      ...(typeof problem.correlationId === 'string'
+        ? { correlationId: problem.correlationId }
+        : {}),
+    },
+    { cause: error }
+  );
+}
+
+function extractProblem(error: unknown): Record<string, unknown> | null {
+  const message = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+  for (const candidate of [message, message.slice(message.indexOf('{'))]) {
+    if (!candidate) continue;
+    try {
+      const parsed = JSON.parse(candidate) as unknown;
+      if (
+        parsed &&
+        typeof parsed === 'object' &&
+        !Array.isArray(parsed) &&
+        typeof (parsed as Record<string, unknown>).code === 'string'
+      ) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      // MCP implementations may prefix the structured problem with a tool error label.
+    }
+  }
+  return null;
 }
 
 function requireObject(value: unknown, label: string): Record<string, unknown> {

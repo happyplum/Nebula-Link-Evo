@@ -3,7 +3,10 @@ import cors from '@fastify/cors';
 import { join } from 'node:path';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadConfig as loadServiceConfig, type AiChatServiceConfig } from './config/service-config.js';
+import {
+  loadConfig as loadServiceConfig,
+  type AiChatServiceConfig,
+} from './config/service-config.js';
 import { ConversationDatabase } from './db/ConversationDatabase.js';
 import { AppService } from './services/app-service.js';
 import { ConversationManager } from './conversation/manager.js';
@@ -12,7 +15,6 @@ import { createCompressionClient } from './clients/compression.js';
 import { ChatSessionController } from './services/chat-session-controller.js';
 import { SessionEventHub } from './conversation/session-event-hub.js';
 import { ToolRegistry } from './tools/registry.js';
-import { MCPClientProvider } from './tools/providers/mcp-client-provider.js';
 import { ConversationJobQueue } from './services/conversation-job-queue.js';
 import { StreamPersistWorker } from './services/stream-persist-worker.js';
 import { runPreflight } from './services/provider/preflight.js';
@@ -30,6 +32,7 @@ import {
   createHarnessRuntime,
   installGatewayToolBridge,
   mapHarnessConfig,
+  publicMcpToolName,
 } from './harness/index.js';
 import type { HarnessRuntime } from './harness/types.js';
 import { HarnessProjectionStore } from './harness/projection-store.js';
@@ -143,6 +146,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
           options.trustedPluginLockPath ?? join(packageRoot, 'trusted-harness-plugins.lock.json'),
       },
     });
+    localAppService.setHarnessMcpInventory(
+      harnessConfig.mcp.map((server) => server.serverName),
+      harness.transportToolNames()
+    );
 
     conversationManager = new ConversationManager(conversationsPath, database);
     const compressionClient = createCompressionClient(null);
@@ -152,11 +159,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     sessionController.initialize();
 
     toolRegistry = new ToolRegistry();
-    const mcpClient = localAppService.getMCPSDKClient();
-    if (mcpClient) toolRegistry.registerProvider(new MCPClientProvider(mcpClient));
-
     const visionDefaults = providerConfig.defaults.vision;
-    if (visionDefaults && mcpClient) {
+    if (visionDefaults) {
       try {
         const visionModel = await providerRegistry.resolve(
           visionDefaults.provider,
@@ -214,9 +218,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       app.log.info({ retainedTaskCount }, 'Collected expired Harness Agent tasks');
     }
     retentionTimer = setInterval(() => {
-      void retention.collectEligible().catch((error) =>
-        app.log.error({ err: error }, 'Harness retention collection failed')
-      );
+      void retention
+        .collectEligible()
+        .catch((error) => app.log.error({ err: error }, 'Harness retention collection failed'));
     }, 60_000);
     retentionTimer.unref();
     const skillRuntime = new SkillRuntime(agentTaskRepository);
@@ -224,18 +228,17 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       toolRegistry.getAvailableTools({ consumer: 'chat' }).map((tool) => tool.name)
     );
     if (
-      mcpClient?.getAvailableTools().some(
-        (tool) =>
-          tool.originalName === 'browser-control.operation_execute' ||
-          tool.name === 'browser-control.operation_execute'
+      harnessConfig.mcp.some((server) =>
+        harness
+          ?.transportToolNames()
+          .includes(publicMcpToolName(server.serverName, 'browser-control.operation_execute'))
       )
     ) {
       skillAvailableTools.add('browser-control.operation_execute');
     }
-    const skillCatalog = skillRuntime.loadFromDirectories(
-      serviceConfig.skillDirectories,
-      [...skillAvailableTools]
-    );
+    const skillCatalog = skillRuntime.loadFromDirectories(serviceConfig.skillDirectories, [
+      ...skillAvailableTools,
+    ]);
     const agentTaskExecutor = new AgentTaskModelExecutor({
       config: providerConfig,
       harness,

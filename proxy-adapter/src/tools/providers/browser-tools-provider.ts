@@ -28,9 +28,11 @@ export class BrowserToolsProvider extends EventEmitter implements ToolProvider {
   async initialize(): Promise<void> {
     this._toolMap = createBrowserTools(this.browserClient);
     this._tools = TOOL_DEFINITIONS.map((definition) => {
-      const sdkTool = this._toolMap[definition.name] as {
-        execute: (args: unknown) => Promise<string>;
-      } | undefined;
+      const sdkTool = this._toolMap[definition.name] as
+        | {
+            execute: (args: unknown) => Promise<string>;
+          }
+        | undefined;
 
       if (!sdkTool) {
         throw new Error(`Tool not found: ${definition.name}`);
@@ -42,7 +44,7 @@ export class BrowserToolsProvider extends EventEmitter implements ToolProvider {
         description: definition.description,
         inputSchema: definition.inputSchema,
         providerId: 'browser-tools',
-        exposeTo: ['chat', 'mcp-server'] as const,
+        exposeTo: [] as const,
         isAvailable: true,
         execute: (args: unknown) => sdkTool.execute(args),
       };

@@ -31,11 +31,14 @@ function jsonSchemaToZodShape(schema: Record<string, unknown>): Record<string, z
 // Safe execution wrapper (MCP variant)
 // ---------------------------------------------------------------------------
 
-async function safeExecuteMcp(fn: (args: unknown) => Promise<string>, args: unknown): Promise<string> {
+async function safeExecuteMcp(
+  fn: (args: unknown) => Promise<string>,
+  args: unknown
+): Promise<{ text: string; isError: boolean }> {
   try {
-    return await fn(args);
+    return { text: await fn(args), isError: false };
   } catch (error) {
-    return error instanceof Error ? error.message : String(error);
+    return { text: error instanceof Error ? error.message : String(error), isError: true };
   }
 }
 
@@ -49,13 +52,12 @@ export function registerGatewayToolsToMcpServer(server: McpServer, tools: Gatewa
 
     const zodShape = jsonSchemaToZodShape(gatewayTool.inputSchema);
 
-    server.tool(
-      gatewayTool.name,
-      gatewayTool.description,
-      zodShape,
-      async (args) => ({
-        content: [{ type: 'text' as const, text: await safeExecuteMcp(gatewayTool.execute, args) }],
-      }),
-    );
+    server.tool(gatewayTool.name, gatewayTool.description, zodShape, async (args) => {
+      const result = await safeExecuteMcp(gatewayTool.execute, args);
+      return {
+        content: [{ type: 'text' as const, text: result.text }],
+        ...(result.isError ? { isError: true } : {}),
+      };
+    });
   }
 }

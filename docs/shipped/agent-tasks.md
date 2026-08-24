@@ -13,9 +13,9 @@
 - [shipped] Skill v1 服务端默认只允许 `vision.*` 与 `browser-control.operation_execute` 工具命名空间；文件系统、shell、网络、环境变量与 secret 工具默认拒绝。Skill 指令作为固定 system context 装载但不能覆盖 task/tool/schema 安全规则，也不会写入事件。
 - [shipped] Skill 执行记录 `skill_loaded/skill_execute/skill_result/skill_failure` task events；已有任务的幂等重放先返回持久事实，不依赖当前目录仍加载该版本，新任务必须使用当前 catalog 的精确 hash。
 - [shipped] 任务工具默认拒绝，实际可用集合是精确 `toolPolicy.allow` 与运行时 ToolRegistry 的交集；当前严格拒绝 wildcard、legacy `browser-control.*`、模型可见 `operation_get/cancel`、超过一个或未精确匹配 catalog id/version/hash 的 Skill pin，以及尚不能执行的普通工具 constraints。
-- [shipped] 受控浏览器 wrapper 只向模型暴露调用方冻结的 `stepId` 以及模型建议的 `target/args`；session/Tab/lease/token/leaseSequence、稳定 operationId、kind/operation/effectId 和 `presentation.animation=off` 由服务端注入。observe binding 不能执行 act；若声明数量边界，当前只接受 `maxAffectedItems=1`。
+- [shipped] 受控浏览器 wrapper 只向模型暴露调用方冻结的 `stepId`；target/args、session/Tab/lease/token/leaseSequence、稳定 operationId、kind/operation/effectId、policy evaluation/projection/active grant/数量边界和 `presentation.animation=off` 由服务端注入并逐调用求交，模型替换目标或参数会被拒绝。
 - [shipped] Agent browser step 可预授权 `beforeScreenshot/afterScreenshot/domSnapshot`，wrapper 原样注入受控 operation，由 proxy 生成真实 artifact；`videoSegment=true` 在 ai-chat-service 请求边界拒绝，不能绕过 proxy capability。
-- [shipped] `operation_execute` 传输失败或超时后先以同一 operationId 调用 `operation_get`；无法证明终态时返回 `outcome_unknown`，禁止盲重试。`operation_cancel` 已作为服务端内部包装能力接通，不暴露给模型。
+- [shipped] 只有 `operation_execute` 的模糊传输失败或超时才以同一 operationId 调用 `operation_get`；proxy 的确定性 validation/permission/lease/conflict/dependency problem 直接映射为 Agent error。无法证明终态时返回 `outcome_unknown`，禁止盲重试；Task cancel 先向 queued operation 发送 `operation_cancel`，再中止 Agent loop。
 - [shipped] MCP 调试日志只记录脱敏、截断后的参数摘要，覆盖驼峰 `leaseToken` 等敏感字段；Agent task 模型输入、持久请求和 HTTP 响应不包含 token 值。
 - [shipped] Agent Task 与 Chat 共用 DSH Agent Loop；常规模型走 Pi adapter，GLM 走 Nebula JWT adapter。Task 使用受限 DSH tool scope、turn/tool/time/token 预算与调用方 response Schema；`completed` 只表示结构化任务完成，不等于 ai-e2e TODO 通过。
 - [shipped] `submit_result` 先形成 pending result；只有同 callId/hash 的 DSH tool result 已 durable 后才完成。终态按 flush → projection catch-up → 同一 SQLite 事务写结构化结果/usage/status/terminal event/cursor；崩溃未持久化结果收敛为 interrupted。

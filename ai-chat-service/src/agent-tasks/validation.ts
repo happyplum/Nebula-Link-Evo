@@ -75,6 +75,7 @@ export function validateCreateAgentTaskRequest(value: unknown): ValidatedAgentTa
       'skillPolicy',
       'budgets',
       'browserBinding',
+      'sideEffectAuthorization',
       'correlation',
     ],
     'Agent task request'
@@ -120,6 +121,11 @@ export function validateCreateAgentTaskRequest(value: unknown): ValidatedAgentTa
     allow,
     browserBinding?.access
   );
+  validateSideEffectAuthorization(
+    request.sideEffectAuthorization,
+    browserSteps,
+    request.correlation
+  );
   const normalized: CreateAgentTaskRequest = {
     ...request,
     responseSchema,
@@ -146,6 +152,111 @@ export function validateCreateAgentTaskRequest(value: unknown): ValidatedAgentTa
     persistedRequest,
     requestHash: sha256(stableStringify(hashInput)),
   };
+}
+
+function validateSideEffectAuthorization(
+  raw: CreateAgentTaskRequest['sideEffectAuthorization'],
+  steps: ReadonlyMap<string, AgentTaskBrowserStep>,
+  correlation?: Record<string, string>
+): void {
+  const effectSteps = [...steps.values()].filter((step) => step.effectId);
+  if (effectSteps.length === 0) {
+    if (raw !== undefined) fail('sideEffectAuthorization is only allowed for effect-bearing steps');
+    return;
+  }
+  const value = requireObject(raw, 'sideEffectAuthorization') as unknown as NonNullable<typeof raw>;
+  assertAllowedKeys(
+    value as unknown as Record<string, unknown>,
+    [
+      'contextType',
+      'contextId',
+      'environment',
+      'policyVersion',
+      'policyEvaluationId',
+      'policyResult',
+      'projectionSha256',
+      'effects',
+      'grant',
+    ],
+    'sideEffectAuthorization'
+  );
+  if (!['run', 'authoring'].includes(value.contextType))
+    fail('sideEffectAuthorization.contextType is invalid');
+  requireBoundedString(value.contextId, 'sideEffectAuthorization.contextId', 1, 128);
+  if (value.contextType === 'run' && correlation?.runId !== value.contextId) {
+    fail('sideEffectAuthorization context does not match correlation.runId');
+  }
+  if (!['local', 'test', 'staging', 'production'].includes(value.environment))
+    fail('sideEffectAuthorization.environment is invalid');
+  requireBoundedString(value.policyVersion, 'sideEffectAuthorization.policyVersion', 1, 128);
+  requireBoundedString(
+    value.policyEvaluationId,
+    'sideEffectAuthorization.policyEvaluationId',
+    1,
+    128
+  );
+  if (!['auto_allowed', 'approval_required'].includes(value.policyResult))
+    fail('sideEffectAuthorization.policyResult is invalid');
+  if (!/^[a-f0-9]{64}$/i.test(value.projectionSha256))
+    fail('sideEffectAuthorization.projectionSha256 must be SHA-256');
+  if (!Array.isArray(value.effects) || value.effects.length !== effectSteps.length)
+    fail('sideEffectAuthorization.effects must exactly cover authorized effect steps');
+  const byStep = new Map<string, (typeof value.effects)[number]>();
+  for (const effect of value.effects) {
+    const record = requireObject(
+      effect,
+      'sideEffectAuthorization effect'
+    ) as unknown as (typeof value.effects)[number];
+    assertAllowedKeys(
+      record as unknown as Record<string, unknown>,
+      ['stepId', 'effectId', 'kind', 'maxAffectedItems', 'reversibility'],
+      'sideEffectAuthorization effect'
+    );
+    if (byStep.has(record.stepId)) fail(`Duplicate side-effect authorization for ${record.stepId}`);
+    if (!['create', 'update', 'delete', 'auth_change'].includes(record.kind))
+      fail(`Side-effect kind for ${record.stepId} is invalid`);
+    if (!['reversible', 'compensatable', 'irreversible'].includes(record.reversibility))
+      fail(`Side-effect reversibility for ${record.stepId} is invalid`);
+    requireIntegerRange(
+      record.maxAffectedItems,
+      `Side-effect ${record.stepId}.maxAffectedItems`,
+      1,
+      1_000
+    );
+    byStep.set(record.stepId, record);
+  }
+  for (const step of effectSteps) {
+    const effect = byStep.get(step.stepId);
+    if (
+      !effect ||
+      effect.effectId !== step.effectId ||
+      effect.maxAffectedItems !== step.maxAffectedItems
+    )
+      fail(`Side-effect authorization does not match browser step ${step.stepId}`);
+    if (value.environment === 'production' && effect.kind !== 'auth_change')
+      fail('Production business writes are not authorized');
+  }
+  const highRisk = value.effects.some(
+    (effect) =>
+      effect.kind === 'delete' ||
+      effect.maxAffectedItems > 1 ||
+      effect.reversibility === 'irreversible'
+  );
+  if (value.environment === 'staging' && highRisk) {
+    const grant = requireObject(
+      value.grant,
+      'sideEffectAuthorization.grant'
+    ) as unknown as NonNullable<typeof value.grant>;
+    assertAllowedKeys(
+      grant as unknown as Record<string, unknown>,
+      ['grantId', 'status', 'approvedProjectionSha256'],
+      'sideEffectAuthorization.grant'
+    );
+    if (grant.status !== 'active' || grant.approvedProjectionSha256 !== value.projectionSha256)
+      fail('Staging high-risk grant is inactive or stale');
+  } else if (value.policyResult !== 'auto_allowed') {
+    fail('Non-high-risk task requires an auto_allowed policy evaluation');
+  }
 }
 
 export function redactAgentTaskRequest(request: CreateAgentTaskRequest): PersistedAgentTaskRequest {
@@ -449,7 +560,7 @@ function validateBrowserSteps(
     const step = requireObject(rawStep, `Browser step ${index}`) as unknown as AgentTaskBrowserStep;
     assertAllowedKeys(
       step as unknown as Record<string, unknown>,
-      ['stepId', 'kind', 'operation', 'effectId', 'maxAffectedItems', 'capture'],
+      ['stepId', 'kind', 'operation', 'target', 'args', 'effectId', 'maxAffectedItems', 'capture'],
       `Browser step ${index}`
     );
     requireBoundedString(step.stepId, `Browser step ${index}.stepId`, 1, 128);
@@ -464,6 +575,8 @@ function validateBrowserSteps(
       fail(`Browser step ${step.stepId} kind and operation do not match`);
     if (access === 'observe' && step.kind === 'act')
       fail(`Observe binding cannot authorize act step ${step.stepId}`);
+    if (step.target !== undefined) requireObject(step.target, `Browser step ${step.stepId}.target`);
+    if (step.args !== undefined) requireObject(step.args, `Browser step ${step.stepId}.args`);
     if (step.effectId !== undefined)
       requireBoundedString(step.effectId, `Browser step ${step.stepId}.effectId`, 1, 128);
     if (step.maxAffectedItems !== undefined)

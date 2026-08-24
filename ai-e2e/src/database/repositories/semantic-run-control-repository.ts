@@ -787,9 +787,8 @@ export class SemanticRunControlRepository {
               : { kind: 'unknown' },
         });
       }
-      const effects = collectSideEffects(scriptPayload);
       sideEffects.push(
-        ...effects.map((effect) => ({ ...effect, callKey, scriptRevisionId: script.id }))
+        ...collectSideEffects(scriptPayload, callKey, String(script.id), repeatCount)
       );
       frozenCalls.push({
         callKey,
@@ -1365,9 +1364,9 @@ function evaluateSideEffectPolicy(
   );
   const hasHighRisk = effects.some(
     (effect) =>
-      ['delete', 'upload'].includes(String(effect.kind)) ||
-      effect.irreversible === true ||
-      (typeof effect.quantity === 'number' && effect.quantity > 1)
+      effect.kind === 'delete' ||
+      effect.reversibility === 'irreversible' ||
+      (typeof effect.maxAffectedItems === 'number' && effect.maxAffectedItems > 1)
   );
   if (environment === 'production' && hasBusinessWrite) {
     return { result: 'denied', reasonCodes: ['production_business_write_denied'] };
@@ -1379,11 +1378,45 @@ function evaluateSideEffectPolicy(
 }
 
 function collectSideEffects(
-  scriptPayload: Record<string, unknown>
+  scriptPayload: Record<string, unknown>,
+  callKey: string,
+  scriptRevisionId: string,
+  repeatCount: number
 ): Array<Record<string, unknown>> {
-  return (parseArray(scriptPayload.steps) as Array<Record<string, unknown>>)
-    .map((step) => (isObject(step.effect) ? step.effect : null))
-    .filter((effect): effect is Record<string, unknown> => Boolean(effect));
+  const declarations = new Map(
+    (parseArray(scriptPayload.sideEffects) as Array<Record<string, unknown>>)
+      .filter(isObject)
+      .map((effect) => [String(effect.id), effect])
+  );
+  return (parseArray(scriptPayload.steps) as Array<Record<string, unknown>>).flatMap((step) => {
+    const effectId = typeof step.sideEffectId === 'string' ? step.sideEffectId : undefined;
+    if (!effectId) return [];
+    const effect = declarations.get(effectId);
+    if (!effect) throw new Error(`Side-effect '${effectId}' is not declared`);
+    const affectedItems = isObject(effect.affectedItems) ? effect.affectedItems : undefined;
+    const perInvocation =
+      affectedItems?.kind === 'single'
+        ? 1
+        : typeof affectedItems?.maxItems === 'number'
+          ? affectedItems.maxItems
+          : undefined;
+    if (!perInvocation || !Number.isInteger(perInvocation) || perInvocation < 1) {
+      throw new Error(`Side-effect '${effectId}' has no finite affectedItems bound`);
+    }
+    return [
+      {
+        callKey,
+        scriptRevisionId,
+        stepId: String(step.id),
+        effectId,
+        kind: effect.kind,
+        resourceType: effect.resourceType,
+        maxAffectedItems: perInvocation * repeatCount,
+        reversibility: effect.reversibility,
+        usesFileUpload: isObject(step.action) && step.action.type === 'set_files',
+      },
+    ];
+  });
 }
 
 function expandDependencies(

@@ -1,5 +1,5 @@
 export { mapHarnessConfig, mapReconnect } from './config-mapper.js';
-export { createHarnessRuntime, SessionId } from './runtime.js';
+export { createHarnessRuntime, publicMcpToolName, SessionId } from './runtime.js';
 export { NebulaGlmLlmAdapter, createGlmJwt } from './glm-adapter.js';
 export { HarnessDeletionService } from './deletion-service.js';
 export { HarnessRunScheduler } from './run-scheduler.js';

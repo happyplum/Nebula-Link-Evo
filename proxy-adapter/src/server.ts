@@ -226,27 +226,27 @@ async function start() {
   }
 }
 
-async function shutdown(signal: 'SIGINT' | 'SIGTERM'): Promise<void> {
-  app.log.info({ signal }, '[proxy-adapter] shutdown');
-  await interactionLogger.destroy();
-  if (toolRegistry) {
-    await toolRegistry.shutdownAll();
-  }
-  if (browserExecutionService) {
-    await browserExecutionService.shutdown();
-  }
-  await shutdownBrowserEngine();
-  await appService.shutdown();
-  await app.close();
-  process.exit(0);
+let shutdownPromise: Promise<void> | undefined;
+
+function shutdown(signal: 'SIGINT' | 'SIGTERM'): Promise<void> {
+  shutdownPromise ??= (async () => {
+    app.log.info({ signal }, '[proxy-adapter] shutdown');
+    await app.close();
+    await interactionLogger.destroy();
+    if (toolRegistry) await toolRegistry.shutdownAll();
+    if (browserExecutionService) await browserExecutionService.shutdown();
+    await shutdownBrowserEngine();
+    await appService.shutdown();
+  })();
+  return shutdownPromise;
 }
 
 process.on('SIGINT', () => {
-  void shutdown('SIGINT');
+  void shutdown('SIGINT').then(() => process.exit(0));
 });
 
 process.on('SIGTERM', () => {
-  void shutdown('SIGTERM');
+  void shutdown('SIGTERM').then(() => process.exit(0));
 });
 
 start();

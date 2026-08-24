@@ -81,7 +81,7 @@
 | `/api/livekit-token` | GET | shipped | LiveKit 令牌发放 | plugins/routes/api/livekit-token、services/livekit-publisher |
 | `/debug/stream` | GET (SSE) | shipped | Debug 事件流（MJPEG 元数据 + 交互事件） | plugins/routes/debug/stream、services/debug-event-hub |
 | `/debug/*` | * | shipped | 浏览器调试 REST 端点（MJPEG、DOM 快照） | plugins/routes/debug/index、browser-engine |
-| `/mcp` | POST (StreamableHTTP)；GET 返回 405 | shipped | 无状态 JSON MCP Server 入口（15 个兼容工具 + 3 个受控 operation 工具）；拒绝可选 GET SSE 通道并允许客户端回退到 POST | mcp-server/、tools/、browser-tools/、browser-execution/ |
+| `/mcp` | POST (StreamableHTTP)；GET 返回 405 | shipped | 无状态 JSON MCP Server 入口，仅暴露 3 个受控 operation 工具；拒绝可选 GET SSE 通道并允许客户端回退到 POST | mcp-server/、tools/、browser-execution/ |
 | `/api/v1/browser-execution/sessions`、`/:sessionId` | POST/GET/DELETE | shipped | 创建/读取/关闭全局单活动可视浏览器执行会话 | 创建/关闭要求 `Idempotency-Key`；活动会话关闭要求 control bearer token |
 | `/api/v1/browser-execution/sessions/:sessionId/leases`、`/:leaseId` | POST/DELETE | shipped | 签发/撤销 observe/control 租约 | observe 最长 30 秒且单次使用，control 最长 5 分钟；token 仅首次响应明文，SQLite 只存 SHA-256 hash |
 | `/api/v1/browser-execution/operations/:operationId` | GET | shipped | 原子操作账本查询与未知结果恢复 | 已开始但重启前无终态的操作收敛为 `outcome_unknown`；queued 重启后取消 |
@@ -97,7 +97,7 @@
 | 浏览器控制（12 种 action：click / type / focus / blur / hover / value / dispatch / scroll / navigate / wait / mcp_call / finish） | browser-tools/definitions + browser-engine/services/page-actions | shipped | 单元测试 + 集成测试 | browser-tools、browser-engine、action-executor |
 | Playwright/CDP 浏览器通道 | browser-engine/services/browser-lifecycle + browser-engine/screencast | shipped | browser-service 单元测试 + screencast 生命周期测试 + 集成面 | 生命周期可按需开放 remote-debugging-port；浏览器打开/关闭同步启动/停止页面 `CDPSession` 屏播 |
 | MCP Server (StreamableHTTP) | mcp-server/ | shipped | `__tests__/adapters/mcp-server-adapter.test.ts` | tools/、mcp-server/ |
-| browser-control.* 工具暴露 | tools/providers/{browser-tools-provider,browser-execution-tools-provider} | shipped | `__tests__/browser-tools-provider.test.ts`、`browser-execution-tools-provider.test.ts` | 15 个兼容工具 + `operation_execute/get/cancel`；受控工具只向 MCP Server 暴露 |
+| browser-control.* 工具暴露 | tools/providers/{browser-tools-provider,browser-execution-tools-provider} | shipped | provider tests + 真实 `/mcp` error contract test | MCP 仅暴露 `operation_execute/get/cancel`；旧 15 个 browser tools 仅保留包内实现且 `exposeTo=[]` |
 | 视觉标记系统（Vision Marker） | browser-engine/marker-injector、locator-generator | shipped | marker-mode-e2e + 集成测试 | browser-engine、shared/types/vision-marker |
 | 7 级目标定位链 | browser-engine/locator-generator、click-resolution | shipped | 集成测试 | browser-engine |
 | MJPEG 屏播 | browser-engine/screencast + plugins/routes/debug | shipped | SSE 助手测试 + debug-ui 集成 | browser-engine、debug-event-hub |
@@ -112,7 +112,7 @@
 | 通用浏览器执行会话与操作账本 | `src/browser-execution/` | shipped | service/repository 单元测试 + Fastify inject 契约测试 + 重启恢复测试 | 全局单 session/单 Context、lease token hash/process epoch、FIFO 原子边界、幂等冲突、queued cancel、`outcome_unknown`、脱敏请求账本和 legacy 门禁；不解释 E2E actor/environment/审批 |
 | 浏览器短期产物与会话事件运行时                                                                                                    | `src/browser-execution/{artifact-store,repository,service}.ts`、`plugins/routes/browser-execution.ts` | shipped     | repository/service/真实 Playwright/Fastify SSE 与下载契约测试                          | schema migration 2 记录 capture/产物/hold/清理资格和 session-scoped 单调 seq；截图/DOM bytes 以 SHA-256 内容寻址保存到 SQLite 外，操作可请求 before/after/DOM，失败操作自动尝试现场截图；提供 snapshot-first SSE、event-log 和带完整性复核的会话范围 artifact GET                                  |
 | Vision v2 证据生产边界 | browser-execution operation/artifact API | shipped | proxy operation/artifact tests + ai-chat snapshot-loader contract tests | proxy 继续作为 snapshot bytes/status/hash 的唯一权威生产者；`VisionSnapshotBindingV1` 只投影稳定引用与完整性字段，不向模型或 shared 暴露 lease token/artifact bytes |
-| 受限 MCP 原子工具 | tools/providers/browser-execution-tools-provider、browser-execution | shipped | `__tests__/browser-execution-tools-provider.test.ts` | `browser-control.operation_execute/get/cancel` 已交付；调用方隐藏注入 session/Tab/lease/token；BrowserExecutionError 以结构化 problem 穿过 MCP 文本 envelope，普通 Chat 继续过滤三项工具 |
+| 受限 MCP 原子工具 | tools/providers/browser-execution-tools-provider、browser-execution | shipped | provider test + 真实 `/mcp` error contract test | `browser-control.operation_execute/get/cancel` 是唯一 MCP 工具面；调用方隐藏注入 session/Tab/lease/token；BrowserExecutionError 通过 `isError: true` 的结构化 problem 传播 |
 | 语义脚本原子动作/观测覆盖                                                                                                         | browser-execution/playwright-browser、validation                                                      | in-progress | 真实 Playwright integration 测试                                                       | 已交付 10 种观测（page_state/dom_snapshot/target_state/url/title/text/value/attribute/count/tabs）和除 set_files 外 14 种动作，按 role/test-id/label/placeholder/text/css/xpath 候选解析并拒绝歧义；禁止任意 JS/CDP/裸坐标。截图/DOM capture 已生效，set_files、video segment 和操作动画待后续交付 |
 | 错误分类 | errors/http-errors | shipped | `__tests__/errors.test.ts` | errors |
 

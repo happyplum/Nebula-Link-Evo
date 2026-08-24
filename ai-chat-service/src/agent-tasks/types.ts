@@ -1,4 +1,7 @@
-import type { BrowserOperationKind } from '@nebula-link-evo/shared/types/browser-execution';
+import type {
+  BrowserOperationKind,
+  BrowserTargetRefV1,
+} from '@nebula-link-evo/shared/types/browser-execution';
 
 export const AGENT_TASK_SCHEMA = 'nebula.ai.agent-task/1.0' as const;
 
@@ -29,6 +32,8 @@ export interface AgentTaskBrowserStep {
   stepId: string;
   kind: BrowserOperationKind;
   operation: string;
+  target?: BrowserTargetRefV1;
+  args?: Record<string, unknown>;
   effectId?: string;
   maxAffectedItems?: number;
   capture?: {
@@ -36,6 +41,28 @@ export interface AgentTaskBrowserStep {
     afterScreenshot?: boolean;
     domSnapshot?: boolean;
     videoSegment?: boolean;
+  };
+}
+
+export interface AgentTaskSideEffectAuthorization {
+  contextType: 'run' | 'authoring';
+  contextId: string;
+  environment: 'local' | 'test' | 'staging' | 'production';
+  policyVersion: string;
+  policyEvaluationId: string;
+  policyResult: 'auto_allowed' | 'approval_required';
+  projectionSha256: string;
+  effects: Array<{
+    stepId: string;
+    effectId: string;
+    kind: 'create' | 'update' | 'delete' | 'auth_change';
+    maxAffectedItems: number;
+    reversibility: 'reversible' | 'compensatable' | 'irreversible';
+  }>;
+  grant?: {
+    grantId: string;
+    status: 'active';
+    approvedProjectionSha256: string;
   };
 }
 
@@ -63,6 +90,7 @@ export interface CreateAgentTaskRequest {
     maxTokens?: number;
   };
   browserBinding?: AgentTaskBrowserBinding;
+  sideEffectAuthorization?: AgentTaskSideEffectAuthorization;
   correlation?: Record<string, string>;
 }
 
@@ -175,6 +203,7 @@ export interface AgentTaskExecutionContext {
     status: 'succeeded' | 'failed' | 'outcome_unknown',
     proxyStatus?: string
   ): void;
+  registerOperationCanceller?(cancel: () => Promise<void>): () => void;
 }
 
 export interface AgentTaskOperationReservation {

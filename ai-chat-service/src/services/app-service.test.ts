@@ -8,26 +8,19 @@ function buildServiceWithVisionState(options: {
   const service = new AppService();
   const serviceInternals = service as unknown as {
     toolRegistry: {
-      getAvailableTools(options?: { consumer?: 'chat' | 'mcp-server' | 'all' }): Array<{ name: string }>;
-    };
-    mcpClient: {
-      getServerList(): Array<{ name: string; state: string; running: boolean; toolsCount: number }>;
+      getAvailableTools(options?: {
+        consumer?: 'chat' | 'mcp-server' | 'all';
+      }): Array<{ name: string }>;
     };
   };
 
   serviceInternals.toolRegistry = {
     getAvailableTools: () => (options.hasVisionTool ? [{ name: 'vision.resolve_target' }] : []),
   };
-  serviceInternals.mcpClient = {
-    getServerList: () => [
-      {
-        name: 'gateway',
-        state: options.gatewayRunning ? 'running' : 'failed',
-        running: options.gatewayRunning,
-        toolsCount: options.gatewayRunning ? 15 : 0,
-      },
-    ],
-  };
+  service.setHarnessMcpInventory(
+    ['gateway'],
+    options.gatewayRunning ? ['mcp__gateway__browser-control_operation_execute'] : []
+  );
 
   return service;
 }
