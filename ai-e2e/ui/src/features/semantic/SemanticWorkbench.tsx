@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
@@ -333,6 +333,29 @@ export function SemanticWorkbench({
     },
     onError: (error: Error) => toast.error(error.message),
   });
+  const bootstrapStarted = useRef(false);
+  useEffect(() => {
+    if (
+      mode !== 'authoring' ||
+      searchParams.get('bootstrap') !== '1' ||
+      authoringJobId ||
+      !workspace ||
+      !moduleId ||
+      bootstrapStarted.current
+    ) {
+      return;
+    }
+    bootstrapStarted.current = true;
+    createAuthoring.mutate({
+      versionId,
+      mode: 'bootstrap',
+      intent: 'author_assets',
+      targetType: 'functional_module',
+      targetId: moduleId,
+      currentUrl: browserUrl,
+      reason: '根据 PRD、初始 semantic 资产图与真实浏览器证据完成首次编排',
+    });
+  }, [authoringJobId, browserUrl, createAuthoring, mode, moduleId, searchParams, versionId, workspace]);
   const createRun = useMutation({
     mutationFn: semanticApi.createRun,
     onSuccess: (result) => {

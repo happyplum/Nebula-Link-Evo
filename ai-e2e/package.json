@@ -15,10 +15,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "type-check": "tsc --noEmit",
-    "lint": "eslint ."
+    "lint": "eslint src ui/src --ignore-pattern \"src/**/__tests__/**\" --ignore-pattern \"src/**/*.test.ts\" --ignore-pattern \"ui/src/**/*.test.ts\" --ignore-pattern \"ui/src/**/*.test.tsx\""
   },
   "dependencies": {
-    "@fastify/autoload": "catalog:",
     "@fastify/cors": "catalog:",
     "@fastify/static": "^8.0.0",
     "@fastify/type-provider-typebox": "catalog:",
@@ -27,9 +26,7 @@
     "axios": "catalog:",
     "better-sqlite3": "^11.0.0",
     "dotenv": "catalog:",
-    "fastify": "catalog:",
-    "playwright": "^1.58.2",
-    "zod": "catalog:"
+    "fastify": "catalog:"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.8",

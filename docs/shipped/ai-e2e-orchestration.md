@@ -1,76 +1,16 @@
 # ai-e2e-orchestration `ai-e2e :3002 /ai-e2e/`
 
-PRD 驱动的 E2E 自动化测试编排器。把"需求分析 → 页面探索 → URL 绑定 → 脚本生成 → 执行 → 单次失败诊断 → 可选自动修复"串成闭环。自身不直连 AI provider 或 Playwright。
-
-- [shipped] 工作流核心服务集（`ai-e2e/src/services/`）：ProjectService、PRDAnalyzerService、ExplorerService、TestScenarioService、ScriptGeneratorService、ExecutorService、AIDiagnosisService、StateMachineService、LoginRecorderService。
-- [shipped] PRD 上传与 L1/L2 模块分析：PRD → 业务模块 → 功能模块 → 测试场景。入口：PRDAnalyzerService。
-- [shipped] 模块编辑（业务/功能模块增删改排）：PRDAnalyzerService。
-- [shipped] 站点探索（AI + BFS）+ SPA-aware URL 发现：ExplorerService。补充使用渲染后 DOM、HashRouter、History API 观察器和可访问 router 配置发现客户端路由；非 SPA 站点保持原有 BFS 行为。
-- [shipped] URL 绑定建议与人工调整：ExplorerService + `ai-e2e/ui/src/features/exploration/`。查询、确认、拒绝和手动创建的 HTTP 响应统一输出前端 DTO：`module_id`、`confidence` 与 `proposed/confirmed/rejected`，不泄漏数据库字段名。
-- [shipped] 每个功能模块必须绑定 URL 的强校验（`ai_proposed` 计为已绑定）：StateMachineService。前端显示未绑定模块提示（UnboundModuleIndicator）。
-- [shipped] 测试场景 CRUD + 数据映射（preconditions ↔ expected_results）：TestScenarioService + `ai-e2e/ui/src/features/scenario/`（ScenarioPanel + ScenarioEditor）。
-- [shipped] 脚本生成（按 scenario，Playwright Library API）：ScriptGeneratorService。
-- [shipped] 脚本人工编辑与版本历史：ScriptGeneratorService + `ai-e2e/ui/src/features/scripts/`。
-- [shipped] 脚本执行（`npx tsx` 子进程，**Library API only**）：ExecutorService。禁用 `test()` / `describe()` / `expect()` / `waitForLoadState('networkidle')`。
-- [shipped] 串行执行（不支持并发，`run-all` 内部串行）：ExecutorService。
-- [shipped] 单次 run 失败诊断：AIDiagnosisService。
-- [shipped] 可选自动修复（审批/拒绝）：AIDiagnosisService。
-- [shipped] 项目级诊断汇总（根因分布统计、JSON/HTML 导出）：AIDiagnosisService + `ai-e2e/ui/src/features/report/`。根因类型：selector / timing / assertion / environment / data / unknown。
-- [shipped] 项目状态机：`draft → configuring → analyzing → analyzed → exploring → explored → generating → ready → running → completed`。入口：StateMachineService。
-- [shipped] SSE 阶段事件推送：`ai-e2e/src/server/plugins/`（SSE）+ `ai-e2e/ui/src/hooks/use-sse.ts`。路由 `GET /api/projects/:id/events`。
-- [shipped] 登录步骤录制与回放：LoginRecorderService。
-- [shipped] `AiE2eRuntimeClient` 显式组合 `AiChatClient`（→ ai-chat-service :3001 `POST /api/v1/ai/generate`）与 `AgentTaskClient`（→ `/api/v1/agent-tasks`）；`BrowserGatewayClient`/`SemanticBrowserClient` 分别消费 proxy 调试面与 browser-execution 控制面。不存在跨 AI/proxy 的聚合 facade。
-- [shipped] 独立 SQLite（项目 / scenario / script / run / diagnosis）：`ai-e2e/src/database/`。不与 proxy-adapter / ai-chat-service 共享。
-- [shipped] Prompt 模板（稳定资产）：`ai-e2e/prompts/*.md`。脚本生成模板按 DOM 快照 v2 的 `elements_map[*].locator_bundle` 读取定位候选，优先使用真实 `testid`，不会把元素 ID 当作 testid。必须保留。
-- [shipped] SPA UI 挂载前缀 `/ai-e2e/`：HomePage（`/`）+ ProjectPage（`/project/:projectId`），项目页为四步向导。
-- [shipped] dev-only 浏览器中心体验原型：`ai-e2e/ui/src/features/preview/` 在 `/#/__preview/*` 提供总览、业务版本、资产、Authoring、Run、决策、证据和设置页面；Authoring/Run 使用可拖拽且可键盘调整的三栏布局，中间浏览器持续挂载，模块切换不隐式导航，Chat 生成结构化候选，同页其他模块资产与跨 URL 修改进入人工审批。原型只使用本地 fixtures、不请求 `/api`，并由 `import.meta.env.DEV` 保证生产构建不注册且不打包；不得据此把目标 authoring/run API、SSE 或协调器描述为 shipped。
-- [shipped] semantic 浏览器中心生产工作台：`ai-e2e/ui/src/features/semantic/` 提供业务版本入口、Authoring 与 Run 全屏工作台；左侧上下文/TODO、中间持续挂载的 proxy 只读浏览器、右侧 PRD/模块/场景/DAG/Diff/影响/决策/证据及常驻可折叠 Chat。三栏支持指针/键盘调整、边界约束、双击复位和持久化，支持 system/light/dark、缩放/收起/专注和 reduced-motion；模块切换只更新深链接上下文，显式定位通过 `intent=locate_in_browser` 调度 navigation-only task且不生成候选。
-- [shipped] semantic 工作台真实控制闭环：模块/场景一键 repair 与 Chat 都生成结构化 amendment；同页其他模块和跨 URL 变更必须审批，stale/错误模块/未授权候选不可应用，安全边界后验证并原子激活。Run 页面从 snapshot-first SSE 呈现权威 Run/TODO/attempt 状态、恢复/决策/依赖跳过与证据，并提供 start/pause/resume/cancel/close-browser；legacy 四步向导与旧控制链保持不变。
-- [shipped] 验收面：`ai-e2e/src/__tests__/`（ai、database 等）单元 + 集成测试。
-- [designed] 页面运行匹配器以已交付的 Origin 无关 semantic 页面修订、部署绑定和 baseline variant 为输入；legacy `urls.url` 仍只保存完整 URL。完整参数校验、动态参数和基线采集 runtime 尚未实现。
-- [designed] 模块需求内容应融合 PRD 片段、真实 DOM/截图、页面锚点、功能说明与有序场景；不可变 requirement/coverage 表已交付，内容仍待 authoring runtime 生成。
-- [designed] semantic v1 已有“页面→模块→多个功能脚本→场景引用”的稳定身份/修订数据层；首期脚本的线性步骤、硬断言、输出/副作用 Schema 与跨模块执行 runtime 仍待实现，legacy 脚本继续按 scenario 归属。
-- [designed] 首期权威脚本 Schema 为 `nebula.ai-e2e.functional-script/1.0`：纯 JSON、白名单动作/断言/值引用、无任意代码/固定 sleep/裸 URL/坐标；副作用必须声明应用检查与重试策略。机器契约见 `ai-e2e/docs/semantic-script-schema.md`。
-- [designed] 场景调用图首期为无环图；semantic run 已能冻结基础计划并展开 TODO/依赖/变量，后续仍需实现重复/条件展开、页面任务/尝试执行、追加式修订和恢复。legacy `run-all` 仍只是项目脚本顺序遍历。
-- [designed] 业务版本由用户创建，可记录来源版本及部署/Git 标识；`copy` 原子复制当前有效资产、生成新身份并重建内部引用，复制后独立维护，不复制编辑历史、运行状态、证据、实际数据或秘密。目标契约见 `ai-e2e/docs/version-page-asset-contract.md`。
-- [shipped] semantic v1 业务版本与独立资产快照基座：migration 014 新增版本/部署引用/PRD/变量/页面→业务模块→功能模块→功能脚本→场景 current revision；create/list/get/copy API 使用 plugin options 注入，copy 以幂等 `BEGIN IMMEDIATE` 重建全部已实现内部 ID、保留来源审计、把执行资产置为 stale，并在校验失败时整体回滚。本单元不接 AI、浏览器、运行状态或操作动画。
-- [shipped] semantic v1 数据地基：migration 015–017 增量新增 decision/coverage/baseline/scoped verification/dependency、authoring job/task/attempt/command/event、semantic run/plan/TODO/page-task/attempt/variable/decision/event、全局 browser job FIFO、policy/artifact/evidence/outbox/external-link/legacy-import 表；不删除或改写 legacy 表。
-- [shipped] 015+ checksum migration runner：`schema_migrations` 保存 applying/applied/failed、SQL SHA-256 与应用版本；单 migration 使用 `BEGIN IMMEDIATE`，失败回滚并保留 failed 账本，已应用 checksum 漂移拒绝。001–014 preflight/baseline 与文件备份仍未交付。
-- [shipped] semantic 核心仓储事务：valid draft revision 只有命中精确 verification scope/依赖闭包后才能激活；current 切换、dependency index、business version validation 失效与 authoring event 同事务。正式 run 原子冻结 base plan、TODO/依赖和初始变量；command 使用 id+hash 幂等与 stateVersion 乐观并发，event seq 单调。
-- [shipped] semantic v1 生产读控制面：`GET /api/v1/capabilities`、业务版本 `workspace/pages/modules/functional-scripts/scenarios`、资产 revision 历史/详情、Authoring snapshot/event-log，以及 Run snapshot/plan/TODO/decision/evidence/event-log 均直接投影 014–018 权威表；响应统一为 `{ data, meta }`，v1 错误统一为可判定 `ApiProblem`，capability 精确声明结构化 amendment、Run command 与 snapshot-first event 能力。
-- [shipped] semantic 结构化 Authoring amendment：migration 018 增加 job-scoped context thread、amendment/change/decision link 与 Chat message 审计表；手动 bootstrap/recheck/repair/import 创建立即生成首个 task。候选必须引用同版本 exact current base 与 valid draft candidate；当前 URL/模块内可进入 candidate_ready，同页其他模块和跨 URL 生成结构化审批，浏览器操作未达安全边界时排队，模块/基础 revision 变化后 stale，拒绝/失败不切换 current，多 revision 激活先全量校验并在单事务切换。
-- [shipped] semantic authoring/browser queue 数据层：同一业务版本一个写 authoring job，task/attempt 追加审计；standalone authoring 与 formal run 进入全局 FIFO，全库最多一个 acquiring/active/releasing browser job，authoring verification 与 run-triggered repair 复用父 browser job，避免自等待。
-- [shipped] semantic 正式 Run 控制面：`SemanticRunControlRepository`/`SemanticRunService` 与 `/api/v1/projects/:projectId/runs`、`/api/v1/runs/:runId/*` 从 exact valid version/deployment + current verified scenario/script 冻结 plan/TODO，提供 start/pause/resume/cancel、独立 close-browser outbox、page task/attempt、恢复与决策回答；所有 path Run/TODO 归属均服务端复核，写命令使用 `Idempotency-Key + If-Match stateVersion` 并持久化冲突审计。
-- [shipped] semantic Run 传播与恢复：`passed` 只解锁满足依赖的 TODO，终态失败/取消只传播到真实下游；`recoverable_interruption` 显式恢复，`blocked/outcome_unknown/decision_required` 生成持久决策且未回答前不跳过，取消等待活动 attempt 安全结束后把剩余 TODO 标为 cancelled，不记为 timeout。
-- [shipped] semantic 正式 Run 环境门禁：从脚本顶层 sideEffects 与 step sideEffectId 确定性生成风险投影；local/test 自动放行，staging 高风险先决策并写 active grant，production 业务写硬拒绝。派发携带精确 evaluation/projection/grant/effect/数量快照，ai-chat wrapper 对冻结 target/args 与 lease 逐调用求交。
-- [shipped] Authoring/Run snapshot-first SSE：`GET /api/v1/authoring-jobs/:jobId/events` 与 `GET /api/v1/runs/:runId/events` 首帧发送权威 snapshot/seq/stateVersion，随后从持久 event-log 按单调 seq 投递并发送 heartbeat；断线事实不依赖内存事件总线。
-- [shipped] semantic 证据与集成仓储：artifact 内容寻址去重、evidence item 追加、manifest 原子 seal、inline secret-like 字段拒绝；outbox 支持同 ID/hash 重放、claim/settle，external link 只保存 opaque ID/hash/secret ref 并拒绝外部 seq 倒退。
-- [shipped] semantic 跨服务确定性协调器：`SemanticCoordinatorService` 以全局 browser FIFO 驱动 proxy session/lease 与 ai-chat-service Agent task，正式 Run 把冻结语义脚本投影为 `operation_execute` 白名单步骤并按结构化验收结果收敛 TODO；Authoring repair 使用 observe 分析、结构化 draft candidate、范围审批和安全边界后二次真实浏览器验证，成功才原子激活。
-- [shipped] semantic outbox/恢复与证据提升：外部 create/command 使用稳定幂等键，启动把遗留 dispatching 恢复为可重放状态；browser/Agent/operation/artifact 只保存 opaque ref/hash，lease token 仅进入本机 AES-GCM secret store。协调器下载 operation 截图/DOM、校验 SHA-256、写入本地内容寻址存储并封存 evidence manifest；丢失不可恢复事实时显式记 interrupted/failed，不盲目重放副作用。
-- [shipped] business version copy 扩展：current decision、page baseline、module requirement、functional-point coverage 和 revision dependency 全量生成新 ID 并重写版本内引用；共享 content-addressed blob 只增加 ref count，不复制 asset/business-version verification、run、evidence manifest、实际变量或秘密，目标继续 `needs_recheck`。
-- [designed] 主代理维护 PRD 流程、TODO 依赖、运行变量和决策，并负责派发、恢复、跳过、验收与汇总；页面子代理只执行获授权的页面场景片段，负责重新检查、执行、验证、职责内修复和结构化汇报。
-- [designed] 默认创建干净子代理上下文；登出等可恢复中断可由主代理在页面状态和副作用检查后续接原上下文，否则从检查点和授权变量重建。
-- [designed] 首期一个主代理在任一时刻只运行一个执行型子代理，同一测试流程复用 proxy-adapter 托管的 Playwright/Chromium 实例和浏览器会话，所有动作串行；每个会话固定一个 BrowserContext 和一个活动 actor，跨角色由主代理显式编排退出/登录脚本，子代理发现身份异常即停止。子代理上下文可按任务重建，并存身份、多 Context/Tab 并发仅作为后期扩展。
-- [shipped] semantic 页面任务图、页面/模块范围与验收归 ai-e2e；模型、MCP 工具和 Skills 的执行归 ai-chat-service。ai-e2e 已通过 Agent task client 接入不可变任务、工具/预算约束、模型不可见 browser binding、命令同步和结构化结果；Legacy `AiChatClient.generateText()` 继续服务旧链。
-- [designed] 主代理派发不可变页面任务包并持有共享浏览器生命周期；子代理只取得指定 TODO、actor、Tab、工具和输出槽的短期控制租约，不获得凭据明文或自行登录权限。
-- [designed] 系统内权威脚本是结构化语义功能脚本；所有浏览器动作按语义步骤通过 proxy-adapter 可视执行。原子操作使用幂等 ID 和结果账本，状态不确定时先检查副作用；当前 `npx tsx` 子进程执行器不是目标执行路径。完整契约见 `ai-e2e/docs/agent-browser-execution-contract.md`。
-- [designed] 失败先保存截图和现场并评估后续阻碍；主代理按依赖跳过或继续。意外登出按可恢复中断上报，需要决策时暂停并在决策写入版本文档后恢复。
-- [designed] 测试流程、运行 TODO、执行尝试、Agent 和浏览器操作分别持有状态；blocked/interrupted/waiting_decision 未收敛前不提前跳过下游，取消不再记作超时。
-- [shipped] ai-e2e 生产工作台从 `run.snapshot` + 单调事件恢复，并展示只读实时浏览器、TODO/尝试、依赖传播、决策与证据；不可变证据 manifest/item 与持久 run event 仍是权威状态源。
-- [shipped] 目标业务版本/Authoring/Run API、`ai-chat-service /api/v1/agent-tasks`、`proxy-adapter /api/v1/browser-execution/*`、`browser-control.operation_*` 与重启恢复协议见 `ai-e2e/docs/service-api-event-contract.md`；三服务控制面和 ai-e2e 跨服务协调均已接通。同一 run 禁止混用新旧执行器；ai-e2e 对 Agent/Browser SSE 的直接消费仍 pending。
-- [designed] 双模型、`vision.analyze_page`/`vision.resolve_target`、声明式 Skill manifest、版本/hash pin、工具权限交集和 prompt injection 边界见 `ai-e2e/docs/ai-model-skill-contract.md`。
-- [designed] 目标 migration 后续对 001–014 做结构 preflight/checksum baseline 和文件备份，旧 TypeScript/login/run 只读保留，legacy importer 只生成 needs_recheck 版本/候选；新链按业务版本 opt-in 且 run 固定 `semantic_v1`。
-- [shipped] 主代理 runtime 由持久 authoring/run 数据和 outbox 驱动，不依赖长模型对话；正式 Run 与局部 repair 已接入 Agent/browser、真实验证、证据和恢复闭环。完整 PRD bootstrap/recheck 阶段协调与 coverage 生成仍 pending。
-- [designed] revision dependency index 由已校验资产确定性生成，页面变化按 none/locator_only/interaction/contract/requirement/environment 分类；局部修复只修改并重验受影响闭包。
-- [designed] copy 后执行资产在目标版本保持 current 选择但标为 stale，目标版本 `needs_recheck`；目标 deployment 上真实重验前不能创建正式 semantic run。
-- [shipped] ai-e2e 持久 FIFO/单 active browser job 已接入 runtime；每个 proxy 进程最多一个活动 browser execution session，Authoring 分析 observe、正式执行/候选验证按冻结步骤取得 control，租约和 session 显式释放，UI live view 保持只读。
-- [designed] v1 语义控制面只在 loopback/local 单用户边界启用；远程或多用户拓扑必须先交付统一认证、授权与租户隔离。
-- [designed] environment 固定在 immutable deployment revision。local/test 自动允许已声明、有界副作用；staging 单项非不可逆 create/update 自动，删除/批量/不可逆/上传做一次当前 run/job 计划级审批；production 只允许显式认证会话变化和只读行为且无 v1 绕过。ai-e2e 持有风险投影、policy evaluation/grant 与逐 effectId 授权，完整契约见 `ai-e2e/docs/environment-side-effect-policy-contract.md`。
-- [designed] 页面或 DOM 节点变化后只修复当前业务版本内受影响的功能脚本并重新验证；当前仅有 run 级失败诊断与自动修复。
-- [tech-debt] `page_snapshot_json` 缺失：手动 URL 不经过探索，该字段为 NULL，导致 AI 编造选择器，通过率从 60%+ 降到 4.6%。变通：手动注入 DOM 快照。
-- [tech-debt] AI 模板约束执行不足：AI 偶尔生成 `test()` / `expect()` / `waitForLoadState('networkidle')` / `typescript` 前缀。变通：批量后处理。
-- [tech-debt] AI 超时预算未按操作细分：当前默认 `settings.timeout=180s`，`DEFAULT_AI_TIMEOUT_MS=300s`。
-- [tech-debt] 旧执行链只有基础串行：`POST /execution/run/:scriptId` 不支持并发；首期目标也采用串行，但必须替换为主代理逐项派发、子代理执行并共享 proxy-adapter 浏览器会话的受控串行链。
-- [shipped] Legacy 批量分析可靠性：`POST /analysis/decompose-all` 与 `POST /analysis/generate-all-scenarios` 对单项 AI 调用使用 `withRetry({ maxRetries: 2, baseDelayMs: 1000 })`，单项失败写入对应 `results[*].error` 而不中断整批；响应与完成 SSE 均携带 `succeeded` / `failed` 计数。
-- [shipped] Legacy `POST /execution/run-all` 按脚本串行调用 `ExecutorService.executeScript()`；仅 `error` / `timeout` 基础设施状态重试一次，断言 `fail` 不重试，响应统一为 `{ total, succeeded, failed, results }`。
-- [shipped] 项目事件 SSE 在 `ai-e2e/src/server/routes/events.ts` 的订阅连接处过滤：声明 `data.projectId` 的事件只投递到匹配项目，未声明项目的事件保持广播兼容。
+- [shipped] 纯 semantic 项目初始化：`POST /api/v1/projects` 原子创建项目、不可变部署修订、业务版本、PRD 和待验证起始资产图；支持幂等重放并拒绝请求漂移。
+- [shipped] 旧四步向导、`/api/projects/*`、旧服务/仓储/迁移、单次文本 AI facade、debug browser client、TypeScript 脚本和 `npx tsx` 执行器已删除；不提供导入或向后兼容。
+- [shipped] 业务版本与 semantic 资产图：页面→业务模块→功能模块→多个功能脚本→场景 DAG，稳定身份、不可变修订、copy 引用重建和验证失效。
+- [shipped] Authoring `bootstrap/recheck/repair`：持久 job/task/attempt/event、结构化 amendment、Chat scope、同页/跨 URL 影响审批、安全边界排队、真实浏览器验证与原子激活。
+- [shipped] Authoring 验证接入 ai-chat-service Vision v2 工具；候选副作用按 environment、stepId、effectId、数量和 grant 生成冻结授权，production 业务写拒绝。
+- [shipped] 正式 Run：exact valid version/deployment/scenario 冻结 plan/TODO/DAG/变量，支持 start/pause/resume/cancel、依赖跳过、可恢复中断、结果未知决策和 close-browser。
+- [shipped] 可视语义执行：结构化脚本确定性投影为 proxy `operation_execute` 白名单步骤，关联截图/DOM/artifact/evidence，外部调用使用 outbox 与稳定幂等键收敛。
+- [shipped] 全局 FIFO 与恢复：单 active browser session/context/control actor，Authoring 与 Run 共享安全边界，重启恢复 dispatching outbox，未知副作用不盲目重放。
+- [shipped] 生产浏览器中心 UI：左上下文/TODO、中间持续挂载浏览器、右侧 PRD/模块/场景/Diff/影响/决策/证据和常驻 Chat；模块切换不导航，显式定位才创建 navigation-only task。
+- [shipped] 工作台三栏支持指针/键盘调宽、边界约束、双击复位、持久化、缩放/收起/专注、system/light/dark 与 reduced-motion。
+- [shipped] 新项目通过 `bootstrap=1` 深链接只自动创建一次 bootstrap Agent task；起始脚本/场景保持 `unverified`，不能伪装成可运行版本。
+- [shipped] API/SSE 统一 `{ data, meta }`、`ApiProblem`、snapshot-first + 单调 seq；UI 断线从权威 snapshot 恢复。
+- [tech-debt] 尚未直接消费 ai-chat-service/proxy-adapter 的服务端事件流；当前通过任务/operation 查询和 ai-e2e 持久事件收敛。
+- [tech-debt] 功能脚本完整机器 JSON Schema 尚未抽成统一 validator 包；现有创建、引用、DAG、冻结投影和授权校验继续生效。

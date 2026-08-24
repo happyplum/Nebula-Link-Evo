@@ -190,6 +190,14 @@ export class SemanticCoordinatorService {
         false
       );
     }
+    if (agentFeatures.sideEffectAuthorization !== 'preauthorized_steps_only') {
+      throw new IntegrationClientError(
+        'ai-chat-service',
+        'capability_mismatch',
+        'ai-chat-service 未声明逐浏览器步骤副作用授权能力',
+        false
+      );
+    }
     const sha256 = hashValue({ agent, browser });
     this.capabilitySnapshot = { checkedAt: now, sha256 };
     return sha256;

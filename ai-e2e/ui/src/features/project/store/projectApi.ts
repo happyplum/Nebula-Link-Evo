@@ -1,97 +1,62 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Project } from '@/types/project';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { CreateProjectInput, CreatedProjectWorkspace, Project } from '@/types/project.js';
 
-// Base API URL
-const API_BASE = '/api/projects';
+const API_BASE = '/api/v1/projects';
 
-// Fetch all projects
-export const fetchProjects = async (): Promise<Project[]> => {
-  const response = await fetch(API_BASE);
+interface ApiSuccess<T> {
+  data: T;
+}
+
+async function read<T>(response: Response): Promise<T> {
+  const body = (await response.json()) as ApiSuccess<T> | { message?: string; code?: string };
   if (!response.ok) {
-    throw new Error('Failed to fetch projects');
+    throw new Error('message' in body && body.message ? body.message : `请求失败 (${response.status})`);
   }
-  const data = await response.json();
-  return data.projects || [];
-};
+  return (body as ApiSuccess<T>).data;
+}
 
-// Fetch single project
-export const fetchProject = async (id: string): Promise<Project> => {
-  const response = await fetch(`${API_BASE}/${id}`);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch project ${id}`);
-  }
-  const data = await response.json();
-  return data.data || data;
-};
+export async function fetchProjects(): Promise<Project[]> {
+  const data = await read<{ projects: Project[] }>(await fetch(API_BASE));
+  return data.projects;
+}
 
-// Create project
-export const createProject = async (projectData: Partial<Project>): Promise<Project> => {
-  const response = await fetch(API_BASE, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(projectData),
-  });
-  if (!response.ok) {
-    throw new Error('Failed to create project');
-  }
-  const data = await response.json();
-  return data.data || data;
-};
+export async function fetchProject(id: string): Promise<Project> {
+  return read<Project>(await fetch(`${API_BASE}/${encodeURIComponent(id)}`));
+}
 
-// Delete project
-export const deleteProject = async (id: string): Promise<void> => {
-  const response = await fetch(`${API_BASE}/${id}`, {
-    method: 'DELETE',
-  });
-  if (!response.ok) {
-    throw new Error(`Failed to delete project ${id}`);
-  }
-};
-
-// --- React Query Hooks ---
+export async function createProject(input: CreateProjectInput): Promise<CreatedProjectWorkspace> {
+  return read<CreatedProjectWorkspace>(
+    await fetch(API_BASE, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': crypto.randomUUID(),
+      },
+      body: JSON.stringify(input),
+    })
+  );
+}
 
 export const projectKeys = {
-  all: ['projects'] as const,
-  lists: () => [...projectKeys.all, 'list'] as const,
-  list: (filters: string) => [...projectKeys.lists(), { filters }] as const,
-  details: () => [...projectKeys.all, 'detail'] as const,
-  detail: (id: string) => [...projectKeys.details(), id] as const,
+  all: ['semantic-projects'] as const,
+  lists: () => ['semantic-projects', 'list'] as const,
+  detail: (id: string) => ['semantic-projects', 'detail', id] as const,
 };
 
-export const useProjects = () => {
-  return useQuery({
-    queryKey: projectKeys.lists(),
-    queryFn: fetchProjects,
-  });
-};
+export const useProjects = () =>
+  useQuery({ queryKey: projectKeys.lists(), queryFn: fetchProjects });
 
-export const useProject = (id: string) => {
-  return useQuery({
+export const useProject = (id: string) =>
+  useQuery({
     queryKey: projectKeys.detail(id),
     queryFn: () => fetchProject(id),
-    enabled: !!id,
+    enabled: Boolean(id),
   });
-};
 
 export const useCreateProject = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: createProject,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
-    },
-  });
-};
-
-export const useDeleteProject = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: deleteProject,
-    onSuccess: (_, id) => {
-      queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
-      queryClient.removeQueries({ queryKey: projectKeys.detail(id) });
-    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: projectKeys.lists() }),
   });
 };

@@ -27,11 +27,10 @@ describe('error-handler plugin', () => {
     const response = await app.inject({ method: 'GET', url: '/missing' });
 
     expect(response.statusCode).toBe(404);
-    expect(response.json()).toEqual({
-      error: {
-        code: 'NOT_FOUND',
-        message: 'project missing',
-      },
+    expect(response.json()).toMatchObject({
+      code: 'not_found',
+      message: 'project missing',
+      retryable: false,
     });
   });
 
@@ -44,12 +43,11 @@ describe('error-handler plugin', () => {
     const response = await app.inject({ method: 'GET', url: '/validation' });
 
     expect(response.statusCode).toBe(400);
-    expect(response.json()).toEqual({
-      error: {
-        code: 'VALIDATION_ERROR',
-        message: 'invalid payload',
-        details: ['name is required'],
-      },
+    expect(response.json()).toMatchObject({
+      code: 'validation_error',
+      message: 'invalid payload',
+      details: { errors: ['name is required'] },
+      retryable: false,
     });
   });
 
@@ -62,11 +60,10 @@ describe('error-handler plugin', () => {
     const response = await app.inject({ method: 'GET', url: '/plain' });
 
     expect(response.statusCode).toBe(500);
-    expect(response.json()).toEqual({
-      error: {
-        code: 'INTERNAL_ERROR',
-        message: 'unexpected',
-      },
+    expect(response.json()).toMatchObject({
+      code: 'internal_error',
+      message: 'unexpected',
+      retryable: true,
     });
   });
 
@@ -81,11 +78,10 @@ describe('error-handler plugin', () => {
     const response = await app.inject({ method: 'GET', url: '/rate-limit' });
 
     expect(response.statusCode).toBe(429);
-    expect(response.json()).toEqual({
-      error: {
-        code: 'INTERNAL_ERROR',
-        message: 'Too many requests',
-      },
+    expect(response.json()).toMatchObject({
+      code: 'internal_error',
+      message: 'Too many requests',
+      retryable: true,
     });
   });
 

@@ -29,9 +29,9 @@ Browser ←→ debug-ui (:5173 dev)
          AI Providers                 Chromium
    (GLM / OpenAI / Anthropic / Kimi / NVIDIA)
 
-         ai-e2e (:3002) — 自动化测试编排
-   ├── AiE2eRuntimeClient → ai-chat-service (:3001) POST /api/v1/ai/generate + /api/v1/agent-tasks
-   └── BrowserGatewayClient → proxy-adapter (:3000) /debug/api/*
+         ai-e2e (:3002) — semantic 自动化测试编排
+   ├── AgentTaskClient → ai-chat-service (:3001) /api/v1/agent-tasks
+   └── SemanticBrowserClient → proxy-adapter (:3000) /api/v1/browser-execution/*
 
    nebula-browser / DeepSeek Harness plugin
    └── browser-control-client → proxy-adapter (:3000) HTTP + /mcp
@@ -52,14 +52,14 @@ shared  ←──  proxy-adapter
         ←──  deepseek-harness-plugin
 
 proxy-adapter  ←──  ai-chat-service（DSH MCP transport → /mcp）
-               ←──  ai-e2e（BrowserGatewayClient → /debug/api/*）
+               ←──  ai-e2e（SemanticBrowserClient → /api/v1/browser-execution/*）
                ←──  debug-ui（REST + SSE + MJPEG）
                ←──  browser-control-client（HTTP browser-execution + /mcp operation）
 
 browser-control-client  ←──  deepseek-harness-plugin
 
 ai-chat-service  ←──  debug-ui（Chat SSE）
-                 ←──  ai-e2e（AiE2eRuntimeClient 消费 /api/v1/ai/generate 与 Agent task create/get/commands）
+                 ←──  ai-e2e（AgentTaskClient 消费 Agent task create/get/commands）
 
 ai-e2e  ←──  （仅被用户/UI 消费）
 
@@ -71,7 +71,7 @@ debug-ui  ←──  （仅被用户消费）
 - **shared** 是依赖图最底层，**不反向**依赖任何上层包。
 - **proxy-adapter** 不依赖任何上层包的代码（仅被消费）。
 - **ai-chat-service** 通过 MCP-over-HTTP 消费 `proxy-adapter`，不直连 Playwright。
-- **ai-e2e** 通过显式装配的 `AiE2eRuntimeClient` + `BrowserGatewayClient` 消费，零 `@ai-sdk/*` 依赖；不存在 proxy/AI 聚合 facade。
+- **ai-e2e** 只通过 `AgentTaskClient` 与 `SemanticBrowserClient` 消费两个后端，零 `@ai-sdk/*` 依赖；不存在单次文本生成或 debug-browser facade。
 - **debug-ui** 仅消费 `ai-chat-service` 与 `proxy-adapter` 的 HTTP/SSE。
 - **browser-control-client** 只消费 proxy 的 loopback HTTP 控制面与 `/mcp`，不直连 Playwright/CDP；**deepseek-harness-plugin** 只消费该客户端。
 - 跨包数据库**互不共享**：每个后端包维护独立 SQLite。
@@ -83,7 +83,7 @@ debug-ui  ←──  （仅被用户消费）
 | 浏览器能力层：`proxy-adapter`    | shipped     | Playwright/CDP 集成的唯一所有者；分析页面、生成 DOM/截图证据、执行浏览器动作，并只以 3 个 `browser-control.operation_*` MCP 工具、browser-execution HTTP 控制面和受仲裁调试面服务。                                                                                              |
 | 受控本地接入层：`integrations/*` | shipped     | 复用既有 browser-execution HTTP + `/mcp`；提供 CLI 与只暴露 observe/act、逐 act 审批的 DeepSeek Harness bundle，不拥有浏览器引擎或业务编排。                                                                                                                                     |
 | AI 基础能力层：`ai-chat-service` | in-progress | 每 Fastify 实例独立 Cordis root，Chat/Agent Task 共用唯一 DSH Agent Loop；Pi/GLM、JSONL persistence/SQLite projection、单一 DSH MCP transport/ToolRuntime、Vision v2、Skills、预算/调度/删除/留存/备份、正式 Run policy/grant 交集和部署锁定插件已交付；生产切换演练仍 pending。 |
-| E2E 业务层：`ai-e2e`             | in-progress | PRD 分析、页面探索和既有 TypeScript 资产域继续独立演进；semantic 业务版本、结构化 Authoring/Run 控制面、主/页面任务协调、浏览器可视语义执行与证据闭环已交付。完整页面匹配、bootstrap/recheck、生产 UI 和旧资产 importer 仍 pending。                                             |
+| E2E 业务层：`ai-e2e`             | shipped | 纯 semantic 项目初始化、业务版本、结构化 Authoring/Run、Vision v2、逐 effect 授权、可视语义执行、证据闭环与生产工作台已交付；不提供旧资产导入或兼容。 |
 
 跨层原则：浏览器执行证据只能来自 `proxy-adapter`；通用 AI/MCP/Skills 能力只能归属 `ai-chat-service`；E2E 的页面、模块、脚本和修复语义只能归属 `ai-e2e`。
 
@@ -170,10 +170,10 @@ debug-ui  ←──  （仅被用户消费）
 
 ### 3.7 ai-e2e 后端消费契约
 
-- AI 调用：`AiE2eRuntimeClient` 显式组合 `AiChatClient.generateText()` 到 `POST /api/v1/ai/generate`，以及 `AgentTaskClient` 到 `/api/v1/agent-tasks` create/get/commands；不存在旧路径或 proxy/AI 聚合 facade。
-- 浏览器调用：Legacy 经 `BrowserGatewayClient` 到 `/debug/api/*`；semantic v1 经 `SemanticBrowserClient` 到 `/api/v1/browser-execution/*`，两者都不得直连 Playwright/CDP。
-- 任一基址为空时：DB-only 路由继续工作；AI / Playwright 路由返回 `503`。
-- 脚本执行：仅 Playwright Library API（`import { chromium } from 'playwright'`），禁用 `test()` / `describe()` / `expect()` / `waitForLoadState('networkidle')`。
+- AI 调用：只通过 `AgentTaskClient` 到 `/api/v1/agent-tasks` create/get/commands；Authoring 可申请 `vision.analyze_page`/`vision.resolve_target`，不存在单次文本生成或聚合 facade。
+- 浏览器调用：只通过 `SemanticBrowserClient` 到 `/api/v1/browser-execution/*`，不得调用 debug 路由或直连 Playwright/CDP。
+- 下游服务缺失或 capability 不兼容时，依赖其执行的请求返回可判定失败，不静默回退。
+- 脚本执行：只执行结构化 semantic 步骤，由 proxy-adapter 可视运行；不存在任意 TypeScript/JavaScript 执行路径。
 - 并发：`POST /execution/run/:scriptId` 不支持并发；批量必须串行或 `run-all`。
 - semantic 跨服务调用：`ai-e2e` 先写 integration outbox，再以原幂等键创建/查询 Agent task 与 browser session/lease/operation；SQLite 写事务内不等待网络。启动把遗留 dispatching 恢复为可重放状态，一次性 lease token 只进入本机加密 secret store。
 - v1 三服务新控制面只允许 loopback/local 单用户部署；capability、Origin 和 lease 不替代认证，远程/多用户启用前必须另行交付统一身份、授权与租户隔离。
@@ -195,22 +195,22 @@ debug-ui  ←──  （仅被用户消费）
 
 ### 3.9 ai-e2e 业务版本、脚本与代理编排契约
 
-- **页面锚点（in-progress）**：semantic 页面 current revision 已保存不含 Origin 的 route mode/template/identity query 和唯一签名，命名 baseline variant/revision 表已交付；完整参数 Schema、运行匹配、动态参数和基线采集仍 pending。legacy `urls.url` 不是稳定身份。
+- **页面锚点（in-progress）**：页面 current revision 保存不含 Origin 的 route mode/template/identity query 和唯一签名，命名 baseline variant/revision 表已交付；完整参数 Schema、运行匹配、动态参数和基线采集仍 pending。
 - **功能模块（in-progress）**：semantic v1 已有页面→业务模块→功能模块→多个稳定 FunctionalScript 身份/修订关系；公开资产 authoring 与 semantic 执行仍 pending。
 - **模块需求文档（in-progress）**：不可变 requirement revision 与逐功能点 coverage 数据基座已交付；PRD/DOM/截图融合生成和公开 authoring 接口仍 pending。
-- **功能脚本与场景（in-progress）**：semantic v1 已有版本隔离的功能脚本/场景稳定身份、不可变 current revision、模块归属、场景调用引用与无环校验；copy 后执行资产 stale。完整机器 Schema、公开 authoring、TODO/尝试与语义执行仍 pending；legacy 持久化仍是 scenario 级 TypeScript script version。
+- **功能脚本与场景（shipped）**：版本隔离的功能脚本/场景稳定身份、不可变 current revision、模块归属、场景调用引用、无环校验、结构化 Authoring、TODO/尝试与语义执行已接通；完整独立机器 Schema validator 仍为技术债。
 - **业务版本（in-progress）**：用户 create/list/get、来源版本、部署/Git 标识和幂等原子 `copy` 已交付；copy 为 current PRD/变量/决策/基线/需求/coverage/dependency/semantic 资产生成新身份、重写内部引用并增加共享 blob ref count，不复制验证、运行、证据 manifest、实际数据或秘密。目标保持 `needs_recheck`。
-- **目标持久化（in-progress）**：migration 014–018 已交付资产治理、authoring/run/browser queue、decision/policy/evidence/outbox/external link/legacy import/结构化 amendment 表与核心原子仓储；015+ 使用 checksum migration 账本。公开 API 与跨服务 worker 已接入，001–014 preflight/baseline、备份和 legacy importer 仍 pending。
+- **持久化（shipped）**：纯 semantic migration 001、014–018 已交付项目/资产治理、authoring/run/browser queue、decision/policy/evidence/outbox/external link/结构化 amendment 表与核心原子仓储；不读取或导入旧表。
 - **主代理 / 页面子代理（shipped）**：持久 authoring/run 状态、计划/TODO/变量、browser FIFO 和确定性协调器已接通 Agent task、短期 lease、恢复、依赖跳过与验收；任一时刻只有一个执行型页面任务。
 - **上下文（pending）**：大多数派发使用干净子代理上下文；登出等可恢复中断可由主代理在页面状态和副作用检查后续接原上下文，否则从检查点与授权变量重建。
 - **串行调度与身份（shipped）**：ai-e2e 持久 `browser_jobs` FIFO、全库单 active 槽、proxy session/lease 派发、显式释放和重启收敛已接入；每个 browser session 固定单 Context/active actor。
 - **环境与副作用安全（formal run shipped）**：风险投影从脚本顶层声明与 step sideEffectId 确定性生成；policy evaluation/grant/decision、local/test 自动放行、staging 高风险审批、production 业务写拒绝和逐 effectId/数量/grant 跨服务门禁已接通。
 - **编排与执行分属两层（shipped）**：页面任务图、模块范围与验收标准归 `ai-e2e`；模型调用、MCP 工具和 Skills 执行归 `ai-chat-service`。semantic v1 已接入 Agent task/Skill tool loop；核心服务仅保留 canonical v1 路由和工具面，不提供兼容别名或静默回退。
 - **页面任务与控制租约（shipped）**：主代理派发不可变页面任务包并持有共享浏览器生命周期；页面任务只取得指定 TODO、Tab、工具和输出槽的短期租约。跨服务只传稳定引用和非秘密约束，不传 Playwright 对象或凭据值。
-- **可视语义执行（in-progress）**：semantic v1 把结构化脚本确定性投影为受限 `operation_execute` 步骤，冻结 target/args 并关联 operation、截图/DOM 与 evidence manifest；结果不确定先进入决策/恢复。Legacy `npx tsx` 只保留旧 run，browser event 流消费仍 pending。
-- **跨服务 API/事件（in-progress）**：三服务 capability、Agent/browser 控制面、Vision v2 evidence binding，以及 ai-e2e 业务版本、Authoring/Run API/SSE、outbox coordinator、正式 Run 逐 effect 授权和证据提升已交付。业务版本通用 revision 写、完整 Authoring job 控制、Agent/browser event stream 消费和 Vision v2 在全部业务流程的接入仍 pending。
-- **资产生成/复核/修复（in-progress）**：局部 repair 已接入结构化 Agent 候选、同页跨模块/跨 URL 影响审批、安全边界、真实浏览器验证和原子激活；完整 PRD bootstrap/recheck 与 coverage 生成仍 pending。
-- **迁移与切流（in-progress）**：015–017 已进入 checksum migration 账本，失败 rollback/漂移拒绝且旧表不变；001–014 preflight/baseline、文件备份、legacy importer 与版本级 capability cutover 仍 pending。
+- **可视语义执行（shipped）**：结构化脚本确定性投影为受限 `operation_execute` 步骤，冻结 target/args 并关联 operation、截图/DOM 与 evidence manifest；结果不确定先进入决策/恢复。下游 browser event 流直连消费仍为技术债。
+- **跨服务 API/事件（shipped）**：三服务 capability、Agent/browser 控制面、Vision v2 evidence binding，以及 ai-e2e Project/Authoring/Run API/SSE、outbox coordinator、逐 effect 授权和证据提升已交付；Agent/browser event stream 直连消费仍为技术债。
+- **资产生成/复核/修复（shipped）**：bootstrap/recheck/repair 均创建结构化 Agent 候选，接入同页跨模块/跨 URL 影响审批、安全边界、真实浏览器验证、revision verification 和原子激活。
+- **产品切换（shipped）**：ai-e2e 已完成纯 semantic clean cut，只使用独立 semantic 数据库和 canonical v1 路由，不提供旧资产导入、读取或兼容。
 - **分层状态与传播（shipped）**：Run/plan/TODO/dependency/page task/attempt/variable/decision/command/event、正式 Run 冻结/命令、Agent/browser 页面执行、依赖传播、恢复/决策与公开 snapshot/SSE 已交付。
 - **决策与证据（in-progress）**：版本/运行决策、计划级 grant、内容寻址 artifact、append-only evidence、sealed manifest 和 proxy operation/截图/DOM 自动提升已交付；保留清理、脱敏完成和生产 UI 恢复仍 pending。
 - **DOM 变化局部修复（in-progress）**：当前只有 run 级诊断/自动修复；目标是只修复当前业务版本内受影响的功能脚本并重新验证。
@@ -241,7 +241,7 @@ debug-ui  ←──  （仅被用户消费）
 | 修改运行/TODO/尝试状态、决策、依赖传播、证据所有权/完整度/保留/脱敏或运行快照事件           | 跨包契约（3.9） + `ai-e2e` PRODUCT-SPEC/AGENTS/UI AGENTS + `proxy-adapter` PRODUCT-SPEC（涉及原始产物时） + `ai-e2e/docs/run-state-decision-evidence-contract.md`                                                                                                                                                                                                                                |
 | 修改语义脚本 Schema、动作/断言/引用白名单或映射                                             | 跨包契约（3.6、3.9） + `ai-e2e`/`proxy-adapter` PRODUCT-SPEC + `ai-e2e/docs/functional-script-contract.md` + `ai-e2e/docs/semantic-script-schema.md`                                                                                                                                                                                                                                             |
 | 修改业务版本/资产修订/运行/决策/事件/证据/outbox 表、copy 或状态事务                        | 跨包契约（3.9） + `ai-e2e` PRODUCT-SPEC/AGENTS + `ai-e2e/docs/target-data-model.md` + `ai-e2e/docs/service-api-event-contract.md` + 相关产品契约                                                                                                                                                                                                                                                 |
-| 修改 migration baseline、旧资产导入、能力门禁、legacy/semantic 切流、回滚或发布验收         | 跨包契约（3.2、3.9） + 三服务 PRODUCT-SPEC + `ai-e2e/docs/migration-compatibility-acceptance-contract.md` + `ai-e2e/docs/target-data-model.md`                                                                                                                                                                                                                                                   |
+| 修改 ai-e2e migration baseline、能力门禁、纯 semantic 产品边界或发布验收                     | 跨包契约（3.2、3.9） + 三服务 PRODUCT-SPEC + `ai-e2e/docs/target-data-model.md`                                                                                                                                                                                                                                                                                                          |
 | 修改端口分配                                                                                | 跨包契约（3.1） + 全局索引 + 根 README Packages 表 + 根 README Architecture 拓扑                                                                                                                                                                                                                                                                                                                 |
 | 修改依赖方向（如新包依赖、facade 拆分）                                                     | 依赖方向图 + 全局索引                                                                                                                                                                                                                                                                                                                                                                            |
 

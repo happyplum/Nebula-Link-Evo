@@ -1,7 +1,7 @@
 import React from 'react'
 import { cn } from '@/lib/utils.js'
 
-export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
+export interface CardProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'title'> {
   title?: React.ReactNode
   actions?: React.ReactNode
   noPadding?: boolean

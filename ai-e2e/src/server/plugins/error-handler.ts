@@ -1,27 +1,7 @@
 import fp from './fastify-plugin.js';
 import type { FastifyError, FastifyInstance } from 'fastify';
 import { ServiceError } from '../../services/service-error.js';
-import type { ErrorResponse } from '../../types/api.js';
 import type { ApiProblem } from '../../types/semantic-control.js';
-
-function toErrorResponse(code: string, message: string, details?: string[]): ErrorResponse {
-  if (details && details.length > 0) {
-    return {
-      error: {
-        code,
-        message,
-        details,
-      },
-    };
-  }
-
-  return {
-    error: {
-      code,
-      message,
-    },
-  };
-}
 
 function getStatusCode(error: FastifyError | Error): number {
   if ('statusCode' in error && typeof error.statusCode === 'number') {
@@ -63,24 +43,12 @@ async function errorHandlerPlugin(fastify: FastifyInstance): Promise<void> {
     );
 
     const statusCode = error instanceof ServiceError ? error.statusCode : getStatusCode(error);
-    if (request.url.startsWith('/api/v1')) {
-      const correlationHeader = request.headers['x-correlation-id'];
-      const correlationId = Array.isArray(correlationHeader)
-        ? correlationHeader[0] ?? request.id
-        : correlationHeader ?? request.id;
-      reply.status(statusCode).send(toApiProblem(error, correlationId, statusCode));
-      return;
-    }
-
-    if (error instanceof ServiceError) {
-      reply.status(error.statusCode).send(toErrorResponse(error.code, error.message, error.details));
-      return;
-    }
-
-    const message = error.message || 'Internal Server Error';
-    reply.status(statusCode).send(toErrorResponse('INTERNAL_ERROR', message));
+    const correlationHeader = request.headers['x-correlation-id'];
+    const correlationId = Array.isArray(correlationHeader)
+      ? correlationHeader[0] ?? request.id
+      : correlationHeader ?? request.id;
+    reply.status(statusCode).send(toApiProblem(error, correlationId, statusCode));
   });
-
 }
 
 export default fp(errorHandlerPlugin, {

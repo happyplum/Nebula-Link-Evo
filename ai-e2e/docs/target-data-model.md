@@ -1,17 +1,17 @@
 # AI E2E 目标数据模型
 
-> 状态：`in-progress`。migration 014–018 已交付资产治理、authoring/run/browser queue、decision/policy/evidence/outbox/external link、结构化 amendment/Chat scope 目标表与核心仓储；015+ checksum runner 已落地。正式 Run、局部 Authoring repair、公开 API/SSE 与跨服务执行协调器已接入；001–014 preflight/baseline、备份与 legacy importer 仍未实现。
+> 状态：`shipped`。纯 semantic migration 001、014–018 已交付项目、资产治理、authoring/run/browser queue、decision/policy/evidence/outbox/external link、结构化 amendment/Chat scope 表与核心仓储；Project/Authoring/Run API/SSE 和跨服务协调器已接入。
 > 更新时间：2026-08-24。
 > 本文定义 `ai-e2e` 首期最终关系模型、不可变修订、版本复制事务、页面规范化、运行数据与证据存储。迁移编号和物理 SQL 在实施时按现有 SQLite migration 链追加，但不得改变本文的所有权和唯一性约束。
 
 ### 当前物理映射
 
-migration 014 只增不改。legacy migration 已占用且仍被旧 repository 使用的 `business_modules`、`functional_modules`、`test_scenarios` 与本文语义不兼容，因此 semantic v1 暂时映射为 `semantic_business_modules`、`semantic_functional_modules`、`semantic_test_scenarios` 及对应 revision 表；API 与领域名称仍使用 business/functional module 和 scenario。切流完成前不得把两套表混读或让 semantic run 引用 legacy ID。
+领域资产物理映射为 `semantic_business_modules`、`semantic_functional_modules`、`semantic_test_scenarios` 及对应 revision 表；API 与领域名称使用 business/functional module 和 scenario。
 
 ## 1. 存储原则
 
 - `ai-e2e` 继续使用独立 SQLite，不与 `proxy-adapter` 或 `ai-chat-service` 共享数据库或跨库外键。
-- 新实体 ID 使用 `crypto.randomUUID()` 生成的 UUID v4 字符串；现有 16 位 hex ID 作为 legacy ID 保留，不要求重写。
+- 实体 ID 使用 `crypto.randomUUID()` 生成的 UUID v4 字符串。
 - 时间统一保存 UTC RFC 3339 文本，应用层输出 ISO 8601；所有终态同时记录明确 `completed_at`。
 - JSON 字段在写入前按键稳定排序并规范化，内容资产计算 SHA-256；不得对含秘密明文的对象计算并持久化可反推哈希。
 - 稳定资产与不可变 payload 修订分离。运行、copy 和修复引用精确 revision ID + content hash，不引用会变化的“当前内容”。
@@ -52,7 +52,6 @@ projects
    └─ evidence_manifests ── evidence_items ── artifact_objects
 
 schema_migrations
-legacy_import_batches ── legacy_entity_links
 integration_outbox ── external_task_links
 browser_jobs
 ```
@@ -93,14 +92,13 @@ browser_jobs
 
 ### 4.1 `projects`
 
-保留现有项目作为长期容器。目标上：
+项目是业务版本、部署和运行的长期容器：
 
 | 字段 | 变化 |
 |---|---|
-| `id/name/created_at/updated_at` | 保留 |
-| `status` | 只表示项目工作流/展示阶段，不再表示某次测试流程结果 |
-| `target_base_url` | 迁移期只读 legacy；目标部署由 deployment revision 提供 |
-| `auth_config_json` | 迁移为 secret reference 结构后废弃明文/自由 JSON |
+| `id/name/description/created_at/updated_at` | 项目身份与展示信息 |
+| `create_request_id/request_hash` | 项目初始化幂等键与请求漂移校验 |
+| `created_by` | 创建者审计引用 |
 
 ### 4.2 `deployment_profiles`
 
@@ -562,7 +560,7 @@ SQLite `BEGIN IMMEDIATE` 防止 copy 期间来源 current 指针变化。重复�
 
 - `BusinessVersionRepository` 已实现空白创建和 copy 幂等 hash、来源 `valid/archived` 门禁、事务回滚、全图 hash/引用/场景 DAG 校验和目标 `needs_recheck`。
 - 已复制并重建当前 PRD/解析结果、变量定义、页面、业务模块、功能模块、功能脚本、场景及其 current revision ID；部署 binding 引用项目级 immutable deployment revision，Git 元数据可继承或覆盖。
-- migration 015–018 已交付 decision、coverage、baseline、scoped verification/dependency、authoring、run、evidence/outbox 与结构化 amendment/Chat scope 表。copy 已重建 current decision/baseline/requirement/coverage/dependency 引用，内容寻址 artifact 只增加引用计数；仍不读取或复制 legacy run/script/evidence，也不复制 semantic verification、business version validation、run、authoring thread/amendment 或 evidence manifest。
+- migration 015–018 已交付 decision、coverage、baseline、scoped verification/dependency、authoring、run、evidence/outbox 与结构化 amendment/Chat scope 表。copy 已重建 current decision/baseline/requirement/coverage/dependency 引用，内容寻址 artifact 只增加引用计数；不复制 verification、business version validation、run、authoring thread/amendment 或 evidence manifest。
 - copy 后功能脚本/场景 revision 的 `readiness_status=stale` 仅是目标版本待复核投影；真实授权以 scoped `asset_revision_verifications` 与 `business_version_validations` 为准，不能据此创建 semantic formal run。
 
 ### 9.2 独立性判定
@@ -579,7 +577,7 @@ copy 后必须满足：
 
 ### 10.1 `authoring_jobs`
 
-- `id/project_id/business_version_id/mode(bootstrap/recheck/repair/import_conversion)`。
+- `id/project_id/business_version_id/mode(bootstrap/recheck/repair)`。
 - `parent_run_id nullable`；仅 run-triggered repair 使用，并复用父 run 的 browser job/session 槽位。
 - `browser_job_id nullable`；需要真实页面时绑定一个 root browser job，嵌套 repair 必须与 parent run 相同。
 - `lifecycle(created/planning/running/paused/waiting_decision/completing/completed/cancelling/cancelled/failed)`。
@@ -680,7 +678,7 @@ scope 至少冻结 deployment revision、Git/build 标识、角色、locale、vi
 |---|---|---|
 | `id` | TEXT | UUID PK |
 | `project_id/business_version_id` | TEXT | FK |
-| `engine` | TEXT | 固定 `semantic_v1`；旧运行保留在 `execution_runs` 并标记 legacy，不混链 |
+| `engine` | TEXT | 固定 `semantic_v1` |
 | `purpose` | TEXT | `formal/authoring_verification`；验证 run 不计作正式业务通过 |
 | `authoring_job_id` | TEXT NULL | purpose=authoring_verification 时必填，formal 时为空 |
 | `browser_job_id` | TEXT | standalone verification/formal run 的 root job，嵌套 verification 与 parent run 相同 |
@@ -925,19 +923,17 @@ manifest sealed 后不可修改；补充证据创建新的 manifest revision 或
 
 跨服务调用不能纳入 SQLite 事务，采用 outbox/状态机：先记录 intent/command，再调用外部服务，最后以幂等回调/查询收敛。不得在持有 SQLite write transaction 时等待模型或浏览器网络调用。
 
-015+ checksum migration runner、legacy import 账本和 migration 018 amendment scope 表已交付；001–014 结构 baseline/preflight、文件备份和旧资产 importer 仍按 `migration-compatibility-acceptance-contract.md` pending。目标表只通过增量 migration 新增；不删除、重命名或反向改写旧表。
+纯 semantic migration 001、014–018 在独立数据库中按固定顺序执行；015+ 使用 checksum/状态账本覆盖失败 rollback 与 checksum 漂移拒绝。
 
 ## 16. 当前实现差距
 
-- semantic v1 已有 business version 与独立 current asset graph；legacy module、URL、scenario 和 script 仍直接归项目链路，尚未导入或切流。
-- semantic v1 已有稳定功能脚本身份、不可变 revision payload/hash、scoped verification、dependency index 和 verified-scope 激活事务；公开 authoring/修订 API、完整 Schema 校验及语义执行尚未实现。legacy `scripts` 仍保存 scenario 级 TypeScript 文本与可变 status。
-- semantic `test_runs` 已能从 verified scenario 原子冻结 base plan、TODO/依赖和初始变量，并通过乐观命令、page task/attempt、Agent/browser 协调、精确依赖传播、恢复/决策应用、持久 seq event 和公开 API/SSE 驱动状态。legacy `execution_runs` 保持原义且不混链。
+- semantic v1 已有 business version、独立 current asset graph、稳定功能脚本身份、不可变 revision payload/hash、scoped verification、dependency index、verified-scope 激活事务、公开 Authoring API 和可视语义执行；完整独立机器 Schema validator 仍待实现。
+- `test_runs` 从 verified scenario 原子冻结 base plan、TODO/依赖和初始变量，并通过乐观命令、page task/attempt、Agent/browser 协调、精确依赖传播、恢复/决策应用、持久 seq event 和公开 API/SSE 驱动状态。
 - 持久 outbox、opaque external task link 与确定性协调器已接入网络派发、启动恢复和跨服务状态核对；lease token 只进入本机加密 secret store，不写数据库明文。
 - 内容寻址 artifact、append-only evidence item 和 sealed manifest 已由协调器接入 proxy 截图/DOM/operation 自动提升；保留清理、脱敏完成和 UI 证据时间线尚未实现。
-- semantic 页面 revision 已保存 Origin 无关签名；legacy URL 表仍把实际 URL、单快照和逻辑页面混为一个实体，尚无运行匹配器、完整参数 Schema 或基线变体。
-- 当前启动仍直接执行 legacy migration 001–014；015–018 已使用 checksum/状态账本并覆盖失败 rollback 与 checksum 漂移拒绝，但 001–014 结构 preflight/baseline、文件备份和 legacy importer 尚未实现。
-- 持久 authoring job/task/attempt/command/event、candidate verification/activation、coverage/dependency 和跨 authoring/run 的 browser FIFO 数据基座已交付；PRD/探索/生成/修复协调器仍围绕旧项目状态和短期调用。
-- 风险投影 hash、policy evaluation/grant/decision 表与确定性计划级环境规则已交付；staging 高风险审批会原子创建 active grant，production 业务写会取消 Run/browser job。逐 effectId 的跨服务参数门禁尚未实现。
+- 页面 revision 已保存 Origin 无关签名；运行匹配器、完整参数 Schema 和基线采集仍待实现。
+- 持久 authoring job/task/attempt/command/event、candidate verification/activation、coverage/dependency 和跨 authoring/run 的 browser FIFO 已接入 bootstrap/recheck/repair。
+- 风险投影 hash、policy evaluation/grant/decision、staging 高风险审批、production 业务写硬拒绝和逐 effectId 跨服务参数门禁已交付。
 
 ## 17. 验收原则
 
@@ -951,10 +947,9 @@ manifest sealed 后不可修改；补充证据创建新的 manifest revision 或
 8. execution attempt 和 sealed evidence 不被重试覆盖。
 9. 大媒体不进入 SQLite，秘密值不进入资产、运行变量、事件或证据。
 10. 跨服务等待不占用 SQLite 写事务，outbox 可用原幂等键恢复，外部引用可查询收敛。
-11. 旧库先通过结构 preflight 和可重入 import；legacy run 不伪装成 semantic run，迁移失败不改写源表。
-12. required 脚本/场景未真实验证时版本不能宣称 authoring succeeded；局部修复依赖索引可解释且不重写无关资产。
-13. authoring/run 公平队列在 ai-e2e 重启后保持 queue_seq，proxy 只允许队首取得唯一活动 session；嵌套 repair 不产生自等待。
-14. 策略评估与 grant 可在重启后恢复，不能跨 context/deployment/policy 复用；production 写计划和缺少有效 staging grant 的高风险计划不能产生浏览器 outbox intent。
+11. required 脚本/场景未真实验证时版本不能宣称 authoring succeeded；局部修复依赖索引可解释且不重写无关资产。
+12. authoring/run 公平队列在 ai-e2e 重启后保持 queue_seq，proxy 只允许队首取得唯一活动 session；嵌套 repair 不产生自等待。
+13. 策略评估与 grant 可在重启后恢复，不能跨 context/deployment/policy 复用；production 写计划和缺少有效 staging grant 的高风险计划不能产生浏览器 outbox intent。
 
 ## 18. 关联文档
 
@@ -964,7 +959,6 @@ manifest sealed 后不可修改；补充证据创建新的 manifest revision 或
 - `run-state-decision-evidence-contract.md`：状态、决策、事件和证据语义。
 - `agent-browser-execution-contract.md`：浏览器会话、页面任务和操作关联。
 - `service-api-event-contract.md`：outbox、外部任务引用、API 与事件恢复协议。
-- `migration-compatibility-acceptance-contract.md`：正式 migration runner、旧资产映射、切流、回滚与发布验收。
 - `asset-authoring-repair-contract.md`：authoring job、coverage、candidate 验证、影响分析与局部激活。
 - `requirements-baseline.md`：总体需求基线。
 - `environment-side-effect-policy-contract.md`：风险投影、环境矩阵、policy evaluation 与 approval grant 语义。

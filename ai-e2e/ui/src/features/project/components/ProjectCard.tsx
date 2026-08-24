@@ -1,93 +1,40 @@
-import React from 'react';
+import { ArrowRight, GitBranch, MonitorUp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '@/shared/components';
-import { cn } from '@/lib/utils';
-import { Project } from '@/types/project';
-import { useDeleteProject } from '../store/projectApi';
+import type { Project } from '@/types/project.js';
 
-interface ProjectCardProps {
-  project: Project;
-}
-
-const statusLabelMap: Record<string, string> = {
-  draft: '草稿',
-  configuring: '配置中',
-  analyzing: '分析中',
-  analyzed: '已分析',
-  exploring: '探索中',
-  explored: '已探索',
-  generating: '生成中',
-  ready: '就绪',
-  running: '运行中',
-  completed: '已完成',
-};
-
-const statusStyleMap: Record<string, string> = {
-  active: 'bg-status-success/25 text-status-success',
-  running: 'bg-status-success/25 text-status-success',
-  completed: 'bg-status-success/25 text-status-success',
-  error: 'bg-status-error/25 text-status-error',
-  analyzing: 'bg-status-info/25 text-status-info',
-  exploring: 'bg-status-info/25 text-status-info',
-  generating: 'bg-status-info/25 text-status-info',
-  default: 'bg-surface-elevated text-text-secondary',
-};
-
-const getStatusStyle = (status: string): string => {
-  return statusStyleMap[status] || statusStyleMap.default;
-};
-
-export const ProjectCard: React.FC<ProjectCardProps> = ({ project }) => {
+export function ProjectCard({ project }: { project: Project }) {
   const navigate = useNavigate();
-  const deleteMutation = useDeleteProject();
-
-  const handleClick = () => {
-    navigate(`/project/${project.id}`);
-  };
-
-  const handleDelete = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (window.confirm(`确定要删除项目 "${project.name}" 吗？`)) {
-      deleteMutation.mutate(project.id);
-    }
-  };
-
-  const formatDate = (dateString: string) => {
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('zh-CN', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      });
-    } catch {
-      return dateString;
-    }
-  };
+  const target = project.latestVersion
+    ? `/semantic/${project.id}/authoring/${project.latestVersion.id}`
+    : `/semantic/${project.id}`;
 
   return (
-    <Card className="cursor-pointer border-border-default bg-surface-elevated p-5 transition-colors hover:border-border-hover" onClick={handleClick}>
-      <div className="flex items-start justify-between">
-        <h3 className="text-base font-medium" title={project.name}>{project.name}</h3>
-        <span className={cn('rounded-full px-2 py-0.5 text-xs', getStatusStyle(project.status))}>
-          {statusLabelMap[project.status] || project.status}
+    <Card
+      className="group cursor-pointer border-border-default bg-surface-elevated p-5 transition hover:border-cyan-700/60"
+      onClick={() => navigate(target)}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <span className="grid h-10 w-10 place-items-center rounded-lg border border-cyan-800/50 bg-cyan-950/35 text-cyan-300">
+          <MonitorUp className="h-5 w-5" aria-hidden="true" />
         </span>
+        {project.latestVersion && (
+          <span className="rounded-full bg-surface-content px-2.5 py-1 text-[11px] text-text-secondary">
+            {project.latestVersion.validationStatus}
+          </span>
+        )}
       </div>
-      
-      <div className="mt-1 text-sm text-text-secondary">
-        {project.description || '暂无描述'}
-      </div>
-      
-      <div className="mt-3 flex items-center justify-between border-t border-border-default pt-3">
-        <span className="text-xs text-text-muted">创建于 {formatDate(project.created_at)}</span>
-        <button 
-          className="ml-2 rounded-md border border-border-default bg-surface-content px-2.5 py-1 text-xs text-text-muted transition-colors hover:border-status-error/40 hover:text-status-error"
-          onClick={handleDelete}
-          title="删除项目"
-        >
-          删除
-        </button>
+      <h3 className="mt-4 text-base font-semibold text-text-primary">{project.name}</h3>
+      <p className="mt-1 line-clamp-2 min-h-10 text-sm text-text-secondary">
+        {project.description || '尚未添加项目说明'}
+      </p>
+      <div className="mt-4 flex items-center justify-between border-t border-border-default pt-3 text-xs text-text-muted">
+        <span className="inline-flex items-center gap-1.5">
+          <GitBranch className="h-3.5 w-3.5" aria-hidden="true" />
+          {project.latestVersion?.name ?? '等待业务版本'}
+        </span>
+        <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
       </div>
     </Card>
   );
-};
+}

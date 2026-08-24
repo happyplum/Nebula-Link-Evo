@@ -23,7 +23,7 @@ type SupportedFastifyPlugin<Options extends FastifyPluginOptions = FastifyPlugin
 let pluginCount = 0;
 
 function getPluginName<Options extends FastifyPluginOptions>(plugin: SupportedFastifyPlugin<Options>): string {
-  return (plugin as Function).name || 'anonymous-plugin';
+  return plugin.name || 'anonymous-plugin';
 }
 
 export default function fp<Options extends FastifyPluginOptions = FastifyPluginOptions>(

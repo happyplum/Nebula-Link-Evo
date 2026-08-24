@@ -230,45 +230,34 @@
 ### 8.1 资产生成、复核与激活
 
 - 首次 PRD + URL 使用持久 `bootstrap` authoring job，按需求抽取、页面发现/建模、模块需求、功能脚本 candidate、场景 candidate、真实浏览器验证和版本校验推进。
-- copy、部署/Git 变化和正式运行前使用 `recheck`；运行失败或 DOM/交互变化使用 `repair`。legacy 转换使用 `import_conversion`，不直接执行旧 TypeScript。
+- copy、部署/Git 变化和正式运行前使用 `recheck`；运行失败或 DOM/交互变化使用 `repair`。
 - candidate 的静态 Schema 校验、真实浏览器验证与 current 激活是三个独立门槛；模型自评、旧 run pass 或静态 valid 都不能代替 verified。
 - copy 后目标版本的执行资产标为 stale，必须在目标 deployment revision 上重新验证后才能恢复 `valid` 并创建正式 run。
 - revision dependency index 由已校验 payload 确定性生成；locator-only 只修当前脚本，交互变化重验引用场景，契约/需求变化扩大依赖范围并暂停决策。
 - 完整工作流、coverage、candidate 和影响分类见 `asset-authoring-repair-contract.md`。
 
-## 9. 当前实现差距
+## 9. 当前实现与差距
 
-以下是经代码核对确认的现状，不得描述为已交付目标能力：
-
-- 当前并存两条数据链：legacy 仍是项目 → 业务模块 → 功能模块 → 测试场景 → TypeScript 脚本版本；semantic v1 已新增业务版本、显式页面、功能脚本、场景 current graph 和独立 copy 基座，但尚未接入 authoring/recheck、UI 或运行链。
-- legacy `projects.target_base_url` 与 `urls.url` 仍把部署地址和完整运行 URL 直接当作项目/页面数据；semantic v1 已有 Origin 无关页面修订和基线变体表，但完整参数 Schema、运行匹配和基线采集尚未接入。
-- legacy 脚本仍归属于单个测试场景；semantic v1 已有模块下多个稳定功能脚本与场景引用身份，但 authoring/运行时尚未接入跨模块调用执行。
-- 当前 `ExecutorService` 把 TypeScript 写入临时文件并用 `npx tsx` 子进程执行；这与目标唯一可视浏览器执行链冲突，后续必须替换而不是继续扩展为目标执行器。
-- legacy 运行记录仍只关联单个脚本并支持 pass/fail/error/timeout；semantic run/plan/TODO/page-task/attempt/variable/decision/event 数据层已交付，但依赖跳过、等待决策、可恢复中断和执行协调尚未接入。
-- legacy 失败记录仍只保存日志和截图路径；ai-e2e 内容寻址 artifact/evidence manifest 数据层与 proxy capture/artifact 数据层已交付，但跨服务产物提升和贯通版本/场景/调用/步骤的统一证据 runtime 尚未实现。
-- 当前 `proxy-adapter` 已交付 MCP 浏览器工具、实时画面、application-level session/lease/operation ledger、真实 screenshot/DOM capture、失败截图、短期 artifact、完整性校验、artifact GET 与 snapshot-first browser events/event-log；video、动画、自动脱敏与保留清理 worker 仍未交付。
-- 当前 `ai-chat-service` 已交付 Agent 工具循环、任务 POST/GET/commands、MCP client/ToolRegistry、结构化任务结果、安全 checkpoint、snapshot-first events/event-log 与本地只读单 Skill loader/catalog/runtime；通用视觉 v2 与完整 policy/grant 授权交集尚未实现。
-- 当前 `ai-e2e` 主要使用纯文本生成接口，尚未实现主代理/页面子代理的任务图、上下文隔离、暂停决策和恢复运行时。
-- 持久 authoring job/task/attempt/event、coverage disposition、candidate verification/activation、revision dependency index 和 browser FIFO 数据基座已交付；生成和修复服务仍围绕旧项目状态与短期调用，尚未切入新协调器。
-- `ai-e2e` semantic 生产工作台已集成只读测试浏览器画面、TODO/尝试状态、决策和统一证据定位；legacy 四步向导保持原有展示。
-- semantic UI 以持久化运行快照、单调事件序号和服务端状态恢复，不再用本地累计百分比推断；legacy UI 仍只消费旧项目事件，禁止跨链恢复。
+- ai-e2e 只保留 semantic 数据、canonical `/api/v1/*`、结构化 Authoring/Run 和浏览器中心工作台，不提供旧资产、旧路由或任意脚本执行兼容。
+- 项目初始化会原子建立 deployment、业务版本、PRD、页面、模块、观察型脚本和场景，并以 bootstrap job 进入真实网页建模。
+- Agent task、Vision v2、逐 effect 授权、浏览器 FIFO、依赖传播、恢复/决策、revision verification、证据提升和原子激活已接通。
+- 完整参数 Schema/页面匹配与基线采集、独立机器 Schema validator、Agent/browser event stream 直连消费、证据自动脱敏和保留清理仍为技术债。
 
 ## 10. 尚待技术设计的内容
 
 以下内容仍未全部锁定或尚待形成可执行实现，不得描述为已交付：
 
-- `target-data-model.md` 已锁定完整目标表与事务；migration 014–018、semantic repositories、公开 workspace/Authoring/Run API、执行协调器、策略/决策应用与生产 UI 已实现。完整 bootstrap/recheck、通用资产写接口、迁移 preflight/importer 仍未实现。
+- `target-data-model.md` 已锁定完整目标表与事务；纯 semantic migration、repositories、Project/Workspace/Authoring/Run API、执行协调器、策略/决策应用与生产 UI 已实现。
 - 场景调用图、运行计划、TODO、追加式修订和受控条件 payload 已锁定为 `nebula.ai-e2e.scenario/1.0` 与对应运行表；正式 JSON Schema 文件尚未生成。
-- 页面模板语法、参数类型、WHATWG URL 规范化、匹配评分、基线指纹/阈值和多部署 revision 已锁定；旧数据迁移仍待兼容契约。
+- 页面模板语法、参数类型、WHATWG URL 规范化、匹配评分、基线指纹/阈值和多部署 revision 已锁定；完整参数 Schema、运行匹配和基线采集仍待实现。
 - 语义脚本 DSL v1 已在 `semantic-script-schema.md` 锁定；实现仍需按其中能力差距扩展 proxy 原子动作并生成正式 JSON Schema 文件。
 - 浏览器执行会话、Tab、observe/control 租约、原子操作、去重账本、结果查询、Agent task 和四类目标事件流（Authoring/Run/Agent/Browser）的 API/Schema 已在 `service-api-event-contract.md` 锁定；三服务控制面与 Authoring/Run snapshot-first SSE 已交付。v1 单 BrowserContext、单活动身份与显式串行切换已锁定，同时多身份/多 Context 及后期多 Tab 并发仍需在启用前另行设计。
 - 主代理与子代理运行时采用干净 Agent task、模型不可见短期 opaque 租约 token、hash/process epoch、主代理签发/回收和 proxy SQLite WAL 操作账本的协议已锁定；三服务数据账本已落地，正式任务包 Schema、派发/回收 runtime 与跨服务协调仍未实现。
-- 双模型调用、`vision.analyze_page`、`vision.resolve_target`、声明式 Skill manifest、版本 pin 和工具权限交集已在 `ai-model-skill-contract.md` 锁定；本地只读单 Skill loader/catalog/runtime、精确版本/hash pin 与工具/预算缩权已实现，通用视觉 v2、完整 policy/grant 授权交集和独立正式 JSON Schema 仍待实现。
+- 双模型调用、`vision.analyze_page`、`vision.resolve_target`、声明式 Skill manifest、版本 pin 和工具权限交集已在 `ai-model-skill-contract.md` 锁定并接入 Authoring；独立正式 JSON Schema 仍待实现。
 - 决策、内容寻址 artifact、evidence manifest/item 和默认保留结构已落库，证据追加/封存仓储已实现；跨服务脱敏提升、身份访问控制和清理任务仍待实现。
-- 环境风险矩阵、计划级风险投影、staging grant、production 硬拒绝和修订后重新审批已锁定；策略引擎、evaluation/grant/decision 持久化、grant 应用和审批 UI 已实现，逐 effectId 跨服务授权交集尚未实现。
+- 环境风险矩阵、计划级风险投影、staging grant、production 硬拒绝、修订后重新审批和逐 effectId 跨服务授权交集已实现。
 - 首期非本机/多用户部署不在当前信任边界内；若未来开放，必须先设计统一身份、授权和租户隔离，不以 capability/lease 代替认证。
 - 可视操作动画的表现、节奏和重放协议。
-- 现有 TypeScript、登录录制、历史项目/run 的保守导入、双轨 API、版本级切流、回滚和技术验收已在 `migration-compatibility-acceptance-contract.md` 锁定；正式 migrations/importer 和 fixtures 尚未实现。
 - 标准 Playwright 文件导出能力。
 
 ## 11. 需求验收原则
@@ -318,7 +307,6 @@
 - `ai-e2e/docs/service-api-event-contract.md`：三服务目标 API、MCP 原子操作、事件信封、幂等与重启恢复。
 - `ai-e2e/docs/ai-model-skill-contract.md`：分析/决策模型、单次视觉模型、受限 Agent task 与 Skills runtime。
 - `ai-e2e/docs/environment-side-effect-policy-contract.md`：环境矩阵、风险投影、计划级审批与跨服务门禁。
-- `ai-e2e/docs/migration-compatibility-acceptance-contract.md`：旧库/旧资产迁移、双轨切流、故障恢复、回滚和发布门禁。
 - `ai-e2e/docs/asset-authoring-repair-contract.md`：从零生成、复核、真实验证、影响分析和局部修复。
 - `ai-e2e/AGENTS.md`：开发边界与运行时事实。
 - `docs/PRODUCT-SPEC-INDEX.md`：跨包契约索引。

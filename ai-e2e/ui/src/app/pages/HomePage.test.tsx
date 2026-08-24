@@ -12,7 +12,7 @@ vi.mock('../../features/project/store/projectApi.js', () => ({
 }));
 
 describe('HomePage', () => {
-  it('renders dashboard title and subtitle', () => {
+  it('renders the semantic workspace entry', () => {
     const client = new QueryClient();
     render(
       <QueryClientProvider client={client}>
@@ -21,8 +21,8 @@ describe('HomePage', () => {
         </MemoryRouter>
       </QueryClientProvider>,
     );
-    expect(screen.getByText('工作区')).toBeInTheDocument();
-    expect(screen.getByText('管理并运行你的 AI E2E 测试')).toBeInTheDocument();
+    expect(screen.getByText('Semantic E2E 工作台')).toBeInTheDocument();
+    expect(screen.getByText(/从 PRD 到可见浏览器执行/)).toBeInTheDocument();
   });
 
   it('renders the three metric cards', () => {
@@ -34,12 +34,12 @@ describe('HomePage', () => {
         </MemoryRouter>
       </QueryClientProvider>,
     );
-    expect(screen.getByText('项目数')).toBeInTheDocument();
-    expect(screen.getByText('通过次数')).toBeInTheDocument();
-    expect(screen.getByText('失败次数')).toBeInTheDocument();
+    expect(screen.getByText('Semantic 项目')).toBeInTheDocument();
+    expect(screen.getByText('已验证版本')).toBeInTheDocument();
+    expect(screen.getByText('需要处理')).toBeInTheDocument();
   });
 
-  it('renders the QuickActions create button', () => {
+  it('renders the semantic project create button', () => {
     const client = new QueryClient();
     render(
       <QueryClientProvider client={client}>
@@ -48,6 +48,6 @@ describe('HomePage', () => {
         </MemoryRouter>
       </QueryClientProvider>,
     );
-    expect(screen.getByText('新建测试项目')).toBeInTheDocument();
+    expect(screen.getByText('创建项目并开始编排')).toBeInTheDocument();
   });
 });

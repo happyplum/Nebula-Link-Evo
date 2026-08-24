@@ -301,17 +301,17 @@ open → answered → applied
 
 ## 12. 当前实现差距
 
-- semantic Run 已区分 Run/TODO/page task/attempt/decision/evidence 状态，取消、可恢复中断、结果未知和依赖跳过拥有独立事实；legacy `execution_runs` 仍只关联一个 TypeScript 脚本并混用 running/pass/fail/error/timeout。
-- semantic Run 已提供持久 event ID/seq、snapshot-first SSE 与 event-log；legacy 项目 SSE 仍是易失阶段事件。
-- semantic 生产 UI 已消费权威 Run snapshot/SSE、TODO/依赖、决策和证据投影；legacy 四步向导继续使用旧状态链，两者不跨链恢复。
+- semantic Run 已区分 Run/TODO/page task/attempt/decision/evidence 状态，取消、可恢复中断、结果未知和依赖跳过拥有独立事实。
+- Run 已提供持久 event ID/seq、snapshot-first SSE 与 event-log。
+- 生产 UI 已消费权威 Run snapshot/SSE、TODO/依赖、决策和证据投影。
 - artifact/evidence manifest/item 仓储、proxy 截图/DOM/operation 自动提升、读 API 与 UI 证据定位已交付；自动脱敏与保留清理 worker 未交付。
-- semantic 决策已能处理计划级副作用审批、blocked/outcome-unknown 恢复；旧 AI 修复审批仍只服务 legacy TypeScript 链。
+- semantic 决策已能处理计划级副作用审批、blocked/outcome-unknown 恢复和 Authoring 影响扩展审批。
 
 ## 13. 实现前仍需精确定义
 
 - 各层实体表、状态 token、command 幂等记录与 run event 持久化已在 `target-data-model.md` 锁定；精确服务 API/SSE payload 与 snapshot 重连协议已在 `service-api-event-contract.md` 锁定。三服务控制面、ai-e2e 执行协调、跨服务业务事件关联和生产工作台已实现。
 - 证据对象存储、内容哈希、提升事务、脱敏管线、访问权限和清理任务。
-- 环境风险投影、policy evaluation/grant 持久化和审批 UI 已实现；逐 effectId 跨服务门禁仍未实现。
+- 环境风险投影、policy evaluation/grant 持久化、审批 UI 和逐 effectId 跨服务门禁已实现。
 
 ## 14. 验收原则
 

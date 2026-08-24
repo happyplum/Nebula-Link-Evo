@@ -273,7 +273,6 @@ provider/runtime 可用工具
 - `agent-browser-execution-contract.md`：主/子代理和页面任务授权。
 - `semantic-script-schema.md`：动作、断言和目标引用 Schema。
 - `run-state-decision-evidence-contract.md`：运行裁决、证据和人工控制。
-- `migration-compatibility-acceptance-contract.md`：能力门禁、服务升级、故障注入和发布验收。
 - `asset-authoring-repair-contract.md`：主代理耐久工作流、资产生成、验证和局部修复。
 - `environment-side-effect-policy-contract.md`：调用方风险投影、计划级审批与 Agent 工具授权交集。
 - `../../ai-chat-service/PRODUCT-SPEC.md`：AI 能力当前实现与缺口。

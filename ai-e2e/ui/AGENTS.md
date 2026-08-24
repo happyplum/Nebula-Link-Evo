@@ -1,55 +1,21 @@
-# ai-e2e/ui
+# AI E2E UI
 
-Nested workspace package — React 19 SPA served at `/ai-e2e/` by the ai-e2e Fastify backend.
+## 边界
 
-## Commands
+- UI 只提供 semantic 项目首页、业务版本入口、Authoring 工作台和 Run 工作台。
+- 禁止恢复旧四步向导、旧项目 API、旧 Agent 浮窗或开发 fixtures 路由。
+- 权威状态来自 v1 workspace/snapshot、持久 event-log 与 snapshot-first SSE；Chat 文本本身不是状态。
 
-```bash
-pnpm dev          # vite --host --port 5174 (proxies /api → :3002)
-pnpm build        # vite build → dist/
-pnpm type-check   # tsc --noEmit
-pnpm test         # vitest run
-```
+## 工作台规则
 
-## Where To Look
+- 左侧展示 PRD/页面/模块/场景/TODO，中间浏览器持续挂载，右侧展示上下文、Diff、影响、决策和证据，Chat 常驻可折叠。
+- 模块切换只更新深链接上下文；只有“在浏览器中定位”才创建 navigation-only Authoring task。
+- 候选必须在当前模块、base revision 和审批范围仍匹配时才能排队应用。
+- 新建项目携带 `bootstrap=1` 和目标 URL 深链接，工作台只自动创建一次 bootstrap 任务。
+- 三栏支持指针/键盘调整、双击复位、宽度持久化、缩放/收起/专注、system/light/dark 和 reduced-motion。
+- 所有交互提供可见焦点、语义标签、键盘路径和足够点击热区。
 
-| Area | Path |
-|---|---|
-| App entry | `src/main.tsx` → `src/App.tsx` |
-| Routes / layout | `src/app/` |
-| Semantic browser workbench | `src/features/semantic/` |
-| Feature pages | `src/features/` |
-| Shared UI primitives | `src/components/ui/` |
-| Shared hooks | `src/shared/hooks/` and `src/hooks/` |
-| API client | `src/shared/api/` |
-| Types | `src/types/` |
+## 验证
 
-## Tech Stack
-
-- React 19, react-router-dom v7, Zustand, TanStack Query
-- Vite with `base: '/ai-e2e/'`
-- Tailwind CSS 4 via `@tailwindcss/vite`
-- shadcn/ui component conventions backed by Radix UI primitives
-- Vitest + jsdom
-
-## Conventions
-
-- `@/` alias maps to `src/` (tsconfig paths + vite resolve).
-- Local TS imports keep the `.js` extension.
-- Feature directories under `src/features/` are organized by domain (project, semantic, analysis, scenario, exploration, scripts, execution, report, ai-status).
-- `src/components/ui/` contains shadcn/Radix-style primitives; feature-specific UI stays under its feature directory.
-- Atlas visual tokens live in `src/app/globals.css`; prefer Tailwind utilities and token classes over CSS Modules.
-
-## Anti-Patterns
-
-- Do not import from `@nebula-link-evo/shared` here — it is declared as a dependency but unused (phantom dep). If shared types are needed, remove the existing types duplication and import properly.
-- Do not revive the old CSS Modules styling model; current UI styling uses Tailwind utilities, Atlas tokens, and shadcn-compatible primitives.
-- Do not change the `base: '/ai-e2e/'` path — it must match the static mount in `ai-e2e` server.
-- Do not add another routing library — react-router-dom v7 is already in use.
-- The semantic execution UI renders persisted run/TODO/attempt state and monotonic run events from the backend; it connects to `/api/v1/runs/:runId/events`, accepts the initial `run.snapshot`, and refetches on a sequence gap. Do not infer authority from local progress increments or merge repeated steps by display label. Contracts: `../docs/run-state-decision-evidence-contract.md` and `../docs/service-api-event-contract.md`.
-- Keep the live browser view read-only during Agent control. Any future manual takeover must first obtain an exclusive lease and force a fresh checkpoint before Agent resume.
-- During migration, route entire runs by `executionKind`: legacy history stays view-only with its original limited status, while `semantic_v1` uses the v1 snapshot/event workspace. Never merge or resume a legacy run through semantic controls. See `../docs/migration-compatibility-acceptance-contract.md`.
-- The semantic authoring workspace renders backend `authoring.snapshot`, task/attempt state, candidate verification and blocking decisions from `/api/v1/authoring-jobs/:jobId/events`. Do not infer completion from model text; a job succeeds only after required assets are verified and atomically activated. See `../docs/asset-authoring-repair-contract.md`.
-- Authoring verification and test runs share the v1 proxy FIFO. When the browser is occupied, show queued/browser-busy state; never open a second logical session or give live-view controls to bypass the queue.
-- Module selection only changes URL-backed workspace context. Browser navigation is explicit: create an authoring job with `intent=locate_in_browser`; do not call legacy debug navigation routes from the semantic UI.
-- Keep the center browser component mounted while resizing columns, switching inspector tabs, collapsing Chat, or entering focus mode. Persist only layout preferences, never browser session authority or semantic workflow state.
+- 严格类型检查必须使用 `pnpm exec tsc -p tsconfig.app.json --noEmit`；根引用型 `tsc --noEmit` 不能替代它。
+- 运行 `pnpm test` 与 `pnpm build`；工作台改动需覆盖模块切换不导航、浏览器不重挂载、深链接恢复、候选权限与 Run 恢复。

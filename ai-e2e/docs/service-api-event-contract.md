@@ -118,7 +118,7 @@ interface ServiceCapabilitiesV1 {
 
 | Method   | Path                                                                     | 语义                                                                                                                                    |
 | -------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
-| POST     | `/api/v1/business-versions/:versionId/authoring-jobs`                    | 创建 bootstrap/recheck/repair/import_conversion job；`intent` 默认为 `author_assets`，`locate_in_browser` 只创建 navigation-only task。 |
+| POST     | `/api/v1/business-versions/:versionId/authoring-jobs`                    | 创建 bootstrap/recheck/repair job；`intent` 默认为 `author_assets`，`locate_in_browser` 只创建 navigation-only task。 |
 | GET      | `/api/v1/authoring-jobs/:jobId`                                          | 读取 authoring snapshot、coverage 和 active task。                                                                                      |
 | POST     | `/api/v1/authoring-jobs/:jobId/commands`                                 | `start/pause/resume/cancel`。                                                                                                           |
 | GET      | `/api/v1/authoring-jobs/:jobId/events`                                   | snapshot-first authoring SSE。                                                                                                          |
@@ -431,8 +431,7 @@ ai-e2e 持久化 intent/outbox
 
 ## 8. 资产迁移与核心服务切换边界
 
-- `ai-e2e` legacy `/api/projects/:id/events` 仍只发布易失项目阶段事件；semantic 工作台必须使用已交付的 `/api/v1/runs/:runId/events` snapshot-first SSE 与 event-log 才能依赖断线恢复。
-- 当前 `/api/projects/:projectId/execution/*` 和 `ExecutorService` 是旧 scenario-level TypeScript 执行面；在语义运行链验收前继续存在，但新业务版本不得生成新的不可视旁路依赖。
+- 工作台只使用 `/api/v1/runs/:runId/events` snapshot-first SSE 与 event-log 恢复权威状态。
 - `ai-chat-service` 的 `/api/v1/ai/generate` 是无工具的纯文本调用；持久 Agent task API 已作为独立 canonical v1 路由交付。
 - `proxy-adapter` MCP transport 无会话，浏览器服务是进程级实例；应用层 session/lease/operation ledger 不依赖 MCP transport session，MCP 仅保留三个受控 operation 工具。
 - ai-e2e 旧 TypeScript 资产与运行记录属于业务数据迁移域；它们不得要求 ai-chat-service 或 proxy-adapter 保留旧路由、旧工具、双写或适配层。
@@ -462,5 +461,4 @@ ai-e2e 持久化 intent/outbox
 - `ai-model-skill-contract.md`：双模型、视觉输出和 Skills 执行隔离。
 - `semantic-script-schema.md`：原子动作与目标引用白名单。
 - `asset-authoring-repair-contract.md`：从零生成、复核、candidate 验证、影响分析和局部修复。
-- `migration-compatibility-acceptance-contract.md`：旧资产导入、版本级切流、回滚与发布验收。
 - `environment-side-effect-policy-contract.md`：环境风险矩阵、计划级审批和逐调用副作用门禁。
