@@ -39,9 +39,9 @@ AI 能力经 MCP-over-HTTP 路由到 proxy-adapter (:3000)，后者内进程运�
 
 ---
 
-## Target AI E2E Flow（pending）
+## AI E2E Flow（shipped）
 
-> 这是已确认的目标需求，不是当前 shipped 运行时。当前 ai-e2e 仍以纯文本生成和 `npx tsx` 子进程脚本执行为主。
+> 当前运行时由 ai-e2e 持久 Authoring/Run 工作流、ai-chat-service Agent task/Vision 和 proxy-adapter browser operation 组成。
 
 ```text
 PRD + 目标链接 / 已有业务版本
@@ -94,12 +94,12 @@ proxy-adapter
 - 需要主代理决策时暂停，影响需求或验收的决定写入业务版本文档后再恢复。
 - 流程、TODO、尝试、Agent 和浏览器操作分别持有状态；blocked/interrupted/waiting_decision 未收敛前不提前把下游标为跳过。
 - `ai-e2e` 通过持久 `run.snapshot`、单调事件序号和不可变证据 manifest 向 UI 提供权威状态；浏览器视频用于实时观察，默认不等于永久录像。
-- Run、Agent task 和 Browser session 各自使用 snapshot-first SSE 与独立序号；现有 Chat SSE、Debug SSE 和项目阶段 SSE 是兼容面，不能混用序号或替代业务状态。
+- Run、Agent task 和 Browser session 各自使用 snapshot-first SSE 与独立序号；Chat SSE 与 Debug SSE 不能混用序号或替代业务状态。
 - 跨服务不使用分布式事务：`ai-e2e` 先写 intent/outbox，再用同一幂等键创建/查询 Agent task 和浏览器 operation；超时后先查账本。
-- 创建 semantic run 前核对三服务 `/api/v1/capabilities`；旧 TypeScript run 与 `semantic_v1` run 分链保存和展示，不能在运行中回退或混合。
+- 创建 semantic run 前核对三服务 `/api/v1/capabilities`；能力不满足时返回可判定失败且不派发任务。
 - v1 控制面只允许 loopback/local 单用户部署；远程或多用户使用必须先实现统一认证、授权和租户隔离。
 
-完整需求见 `ai-e2e/docs/requirements-baseline.md`；资产生成/修复、功能脚本、场景编排、代理浏览器执行、运行状态/证据、跨服务 API/事件、双模型/Skills 和迁移验收分别见 `ai-e2e/docs/asset-authoring-repair-contract.md`、`ai-e2e/docs/functional-script-contract.md`、`ai-e2e/docs/scenario-orchestration-contract.md`、`ai-e2e/docs/agent-browser-execution-contract.md`、`ai-e2e/docs/run-state-decision-evidence-contract.md`、`ai-e2e/docs/service-api-event-contract.md`、`ai-e2e/docs/ai-model-skill-contract.md`、`ai-e2e/docs/migration-compatibility-acceptance-contract.md`。
+完整需求见 `ai-e2e/docs/requirements-baseline.md`；资产生成/修复、功能脚本、场景编排、代理浏览器执行、运行状态/证据、跨服务 API/事件和双模型/Skills 分别见 `ai-e2e/docs/asset-authoring-repair-contract.md`、`ai-e2e/docs/functional-script-contract.md`、`ai-e2e/docs/scenario-orchestration-contract.md`、`ai-e2e/docs/agent-browser-execution-contract.md`、`ai-e2e/docs/run-state-decision-evidence-contract.md`、`ai-e2e/docs/service-api-event-contract.md`、`ai-e2e/docs/ai-model-skill-contract.md`。
 
 ---
 

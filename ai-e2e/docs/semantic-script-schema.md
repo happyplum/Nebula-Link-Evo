@@ -1,6 +1,6 @@
 # AI E2E 语义功能脚本 Schema v1
 
-> 状态：目标技术契约，尚未实现。
+> 状态：`shipped`。schema revision、静态结构/引用校验和运行投影已交付；完整独立 JSON Schema validator 仍为技术债。
 > Schema ID：`nebula.ai-e2e.functional-script/1.0`。
 > 本文锁定首期可持久化脚本的字段、动作/断言白名单、引用规则和静态校验。数据库修订结构见 `target-data-model.md`；浏览器原子操作协议见 `agent-browser-execution-contract.md`。
 

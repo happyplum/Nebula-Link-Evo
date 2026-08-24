@@ -167,7 +167,6 @@
 - `ai-e2e/docs/run-state-decision-evidence-contract.md` — 浏览器原始产物与上层长期业务证据的所有权边界
 - `ai-e2e/docs/semantic-script-schema.md` — 首期语义脚本动作/断言白名单与本包通用操作映射
 - `ai-e2e/docs/service-api-event-contract.md` — 浏览器执行 control plane、MCP 原子操作、事件、幂等与恢复
-- `ai-e2e/docs/migration-compatibility-acceptance-contract.md` — 服务升级顺序、重启语义、故障注入和发布门禁
 - `ai-e2e/docs/asset-authoring-repair-contract.md` — authoring verification 与正式 run 共享浏览器 FIFO 的消费边界
 - `ai-e2e/docs/environment-side-effect-policy-contract.md` — 上游环境/副作用门禁与本包通用执行边界
 - `docs/reference/debug-page-integration-api-reference.md` — Proxy Adapter API 参考

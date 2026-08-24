@@ -78,7 +78,7 @@ interface ServiceCapabilitiesV1 {
 
 - `ai-chat-service` 当前声明 agent-task/skill/browser-operation 协议、任务/结构化输出/模型不可见 binding、预授权步骤包装能力和限制；`taskEvents/taskCommands/skillsRuntime=true`，并声明 loaded Skill version 数与 `maxSkillsPerTask=1`；操作动画不可用，未来再补 vision v2 与完整逐工具副作用授权。它不声明环境矩阵，也不签发审批。
 - `proxy-adapter` 至少声明 browser-execution/operation 协议、受支持动作/观测、持久账本和可视画面能力；v1 还必须声明 `maxActiveBrowserSessions=1`、`maxBrowserContextsPerSession=1` 且不支持运行中 storage-state 切换。它只执行通用 lease/operation 约束，不解释环境或审批。
-- `ai-e2e` 至少声明 `side-effect-policy/1.0`、四类环境矩阵和审批协议；在创建 run 前执行并缓存短期依赖 preflight，确认 major 兼容、所需功能/Skill/hash 可用。不兼容时返回 `503 dependency_unavailable`，不得在同一 run 静默回退旧执行器。
+- `ai-e2e` 至少声明 `side-effect-policy/1.0`、四类环境矩阵和审批协议；在创建 run 前执行并缓存短期依赖 preflight，确认 major 兼容、所需功能/Skill/hash 可用。不兼容时返回 `503 dependency_unavailable` 并停止派发。
 - capability 只说明能力，不包含 provider key、lease token、文件路径或其他机密。
 
 ### 2.5 首期信任边界
@@ -429,13 +429,13 @@ ai-e2e 持久化 intent/outbox
 
 当前实现通过 500ms 确定性协调循环执行上述核对：启动时把遗留 `dispatching` outbox 恢复为可重放状态，外部 create/command 使用稳定幂等键，session/lease/Agent/operation/artifact 只保存 opaque ref 与哈希；一次性 lease token 仅保存在本机 AES-GCM secret store。若 token 或 Agent 创建确认事实不可恢复，则显式落 `interrupted/failed`，不盲目生成第二个副作用任务。
 
-## 8. 资产迁移与核心服务切换边界
+## 8. 核心服务运行边界
 
 - 工作台只使用 `/api/v1/runs/:runId/events` snapshot-first SSE 与 event-log 恢复权威状态。
 - `ai-chat-service` 的 `/api/v1/ai/generate` 是无工具的纯文本调用；持久 Agent task API 已作为独立 canonical v1 路由交付。
 - `proxy-adapter` MCP transport 无会话，浏览器服务是进程级实例；应用层 session/lease/operation ledger 不依赖 MCP transport session，MCP 仅保留三个受控 operation 工具。
-- ai-e2e 旧 TypeScript 资产与运行记录属于业务数据迁移域；它们不得要求 ai-chat-service 或 proxy-adapter 保留旧路由、旧工具、双写或适配层。
-- 新 API 与旧 API 并存期间，UI 必须按项目/业务版本能力标志选择整条执行链，禁止在同一 run 中混用新旧执行器。
+- ai-e2e 只使用结构化 semantic 资产、canonical v1 API 和受控 browser operation；UI、协调器与下游服务共享同一套版本化契约。
+- capability preflight 必须在创建 run 前确认协议 major、功能、Skill 与 hash；不满足时返回可判定错误并停止派发。
 
 ## 9. 验收原则
 
@@ -445,7 +445,7 @@ ai-e2e 持久化 intent/outbox
 4. 相同 `operationId` 不会产生第二次浏览器副作用，未知结果必须先检查。
 5. 四类目标 SSE 均能从各自 snapshot 恢复；Authoring/Run 的持久 seq 与业务状态更新同事务。
 6. 一个 browser session 任一时刻最多一个活动 control lease；一个 run 任一时刻最多一个执行型页面任务。
-7. 旧执行面不会与新执行面在同一 run 中交叉调用。
+7. 每个 run 只通过冻结的 semantic 资产和 canonical Agent/browser 控制面执行。
 8. 跨服务超时、重启和事件缺号均有可重复的查询与收敛路径。
 9. 首期控制面保持 loopback/local 单用户边界；非本机或多用户部署在统一认证授权协议落地前不能启动 semantic authoring/run。
 10. v1 browser session 只绑定一个 BrowserContext；跨账号/角色只能通过场景内显式认证脚本串行切换，Agent task 或 proxy API 不能暗换 storage state。
