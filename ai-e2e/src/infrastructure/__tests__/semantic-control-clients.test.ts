@@ -52,6 +52,47 @@ describe('semantic control HTTP clients', () => {
     });
   });
 
+  it('按持久 seq 游标消费 Agent 与浏览器事件日志', async () => {
+    const agentHttp = axiosInstance();
+    agentHttp.get.mockResolvedValueOnce({
+      data: [
+        {
+          id: 'event-4',
+          taskId: 'task-1',
+          seq: 4,
+          type: 'agent_task.completed',
+          entityType: 'task',
+          entityId: 'task-1',
+          stateVersion: 2,
+          payload: {},
+          occurredAt: '2026-08-25T00:00:00.000Z',
+          createdAt: '2026-08-25T00:00:00.000Z',
+        },
+      ],
+    });
+    mockedAxios.create.mockReturnValueOnce(agentHttp as never);
+    const agent = new AgentTaskClient({ baseUrl: 'http://127.0.0.1:3001' });
+    await expect(agent.listTaskEvents('task-1', 3, 25)).resolves.toMatchObject([{ seq: 4 }]);
+    expect(agentHttp.get).toHaveBeenCalledWith(
+      '/api/v1/agent-tasks/task-1/event-log',
+      expect.objectContaining({ params: { afterSeq: 3, limit: 25 } })
+    );
+
+    const browserHttp = axiosInstance();
+    browserHttp.get.mockResolvedValueOnce({
+      data: { data: [{ id: 'event-7', sessionId: 'session-1', seq: 7 }], meta: {} },
+    });
+    mockedAxios.create.mockReturnValueOnce(browserHttp as never);
+    const browser = new SemanticBrowserClient({ baseUrl: 'http://127.0.0.1:3000' });
+    await expect(browser.listSessionEvents('session-1', 6, 25)).resolves.toMatchObject([
+      { seq: 7 },
+    ]);
+    expect(browserHttp.get).toHaveBeenCalledWith(
+      '/api/v1/browser-execution/sessions/session-1/event-log',
+      expect.objectContaining({ params: { afterSeq: 6, limit: 25 } })
+    );
+  });
+
   it('浏览器客户端解包 session/lease，并只在 Authorization header 中传租约 token', async () => {
     const mock = axiosInstance();
     mock.post

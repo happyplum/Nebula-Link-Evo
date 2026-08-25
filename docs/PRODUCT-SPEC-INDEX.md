@@ -208,8 +208,8 @@ debug-ui  ←──  （仅被用户消费）
 - **环境与副作用安全（formal run shipped）**：风险投影从脚本顶层声明与 step sideEffectId 确定性生成；policy evaluation/grant/decision、local/test 自动放行、staging 高风险审批、production 业务写拒绝和逐 effectId/数量/grant 跨服务门禁已接通。
 - **编排与执行分属两层（shipped）**：页面任务图、模块范围与验收标准归 `ai-e2e`；模型调用、MCP 工具和 Skills 执行归 `ai-chat-service`。semantic v1 已接入 Agent task/Skill tool loop；核心服务仅保留 canonical v1 路由和工具面，不提供兼容别名或静默回退。
 - **页面任务与控制租约（shipped）**：主代理派发不可变页面任务包并持有共享浏览器生命周期；页面任务只取得指定 TODO、Tab、工具和输出槽的短期租约。跨服务只传稳定引用和非秘密约束，不传 Playwright 对象或凭据值。
-- **可视语义执行（shipped）**：结构化脚本确定性投影为受限 `operation_execute` 步骤，冻结 target/args 并关联 operation、截图/DOM 与 evidence manifest；结果不确定先进入决策/恢复。下游 browser event 流直连消费仍为技术债。
-- **跨服务 API/事件（shipped）**：三服务 capability、Agent/browser 控制面、Vision v2 evidence binding，以及 ai-e2e Project/Authoring/Run API/SSE、outbox coordinator、逐 effect 授权和证据提升已交付；Agent/browser event stream 直连消费仍为技术债。
+- **可视语义执行（shipped）**：结构化脚本确定性投影为受限 `operation_execute` 步骤，冻结 target/args 并关联 operation、截图/DOM 与 evidence manifest；结果不确定先进入决策/恢复。ai-e2e 以持久 seq 游标直接消费 browser session event-log，并以权威 session/operation 查询补全状态与证据。
+- **跨服务 API/事件（shipped）**：三服务 capability、Agent/browser 控制面、Vision v2 evidence binding，以及 ai-e2e Project/Authoring/Run API/SSE、outbox coordinator、逐 effect 授权和证据提升已交付；ai-e2e 直接消费 Agent task/browser session 持久 event-log，游标落在 opaque external link，重启后可继续补洞。
 - **资产生成/复核/修复（shipped）**：bootstrap/recheck/repair 均创建结构化 Agent 候选，接入同页跨模块/跨 URL 影响审批、安全边界、真实浏览器验证、revision verification 和原子激活。
 - **产品切换（shipped）**：ai-e2e 已完成纯 semantic clean cut，只使用独立 semantic 数据库和 canonical v1 路由，不提供旧资产导入、读取或兼容。
 - **分层状态与传播（shipped）**：Run/plan/TODO/dependency/page task/attempt/variable/decision/command/event、正式 Run 冻结/命令、Agent/browser 页面执行、依赖传播、恢复/决策与公开 snapshot/SSE 已交付。

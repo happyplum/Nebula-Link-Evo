@@ -101,10 +101,28 @@ export interface AgentTaskView {
   completedAt?: string;
 }
 
+export interface AgentTaskEventRecord {
+  id: string;
+  taskId: string;
+  seq: number;
+  type: string;
+  entityType: 'task' | 'command' | 'checkpoint' | 'skill';
+  entityId: string;
+  stateVersion: number;
+  payload: Record<string, unknown>;
+  occurredAt: string;
+  createdAt: string;
+}
+
 export interface AgentTaskClientPort {
   getCapabilities(): Promise<Record<string, unknown>>;
   createTask(input: CreateAgentTaskInput, idempotencyKey: string): Promise<AgentTaskView>;
   getTask(taskId: string): Promise<AgentTaskView>;
+  listTaskEvents?(
+    taskId: string,
+    afterSeq?: number,
+    limit?: number
+  ): Promise<AgentTaskEventRecord[]>;
   commandTask(
     taskId: string,
     input: {
@@ -165,6 +183,16 @@ export class AgentTaskClient implements AgentTaskClientPort {
       this.client.get(`/api/v1/agent-tasks/${encodeURIComponent(taskId)}`, {
         timeout: this.timeoutMs,
         headers: headers(),
+      })
+    );
+  }
+
+  async listTaskEvents(taskId: string, afterSeq = 0, limit = 500): Promise<AgentTaskEventRecord[]> {
+    return this.request(() =>
+      this.client.get(`/api/v1/agent-tasks/${encodeURIComponent(taskId)}/event-log`, {
+        timeout: this.timeoutMs,
+        headers: headers(),
+        params: { afterSeq, limit },
       })
     );
   }

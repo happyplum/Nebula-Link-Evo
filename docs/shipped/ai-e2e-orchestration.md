@@ -18,5 +18,5 @@
 - [shipped] ai-e2e 后端覆盖率门禁合并单元/集成与真实三服务 E2E，并对协调器、语义任务投影和 amendment 激活仓储设置文件级阈值；UI 继续独立提供覆盖率门禁。
 - [shipped] ai-e2e UI Playwright 使用动态端口、临时数据、真实 proxy、确定性 ai-chat DSH Harness、ai-e2e 服务及生产 UI bundle，覆盖首次 bootstrap 一次性、candidate 浏览器验证/激活、正式 Run、证据与 reload 恢复；该套件已纳入根 `test:e2e` 与 CI。
 - [shipped] executable amendment 先把精确 candidate revision verification 与 scope/dependency hash 持久化，再原子激活修订，最后按激活后的完整资产图写业务版本 validation；未验证候选保持 fail closed。
-- [tech-debt] 尚未直接消费 ai-chat-service/proxy-adapter 的服务端事件流；当前通过任务/operation 查询和 ai-e2e 持久事件收敛。
+- [shipped] 协调器直接消费 ai-chat-service Agent task 与 proxy-adapter browser session 的持久 event-log，使用 `external_task_links.last_external_seq` 单调游标补洞；权威快照查询继续用于获得完整终态，重启不从未知增量重建状态。
 - [tech-debt] 功能脚本完整机器 JSON Schema 尚未抽成统一 validator 包；现有创建、引用、DAG、冻结投影和授权校验继续生效。

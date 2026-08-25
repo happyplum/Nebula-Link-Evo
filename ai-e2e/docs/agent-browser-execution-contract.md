@@ -212,14 +212,14 @@
 
 - `proxy-adapter` 已交付 application session、稳定 Tab、observe/control lease、`operationId` 去重、queued cancel、持久结果查询和重启 `outcome_unknown`；当前 MCP Server 只暴露 3 个受控 operation 工具。
 - proxy 已交付受控 dom_snapshot、before/after screenshot、失败截图、内容寻址短期 artifact、完整性校验、browser session SSE/event-log 与会话范围 artifact GET；set_files、video、操作动画、control 原地续租、脱敏与保留清理 worker仍未实现。
-- browser execution 事件已按 session 持久化单调 seq 并采用 snapshot-first SSE；ai-e2e 已通过 operation GET 和 opaque external link 写入业务证据关联，但尚未消费 browser SSE/event-log，因此跨服务实时业务时间线仍不完整。
-- `ai-chat-service` 已交付独立受限 Agent task POST/GET/commands、持久状态、精确工具白名单、预算、结构化结果、模型不可见 browser binding、snapshot-first events/event-log 与单 Skill runtime；ai-e2e semantic 页面任务和 Authoring repair 已消费 create/get/commands，尚未消费 Agent SSE/event-log。
+- browser execution 事件已按 session 持久化单调 seq 并采用 snapshot-first SSE；ai-e2e 协调器直接按持久 seq 游标消费 browser event-log，并通过 operation GET 和 opaque external link 写入业务证据关联。
+- `ai-chat-service` 已交付独立受限 Agent task POST/GET/commands、持久状态、精确工具白名单、预算、结构化结果、模型不可见 browser binding、snapshot-first events/event-log 与单 Skill runtime；ai-e2e semantic 页面任务和 Authoring repair 已消费 create/get/commands/event-log，完整终态仍以权威 task snapshot 收敛。
 - `ai-e2e` 只使用 Agent + MCP 可视执行链，不存在本地脚本子进程执行路径。
 - `ai-chat-service` 已实现调用方冻结的 `stepId/kind/operation/effectId` 门禁和 observe/control 检查；三服务仍未贯通风险投影、policy evaluation/active grant 与参数级数量交集。
 
 ## 15. 仍待实现设计
 
-- Agent task、browser event/artifact、剩余动作/观测和跨服务证据关联已在 `service-api-event-contract.md` 锁定；proxy 控制面、ai-chat-service Agent task/Skill runtime，以及 ai-e2e 页面任务、Authoring/Run API/SSE、outbox 协调和证据提升均已实现。剩余缺口是 Agent/browser 事件流消费、逐 effectId 参数门禁、保留清理和生产 UI。
+- Agent task、browser event/artifact 和跨服务证据关联已在 `service-api-event-contract.md` 锁定；proxy 控制面、ai-chat-service Agent task/Skill runtime，以及 ai-e2e 页面任务、下游 event-log 游标消费、Authoring/Run API/SSE、outbox 协调、逐 effectId 参数门禁、证据提升和生产 UI 均已实现。保留清理由各服务产品规格单独追踪。
 - proxy 已实现短期 opaque token + SHA-256 hash/process epoch 和自有 SQLite WAL operation ledger；不扩权续租、7 天保留、pin/引用保护和清理任务仍待实现。
 - 动画媒体协议、播放速度和重放索引格式。
 - 同时多身份、多 BrowserContext 与多 Tab 并发需要的隔离和调度模型；v1 单 Context、单活动身份不依赖该扩展。
