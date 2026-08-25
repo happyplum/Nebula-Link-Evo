@@ -162,7 +162,7 @@ debug-ui  ←──  （仅被用户消费）
 
 ### 3.6 浏览器目标定位与视觉标记契约（`proxy-adapter` 内部）
 
-- 浏览器操作只接受 `shared/types/browser-execution.ts` 的 operation 白名单和严格 target/args Schema；已删除跨包 `Action` 联合及其映射层。
+- 浏览器操作只接受 `shared/types/browser-execution.ts` 的 operation 白名单和严格 target/args Schema；`BrowserOperationRequestV1` 以 kind/operation 判别到精确 args 映射，proxy 执行分支直接获得收窄参数；已删除旧跨包 `Action` 联合及其映射层。
 - 7 级目标链：nebula-id → role → testid → aria → text → css → xpath。
 - DOM 快照 v2.0：含 `data-nebula-id` 属性；element 归一化字段 `id` + `locator_bundle`。
 - 视觉标记（Vision Marker）系统：通过 `data-nebula-id` 关联操作坐标与 DOM 元素；生产 Vision v2 不接收调用方 raw base64，而是通过 `VisionSnapshotBindingV1` 校验 proxy operation/artifact 的 session、Tab、lease sequence、request hash、status、SHA、MIME 与 size 后加载 immutable bytes。

@@ -64,12 +64,12 @@ export class PlaywrightBrowserExecutionBrowser implements BrowserExecutionBrowse
       return { actual: await this.browserService.getTabs(OWNER) };
     }
     if (request.operation === 'switch_tab') {
-      const tabId = requireStringArg(request, 'tabId');
+      const { tabId } = request.args;
       await this.browserService.switchTab(tabId, OWNER);
       return { actual: { activeTabId: tabId } };
     }
     if (request.operation === 'close_tab') {
-      const returnToTabId = requireStringArg(request, 'returnToTabId');
+      const { returnToTabId } = request.args;
       await this.browserService.closeActiveTab(returnToTabId, OWNER);
       return { actual: { activeTabId: returnToTabId } };
     }
@@ -127,8 +127,7 @@ export class PlaywrightBrowserExecutionBrowser implements BrowserExecutionBrowse
       case 'title':
         return { actual: await page.title() };
       case 'navigate': {
-        const url = requireStringArg(request, 'url');
-        const waitUntil = optionalStringArg(request, 'waitUntil') ?? 'domcontentloaded';
+        const { url, waitUntil = 'domcontentloaded' } = request.args;
         if (!['commit', 'domcontentloaded', 'load'].includes(waitUntil)) {
           throw new BrowserExecutionError('validation_failed', 'navigate.waitUntil is invalid');
         }
@@ -149,8 +148,7 @@ export class PlaywrightBrowserExecutionBrowser implements BrowserExecutionBrowse
         return {};
       }
       case 'scroll': {
-        const direction = requireStringArg(request, 'direction');
-        const amount = requireNumberArg(request, 'amount');
+        const { direction, amount } = request.args;
         if (!['up', 'down', 'left', 'right'].includes(direction) || amount < 1 || amount > 5000) {
           throw new BrowserExecutionError('validation_failed', 'scroll arguments are invalid');
         }
@@ -219,7 +217,7 @@ export class PlaywrightBrowserExecutionBrowser implements BrowserExecutionBrowse
       case 'attribute':
         return {
           resolvedTarget: resolved.target,
-          actual: await locator.first().getAttribute(requireStringArg(request, 'name')),
+          actual: await locator.first().getAttribute(request.args.name),
         };
       case 'count':
         return { resolvedTarget: resolved.target, actual: await locator.count() };
@@ -231,23 +229,23 @@ export class PlaywrightBrowserExecutionBrowser implements BrowserExecutionBrowse
         });
         break;
       case 'fill':
-        await locator.fill(requireStringArg(request, 'value'), {
+        await locator.fill(request.args.value, {
           timeout: remainingTimeout(request.deadlineAt),
         });
         break;
       case 'type_text': {
-        const delay = optionalNumberArg(request, 'delayMs') ?? 0;
+        const delay = request.args.delayMs ?? 0;
         if (!Number.isInteger(delay) || delay < 0 || delay > 100) {
           throw new BrowserExecutionError('validation_failed', 'type_text.delayMs is invalid');
         }
-        await locator.pressSequentially(requireStringArg(request, 'value'), {
+        await locator.pressSequentially(request.args.value, {
           delay,
           timeout: remainingTimeout(request.deadlineAt),
         });
         break;
       }
       case 'select_option':
-        await locator.selectOption(requireStringArrayArg(request, 'values'), {
+        await locator.selectOption(request.args.values, {
           timeout: remainingTimeout(request.deadlineAt),
         });
         break;
@@ -357,109 +355,34 @@ function locatorForCandidate(page: Page, candidate: BrowserLocatorCandidate): Lo
   }
 }
 
-function requireStringArg(request: BrowserOperationRequestV1, name: string): string {
-  const value = request.args?.[name];
-  if (typeof value !== 'string' || !value) {
-    throw new BrowserExecutionError(
-      'validation_failed',
-      `${request.operation}.${name} is required`
-    );
-  }
-  return value;
-}
-
-function optionalStringArg(request: BrowserOperationRequestV1, name: string): string | undefined {
-  const value = request.args?.[name];
-  if (value === undefined) return undefined;
-  if (typeof value !== 'string') {
-    throw new BrowserExecutionError(
-      'validation_failed',
-      `${request.operation}.${name} must be a string`
-    );
-  }
-  return value;
-}
-
-function requireNumberArg(request: BrowserOperationRequestV1, name: string): number {
-  const value = request.args?.[name];
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    throw new BrowserExecutionError(
-      'validation_failed',
-      `${request.operation}.${name} is required`
-    );
-  }
-  return value;
-}
-
-function optionalNumberArg(request: BrowserOperationRequestV1, name: string): number | undefined {
-  const value = request.args?.[name];
-  if (value === undefined) return undefined;
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    throw new BrowserExecutionError(
-      'validation_failed',
-      `${request.operation}.${name} must be a number`
-    );
-  }
-  return value;
-}
-
-function requireStringArrayArg(request: BrowserOperationRequestV1, name: string): string[] {
-  const value = request.args?.[name];
-  if (
-    !Array.isArray(value) ||
-    value.length === 0 ||
-    value.some((item) => typeof item !== 'string')
-  ) {
-    throw new BrowserExecutionError(
-      'validation_failed',
-      `${request.operation}.${name} is required`
-    );
-  }
-  return value as string[];
-}
-
 function optionalMouseButton(
-  request: BrowserOperationRequestV1
+  request: Extract<BrowserOperationRequestV1, { operation: 'click' }>
 ): 'left' | 'middle' | 'right' | undefined {
-  const value = optionalStringArg(request, 'button');
-  if (value === undefined) return undefined;
-  if (value !== 'left' && value !== 'middle' && value !== 'right') {
-    throw new BrowserExecutionError('validation_failed', 'click.button is invalid');
-  }
-  return value;
+  return request.args?.button;
 }
 
-function optionalClickCount(request: BrowserOperationRequestV1): number | undefined {
-  const value = optionalNumberArg(request, 'clickCount');
-  if (value === undefined) return undefined;
-  if (value !== 1 && value !== 2) {
-    throw new BrowserExecutionError('validation_failed', 'click.clickCount is invalid');
-  }
-  return value;
+function optionalClickCount(
+  request: Extract<BrowserOperationRequestV1, { operation: 'click' }>
+): 1 | 2 | undefined {
+  return request.args?.clickCount;
 }
 
-function parseKey(request: BrowserOperationRequestV1): string {
-  const raw = request.args?.key;
+function parseKey(request: Extract<BrowserOperationRequestV1, { operation: 'press' }>): string {
+  const { key: raw } = request.args;
   if (typeof raw === 'string') {
     if (!ALLOWED_KEYS.has(raw)) {
       throw new BrowserExecutionError('validation_failed', 'press.key is not allowed');
     }
     return raw;
   }
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    throw new BrowserExecutionError('validation_failed', 'press.key is required');
-  }
-  const key = (raw as Record<string, unknown>).key;
-  const modifiers = (raw as Record<string, unknown>).modifiers;
+  const { key, modifiers } = raw;
   if (
-    typeof key !== 'string' ||
     !ALLOWED_KEYS.has(key) ||
-    !Array.isArray(modifiers) ||
-    modifiers.some((item) => typeof item !== 'string' || !ALLOWED_MODIFIERS.has(item))
+    modifiers.some((item) => !ALLOWED_MODIFIERS.has(item))
   ) {
     throw new BrowserExecutionError('validation_failed', 'press.key is invalid');
   }
-  return [...new Set(modifiers as string[]), key].join('+');
+  return [...new Set(modifiers), key].join('+');
 }
 
 function remainingTimeout(deadlineAt: string): number {

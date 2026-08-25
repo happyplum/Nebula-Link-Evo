@@ -16,6 +16,7 @@ proxy-adapter 通过 MCP Server (StreamableHTTP) 只对外暴露受控 `browser-
 - [shipped] browser lease 使用 32-byte opaque token，proxy 仅保存 SHA-256 hash/policy/expiry/process epoch；observe 最长 30 秒、control 最长 5 分钟。operation ledger 使用 `data/proxy-adapter/browser-execution.sqlite` SQLite WAL，动作前写 queued，支持 operation ID 去重、queued cancel 和重启恢复；请求 payload 脱敏保存。
 - [shipped] `browser-execution` schema migration 2 提供短期证据数据地基：operation capture 请求/完成度、截图/DOM/video/trace artifact 元数据、TTL/opaque upstream hold/清理资格，以及 session-scoped 持久事件与事务内单调 seq；迁移有 checksum 且可重入，媒体 bytes 不进入 SQLite。
 - [shipped] 受控执行已覆盖 page_state/dom_snapshot/target_state/url/title/text/value/attribute/count/tabs 观测，以及 navigate/click/fill/type_text/press/select_option/check/uncheck/focus/blur/hover/scroll/switch_tab/close_tab 动作；重新解析 locator candidates 并拒绝歧义，不开放 JS/CDP/坐标。
+- [shipped] `shared/types/browser-execution.ts` 以 kind/operation 判别联合映射每个操作的精确 args；proxy 运行时继续拒绝缺失、额外或越界字段，执行分支不再使用字符串键或参数强制转换。
 - [shipped] `operation_execute` 支持 before/after screenshot 与 DOM capture，失败操作即使未主动请求也会尝试保存现场截图；bytes 以 SHA-256 内容寻址写入 `data/proxy-adapter/artifacts`，操作结果只返回 opaque artifact ref。`GET /api/v1/browser-execution/sessions/:sessionId/artifacts/:artifactId` 在返回前复核 storage ref、size 和 SHA-256。
 - [shipped] browser session 持久事件按 session 单调 seq 记录；`/events` 每次连接先发 `browser_session.snapshot`，`/event-log?afterSeq=` 用于审计补洞，heartbeat 不占业务 seq。
 - [pending] set_files、video segment、control 续租、操作动画、自动脱敏和 operation/idempotency 账本保留清理 worker 尚未交付；capability 保持 `operationPresentationAnimation=false`。

@@ -150,15 +150,62 @@ export interface BrowserTargetRefV1 {
   };
 }
 
-export interface BrowserOperationRequestV1 {
+export type BrowserKeyModifier = 'Alt' | 'Control' | 'Meta' | 'Shift';
+
+export interface BrowserOperationArgsByName {
+  page_state: never;
+  dom_snapshot: never;
+  target_state: never;
+  url: never;
+  title: never;
+  text: never;
+  value: never;
+  attribute: { name: string };
+  count: never;
+  tabs: never;
+  navigate: { url: string; waitUntil?: 'commit' | 'domcontentloaded' | 'load' };
+  click: { button?: 'left' | 'middle' | 'right'; clickCount?: 1 | 2 };
+  fill: { value: string };
+  type_text: { value: string; delayMs?: number };
+  press: { key: string | { key: string; modifiers: BrowserKeyModifier[] } };
+  select_option: { values: string[] };
+  check: never;
+  uncheck: never;
+  focus: never;
+  blur: never;
+  hover: never;
+  scroll: { direction: 'up' | 'down' | 'left' | 'right'; amount: number };
+  switch_tab: { tabId: string };
+  close_tab: { returnToTabId: string };
+}
+
+export type BrowserOperationArgs<TOperation extends BrowserOperationName> =
+  BrowserOperationArgsByName[TOperation];
+
+type BrowserOperationArgsProperty<TOperation extends BrowserOperationName> =
+  BrowserOperationArgs<TOperation> extends never
+    ? { args?: never }
+    : TOperation extends 'click'
+      ? { args?: BrowserOperationArgs<TOperation> }
+      : { args: BrowserOperationArgs<TOperation> };
+
+type BrowserOperationDescriptorFor<
+  TKind extends BrowserOperationKind,
+  TOperation extends BrowserOperationName,
+> = TOperation extends BrowserOperationName
+  ? { kind: TKind; operation: TOperation } & BrowserOperationArgsProperty<TOperation>
+  : never;
+
+export type BrowserOperationDescriptor =
+  | BrowserOperationDescriptorFor<'observe', ObserveOperation>
+  | BrowserOperationDescriptorFor<'act', ActOperation>;
+
+interface BrowserOperationRequestBaseV1 {
   schema: 'nebula.browser.operation/1.0';
   operationId: string;
   leaseSequence: number;
   deadlineAt: string;
-  kind: BrowserOperationKind;
-  operation: BrowserOperationName;
   target?: BrowserTargetRefV1;
-  args?: Record<string, unknown>;
   capture?: {
     beforeScreenshot?: boolean;
     afterScreenshot?: boolean;
@@ -170,6 +217,8 @@ export interface BrowserOperationRequestV1 {
     animation: 'normal' | 'fast' | 'off';
   };
 }
+
+export type BrowserOperationRequestV1 = BrowserOperationRequestBaseV1 & BrowserOperationDescriptor;
 
 export interface ExecuteBrowserOperationInput {
   sessionId: string;

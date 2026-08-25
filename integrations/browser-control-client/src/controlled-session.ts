@@ -123,7 +123,8 @@ export class ControlledBrowserSession {
       let binding = await this.startUnlocked(signal);
       binding = await this.rotateLeaseIfNeeded(binding, signal);
       const operationId = stableUuid(this.ownerId, input.key, input.kind, input.operation);
-      const request: BrowserOperationRequestV1 = {
+      // JSON/模型输入在 proxy 权威边界按判别 Schema 校验；凭证注入后才形成线协议请求。
+      const request = {
         schema: 'nebula.browser.operation/1.0',
         operationId,
         leaseSequence: binding.leaseSequence,
@@ -137,7 +138,7 @@ export class ControlledBrowserSession {
           ...(input.label ? { label: input.label } : {}),
           animation: 'off',
         },
-      };
+      } as BrowserOperationRequestV1;
       const credentials = credentialsFrom(binding);
       const timeoutSignal = AbortSignal.timeout(this.operationTimeoutMs);
       const operationSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
