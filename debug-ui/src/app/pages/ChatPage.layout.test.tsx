@@ -2,6 +2,9 @@ import { describe, it, expect, vi } from 'vitest';
 import { render } from '@testing-library/react';
 import ChatPage from './ChatPage.js';
 import { testIds } from '@/shared/testing/testids.js';
+import { useChatStore } from '@/features/chat/store/chat.store.js';
+
+type ChatState = ReturnType<typeof useChatStore.getState>;
 
 vi.mock('@/features/config/api/config.queries.js', () => ({
   useConfig: () => ({ data: { decision: { provider: 'glm', model: 'glm-4.6v-flash' } } }),
@@ -17,7 +20,7 @@ vi.mock('@/shared/query/query-client.js', () => ({
 }));
 
 vi.mock('@/features/chat/store/chat.store.js', () => ({
-  useChatStore: vi.fn((selector: (s: any) => unknown) =>
+  useChatStore: vi.fn((selector: (s: ChatState) => unknown) =>
     selector({
       streamingState: 'idle',
       activeSessionId: null,
@@ -33,11 +36,11 @@ vi.mock('@/features/chat/store/chat.store.js', () => ({
       setIsLoadingSessions: vi.fn(),
       setIsLoadingMessages: vi.fn(),
       pendingJobs: {},
-    })
+    } as unknown as ChatState)
   ),
-  selectShowThinking: (s: any) => s.showThinking,
-  selectStreamingState: (s: any) => s.streamingState,
-  selectActiveSessionId: (s: any) => s.activeSessionId,
+  selectShowThinking: (s: ChatState) => s.showThinking,
+  selectStreamingState: (s: ChatState) => s.streamingState,
+  selectActiveSessionId: (s: ChatState) => s.activeSessionId,
 }));
 
 // Mock chat sub-components used by ChatPage

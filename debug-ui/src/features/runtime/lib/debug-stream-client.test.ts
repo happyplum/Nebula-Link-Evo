@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mustExist } from '@/test-support/must-exist.js';
 
 class MockEventSource {
   static CONNECTING = 0;
@@ -21,10 +22,12 @@ class MockEventSource {
   }
 
   addEventListener(type: string, handler: (event: MessageEvent<string>) => void) {
-    if (!this.listeners.has(type)) {
-      this.listeners.set(type, new Set());
+    let handlers = this.listeners.get(type);
+    if (!handlers) {
+      handlers = new Set();
+      this.listeners.set(type, handlers);
     }
-    this.listeners.get(type)!.add(handler);
+    handlers.add(handler);
   }
 
   removeEventListener(type: string, handler: (event: MessageEvent<string>) => void) {
@@ -85,7 +88,7 @@ describe('debugStreamClient', () => {
     debugStreamClient.acquire();
     debugStreamClient.acquire();
 
-    const es = MockEventSource.instances[0]!;
+    const es = mustExist(MockEventSource.instances[0], 'mock EventSource');
 
     debugStreamClient.release();
     expect(es.close).not.toHaveBeenCalled();
@@ -102,7 +105,7 @@ describe('debugStreamClient', () => {
     const unsubscribe = debugStreamClient.subscribe('debug.status', handler);
 
     debugStreamClient.acquire();
-    const es = MockEventSource.instances[0]!;
+    const es = mustExist(MockEventSource.instances[0], 'mock EventSource');
 
     es.emit('debug.status', {
       type: 'debug.status',
@@ -139,8 +142,8 @@ describe('debugStreamClient', () => {
 
     debugStreamClient.subscribeConnectionState(listener);
     debugStreamClient.acquire();
-    MockEventSource.instances[0]!.open();
-    MockEventSource.instances[0]!.fail();
+    mustExist(MockEventSource.instances[0], 'mock EventSource').open();
+    mustExist(MockEventSource.instances[0], 'mock EventSource').fail();
 
     expect(listener.mock.calls).toEqual([['connecting'], ['connected'], ['disconnected']]);
     expect(debugStreamClient.getConnectionState()).toBe('disconnected');
@@ -150,7 +153,7 @@ describe('debugStreamClient', () => {
     const { debugStreamClient } = await loadStreamClient();
 
     debugStreamClient.acquire();
-    const first = MockEventSource.instances[0]!;
+    const first = mustExist(MockEventSource.instances[0], 'mock EventSource');
     first.open();
 
     debugStreamClient.forceReconnect();
@@ -170,7 +173,7 @@ describe('debugStreamClient', () => {
     debugStreamClient.subscribeConnectionState(stateHandler);
     debugStreamClient.acquire();
 
-    const first = MockEventSource.instances[0]!;
+    const first = mustExist(MockEventSource.instances[0], 'mock EventSource');
 
     stateHandler.mockClear();
 
@@ -200,10 +203,10 @@ describe('debugStreamClient', () => {
     debugStreamClient.acquire();
     expect(debugStreamClient.getConnectionState()).toBe('connecting');
 
-    MockEventSource.instances[0]!.open();
+    mustExist(MockEventSource.instances[0], 'mock EventSource').open();
     expect(debugStreamClient.getConnectionState()).toBe('connected');
 
-    MockEventSource.instances[0]!.fail();
+    mustExist(MockEventSource.instances[0], 'mock EventSource').fail();
     expect(debugStreamClient.getConnectionState()).toBe('disconnected');
   });
 });

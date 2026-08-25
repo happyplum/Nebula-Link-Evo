@@ -2,6 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { mustExist } from '@/test-support/must-exist.js';
 
 class MockEventSource {
   static CONNECTING = 0;
@@ -24,10 +25,12 @@ class MockEventSource {
   }
 
   addEventListener(type: string, handler: (event: MessageEvent) => void) {
-    if (!this.listeners.has(type)) {
-      this.listeners.set(type, new Set());
+    let handlers = this.listeners.get(type);
+    if (!handlers) {
+      handlers = new Set();
+      this.listeners.set(type, handlers);
     }
-    this.listeners.get(type)!.add(handler);
+    handlers.add(handler);
   }
 
   removeEventListener(type: string, handler: (event: MessageEvent) => void) {
@@ -121,7 +124,7 @@ describe('useDebugStream', () => {
     renderHook(() => useDebugStream(), { wrapper: createWrapper(client) });
     await flushAsyncWork();
 
-    const es = MockEventSource.instances[0]!;
+    const es = mustExist(MockEventSource.instances[0], 'mock EventSource');
     act(() => {
       es.open();
       es.emit('debug.snapshot', {
@@ -175,8 +178,8 @@ describe('useDebugStream', () => {
     const { unmount } = renderHook(() => useDebugStream(), { wrapper: createWrapper(client) });
 
     act(() => {
-      MockEventSource.instances[0]!.open();
-      MockEventSource.instances[0]!.emit('debug.mcp_invalidated', {
+      mustExist(MockEventSource.instances[0], 'mock EventSource').open();
+      mustExist(MockEventSource.instances[0], 'mock EventSource').emit('debug.mcp_invalidated', {
         type: 'debug.mcp_invalidated',
         seq: 2,
         scope: 'all',
@@ -204,8 +207,8 @@ describe('useDebugStream', () => {
     await flushAsyncWork();
 
     act(() => {
-      MockEventSource.instances[0]!.open();
-      MockEventSource.instances[0]!.emit('debug.error', {
+      mustExist(MockEventSource.instances[0], 'mock EventSource').open();
+      mustExist(MockEventSource.instances[0], 'mock EventSource').emit('debug.error', {
         type: 'debug.error',
         code: 'upstream_disconnected',
         message: 'test error',
@@ -225,8 +228,8 @@ describe('useDebugStream', () => {
     await flushAsyncWork();
 
     act(() => {
-      MockEventSource.instances[0]!.open();
-      MockEventSource.instances[0]!.emit('debug.keepalive', {
+      mustExist(MockEventSource.instances[0], 'mock EventSource').open();
+      mustExist(MockEventSource.instances[0], 'mock EventSource').emit('debug.keepalive', {
         type: 'debug.keepalive',
         emittedAt: '2026-05-03T00:00:04.000Z',
       });
@@ -244,8 +247,8 @@ describe('useDebugStream', () => {
     await flushAsyncWork();
 
     act(() => {
-      MockEventSource.instances[0]!.open();
-      MockEventSource.instances[0]!.fail();
+      mustExist(MockEventSource.instances[0], 'mock EventSource').open();
+      mustExist(MockEventSource.instances[0], 'mock EventSource').fail();
     });
 
     expect(MockEventSource.instances).toHaveLength(1);
@@ -255,6 +258,6 @@ describe('useDebugStream', () => {
     });
 
     expect(MockEventSource.instances.length).toBeGreaterThan(1);
-    expect(MockEventSource.instances[0]!.close).toHaveBeenCalled();
+    expect(mustExist(MockEventSource.instances[0], 'mock EventSource').close).toHaveBeenCalled();
   });
 });

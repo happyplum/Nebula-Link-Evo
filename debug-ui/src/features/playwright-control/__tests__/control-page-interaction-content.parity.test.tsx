@@ -307,7 +307,7 @@ describe('P3-19-V: Control Page Interaction - Content Parity', () => {
   // --- setExecutingAction lifecycle during action ---
 
   it('sets isExecutingAction true during execution and false after completion', async () => {
-    let resolveAction: (value: unknown) => void;
+    let resolveAction: ((value: unknown) => void) | undefined;
     const actionPromise = new Promise((resolve) => {
       resolveAction = resolve;
     });
@@ -331,7 +331,8 @@ describe('P3-19-V: Control Page Interaction - Content Parity', () => {
     });
 
     // Resolve the action
-    resolveAction!({ success: true });
+    if (!resolveAction) throw new Error('action resolver must be captured');
+    resolveAction({ success: true });
 
     await waitFor(() => {
       expect(useControlStore.getState().isExecutingAction).toBe(false);

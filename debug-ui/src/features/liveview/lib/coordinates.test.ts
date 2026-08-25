@@ -5,47 +5,48 @@ import {
   pageToCanvasCoords,
   type ImageFitRect,
 } from './coordinates.js';
+import { mustExist } from '@/test-support/must-exist.js';
 
 describe('getImageFitRect', () => {
   it('fits landscape image in portrait container', () => {
     // 1920×1080 image in 400×600 container
-    const fit = getImageFitRect(1920, 1080, 400, 600);
+    const fit = mustExist(getImageFitRect(1920, 1080, 400, 600), 'landscape fit');
     expect(fit).not.toBeNull();
 
     // Scale constrained by width: 400/1920 ≈ 0.2083
-    expect(fit!.scale).toBeCloseTo(400 / 1920, 6);
-    expect(fit!.drawW).toBeCloseTo(400, 6);
-    expect(fit!.drawH).toBeCloseTo((1080 * 400) / 1920, 6);
+    expect(fit.scale).toBeCloseTo(400 / 1920, 6);
+    expect(fit.drawW).toBeCloseTo(400, 6);
+    expect(fit.drawH).toBeCloseTo((1080 * 400) / 1920, 6);
     // Centered vertically
-    expect(fit!.offsetX).toBeCloseTo(0, 6);
-    expect(fit!.offsetY).toBeCloseTo((600 - fit!.drawH) / 2, 6);
-    expect(fit!.imgW).toBe(1920);
-    expect(fit!.imgH).toBe(1080);
+    expect(fit.offsetX).toBeCloseTo(0, 6);
+    expect(fit.offsetY).toBeCloseTo((600 - fit.drawH) / 2, 6);
+    expect(fit.imgW).toBe(1920);
+    expect(fit.imgH).toBe(1080);
   });
 
   it('fits portrait image in landscape container', () => {
     // 1080×1920 image in 600×400 container
-    const fit = getImageFitRect(1080, 1920, 600, 400);
+    const fit = mustExist(getImageFitRect(1080, 1920, 600, 400), 'portrait fit');
     expect(fit).not.toBeNull();
 
     // Scale constrained by height: 400/1920 ≈ 0.2083
-    expect(fit!.scale).toBeCloseTo(400 / 1920, 6);
-    expect(fit!.drawH).toBeCloseTo(400, 6);
-    expect(fit!.drawW).toBeCloseTo((1080 * 400) / 1920, 6);
+    expect(fit.scale).toBeCloseTo(400 / 1920, 6);
+    expect(fit.drawH).toBeCloseTo(400, 6);
+    expect(fit.drawW).toBeCloseTo((1080 * 400) / 1920, 6);
     // Centered horizontally
-    expect(fit!.offsetY).toBeCloseTo(0, 6);
-    expect(fit!.offsetX).toBeCloseTo((600 - fit!.drawW) / 2, 6);
+    expect(fit.offsetY).toBeCloseTo(0, 6);
+    expect(fit.offsetX).toBeCloseTo((600 - fit.drawW) / 2, 6);
   });
 
   it('handles exact aspect-ratio match', () => {
     // 800×600 image in 400×300 container (same 4:3 ratio)
-    const fit = getImageFitRect(800, 600, 400, 300);
+    const fit = mustExist(getImageFitRect(800, 600, 400, 300), 'exact-ratio fit');
     expect(fit).not.toBeNull();
-    expect(fit!.scale).toBe(0.5);
-    expect(fit!.drawW).toBe(400);
-    expect(fit!.drawH).toBe(300);
-    expect(fit!.offsetX).toBe(0);
-    expect(fit!.offsetY).toBe(0);
+    expect(fit.scale).toBe(0.5);
+    expect(fit.drawW).toBe(400);
+    expect(fit.drawH).toBe(300);
+    expect(fit.offsetX).toBe(0);
+    expect(fit.offsetY).toBe(0);
   });
 
   it('returns null for zero image width', () => {
@@ -72,9 +73,9 @@ describe('getImageFitRect', () => {
   });
 
   it('preserves image dimensions in the result', () => {
-    const fit = getImageFitRect(640, 480, 320, 240);
-    expect(fit!.imgW).toBe(640);
-    expect(fit!.imgH).toBe(480);
+    const fit = mustExist(getImageFitRect(640, 480, 320, 240), 'dimension fit');
+    expect(fit.imgW).toBe(640);
+    expect(fit.imgH).toBe(480);
   });
 });
 
@@ -171,8 +172,8 @@ describe('canvasToPageCoords', () => {
       imgW: 1600,
       imgH: 1200,
     };
-    const result = canvasToPageCoords(100.4, 0, fit);
-    expect(result!.x).toBe(201);
+    const result = mustExist(canvasToPageCoords(100.4, 0, fit), 'rounded page coordinates');
+    expect(result.x).toBe(201);
   });
 });
 
@@ -254,9 +255,9 @@ describe('pageToCanvasCoords', () => {
     const pageX = 500;
     const pageY = 333;
     const canvas = pageToCanvasCoords(pageX, pageY, fit);
-    const back = canvasToPageCoords(canvas.x, canvas.y, fit);
+    const back = mustExist(canvasToPageCoords(canvas.x, canvas.y, fit), 'round-trip coordinates');
     // Round-trip may differ by at most 1 due to Math.round
-    expect(Math.abs(back!.x - pageX)).toBeLessThanOrEqual(1);
-    expect(Math.abs(back!.y - pageY)).toBeLessThanOrEqual(1);
+    expect(Math.abs(back.x - pageX)).toBeLessThanOrEqual(1);
+    expect(Math.abs(back.y - pageY)).toBeLessThanOrEqual(1);
   });
 });

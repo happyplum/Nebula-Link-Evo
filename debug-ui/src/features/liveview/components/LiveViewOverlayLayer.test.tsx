@@ -7,7 +7,7 @@ global.ResizeObserver = class ResizeObserver {
   observe = vi.fn();
   unobserve = vi.fn();
   disconnect = vi.fn();
-} as any;
+} as unknown as typeof ResizeObserver;
 
 // Use vi.hoisted so values are available inside vi.mock factories (which are hoisted to top)
 const { mockSubscribe, mockMarkerUnsub, mockOverlayUnsub, mockUseControlStoreState } = vi.hoisted(
@@ -32,14 +32,17 @@ const { mockSubscribe, mockMarkerUnsub, mockOverlayUnsub, mockUseControlStoreSta
         return vi.fn();
       });
 
-    // Expose captured handlers for test use
-    (subscribe as any)._getMarkerHandler = () => _markerHandler;
-    (subscribe as any)._getOverlayHandler = () => _overlayHandler;
+    const exposedSubscribe = subscribe as typeof subscribe & {
+      _getMarkerHandler: () => typeof _markerHandler;
+      _getOverlayHandler: () => typeof _overlayHandler;
+    };
+    exposedSubscribe._getMarkerHandler = () => _markerHandler;
+    exposedSubscribe._getOverlayHandler = () => _overlayHandler;
 
     const storeState = {
       elementPickerEnabled: false,
       selectedElement: null,
-      domElements: [] as any[],
+      domElements: [] as unknown[],
       markerToggle: false,
       setElementPickerEnabled: vi.fn(),
       setCapturedCoordinates: vi.fn(),
@@ -48,7 +51,7 @@ const { mockSubscribe, mockMarkerUnsub, mockOverlayUnsub, mockUseControlStoreSta
     };
 
     return {
-      mockSubscribe: subscribe,
+      mockSubscribe: exposedSubscribe,
       mockMarkerUnsub: markerUnsub,
       mockOverlayUnsub: overlayUnsub,
       mockUseControlStoreState: storeState,
@@ -124,8 +127,8 @@ describe('LiveViewOverlayLayer SSE subscription', () => {
   it('injects a marker when debug.marker event is received', async () => {
     render(<LiveViewOverlayLayer fitRect={FIT_RECT} />);
 
-    const handler = (mockSubscribe as any)._getMarkerHandler();
-    expect(handler).toBeDefined();
+    const handler = mockSubscribe._getMarkerHandler();
+    if (!handler) throw new Error('debug.marker handler must be registered');
 
     act(() => {
       handler({
@@ -146,8 +149,8 @@ describe('LiveViewOverlayLayer SSE subscription', () => {
   it('sets overlayBBox when debug.overlay event with non-null overlay is received', async () => {
     render(<LiveViewOverlayLayer fitRect={FIT_RECT} />);
 
-    const handler = (mockSubscribe as any)._getOverlayHandler();
-    expect(handler).toBeDefined();
+    const handler = mockSubscribe._getOverlayHandler();
+    if (!handler) throw new Error('debug.overlay handler must be registered');
 
     act(() => {
       handler({
@@ -172,7 +175,8 @@ describe('LiveViewOverlayLayer SSE subscription', () => {
   it('clears overlayBBox when debug.overlay event with null overlay is received', async () => {
     render(<LiveViewOverlayLayer fitRect={FIT_RECT} />);
 
-    const handler = (mockSubscribe as any)._getOverlayHandler();
+    const handler = mockSubscribe._getOverlayHandler();
+    if (!handler) throw new Error('debug.overlay handler must be registered');
 
     // Set overlay first
     act(() => {
@@ -216,7 +220,8 @@ describe('LiveViewOverlayLayer SSE subscription', () => {
   it('ignores malformed debug.marker events without throwing', () => {
     render(<LiveViewOverlayLayer fitRect={FIT_RECT} />);
 
-    const handler = (mockSubscribe as any)._getMarkerHandler();
+    const handler = mockSubscribe._getMarkerHandler();
+    if (!handler) throw new Error('debug.marker handler must be registered');
     expect(() => {
       act(() => {
         handler({ data: 'not-valid-json' });
@@ -227,7 +232,8 @@ describe('LiveViewOverlayLayer SSE subscription', () => {
   it('ignores malformed debug.overlay events without throwing', () => {
     render(<LiveViewOverlayLayer fitRect={FIT_RECT} />);
 
-    const handler = (mockSubscribe as any)._getOverlayHandler();
+    const handler = mockSubscribe._getOverlayHandler();
+    if (!handler) throw new Error('debug.overlay handler must be registered');
     expect(() => {
       act(() => {
         handler({ data: 'not-valid-json' });

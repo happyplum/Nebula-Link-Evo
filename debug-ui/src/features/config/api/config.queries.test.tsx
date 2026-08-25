@@ -8,6 +8,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 
 import { useConfig, useHealth, useMcpStatus, useMcpTools } from './config.queries.js';
+import { mustExist } from '@/test-support/must-exist.js';
 
 function createWrapper() {
   const client = new QueryClient({
@@ -110,7 +111,7 @@ describe('config.queries', () => {
       const { result } = renderHook(() => useHealth(), { wrapper: createWrapper() });
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-      const data = result.current.data!;
+      const data = mustExist(result.current.data, 'health response');
       expect(data.status).toBe('ok');
       expect(data.mcp.enabled).toBe(true);
       expect(data.mcp.servers).toHaveLength(1);
@@ -135,7 +136,7 @@ describe('config.queries', () => {
       const { result } = renderHook(() => useMcpStatus(), { wrapper: createWrapper() });
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-      const data = result.current.data!;
+      const data = mustExist(result.current.data, 'MCP status response');
       expect(data.enabled).toBe(true);
       expect(data.servers).toHaveLength(2);
       expect(data.servers[0].running).toBe(true);
@@ -162,7 +163,7 @@ describe('config.queries', () => {
       const { result } = renderHook(() => useMcpTools(), { wrapper: createWrapper() });
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-      const tools = result.current.data!.tools;
+      const tools = mustExist(result.current.data, 'MCP tools response').tools;
       expect(tools).toHaveLength(2);
       expect(tools[0].name).toBe('read_file');
       expect(tools[0].inputSchema?.required).toEqual(['path']);
@@ -175,7 +176,7 @@ describe('config.queries', () => {
       const { result } = renderHook(() => useMcpTools(), { wrapper: createWrapper() });
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-      expect(result.current.data!.tools[0].inputSchema).toBeUndefined();
+      expect(mustExist(result.current.data, 'MCP tools response').tools[0].inputSchema).toBeUndefined();
     });
 
     it('fetches /debug/api/mcp/tools endpoint', async () => {

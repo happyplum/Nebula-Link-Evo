@@ -141,7 +141,7 @@ describe('QueueFloatingPanel', () => {
 
     useChatStore.getState().setPendingJobsFromSnapshot(sessionId, jobs);
 
-    (global.fetch as any).mockResolvedValueOnce({ ok: true });
+    vi.mocked(global.fetch).mockResolvedValueOnce(new Response(null, { status: 200 }));
 
     render(<QueueFloatingPanel sessionId={sessionId} />);
 

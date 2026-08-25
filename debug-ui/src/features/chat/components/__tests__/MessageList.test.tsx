@@ -3,17 +3,26 @@ import { render, screen } from '@testing-library/react';
 import { MessageList } from '../MessageList.js';
 import { useChatStore } from '../../store/chat.store.js';
 import { testIds } from '@/shared/testing/testids.js';
+import { mustExist } from '@/test-support/must-exist.js';
+
+type ChatState = ReturnType<typeof useChatStore.getState>;
+type StoreMock = {
+  mockImplementation: (
+    implementation: (selector: (state: Record<string, unknown>) => unknown) => unknown
+  ) => void;
+};
+const storeMock = useChatStore as unknown as StoreMock;
 
 vi.mock('../../store/chat.store.js', () => ({
   useChatStore: vi.fn(),
-  selectActiveMessages: (s: any) =>
+  selectActiveMessages: (s: ChatState) =>
     s.activeSessionId ? s.messagesBySession[s.activeSessionId] || [] : [],
-  selectActiveSessionId: (s: any) => s.activeSessionId,
-  selectStreamingState: (s: any) => s.streamingState,
-  selectStreamingContent: (s: any) => s.streamingContent,
-  selectStreamingThinking: (s: any) => s.streamingThinking,
-  selectStreamingToolCalls: (s: any) => s.streamingToolCalls ?? [],
-  selectShowThinking: (s: any) => s.showThinking,
+  selectActiveSessionId: (s: ChatState) => s.activeSessionId,
+  selectStreamingState: (s: ChatState) => s.streamingState,
+  selectStreamingContent: (s: ChatState) => s.streamingContent,
+  selectStreamingThinking: (s: ChatState) => s.streamingThinking,
+  selectStreamingToolCalls: (s: ChatState) => s.streamingToolCalls ?? [],
+  selectShowThinking: (s: ChatState) => s.showThinking,
 }));
 
 // Mock HTMLDialogElement methods not available in jsdom
@@ -32,7 +41,7 @@ describe('MessageList', () => {
   });
 
   it('renders empty state when no messages', () => {
-    (useChatStore as any).mockImplementation((selector: any) =>
+    storeMock.mockImplementation((selector) =>
       selector({
         activeSessionId: 'session-1',
         showThinking: false,
@@ -58,7 +67,7 @@ describe('MessageList', () => {
       { id: '2', role: 'assistant', content: 'Hi there' },
     ];
 
-    (useChatStore as any).mockImplementation((selector: any) =>
+    storeMock.mockImplementation((selector) =>
       selector({
         activeSessionId: 'session-1',
         showThinking: false,
@@ -81,7 +90,7 @@ describe('MessageList', () => {
   });
 
   it('renders streaming assistant thinking even when there are no persisted messages yet', () => {
-    (useChatStore as any).mockImplementation((selector: any) =>
+    storeMock.mockImplementation((selector) =>
       selector({
         activeSessionId: 'session-1',
         showThinking: true,
@@ -110,7 +119,7 @@ describe('MessageList', () => {
       toolCalls: [{ id: 'tc-1', name: 'screenshot', arguments: '{}', status: 'completed' }],
     };
 
-    (useChatStore as any).mockImplementation((selector: any) =>
+    storeMock.mockImplementation((selector) =>
       selector({
         activeSessionId: 'session-1',
         showThinking: false,
@@ -140,7 +149,7 @@ describe('MessageList', () => {
       toolCalls: [{ id: 'tc-1', name: 'screenshot', arguments: '{}', status: 'completed' }],
     };
 
-    (useChatStore as any).mockImplementation((selector: any) =>
+    storeMock.mockImplementation((selector) =>
       selector({
         activeSessionId: 'session-1',
         showThinking: false,
@@ -178,7 +187,7 @@ describe('MessageList', () => {
       },
     ];
 
-    (useChatStore as any).mockImplementation((selector: any) =>
+    storeMock.mockImplementation((selector) =>
       selector({
         activeSessionId: 'session-1',
         showThinking: false,
@@ -214,7 +223,7 @@ describe('MessageList', () => {
       ],
     };
 
-    (useChatStore as any).mockImplementation((selector: any) =>
+    storeMock.mockImplementation((selector) =>
       selector({
         activeSessionId: 'session-1',
         showThinking: false,
@@ -238,20 +247,20 @@ describe('MessageList', () => {
     (card as HTMLElement).click();
 
     // Verify dialog is now open
-    const dialog = container.querySelector('dialog');
+    const dialog = mustExist(container.querySelector('dialog'), 'tool call dialog');
     expect(dialog).toHaveProperty('open', true);
 
     // The result section should be rendered with the label "结果"
     // Empty string result should still show the result section (not hide it)
-    const resultLabels = dialog?.querySelectorAll('[class*="label"]');
+    const resultLabels = dialog.querySelectorAll('[class*="label"]');
     expect(resultLabels).toHaveLength(2); // One for "参数", one for "结果"
 
     // Verify "结果" label is present
-    const hasResultLabel = Array.from(resultLabels!).some((label) => label.textContent === '结果');
+    const hasResultLabel = Array.from(resultLabels).some((label) => label.textContent === '结果');
     expect(hasResultLabel).toBe(true);
 
     // Verify the empty string result is rendered (empty pre tag)
-    const codeElements = dialog?.querySelectorAll('[class*="code"]');
+    const codeElements = dialog.querySelectorAll('[class*="code"]');
     expect(codeElements).toHaveLength(2); // One for arguments, one for result
   });
 });

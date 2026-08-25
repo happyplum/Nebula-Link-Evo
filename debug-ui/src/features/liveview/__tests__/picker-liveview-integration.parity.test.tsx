@@ -10,7 +10,7 @@ global.ResizeObserver = class ResizeObserver {
   observe = vi.fn();
   unobserve = vi.fn();
   disconnect = vi.fn();
-} as any;
+} as unknown as typeof ResizeObserver;
 
 const mockUseControlStore = vi.hoisted(() => ({
   state: {
@@ -30,7 +30,7 @@ vi.mock('@/features/runtime/store/index.js', () => ({
   selectPlaywrightIsOpen: () => false,
   selectPlaywrightStatusHydrated: () => true,
   selectLiveviewRefreshKey: () => 0,
-  useRuntimeStore: (selector: (s: any) => any) =>
+  useRuntimeStore: (selector: (s: unknown) => unknown) =>
     selector({
       playwrightIsOpen: false,
       playwrightStatusHydrated: true,
