@@ -24,6 +24,7 @@ import { BrowserExecutionToolsProvider } from './tools/providers/browser-executi
 import capabilitiesRoutes from './plugins/routes/capabilities.js';
 import browserExecutionRoutes from './plugins/routes/browser-execution.js';
 
+const ARTIFACT_CLEANUP_INTERVAL_MS = 60_000;
 const envLocal = path.join(process.cwd(), '.env');
 const envRoot = path.join(process.cwd(), '..', '.env');
 
@@ -82,16 +83,23 @@ export async function buildApp(options: BuildProxyAppOptions = {}): Promise<Fast
     controlPlaneEnabled: true,
   });
   let cleanupPromise: Promise<void> | undefined;
-
-  app.addHook('onClose', async () => {
-    cleanupPromise ??= (async () => {
-      await interactionLogger.destroy();
-      await toolRegistry.shutdownAll();
-      await browserExecutionService.shutdown();
-      await shutdownBrowserEngine();
-    })();
-    await cleanupPromise;
-  });
+  let artifactCleanupPromise: Promise<void> | undefined;
+  const runArtifactCleanup = (): Promise<void> => {
+    artifactCleanupPromise ??= browserExecutionService
+      .cleanupExpiredArtifacts()
+      .then(({ recordsDeleted, filesDeleted }) => {
+        if (recordsDeleted > 0) {
+          app.log.info({ recordsDeleted, filesDeleted }, 'Expired browser artifacts cleaned');
+        }
+      })
+      .catch((error: unknown) => {
+        app.log.error({ err: error }, 'Expired browser artifact cleanup failed');
+      })
+      .finally(() => {
+        artifactCleanupPromise = undefined;
+      });
+    return artifactCleanupPromise;
+  };
 
   const isTestMode = process.env.TEST_MODE === 'true';
 
@@ -108,6 +116,24 @@ export async function buildApp(options: BuildProxyAppOptions = {}): Promise<Fast
   // Initialize ToolRegistry and register providers
   browserExecutionService.initialize();
   browserClient.setAccessArbiter(browserExecutionService);
+  const artifactCleanupTimer = setInterval(
+    () => void runArtifactCleanup(),
+    ARTIFACT_CLEANUP_INTERVAL_MS
+  );
+  artifactCleanupTimer.unref();
+  void runArtifactCleanup();
+
+  app.addHook('onClose', async () => {
+    cleanupPromise ??= (async () => {
+      clearInterval(artifactCleanupTimer);
+      await artifactCleanupPromise;
+      await interactionLogger.destroy();
+      await toolRegistry.shutdownAll();
+      await browserExecutionService.shutdown();
+      await shutdownBrowserEngine();
+    })();
+    await cleanupPromise;
+  });
 
   toolRegistry.registerProvider(new BrowserExecutionToolsProvider(browserExecutionService));
 

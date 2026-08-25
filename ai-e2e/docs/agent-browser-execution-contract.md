@@ -211,7 +211,7 @@
 ## 14. 当前实现差距
 
 - `proxy-adapter` 已交付 application session、稳定 Tab、observe/control lease、`operationId` 去重、queued cancel、持久结果查询和重启 `outcome_unknown`；当前 MCP Server 只暴露 3 个受控 operation 工具。
-- proxy 已交付受控 dom_snapshot、before/after screenshot、失败截图、内容寻址短期 artifact、完整性校验、browser session SSE/event-log 与会话范围 artifact GET；set_files、video、操作动画、control 原地续租、脱敏与保留清理 worker仍未实现。
+- proxy 已交付受控 dom_snapshot、before/after screenshot、失败截图、内容寻址短期 artifact、完整性校验、browser session SSE/event-log、会话范围 artifact GET 与 TTL/hold 短期清理；set_files、video、操作动画、control 原地续租和自动脱敏仍未实现。
 - browser execution 事件已按 session 持久化单调 seq 并采用 snapshot-first SSE；ai-e2e 协调器直接按持久 seq 游标消费 browser event-log，并通过 operation GET 和 opaque external link 写入业务证据关联。
 - `ai-chat-service` 已交付独立受限 Agent task POST/GET/commands、持久状态、精确工具白名单、预算、结构化结果、模型不可见 browser binding、snapshot-first events/event-log 与单 Skill runtime；ai-e2e semantic 页面任务和 Authoring repair 已消费 create/get/commands/event-log，完整终态仍以权威 task snapshot 收敛。
 - `ai-e2e` 只使用 Agent + MCP 可视执行链，不存在本地脚本子进程执行路径。

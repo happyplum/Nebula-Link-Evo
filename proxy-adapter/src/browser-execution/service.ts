@@ -719,6 +719,38 @@ export class BrowserExecutionService {
     return { artifact, bytes };
   }
 
+  async cleanupExpiredArtifacts(): Promise<{ recordsDeleted: number; filesDeleted: number }> {
+    this.assertInitialized();
+    return this.operationMutex.runExclusive(async () => {
+      const deletedAt = this.now();
+      const artifacts = this.repository.listArtifactsEligibleForDeletion(deletedAt);
+      let recordsDeleted = 0;
+      let filesDeleted = 0;
+
+      for (const artifact of artifacts) {
+        const claimed = this.repository.claimArtifactDeletion(artifact.id);
+        let fileDeleted = false;
+        if (
+          claimed.storageBackend === 'local_file' &&
+          claimed.storageRef &&
+          !this.repository.hasOtherArtifactStorageReference(claimed.storageRef, claimed.id)
+        ) {
+          fileDeleted = await this.artifactStore.delete(claimed.storageRef);
+          if (fileDeleted) filesDeleted += 1;
+        }
+        const deleted = this.repository.markArtifactDeleted(claimed.id, deletedAt);
+        recordsDeleted += 1;
+        this.recordEvent(deleted.sessionId, 'artifact.deleted', 'artifact', deleted.id, {
+          retentionClass: deleted.retentionClass,
+          expiresAt: deleted.expiresAt,
+          fileDeleted,
+        });
+      }
+
+      return { recordsDeleted, filesDeleted };
+    });
+  }
+
   listSessionEvents(sessionId: string, afterSeq = 0, limit = 100): BrowserSessionEventRecord[] {
     this.assertInitialized();
     this.assertControlPlaneEnabled();

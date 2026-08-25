@@ -789,6 +789,43 @@ export class BrowserExecutionRepository {
     return rows.map(mapArtifact);
   }
 
+  claimArtifactDeletion(id: string): BrowserArtifactRecord {
+    const result = this.requireDb()
+      .prepare(
+        `UPDATE browser_artifacts SET status = 'expired'
+         WHERE id = ? AND status IN ('available','failed','expired')`
+      )
+      .run(id);
+    if (result.changes !== 1) {
+      throw new BrowserExecutionError('state_conflict', `Artifact ${id} cannot be deleted`);
+    }
+    return this.getArtifactOrThrow(id);
+  }
+
+  hasOtherArtifactStorageReference(storageRef: string, artifactId: string): boolean {
+    const row = this.requireDb()
+      .prepare(
+        `SELECT 1 AS found FROM browser_artifacts
+         WHERE storage_ref = ? AND id <> ? AND status <> 'deleted'
+         LIMIT 1`
+      )
+      .get(storageRef, artifactId) as { found: number } | undefined;
+    return Boolean(row);
+  }
+
+  markArtifactDeleted(id: string, deletedAt: string): BrowserArtifactRecord {
+    const result = this.requireDb()
+      .prepare(
+        `UPDATE browser_artifacts SET status = 'deleted', deleted_at = COALESCE(deleted_at, ?)
+         WHERE id = ? AND status = 'expired'`
+      )
+      .run(deletedAt, id);
+    if (result.changes !== 1) {
+      throw new BrowserExecutionError('state_conflict', `Artifact ${id} is not expired`);
+    }
+    return this.getArtifactOrThrow(id);
+  }
+
   appendSessionEvent(input: AppendBrowserSessionEvent): BrowserSessionEventRecord {
     assertSafeEventPayload(input.payload);
     return this.transaction(() => {

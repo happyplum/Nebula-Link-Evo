@@ -271,7 +271,7 @@ interface CreateAgentTaskRequestV1 {
 | GET    | `/api/v1/browser-execution/operations/:operationId`                          | 查询原子操作账本和最终/不确定结果。                                       |
 | GET    | `/api/v1/browser-execution/sessions/:sessionId/artifacts/:artifactId`        | 在会话边界内读取短期原始产物；返回前复核 storage ref、size 与 SHA-256。   |
 
-当前实现状态：session 创建/读取/关闭、lease 签发/撤销、operation 查询、真实 before/after screenshot、DOM capture、失败截图、内容寻址短期存储、session SSE、event-log 与 artifact GET 已交付。observe/control 创建、opaque token hash/process epoch、单 session 门禁和 SQLite operation ledger 已生效；control 原地续租、脱敏/清理 worker、video 与动画尚未实现。
+当前实现状态：session 创建/读取/关闭、lease 签发/撤销、operation 查询、真实 before/after screenshot、DOM capture、失败截图、内容寻址短期存储、session SSE、event-log、artifact GET 与 TTL/hold 短期清理已交付。observe/control 创建、opaque token hash/process epoch、单 session 门禁和 SQLite operation ledger 已生效；control 原地续租、自动脱敏、operation/idempotency 账本清理、video 与动画尚未实现。
 
 浏览器执行会话是应用层身份，与当前 stateless StreamableHTTP MCP transport session 无关。MCP 传输可以每个请求新建 server，仍必须依据 application-level session、lease 和 operation ledger 执行。
 
@@ -381,7 +381,7 @@ interface RunEventV1 {
 ### 6.2 Agent 与浏览器事件
 
 - `AgentTaskEventV1` 使用 task-scoped `seq`；当前事件集包含 `agent_task.snapshot/created/state_changed/model_turn/tool_call/tool_result/budget_updated/command.accepted/command.completed/command.rejected/checkpoint.created/skill_loaded/skill_execute/skill_result/skill_failure`。
-- `BrowserEventV1` 使用 browser-session-scoped `seq`，最低事件集：`browser_session.snapshot`、`tab.created/selected/closed`、`lease.issued/revoked/expired`、`operation.queued/started/completed`、`target.resolved/stale/ambiguous`、`artifact.created`、`animation.started/completed`。
+- `BrowserEventV1` 使用 browser-session-scoped `seq`，最低事件集：`browser_session.snapshot`、`tab.created/selected/closed`、`lease.issued/revoked/expired`、`operation.queued/started/completed`、`target.resolved/stale/ambiguous`、`artifact.created/deleted`、`animation.started/completed`。
 - Agent/浏览器事件只有过程事实；`ai-e2e` 写入自己的关联事件后才成为业务时间线的一部分。
 
 ### 6.3 Authoring 事件

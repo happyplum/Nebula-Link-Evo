@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { dirname, extname, isAbsolute, relative, resolve } from 'node:path';
 import { sha256Bytes } from './hash.js';
 import type { BrowserArtifactKind } from './types.js';
@@ -12,6 +12,7 @@ export interface StoredBrowserArtifact {
 export interface BrowserArtifactStore {
   write(kind: BrowserArtifactKind, bytes: Buffer): Promise<StoredBrowserArtifact>;
   read(storageRef: string): Promise<Buffer>;
+  delete(storageRef: string): Promise<boolean>;
 }
 
 const EXTENSIONS: Record<BrowserArtifactKind, string> = {
@@ -45,6 +46,16 @@ export class LocalBrowserArtifactStore implements BrowserArtifactStore {
     return readFile(this.resolveRef(storageRef));
   }
 
+  async delete(storageRef: string): Promise<boolean> {
+    try {
+      await unlink(this.resolveRef(storageRef));
+      return true;
+    } catch (error) {
+      if (isNotFound(error)) return false;
+      throw error;
+    }
+  }
+
   private resolveRef(storageRef: string): string {
     if (!/^[a-f0-9]{2}\/[a-f0-9]{64}\.(png|json|webm|zip)$/.test(storageRef)) {
       throw new Error('Artifact storage reference is invalid');
@@ -63,4 +74,8 @@ export class LocalBrowserArtifactStore implements BrowserArtifactStore {
 
 function isAlreadyExists(error: unknown): boolean {
   return Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'EEXIST');
+}
+
+function isNotFound(error: unknown): boolean {
+  return Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT');
 }
