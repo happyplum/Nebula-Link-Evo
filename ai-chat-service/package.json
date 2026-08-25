@@ -12,6 +12,7 @@
     "build": "tsc -b",
     "start": "node dist/server.js",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "type-check": "tsc --noEmit",
     "verify:harness-bom": "tsx src/harness/verify-bom.ts",
     "lint": "eslint src",
@@ -77,6 +78,7 @@
     "@types/node": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
     "vitest": "catalog:"
   }
 }
