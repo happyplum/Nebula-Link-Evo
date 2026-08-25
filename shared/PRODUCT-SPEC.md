@@ -36,7 +36,7 @@
 | 运行时类型  | `types/`           | shipped | browser-execution、vision-snapshot、sse-events、vision-marker、debug-events、constants、index | 框架中立；vision snapshot 只含不可变 evidence binding，不含 bytes/token；新增类型需同时更新公共入口 |
 | 运行时工具  | `utils/`           | shipped | frame-counter、index 等纯函数                                                                 | 必须纯函数，无副作用                                                                                |
 | 测试辅助    | `test-utils/`      | shipped | mocks（BrowserContext、sse-event、debug-event）、service-lifecycle、index                     | **不进 `tsc -b` 构建产物**；消费方按源码相对路径引用                                                |
-| Vitest 配置 | `vitest.config.ts` | shipped | shared 包测试配置                                                                             | 仅本包测试                                                                                          |
+| Vitest 配置 | `vitest.config.ts` | shipped | shared 包测试与覆盖率防回退门禁                                                               | 仅统计运行时入口、类型与工具；`test-utils/` 不计入生产覆盖率                                        |
 
 ### 子路径导出（package.json）
 

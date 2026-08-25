@@ -118,6 +118,14 @@ start.bat
 curl http://localhost:3000/api/v1/health
 ```
 
+**测试与覆盖率**：
+
+```bash
+pnpm test           # 全工作区测试
+pnpm test:coverage  # 全工作区串行覆盖率门禁
+pnpm test:e2e       # 真实跨服务 E2E
+```
+
 ## Project Structure
 
 ```

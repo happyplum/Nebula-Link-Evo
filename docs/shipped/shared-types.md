@@ -14,3 +14,4 @@
 - [shipped] 子路径导出（package.json `exports`）：`.`（root，运行时类型+工具）、`./types`（仅类型）、`./types/browser-execution`（浏览器执行线协议）、`./types/vision-snapshot`（不可变视觉证据 binding）、`./utils`（仅工具）、`./test-utils`（测试辅助，源码引用，不入 build）。
 - [shipped] 硬约束：不反向依赖任何上层包（proxy-adapter / ai-chat-service / ai-e2e）；不写入后端业务逻辑或服务假设；工具函数无隐藏副作用。
 - [shipped] 验收面：`shared/__tests__/sse-events-contract.test.ts`、`debug-events-contract.test.ts`、`screenshot-contract.test.ts`、`utils/__tests__/frame-counter.test.ts`、`test-utils/__tests__/mocks.test.ts`。
+- [shipped] `pnpm --filter @nebula-link-evo/shared test:coverage` 只统计运行时入口、类型和工具，排除不进构建产物的 `test-utils/`，并以包级阈值防止覆盖率回退。

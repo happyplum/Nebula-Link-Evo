@@ -22,6 +22,7 @@
 | Bundle manifest | `package.json`、`cordis.patch.yml` | shipped | `dsh.bundle.patch` 与 Cordis plugin row                           |
 | 插件运行时      | `src/index.ts`                     | shipped | 两工具、审批、稳定调用身份、单 owner、信号传播、脱敏、native card |
 | 运行时验证      | `src/index.test.ts`                | shipped | 真实 Cordis/SystemPrompt/ToolRuntime/Approval 组合测试            |
+| 覆盖率门禁      | `vitest.config.ts`                 | shipped | 插件运行时覆盖率防回退                                            |
 | 第三方声明      | `THIRD_PARTY_NOTICES.md`           | shipped | DeepSeek Harness/Cordis MIT 依赖声明                              |
 
 ## 3. 工具契约
