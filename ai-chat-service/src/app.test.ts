@@ -13,6 +13,21 @@ afterEach(async () => {
 });
 
 describe('buildApp', () => {
+  it('rejects a non-loopback bind before loading runtime resources', async () => {
+    const serviceConfig: AiChatServiceConfig = {
+      port: 3001,
+      host: '0.0.0.0',
+      logLevel: 'error',
+      gatewayUrl: 'http://127.0.0.1:3000',
+      corsOrigins: [],
+      skillDirectories: [],
+    };
+
+    await expect(buildApp({ serviceConfig })).rejects.toThrow(
+      'ai-chat-service must bind to a loopback host'
+    );
+  });
+
   it('creates independent Cordis roots and state stores for two Fastify instances', async () => {
     const root = await mkdtemp(join(tmpdir(), 'nebula-build-app-'));
     roots.push(root);

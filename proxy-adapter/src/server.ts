@@ -59,7 +59,7 @@ function resolveCorsOrigin(): (string | RegExp)[] | boolean {
 /**
  * Server bind address.
  * - Default: 127.0.0.1 (localhost only)
- * - Set HOST=0.0.0.0 to listen on all interfaces (for Docker/remote)
+ * - Non-loopback HOST values fail closed until a remote authentication boundary exists.
  */
 export interface BuildProxyAppOptions {
   dataDir?: string;

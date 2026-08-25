@@ -83,7 +83,7 @@ interface ServiceCapabilitiesV1 {
 
 ### 2.5 首期信任边界
 
-- v1 控制面按当前产品形态只允许 loopback/local 单用户部署；`ai-e2e`、`ai-chat-service` 与 `proxy-adapter` 的控制路由不得直接暴露到非受信网络。
+- v1 控制面按当前产品形态只允许 loopback/local 单用户部署；proxy 与 ai-chat 的可配置启动入口必须拒绝非 loopback host，ai-e2e 固定监听 `127.0.0.1`，三者控制路由不得直接暴露到非受信网络。
 - capability、Origin 检查、lease 和幂等键都不等同于身份认证。只要需要非 loopback、远程访问或多用户共享，就必须先新增统一身份、项目/版本授权、租户隔离、审计主体和 secret 访问控制协议；在该协议验收前 semantic authoring/run 默认拒绝启动。
 - 反向代理若存在，只能位于受信本机边界内，并保持 SSE、请求体限制和不可伪造调用方身份；本文不把“有反向代理”视为已经具备 auth。
 
