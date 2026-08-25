@@ -6,13 +6,13 @@ The large checklist plan is no longer the durable tracking surface. Completed or
 
 ## Residual Items
 
-### Authentication design
+### Remote authentication design
 
 Status: `pending`
 
-The earlier audit identified global authentication as an architecture decision. No durable authentication design document was found during cleanup.
+The shipped v1 control planes are intentionally loopback-only and do not require a global authentication layer. Remote deployment remains blocked until a durable authentication, authorization, and tenant-isolation design is approved.
 
-Expected result: create a focused design comparing API key, JWT/refresh token, OAuth2, and session-based options for Fastify HTTP routes, MCP access, debug UI, and ai-e2e surfaces.
+Expected result: before enabling non-loopback control, create a focused design comparing API key, JWT/refresh token, OAuth2, and session-based options for Fastify HTTP routes, MCP access, debug UI, and ai-e2e surfaces, including tenant isolation and credential rotation.
 
 ### Action parameter type strengthening
 
@@ -21,14 +21,6 @@ Status: `pending`
 Some action execution paths may still use broad `Record<string, unknown>` parameters instead of the shared discriminated action union.
 
 Expected result: action handlers narrow by action type and use typed params without ad-hoc casts.
-
-### Shared DOM utilities extraction
-
-Status: `pending`
-
-DOM handling shared by marker injection and DOM extraction was previously identified as a duplication hotspot.
-
-Expected result: extract reusable DOM operations only if the current code still has duplicated behavior and the shared module reduces maintenance cost.
 
 ### Environment loading centralization
 
