@@ -1226,7 +1226,12 @@ export class SemanticCoordinatorService {
       const leaseId = stringValue(payload.browserLeaseId);
       const secretRef = item.secret_binding_ref ? String(item.secret_binding_ref) : undefined;
       const leaseToken = secretRef ? this.secrets.get(secretRef) : undefined;
-      if (!leaseId || !leaseToken || !session.activeLeases.some((lease) => lease.id === leaseId)) {
+      if (
+        !secretRef ||
+        !leaseId ||
+        !leaseToken ||
+        !session.activeLeases.some((lease) => lease.id === leaseId)
+      ) {
         throw new IntegrationClientError(
           'proxy-adapter',
           'lease_conflict',
@@ -1235,7 +1240,7 @@ export class SemanticCoordinatorService {
         );
       }
       await this.options.browser.closeSession(sessionId, item.id, { leaseId, leaseToken });
-      this.secrets.delete(secretRef!);
+      this.secrets.delete(secretRef);
     }
     const job = this.options.repository.getActiveBrowserJob();
     if (job && job.contextType === item.context_type && job.contextId === item.context_id) {
