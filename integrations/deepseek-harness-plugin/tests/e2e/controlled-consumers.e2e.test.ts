@@ -6,19 +6,28 @@ import { Session, SessionId } from '@deepseek-ai/dsh-session';
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt';
 import ApprovalService, { type ApprovalOutcome } from '@deepseek-ai/dsh-user-approval';
 import { createServer, type Server } from 'node:http';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp as buildProxyApp } from '../../../../proxy-adapter/src/server.js';
 import { runCli } from '../../../browser-control-client/src/cli.js';
 import { createDeepSeekBrowserPlugin } from '../../src/index.js';
 
 describe('controlled CLI and DeepSeek Harness consumers', () => {
+  const liveKitApiKey = process.env.LIVEKIT_API_KEY;
+  const liveKitApiSecret = process.env.LIVEKIT_API_SECRET;
+  let root: string;
   let proxyApp: Awaited<ReturnType<typeof buildProxyApp>>;
   let proxyUrl: string;
   let targetServer: Server;
   let targetUrl: string;
 
   beforeAll(async () => {
-    proxyApp = await buildProxyApp({ skipBackups: true });
+    delete process.env.LIVEKIT_API_KEY;
+    delete process.env.LIVEKIT_API_SECRET;
+    root = await mkdtemp(join(tmpdir(), 'nebula-controlled-consumers-'));
+    proxyApp = await buildProxyApp({ dataDir: join(root, 'proxy'), skipBackups: true });
     proxyUrl = await proxyApp.listen({ host: '127.0.0.1', port: 0 });
     targetServer = createServer((_request, response) => {
       response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
@@ -43,6 +52,9 @@ describe('controlled CLI and DeepSeek Harness consumers', () => {
     await new Promise<void>((resolve, reject) =>
       targetServer.close((error) => (error ? reject(error) : resolve()))
     );
+    await rm(root, { recursive: true, force: true });
+    restoreEnvironment('LIVEKIT_API_KEY', liveKitApiKey);
+    restoreEnvironment('LIVEKIT_API_SECRET', liveKitApiSecret);
   });
 
   it('runs CLI NDJSON through the real proxy and fails closed without --allow-act', async () => {
@@ -109,7 +121,7 @@ describe('controlled CLI and DeepSeek Harness consumers', () => {
       const observed = await execute(ctx, agent, 'nebula_browser_observe', 'observe-call', {
         operation: 'page_state',
       });
-      expect(observed.isError).toBe(false);
+      expect(observed.isError, JSON.stringify(observed)).toBe(false);
       expect(approvals).toEqual([]);
 
       const navigated = await execute(ctx, agent, 'nebula_browser_act', 'navigate-call', {
@@ -150,6 +162,11 @@ function cliIo(stdin: string) {
     stdout,
     stderr,
   };
+}
+
+function restoreEnvironment(name: string, value: string | undefined): void {
+  if (value === undefined) delete process.env[name];
+  else process.env[name] = value;
 }
 
 function createAgent(ctx: Context, id: string): Agent {

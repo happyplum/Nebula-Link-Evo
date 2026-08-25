@@ -7,38 +7,16 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildApp as buildProxyApp } from '../../src/server.js';
-import { AgentTaskRepository } from '../../../ai-chat-service/src/agent-tasks/repository.js';
-import { AgentTaskService } from '../../../ai-chat-service/src/agent-tasks/service.js';
-import type { AgentTaskExecutor } from '../../../ai-chat-service/src/agent-tasks/types.js';
-import agentTaskRoutes from '../../../ai-chat-service/src/plugins/routes/api/agent-tasks.js';
-import { AgentTaskClient } from '../../../ai-e2e/src/infrastructure/agent-task-client.js';
 import { SemanticBrowserClient } from '../../../ai-e2e/src/infrastructure/semantic-browser-client.js';
 
 describe('canonical cross-service control planes', () => {
   let root: string;
   let proxyUrl: string;
-  let aiChatUrl: string;
   let proxyApp: Awaited<ReturnType<typeof buildProxyApp>>;
-  const aiChatApp = Fastify({ logger: false });
   const targetApp = Fastify({ logger: false });
   const mcpClient = new Client({ name: 'canonical-control-plane-e2e', version: '1.0.0' });
   let mcpTransport: StreamableHTTPClientTransport;
   let targetUrl: string;
-  const repository = new AgentTaskRepository(':memory:');
-  const executor: AgentTaskExecutor = {
-    execute: async () => ({
-      output: { ok: true },
-      terminationReason: 'stop',
-      usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, modelTurns: 1, toolCalls: 0 },
-      toolCalls: [],
-    }),
-  };
-  const agentTaskService = new AgentTaskService(repository, executor, {
-    info: () => undefined,
-    warn: () => undefined,
-    error: () => undefined,
-  });
-
   beforeAll(async () => {
     root = await mkdtemp(join(tmpdir(), 'nebula-control-plane-e2e-'));
     proxyApp = await buildProxyApp({ dataDir: join(root, 'proxy'), skipBackups: true });
@@ -53,53 +31,12 @@ describe('canonical cross-service control planes', () => {
     targetUrl = await targetApp.listen({ host: '127.0.0.1', port: 0 });
     mcpTransport = new StreamableHTTPClientTransport(new URL('/mcp', proxyUrl));
     await mcpClient.connect(mcpTransport);
-    await aiChatApp.register(agentTaskRoutes, {
-      prefix: '/api/v1',
-      service: agentTaskService,
-      serviceVersion: 'e2e',
-      localControlPlane: true,
-    });
-    aiChatUrl = await aiChatApp.listen({ host: '127.0.0.1', port: 0 });
   });
 
   afterAll(async () => {
     await mcpTransport.close();
-    await Promise.all([proxyApp.close(), aiChatApp.close(), targetApp.close()]);
-    await agentTaskService.close();
+    await Promise.all([proxyApp.close(), targetApp.close()]);
     await rm(root, { recursive: true, force: true });
-  });
-
-  it('uses the canonical ai-chat-service Agent task API over real HTTP', async () => {
-    const client = new AgentTaskClient({ baseUrl: aiChatUrl, timeoutMs: 10_000 });
-    const capabilities = await client.getCapabilities();
-    expect(capabilities).toMatchObject({
-      service: 'ai-chat-service',
-      protocols: { 'nebula.ai.agent-task': { major: 1 } },
-    });
-
-    const created = await client.createTask(
-      {
-        schema: 'nebula.ai.agent-task/1.0',
-        clientTaskId: 'cross-service-e2e',
-        modelRole: 'decision',
-        input: { objective: 'verify canonical control plane' },
-        responseSchema: {
-          type: 'object',
-          properties: { ok: { type: 'boolean' } },
-          required: ['ok'],
-          additionalProperties: false,
-        },
-        toolPolicy: { allow: [] },
-        skillPolicy: { allow: [] },
-        budgets: { maxDurationMs: 10_000, maxModelTurns: 1, maxToolCalls: 0 },
-      },
-      'cross-service-agent-task'
-    );
-    const current = await client.getTask(created.taskId);
-    expect(['created', 'running', 'completed']).toContain(current.status);
-
-    const legacy = await fetch(`${aiChatUrl}/api/agent-tasks/${created.taskId}`);
-    expect(legacy.status).toBe(404);
   });
 
   it('uses the canonical proxy browser session and lease API with real Chromium', async () => {

@@ -20,3 +20,4 @@
 - [shipped] 真实 Cordis/SystemPrompt/ToolRuntime/Approval 测试覆盖注册、observe、act/拒绝态、never、跨 session 争用、稳定调用身份、脱敏及 HMR/卸载。
 - [shipped] `browser-control-client` 与 `deepseek-harness-plugin` 均提供包级 `test:coverage` 防回退门禁，并由根串行覆盖率命令进入 CI。
 - [shipped] 插件真实浏览器 E2E 使用 proxy/Chromium 与 Cordis ToolRuntime/Approval：observe 不审批，首个 act 仅在 `allowed-once` 后执行，后续 `rejected` 不触发操作，模型可见结果不含 session/tab/lease/token/sequence。
+- [shipped] ai-chat-service 真实进程 Harness E2E 通过确定性 DSH LLM adapter（不调用外部模型）驱动模型可见产品 wrapper，经 required gateway MCP 操作真实 Chromium，并在重启前后核对 durable DSH seq 与 SQLite projection watermark 一致。

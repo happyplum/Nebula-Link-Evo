@@ -261,8 +261,8 @@ debug-ui  ←──  （仅被用户消费）
 
 - 根 `pnpm test` 运行工作区测试；Windows 发布门使用串行工作区执行以避免资源竞争。
 - 根 `pnpm test:coverage` 串行运行所有声明覆盖率脚本的工作区，并由各包 `vitest.config.ts` 提供当前防回退阈值；关键状态机、授权、SSE、Vision、投影/协调器和 browser execution 仍须以 lines ≥80%、branches ≥70% 作为完整验收目标。
-- `pnpm test:e2e` 只用于真实公开入口、真实 transport 和真实 Chromium 的跨服务验证；Fastify `inject`、fake client 或直接 executor 调用只能归入单元/集成测试。
-- CI 的 Node 版本必须满足根 `engines`，并执行 frozen install、build、串行 test、coverage 与跨服务 E2E。UI Playwright 和三服务产品旅程在进入对应 CI 门禁前不得视为完整验收。
+- `pnpm test:e2e` 串行执行 proxy canonical control plane、ai-chat Agent browser loop、ai-e2e 三服务 semantic 旅程、CLI/Harness 真实消费者和 Debug UI SSE Playwright；只允许真实公开入口、真实 transport 和真实 Chromium，Fastify `inject`、fake client 或直接 executor 调用只能归入单元/集成测试。
+- CI 的 Node 版本必须满足根 `engines`，并执行 frozen install、build、串行 test、coverage 与完整根 E2E；Linux 使用 `xvfb-run` 承载所有 headed Chromium 验收。
 
 ---
 
