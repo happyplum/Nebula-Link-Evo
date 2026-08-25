@@ -17,7 +17,10 @@ export default tseslint.config(
       },
     },
     rules: {
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_', ignoreRestSiblings: true }],
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', ignoreRestSiblings: true },
+      ],
       '@typescript-eslint/explicit-function-return-type': 'off',
       '@typescript-eslint/explicit-module-boundary-types': 'off',
       '@typescript-eslint/no-explicit-any': ['warn', { fixToUnknown: true, ignoreRestArgs: false }],
@@ -37,12 +40,61 @@ export default tseslint.config(
     },
   },
   {
+    files: ['ai-chat-service/tests/**/*.ts'],
+    languageOptions: {
+      parserOptions: {
+        projectService: false,
+        project: ['./ai-chat-service/tsconfig.eslint.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+  },
+  {
     files: ['proxy-adapter/src/**/*.ts'],
     languageOptions: {
       parserOptions: {
         projectService: false,
         project: ['./proxy-adapter/tsconfig.test.json'],
         tsconfigRootDir: import.meta.dirname,
+      },
+    },
+  },
+  {
+    files: ['proxy-adapter/tests/**/*.ts'],
+    languageOptions: {
+      parserOptions: {
+        projectService: false,
+        project: ['./proxy-adapter/tsconfig.tests.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+  },
+  {
+    files: ['debug-ui/e2e/**/*.ts', 'debug-ui/playwright*.config.ts', 'debug-ui/vite.config.ts'],
+    languageOptions: {
+      parserOptions: {
+        projectService: false,
+        project: ['./debug-ui/tsconfig.playwright.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+  },
+  {
+    files: ['ai-e2e/ui/e2e/**/*.ts', 'ai-e2e/ui/playwright.config.ts'],
+    languageOptions: {
+      parserOptions: {
+        projectService: false,
+        project: ['./ai-e2e/ui/tsconfig.playwright.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+  },
+  {
+    files: ['**/*.mjs'],
+    languageOptions: {
+      globals: {
+        process: 'readonly',
+        URL: 'readonly',
       },
     },
   },
@@ -56,5 +108,5 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     },
-  },
+  }
 );

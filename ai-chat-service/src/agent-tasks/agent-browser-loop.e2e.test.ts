@@ -87,6 +87,8 @@ it('drives real proxy Chromium through the complete ai-chat-service HTTP Harness
       mode: 'control',
       ttlSeconds: 60,
     });
+    const tab = requireValue(session.tabs[0], 'Browser session must expose its initial tab');
+    const leaseToken = requireValue(issued.token, 'Control lease must include its token');
     const request = {
       schema: 'nebula.ai.agent-task/1.0' as const,
       clientTaskId: 'process-agent-browser-loop',
@@ -117,9 +119,9 @@ it('drives real proxy Chromium through the complete ai-chat-service HTTP Harness
       budgets: { maxDurationMs: 30_000, maxModelTurns: 2, maxToolCalls: 1, maxTokens: 2_000 },
       browserBinding: {
         browserSessionId: session.id,
-        tabId: session.tabs[0]!.id,
+        tabId: tab.id,
         browserLeaseId: issued.lease.id,
-        browserLeaseToken: issued.token!,
+        browserLeaseToken: leaseToken,
         browserLeaseSequence: issued.lease.sequence,
         access: 'control' as const,
       },
@@ -155,16 +157,21 @@ it('drives real proxy Chromium through the complete ai-chat-service HTTP Harness
         },
       ],
     });
-    const operationId = completed.toolCalls[0]!.operationId!;
+    const toolCall = requireValue(
+      completed.toolCalls[0],
+      'Completed task must include a tool call'
+    );
+    const operationId = requireValue(
+      toolCall.operationId,
+      'Browser tool call must persist operationId'
+    );
     await expect(browserClient.getOperation(operationId)).resolves.toMatchObject({
       operationId,
       operation: 'navigate',
       status: 'succeeded',
     });
     await expect(browserClient.getSession(session.id)).resolves.toMatchObject({
-      tabs: [
-        expect.objectContaining({ id: session.tabs[0]!.id, url: new URL(targetUrl).toString() }),
-      ],
+      tabs: [expect.objectContaining({ id: tab.id, url: new URL(targetUrl).toString() })],
     });
 
     const eventLog = await getJson<Array<{ seq: number; type: string }>>(
@@ -224,7 +231,7 @@ it('drives real proxy Chromium through the complete ai-chat-service HTTP Harness
 
     await browserClient.closeSession(session.id, 'process-agent-browser-close', {
       leaseId: issued.lease.id,
-      leaseToken: issued.token!,
+      leaseToken,
     });
   } finally {
     if (aiChatProcess) await stopChild(aiChatProcess);
@@ -395,6 +402,11 @@ async function getJson<T>(url: string): Promise<T> {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`${url} returned ${response.status}`);
   return response.json() as Promise<T>;
+}
+
+function requireValue<T>(value: T | null | undefined, message: string): T {
+  if (value === null || value === undefined) throw new Error(message);
+  return value;
 }
 
 async function availablePort(): Promise<number> {

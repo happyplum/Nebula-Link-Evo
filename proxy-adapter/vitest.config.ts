@@ -12,7 +12,7 @@ export default defineConfig({
     environment: 'node',
     include: ['src/**/*.test.ts'],
     exclude: ['src/__tests__/e2e/debug-ui/specs/**/*.e2e.test.ts'],
-    setupFiles: [],
+    setupFiles: ['./tests/vitest.setup.ts'],
     clearMocks: true,
     coverage: {
       provider: 'v8',

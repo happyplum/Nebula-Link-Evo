@@ -16,6 +16,7 @@ describe('semantic project routes', () => {
   it('atomically creates a project, deployment, PRD and unverified semantic starter graph', async () => {
     const database = DatabaseManager.getInstance();
     const app = createServer({
+      logger: false,
       semanticProjectService: new SemanticProjectService(database.getSemanticProjectRepo()),
     });
     const payload = {
@@ -83,6 +84,7 @@ describe('semantic project routes', () => {
   it('rejects idempotency drift and non-http targets', async () => {
     const database = DatabaseManager.getInstance();
     const app = createServer({
+      logger: false,
       semanticProjectService: new SemanticProjectService(database.getSemanticProjectRepo()),
     });
     const payload = {
