@@ -11,14 +11,20 @@ afterEach(async () => {
 });
 
 describe('createServer', () => {
-  it('does not expose the removed legacy project API', async () => {
+  it('does not expose any method or subresource under the removed legacy project API', async () => {
     const app = createServer();
     apps.add(app);
 
     await app.ready();
 
-    const response = await app.inject({ method: 'GET', url: '/api/projects' });
-    expect(response.statusCode).toBe(404);
+    const responses = await Promise.all([
+      app.inject({ method: 'GET', url: '/api/projects' }),
+      app.inject({ method: 'POST', url: '/api/projects', payload: {} }),
+      app.inject({ method: 'GET', url: '/api/projects/legacy-project' }),
+      app.inject({ method: 'POST', url: '/api/projects/legacy-project/runs', payload: {} }),
+    ]);
+
+    expect(responses.map(response => response.statusCode)).toEqual([404, 404, 404, 404]);
   });
 
   it('registers CORS with credentials support', async () => {

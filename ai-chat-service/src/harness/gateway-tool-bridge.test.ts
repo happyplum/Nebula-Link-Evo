@@ -24,15 +24,19 @@ function provider(): ToolProvider {
         isAvailable: true,
         execute: async () => '{"ok":true}',
       },
-      {
-        id: 'raw',
-        name: 'browser-control.operation_execute',
+      ...[
+        'browser-control.operation_execute',
+        'browser-control.operation_get',
+        'browser-control.operation_cancel',
+      ].map((name, index) => ({
+        id: `raw-${index}`,
+        name,
         description: 'must stay hidden',
         inputSchema: { type: 'object', properties: {} },
         providerId: 'fixture',
         isAvailable: true,
         execute: async () => 'unsafe',
-      },
+      })),
     ],
   };
 }
