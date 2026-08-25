@@ -821,6 +821,125 @@ describe('SemanticCoordinatorService', () => {
     expect(browser.capabilityCalls).toBe(1);
   });
 
+  it('在持久化 outbox 载荷损坏时终止派发并暂停所属运行', async () => {
+    const fixture = createFixture(db, assets);
+    const created = runs.createFormalRun({
+      projectId: 'project-1',
+      businessVersionId: fixture.versionId,
+      clientRunId: 'corrupt-outbox-run',
+      scenarioRevisionId: fixture.scenarioRevisionId,
+      deploymentRevisionId: fixture.deploymentRevisionId,
+      inputs: {},
+    });
+    evidence.enqueueOutbox({
+      id: 'corrupt-outbox',
+      context: { type: 'run', id: created.id },
+      targetService: 'proxy_adapter',
+      commandType: 'browser_session.close',
+      endpointOrTool: '/api/v1/browser-execution/sessions/:sessionId',
+      payloadRedacted: { browserSessionId: SESSION_ID },
+    });
+    db.prepare('UPDATE integration_outbox SET payload_json_redacted = ? WHERE id = ?').run(
+      '{',
+      'corrupt-outbox'
+    );
+    const coordinator = new SemanticCoordinatorService({
+      repository: new SemanticCoordinatorRepository(db),
+      workflows,
+      evidence,
+      runs,
+      agentTasks: new FakeAgentTaskClient(),
+      browser: new FakeBrowserClient(),
+      secretStore: new MemoryCoordinatorSecretStore(),
+    });
+
+    await expect(coordinator.tick()).resolves.toEqual({
+      action: 'outbox:browser_session.close',
+    });
+    expect(
+      db.prepare('SELECT status, last_error_json FROM integration_outbox WHERE id = ?').get(
+        'corrupt-outbox'
+      )
+    ).toMatchObject({ status: 'terminal_failed' });
+    expect(db.prepare('SELECT lifecycle FROM test_runs WHERE id = ?').get(created.id)).toEqual({
+      lifecycle: 'paused',
+    });
+  });
+
+  it('在浏览器作业安全边界按运行与 Authoring 生命周期派发控制命令', async () => {
+    let currentJob = {
+      id: 'job-1',
+      queueSeq: 1,
+      contextType: 'run' as const,
+      contextId: 'run-1',
+      state: 'acquiring' as const,
+    };
+    let lifecycle = 'running';
+    let settledCancellation = 0;
+    const enqueued: unknown[] = [];
+    const repository = {
+      getVerificationAmendmentToSchedule: () => null,
+      getActiveBrowserJob: () => currentJob,
+      getActivePageTask: () => null,
+      getRunLifecycle: () => lifecycle,
+      getReadyTodo: () => null,
+      getAuthoringJobLifecycle: () => lifecycle,
+      getAuthoringTask: () => null,
+    } as unknown as SemanticCoordinatorRepository;
+    const workflowPort = {
+      claimNextBrowserJob: () => null,
+      settleAuthoringCancellation: () => {
+        settledCancellation += 1;
+      },
+    } as unknown as SemanticWorkflowRepository;
+    const evidencePort = {
+      recoverDispatchingOutbox: () => 0,
+      claimNextOutbox: () => null,
+      enqueueOutbox: (command: unknown) => enqueued.push(command),
+    } as unknown as SemanticEvidenceRepository;
+    const coordinator = new SemanticCoordinatorService({
+      repository,
+      workflows: workflowPort,
+      evidence: evidencePort,
+      runs,
+      agentTasks: new FakeAgentTaskClient(),
+      browser: new FakeBrowserClient(),
+      secretStore: new MemoryCoordinatorSecretStore(),
+    });
+
+    await expect(coordinator.tick()).resolves.toEqual({ action: 'browser_session.queued' });
+
+    currentJob = {
+      ...currentJob,
+      state: 'releasing',
+    };
+    await expect(coordinator.tick()).resolves.toEqual({ action: 'idle' });
+
+    currentJob = {
+      ...currentJob,
+      state: 'active',
+      browserSessionId: SESSION_ID,
+    };
+    lifecycle = 'completed';
+    await expect(coordinator.tick()).resolves.toEqual({ action: 'browser_session.close_queued' });
+
+    currentJob = {
+      ...currentJob,
+      contextType: 'authoring',
+      contextId: 'authoring-1',
+    };
+    lifecycle = 'cancelling';
+    await expect(coordinator.tick()).resolves.toEqual({ action: 'authoring.cancelled' });
+    expect(settledCancellation).toBe(1);
+
+    lifecycle = 'waiting_decision';
+    await expect(coordinator.tick()).resolves.toEqual({ action: 'browser_session.close_queued' });
+
+    lifecycle = 'paused';
+    await expect(coordinator.tick()).resolves.toEqual({ action: 'authoring.paused' });
+    expect(enqueued).toHaveLength(4);
+  });
+
   it.each([
     ['cancelling', 'running', 'cancel'],
     ['paused', 'running', 'pause'],
