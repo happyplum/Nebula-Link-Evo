@@ -17,13 +17,14 @@
 
 ## 2. 模块清单
 
-| 模块         | 路径                                      | 状态    | 职责                                                                               |
-| ------------ | ----------------------------------------- | ------- | ---------------------------------------------------------------------------------- |
-| 线协议客户端 | `src/client.ts`、`src/mcp-tool-caller.ts` | shipped | HTTP capability/session/lease/operation/artifact；MCP execute/cancel；problem 映射 |
-| 受控会话     | `src/controlled-session.ts`               | shipped | 协议检查、显式 attach、活动 Tab、control lease、串行、轮换、ledger 恢复与清理      |
-| CLI          | `src/cli.ts`                              | shipped | JSON 低层命令、NDJSON run、交互 shell、act 门禁、稳定退出码                        |
-| 公共入口     | `src/index.ts`                            | shipped | 导出客户端、控制器、错误与公共配置类型                                             |
-| 测试门禁     | `vitest.config.ts`                        | shipped | 全包覆盖率防回退，并对 client/controlled-session 设置模块级阈值                    |
+| 模块           | 路径                                      | 状态    | 职责                                                                               |
+| -------------- | ----------------------------------------- | ------- | ---------------------------------------------------------------------------------- |
+| 线协议客户端   | `src/client.ts`、`src/mcp-tool-caller.ts` | shipped | HTTP capability/session/lease/operation/artifact；MCP execute/cancel；problem 映射 |
+| 受控会话       | `src/controlled-session.ts`               | shipped | 协议检查、显式 attach、活动 Tab、control lease、串行、轮换、ledger 恢复与清理      |
+| CLI            | `src/cli.ts`                              | shipped | JSON 低层命令、NDJSON run、交互 shell、act 门禁、稳定退出码                        |
+| 公共入口       | `src/index.ts`                            | shipped | 导出客户端、控制器、错误与公共配置类型                                             |
+| 测试门禁       | `vitest.config.ts`                        | shipped | 全包覆盖率防回退，并对 client/controlled-session 设置模块级阈值                    |
+| 真实消费者 E2E | `../deepseek-harness-plugin/tests/e2e/`   | shipped | 真实 proxy/Chromium 驱动 CLI NDJSON 并验证自动化 act 门禁与 token 脱敏             |
 
 ## 3. CLI 契约
 
@@ -44,6 +45,7 @@
 | token 脱敏、act 门禁、JSON/NDJSON              | shipped | `cli.test.ts`                                  |
 | 租约轮换、串行、稳定 operationId、未知结果恢复 | shipped | `controlled-session.test.ts`                   |
 | attach/自有 session 清理差异                   | shipped | `controlled-session.test.ts`                   |
+| CLI 真实 navigate/click/text 与失败关闭        | shipped | `controlled-consumers.e2e.test.ts`             |
 
 ## 5. 修改维护协议 [MUST-MAINTAIN]
 

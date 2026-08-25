@@ -10,3 +10,4 @@
 - [shipped] 稳定退出码为 0 成功、1 内部、2 校验、3 连接/兼容、4 领域失败、5 `outcome_unknown`。
 - [shipped] 验收覆盖 HTTP/MCP problem 映射、幂等 header、JSON/NDJSON、act 门禁、token 脱敏、租约轮换、串行、attach/自有清理和未知结果恢复。
 - [shipped] `pnpm --filter @nebula-link-evo/browser-control-client test:coverage` 提供全包覆盖率门禁，并单独约束 `client.ts` 与 `controlled-session.ts`。
+- [shipped] 真实消费者 E2E 启动 proxy/Chromium 和本地页面，通过 `nebula-browser run` 完成 navigate、click、text；缺少 `--allow-act` 时在创建 client/session 前失败关闭，stdout/stderr 不含隐藏 lease 字段。

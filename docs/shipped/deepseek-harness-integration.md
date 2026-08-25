@@ -19,3 +19,4 @@
 - [shipped] 同一 profile 不得向同 proxy 同时挂载官方通用 MCP bridge；proxy `/mcp` 本身也只发布 3 个受控 operation 工具，避免旧浏览器工具绕过包装层。
 - [shipped] 真实 Cordis/SystemPrompt/ToolRuntime/Approval 测试覆盖注册、observe、act/拒绝态、never、跨 session 争用、稳定调用身份、脱敏及 HMR/卸载。
 - [shipped] `browser-control-client` 与 `deepseek-harness-plugin` 均提供包级 `test:coverage` 防回退门禁，并由根串行覆盖率命令进入 CI。
+- [shipped] 插件真实浏览器 E2E 使用 proxy/Chromium 与 Cordis ToolRuntime/Approval：observe 不审批，首个 act 仅在 `allowed-once` 后执行，后续 `rejected` 不触发操作，模型可见结果不含 session/tab/lease/token/sequence。
