@@ -10,6 +10,7 @@ import { BusinessVersionRepository } from '../business-version-repository.js';
 import { SemanticAssetRepository } from '../semantic-asset-repository.js';
 import { hashValue } from '../semantic-repository-utils.js';
 import { SemanticWorkflowRepository } from '../semantic-workflow-repository.js';
+import { functionalScriptFixture } from '../../../test-support/functional-script-fixture.js';
 
 const HASH_A = 'a'.repeat(64);
 
@@ -311,13 +312,12 @@ describe('authoring amendment repository', () => {
       assetId: fixture.scriptId,
       businessVersionId: fixture.versionId,
       schemaId: 'nebula.ai-e2e.functional-script/1.0',
-      payload: {
-        schema: 'nebula.ai-e2e.functional-script/1.0',
+      payload: functionalScriptFixture({
         scriptKey: 'login.success',
-        functionalModuleId: fixture.module1Id,
-        pageScope: { entryPageId: fixture.page1Id, allowedTransitions: [] },
-        steps: [{ action: 'click', target: 'submit' }],
-      },
+        name: '成功登录',
+        moduleId: fixture.module1Id,
+        pageId: fixture.page1Id,
+      }),
       validationStatus: 'valid',
       changeReason: '未验证脚本候选',
       createdByType: 'child_agent',
@@ -358,13 +358,12 @@ describe('authoring amendment repository', () => {
       assetId: fixture.scriptId,
       businessVersionId: fixture.versionId,
       schemaId: 'nebula.ai-e2e.functional-script/1.0',
-      payload: {
-        schema: 'nebula.ai-e2e.functional-script/1.0',
+      payload: functionalScriptFixture({
         scriptKey: 'login.success',
-        functionalModuleId: fixture.module1Id,
-        pageScope: { entryPageId: fixture.page1Id, allowedTransitions: [] },
-        steps: [{ action: 'click', target: 'submit' }],
-      },
+        name: '成功登录',
+        moduleId: fixture.module1Id,
+        pageId: fixture.page1Id,
+      }),
       validationStatus: 'valid',
       changeReason: '已验证脚本候选',
       createdByType: 'child_agent',
@@ -534,13 +533,12 @@ function createFixture(db: DatabaseSync, versions: BusinessVersionRepository) {
     functionalModuleId: module1.id,
     scriptKey: 'login.success',
     name: '成功登录',
-    payload: {
-      schema: 'nebula.ai-e2e.functional-script/1.0',
+    payload: functionalScriptFixture({
       scriptKey: 'login.success',
-      functionalModuleId: module1.id,
-      pageScope: { entryPageId: page1.id, allowedTransitions: [] },
-      steps: [],
-    },
+      name: '成功登录',
+      moduleId: module1.id,
+      pageId: page1.id,
+    }),
     createdBy: 'system',
     readinessStatus: 'verified',
   });

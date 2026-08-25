@@ -14,6 +14,7 @@ import { hashValue } from '../../database/repositories/semantic-repository-utils
 import { SemanticRunControlRepository } from '../../database/repositories/semantic-run-control-repository.js';
 import { SemanticQueryRepository } from '../../database/repositories/semantic-query-repository.js';
 import { SemanticWorkflowRepository } from '../../database/repositories/semantic-workflow-repository.js';
+import { functionalScriptFixture } from '../../test-support/functional-script-fixture.js';
 import type {
   AgentTaskClientPort,
   AgentTaskView,
@@ -1012,15 +1013,12 @@ function createFixture(db: DatabaseSync, assets: SemanticAssetRepository) {
     functionalModuleId: module.id,
     scriptKey: 'account.view',
     name: '查看账号',
-    payload: {
-      schema: 'nebula.ai-e2e.functional-script/1.0',
+    payload: functionalScriptFixture({
       scriptKey: 'account.view',
-      functionalModuleId: module.id,
-      pageScope: { entryPageId: page.id, allowedTransitions: [] },
-      steps: [{ id: 'step_observe', action: 'observe', postconditions: [] }],
-      sideEffects: [],
-      finalAssertions: [],
-    },
+      name: '查看账号',
+      moduleId: module.id,
+      pageId: page.id,
+    }),
     createdBy: 'system',
     readinessStatus: 'verified',
   });

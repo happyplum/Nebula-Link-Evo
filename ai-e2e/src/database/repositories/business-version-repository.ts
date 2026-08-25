@@ -16,6 +16,7 @@ import type {
   ScenarioAsset,
 } from '../../types/business-version.js';
 import { collectArtifactObjectIds } from './semantic-repository-utils.js';
+import { validateFunctionalScriptV1 } from '../../validation/functional-script-validator.js';
 
 interface StatementLike {
   run(...params: unknown[]): { changes: number | bigint };
@@ -446,6 +447,17 @@ export class BusinessVersionRepository {
 
   createFunctionalScript(params: CreateFunctionalScriptParams): FunctionalScriptAsset {
     validateAssetInput(params, 'nebula.ai-e2e.functional-script/1.0');
+    validateFunctionalScriptV1(params.payload);
+    if (
+      params.payload.moduleId !== params.functionalModuleId ||
+      params.payload.scriptKey !== params.scriptKey ||
+      params.payload.name !== params.name
+    ) {
+      throw new BusinessVersionRepositoryError(
+        'validation_failed',
+        'Functional script identity fields must match its asset identity'
+      );
+    }
     const version = this.requireMutableVersion(params.businessVersionId);
     this.requireOwnedAsset(
       'semantic_functional_modules',

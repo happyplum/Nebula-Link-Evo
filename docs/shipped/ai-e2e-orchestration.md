@@ -19,4 +19,4 @@
 - [shipped] ai-e2e UI Playwright 使用动态端口、临时数据、真实 proxy、确定性 ai-chat DSH Harness、ai-e2e 服务及生产 UI bundle，覆盖首次 bootstrap 一次性、candidate 浏览器验证/激活、正式 Run、证据与 reload 恢复；该套件已纳入根 `test:e2e` 与 CI。
 - [shipped] executable amendment 先把精确 candidate revision verification 与 scope/dependency hash 持久化，再原子激活修订，最后按激活后的完整资产图写业务版本 validation；未验证候选保持 fail closed。
 - [shipped] 协调器直接消费 ai-chat-service Agent task 与 proxy-adapter browser session 的持久 event-log，使用 `external_task_links.last_external_seq` 单调游标补洞；权威快照查询继续用于获得完整终态，重启不从未知增量重建状态。
-- [tech-debt] 功能脚本完整机器 JSON Schema 尚未抽成统一 validator 包；现有创建、引用、DAG、冻结投影和授权校验继续生效。
+- [shipped] `nebula.ai-e2e.functional-script/1.0` 提供可导出的 TypeBox JSON Schema 与独立静态 validator；valid/current 创建及 AI candidate 标记为 valid 前统一拒绝旧 `functionalModuleId`、未知字段、空步骤、非法动作/断言、悬空 step/effect/input 引用和无最终断言脚本。

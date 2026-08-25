@@ -13,6 +13,7 @@ import { SemanticWorkflowRepository } from '../../../database/repositories/seman
 import { SemanticQueryService } from '../../../services/semantic-query-service.js';
 import errorHandlerPlugin from '../../plugins/error-handler.js';
 import semanticControlRoutes, { encodeSseEvent } from '../semantic-control.js';
+import { functionalScriptFixture } from '../../../test-support/functional-script-fixture.js';
 
 const HASH_A = 'a'.repeat(64);
 const HASH_B = 'b'.repeat(64);
@@ -295,13 +296,12 @@ function createFixture(db: DatabaseSync, versions: BusinessVersionRepository) {
     functionalModuleId: functionalModule.id,
     scriptKey: 'login.success',
     name: '成功登录',
-    payload: {
-      schema: 'nebula.ai-e2e.functional-script/1.0',
+    payload: functionalScriptFixture({
       scriptKey: 'login.success',
-      functionalModuleId: functionalModule.id,
-      pageScope: { entryPageId: page.id, allowedTransitions: [] },
-      steps: [],
-    },
+      name: '成功登录',
+      moduleId: functionalModule.id,
+      pageId: page.id,
+    }),
     createdBy: 'system',
     readinessStatus: 'verified',
   });

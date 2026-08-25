@@ -199,7 +199,7 @@ debug-ui  ←──  （仅被用户消费）
 - **页面锚点（in-progress）**：页面 current revision 保存不含 Origin 的 route mode/template/identity query 和唯一签名，命名 baseline variant/revision 表已交付；完整参数 Schema、运行匹配、动态参数和基线采集仍 pending。
 - **功能模块（in-progress）**：semantic v1 已有页面→业务模块→功能模块→多个稳定 FunctionalScript 身份/修订关系；公开资产 authoring 与 semantic 执行仍 pending。
 - **模块需求文档（in-progress）**：不可变 requirement revision 与逐功能点 coverage 数据基座已交付；PRD/DOM/截图融合生成和公开 authoring 接口仍 pending。
-- **功能脚本与场景（shipped）**：版本隔离的功能脚本/场景稳定身份、不可变 current revision、模块归属、场景调用引用、无环校验、结构化 Authoring、TODO/尝试与语义执行已接通；完整独立机器 Schema validator 仍为技术债。
+- **功能脚本与场景（shipped）**：版本隔离的功能脚本/场景稳定身份、不可变 current revision、模块归属、场景调用引用、无环校验、结构化 Authoring、TODO/尝试与语义执行已接通；功能脚本 valid/current 写入统一经过可导出 TypeBox JSON Schema 与独立静态引用 validator，不接受旧字段或兼容转换。
 - **业务版本（in-progress）**：用户 create/list/get、来源版本、部署/Git 标识和幂等原子 `copy` 已交付；copy 为 current PRD/变量/决策/基线/需求/coverage/dependency/semantic 资产生成新身份、重写内部引用并增加共享 blob ref count，不复制验证、运行、证据 manifest、实际数据或秘密。目标保持 `needs_recheck`。
 - **持久化（shipped）**：纯 semantic migration 001、014–018 已交付项目/资产治理、authoring/run/browser queue、decision/policy/evidence/outbox/external link/结构化 amendment 表与核心原子仓储；不读取或导入旧表。
 - **主代理 / 页面子代理（shipped）**：持久 authoring/run 状态、计划/TODO/变量、browser FIFO 和确定性协调器已接通 Agent task、短期 lease、恢复、依赖跳过与验收；任一时刻只有一个执行型页面任务。

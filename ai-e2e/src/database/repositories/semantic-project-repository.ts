@@ -243,8 +243,24 @@ export class SemanticProjectRepository {
       pageScope: { entryPageId: input.pageId, allowedTransitions: [] },
       inputs: [],
       preconditions: [],
-      steps: [{ id: 'observe-initial-page', action: { type: 'observe' }, postconditions: [] }],
-      finalAssertions: [],
+      steps: [
+        {
+          id: 'step_observe_initial_page',
+          name: '观察起始页面',
+          intent: '采集起始页面状态与证据',
+          action: { type: 'observe' },
+          postconditions: [],
+        },
+      ],
+      finalAssertions: [
+        {
+          id: 'assert_page_url',
+          kind: 'page.url',
+          expected: { kind: 'literal', value: '/' },
+          comparator: 'contains',
+          message: '起始页面 URL 可读取',
+        },
+      ],
       outputs: [],
       sideEffects: [],
     };
