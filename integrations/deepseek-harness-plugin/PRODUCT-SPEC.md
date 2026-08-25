@@ -55,5 +55,5 @@
 
 | 边界                          | 状态    | 说明                                             |
 | ----------------------------- | ------- | ------------------------------------------------ |
-| Harness 稳定版兼容            | pending | 当前基于 developer preview `0.1.1-rc.2` 精确锁定 |
+| Harness 稳定版兼容            | pending | 当前基于 developer preview `0.1.1-rc.2` 精确锁定；仅在全部直接依赖与 peer closure 发布相互兼容的非预发布版本后迁移，并按仓库规则重评 persistence patch、重建 lockfile/BOM/patch hash、复验持久化链 |
 | 秘密注入、专属 UI、远程 proxy | pending | v1 不提供                                        |
