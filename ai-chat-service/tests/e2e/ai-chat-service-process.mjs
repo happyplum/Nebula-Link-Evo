@@ -1,4 +1,5 @@
 import { CallId, LlmAdapter } from '@deepseek-ai/dsh-llm';
+import { appendFile } from 'node:fs/promises';
 import { buildApp } from '../../dist/app.js';
 import { createHarnessRuntime } from '../../dist/harness/runtime.js';
 
@@ -10,6 +11,8 @@ class DeterministicBrowserAdapter extends LlmAdapter {
   async *stream(options) {
     const isAgentTask = options.tools?.some((tool) => tool.name === 'submit_result');
     if (!isAgentTask) {
+      if (chatStartedPath) await appendFile(chatStartedPath, 'started\n', 'utf8');
+      await abortableDelay(chatDelayMs, options.signal);
       yield { type: 'block-start', index: 0, blockType: 'text' };
       yield { type: 'text-delta', index: 0, text: 'E2E assistant response' };
       yield {
@@ -40,6 +43,12 @@ class DeterministicBrowserAdapter extends LlmAdapter {
     yield { type: 'finish', reason: { kind: 'tool-calls' } };
   }
 }
+
+const chatDelayMs = Number(process.env.E2E_CHAT_DELAY_MS ?? 0);
+if (!Number.isSafeInteger(chatDelayMs) || chatDelayMs < 0 || chatDelayMs > 30_000) {
+  throw new Error('E2E_CHAT_DELAY_MS must be an integer between 0 and 30000');
+}
+const chatStartedPath = process.env.E2E_CHAT_STARTED_PATH;
 
 const configPath = requireEnvironment('AI_CHAT_E2E_CONFIG_PATH');
 const dataDir = requireEnvironment('AI_CHAT_E2E_DATA_DIR');
@@ -97,4 +106,24 @@ function requireEnvironment(name) {
   const value = process.env[name];
   if (!value) throw new Error(`${name} is required`);
   return value;
+}
+
+async function abortableDelay(delayMs, signal) {
+  if (delayMs === 0) return;
+  await new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      signal?.removeEventListener('abort', abort);
+      resolve();
+    }, delayMs);
+    const abort = () => {
+      clearTimeout(timeout);
+      signal?.removeEventListener('abort', abort);
+      reject(new DOMException(String(signal?.reason ?? 'Aborted'), 'AbortError'));
+    };
+    if (signal?.aborted) {
+      abort();
+      return;
+    }
+    signal?.addEventListener('abort', abort, { once: true });
+  });
 }

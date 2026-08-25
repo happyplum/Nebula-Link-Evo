@@ -1,7 +1,7 @@
 import Fastify from 'fastify';
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -240,6 +240,141 @@ it('drives real proxy Chromium through the complete ai-chat-service HTTP Harness
   }
 }, 90_000);
 
+it('pauses and resumes Chat at a durable checkpoint through canonical HTTP and fresh SSE snapshots', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'nebula-chat-control-process-e2e-'));
+  const proxyPort = await availablePort();
+  const proxyUrl = `http://127.0.0.1:${proxyPort}`;
+  const dataDir = join(root, 'ai-chat');
+  const chatStartedPath = join(root, 'chat-started.log');
+  const configPath = join(root, 'config.json');
+  const trustedPluginLockPath = join(root, 'trusted-harness-plugins.lock.json');
+  const proxyProcess = spawn(
+    process.execPath,
+    [fileURLToPath(new URL('../../../proxy-adapter/dist/server.js', import.meta.url))],
+    {
+      cwd: root,
+      env: {
+        ...process.env,
+        HOST: '127.0.0.1',
+        PROXY_PORT: String(proxyPort),
+        TEST_MODE: 'true',
+        LOG_LEVEL: 'error',
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    }
+  );
+  let aiChatProcess: ChildProcess | undefined;
+
+  try {
+    await mkdir(dataDir, { recursive: true });
+    await writeFile(chatStartedPath, '', 'utf8');
+    await writeFile(configPath, JSON.stringify(testConfig()), 'utf8');
+    await writeFile(trustedPluginLockPath, JSON.stringify(testPluginLock(proxyUrl)), 'utf8');
+    await waitForHttp(`${proxyUrl}/api/v1/health`, proxyProcess, 'proxy-adapter');
+    const started = await startAiChatProcess({
+      root,
+      dataDir,
+      configPath,
+      trustedPluginLockPath,
+      proxyUrl,
+      environment: {
+        E2E_CHAT_DELAY_MS: '500',
+        E2E_CHAT_STARTED_PATH: chatStartedPath,
+      },
+    });
+    aiChatProcess = started.process;
+    let currentUrl = started.url;
+    let sessionUrl = await createChatSession(currentUrl, 'Chat control E2E');
+    const initial = await readFirstSse(`${sessionUrl}/stream`);
+    expect(initial).toMatchObject({
+      event: 'session.snapshot',
+      id: 0,
+      data: { state: 'idle', messages: [] },
+    });
+
+    await postJson(`${sessionUrl}/messages`, { content: 'Pause after this response' }, 202);
+    await waitForChatStatus(sessionUrl, 'running');
+    await waitForChatStarts(chatStartedPath, 1);
+    await postJson(`${sessionUrl}/pause`, {}, 200);
+    await waitForChatStatus(sessionUrl, 'paused');
+
+    const paused = await readFirstSse(`${sessionUrl}/stream`, { 'Last-Event-ID': '999999' });
+    expect(paused).toMatchObject({
+      event: 'session.snapshot',
+      id: 0,
+      data: {
+        state: 'paused',
+        messages: expect.arrayContaining([
+          expect.objectContaining({ role: 'user', content: 'Pause after this response' }),
+          expect.objectContaining({ role: 'assistant', content: 'E2E assistant response' }),
+        ]),
+      },
+    });
+
+    await forceStopChild(aiChatProcess);
+    aiChatProcess = undefined;
+    const restarted = await startAiChatProcess({
+      root,
+      dataDir,
+      configPath,
+      trustedPluginLockPath,
+      proxyUrl,
+      environment: {
+        E2E_CHAT_DELAY_MS: '500',
+        E2E_CHAT_STARTED_PATH: chatStartedPath,
+      },
+    });
+    aiChatProcess = restarted.process;
+    currentUrl = restarted.url;
+    sessionUrl = sessionUrl.replace(started.url, currentUrl);
+    await waitForChatStatus(sessionUrl, 'paused');
+
+    await postJson(`${sessionUrl}/resume`, {}, 200);
+    await waitForChatStatus(sessionUrl, 'idle');
+    const resumed = await readFirstSse(`${sessionUrl}/stream`);
+    expect(resumed).toMatchObject({
+      event: 'session.snapshot',
+      id: 0,
+      data: {
+        state: 'idle',
+        messages: expect.arrayContaining([
+          expect.objectContaining({ role: 'assistant', content: 'E2E assistant response' }),
+        ]),
+      },
+    });
+    let expectedChatStarts = 2;
+    for (const command of ['interrupt', 'cancel'] as const) {
+      const controlledUrl = await createChatSession(currentUrl, `Chat ${command} E2E`);
+      await postJson(`${controlledUrl}/messages`, { content: `${command} this response` }, 202);
+      await waitForChatStatus(controlledUrl, 'running');
+      expectedChatStarts += 1;
+      await waitForChatStarts(chatStartedPath, expectedChatStarts);
+      await postJson(`${controlledUrl}/${command}`, {}, 200);
+      await waitForChatStatus(controlledUrl, 'completed');
+      const operations = await getJson<Array<{ operation: string; status: string }>>(
+        `${controlledUrl}/operations`
+      );
+      expect(operations).toEqual(
+        expect.arrayContaining([expect.objectContaining({ operation: command, status: 'success' })])
+      );
+      const snapshot = await readFirstSse(`${controlledUrl}/stream`);
+      const messages = snapshot.data.messages as Array<{ role: string; content: string }>;
+      expect(messages).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ role: 'assistant', content: 'E2E assistant response' }),
+        ])
+      );
+    }
+
+    expect((await fetch(`${currentUrl}/api/chat/sessions/missing`)).status).toBe(404);
+  } finally {
+    if (aiChatProcess) await stopChild(aiChatProcess);
+    await stopChild(proxyProcess);
+    await rm(root, { recursive: true, force: true });
+  }
+}, 90_000);
+
 function testConfig(): Record<string, unknown> {
   return {
     version: '2.0',
@@ -266,6 +401,13 @@ function testConfig(): Record<string, unknown> {
   };
 }
 
+async function waitForChatStarts(path: string, expectedCount: number): Promise<void> {
+  await vi.waitFor(async () => {
+    const lines = (await readFile(path, 'utf8')).split('\n').filter(Boolean);
+    expect(lines).toHaveLength(expectedCount);
+  });
+}
+
 function testPluginLock(proxyUrl: string): Record<string, unknown> {
   return {
     schema: 'nebula.ai.trusted-harness-plugins/1.0',
@@ -288,6 +430,7 @@ async function startAiChatProcess(options: {
   configPath: string;
   trustedPluginLockPath: string;
   proxyUrl: string;
+  environment?: Record<string, string>;
 }): Promise<{ process: ChildProcess; url: string; logs: () => string }> {
   const child = spawn(
     process.execPath,
@@ -303,6 +446,7 @@ async function startAiChatProcess(options: {
         E2E_TEST_API_KEY: 'deterministic-test-key',
         TEST_MODE: 'true',
         LOG_LEVEL: 'error',
+        ...options.environment,
       },
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
@@ -359,10 +503,11 @@ async function waitForTask(client: AgentTaskClient, taskId: string): Promise<Ful
 }
 
 async function readFirstSse(
-  url: string
+  url: string,
+  headers?: Record<string, string>
 ): Promise<{ event: string; id: number; data: Record<string, unknown> }> {
   const controller = new AbortController();
-  const response = await fetch(url, { signal: controller.signal });
+  const response = await fetch(url, { headers, signal: controller.signal });
   if (!response.ok || !response.body) throw new Error(`SSE request failed with ${response.status}`);
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -396,6 +541,43 @@ async function readFirstSse(
     controller.abort();
     await reader.cancel().catch(() => undefined);
   }
+}
+
+async function postJson<T = unknown>(
+  url: string,
+  body: unknown,
+  expectedStatus: number
+): Promise<T> {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (response.status !== expectedStatus) {
+    throw new Error(`${url} returned ${response.status}: ${await response.text()}`);
+  }
+  return response.json() as Promise<T>;
+}
+
+async function createChatSession(baseUrl: string, title: string): Promise<string> {
+  const created = await postJson<{ session: { id: string } }>(
+    `${baseUrl}/api/v1/chat/sessions`,
+    { title, provider: 'test', model: 'decision' },
+    201
+  );
+  return `${baseUrl}/api/v1/chat/sessions/${encodeURIComponent(created.session.id)}`;
+}
+
+async function waitForChatStatus(sessionUrl: string, expected: string): Promise<void> {
+  const deadline = Date.now() + 15_000;
+  let lastStatus = 'unknown';
+  while (Date.now() < deadline) {
+    const state = await getJson<{ status: string }>(`${sessionUrl}/status`);
+    lastStatus = state.status;
+    if (state.status === expected) return;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error(`Chat session did not reach ${expected}; last status was ${lastStatus}`);
 }
 
 async function getJson<T>(url: string): Promise<T> {
@@ -446,5 +628,12 @@ async function stopChild(child: ChildProcess): Promise<void> {
   if (child.exitCode !== null) return;
   const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()));
   child.kill('SIGTERM');
+  await exited;
+}
+
+async function forceStopChild(child: ChildProcess): Promise<void> {
+  if (child.exitCode !== null) return;
+  const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()));
+  child.kill('SIGKILL');
   await exited;
 }
