@@ -95,12 +95,11 @@ export class SemanticBrowserClient implements SemanticBrowserClientPort {
     this.timeoutMs = config.timeoutMs ?? 30_000;
     this.client = axios.create({
       baseURL: configured.replace(/\/$/, ''),
-      headers: { 'Content-Type': 'application/json' },
     });
   }
 
   async getCapabilities(): Promise<Record<string, unknown>> {
-    return this.request(() =>
+    return this.requestDirect(() =>
       this.client.get('/api/v1/capabilities', { timeout: this.timeoutMs, headers: headers() })
     );
   }
@@ -205,6 +204,14 @@ export class SemanticBrowserClient implements SemanticBrowserClientPort {
   private async request<T>(work: () => Promise<{ data: { data: T } }>): Promise<T> {
     try {
       return (await work()).data.data;
+    } catch (error) {
+      throw mapError(error);
+    }
+  }
+
+  private async requestDirect<T>(work: () => Promise<{ data: T }>): Promise<T> {
+    try {
+      return (await work()).data;
     } catch (error) {
       throw mapError(error);
     }
