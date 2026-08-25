@@ -8,6 +8,7 @@ import {
   BusinessVersionRepository,
   BusinessVersionRepositoryError,
 } from '../business-version-repository.js';
+import { functionalScriptFixture } from '../../../test-support/functional-script-fixture.js';
 
 describe('BusinessVersionRepository', () => {
   let db: DatabaseSync;
@@ -138,13 +139,12 @@ describe('BusinessVersionRepository', () => {
       functionalModuleId: functionalModule.id,
       scriptKey: 'login.success',
       name: '成功登录',
-      payload: {
-        schema: 'nebula.ai-e2e.functional-script/1.0',
+      payload: functionalScriptFixture({
         scriptKey: 'login.success',
-        functionalModuleId: functionalModule.id,
-        pageScope: { entryPageId: page.id, allowedTransitions: [] },
-        steps: [],
-      },
+        name: '成功登录',
+        moduleId: functionalModule.id,
+        pageId: page.id,
+      }),
       createdBy: 'system',
       readinessStatus: 'verified',
     });

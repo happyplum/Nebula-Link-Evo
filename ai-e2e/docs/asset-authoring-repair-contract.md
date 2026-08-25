@@ -253,7 +253,7 @@ revision 激活事务同步维护 `asset_revision_dependencies`，关系至少�
 
 ## 11. 当前实现差距
 
-- bootstrap/recheck/repair 已有持久 job/task/attempt/event、版本写锁、结构化 candidate/影响审批、真实浏览器验证、revision verification、原子激活与重启恢复；完整独立机器 Schema validator 仍为技术债。
+- bootstrap/recheck/repair 已有持久 job/task/attempt/event、版本写锁、结构化 candidate/影响审批、独立功能脚本 Schema validator、真实浏览器验证、revision verification、原子激活与重启恢复。
 - semantic 调度统一使用跨 authoring/run FIFO，并以逐 effectId 授权信封接入 ai-chat-service。
 - 生产工作台已经从权威 snapshot/SSE 呈现修订、审批与验证状态；通用资产 CRUD/手动修订接口仍未开放。
 

@@ -10,6 +10,7 @@ import { SemanticEvidenceRepository } from '../semantic-evidence-repository.js';
 import { hashValue } from '../semantic-repository-utils.js';
 import { SemanticRunControlRepository } from '../semantic-run-control-repository.js';
 import { SemanticWorkflowRepository } from '../semantic-workflow-repository.js';
+import { functionalScriptFixture } from '../../../test-support/functional-script-fixture.js';
 
 const HASH_A = 'a'.repeat(64);
 const HASH_B = 'b'.repeat(64);
@@ -410,25 +411,56 @@ function createFixture(
     functionalModuleId: functionalModule.id,
     scriptKey: 'account.action',
     name: '账号操作',
-    payload: {
-      schema: 'nebula.ai-e2e.functional-script/1.0',
+    payload: functionalScriptFixture({
       scriptKey: 'account.action',
-      functionalModuleId: functionalModule.id,
-      pageScope: { entryPageId: page.id, allowedTransitions: [] },
+      name: '账号操作',
+      moduleId: functionalModule.id,
+      pageId: page.id,
       steps: effect
-        ? [{ id: 'step_effect', action: 'click', sideEffectId: 'effect-1' }]
-        : [{ action: 'observe' }],
+        ? [
+            {
+              id: 'step_effect',
+              name: '执行账号操作',
+              intent: '执行受控副作用',
+              action: {
+                type: 'click',
+                target: {
+                  semantic: '账号操作按钮',
+                  candidates: [
+                    { strategy: 'role', role: 'button', name: { kind: 'literal', value: '提交' } },
+                  ],
+                  expected: { cardinality: 'exactly_one', visible: true, enabled: true },
+                },
+              },
+              postconditions: [],
+              sideEffectId: 'effect-1',
+            },
+          ]
+        : undefined,
       sideEffects: effect
         ? [
             {
               id: 'effect-1',
+              kind: effect.kind,
               resourceType: 'fixture',
+              identityFrom: { kind: 'literal', value: 'fixture-1' },
               affectedItems: { kind: 'single' },
+              reversibility: effect.reversibility,
+              verifyApplied: [
+                {
+                  id: 'assert_effect_applied',
+                  kind: 'page.url',
+                  expected: { kind: 'literal', value: '/' },
+                  comparator: 'contains',
+                  message: '副作用完成后页面仍可访问',
+                },
+              ],
+              retryPolicy: 'verify_before_retry',
               ...effect,
             },
           ]
-        : [],
-    },
+        : undefined,
+    }),
     createdBy: 'system',
     readinessStatus: 'verified',
   });

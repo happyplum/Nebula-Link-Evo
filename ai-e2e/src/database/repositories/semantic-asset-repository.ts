@@ -9,6 +9,7 @@ import {
   type DatabaseLike,
   type SupportedDatabase,
 } from './semantic-repository-utils.js';
+import { validateFunctionalScriptV1 } from '../../validation/functional-script-validator.js';
 
 export type SemanticAssetType =
   | 'page_definition'
@@ -171,6 +172,9 @@ export class SemanticAssetRepository {
 
   createRevision(params: CreateSemanticRevisionParams): SemanticRevisionRecord {
     assertNoInlineSecrets(params.payload);
+    if (params.assetType === 'functional_script' && params.validationStatus === 'valid') {
+      validateFunctionalScriptV1(params.payload);
+    }
     if (params.validationErrors !== undefined) assertNoInlineSecrets(params.validationErrors);
     if (params.assetType === 'page_definition') {
       if (!params.pageSignatureSha256) throw new Error('pageSignatureSha256 is required');

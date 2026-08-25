@@ -9,6 +9,7 @@ import { SemanticAssetRepository } from '../semantic-asset-repository.js';
 import { SemanticEvidenceRepository } from '../semantic-evidence-repository.js';
 import { hashValue } from '../semantic-repository-utils.js';
 import { SemanticWorkflowRepository } from '../semantic-workflow-repository.js';
+import { functionalScriptFixture } from '../../../test-support/functional-script-fixture.js';
 
 const HASH_A = 'a'.repeat(64);
 const HASH_B = 'b'.repeat(64);
@@ -127,13 +128,12 @@ describe('semantic v1 data foundation repositories', () => {
       assetId: fixture.scriptId,
       businessVersionId: fixture.versionId,
       schemaId: 'nebula.ai-e2e.functional-script/1.0',
-      payload: {
-        schema: 'nebula.ai-e2e.functional-script/1.0',
+      payload: functionalScriptFixture({
         scriptKey: 'login.success',
-        functionalModuleId: fixture.functionalModuleId,
-        pageScope: { entryPageId: fixture.pageId, allowedTransitions: [] },
-        steps: [{ action: 'click', target: 'submit' }],
-      },
+        name: '成功登录',
+        moduleId: fixture.functionalModuleId,
+        pageId: fixture.pageId,
+      }),
       validationStatus: 'valid',
       changeReason: 'repair selector',
       createdByType: 'child_agent',
@@ -610,13 +610,12 @@ function createFixture(db: DatabaseSync, versions: BusinessVersionRepository) {
     functionalModuleId: functionalModule.id,
     scriptKey: 'login.success',
     name: '成功登录',
-    payload: {
-      schema: 'nebula.ai-e2e.functional-script/1.0',
+    payload: functionalScriptFixture({
       scriptKey: 'login.success',
-      functionalModuleId: functionalModule.id,
-      pageScope: { entryPageId: page.id, allowedTransitions: [] },
-      steps: [],
-    },
+      name: '成功登录',
+      moduleId: functionalModule.id,
+      pageId: page.id,
+    }),
     createdBy: 'system',
     readinessStatus: 'verified',
   });

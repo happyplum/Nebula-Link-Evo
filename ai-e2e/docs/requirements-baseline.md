@@ -241,7 +241,7 @@
 - ai-e2e 只保留 semantic 数据、canonical `/api/v1/*`、结构化 Authoring/Run 和浏览器中心工作台，不提供旧资产、旧路由或任意脚本执行兼容。
 - 项目初始化会原子建立 deployment、业务版本、PRD、页面、模块、观察型脚本和场景，并以 bootstrap job 进入真实网页建模。
 - Agent task、Vision v2、逐 effect 授权、浏览器 FIFO、依赖传播、恢复/决策、revision verification、证据提升和原子激活已接通。
-- 完整参数 Schema/页面匹配与基线采集、独立机器 Schema validator、Agent/browser event stream 直连消费、证据自动脱敏和保留清理仍为技术债。
+- 完整参数 Schema/页面匹配与基线采集、证据自动脱敏和保留清理仍为技术债；功能脚本独立 Schema validator 与 Agent/browser 持久 event-log 游标消费已交付。
 
 ## 10. 尚待技术设计的内容
 
@@ -250,7 +250,7 @@
 - `target-data-model.md` 已锁定完整目标表与事务；纯 semantic migration、repositories、Project/Workspace/Authoring/Run API、执行协调器、策略/决策应用与生产 UI 已实现。
 - 场景调用图、运行计划、TODO、追加式修订和受控条件 payload 已锁定为 `nebula.ai-e2e.scenario/1.0` 与对应运行表；正式 JSON Schema 文件尚未生成。
 - 页面模板语法、参数类型、WHATWG URL 规范化、匹配评分、基线指纹/阈值和多部署 revision 已锁定；完整参数 Schema、运行匹配和基线采集仍待实现。
-- 语义脚本 DSL v1 已在 `semantic-script-schema.md` 锁定；实现仍需按其中能力差距扩展 proxy 原子动作并生成正式 JSON Schema 文件。
+- 语义脚本 DSL v1 已在 `semantic-script-schema.md` 锁定并生成可导出 TypeBox JSON Schema；运行投影按 proxy 当前 capability fail closed，不为缺失能力提供兼容动作。
 - 浏览器执行会话、Tab、observe/control 租约、原子操作、去重账本、结果查询、Agent task 和四类目标事件流（Authoring/Run/Agent/Browser）的 API/Schema 已在 `service-api-event-contract.md` 锁定；三服务控制面与 Authoring/Run snapshot-first SSE 已交付。v1 单 BrowserContext、单活动身份与显式串行切换已锁定，同时多身份/多 Context 及后期多 Tab 并发仍需在启用前另行设计。
 - 主代理与子代理运行时采用干净 Agent task、模型不可见短期 opaque 租约 token、hash/process epoch、主代理签发/回收和 proxy SQLite WAL 操作账本的协议已锁定；三服务数据账本已落地，正式任务包 Schema、派发/回收 runtime 与跨服务协调仍未实现。
 - 双模型调用、`vision.analyze_page`、`vision.resolve_target`、声明式 Skill manifest、版本 pin 和工具权限交集已在 `ai-model-skill-contract.md` 锁定并接入 Authoring；独立正式 JSON Schema 仍待实现。

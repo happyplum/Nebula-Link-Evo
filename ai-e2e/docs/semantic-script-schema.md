@@ -1,6 +1,6 @@
 # AI E2E 语义功能脚本 Schema v1
 
-> 状态：`shipped`。schema revision、静态结构/引用校验和运行投影已交付；完整独立 JSON Schema validator 仍为技术债。
+> 状态：`shipped`。schema revision、可导出 TypeBox JSON Schema、独立静态结构/引用校验和运行投影均已交付。
 > Schema ID：`nebula.ai-e2e.functional-script/1.0`。
 > 本文锁定首期可持久化脚本的字段、动作/断言白名单、引用规则和静态校验。数据库修订结构见 `target-data-model.md`；浏览器原子操作协议见 `agent-browser-execution-contract.md`。
 
@@ -523,12 +523,11 @@ interface PageAnchorExpression {
 
 示例故意省略后续步骤，因此不能通过完整脚本静态校验；正式脚本必须包含创建副作用、应用检查、最终断言和用户标识输出。
 
-## 16. 当前实现差距
+## 16. 当前实现边界
 
-- 当前 `scripts.content` 保存任意 TypeScript 文本，语言只限制 ts/js，没有 JSON Schema 或内容哈希。
-- 当前生成/修复提示可能产生 `test()`、`expect()`、`networkidle` 或语言标记，执行器只能在运行时失败。
-- 当前 `browser-control.*` 缺少 press、select、checked、set_files、Tab close 及统一断言操作，也没有原子操作信封。
-- 当前没有输入/输出类型校验、秘密引用、页面范围、硬断言、副作用或静态引用检查。
+- `FunctionalScriptV1Schema` 提供稳定 JSON Schema ID；独立 validator 在 valid/current 写入前执行大小、未知字段、输入/输出、页面范围、步骤、动作、断言、副作用和引用检查。
+- 旧 `functionalModuleId`、字符串 action、空步骤、无最终断言、任意代码/动作和悬空引用直接失败，不提供兼容转换。
+- 运行投影只接受 proxy-adapter 当前 capability 可执行的原子动作；契约中尚无下游能力的动作会 fail closed，不能降级为 `dom_script`。
 
 ## 17. 关联文档
 

@@ -1,6 +1,6 @@
 # 功能脚本需求契约
 
-> 状态：`shipped`。结构化脚本 revision、确定性步骤投影、副作用授权、浏览器验证与场景调用已经交付；完整 JSON Schema validator 仍按产品规格登记为技术债。
+> 状态：`shipped`。结构化脚本 revision、TypeBox JSON Schema/独立静态 validator、确定性步骤投影、副作用授权、浏览器验证与场景调用已经交付。
 
 ## 1. 定位与边界
 
@@ -120,7 +120,7 @@
 - 功能脚本是功能模块下的稳定身份，current revision 保存结构化语义步骤和副作用声明。
 - 场景通过调用 DAG 组合功能脚本，并由共享浏览器会话可视执行；不支持任意 TypeScript/JavaScript 脚本执行。
 - Run 冻结输入、输出、断言、副作用和 revision，执行尝试记录检查点、影响与证据。
-- 当前执行前校验覆盖结构、引用、DAG、冻结投影和权限；完整机器 JSON Schema validator 尚未抽成统一校验包。
+- valid/current 脚本写入与 AI candidate 标记为 valid 前统一经过 `FunctionalScriptV1Schema` 和静态引用 validator；运行前继续校验 DAG、冻结投影、scope verification 与权限交集。
 
 ## 12. 关联文档
 
