@@ -27,7 +27,9 @@
     "build": "tsc -b",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
+    "test:coverage": "vitest run --coverage",
+    "type-check:e2e": "tsc --noEmit -p tsconfig.e2e.json"
   },
   "dependencies": {
     "@deepseek-ai/cordis": "4.0.1",

@@ -17,13 +17,14 @@
 
 ## 2. 模块清单
 
-| 模块            | 路径                               | 状态    | 职责                                                              |
-| --------------- | ---------------------------------- | ------- | ----------------------------------------------------------------- |
-| Bundle manifest | `package.json`、`cordis.patch.yml` | shipped | `dsh.bundle.patch` 与 Cordis plugin row                           |
-| 插件运行时      | `src/index.ts`                     | shipped | 两工具、审批、稳定调用身份、单 owner、信号传播、脱敏、native card |
-| 运行时验证      | `src/index.test.ts`                | shipped | 真实 Cordis/SystemPrompt/ToolRuntime/Approval 组合测试            |
-| 覆盖率门禁      | `vitest.config.ts`                 | shipped | 插件运行时覆盖率防回退                                            |
-| 第三方声明      | `THIRD_PARTY_NOTICES.md`           | shipped | DeepSeek Harness/Cordis MIT 依赖声明                              |
+| 模块            | 路径                                         | 状态    | 职责                                                                      |
+| --------------- | -------------------------------------------- | ------- | ------------------------------------------------------------------------- |
+| Bundle manifest | `package.json`、`cordis.patch.yml`           | shipped | `dsh.bundle.patch` 与 Cordis plugin row                                   |
+| 插件运行时      | `src/index.ts`                               | shipped | 两工具、审批、稳定调用身份、单 owner、信号传播、脱敏、native card         |
+| 运行时验证      | `src/index.test.ts`                          | shipped | 真实 Cordis/SystemPrompt/ToolRuntime/Approval 组合测试                    |
+| 浏览器 E2E      | `tests/e2e/controlled-consumers.e2e.test.ts` | shipped | 真实 proxy/Chromium + Cordis Approval 验证 observe/act/拒绝与隐藏 binding |
+| 覆盖率门禁      | `vitest.config.ts`                           | shipped | 插件运行时覆盖率防回退                                                    |
+| 第三方声明      | `THIRD_PARTY_NOTICES.md`                     | shipped | DeepSeek Harness/Cordis MIT 依赖声明                                      |
 
 ## 3. 工具契约
 
@@ -36,13 +37,14 @@
 
 ## 4. 功能清单
 
-| 功能                                  | 状态    | 验收面                                  |
-| ------------------------------------- | ------- | --------------------------------------- |
-| 两工具注册与 observe 直通             | shipped | `index.test.ts`                         |
-| act 单次审批及全部拒绝态              | shipped | `index.test.ts`（真实 ApprovalService） |
-| 单 Harness session 占用与稳定调用 key | shipped | `index.test.ts`                         |
-| HMR/卸载清理、原生工具卡、凭证脱敏    | shipped | `index.test.ts`                         |
-| 敏感目标/参数与危险操作拒绝           | shipped | `index.test.ts` + 操作 enum             |
+| 功能                                    | 状态    | 验收面                                  |
+| --------------------------------------- | ------- | --------------------------------------- |
+| 两工具注册与 observe 直通               | shipped | `index.test.ts`                         |
+| act 单次审批及全部拒绝态                | shipped | `index.test.ts`（真实 ApprovalService） |
+| 单 Harness session 占用与稳定调用 key   | shipped | `index.test.ts`                         |
+| HMR/卸载清理、原生工具卡、凭证脱敏      | shipped | `index.test.ts`                         |
+| 敏感目标/参数与危险操作拒绝             | shipped | `index.test.ts` + 操作 enum             |
+| 真实 proxy observe、单次 act 审批与拒绝 | shipped | `controlled-consumers.e2e.test.ts`      |
 
 ## 5. 修改维护协议 [MUST-MAINTAIN]
 
