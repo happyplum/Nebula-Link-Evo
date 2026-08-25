@@ -132,10 +132,10 @@ describe('createHarnessRuntime', () => {
       await session.followup('persist me');
       await session.flush();
       const revision = await runtime.revision(id);
-      expect(revision).toBeDefined();
-      await expect(runtime.purge(id, revision!)).rejects.toThrow(/live persistence owner/);
+      if (revision === undefined) throw new Error('runtime revision must exist after flush');
+      await expect(runtime.purge(id, revision)).rejects.toThrow(/live persistence owner/);
       await session.dispose();
-      await expect(runtime.purge(id, revision!)).resolves.toBe(true);
+      await expect(runtime.purge(id, revision)).resolves.toBe(true);
       await expect(runtime.inspect(id)).rejects.toThrow(/not found/);
 
       const recreated = await runtime.openSession({

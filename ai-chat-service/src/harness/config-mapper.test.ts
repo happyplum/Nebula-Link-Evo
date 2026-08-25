@@ -97,7 +97,9 @@ describe('mapHarnessConfig', () => {
 
   it('refuses inline provider secrets', () => {
     const raw = config();
-    raw.providers.nvidia!.apiKey = 'inline-secret';
+    const nvidia = raw.providers.nvidia;
+    if (!nvidia) throw new Error('test fixture is missing the nvidia provider');
+    nvidia.apiKey = 'inline-secret';
     expect(() =>
       mapHarnessConfig(raw, {
         dataDir: '.',

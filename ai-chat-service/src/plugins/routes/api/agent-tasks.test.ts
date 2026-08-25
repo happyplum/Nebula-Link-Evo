@@ -280,11 +280,11 @@ describe('Agent task routes', () => {
     const response = await fetch(`${address}/api/v1/agent-tasks/${taskId}/events`, {
       signal: controller.signal,
     });
-    const reader = response.body!.getReader();
-    const firstChunk = await reader.read();
-
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toContain('text/event-stream');
+    if (!response.body) throw new Error('agent task SSE response must have a body');
+    const reader = response.body.getReader();
+    const firstChunk = await reader.read();
     expect(new TextDecoder().decode(firstChunk.value)).toContain('event: agent_task.snapshot');
 
     const running = await app.inject({ method: 'GET', url: `/api/v1/agent-tasks/${taskId}` });
@@ -312,7 +312,8 @@ describe('Agent task routes', () => {
     const reconnect = await fetch(`${address}/api/v1/agent-tasks/${taskId}/events`, {
       signal: reconnectController.signal,
     });
-    const reconnectReader = reconnect.body!.getReader();
+    if (!reconnect.body) throw new Error('reconnected agent task SSE response must have a body');
+    const reconnectReader = reconnect.body.getReader();
     const reconnectChunk = await reconnectReader.read();
     const reconnectText = new TextDecoder().decode(reconnectChunk.value);
     await reconnectReader.cancel();
