@@ -1,6 +1,7 @@
 import Fastify from 'fastify';
 import { expect, it, vi } from 'vitest';
 import { spawn, type ChildProcess } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -12,6 +13,7 @@ import {
 } from '../../../ai-e2e/src/infrastructure/agent-task-client.js';
 import { SemanticBrowserClient } from '../../../ai-e2e/src/infrastructure/semantic-browser-client.js';
 import { AgentTaskRepository } from './repository.js';
+import { BrowserControlClient } from '../../../integrations/browser-control-client/src/client.js';
 
 const TERMINAL_TASK_STATUSES = new Set([
   'completed',
@@ -55,14 +57,69 @@ it('drives real proxy Chromium through the complete ai-chat-service HTTP Harness
     }
   );
   let aiChatProcess: ChildProcess | undefined;
+  let controlClient: BrowserControlClient | undefined;
+  let visionRequests = 0;
 
   try {
     targetApp.get('/', async (_request, reply) =>
-      reply.type('text/html').send('<!doctype html><title>Agent target</title><h1>Ready</h1>')
+      reply
+        .type('text/html')
+        .send(
+          '<!doctype html><title>Agent target</title><h1>Ready</h1><button data-testid="submit">Submit</button>'
+        )
     );
+    targetApp.post('/v1/chat/completions', async (request) => {
+      visionRequests += 1;
+      const prompt = collectStrings(request.body).join('\n');
+      const elementId = /\[([^\]]+)\] <button> "Submit"/u.exec(prompt)?.[1];
+      if (!elementId) throw new Error('Vision request did not contain the real Submit element');
+      const content = prompt.includes('web page element matcher')
+        ? prompt.includes('Ambiguous Submit button')
+          ? {
+              nebula_id: elementId,
+              confidence: 0.9,
+              ambiguous: true,
+              reasoning: 'Two candidates appear plausible.',
+            }
+          : prompt.includes('Low confidence Submit button')
+            ? {
+                nebula_id: elementId,
+                confidence: 0.4,
+                ambiguous: false,
+                reasoning: 'The visual evidence is weak.',
+              }
+            : {
+                nebula_id: elementId,
+                confidence: 0.98,
+                ambiguous: false,
+                reasoning: 'The labeled button text is Submit.',
+              }
+        : {
+            summary: 'The fixture page is ready.',
+            notable_elements: [
+              { nebula_id: elementId, description: 'Submit button', confidence: 0.98 },
+            ],
+            risks: [],
+            reasoning: 'The screenshot and DOM evidence agree.',
+          };
+      return {
+        id: `vision-response-${visionRequests}`,
+        object: 'chat.completion',
+        created: 1,
+        model: 'vision',
+        choices: [
+          {
+            index: 0,
+            message: { role: 'assistant', content: JSON.stringify(content) },
+            finish_reason: 'stop',
+          },
+        ],
+        usage: { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 },
+      };
+    });
     const targetUrl = await targetApp.listen({ host: '127.0.0.1', port: 0 });
     await mkdir(dataDir, { recursive: true });
-    await writeFile(configPath, JSON.stringify(testConfig()), 'utf8');
+    await writeFile(configPath, JSON.stringify(testConfig(`${targetUrl}/v1`)), 'utf8');
     await writeFile(trustedPluginLockPath, JSON.stringify(testPluginLock(proxyUrl)), 'utf8');
     await waitForHttp(`${proxyUrl}/api/v1/health`, proxyProcess, 'proxy-adapter');
 
@@ -174,6 +231,156 @@ it('drives real proxy Chromium through the complete ai-chat-service HTTP Harness
       tabs: [expect.objectContaining({ id: tab.id, url: new URL(targetUrl).toString() })],
     });
 
+    controlClient = new BrowserControlClient({ baseUrl: proxyUrl, requestTimeoutMs: 30_000 });
+    const captured = await controlClient.executeOperation(
+      { sessionId: session.id, leaseId: issued.lease.id, leaseToken },
+      tab.id,
+      {
+        schema: 'nebula.browser.operation/1.0',
+        operationId: randomUUID(),
+        leaseSequence: issued.lease.sequence,
+        deadlineAt: new Date(Date.now() + 30_000).toISOString(),
+        kind: 'observe',
+        operation: 'dom_snapshot',
+        args: {},
+        presentation: { animation: 'off' },
+      }
+    );
+    expect(captured).toMatchObject({
+      status: 'succeeded',
+      kind: 'observe',
+      operation: 'dom_snapshot',
+      sessionId: session.id,
+      tabId: tab.id,
+    });
+    const domArtifact = requireValue(
+      captured.artifacts.find((artifact) => artifact.kind === 'dom_snapshot'),
+      'Real DOM snapshot operation must expose its immutable artifact'
+    );
+    const snapshotId = requireValue(
+      domArtifact.snapshotId,
+      'Real DOM snapshot artifact must expose snapshotId'
+    );
+    const binding = {
+      schema: 'nebula.vision-snapshot-binding/1.0' as const,
+      sessionId: captured.sessionId,
+      tabId: requireValue(captured.tabId, 'DOM snapshot operation must preserve tabId'),
+      operationId: captured.operationId,
+      requestHash: captured.requestHash,
+      leaseId: captured.leaseId,
+      leaseSequence: captured.leaseSequence,
+      snapshotId,
+      status: 'succeeded' as const,
+      domArtifact: {
+        artifactId: domArtifact.id,
+        sha256: domArtifact.sha256,
+        mimeType: 'application/json' as const,
+        sizeBytes: domArtifact.sizeBytes,
+      },
+    };
+    const visionRequest = {
+      schema: 'nebula.ai.agent-task/1.0' as const,
+      clientTaskId: 'process-agent-vision-loop',
+      modelRole: 'decision' as const,
+      input: {
+        objective: 'Analyze the real proxy snapshot and resolve the Submit button',
+        binding,
+      },
+      responseSchema: {
+        type: 'object',
+        properties: { status: { type: 'string', const: 'vision-verified' } },
+        required: ['status'],
+        additionalProperties: false,
+      },
+      toolPolicy: { allow: ['vision.analyze_page', 'vision.resolve_target'] },
+      skillPolicy: { allow: [] },
+      budgets: { maxDurationMs: 30_000, maxModelTurns: 3, maxToolCalls: 2, maxTokens: 2_000 },
+    };
+    const visionCreated = await agentClient.createTask(
+      visionRequest,
+      'process-agent-vision-create'
+    );
+    const visionCompleted = await waitForTask(agentClient, visionCreated.taskId);
+    if (visionCompleted.status !== 'completed') {
+      throw new Error(`Vision task failed: ${JSON.stringify(visionCompleted)}`);
+    }
+    expect(visionCompleted).toMatchObject({
+      status: 'completed',
+      output: { status: 'vision-verified' },
+      usage: { inputTokens: 15, outputTokens: 15, modelTurns: 3, toolCalls: 2 },
+      toolCalls: [
+        { toolName: 'vision.analyze_page', status: 'succeeded' },
+        { toolName: 'vision.resolve_target', status: 'succeeded' },
+      ],
+    });
+    expect(visionRequests).toBe(2);
+
+    const rejectionCases = [
+      {
+        name: 'tampered-hash',
+        expectedCode: 'VISION_SNAPSHOT_REJECTED',
+        tool: 'vision.analyze_page',
+        binding: {
+          ...binding,
+          domArtifact: { ...binding.domArtifact, sha256: '0'.repeat(64) },
+        },
+      },
+      {
+        name: 'tab-drift',
+        expectedCode: 'VISION_SNAPSHOT_REJECTED',
+        tool: 'vision.analyze_page',
+        binding: { ...binding, tabId: randomUUID() },
+      },
+      {
+        name: 'ambiguous-target',
+        expectedCode: 'VISION_TARGET_AMBIGUOUS',
+        tool: 'vision.resolve_target',
+        binding,
+      },
+      {
+        name: 'low-confidence-target',
+        expectedCode: 'VISION_TARGET_LOW_CONFIDENCE',
+        tool: 'vision.resolve_target',
+        binding,
+      },
+    ] as const;
+    for (const rejection of rejectionCases) {
+      const rejected = await agentClient.createTask(
+        {
+          schema: 'nebula.ai.agent-task/1.0',
+          clientTaskId: `process-agent-vision-${rejection.name}`,
+          modelRole: 'decision',
+          input: {
+            objective: `Prove ${rejection.name} fails closed`,
+            expectedCode: rejection.expectedCode,
+            binding: rejection.binding,
+          },
+          responseSchema: {
+            type: 'object',
+            properties: { code: { type: 'string', const: rejection.expectedCode } },
+            required: ['code'],
+            additionalProperties: false,
+          },
+          toolPolicy: { allow: [rejection.tool] },
+          skillPolicy: { allow: [] },
+          budgets: {
+            maxDurationMs: 30_000,
+            maxModelTurns: 2,
+            maxToolCalls: 1,
+            maxTokens: 2_000,
+          },
+        },
+        `process-agent-vision-${rejection.name}-create`
+      );
+      await expect(waitForTask(agentClient, rejected.taskId)).resolves.toMatchObject({
+        status: 'completed',
+        output: { code: rejection.expectedCode },
+        usage: { inputTokens: 10, outputTokens: 10, modelTurns: 2, toolCalls: 1 },
+        toolCalls: [{ toolName: rejection.tool, status: 'succeeded' }],
+      });
+    }
+    expect(visionRequests).toBe(4);
+
     const eventLog = await getJson<Array<{ seq: number; type: string }>>(
       `${aiChatUrl}/api/v1/agent-tasks/${encodeURIComponent(created.taskId)}/event-log`
     );
@@ -201,6 +408,9 @@ it('drives real proxy Chromium through the complete ai-chat-service HTTP Harness
       const projection = repository.getHarnessProjection(created.taskId);
       expect(projection.projectedDshSeq).toBeGreaterThan(0);
       expect(projection.projectedDshSeq).toBe(projection.durableDshSeq);
+      const visionProjection = repository.getHarnessProjection(visionCreated.taskId);
+      expect(visionProjection.projectedDshSeq).toBeGreaterThan(0);
+      expect(visionProjection.projectedDshSeq).toBe(visionProjection.durableDshSeq);
     } finally {
       repository.close();
     }
@@ -228,12 +438,19 @@ it('drives real proxy Chromium through the complete ai-chat-service HTTP Harness
       id: completed.eventSeq,
       data: { task: { status: 'completed', output: { status: 'navigated' } } },
     });
+    await expect(restartedClient.getTask(visionCreated.taskId)).resolves.toMatchObject({
+      taskId: visionCreated.taskId,
+      status: 'completed',
+      output: { status: 'vision-verified' },
+      eventSeq: visionCompleted.eventSeq,
+    });
 
     await browserClient.closeSession(session.id, 'process-agent-browser-close', {
       leaseId: issued.lease.id,
       leaseToken,
     });
   } finally {
+    await controlClient?.close();
     if (aiChatProcess) await stopChild(aiChatProcess);
     await Promise.all([stopChild(proxyProcess), targetApp.close()]);
     await rm(root, { recursive: true, force: true });
@@ -375,20 +592,27 @@ it('pauses and resumes Chat at a durable checkpoint through canonical HTTP and f
   }
 }, 90_000);
 
-function testConfig(): Record<string, unknown> {
+function testConfig(visionBaseUrl?: string): Record<string, unknown> {
   return {
     version: '2.0',
     providers: {
       test: {
         enabled: true,
         apiKey: '{E2E_TEST_API_KEY}',
-        baseUrl: 'http://127.0.0.1:1/v1',
+        baseUrl: visionBaseUrl ?? 'http://127.0.0.1:1/v1',
         models: {
           decision: { type: 'decision', capabilities: ['decision'], maxTokens: 2_000 },
+          ...(visionBaseUrl
+            ? { vision: { type: 'vision', capabilities: ['vision'], maxTokens: 2_000 } }
+            : {}),
         },
       },
     },
-    defaults: { mode: 'unified', decision: 'test/decision' },
+    defaults: {
+      mode: 'unified',
+      decision: 'test/decision',
+      ...(visionBaseUrl ? { vision: 'test/vision' } : {}),
+    },
     settings: {
       timeout: 30_000,
       maxRetries: 1,
@@ -399,6 +623,12 @@ function testConfig(): Record<string, unknown> {
     },
     mcp: { enabled: false, servers: {} },
   };
+}
+
+function collectStrings(value: unknown): string[] {
+  if (typeof value === 'string') return [value];
+  if (!value || typeof value !== 'object') return [];
+  return Object.values(value).flatMap(collectStrings);
 }
 
 async function waitForChatStarts(path: string, expectedCount: number): Promise<void> {

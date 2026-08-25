@@ -24,14 +24,68 @@ class DeterministicBrowserAdapter extends LlmAdapter {
       yield { type: 'finish', reason: { kind: 'stop' } };
       return;
     }
-    const browserTurn = !options.messages.some((message) =>
-      message.content.some((block) => block.type === 'tool-result')
+    const toolResults = options.messages.flatMap((message) =>
+      message.content.filter((block) => block.type === 'tool-result')
     );
-    const id = CallId(browserTurn ? 'browser-call-1' : 'submit-call-1');
-    const name = browserTurn ? 'nebula__browser_control__operation_execute' : 'submit_result';
-    const args = JSON.stringify(
-      browserTurn ? { stepId: 'navigate-target' } : { result: { status: 'navigated' } }
-    );
+    const binding = findVisionBinding(options.messages);
+    const turn = toolResults.length;
+    const toolNames = new Set(options.tools?.map((tool) => tool.name));
+    const expectedCode = findNamedString(options.messages, 'expectedCode');
+    const calls = expectedCode
+      ? [
+          expectedCode === 'VISION_SNAPSHOT_REJECTED'
+            ? {
+                name: 'nebula__vision__analyze_page',
+                args: () => ({
+                  binding: requireVisionBinding(binding),
+                  objective: 'Reject invalid immutable evidence',
+                }),
+              }
+            : {
+                name: 'nebula__vision__resolve_target',
+                args: () => ({
+                  binding: requireVisionBinding(binding),
+                  description:
+                    expectedCode === 'VISION_TARGET_AMBIGUOUS'
+                      ? 'Ambiguous Submit button'
+                      : 'Low confidence Submit button',
+                }),
+              },
+          {
+            name: 'submit_result',
+            args: () => ({ result: { code: requireVisionCode(findVisionCode(toolResults)) } }),
+          },
+        ]
+      : toolNames.has('nebula__browser_control__operation_execute')
+        ? [
+            {
+              name: 'nebula__browser_control__operation_execute',
+              args: () => ({ stepId: 'navigate-target' }),
+            },
+            { name: 'submit_result', args: () => ({ result: { status: 'navigated' } }) },
+          ]
+        : [
+            {
+              name: 'nebula__vision__analyze_page',
+              args: () => ({
+                binding: requireVisionBinding(binding),
+                objective: 'Summarize the fixture page',
+              }),
+            },
+            {
+              name: 'nebula__vision__resolve_target',
+              args: () => ({
+                binding: requireVisionBinding(binding),
+                description: 'Submit button',
+              }),
+            },
+            { name: 'submit_result', args: () => ({ result: { status: 'vision-verified' } }) },
+          ];
+    const call = calls[turn];
+    if (!call) throw new Error(`Unexpected deterministic Agent turn ${turn}`);
+    const id = CallId(`agent-call-${turn + 1}`);
+    const name = call.name;
+    const args = JSON.stringify(call.args());
     yield { type: 'block-start', index: 0, blockType: 'tool-call' };
     yield { type: 'tool-call-delta', index: 0, id, name, argumentsDelta: args };
     yield {
@@ -42,6 +96,55 @@ class DeterministicBrowserAdapter extends LlmAdapter {
     yield { type: 'usage', usage: { inputTokens: 5, outputTokens: 5 } };
     yield { type: 'finish', reason: { kind: 'tool-calls' } };
   }
+}
+
+function requireVisionBinding(binding) {
+  if (!binding) throw new Error('Real browser tool result did not expose a vision binding');
+  return binding;
+}
+
+function requireVisionCode(code) {
+  if (!code) throw new Error('Vision rejection tool result did not expose its code');
+  return code;
+}
+
+function findVisionCode(value) {
+  const code = findNamedString(value, 'code');
+  return code?.startsWith('VISION_') ? code : undefined;
+}
+
+function findNamedString(value, key) {
+  if (typeof value === 'string') {
+    try {
+      return findNamedString(JSON.parse(value), key);
+    } catch {
+      return undefined;
+    }
+  }
+  if (!value || typeof value !== 'object') return undefined;
+  if (typeof value[key] === 'string') return value[key];
+  for (const child of Array.isArray(value) ? value : Object.values(value)) {
+    const found = findNamedString(child, key);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+function findVisionBinding(value) {
+  if (typeof value === 'string') {
+    try {
+      return findVisionBinding(JSON.parse(value));
+    } catch {
+      return undefined;
+    }
+  }
+  if (!value || typeof value !== 'object') return undefined;
+  if (value.schema === 'nebula.vision-snapshot-binding/1.0') return value;
+  for (const child of Array.isArray(value) ? value : Object.values(value)) {
+    const binding = findVisionBinding(child);
+    if (binding) return binding;
+  }
+  return undefined;
 }
 
 const chatDelayMs = Number(process.env.E2E_CHAT_DELAY_MS ?? 0);

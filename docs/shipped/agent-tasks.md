@@ -23,5 +23,5 @@
 - [shipped] 浏览器调用在 dispatch 前持久化 toolCallId/operationId、canonical args/request hash、Quantity、task/Skill/budget/冻结 step 授权快照以及无 token 的 browser binding；reserved/dispatched 重启分别收敛为 interrupted/outcome_unknown，身份漂移拒绝。
 - [shipped] 通用视觉 v2 已由 `vision.analyze_page`/`vision.resolve_target` 提供并使用 `VisionSnapshotBindingV1`；所有环境均无旧视觉定位工具或 raw screenshot 适配输入。
 - [shipped] policy evaluation/风险投影 hash/active grant/effectId/参数与数量边界已在 dispatch 前与 task、Skill、budget、冻结 step、browser binding/lease 逐调用求交，并持久化 authorization snapshot。多 Skill 组合/嵌套调用不在 v1，必须由调用方拆为独立 task。
-- [shipped] 真实进程 E2E 启动 proxy-adapter、完整 ai-chat-service Harness 和 Chromium，经 canonical Agent Task HTTP、snapshot-first SSE、模型不可见浏览器 wrapper 与 MCP 完成导航；同时验证 usage/terminal event/DSH projection watermark、幂等重放、旧路径 404 和服务重启后的终态恢复。
+- [shipped] 真实进程 E2E 启动 proxy-adapter、完整 ai-chat-service Harness 和 Chromium，经 canonical Agent Task HTTP、snapshot-first SSE、模型不可见浏览器 wrapper 与 MCP 完成导航；同链读取真实 DOM artifact 并经 Vision v2 完成分析/定位及篡改、漂移、歧义、低置信度拒绝；同时验证 usage/terminal event/DSH projection watermark、幂等重放、旧路径 404 和服务重启后的终态恢复。
 - [pending] 操作动画不在本阶段；browser operation 固定注入 `animation=off`，proxy capability 仍声明 `operationPresentationAnimation=false`。
