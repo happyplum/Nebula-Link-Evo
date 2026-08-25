@@ -16,7 +16,9 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
-async function fixture(source = 'export default function (_ctx, config) { if (config.value !== "ok") throw new Error("bad config") }') {
+async function fixture(
+  source = 'export default function (_ctx, config) { if (config.value !== "ok") throw new Error("bad config") }'
+) {
   const root = await mkdtemp(join(tmpdir(), 'nebula-trusted-plugin-'));
   roots.push(root);
   const pluginRoot = join(root, 'node_modules', 'fixture-harness-plugin');
@@ -47,7 +49,9 @@ async function fixture(source = 'export default function (_ctx, config) { if (co
         package: 'fixture-harness-plugin',
         version: '1.2.3',
         export: '.',
-        entrySha256: createHash('sha256').update(await readFile(entry)).digest('hex'),
+        entrySha256: createHash('sha256')
+          .update(await readFile(entry))
+          .digest('hex'),
         treeSha256: await hashPackageTree(pluginRoot),
         config,
         configSha256: digestConfig(config),
@@ -89,7 +93,9 @@ describe('trusted Harness plugin loader', () => {
   });
 
   it('fails startup when a required plugin throws during activation', async () => {
-    const item = await fixture('export default function () { throw new Error("activation failed") }');
+    const item = await fixture(
+      'export default function () { throw new Error("activation failed") }'
+    );
     const context = new Context();
     await expect(
       loadTrustedHarnessPlugins(context, {

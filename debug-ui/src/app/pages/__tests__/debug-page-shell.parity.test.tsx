@@ -49,9 +49,7 @@ describe('DebugPage Shell Parity Test', () => {
   const renderWithProviders = (ui: React.ReactElement) => {
     return render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
-          {ui}
-        </MemoryRouter>
+        <MemoryRouter>{ui}</MemoryRouter>
       </QueryClientProvider>
     );
   };

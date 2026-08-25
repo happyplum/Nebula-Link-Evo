@@ -153,7 +153,10 @@ export class InteractionLogger {
       );
 
       writeFileSync(filePath, content, 'utf-8');
-      this.logger.error({ count: failures.length, path: filePath }, 'Interactions logged to failure file');
+      this.logger.error(
+        { count: failures.length, path: filePath },
+        'Interactions logged to failure file'
+      );
     } catch (fileError) {
       this.logger.error({ err: fileError }, 'Failed to write failure log');
     }
@@ -177,7 +180,10 @@ export class InteractionLogger {
       );
 
       writeFileSync(filePath, content, 'utf-8');
-      this.logger.error({ count: this.queue.length, path: filePath }, 'Fallback: interactions logged');
+      this.logger.error(
+        { count: this.queue.length, path: filePath },
+        'Fallback: interactions logged'
+      );
       this.queue = [];
     } catch (error) {
       this.logger.error({ err: error }, 'Fallback log failed');

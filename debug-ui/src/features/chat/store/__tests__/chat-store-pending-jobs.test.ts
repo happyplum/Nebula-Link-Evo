@@ -34,10 +34,14 @@ describe('pendingJobs State Slice', () => {
       };
 
       useChatStore.getState().addPendingJob('session-1', job);
-      useChatStore.getState().addPendingJob('session-1', { ...job, contentPreview: 'Different content' });
+      useChatStore
+        .getState()
+        .addPendingJob('session-1', { ...job, contentPreview: 'Different content' });
 
       expect(useChatStore.getState().pendingJobs['session-1']).toHaveLength(1);
-      expect(useChatStore.getState().pendingJobs['session-1'][0].contentPreview).toBe('Test content');
+      expect(useChatStore.getState().pendingJobs['session-1'][0].contentPreview).toBe(
+        'Test content'
+      );
     });
 
     it('should append job to existing jobs for same session', () => {

@@ -57,7 +57,7 @@ export function estimateToolsTokens(tools: Record<string, unknown>): number {
 export function estimateTotalInputTokens(
   systemPrompt: string,
   messages: ModelMessage[],
-  tools: Record<string, unknown>,
+  tools: Record<string, unknown>
 ): number {
   return (
     estimateTextTokens(systemPrompt) +

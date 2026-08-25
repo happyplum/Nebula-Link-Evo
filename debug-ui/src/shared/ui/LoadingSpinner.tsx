@@ -7,8 +7,8 @@ export interface LoadingSpinnerProps {
 
 export function LoadingSpinner({ size = 'md', label }: LoadingSpinnerProps) {
   return (
-    <div 
-      className={`${styles.spinner} ${styles[size]}`} 
+    <div
+      className={`${styles.spinner} ${styles[size]}`}
       role="status"
       data-testid="loading-spinner"
     >

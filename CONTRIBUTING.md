@@ -11,8 +11,12 @@
 ```bash
 pnpm install --frozen-lockfile
 pnpm build
+pnpm type-check
+pnpm lint
+pnpm format:check
 pnpm test
 pnpm test:coverage
+pnpm test:e2e
 ```
 
 运行开发环境与包级命令前，请参考 [README](README.md) 和目标包的
@@ -31,14 +35,17 @@ pnpm test:coverage
 提交 PR 前至少运行：
 
 ```bash
-pnpm exec prettier --check path/to/changed-file.ts
 pnpm build
+pnpm type-check
+pnpm lint
+pnpm format:check
 pnpm test
 pnpm test:coverage
+pnpm test:e2e
 ```
 
-根级 `pnpm lint` 和 `pnpm format:check` 仍有已登记的历史技术债；请对本次
-修改的文件运行对应包的 lint 或 Prettier 检查，且不得新增问题。
+根级 lint 与 `ai-e2e` 包级 lint 仍有已登记的 warning 技术债，但均不得出现
+error 或新增 warning；`pnpm format:check` 必须完整通过。
 
 ## 贡献授权
 

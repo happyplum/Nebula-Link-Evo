@@ -142,11 +142,7 @@ describe('debugStreamClient', () => {
     MockEventSource.instances[0]!.open();
     MockEventSource.instances[0]!.fail();
 
-    expect(listener.mock.calls).toEqual([
-      ['connecting'],
-      ['connected'],
-      ['disconnected'],
-    ]);
+    expect(listener.mock.calls).toEqual([['connecting'], ['connected'], ['disconnected']]);
     expect(debugStreamClient.getConnectionState()).toBe('disconnected');
   });
 

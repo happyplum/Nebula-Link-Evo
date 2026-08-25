@@ -1,10 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createFrameCounter } from '@nebula-link-evo/shared';
 import type { FrameCounter } from '@nebula-link-evo/shared';
-import {
-  createMjpegTransform,
-  getImageFitRect,
-} from '@/features/liveview/lib/index.js';
+import { createMjpegTransform, getImageFitRect } from '@/features/liveview/lib/index.js';
 import type { ImageFitRect } from '@/features/liveview/lib/index.js';
 import {
   selectLiveviewRefreshKey,
@@ -372,11 +369,7 @@ export function LiveViewCanvas({
   }, [className]);
 
   return (
-    <div
-      ref={containerRef}
-      className={containerClassName}
-      data-testid={testIds.liveviewCanvas}
-    >
+    <div ref={containerRef} className={containerClassName} data-testid={testIds.liveviewCanvas}>
       <canvas ref={renderCanvasRef} className={styles.renderCanvas} />
       <LiveViewOverlayLayer
         fitRect={fitRect}

@@ -61,9 +61,7 @@ describe('Accordion Parity Test', () => {
   });
 
   it('custom testId prop works', () => {
-    render(
-      <Accordion {...defaultProps} open={true} testId="custom-accordion" />
-    );
+    render(<Accordion {...defaultProps} open={true} testId="custom-accordion" />);
 
     const root = screen.getByTestId('custom-accordion');
     const header = screen.getByTestId('custom-accordion-header');

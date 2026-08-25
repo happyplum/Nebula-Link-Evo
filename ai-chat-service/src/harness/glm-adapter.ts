@@ -89,7 +89,10 @@ export class NebulaGlmLlmAdapter extends LlmAdapter {
     this.baseUrl = (options.baseUrl || DEFAULT_BASE_URL).replace(/\/$/, '');
     this.env = options.env ?? process.env;
     this.request = options.fetch ?? globalThis.fetch;
-    this.retry = resolveRetryPolicy(options.retryPolicy, `providers.${options.provider}.retryPolicy`);
+    this.retry = resolveRetryPolicy(
+      options.retryPolicy,
+      `providers.${options.provider}.retryPolicy`
+    );
   }
 
   override providerInfo(provider: string): LlmProviderInfo {
@@ -118,10 +121,16 @@ export class NebulaGlmLlmAdapter extends LlmAdapter {
     const hasImages = options.messages.some((message) => hasImage(message.content));
     const attachments = hasImages ? this.options.attachments?.() : undefined;
     if (hasImages && !model.acceptsImages) {
-      throw new LlmError(`GLM model "${options.model}" does not accept image input.`, 'UNSUPPORTED_CONTENT');
+      throw new LlmError(
+        `GLM model "${options.model}" does not accept image input.`,
+        'UNSUPPORTED_CONTENT'
+      );
     }
     if (hasImages && !attachments) {
-      throw new LlmError('GLM image input requires the durable attachment service.', 'UNSUPPORTED_CONTENT');
+      throw new LlmError(
+        'GLM image input requires the durable attachment service.',
+        'UNSUPPORTED_CONTENT'
+      );
     }
 
     const rawApiKey = this.env[this.options.apiKeyEnv]?.trim();
@@ -150,12 +159,15 @@ export class NebulaGlmLlmAdapter extends LlmAdapter {
         signal: requestDeadline.signal,
       });
       if (!response.ok) throw await providerError(response);
-      if (!response.body) throw new LlmError('GLM response has no stream body.', 'MALFORMED_RESPONSE');
+      if (!response.body)
+        throw new LlmError('GLM response has no stream body.', 'MALFORMED_RESPONSE');
       yield* translateSse(response.body, requestDeadline.signal);
     } catch (error) {
       const timedOut = timeoutOf(requestDeadline.signal, GLM_TIMEOUT_CODE);
       if (timedOut) {
-        throw new LlmError(`GLM request exceeded ${timedOut.timeoutMs}ms.`, 'TIMEOUT', { cause: error });
+        throw new LlmError(`GLM request exceeded ${timedOut.timeoutMs}ms.`, 'TIMEOUT', {
+          cause: error,
+        });
       }
       if (options.signal?.aborted || requestDeadline.signal.aborted) {
         throw new LlmError('GLM request was aborted.', 'ABORTED', { cause: error });
@@ -203,7 +215,9 @@ export function createGlmJwt(apiKey: string, nowSeconds = Math.floor(Date.now() 
   }
   const id = apiKey.slice(0, separator);
   const secret = apiKey.slice(separator + 1);
-  const header = Buffer.from(JSON.stringify({ alg: 'HS256', sign_type: 'SIGN' })).toString('base64url');
+  const header = Buffer.from(JSON.stringify({ alg: 'HS256', sign_type: 'SIGN' })).toString(
+    'base64url'
+  );
   const payload = Buffer.from(
     JSON.stringify({ api_key: id, exp: nowSeconds + 3_600, timestamp: nowSeconds })
   ).toString('base64url');
@@ -244,7 +258,10 @@ async function serializeRequest(
     const regular = message.content.filter((block) => block.type !== 'tool-result');
     const toolResults = message.content.filter((block) => block.type === 'tool-result');
     if (regular.length > 0 || toolResults.length === 0) {
-      messages.push({ role: message.role, content: await userContent(regular, attachments, signal) });
+      messages.push({
+        role: message.role,
+        content: await userContent(regular, attachments, signal),
+      });
     }
     for (const result of toolResults) {
       messages.push({
@@ -284,7 +301,8 @@ async function userContent(
   signal: AbortSignal
 ): Promise<string | Array<Record<string, unknown>>> {
   if (!hasImage(content)) return textOf(content);
-  if (!attachments) throw new LlmError('GLM image attachment store is unavailable.', 'UNSUPPORTED_CONTENT');
+  if (!attachments)
+    throw new LlmError('GLM image attachment store is unavailable.', 'UNSUPPORTED_CONTENT');
   const parts: Array<Record<string, unknown>> = [];
   for (const block of content) {
     if (block.type === 'text' && block.text) parts.push({ type: 'text', text: block.text });
@@ -296,7 +314,9 @@ async function userContent(
       );
       parts.push({
         type: 'image_url',
-        image_url: { url: `data:${image.mediaType};base64,${Buffer.from(image.data).toString('base64')}` },
+        image_url: {
+          url: `data:${image.mediaType};base64,${Buffer.from(image.data).toString('base64')}`,
+        },
       });
     }
   }
@@ -361,7 +381,8 @@ async function* ssePayloads(
       const next = await reader.read();
       if (next.done) break;
       parser.feed(decoder.decode(next.value, { stream: true }));
-      if (parseFailure) throw new LlmError(parseFailure.message, 'MALFORMED_RESPONSE', { cause: parseFailure });
+      if (parseFailure)
+        throw new LlmError(parseFailure.message, 'MALFORMED_RESPONSE', { cause: parseFailure });
       while (queue.length) {
         const payload = queue.shift()!;
         yield payload;
@@ -418,9 +439,13 @@ async function* translateSse(
     try {
       chunk = JSON.parse(payload) as WireChunk;
     } catch (error) {
-      throw new LlmError(`Malformed GLM SSE payload: ${payload.slice(0, 120)}`, 'MALFORMED_RESPONSE', {
-        cause: error,
-      });
+      throw new LlmError(
+        `Malformed GLM SSE payload: ${payload.slice(0, 120)}`,
+        'MALFORMED_RESPONSE',
+        {
+          cause: error,
+        }
+      );
     }
     for (const choice of chunk.choices ?? []) {
       const reasoning = choice.delta?.reasoning_content;

@@ -11,7 +11,10 @@ import {
   type SelectedElement,
   useControlStore,
 } from '@/features/playwright-control/store/control.store.js';
-import type { DebugMarkerEvent, DebugOverlayEvent } from '@nebula-link-evo/shared/types/debug-events';
+import type {
+  DebugMarkerEvent,
+  DebugOverlayEvent,
+} from '@nebula-link-evo/shared/types/debug-events';
 import { debugStreamClient } from '@/features/runtime/lib/debug-stream-client.js';
 import styles from './LiveViewOverlayLayer.module.css';
 
@@ -47,10 +50,7 @@ interface LiveViewOverlayLayerProps {
   onCoordinateCapture?: (coords: { x: number; y: number }) => void;
 }
 
-export function LiveViewOverlayLayer({
-  fitRect,
-  onCoordinateCapture,
-}: LiveViewOverlayLayerProps) {
+export function LiveViewOverlayLayer({ fitRect, onCoordinateCapture }: LiveViewOverlayLayerProps) {
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCtxRef = useRef<CanvasRenderingContext2D | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
@@ -377,7 +377,11 @@ export function LiveViewOverlayLayer({
         const data: DebugMarkerEvent = JSON.parse(event.data);
         const currentFitRect = fitRectRef.current;
         if (!currentFitRect) return;
-        const canvasCoords = pageToCanvasCoords(data.marker.pageX, data.marker.pageY, currentFitRect);
+        const canvasCoords = pageToCanvasCoords(
+          data.marker.pageX,
+          data.marker.pageY,
+          currentFitRect
+        );
         if (!canvasCoords) return;
         pushMarker({
           canvasX: canvasCoords.x,

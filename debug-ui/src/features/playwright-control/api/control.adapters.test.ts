@@ -68,10 +68,9 @@ describe('control.adapters', () => {
 
       const result = await evaluateExpression('document.title');
 
-      expect(mockPost).toHaveBeenCalledWith(
-        '/debug/api/playwright/evaluate',
-        { expression: 'document.title' },
-      );
+      expect(mockPost).toHaveBeenCalledWith('/debug/api/playwright/evaluate', {
+        expression: 'document.title',
+      });
       expect(result.result).toBe(42);
     });
 
@@ -97,10 +96,7 @@ describe('control.adapters', () => {
 
       const result = await takeScreenshot();
 
-      expect(mockGet).toHaveBeenCalledWith(
-        '/debug/api/playwright/screenshot',
-        undefined,
-      );
+      expect(mockGet).toHaveBeenCalledWith('/debug/api/playwright/screenshot', undefined);
       expect(result.screenshot).toBe('base64data');
       expect(result.viewport).toEqual({ width: 1280, height: 720 });
     });
@@ -120,9 +116,7 @@ describe('control.adapters', () => {
 
   describe('getElements', () => {
     it('gets elements matching selector', async () => {
-      const elements = [
-        { tag: 'button', text: 'Submit', isVisible: true, isInteractable: true },
-      ];
+      const elements = [{ tag: 'button', text: 'Submit', isVisible: true, isInteractable: true }];
       const response = { success: true, elements };
       mockGet.mockResolvedValue(response);
 

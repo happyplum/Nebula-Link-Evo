@@ -37,18 +37,18 @@ export function HealthStatusCard() {
     <div className={styles.container} data-testid={testIds.healthStatusCard}>
       <div className={styles.header}>
         <h2 className={styles.title}>服务状态</h2>
-        <StatusIndicator 
-          status={isHealthy ? 'online' : 'error'} 
-          label={isHealthy ? '正常' : '异常'} 
+        <StatusIndicator
+          status={isHealthy ? 'online' : 'error'}
+          label={isHealthy ? '正常' : '异常'}
         />
       </div>
-      
+
       <div className={styles.grid}>
         <div className={styles.item}>
           <span className={styles.label}>playwright</span>
           <div className={styles.valueRow}>
-            <StatusIndicator 
-              status={health.services.playwright === 'ok' ? 'online' : 'error'} 
+            <StatusIndicator
+              status={health.services.playwright === 'ok' ? 'online' : 'error'}
               size="sm"
             />
             <span className={styles.value}>
@@ -56,14 +56,11 @@ export function HealthStatusCard() {
             </span>
           </div>
         </div>
-        
+
         <div className={styles.item}>
           <span className={styles.label}>MCP 状态</span>
           <div className={styles.valueRow}>
-            <StatusIndicator 
-              status={health.mcp.enabled ? 'online' : 'offline'} 
-              size="sm"
-            />
+            <StatusIndicator status={health.mcp.enabled ? 'online' : 'offline'} size="sm" />
             <span className={styles.value}>
               {health.mcp.enabled ? `${health.mcp.servers.length} servers` : 'Disabled'}
             </span>

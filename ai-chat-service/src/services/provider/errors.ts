@@ -1,7 +1,7 @@
 /**
  * Union type of all provider error codes.
  */
-export type ProviderErrorCode = typeof PROVIDER_ERRORS[keyof typeof PROVIDER_ERRORS];
+export type ProviderErrorCode = (typeof PROVIDER_ERRORS)[keyof typeof PROVIDER_ERRORS];
 
 /**
  * Represents an error specific to AI provider operations.
@@ -58,11 +58,10 @@ export const BUILTIN_PROVIDERS = {
     npmPackage: '@ai-sdk/openai-compatible',
     factory: 'createOpenAICompatible',
   },
-  'openai': {
+  openai: {
     npmPackage: '@ai-sdk/openai',
     factory: 'createOpenAI',
   },
-
 } as const;
 
 /**
@@ -101,7 +100,7 @@ export function normalizeNpmPackage(raw?: string | null): string {
       throw new ProviderError(
         PROVIDER_ERRORS.CONFIG_INVALID,
         trimmed,
-        `Invalid @ai-sdk package name: "${trimmed}"`,
+        `Invalid @ai-sdk package name: "${trimmed}"`
       );
     }
     return trimmed;
@@ -115,7 +114,7 @@ export function normalizeNpmPackage(raw?: string | null): string {
   throw new ProviderError(
     PROVIDER_ERRORS.CONFIG_INVALID,
     trimmed,
-    `Invalid provider package: "${trimmed}". Must be an @ai-sdk/* package or a short name like "openai".`,
+    `Invalid provider package: "${trimmed}". Must be an @ai-sdk/* package or a short name like "openai".`
   );
 }
 
@@ -153,19 +152,11 @@ export function parseProviderModel(input: string): { provider: string; model: st
   const model = slashIndex > 0 ? trimmed.slice(slashIndex + 1).trim() : '';
 
   if (!provider) {
-    throw new ProviderError(
-      PROVIDER_ERRORS.CONFIG_INVALID,
-      'unknown',
-      'Provider name is invalid'
-    );
+    throw new ProviderError(PROVIDER_ERRORS.CONFIG_INVALID, 'unknown', 'Provider name is invalid');
   }
 
   if (!model) {
-    throw new ProviderError(
-      PROVIDER_ERRORS.CONFIG_INVALID,
-      'unknown',
-      'Model name is invalid'
-    );
+    throw new ProviderError(PROVIDER_ERRORS.CONFIG_INVALID, 'unknown', 'Model name is invalid');
   }
 
   return { provider, model };

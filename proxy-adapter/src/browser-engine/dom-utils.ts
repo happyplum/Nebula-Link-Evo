@@ -40,10 +40,7 @@ export const RELEVANT_ELEMENT_ATTRS: readonly string[] = [
  * Escape special characters in CSS selectors.
  */
 export function escapeSelector(selector: string): string {
-  return selector.replace(
-    new RegExp('([!"#$%&\'()*+,.\\/:;<=>?@[\\]^`{|}~])', 'g'),
-    '\\$1',
-  );
+  return selector.replace(new RegExp('([!"#$%&\'()*+,.\\/:;<=>?@[\\]^`{|}~])', 'g'), '\\$1');
 }
 
 /**
@@ -63,7 +60,7 @@ export function escapeXPath(value: string): string {
  * Runs inside the browser context via `element.evaluate()`.
  */
 export async function getElementAttributes(
-  element: ElementHandle,
+  element: ElementHandle
 ): Promise<Record<string, string>> {
   try {
     return await element.evaluate((el) => {
@@ -87,9 +84,7 @@ export async function getElementAttributes(
 /**
  * Filter a full attribute map down to only the relevant element attributes.
  */
-export function filterRelevantAttributes(
-  allAttrs: Record<string, string>,
-): Record<string, string> {
+export function filterRelevantAttributes(allAttrs: Record<string, string>): Record<string, string> {
   const filtered: Record<string, string> = {};
   for (const attr of RELEVANT_ELEMENT_ATTRS) {
     if (allAttrs[attr]) {
@@ -106,9 +101,7 @@ export function filterRelevantAttributes(
 /**
  * Get the lowercased tag name of an element.
  */
-export async function getElementTagName(
-  element: ElementHandle,
-): Promise<string> {
+export async function getElementTagName(element: ElementHandle): Promise<string> {
   try {
     return await element.evaluate((el) => {
       if (el instanceof Element) {
@@ -124,10 +117,7 @@ export async function getElementTagName(
 /**
  * Get trimmed text content from an element, optionally truncated.
  */
-export async function getElementText(
-  element: ElementHandle,
-  maxLength?: number,
-): Promise<string> {
+export async function getElementText(element: ElementHandle, maxLength?: number): Promise<string> {
   try {
     const text = await element.evaluate((el) => el.textContent?.trim() || '');
     return maxLength ? text.substring(0, maxLength) : text;

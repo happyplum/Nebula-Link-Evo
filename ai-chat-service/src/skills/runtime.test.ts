@@ -124,9 +124,7 @@ describe('Skills runtime', () => {
     writeFileSync(join(packageDirectory, 'instructions.md'), '被篡改的指令');
     expect(() =>
       new SkillRuntime(repository()).loadFromDirectories([root], ['vision.resolve_target'])
-    ).toThrow(
-      'contentHash does not match'
-    );
+    ).toThrow('contentHash does not match');
 
     rmSync(join(root, record.manifest.id), { recursive: true, force: true });
     const outsideSkill = join(outside, 'escape.skill');
@@ -138,9 +136,7 @@ describe('Skills runtime', () => {
     );
     expect(() =>
       new SkillRuntime(repository()).loadFromDirectories([root], ['vision.resolve_target'])
-    ).toThrow(
-      'only contain Skill directories'
-    );
+    ).toThrow('only contain Skill directories');
   });
 
   it('fails startup loading when a declared Skill tool is unavailable', () => {

@@ -35,7 +35,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function extractBlockedAgentState(error: unknown): Pick<AgentState, 'blockReason' | 'waitingFor'> | null {
+function extractBlockedAgentState(
+  error: unknown
+): Pick<AgentState, 'blockReason' | 'waitingFor'> | null {
   if (!isRecord(error)) {
     return null;
   }
@@ -198,7 +200,8 @@ export class ConversationJobQueue {
           } catch (error) {
             // Rate-limit errors — block with rate_limit reason (no retry)
             if (error instanceof ProviderError && error.code === PROVIDER_ERRORS.RATE_LIMITED) {
-              const retryAfterMs = (error.details as { retryAfterMs?: number } | undefined)?.retryAfterMs;
+              const retryAfterMs = (error.details as { retryAfterMs?: number } | undefined)
+                ?.retryAfterMs;
               await this.syncSessionState(payload.sessionId, {
                 status: 'blocked',
                 jobId: id,
@@ -305,36 +308,39 @@ export class ConversationJobQueue {
       this.sessionLocks.set(job.sessionId, lock);
     }
 
-    await lock.runExclusive(async () => {
-      if (job.status === 'cancelled') {
-        return;
-      }
+    await lock
+      .runExclusive(async () => {
+        if (job.status === 'cancelled') {
+          return;
+        }
 
-      await this.runScheduler?.wait(job.id);
+        await this.runScheduler?.wait(job.id);
 
-      job.status = 'running';
-      job.startedAt = new Date();
-      this.sessionLastActive.set(job.sessionId, Date.now());
+        job.status = 'running';
+        job.startedAt = new Date();
+        this.sessionLastActive.set(job.sessionId, Date.now());
 
-      // Emit job.started event
-      if (this.eventHub) {
-        this.eventHub.emitJobStarted(job.sessionId, job.id);
-      }
+        // Emit job.started event
+        if (this.eventHub) {
+          this.eventHub.emitJobStarted(job.sessionId, job.id);
+        }
 
-      await job.execute({ maxToolLoops: this.maxToolLoops });
+        await job.execute({ maxToolLoops: this.maxToolLoops });
 
-      job.status = 'completed';
-      job.completedAt = new Date();
+        job.status = 'completed';
+        job.completedAt = new Date();
 
-      // Emit job.completed event
-      if (this.eventHub) {
-        this.eventHub.emitJobCompleted(job.sessionId, job.id);
-      }
-    }).catch((error) => {
-      job.status = 'failed';
-      job.completedAt = new Date();
-      job.error = error instanceof Error ? error.message : String(error);
-    }).finally(() => this.runScheduler?.complete(job.id));
+        // Emit job.completed event
+        if (this.eventHub) {
+          this.eventHub.emitJobCompleted(job.sessionId, job.id);
+        }
+      })
+      .catch((error) => {
+        job.status = 'failed';
+        job.completedAt = new Date();
+        job.error = error instanceof Error ? error.message : String(error);
+      })
+      .finally(() => this.runScheduler?.complete(job.id));
 
     this.sessionLastActive.set(job.sessionId, Date.now());
   }
@@ -423,7 +429,7 @@ export class ConversationJobQueue {
       if (this.eventHub) {
         this.eventHub.emitJobCancelled(job.sessionId, jobId);
       }
-      
+
       // Clean up lock if no other jobs are queued for this session
       this.cleanupSessionLock(job.sessionId);
     }
@@ -431,9 +437,9 @@ export class ConversationJobQueue {
 
   private cleanupSessionLock(sessionId: string): void {
     const hasActiveJobs = Array.from(this.jobs.values()).some(
-      j => j.sessionId === sessionId && (j.status === 'queued' || j.status === 'running')
+      (j) => j.sessionId === sessionId && (j.status === 'queued' || j.status === 'running')
     );
-    
+
     if (!hasActiveJobs) {
       this.sessionLocks.delete(sessionId);
       this.sessionLastActive.delete(sessionId);
@@ -442,7 +448,7 @@ export class ConversationJobQueue {
 
   cleanup(): void {
     const now = Date.now();
-    
+
     // Cleanup idle session locks
     for (const [sessionId, lastActive] of this.sessionLastActive.entries()) {
       if (now - lastActive > this.maxIdleTime) {

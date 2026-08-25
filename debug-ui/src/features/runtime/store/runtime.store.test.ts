@@ -16,13 +16,10 @@ describe('runtime.store', () => {
   });
 
   describe('setPlaywrightStatus', () => {
-    it.each(['unknown', 'ready', 'unhealthy'] as const)(
-      'sets status to %s',
-      (status) => {
-        useRuntimeStore.getState().setPlaywrightStatus(status);
-        expect(useRuntimeStore.getState().playwrightStatus).toBe(status);
-      },
-    );
+    it.each(['unknown', 'ready', 'unhealthy'] as const)('sets status to %s', (status) => {
+      useRuntimeStore.getState().setPlaywrightStatus(status);
+      expect(useRuntimeStore.getState().playwrightStatus).toBe(status);
+    });
   });
 
   describe('setPlaywrightIsOpen', () => {

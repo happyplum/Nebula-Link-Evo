@@ -109,7 +109,7 @@ export function generateMarkerInjectionScript(): string {
 
       // Collect relevant attributes (list from shared dom-utils)
       const attributes = {};
-      const relevantAttrs = [${RELEVANT_ELEMENT_ATTRS.map(a => `'${a}'`).join(', ')}];
+      const relevantAttrs = [${RELEVANT_ELEMENT_ATTRS.map((a) => `'${a}'`).join(', ')}];
       relevantAttrs.forEach(attr => {
         const value = el.getAttribute(attr);
         if (value) {
@@ -200,7 +200,7 @@ export function generateMarkerInjectionScript(): string {
 export async function injectMarkers(page: Page): Promise<MarkerInjectionResult> {
   try {
     const script = generateMarkerInjectionScript();
-    const result = await page.evaluate(script) as MarkerInjectionResult;
+    const result = (await page.evaluate(script)) as MarkerInjectionResult;
     return result;
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';

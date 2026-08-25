@@ -3,10 +3,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { applyPlaywrightStatus } from '@/features/runtime/lib/apply-playwright-status.js';
 import { debugStreamClient } from '@/features/runtime/lib/debug-stream-client.js';
 import { useDebugStream } from '@/features/runtime/hooks/useDebugStream.js';
-import {
-  useRuntimeStore,
-  type ServiceStatus,
-} from '@/features/runtime/store/runtime.store.js';
+import { useRuntimeStore, type ServiceStatus } from '@/features/runtime/store/runtime.store.js';
 
 /** Debug health endpoint returns rich playwright state. */
 interface DebugHealthPlaywright {
@@ -112,7 +109,7 @@ export function useBrowserStatus(): { refreshNow: () => Promise<void> } {
         }
       }, delay);
     },
-    [pollOnce, stopPolling],
+    [pollOnce, stopPolling]
   );
 
   const refreshNow = useCallback(async () => {

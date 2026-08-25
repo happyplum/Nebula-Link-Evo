@@ -163,7 +163,13 @@ describe('canvasToPageCoords', () => {
   it('rounds page coordinates', () => {
     // 100.4 / 0.5 = 200.8 → rounds to 201
     const fit: ImageFitRect = {
-      offsetX: 0, offsetY: 0, drawW: 800, drawH: 600, scale: 0.5, imgW: 1600, imgH: 1200,
+      offsetX: 0,
+      offsetY: 0,
+      drawW: 800,
+      drawH: 600,
+      scale: 0.5,
+      imgW: 1600,
+      imgH: 1200,
     };
     const result = canvasToPageCoords(100.4, 0, fit);
     expect(result!.x).toBe(201);
@@ -172,15 +178,33 @@ describe('canvasToPageCoords', () => {
 
 describe('pageToCanvasCoords', () => {
   const exactFit: ImageFitRect = {
-    offsetX: 0, offsetY: 0, drawW: 800, drawH: 600, scale: 1, imgW: 800, imgH: 600,
+    offsetX: 0,
+    offsetY: 0,
+    drawW: 800,
+    drawH: 600,
+    scale: 1,
+    imgW: 800,
+    imgH: 600,
   };
 
   const scaledFit: ImageFitRect = {
-    offsetX: 0, offsetY: 0, drawW: 800, drawH: 600, scale: 0.5, imgW: 1600, imgH: 1200,
+    offsetX: 0,
+    offsetY: 0,
+    drawW: 800,
+    drawH: 600,
+    scale: 0.5,
+    imgW: 1600,
+    imgH: 1200,
   };
 
   const offsetFit: ImageFitRect = {
-    offsetX: 100, offsetY: 150, drawW: 600, drawH: 300, scale: 1.5, imgW: 400, imgH: 200,
+    offsetX: 100,
+    offsetY: 150,
+    drawW: 600,
+    drawH: 300,
+    scale: 1.5,
+    imgW: 400,
+    imgH: 200,
   };
 
   it('converts page origin to canvas origin', () => {
@@ -219,7 +243,13 @@ describe('pageToCanvasCoords', () => {
   it('handles non-integer page coordinates (round-trip is approximate)', () => {
     // With a non-integer scale, the round-trip may round
     const fit: ImageFitRect = {
-      offsetX: 10, offsetY: 20, drawW: 600, drawH: 400, scale: 0.6, imgW: 1000, imgH: 667,
+      offsetX: 10,
+      offsetY: 20,
+      drawW: 600,
+      drawH: 400,
+      scale: 0.6,
+      imgW: 1000,
+      imgH: 667,
     };
     const pageX = 500;
     const pageY = 333;

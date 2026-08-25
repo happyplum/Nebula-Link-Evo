@@ -195,7 +195,11 @@ describe('AgentTaskRepository', () => {
       toolName: 'browser-control.operation_execute',
       requestHash: 'a'.repeat(64),
       canonicalArgs: { stepId: 'step-1' },
-      quantity: { browserOperations: 1 as const, affectedItems: 1 as const, sideEffectUnits: 1 as const },
+      quantity: {
+        browserOperations: 1 as const,
+        affectedItems: 1 as const,
+        sideEffectUnits: 1 as const,
+      },
       authorization: { toolAllow: ['browser-control.operation_execute'] },
       browserBinding: {
         browserSessionId: 'session-1',

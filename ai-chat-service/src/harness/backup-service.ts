@@ -57,9 +57,18 @@ export class HarnessBackupService {
     try {
       await backup(this.options.conversationDb, join(temporary, 'conversations.sqlite'));
       await backup(this.options.agentTaskDb, join(temporary, 'agent-tasks.sqlite'));
-      await this.copyOptionalTree(join(this.dataDir, 'harness-sessions'), join(temporary, 'harness-sessions'));
-      await this.copyOptionalTree(join(this.dataDir, 'harness-attachments'), join(temporary, 'harness-attachments'));
-      await this.copyOptionalFile(this.options.configPath, join(temporary, 'config', basename(this.options.configPath)));
+      await this.copyOptionalTree(
+        join(this.dataDir, 'harness-sessions'),
+        join(temporary, 'harness-sessions')
+      );
+      await this.copyOptionalTree(
+        join(this.dataDir, 'harness-attachments'),
+        join(temporary, 'harness-attachments')
+      );
+      await this.copyOptionalFile(
+        this.options.configPath,
+        join(temporary, 'config', basename(this.options.configPath))
+      );
       for (const file of this.options.inventoryFiles ?? []) {
         await this.copyOptionalFile(file, join(temporary, 'inventory', basename(file)));
       }
@@ -88,7 +97,8 @@ export class HarnessBackupService {
     const manifest = JSON.parse(
       await readFile(join(canonical, 'manifest.json'), 'utf8')
     ) as BackupManifest;
-    if (manifest.schema !== 'nebula.harness-backup/1.0') throw new Error('Backup manifest is invalid');
+    if (manifest.schema !== 'nebula.harness-backup/1.0')
+      throw new Error('Backup manifest is invalid');
     for (const expected of manifest.files) {
       const file = resolve(canonical, expected.path);
       if (!isWithin(canonical, file)) throw new Error('Backup manifest path escapes its root');
@@ -143,7 +153,12 @@ export class HarnessBackupService {
       return;
     }
     await assertSafeTree(source);
-    await cp(source, target, { recursive: true, dereference: false, force: false, errorOnExist: true });
+    await cp(source, target, {
+      recursive: true,
+      dereference: false,
+      force: false,
+      errorOnExist: true,
+    });
   }
 }
 
@@ -173,7 +188,11 @@ async function hashTree(root: string): Promise<BackupFile[]> {
       if (entry.isDirectory()) pending.push(child);
       else if (entry.isFile()) {
         const bytes = await readFile(child);
-        files.push({ path: relative(root, child).replaceAll('\\', '/'), bytes: bytes.byteLength, sha256: sha256(bytes) });
+        files.push({
+          path: relative(root, child).replaceAll('\\', '/'),
+          bytes: bytes.byteLength,
+          sha256: sha256(bytes),
+        });
       }
     }
   }
@@ -186,7 +205,10 @@ function sha256(value: Uint8Array): string {
 
 function isWithin(root: string, target: string): boolean {
   const path = relative(resolve(root), resolve(target));
-  return path === '' || (path !== '..' && !path.startsWith(`..\\`) && !path.startsWith('../') && !isAbsolute(path));
+  return (
+    path === '' ||
+    (path !== '..' && !path.startsWith(`..\\`) && !path.startsWith('../') && !isAbsolute(path))
+  );
 }
 
 async function syncDirectory(path: string): Promise<void> {

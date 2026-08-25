@@ -13,7 +13,7 @@ describe('MessageBubble', () => {
     };
 
     render(<MessageBubble message={message} />);
-    
+
     const bubble = screen.getByTestId(testIds.messageBubble);
     expect(bubble).toBeInTheDocument();
     expect(bubble).toHaveAttribute('data-role', 'user');
@@ -28,7 +28,7 @@ describe('MessageBubble', () => {
     };
 
     render(<MessageBubble message={message} />);
-    
+
     const bubble = screen.getByTestId(testIds.messageBubble);
     expect(bubble).toBeInTheDocument();
     expect(bubble).toHaveAttribute('data-role', 'assistant');
@@ -44,7 +44,7 @@ describe('MessageBubble', () => {
     };
 
     render(<MessageBubble message={message} />);
-    
+
     expect(screen.getByTestId(testIds.thinkingBlock)).toBeInTheDocument();
     expect(screen.getByText('Final answer')).toBeInTheDocument();
   });
@@ -54,13 +54,11 @@ describe('MessageBubble', () => {
       id: '4',
       role: 'assistant',
       content: 'Using tool',
-      toolCalls: [
-        { id: 't1', name: 'get_weather', arguments: '{}', status: 'completed' }
-      ]
+      toolCalls: [{ id: 't1', name: 'get_weather', arguments: '{}', status: 'completed' }],
     };
 
     render(<MessageBubble message={message} />);
-    
+
     // Tool calls are rendered by ToolCallCard in MessageList, not in MessageBubble
     expect(screen.getByText('Using tool')).toBeInTheDocument();
     expect(screen.queryByText('get_weather')).not.toBeInTheDocument();

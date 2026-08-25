@@ -72,7 +72,9 @@ describe('HarnessProjectionStore', () => {
           'assistant.completed',
         ])
       );
-      expect(db.getMessagesBySession('chat-1').map((message) => [message.role, message.content])).toEqual([
+      expect(
+        db.getMessagesBySession('chat-1').map((message) => [message.role, message.content])
+      ).toEqual([
         ['user', '问题'],
         ['assistant', '回答'],
       ]);
@@ -100,9 +102,7 @@ describe('HarnessProjectionStore', () => {
     const projection = new HarnessProjectionStore(db.connection(), db.getSessionEventsDAO());
     projection.state('chat-corrupt');
     db.connection()
-      .prepare(
-        'UPDATE harness_session_projection SET projected_dsh_seq = 2 WHERE session_id = ?'
-      )
+      .prepare('UPDATE harness_session_projection SET projected_dsh_seq = 2 WHERE session_id = ?')
       .run('chat-corrupt');
     expect(() => projection.catchUp('chat-corrupt', 1, [])).toThrow(/exceeds durable DSH seq/);
   });

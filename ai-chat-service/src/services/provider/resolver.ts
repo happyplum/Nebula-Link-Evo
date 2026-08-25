@@ -24,7 +24,7 @@ interface ConfigDefaults {
  */
 export async function resolveModel(
   providerModel: string,
-  registry: ProviderRegistry,
+  registry: ProviderRegistry
 ): Promise<LanguageModelV3> {
   const { provider, model } = parseProviderModel(providerModel);
   return registry.resolve(provider, model);
@@ -34,12 +34,10 @@ export async function resolveModel(
 export async function resolveSessionModels(
   session: SessionModelFields,
   registry: ProviderRegistry,
-  defaults: ConfigDefaults,
+  defaults: ConfigDefaults
 ): Promise<ResolvedModels> {
   const decisionStr =
-    session.provider && session.model
-      ? `${session.provider}/${session.model}`
-      : defaults.decision;
+    session.provider && session.model ? `${session.provider}/${session.model}` : defaults.decision;
 
   const decision = await resolveModel(decisionStr, registry);
 

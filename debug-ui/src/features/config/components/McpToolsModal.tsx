@@ -43,11 +43,7 @@ function SchemaProp({
     <li className={styles.schemaItem}>
       <div className={styles.propHeader}>
         {hasChildren ? (
-          <button
-            type="button"
-            className={styles.propToggle}
-            onClick={() => setOpen((v) => !v)}
-          >
+          <button type="button" className={styles.propToggle} onClick={() => setOpen((v) => !v)}>
             {open ? '▼' : '▶'}
           </button>
         ) : (
@@ -59,47 +55,28 @@ function SchemaProp({
           {isRequired && <span className={styles.required}>*</span>}
         </span>
 
-        {prop.type && (
-          <span className={styles.propType}>{prop.type}</span>
-        )}
+        {prop.type && <span className={styles.propType}>{prop.type}</span>}
 
-        {prop.enum && (
-          <span className={styles.propEnum}>
-            {prop.enum.join(' | ')}
-          </span>
-        )}
+        {prop.enum && <span className={styles.propEnum}>{prop.enum.join(' | ')}</span>}
 
         {prop.default !== undefined && (
-          <span className={styles.propDefault}>
-            = {JSON.stringify(prop.default)}
-          </span>
+          <span className={styles.propDefault}>= {JSON.stringify(prop.default)}</span>
         )}
       </div>
 
-      {prop.description && (
-        <div className={styles.propDesc}>{prop.description}</div>
-      )}
+      {prop.description && <div className={styles.propDesc}>{prop.description}</div>}
 
       {open && prop.type === 'object' && prop.properties && (
         <ul className={`${styles.schemaList} ${styles.indent}`}>
           {Object.entries(prop.properties).map(([k, v]) => (
-            <SchemaProp
-              key={k}
-              name={k}
-              prop={v}
-              isRequired={nestedRequired.has(k)}
-            />
+            <SchemaProp key={k} name={k} prop={v} isRequired={nestedRequired.has(k)} />
           ))}
         </ul>
       )}
 
       {open && prop.type === 'array' && prop.items && (
         <ul className={`${styles.schemaList} ${styles.indent}`}>
-          <SchemaProp
-            name="[items]"
-            prop={prop.items}
-            isRequired={false}
-          />
+          <SchemaProp name="[items]" prop={prop.items} isRequired={false} />
         </ul>
       )}
 
@@ -108,11 +85,7 @@ function SchemaProp({
           <span className={styles.propUnionLabel}>anyOf:</span>
           {prop.anyOf.map((variant, i) => (
             <div key={i} className={styles.propUnionVariant}>
-              <SchemaProp
-                name={`variant ${i + 1}`}
-                prop={variant}
-                isRequired={false}
-              />
+              <SchemaProp name={`variant ${i + 1}`} prop={variant} isRequired={false} />
             </div>
           ))}
         </div>
@@ -140,8 +113,7 @@ export function McpToolsModal({ serverName, onClose }: McpToolsModalProps) {
   } | null>(null);
 
   const serverTools = useMemo(
-    () =>
-      mcpTools?.tools.filter((t) => serverName && t.name.startsWith(`${serverName}.`)) ?? [],
+    () => mcpTools?.tools.filter((t) => serverName && t.name.startsWith(`${serverName}.`)) ?? [],
     [mcpTools, serverName]
   );
 
@@ -310,9 +282,7 @@ function RawSchemaToggle({ inputSchema }: { inputSchema?: McpTool['inputSchema']
       title="原始 Schema"
       testId="raw-schema"
     >
-      <pre className={styles.rawSchemaContent}>
-        {JSON.stringify(inputSchema, null, 2)}
-      </pre>
+      <pre className={styles.rawSchemaContent}>{JSON.stringify(inputSchema, null, 2)}</pre>
     </Accordion>
   );
 }

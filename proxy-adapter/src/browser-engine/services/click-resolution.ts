@@ -32,7 +32,9 @@ export class ClickResolutionService {
     try {
       if (target.nebula_id) {
         nebulaId = target.nebula_id;
-        element = await this.page.locator(`[data-nebula-id="${target.nebula_id}"]`).elementHandle({ timeout: 1000 });
+        element = await this.page
+          .locator(`[data-nebula-id="${target.nebula_id}"]`)
+          .elementHandle({ timeout: 1000 });
       } else if (target.selector) {
         element = await this.page.locator(target.selector).elementHandle({ timeout: 1000 });
       }
@@ -59,7 +61,17 @@ export class ClickResolutionService {
   /**
    * Build locator array in priority order: nebula-id > role > testid > aria > text > css > xpath
    */
-  private buildLocatorArray(bundle: { role?: string; testid?: string; aria?: string; text?: string; css?: string; xpath?: string }, nebulaId?: string): string[] {
+  private buildLocatorArray(
+    bundle: {
+      role?: string;
+      testid?: string;
+      aria?: string;
+      text?: string;
+      css?: string;
+      xpath?: string;
+    },
+    nebulaId?: string
+  ): string[] {
     const locators: string[] = [];
 
     // Always prefer data-nebula-id locator for precision

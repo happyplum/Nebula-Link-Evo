@@ -10,9 +10,7 @@ export interface MarkdownRendererProps {
 export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(({ content }) => {
   return (
     <div className={styles.markdownBody}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>
-        {content}
-      </ReactMarkdown>
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
     </div>
   );
 });

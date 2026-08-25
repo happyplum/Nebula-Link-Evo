@@ -59,11 +59,9 @@ describe('parseProviderModel', () => {
 
 describe('ProviderError', () => {
   it('creates error with correct properties', () => {
-    const error = new ProviderError(
-      PROVIDER_ERRORS.NOT_FOUND,
-      'test-provider',
-      { reason: 'Model not found' }
-    );
+    const error = new ProviderError(PROVIDER_ERRORS.NOT_FOUND, 'test-provider', {
+      reason: 'Model not found',
+    });
 
     expect(error).toBeInstanceOf(Error);
     expect(error.message).toBe('Provider Error');
@@ -73,11 +71,9 @@ describe('ProviderError', () => {
   });
 
   it('serializes with details property', () => {
-    const error = new ProviderError(
-      PROVIDER_ERRORS.INSTALL_FAILED,
-      'glm',
-      { npmPackage: 'missing-package' }
-    );
+    const error = new ProviderError(PROVIDER_ERRORS.INSTALL_FAILED, 'glm', {
+      npmPackage: 'missing-package',
+    });
 
     const stringified = JSON.stringify(error);
     expect(stringified).toContain('npmPackage');

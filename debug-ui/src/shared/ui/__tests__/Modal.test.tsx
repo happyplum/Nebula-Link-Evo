@@ -32,7 +32,7 @@ describe('Modal', () => {
         <div>Modal Content</div>
       </Modal>
     );
-    
+
     fireEvent.click(screen.getByTestId(testIds.modalOverlay));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -44,7 +44,7 @@ describe('Modal', () => {
         <div>Modal Content</div>
       </Modal>
     );
-    
+
     fireEvent.click(screen.getByTestId(testIds.modalContent));
     expect(onClose).not.toHaveBeenCalled();
   });
@@ -56,7 +56,7 @@ describe('Modal', () => {
         <div>Modal Content</div>
       </Modal>
     );
-    
+
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledTimes(1);
   });

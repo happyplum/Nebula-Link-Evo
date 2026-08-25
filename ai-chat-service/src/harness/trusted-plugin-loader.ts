@@ -90,7 +90,9 @@ export async function loadTrustedHarnessPlugins(
       plugin.package
     );
     if (packageJson.name !== plugin.package || packageJson.version !== plugin.version) {
-      throw new Error(`Trusted Harness plugin ${plugin.package} installed package identity mismatch`);
+      throw new Error(
+        `Trusted Harness plugin ${plugin.package} installed package identity mismatch`
+      );
     }
     assertWithin(packageRoot, resolvedEntry, `plugin entry ${plugin.package}`);
     if ((await hashFile(resolvedEntry)) !== plugin.entrySha256) {
@@ -233,8 +235,10 @@ function assertMcpLock(
   const expected = new Map(
     lock.map((entry) => [entry.serverName, canonicalJson(resolveMcpLockEntry(entry, env))])
   );
-  if (expected.size !== lock.length) throw new Error('Trusted MCP lock contains duplicate server names');
-  if (runtime.length !== lock.length) throw new Error('Runtime MCP composition differs from trusted lock');
+  if (expected.size !== lock.length)
+    throw new Error('Trusted MCP lock contains duplicate server names');
+  if (runtime.length !== lock.length)
+    throw new Error('Runtime MCP composition differs from trusted lock');
   for (const server of runtime) {
     const locked =
       server.transport === 'stdio'
@@ -292,12 +296,16 @@ async function findPackageRoot(entry: string, expectedName: string): Promise<str
       }
     }
     const parent = dirname(current);
-    if (parent === current) throw new Error(`Cannot locate installed package root for ${expectedName}`);
+    if (parent === current)
+      throw new Error(`Cannot locate installed package root for ${expectedName}`);
     current = parent;
   }
 }
 
-function parsePackageJson(value: unknown, label: string): {
+function parsePackageJson(
+  value: unknown,
+  label: string
+): {
   name?: string;
   version?: string;
   dependencies?: Record<string, string>;
@@ -347,7 +355,9 @@ function resolveMcpLockEntry(
       Object.entries(values).map(([key, value]) => {
         const name = /^\{([A-Za-z_][A-Za-z0-9_]*)\}$/u.exec(value)?.[1];
         if (!name || !env[name]) {
-          throw new Error(`Trusted MCP ${entry.serverName} environment binding ${value} is unavailable`);
+          throw new Error(
+            `Trusted MCP ${entry.serverName} environment binding ${value} is unavailable`
+          );
         }
         return [key, env[name]!];
       })
@@ -382,7 +392,9 @@ function isStringRecord(value: unknown): value is Record<string, string> {
 }
 
 async function hashFile(path: string): Promise<string> {
-  return createHash('sha256').update(await readFile(path)).digest('hex');
+  return createHash('sha256')
+    .update(await readFile(path))
+    .digest('hex');
 }
 
 function assertWithin(root: string, target: string, label: string): void {

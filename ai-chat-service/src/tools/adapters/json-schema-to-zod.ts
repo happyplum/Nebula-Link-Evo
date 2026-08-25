@@ -16,7 +16,11 @@ export function jsonPropertyToZod(prop: unknown): z.ZodTypeAny {
 
   const def = prop as JsonSchemaProperty;
 
-  if (Array.isArray(def.enum) && def.enum.length > 0 && def.enum.every((v) => typeof v === 'string')) {
+  if (
+    Array.isArray(def.enum) &&
+    def.enum.length > 0 &&
+    def.enum.every((v) => typeof v === 'string')
+  ) {
     return z.string().refine((v) => (def.enum as string[]).includes(v), {
       message: `Expected one of: ${(def.enum as string[]).join(', ')}`,
     });

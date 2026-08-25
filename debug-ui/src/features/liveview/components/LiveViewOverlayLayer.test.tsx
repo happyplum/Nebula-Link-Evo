@@ -10,49 +10,51 @@ global.ResizeObserver = class ResizeObserver {
 } as any;
 
 // Use vi.hoisted so values are available inside vi.mock factories (which are hoisted to top)
-const { mockSubscribe, mockMarkerUnsub, mockOverlayUnsub, mockUseControlStoreState } = vi.hoisted(() => {
-  const markerUnsub = vi.fn();
-  const overlayUnsub = vi.fn();
+const { mockSubscribe, mockMarkerUnsub, mockOverlayUnsub, mockUseControlStoreState } = vi.hoisted(
+  () => {
+    const markerUnsub = vi.fn();
+    const overlayUnsub = vi.fn();
 
-  let _markerHandler: ((event: { data: string }) => void) | undefined;
-  let _overlayHandler: ((event: { data: string }) => void) | undefined;
+    let _markerHandler: ((event: { data: string }) => void) | undefined;
+    let _overlayHandler: ((event: { data: string }) => void) | undefined;
 
-  const subscribe = vi.fn().mockImplementation(
-    (type: string, handler: (event: { data: string }) => void) => {
-      if (type === 'debug.marker') {
-        _markerHandler = handler;
-        return markerUnsub;
-      }
-      if (type === 'debug.overlay') {
-        _overlayHandler = handler;
-        return overlayUnsub;
-      }
-      return vi.fn();
-    },
-  );
+    const subscribe = vi
+      .fn()
+      .mockImplementation((type: string, handler: (event: { data: string }) => void) => {
+        if (type === 'debug.marker') {
+          _markerHandler = handler;
+          return markerUnsub;
+        }
+        if (type === 'debug.overlay') {
+          _overlayHandler = handler;
+          return overlayUnsub;
+        }
+        return vi.fn();
+      });
 
-  // Expose captured handlers for test use
-  (subscribe as any)._getMarkerHandler = () => _markerHandler;
-  (subscribe as any)._getOverlayHandler = () => _overlayHandler;
+    // Expose captured handlers for test use
+    (subscribe as any)._getMarkerHandler = () => _markerHandler;
+    (subscribe as any)._getOverlayHandler = () => _overlayHandler;
 
-  const storeState = {
-    elementPickerEnabled: false,
-    selectedElement: null,
-    domElements: [] as any[],
-    markerToggle: false,
-    setElementPickerEnabled: vi.fn(),
-    setCapturedCoordinates: vi.fn(),
-    setSelectedElement: vi.fn(),
-    setHighlightedElementId: vi.fn(),
-  };
+    const storeState = {
+      elementPickerEnabled: false,
+      selectedElement: null,
+      domElements: [] as any[],
+      markerToggle: false,
+      setElementPickerEnabled: vi.fn(),
+      setCapturedCoordinates: vi.fn(),
+      setSelectedElement: vi.fn(),
+      setHighlightedElementId: vi.fn(),
+    };
 
-  return {
-    mockSubscribe: subscribe,
-    mockMarkerUnsub: markerUnsub,
-    mockOverlayUnsub: overlayUnsub,
-    mockUseControlStoreState: storeState,
-  };
-});
+    return {
+      mockSubscribe: subscribe,
+      mockMarkerUnsub: markerUnsub,
+      mockOverlayUnsub: overlayUnsub,
+      mockUseControlStoreState: storeState,
+    };
+  }
+);
 
 vi.mock('@/features/runtime/lib/debug-stream-client.js', () => ({
   debugStreamClient: {

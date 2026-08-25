@@ -15,12 +15,13 @@ describe('SessionSelector', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    
+
     (useChatStore as any).mockImplementation((selector: any) => {
-      if (selector.name === 'selectSessions') return [
-        { id: 'session-1', title: 'First Session' },
-        { id: 'session-2', title: 'Second Session' },
-      ];
+      if (selector.name === 'selectSessions')
+        return [
+          { id: 'session-1', title: 'First Session' },
+          { id: 'session-2', title: 'Second Session' },
+        ];
       if (selector.name === 'selectActiveSessionId') return 'session-1';
       return mockSetActiveSession;
     });
@@ -28,21 +29,21 @@ describe('SessionSelector', () => {
 
   it('renders sessions in dropdown', () => {
     render(<SessionSelector />);
-    
+
     const select = screen.getByTestId(testIds.sessionSelector);
     expect(select).toBeInTheDocument();
     expect(select).toHaveValue('session-1');
-    
+
     expect(screen.getByText('First Session')).toBeInTheDocument();
     expect(screen.getByText('Second Session')).toBeInTheDocument();
   });
 
   it('calls setActiveSession on change', () => {
     render(<SessionSelector />);
-    
+
     const select = screen.getByTestId(testIds.sessionSelector);
     fireEvent.change(select, { target: { value: 'session-2' } });
-    
+
     expect(mockSetActiveSession).toHaveBeenCalledWith('session-2');
   });
 });

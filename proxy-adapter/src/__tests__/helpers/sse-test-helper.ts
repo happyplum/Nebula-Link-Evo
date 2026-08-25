@@ -25,7 +25,9 @@ export async function startTestServer(
     app,
     port,
     baseUrl: `http://127.0.0.1:${port}`,
-    close: async () => { await app.close(); }
+    close: async () => {
+      await app.close();
+    },
   };
 }
 

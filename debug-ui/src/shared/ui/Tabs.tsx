@@ -19,7 +19,7 @@ export function Tabs({ tabs, activeTab, onTabChange, children }: TabsProps) {
   const handleKeyDown = (e: KeyboardEvent<HTMLButtonElement>, index: number) => {
     if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
       e.preventDefault();
-      
+
       let nextIndex = index;
       if (e.key === 'ArrowRight') {
         nextIndex = (index + 1) % tabs.length;
@@ -42,11 +42,7 @@ export function Tabs({ tabs, activeTab, onTabChange, children }: TabsProps) {
 
   return (
     <div className={styles.container}>
-      <div 
-        className={styles.tablist} 
-        role="tablist" 
-        ref={tablistRef}
-      >
+      <div className={styles.tablist} role="tablist" ref={tablistRef}>
         {tabs.map((tab, index) => {
           const isActive = tab.id === activeTab;
           return (
@@ -69,7 +65,7 @@ export function Tabs({ tabs, activeTab, onTabChange, children }: TabsProps) {
         })}
       </div>
       {children && (
-        <div 
+        <div
           className={styles.tabpanel}
           role="tabpanel"
           id={`panel-${activeTab}`}

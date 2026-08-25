@@ -1,5 +1,9 @@
 import { DatabaseSync } from 'node:sqlite';
-import type { SessionEvent, SessionEventType, SessionState as SseSessionState } from '@nebula-link-evo/shared/types/sse-events';
+import type {
+  SessionEvent,
+  SessionEventType,
+  SessionState as SseSessionState,
+} from '@nebula-link-evo/shared/types/sse-events';
 import type { Message } from './types.js';
 
 interface BufferedEvent {
@@ -166,7 +170,11 @@ export class SessionEventsDAO {
        ORDER BY seq ASC
        LIMIT ?`
     );
-    const rows = stmt.all(sessionId, effectiveLastSeq, clampedLimit) as unknown as SessionEventRow[];
+    const rows = stmt.all(
+      sessionId,
+      effectiveLastSeq,
+      clampedLimit
+    ) as unknown as SessionEventRow[];
     return rows.map((row) => this.rowToEvent(row));
   }
 
@@ -231,7 +239,10 @@ export class SessionEventsDAO {
     return { messages, state };
   }
 
-  getThinkingForSession(sessionId: string, assistantMessageIds: readonly string[]): Map<string, string> {
+  getThinkingForSession(
+    sessionId: string,
+    assistantMessageIds: readonly string[]
+  ): Map<string, string> {
     const thinkingMap = new Map<string, string>();
     if (assistantMessageIds.length === 0) {
       return thinkingMap;
@@ -266,7 +277,10 @@ export class SessionEventsDAO {
     const thinkingByTextId = new Map<string, string>();
     for (const row of thinkingRows) {
       try {
-        const payload = JSON.parse(row.payload) as { readonly messageId: string; readonly text: string };
+        const payload = JSON.parse(row.payload) as {
+          readonly messageId: string;
+          readonly text: string;
+        };
         const existing = thinkingByTextId.get(payload.messageId) || '';
         thinkingByTextId.set(payload.messageId, existing + payload.text);
       } catch {
@@ -423,7 +437,8 @@ export class SessionEventsDAO {
       for (const event of events) {
         let ttlExpiresAt: string | null = null;
         if (event.ttlSeconds) {
-          ttlExpiresAt = ttlCache.get(event.sessionId) ??
+          ttlExpiresAt =
+            ttlCache.get(event.sessionId) ??
             new Date(now.getTime() + event.ttlSeconds * 1000).toISOString();
           ttlCache.set(event.sessionId, ttlExpiresAt);
         }

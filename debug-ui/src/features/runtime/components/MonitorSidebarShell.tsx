@@ -181,12 +181,7 @@ export function MonitorSidebarShell() {
         setExecutingAction(false);
       }
     },
-    [
-      handleFetchTabs,
-      incrementLiveviewRefreshKey,
-      setActionError,
-      setExecutingAction,
-    ]
+    [handleFetchTabs, incrementLiveviewRefreshKey, setActionError, setExecutingAction]
   );
 
   useEffect(() => {

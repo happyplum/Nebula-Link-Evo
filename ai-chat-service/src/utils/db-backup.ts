@@ -4,7 +4,12 @@ import { createWorkerLogger } from '../services/logger.js';
 import type { Logger } from 'pino';
 
 const logger = createWorkerLogger('db-backup');
-const DEFAULT_CONVERSATIONS_DB_PATH = path.join(process.cwd(), 'data', 'ai-chat-service', 'conversations.sqlite');
+const DEFAULT_CONVERSATIONS_DB_PATH = path.join(
+  process.cwd(),
+  'data',
+  'ai-chat-service',
+  'conversations.sqlite'
+);
 
 export class DatabaseBackup {
   private dbPath: string;
@@ -60,7 +65,9 @@ export class DatabaseBackup {
   }
 }
 
-export async function initializeWithBackup(dbPath: string = DEFAULT_CONVERSATIONS_DB_PATH): Promise<void> {
+export async function initializeWithBackup(
+  dbPath: string = DEFAULT_CONVERSATIONS_DB_PATH
+): Promise<void> {
   try {
     await fs.access(dbPath);
     // 数据库存在才创建备份

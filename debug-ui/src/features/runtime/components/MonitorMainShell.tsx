@@ -76,7 +76,7 @@ export function MonitorMainShell() {
       if (mode === 'webrtc') setWebrtcFailed(false);
       void refreshNow();
     },
-    [setLiveviewTransport, refreshNow],
+    [setLiveviewTransport, refreshNow]
   );
 
   const indicatorClass =
@@ -114,9 +114,7 @@ export function MonitorMainShell() {
       {/* Task Strip */}
       <div className={styles.taskStrip}>
         <span className={indicatorClass} />
-        <span className={styles.taskStatusText}>
-          {TASK_STATUS_LABEL[playwrightStatus]}
-        </span>
+        <span className={styles.taskStatusText}>{TASK_STATUS_LABEL[playwrightStatus]}</span>
       </div>
 
       {/* Quick Actions */}

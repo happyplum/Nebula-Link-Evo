@@ -27,8 +27,8 @@ describe('HarnessBackupService', () => {
     writeFileSync(inventoryPath, '{"schema":"bom"}');
     const conversations = new DatabaseSync(join(dataDir, 'conversations.sqlite'));
     const tasks = new DatabaseSync(join(dataDir, 'agent-tasks.sqlite'));
-    conversations.exec('CREATE TABLE sample(value TEXT); INSERT INTO sample VALUES (\'chat\')');
-    tasks.exec('CREATE TABLE sample(value TEXT); INSERT INTO sample VALUES (\'task\')');
+    conversations.exec("CREATE TABLE sample(value TEXT); INSERT INTO sample VALUES ('chat')");
+    tasks.exec("CREATE TABLE sample(value TEXT); INSERT INTO sample VALUES ('task')");
     const service = new HarnessBackupService({
       dataDir,
       conversationDb: conversations,
@@ -42,8 +42,11 @@ describe('HarnessBackupService', () => {
       const restored = new DatabaseSync(join(backup, 'conversations.sqlite'), { readOnly: true });
       expect(restored.prepare('SELECT value FROM sample').get()).toEqual({ value: 'chat' });
       restored.close();
-      expect(JSON.parse(await readFile(join(backup, 'manifest.json'), 'utf8')).files)
-        .toEqual(expect.arrayContaining([expect.objectContaining({ path: 'harness-sessions/session.jsonl.zst' })]));
+      expect(JSON.parse(await readFile(join(backup, 'manifest.json'), 'utf8')).files).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ path: 'harness-sessions/session.jsonl.zst' }),
+        ])
+      );
     } finally {
       conversations.close();
       tasks.close();

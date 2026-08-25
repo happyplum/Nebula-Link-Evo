@@ -103,7 +103,8 @@ describe('chat-sync-pagination.parity', () => {
     });
 
     it('resetVisibleMessages removes count (resets to DEFAULT_PAGE_SIZE)', () => {
-      const { addSession, setActiveSession, expandVisibleMessages, resetVisibleMessages } = useChatStore.getState();
+      const { addSession, setActiveSession, expandVisibleMessages, resetVisibleMessages } =
+        useChatStore.getState();
 
       // Create and activate session
       const sessionId = 'sess-test-reset';
@@ -162,7 +163,8 @@ describe('chat-sync-pagination.parity', () => {
     });
 
     it('removeSession cleans up pagination counts', () => {
-      const { addSession, setActiveSession, expandVisibleMessages, removeSession } = useChatStore.getState();
+      const { addSession, setActiveSession, expandVisibleMessages, removeSession } =
+        useChatStore.getState();
 
       // Create and activate session
       const sessionId = 'sess-test-cleanup';

@@ -37,11 +37,7 @@ export const QueueFloatingPanel: React.FC<QueueFloatingPanelProps> = React.memo(
               : job.contentPreview;
 
           return (
-            <div
-              key={job.jobId}
-              className={styles.jobItem}
-              data-testid="queue-job-item"
-            >
+            <div key={job.jobId} className={styles.jobItem} data-testid="queue-job-item">
               <div className={styles.jobInfo}>
                 <div
                   className={styles.statusDot}

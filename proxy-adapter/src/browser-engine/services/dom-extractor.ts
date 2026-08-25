@@ -29,7 +29,6 @@ export class DOMExtractor {
     return this.page;
   }
 
-
   private async takeAnnotatedScreenshot(): Promise<Buffer> {
     const page = this.requirePage();
     const screenshot = await page.screenshot({
@@ -96,10 +95,7 @@ export class DOMExtractor {
             await elementHandle.dispose();
           }
         } catch (error) {
-          this.logger.warn(
-            { err: error, elementId: elementInfo.id },
-            'Failed to process element'
-          );
+          this.logger.warn({ err: error, elementId: elementInfo.id }, 'Failed to process element');
         }
       }
 

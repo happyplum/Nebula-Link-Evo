@@ -60,7 +60,9 @@ export class ChatSessionController {
    */
   getStatus(sessionId: string): SessionStatusResponse {
     const status = this.sessionStatuses.get(sessionId) || 'idle';
-    const metadata = this.sessionMetadata.get(sessionId) || { lastActivity: new Date().toISOString() };
+    const metadata = this.sessionMetadata.get(sessionId) || {
+      lastActivity: new Date().toISOString(),
+    };
 
     return {
       sessionId,
@@ -71,11 +73,13 @@ export class ChatSessionController {
   }
 
   /**
-    * Set current job ID for a session
-    */
+   * Set current job ID for a session
+   */
   setCurrentJobId(sessionId: string, jobId: string): void {
     const traceId = this.logOperation(sessionId, 'set_current_job');
-    const metadata = this.sessionMetadata.get(sessionId) || { lastActivity: new Date().toISOString() };
+    const metadata = this.sessionMetadata.get(sessionId) || {
+      lastActivity: new Date().toISOString(),
+    };
     metadata.currentJobId = jobId;
     metadata.lastActivity = new Date().toISOString();
     this.sessionMetadata.set(sessionId, metadata);
@@ -83,19 +87,21 @@ export class ChatSessionController {
   }
 
   /**
-    * Update session metadata
-    */
+   * Update session metadata
+   */
   updateMetadata(sessionId: string, updates: Partial<SessionMetadata>): void {
     const traceId = this.logOperation(sessionId, 'update_metadata');
-    const metadata = this.sessionMetadata.get(sessionId) || { lastActivity: new Date().toISOString() };
+    const metadata = this.sessionMetadata.get(sessionId) || {
+      lastActivity: new Date().toISOString(),
+    };
     const updated = { ...metadata, ...updates, lastActivity: new Date().toISOString() };
     this.sessionMetadata.set(sessionId, updated);
     this.log(sessionId, `Updated metadata: ${JSON.stringify(updates)}`, traceId);
   }
 
   /**
-      * Create a new AbortController for a session and set its status to running
-      */
+   * Create a new AbortController for a session and set its status to running
+   */
   createAbortController(
     sessionId: string,
     options: CreateAbortControllerOptions = {}
@@ -119,8 +125,8 @@ export class ChatSessionController {
   }
 
   /**
-    * Request to pause a running session (wait-to-complete semantics)
-    */
+   * Request to pause a running session (wait-to-complete semantics)
+   */
   async pause(sessionId: string): Promise<void> {
     const statusData = this.getStatus(sessionId);
     const status = statusData.status;
@@ -137,8 +143,8 @@ export class ChatSessionController {
   }
 
   /**
-      * Mark session as actually paused (called from checkpoints)
-      */
+   * Mark session as actually paused (called from checkpoints)
+   */
   markAsPaused(sessionId: string): void {
     const traceId = this.logOperation(sessionId, 'mark_as_paused');
     this.sessionStatuses.set(sessionId, 'paused');
@@ -148,8 +154,8 @@ export class ChatSessionController {
   }
 
   /**
-      * Resume a paused session
-      */
+   * Resume a paused session
+   */
   resume(sessionId: string, fallbackStatus?: SessionStatus): void {
     const status = this.sessionStatuses.get(sessionId) ?? fallbackStatus ?? 'idle';
 
@@ -161,7 +167,9 @@ export class ChatSessionController {
 
     const traceId = this.logOperation(sessionId, 'resume');
     this.sessionStatuses.set(sessionId, 'running');
-    const metadata = this.sessionMetadata.get(sessionId) || { lastActivity: new Date().toISOString() };
+    const metadata = this.sessionMetadata.get(sessionId) || {
+      lastActivity: new Date().toISOString(),
+    };
     this.sessionMetadata.set(sessionId, {
       ...metadata,
       pauseRequested: false,
@@ -172,17 +180,20 @@ export class ChatSessionController {
   }
 
   /**
-    * Set pause flags
-    */
-  setPauseFlags(sessionId: string, flags: { pauseAfterGeneration?: boolean; pauseAfterExecution?: boolean }): void {
+   * Set pause flags
+   */
+  setPauseFlags(
+    sessionId: string,
+    flags: { pauseAfterGeneration?: boolean; pauseAfterExecution?: boolean }
+  ): void {
     const traceId = this.logOperation(sessionId, 'set_pause_flags');
     this.updateMetadata(sessionId, flags);
     this.log(sessionId, `Pause flags updated: ${JSON.stringify(flags)}`, traceId);
   }
 
   /**
-    * Check if session should pause
-    */
+   * Check if session should pause
+   */
   shouldPause(sessionId: string, point: 'afterGeneration' | 'afterExecution'): boolean {
     const metadata = this.sessionMetadata.get(sessionId);
     if (!metadata) return false;
@@ -195,8 +206,8 @@ export class ChatSessionController {
   }
 
   /**
-      * Interrupt a running session
-      */
+   * Interrupt a running session
+   */
   async interrupt(sessionId: string): Promise<void> {
     const statusData = this.getStatus(sessionId);
     const status = statusData.status;
@@ -218,8 +229,8 @@ export class ChatSessionController {
   }
 
   /**
-      * Cancel a running or interrupted session
-      */
+   * Cancel a running or interrupted session
+   */
   async cancel(sessionId: string): Promise<void> {
     const statusData = this.getStatus(sessionId);
     const status = statusData.status;
@@ -242,8 +253,8 @@ export class ChatSessionController {
   }
 
   /**
-      * Clean up a session, resetting its status to idle
-      */
+   * Clean up a session, resetting its status to idle
+   */
   cleanup(sessionId: string): void {
     const status = this.sessionStatuses.get(sessionId);
     if (status === 'paused') {
@@ -259,17 +270,17 @@ export class ChatSessionController {
   }
 
   /**
-    * Helper for operation logging with simplified TraceID
-    */
+   * Helper for operation logging with simplified TraceID
+   */
   private log(sessionId: string, message: string, traceId?: string): void {
     const displayTraceId = traceId || sessionId.substring(0, 8);
     this.logger.info({ sessionId, traceId: displayTraceId }, message);
   }
 
   /**
-    * Log an operation asynchronously
-    * Returns the traceId for tracking
-    */
+   * Log an operation asynchronously
+   * Returns the traceId for tracking
+   */
   private logOperation(sessionId: string, operationType: ControlCommandType): string {
     const tracedOperation = this.db.createOperation({ sessionId, operation: operationType });
 
@@ -286,16 +297,16 @@ export class ChatSessionController {
   }
 
   /**
-     * Get operation history for a session
-     */
+   * Get operation history for a session
+   */
   getOperations(sessionId: string): TracedOperation[] {
     return this.db.getOperationsBySession(sessionId);
   }
 
   /**
-     * Recover running sessions on startup
-     * Changes status from 'running' to 'blocked' with reason 'process_restart'
-     */
+   * Recover running sessions on startup
+   * Changes status from 'running' to 'blocked' with reason 'process_restart'
+   */
   recoverRunningSessions(): string[] {
     const recoveredSessions = this.db.recoverRunningSessions();
 
@@ -306,7 +317,9 @@ export class ChatSessionController {
 
       // Update in-memory state
       this.sessionStatuses.set(session.id, 'blocked');
-      const metadata = this.sessionMetadata.get(session.id) || { lastActivity: new Date().toISOString() };
+      const metadata = this.sessionMetadata.get(session.id) || {
+        lastActivity: new Date().toISOString(),
+      };
       this.sessionMetadata.set(session.id, { ...metadata, lastActivity: new Date().toISOString() });
     }
 
@@ -314,9 +327,9 @@ export class ChatSessionController {
   }
 
   /**
-     * Initialize the controller and recover running sessions
-     * Call this on application startup
-     */
+   * Initialize the controller and recover running sessions
+   * Call this on application startup
+   */
   initialize(): void {
     this.logger.info('Initializing');
     const recoveredIds = this.recoverRunningSessions();

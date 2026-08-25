@@ -56,11 +56,12 @@ export const useRuntimeStore = create<RuntimeState>()((set) => ({
   setPlaywrightIsOpen: (isOpen) => set({ playwrightIsOpen: isOpen }),
   setPlaywrightStatusHydrated: (hydrated) => set({ playwrightStatusHydrated: hydrated }),
   setPlaywrightUrl: (url) => set({ playwrightUrl: url }),
-  setPlaywrightState: (state) => set({
-    playwrightStatus: state.status,
-    playwrightIsOpen: state.isOpen,
-    playwrightUrl: state.url,
-  }),
+  setPlaywrightState: (state) =>
+    set({
+      playwrightStatus: state.status,
+      playwrightIsOpen: state.isOpen,
+      playwrightUrl: state.url,
+    }),
   incrementSnapshotVersion: () => set((s) => ({ snapshotVersion: s.snapshotVersion + 1 })),
   incrementLiveviewRefreshKey: () => set((s) => ({ liveviewRefreshKey: s.liveviewRefreshKey + 1 })),
   setLastScreenshotDataUrl: (url) => set({ lastScreenshotDataUrl: url }),

@@ -195,10 +195,12 @@ describe('ChatHandler', () => {
   });
 });
 
-function createFixture(options: {
-  abortController?: AbortController;
-  followup?: () => Promise<void>;
-} = {}) {
+function createFixture(
+  options: {
+    abortController?: AbortController;
+    followup?: () => Promise<void>;
+  } = {}
+) {
   const durableEvents = [{ seq: 0, type: 'user/message', time: 1, data: {} }] as never[];
   const handle = {
     followup: vi.fn(options.followup ?? (async () => {})),

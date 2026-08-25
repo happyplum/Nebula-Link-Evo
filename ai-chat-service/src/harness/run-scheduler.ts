@@ -23,7 +23,10 @@ interface RunRow {
 
 /** Persistent FIFO permit scheduler shared by Chat and Agent Task. */
 export class HarnessRunScheduler {
-  private readonly waiters = new Map<string, { resolve: () => void; reject: (error: Error) => void }>();
+  private readonly waiters = new Map<
+    string,
+    { resolve: () => void; reject: (error: Error) => void }
+  >();
   private closed = false;
 
   constructor(
@@ -32,7 +35,9 @@ export class HarnessRunScheduler {
     private readonly maxQueued = 1_000
   ) {
     this.db
-      .prepare("UPDATE harness_model_runs SET status = 'cancelled', updated_at = ? WHERE status IN ('active', 'queued')")
+      .prepare(
+        "UPDATE harness_model_runs SET status = 'cancelled', updated_at = ? WHERE status IN ('active', 'queued')"
+      )
       .run(new Date().toISOString());
   }
 
@@ -106,7 +111,9 @@ export class HarnessRunScheduler {
     await new Promise<void>((resolve, reject) => {
       const abort = (): void => {
         this.cancel(runId);
-        reject(signal?.reason instanceof Error ? signal.reason : new Error('Model run wait aborted'));
+        reject(
+          signal?.reason instanceof Error ? signal.reason : new Error('Model run wait aborted')
+        );
       };
       if (signal?.aborted) return abort();
       const settle = {
@@ -142,14 +149,17 @@ export class HarnessRunScheduler {
     this.db.exec('BEGIN IMMEDIATE');
     try {
       this.db
-        .prepare("UPDATE harness_model_runs SET status = 'cancelled', updated_at = ? WHERE status IN ('active', 'queued')")
+        .prepare(
+          "UPDATE harness_model_runs SET status = 'cancelled', updated_at = ? WHERE status IN ('active', 'queued')"
+        )
         .run(new Date().toISOString());
       this.db.exec('COMMIT');
     } catch (error) {
       this.db.exec('ROLLBACK');
       throw error;
     }
-    for (const waiter of this.waiters.values()) waiter.reject(new Error('Model run scheduler closed'));
+    for (const waiter of this.waiters.values())
+      waiter.reject(new Error('Model run scheduler closed'));
     this.waiters.clear();
   }
 
@@ -173,7 +183,9 @@ export class HarnessRunScheduler {
           .get() as { run_id: string } | undefined;
         if (next) {
           this.db
-            .prepare("UPDATE harness_model_runs SET status = 'active', updated_at = ? WHERE run_id = ?")
+            .prepare(
+              "UPDATE harness_model_runs SET status = 'active', updated_at = ? WHERE run_id = ?"
+            )
             .run(new Date().toISOString(), next.run_id);
           promoted = next.run_id;
         }

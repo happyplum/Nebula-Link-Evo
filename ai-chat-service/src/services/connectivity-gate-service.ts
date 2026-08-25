@@ -6,7 +6,7 @@ export interface ConnectivityState {
 
 /**
  * Connectivity Gate Service - Fail-close gate for connectivity-dependent operations
- * 
+ *
  * This service is a singleton that manages connectivity state.
  * When connectivity fails, it blocks new message-start operations
  * Session creation/list/get/recovery endpoints remain functional.

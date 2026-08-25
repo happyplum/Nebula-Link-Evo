@@ -60,9 +60,7 @@ describe('McpToolsModal', () => {
   it('renders empty state when no tools for server', () => {
     vi.mocked(useMcpTools).mockReturnValue({
       data: {
-        tools: [
-          { name: 'other-server.tool1', description: 'desc' }
-        ],
+        tools: [{ name: 'other-server.tool1', description: 'desc' }],
       },
       isLoading: false,
       error: null,
@@ -76,16 +74,16 @@ describe('McpToolsModal', () => {
     vi.mocked(useMcpTools).mockReturnValue({
       data: {
         tools: [
-          { 
-            name: 'test-server.my-tool', 
+          {
+            name: 'test-server.my-tool',
             description: 'A test tool',
             inputSchema: {
               properties: {
-                param1: { type: 'string', description: 'A parameter' }
+                param1: { type: 'string', description: 'A parameter' },
               },
-              required: ['param1']
-            }
-          }
+              required: ['param1'],
+            },
+          },
         ],
       },
       isLoading: false,
@@ -94,11 +92,11 @@ describe('McpToolsModal', () => {
 
     mockMutateAsync.mockResolvedValue({
       success: true,
-      result: { message: 'Success!' }
+      result: { message: 'Success!' },
     });
 
     render(<McpToolsModal serverName="test-server" onClose={() => {}} />);
-    
+
     // Tool name should be displayed without server prefix
     expect(screen.getByText('my-tool')).toBeInTheDocument();
 
@@ -123,7 +121,7 @@ describe('McpToolsModal', () => {
     expect(mockMutateAsync).toHaveBeenCalledWith({
       server: 'test-server',
       tool: 'my-tool',
-      args: { param1: 'value1' }
+      args: { param1: 'value1' },
     });
 
     await waitFor(() => {
@@ -135,16 +133,14 @@ describe('McpToolsModal', () => {
   it('handles invalid JSON input', async () => {
     vi.mocked(useMcpTools).mockReturnValue({
       data: {
-        tools: [
-          { name: 'test-server.my-tool', description: 'A test tool' }
-        ],
+        tools: [{ name: 'test-server.my-tool', description: 'A test tool' }],
       },
       isLoading: false,
       error: null,
     } as any);
 
     render(<McpToolsModal serverName="test-server" onClose={() => {}} />);
-    
+
     fireEvent.click(screen.getByText('my-tool'));
 
     const textarea = screen.getByPlaceholderText('输入 JSON 参数...');

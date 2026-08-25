@@ -28,7 +28,7 @@ function validatePackageName(npmPackage: string): void {
     throw new ProviderError(
       PROVIDER_ERRORS.INSTALL_FAILED,
       npmPackage,
-      `Invalid package name: "${npmPackage}". Only @ai-sdk/* packages are allowed.`,
+      `Invalid package name: "${npmPackage}". Only @ai-sdk/* packages are allowed.`
     );
   }
 }
@@ -42,7 +42,7 @@ function validatePackageName(npmPackage: string): void {
  */
 export async function installProviderPackage(
   npmPackage: string,
-  options?: { allowDynamicInstall?: boolean },
+  options?: { allowDynamicInstall?: boolean }
 ): Promise<void> {
   validatePackageName(npmPackage);
 
@@ -50,19 +50,18 @@ export async function installProviderPackage(
     throw new ProviderError(
       PROVIDER_ERRORS.INSTALL_FAILED,
       npmPackage,
-      'Dynamic install is disabled',
+      'Dynamic install is disabled'
     );
   }
 
   try {
     await execa('pnpm', ['add', npmPackage]);
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Unknown install error';
+    const message = error instanceof Error ? error.message : 'Unknown install error';
     throw new ProviderError(
       PROVIDER_ERRORS.INSTALL_FAILED,
       npmPackage,
-      `Install failed: ${message}`,
+      `Install failed: ${message}`
     );
   }
 }
@@ -75,9 +74,7 @@ export async function installProviderPackage(
  * @returns The loaded provider factory
  * @throws ProviderError if the module cannot be loaded
  */
-export async function loadProviderPackage(
-  npmPackage: string,
-): Promise<ProviderFactory> {
+export async function loadProviderPackage(npmPackage: string): Promise<ProviderFactory> {
   const cached = moduleCache.get(npmPackage);
   if (cached !== undefined) {
     return cached;
@@ -88,12 +85,11 @@ export async function loadProviderPackage(
     moduleCache.set(npmPackage, mod);
     return mod;
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Unknown load error';
+    const message = error instanceof Error ? error.message : 'Unknown load error';
     throw new ProviderError(
       PROVIDER_ERRORS.INSTALL_FAILED,
       npmPackage,
-      `Failed to load module: ${message}`,
+      `Failed to load module: ${message}`
     );
   }
 }

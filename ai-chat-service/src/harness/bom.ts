@@ -14,7 +14,9 @@ interface HarnessBom {
 }
 
 export async function verifyHarnessBom(packageRoot: string): Promise<void> {
-  const bom = JSON.parse(await readFile(join(packageRoot, 'harness-bom.json'), 'utf8')) as HarnessBom;
+  const bom = JSON.parse(
+    await readFile(join(packageRoot, 'harness-bom.json'), 'utf8')
+  ) as HarnessBom;
   if (bom.schema !== 'nebula.ai.harness-bom/1.0') throw new Error('Unsupported Harness BOM schema');
   const service = JSON.parse(await readFile(join(packageRoot, 'package.json'), 'utf8')) as {
     engines?: { node?: string };
@@ -24,14 +26,17 @@ export async function verifyHarnessBom(packageRoot: string): Promise<void> {
   if (service.engines?.node !== bom.node) throw new Error('Harness BOM Node constraint drifted');
   const declared = { ...service.dependencies, ...service.devDependencies };
   for (const [name, version] of Object.entries(bom.roots)) {
-    if (declared[name] !== version) throw new Error(`Harness BOM root ${name} is not exactly pinned`);
+    if (declared[name] !== version)
+      throw new Error(`Harness BOM root ${name} is not exactly pinned`);
   }
 
   const resolved = new Map<string, string>();
   const pending = await Promise.all(
     Object.keys(bom.roots).map(async (name) => ({
       name,
-      packageJsonPath: await realpath(join(packageRoot, 'node_modules', ...name.split('/'), 'package.json')),
+      packageJsonPath: await realpath(
+        join(packageRoot, 'node_modules', ...name.split('/'), 'package.json')
+      ),
     }))
   );
   while (pending.length > 0) {
@@ -46,7 +51,8 @@ export async function verifyHarnessBom(packageRoot: string): Promise<void> {
     if (metadata.name !== current.name || bom.peerClosure[current.name] !== metadata.version) {
       throw new Error(`Harness BOM installed identity mismatch for ${current.name}`);
     }
-    if (metadata.license !== 'MIT') throw new Error(`Harness dependency ${current.name} is not MIT`);
+    if (metadata.license !== 'MIT')
+      throw new Error(`Harness dependency ${current.name} is not MIT`);
     resolved.set(current.name, metadata.version);
     const requireFromPackage = createRequire(current.packageJsonPath);
     for (const peer of Object.keys(metadata.peerDependencies ?? {})) {
@@ -62,7 +68,8 @@ export async function verifyHarnessBom(packageRoot: string): Promise<void> {
     }
   }
   const unresolved = Object.keys(bom.peerClosure).filter((name) => !resolved.has(name));
-  if (unresolved.length > 0) throw new Error(`Harness BOM contains unreachable peers: ${unresolved.join(', ')}`);
+  if (unresolved.length > 0)
+    throw new Error(`Harness BOM contains unreachable peers: ${unresolved.join(', ')}`);
 
   const jsonlEntry = createRequire(join(packageRoot, 'package.json')).resolve(
     '@deepseek-ai/dsh-session-persistence-jsonl'
@@ -82,7 +89,10 @@ export async function verifyHarnessBom(packageRoot: string): Promise<void> {
   await readFile(join(packageRoot, bom.licenses.notice), 'utf8');
 }
 
-async function resolvePackageJson(requireFromPackage: NodeJS.Require, name: string): Promise<string> {
+async function resolvePackageJson(
+  requireFromPackage: NodeJS.Require,
+  name: string
+): Promise<string> {
   try {
     return await realpath(requireFromPackage.resolve(`${name}/package.json`));
   } catch (error) {

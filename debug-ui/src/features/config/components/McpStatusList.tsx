@@ -76,7 +76,7 @@ export function McpStatusList({ onSelectServer }: McpStatusListProps) {
         <h2 className={styles.title}>MCP 服务</h2>
         <StatusIndicator status="online" label="已启用" />
       </div>
-      
+
       {mcpStatus.servers.length === 0 ? (
         <p className={styles.empty}>无已启用的 MCP 服务器。</p>
       ) : (
@@ -84,30 +84,22 @@ export function McpStatusList({ onSelectServer }: McpStatusListProps) {
           {mcpStatus.servers.map((server) => {
             const display = getServerDisplay(server.state);
             return (
-              <li
-                key={server.name}
-                className={styles.listItem}
-                data-testid={testIds.mcpServerItem}
-              >
+              <li key={server.name} className={styles.listItem} data-testid={testIds.mcpServerItem}>
                 <div className={styles.serverInfo}>
-                   <StatusIndicator
-                     status={display.status}
-                     label={display.label}
-                     size="sm"
-                   />
-                   <div className={styles.serverMeta}>
-                     <span className={styles.serverName}>
-                       {server.name}
-                       {server.source === 'built-in' && (
-                         <span className={styles.builtInBadge}>内置</span>
-                       )}
-                     </span>
-                     <span className={styles.serverStatus}>
-                       {display.label} · {server.toolsCount} 工具
-                     </span>
-                   </div>
-                 </div>
-                
+                  <StatusIndicator status={display.status} label={display.label} size="sm" />
+                  <div className={styles.serverMeta}>
+                    <span className={styles.serverName}>
+                      {server.name}
+                      {server.source === 'built-in' && (
+                        <span className={styles.builtInBadge}>内置</span>
+                      )}
+                    </span>
+                    <span className={styles.serverStatus}>
+                      {display.label} · {server.toolsCount} 工具
+                    </span>
+                  </div>
+                </div>
+
                 {server.state === 'running' && server.toolsCount > 0 && onSelectServer && (
                   <button
                     type="button"

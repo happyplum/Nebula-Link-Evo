@@ -19,7 +19,7 @@ export function getImageFitRect(
   imgW: number,
   imgH: number,
   containerW: number,
-  containerH: number,
+  containerH: number
 ): ImageFitRect | null {
   if (imgW <= 0 || imgH <= 0 || containerW <= 0 || containerH <= 0) {
     return null;
@@ -41,7 +41,7 @@ export function getImageFitRect(
 export function canvasToPageCoords(
   cssX: number,
   cssY: number,
-  fit: ImageFitRect,
+  fit: ImageFitRect
 ): { x: number; y: number } | null {
   const relX = cssX - fit.offsetX;
   const relY = cssY - fit.offsetY;
@@ -62,7 +62,7 @@ export function canvasToPageCoords(
 export function pageToCanvasCoords(
   pageX: number,
   pageY: number,
-  fit: ImageFitRect,
+  fit: ImageFitRect
 ): { x: number; y: number } {
   return {
     x: pageX * fit.scale + fit.offsetX,
