@@ -139,8 +139,9 @@ describe('BrowserExecutionService', () => {
     expect(issued.tokenIssued).toBe(true);
     expect(replay.token).toBeUndefined();
     expect(replay.tokenIssued).toBe(false);
-    expect(repository.getLease(issued.lease.id)?.tokenHash).toBe(hashOpaqueToken(issued.token!));
-    expect(JSON.stringify(issued.lease)).not.toContain(issued.token!);
+    if (!issued.token) throw new Error('new control lease must issue a token');
+    expect(repository.getLease(issued.lease.id)?.tokenHash).toBe(hashOpaqueToken(issued.token));
+    expect(JSON.stringify(issued.lease)).not.toContain(issued.token);
     await expect(
       service.createLease(session.id, 'lease-2', { mode: 'control' })
     ).rejects.toMatchObject({ code: 'browser_busy' });
@@ -288,7 +289,9 @@ describe('BrowserExecutionService', () => {
     const artifactRecords = repository.listOperationArtifacts(operation.operationId);
     expect(artifactRecords).toHaveLength(3);
     expect(artifactRecords.every((artifact) => artifact.status === 'available')).toBe(true);
-    const capture = repository.getCapture(artifactRecords[0]!.captureId!);
+    const [firstArtifact] = artifactRecords;
+    if (!firstArtifact?.captureId) throw new Error('operation artifact must reference a capture');
+    const capture = repository.getCapture(firstArtifact.captureId);
     expect(capture).toMatchObject({
       status: 'completed',
       completeness: 'complete',
@@ -296,7 +299,8 @@ describe('BrowserExecutionService', () => {
       actualItemCount: 3,
     });
 
-    const domRef = operation.artifacts.find((artifact) => artifact.kind === 'dom_snapshot')!;
+    const domRef = operation.artifacts.find((artifact) => artifact.kind === 'dom_snapshot');
+    if (!domRef) throw new Error('operation must produce a DOM snapshot');
     expect(domRef).toMatchObject({
       mimeType: 'application/json',
       sizeBytes: expect.any(Number),
@@ -319,9 +323,11 @@ describe('BrowserExecutionService', () => {
         'operation.completed',
       ])
     );
+    const lastEvent = events.at(-1);
+    if (!lastEvent) throw new Error('operation must produce session events');
     expect(await service.getSessionEventSnapshot(session.id)).toMatchObject({
       type: 'browser_session.snapshot',
-      seq: events.at(-1)!.seq,
+      seq: lastEvent.seq,
     });
   });
 
@@ -351,14 +357,18 @@ describe('BrowserExecutionService', () => {
 
     expect(operation.status).toBe('failed');
     expect(operation.artifacts).toHaveLength(1);
-    const artifact = repository.getArtifact(operation.artifacts[0]!.id)!;
+    const [artifactRef] = operation.artifacts;
+    if (!artifactRef) throw new Error('failed operation must keep a screenshot artifact');
+    const artifact = repository.getArtifact(artifactRef.id);
+    if (!artifact) throw new Error('failure artifact must be persisted');
     expect(artifact).toMatchObject({
       kind: 'screenshot',
       capturePhase: 'failure',
       retentionClass: 'failure_30d',
       status: 'available',
     });
-    writeFileSync(join(directory, artifact.storageRef!), 'tampered');
+    if (!artifact.storageRef) throw new Error('available artifact must have a storage reference');
+    writeFileSync(join(directory, artifact.storageRef), 'tampered');
     await expect(service.getArtifactDownload(session.id, artifact.id)).rejects.toMatchObject({
       code: 'state_conflict',
     });

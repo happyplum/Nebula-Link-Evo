@@ -244,7 +244,7 @@ describe('getStatusCode', () => {
 
   it('should return 500 for regular Error instances with statusCode property', () => {
     const error = new Error('Error');
-    (error as any).statusCode = 500;
+    (error as Error & { statusCode: number }).statusCode = 500;
     expect(getStatusCode(error)).toBe(500);
   });
 

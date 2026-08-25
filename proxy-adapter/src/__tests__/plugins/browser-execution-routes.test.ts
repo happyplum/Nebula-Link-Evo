@@ -258,9 +258,11 @@ describe('browser execution HTTP contract', () => {
       },
     });
 
+    const [artifact] = operation.artifacts;
+    if (!artifact) throw new Error('DOM snapshot operation must produce an artifact');
     const artifactResponse = await app.inject({
       method: 'GET',
-      url: `/api/v1/browser-execution/sessions/${sessionId}/artifacts/${operation.artifacts[0]!.id}`,
+      url: `/api/v1/browser-execution/sessions/${sessionId}/artifacts/${artifact.id}`,
     });
     expect(artifactResponse.statusCode).toBe(200);
     expect(artifactResponse.headers['content-type']).toContain('application/json');
@@ -290,12 +292,12 @@ describe('browser execution HTTP contract', () => {
       `${address}/api/v1/browser-execution/sessions/${sessionId}/events`,
       { signal: controller.signal }
     );
-    const reader = response.body!.getReader();
-    const firstChunk = await reader.read();
-    controller.abort();
-
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toContain('text/event-stream');
+    if (!response.body) throw new Error('browser session SSE response must have a body');
+    const reader = response.body.getReader();
+    const firstChunk = await reader.read();
+    controller.abort();
     expect(new TextDecoder().decode(firstChunk.value)).toContain('event: browser_session.snapshot');
   });
 

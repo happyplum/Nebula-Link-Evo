@@ -82,7 +82,8 @@ describe('BrowserLifecycle screencast lifecycle', () => {
   it('rebinds LiveKit and MJPEG transports to the selected tab in teardown-first order', async () => {
     const lifecycle = new BrowserLifecycle();
     await lifecycle.open({ headless: true, viewport: { width: 1280, height: 720 } });
-    const second = (await lifecycle.getTabs()).find((tab) => tab.title === 'second')!;
+    const second = (await lifecycle.getTabs()).find((tab) => tab.title === 'second');
+    if (!second) throw new Error('second test tab must exist');
     vi.clearAllMocks();
 
     await lifecycle.switchTab(second.id);
@@ -95,9 +96,12 @@ describe('BrowserLifecycle screencast lifecycle', () => {
     expect(mocks.stopPublisher).toHaveBeenCalledOnce();
     expect(mocks.stopScreencast).toHaveBeenCalledOnce();
     expect(mocks.startScreencast).toHaveBeenCalledWith(mocks.secondPage);
-    expect(mocks.stopPublisher.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.startPublisher.mock.invocationCallOrder[0]!
-    );
+    const stopOrder = mocks.stopPublisher.mock.invocationCallOrder[0];
+    const startOrder = mocks.startPublisher.mock.invocationCallOrder[0];
+    if (stopOrder === undefined || startOrder === undefined) {
+      throw new Error('publisher stop/start calls must be recorded');
+    }
+    expect(stopOrder).toBeLessThan(startOrder);
 
     await lifecycle.close();
   });

@@ -43,8 +43,12 @@ function makeProvider(overrides: {
       status.value = 'disabled';
     }),
     on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
-      if (!listeners.has(event)) listeners.set(event, new Set());
-      listeners.get(event)!.add(handler);
+      let handlers = listeners.get(event);
+      if (!handlers) {
+        handlers = new Set();
+        listeners.set(event, handlers);
+      }
+      handlers.add(handler);
     }),
     removeListener: vi.fn(),
   };
