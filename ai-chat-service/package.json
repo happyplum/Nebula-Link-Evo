@@ -12,6 +12,7 @@
     "build": "tsc -b",
     "start": "node dist/server.js",
     "test": "vitest run",
+    "test:e2e": "pnpm --filter proxy-adapter build && vitest run --config vitest.e2e.config.ts",
     "test:coverage": "vitest run --coverage",
     "type-check": "tsc --noEmit",
     "verify:harness-bom": "tsx src/harness/verify-bom.ts",
