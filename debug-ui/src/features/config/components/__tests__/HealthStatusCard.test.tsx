@@ -8,42 +8,46 @@ vi.mock('../../api/config.queries.js', () => ({
   useHealth: vi.fn(),
 }));
 
+const useHealthMock = vi.mocked(useHealth) as unknown as {
+  mockReturnValue: (value: unknown) => void;
+};
+
 describe('HealthStatusCard', () => {
   it('renders loading state', () => {
-    vi.mocked(useHealth).mockReturnValue({
+useHealthMock.mockReturnValue({
       data: undefined,
       isLoading: true,
       error: null,
-    } as any);
+    } as unknown);
 
     render(<HealthStatusCard />);
     expect(screen.getByTestId(testIds.loadingSpinner)).toBeInTheDocument();
   });
 
   it('renders error state', () => {
-    vi.mocked(useHealth).mockReturnValue({
+useHealthMock.mockReturnValue({
       data: undefined,
       isLoading: false,
       error: new Error('Failed to load'),
-    } as any);
+    } as unknown);
 
     render(<HealthStatusCard />);
     expect(screen.getByText('Failed to load health status')).toBeInTheDocument();
   });
 
   it('renders empty state when no health data', () => {
-    vi.mocked(useHealth).mockReturnValue({
+useHealthMock.mockReturnValue({
       data: null,
       isLoading: false,
       error: null,
-    } as any);
+    } as unknown);
 
     render(<HealthStatusCard />);
     expect(screen.getByText('No health data available')).toBeInTheDocument();
   });
 
   it('renders health data correctly', () => {
-    vi.mocked(useHealth).mockReturnValue({
+useHealthMock.mockReturnValue({
       data: {
         status: 'healthy',
         config: 'ok',
@@ -57,7 +61,7 @@ describe('HealthStatusCard', () => {
       },
       isLoading: false,
       error: null,
-    } as any);
+    } as unknown);
 
     render(<HealthStatusCard />);
 
@@ -68,7 +72,7 @@ describe('HealthStatusCard', () => {
   });
 
   it('renders unhealthy state correctly', () => {
-    vi.mocked(useHealth).mockReturnValue({
+useHealthMock.mockReturnValue({
       data: {
         status: 'error',
         config: 'ok',
@@ -82,7 +86,7 @@ describe('HealthStatusCard', () => {
       },
       isLoading: false,
       error: null,
-    } as any);
+    } as unknown);
 
     render(<HealthStatusCard />);
 

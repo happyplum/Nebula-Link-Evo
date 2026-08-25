@@ -3,6 +3,7 @@ import { render, screen, within, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { testIds } from '@/shared/testing/testids.js';
+import { mustExist } from '@/test-support/must-exist.js';
 
 // Create mutable references for mocks
 const mockUseMcpStatus = vi.fn();
@@ -426,7 +427,7 @@ describe('P4-27-V: MCP Status List and Tools Modal - Parity', () => {
 
       // Click to expand tool
       const toolHeader = screen.getByText('tool-with-schema').closest('button');
-      fireEvent.click(toolHeader!);
+      fireEvent.click(mustExist(toolHeader, 'tool header'));
 
       const modal = screen.getByTestId(testIds.mcpToolsModal);
       expect(within(modal).getByText('输入参数')).toBeInTheDocument();
@@ -449,7 +450,7 @@ describe('P4-27-V: MCP Status List and Tools Modal - Parity', () => {
 
       // Click to expand tool
       const toolHeader = screen.getByText('test-tool').closest('button');
-      fireEvent.click(toolHeader!);
+      fireEvent.click(mustExist(toolHeader, 'tool header'));
 
       const modal = screen.getByTestId(testIds.mcpToolsModal);
       const textarea = within(modal).getByPlaceholderText('输入 JSON 参数...');
@@ -469,7 +470,7 @@ describe('P4-27-V: MCP Status List and Tools Modal - Parity', () => {
 
       // Click to expand tool
       const toolHeader = screen.getByText('exec-tool').closest('button');
-      fireEvent.click(toolHeader!);
+      fireEvent.click(mustExist(toolHeader, 'tool header'));
 
       const modal = screen.getByTestId(testIds.mcpToolsModal);
       expect(within(modal).getByText('执行')).toBeInTheDocument();
@@ -497,7 +498,7 @@ describe('P4-27-V: MCP Status List and Tools Modal - Parity', () => {
 
       // Click to expand tool
       const toolHeader = screen.getByText('result-tool').closest('button');
-      fireEvent.click(toolHeader!);
+      fireEvent.click(mustExist(toolHeader, 'tool header'));
 
       const modal = screen.getByTestId(testIds.mcpToolsModal);
 
@@ -533,7 +534,7 @@ describe('P4-27-V: MCP Status List and Tools Modal - Parity', () => {
 
       // Click to expand tool
       const toolHeader = screen.getByText('structural-tool').closest('button');
-      fireEvent.click(toolHeader!);
+      fireEvent.click(mustExist(toolHeader, 'tool header'));
 
       const modal = screen.getByTestId(testIds.mcpToolsModal);
 

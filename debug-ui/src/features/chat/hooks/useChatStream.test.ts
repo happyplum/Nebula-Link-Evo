@@ -57,8 +57,12 @@ beforeEach(() => {
     // The hook calls es.addEventListener — patch on the mock instance
     const anyEs = es as unknown as { addEventListener: unknown; close: unknown };
     anyEs.addEventListener = (type: string, handler: (e: MessageEvent) => void) => {
-      if (!es.listeners.has(type)) es.listeners.set(type, new Set());
-      es.listeners.get(type)!.add(handler);
+      let handlers = es.listeners.get(type);
+      if (!handlers) {
+        handlers = new Set();
+        es.listeners.set(type, handlers);
+      }
+      handlers.add(handler);
     };
     anyEs.close = es.close;
     return es;
@@ -558,8 +562,10 @@ describe('useChatStream', () => {
       const msgs = useChatStore.getState().messagesBySession['s1'];
       expect(msgs).toHaveLength(1);
       expect(msgs[0].toolCalls).toBeDefined();
-      expect(msgs[0].toolCalls![0].arguments).toBe('{"x":10}');
-      expect(msgs[0].toolCalls![0].name).toBe('click');
+      const toolCall = msgs[0].toolCalls?.[0];
+      if (!toolCall) throw new Error('snapshot message must contain a tool call');
+      expect(toolCall.arguments).toBe('{"x":10}');
+      expect(toolCall.name).toBe('click');
     });
 
     it('falls back to rec.arguments when function.arguments is absent', () => {
@@ -588,7 +594,9 @@ describe('useChatStream', () => {
         state: 'idle',
       });
       const msgs = useChatStore.getState().messagesBySession['s1'];
-      expect(msgs[0].toolCalls![0].arguments).toBe('{"fallback":true}');
+      const toolCall = msgs[0].toolCalls?.[0];
+      if (!toolCall) throw new Error('snapshot message must contain a fallback tool call');
+      expect(toolCall.arguments).toBe('{"fallback":true}');
     });
   });
 

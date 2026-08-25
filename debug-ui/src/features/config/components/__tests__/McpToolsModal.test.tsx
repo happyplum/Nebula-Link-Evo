@@ -13,65 +13,72 @@ vi.mock('../../api/config.mutations.js', () => ({
   useMcpCall: vi.fn(),
 }));
 
+const useMcpCallMock = vi.mocked(useMcpCall) as unknown as {
+  mockReturnValue: (value: unknown) => void;
+};
+const useMcpToolsMock = vi.mocked(useMcpTools) as unknown as {
+  mockReturnValue: (value: unknown) => void;
+};
+
 describe('McpToolsModal', () => {
   const mockMutateAsync = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(useMcpCall).mockReturnValue({
+useMcpCallMock.mockReturnValue({
       mutateAsync: mockMutateAsync,
       isPending: false,
-    } as any);
+    } as unknown);
   });
 
   it('does not render when serverName is null', () => {
-    vi.mocked(useMcpTools).mockReturnValue({
+useMcpToolsMock.mockReturnValue({
       data: undefined,
       isLoading: false,
       error: null,
-    } as any);
+    } as unknown);
 
     render(<McpToolsModal serverName={null} onClose={() => {}} />);
     expect(screen.queryByTestId(testIds.mcpToolsModal)).not.toBeInTheDocument();
   });
 
   it('renders loading state', () => {
-    vi.mocked(useMcpTools).mockReturnValue({
+useMcpToolsMock.mockReturnValue({
       data: undefined,
       isLoading: true,
       error: null,
-    } as any);
+    } as unknown);
 
     render(<McpToolsModal serverName="test-server" onClose={() => {}} />);
     expect(screen.getByTestId(testIds.loadingSpinner)).toBeInTheDocument();
   });
 
   it('renders error state', () => {
-    vi.mocked(useMcpTools).mockReturnValue({
+useMcpToolsMock.mockReturnValue({
       data: undefined,
       isLoading: false,
       error: new Error('Failed to load'),
-    } as any);
+    } as unknown);
 
     render(<McpToolsModal serverName="test-server" onClose={() => {}} />);
     expect(screen.getByText('加载工具失败')).toBeInTheDocument();
   });
 
   it('renders empty state when no tools for server', () => {
-    vi.mocked(useMcpTools).mockReturnValue({
+useMcpToolsMock.mockReturnValue({
       data: {
         tools: [{ name: 'other-server.tool1', description: 'desc' }],
       },
       isLoading: false,
       error: null,
-    } as any);
+    } as unknown);
 
     render(<McpToolsModal serverName="test-server" onClose={() => {}} />);
     expect(screen.getByText('该服务器暂无可用工具。')).toBeInTheDocument();
   });
 
   it('renders tools list and handles execution', async () => {
-    vi.mocked(useMcpTools).mockReturnValue({
+useMcpToolsMock.mockReturnValue({
       data: {
         tools: [
           {
@@ -88,7 +95,7 @@ describe('McpToolsModal', () => {
       },
       isLoading: false,
       error: null,
-    } as any);
+    } as unknown);
 
     mockMutateAsync.mockResolvedValue({
       success: true,
@@ -131,13 +138,13 @@ describe('McpToolsModal', () => {
   });
 
   it('handles invalid JSON input', async () => {
-    vi.mocked(useMcpTools).mockReturnValue({
+useMcpToolsMock.mockReturnValue({
       data: {
         tools: [{ name: 'test-server.my-tool', description: 'A test tool' }],
       },
       isLoading: false,
       error: null,
-    } as any);
+    } as unknown);
 
     render(<McpToolsModal serverName="test-server" onClose={() => {}} />);
 

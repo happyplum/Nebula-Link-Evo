@@ -5,6 +5,8 @@ import { testIds } from '@/shared/testing/testids.js';
 import { useChatStore } from '@/features/chat/store/chat.store.js';
 import { useChatStream } from '@/features/chat/hooks/useChatStream.js';
 
+type ChatState = ReturnType<typeof useChatStore.getState>;
+
 vi.mock('@/features/config/api/config.queries.js', () => ({
   useConfig: () => ({ data: { decision: { provider: 'glm', model: 'glm-4.6v-flash' } } }),
 }));
@@ -22,7 +24,7 @@ vi.mock('@/shared/query/query-client.js', () => ({
 }));
 
 vi.mock('@/features/chat/store/chat.store.js', () => ({
-  useChatStore: vi.fn((selector: (s: any) => unknown) =>
+  useChatStore: vi.fn((selector: (s: ChatState) => unknown) =>
     selector({
       streamingState: 'idle',
       activeSessionId: null,
@@ -38,11 +40,11 @@ vi.mock('@/features/chat/store/chat.store.js', () => ({
       setIsLoadingSessions: vi.fn(),
       setIsLoadingMessages: vi.fn(),
       pendingJobs: {},
-    })
+    } as unknown as ChatState)
   ),
-  selectShowThinking: (s: any) => s.showThinking,
-  selectStreamingState: (s: any) => s.streamingState,
-  selectActiveSessionId: (s: any) => s.activeSessionId,
+  selectShowThinking: (s: ChatState) => s.showThinking,
+  selectStreamingState: (s: ChatState) => s.streamingState,
+  selectActiveSessionId: (s: ChatState) => s.activeSessionId,
 }));
 
 vi.mock('@/features/chat/components/index.js', () => ({
@@ -61,7 +63,7 @@ describe('ChatPage', () => {
     vi.stubGlobal('EventSource', EventSourceCtor);
     (useChatStore as unknown as { getState: () => Record<string, never> }).getState = () => ({});
 
-    vi.mocked(useChatStore).mockImplementation((selector: (s: any) => unknown) =>
+    vi.mocked(useChatStore).mockImplementation((selector: (s: ChatState) => unknown) =>
       selector({
         streamingState: 'idle',
         activeSessionId: 'sess-1',
@@ -77,7 +79,7 @@ describe('ChatPage', () => {
         setIsLoadingSessions: vi.fn(),
         setIsLoadingMessages: vi.fn(),
         pendingJobs: {},
-      })
+      } as unknown as ChatState)
     );
 
     render(<ChatPage />);

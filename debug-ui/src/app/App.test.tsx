@@ -23,7 +23,7 @@ describe('AppRoutes', () => {
   });
 
   afterAll(() => {
-    delete (global as any).ResizeObserver;
+    delete (global as { ResizeObserver?: typeof ResizeObserver }).ResizeObserver;
   });
 
   it('renders DebugPage on "/" route', () => {

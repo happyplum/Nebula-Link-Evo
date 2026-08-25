@@ -4,11 +4,19 @@ import { Composer } from '../Composer.js';
 import { useChatStore } from '../../store/chat.store.js';
 import { testIds } from '@/shared/testing/testids.js';
 
+type ChatState = ReturnType<typeof useChatStore.getState>;
+type StoreMock = {
+  mockImplementation: (
+    implementation: (selector: (state: Record<string, unknown>) => unknown) => unknown
+  ) => void;
+};
+const storeMock = useChatStore as unknown as StoreMock;
+
 vi.mock('../../store/chat.store.js', () => ({
   useChatStore: vi.fn(),
-  selectScreenshotData: (s: any) => s.screenshotData,
-  selectStreamingState: (s: any) => s.streamingState,
-  selectActiveSessionId: (s: any) => s.activeSessionId,
+  selectScreenshotData: (s: ChatState) => s.screenshotData,
+  selectStreamingState: (s: ChatState) => s.streamingState,
+  selectActiveSessionId: (s: ChatState) => s.activeSessionId,
 }));
 
 describe('Composer', () => {
@@ -28,7 +36,7 @@ describe('Composer', () => {
       clearScreenshotData: vi.fn(),
     };
 
-    (useChatStore as any).mockImplementation((selector: any) => selector(state));
+    storeMock.mockImplementation((selector) => selector(state));
   });
 
   afterEach(() => {
@@ -42,7 +50,7 @@ describe('Composer', () => {
   });
 
   it('disables input when streaming', () => {
-    (useChatStore as any).mockImplementation((selector: any) =>
+    storeMock.mockImplementation((selector) =>
       selector({
         streamingState: 'streaming',
         activeSessionId: 'session-1',
@@ -59,7 +67,7 @@ describe('Composer', () => {
   });
 
   it('disables input when no active session', () => {
-    (useChatStore as any).mockImplementation((selector: any) =>
+    storeMock.mockImplementation((selector) =>
       selector({
         streamingState: 'idle',
         activeSessionId: null,

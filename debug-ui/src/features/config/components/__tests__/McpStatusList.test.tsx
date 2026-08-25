@@ -8,49 +8,53 @@ vi.mock('../../api/config.queries.js', () => ({
   useMcpStatus: vi.fn(),
 }));
 
+const useMcpStatusMock = vi.mocked(useMcpStatus) as unknown as {
+  mockReturnValue: (value: unknown) => void;
+};
+
 describe('McpStatusList', () => {
   it('renders loading state', () => {
-    vi.mocked(useMcpStatus).mockReturnValue({
+useMcpStatusMock.mockReturnValue({
       data: undefined,
       isLoading: true,
       error: null,
-    } as any);
+    } as unknown);
 
     render(<McpStatusList />);
     expect(screen.getByTestId(testIds.loadingSpinner)).toBeInTheDocument();
   });
 
   it('renders error state', () => {
-    vi.mocked(useMcpStatus).mockReturnValue({
+useMcpStatusMock.mockReturnValue({
       data: undefined,
       isLoading: false,
       error: new Error('Failed to load'),
-    } as any);
+    } as unknown);
 
     render(<McpStatusList />);
     expect(screen.getByText('加载 MCP 状态失败')).toBeInTheDocument();
   });
 
   it('renders empty state when no data', () => {
-    vi.mocked(useMcpStatus).mockReturnValue({
+useMcpStatusMock.mockReturnValue({
       data: null,
       isLoading: false,
       error: null,
-    } as any);
+    } as unknown);
 
     render(<McpStatusList />);
     expect(screen.getByText('无 MCP 数据')).toBeInTheDocument();
   });
 
   it('renders disabled state', () => {
-    vi.mocked(useMcpStatus).mockReturnValue({
+useMcpStatusMock.mockReturnValue({
       data: {
         enabled: false,
         servers: [],
       },
       isLoading: false,
       error: null,
-    } as any);
+    } as unknown);
 
     render(<McpStatusList />);
     expect(screen.getByText('已禁用')).toBeInTheDocument();
@@ -58,14 +62,14 @@ describe('McpStatusList', () => {
   });
 
   it('renders empty servers list', () => {
-    vi.mocked(useMcpStatus).mockReturnValue({
+useMcpStatusMock.mockReturnValue({
       data: {
         enabled: true,
         servers: [],
       },
       isLoading: false,
       error: null,
-    } as any);
+    } as unknown);
 
     render(<McpStatusList />);
     expect(screen.getByText('已启用')).toBeInTheDocument();
@@ -73,7 +77,7 @@ describe('McpStatusList', () => {
   });
 
   it('renders servers with state machine states and handles view tools click', () => {
-    vi.mocked(useMcpStatus).mockReturnValue({
+useMcpStatusMock.mockReturnValue({
       data: {
         enabled: true,
         servers: [
@@ -83,7 +87,7 @@ describe('McpStatusList', () => {
       },
       isLoading: false,
       error: null,
-    } as any);
+    } as unknown);
 
     const onSelectServer = vi.fn();
     render(<McpStatusList onSelectServer={onSelectServer} />);
@@ -101,7 +105,7 @@ describe('McpStatusList', () => {
   });
 
   it('renders reconnecting state with loading indicator', () => {
-    vi.mocked(useMcpStatus).mockReturnValue({
+useMcpStatusMock.mockReturnValue({
       data: {
         enabled: true,
         servers: [
@@ -110,7 +114,7 @@ describe('McpStatusList', () => {
       },
       isLoading: false,
       error: null,
-    } as any);
+    } as unknown);
 
     render(<McpStatusList />);
     expect(screen.getByText('重连中 · 0 工具')).toBeInTheDocument();
@@ -119,7 +123,7 @@ describe('McpStatusList', () => {
   });
 
   it('renders failed state with error indicator', () => {
-    vi.mocked(useMcpStatus).mockReturnValue({
+useMcpStatusMock.mockReturnValue({
       data: {
         enabled: true,
         servers: [
@@ -128,14 +132,14 @@ describe('McpStatusList', () => {
       },
       isLoading: false,
       error: null,
-    } as any);
+    } as unknown);
 
     render(<McpStatusList />);
     expect(screen.getByText('失败 · 0 工具')).toBeInTheDocument();
   });
 
   it('renders starting state with loading indicator', () => {
-    vi.mocked(useMcpStatus).mockReturnValue({
+useMcpStatusMock.mockReturnValue({
       data: {
         enabled: true,
         servers: [
@@ -144,7 +148,7 @@ describe('McpStatusList', () => {
       },
       isLoading: false,
       error: null,
-    } as any);
+    } as unknown);
 
     render(<McpStatusList />);
     expect(screen.getByText('启动中 · 0 工具')).toBeInTheDocument();

@@ -43,8 +43,12 @@ beforeEach(() => {
     const es = createES(url);
     const anyEs = es as unknown as { addEventListener: unknown; close: unknown };
     anyEs.addEventListener = (type: string, handler: (e: MessageEvent) => void) => {
-      if (!es.listeners.has(type)) es.listeners.set(type, new Set());
-      es.listeners.get(type)!.add(handler);
+      let handlers = es.listeners.get(type);
+      if (!handlers) {
+        handlers = new Set();
+        es.listeners.set(type, handlers);
+      }
+      handlers.add(handler);
     };
     anyEs.close = es.close;
     return es;

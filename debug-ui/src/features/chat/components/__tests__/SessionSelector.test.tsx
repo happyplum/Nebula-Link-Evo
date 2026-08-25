@@ -4,10 +4,16 @@ import { SessionSelector } from '../SessionSelector.js';
 import { useChatStore } from '../../store/chat.store.js';
 import { testIds } from '@/shared/testing/testids.js';
 
+type ChatState = ReturnType<typeof useChatStore.getState>;
+type StoreMock = {
+  mockImplementation: (implementation: (selector: { name: string }) => unknown) => void;
+};
+const storeMock = useChatStore as unknown as StoreMock;
+
 vi.mock('../../store/chat.store.js', () => ({
   useChatStore: vi.fn(),
-  selectSessions: (s: any) => s.sessions,
-  selectActiveSessionId: (s: any) => s.activeSessionId,
+  selectSessions: (s: ChatState) => s.sessions,
+  selectActiveSessionId: (s: ChatState) => s.activeSessionId,
 }));
 
 describe('SessionSelector', () => {
@@ -16,7 +22,7 @@ describe('SessionSelector', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    (useChatStore as any).mockImplementation((selector: any) => {
+    storeMock.mockImplementation((selector) => {
       if (selector.name === 'selectSessions')
         return [
           { id: 'session-1', title: 'First Session' },

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { ChatMessage, ChatSession } from '@/features/chat/types/index.js';
+import { mustExist } from '@/test-support/must-exist.js';
 
 import { useChatStore } from './chat.store.js';
 
@@ -97,7 +98,10 @@ describe('chat.store', () => {
       useChatStore.getState().setSessions([makeSession({ id: 'a', title: 'Old' })]);
       useChatStore.getState().updateSession('a', { title: 'New', status: 'running' });
 
-      const session = useChatStore.getState().sessions.find((s) => s.id === 'a')!;
+      const session = mustExist(
+        useChatStore.getState().sessions.find((s) => s.id === 'a'),
+        'updated session'
+      );
       expect(session.title).toBe('New');
       expect(session.status).toBe('running');
     });
@@ -459,7 +463,7 @@ describe('chat.store', () => {
       expect(msg.role).toBe('assistant');
       expect(msg.content).toBe('Hello');
       expect(msg.toolCalls).toHaveLength(1);
-      expect(msg.toolCalls![0].name).toBe('browser_snapshot');
+      expect(mustExist(msg.toolCalls, 'message tool calls')[0].name).toBe('browser_snapshot');
       expect(s.streamingToolCalls).toEqual([]);
     });
 

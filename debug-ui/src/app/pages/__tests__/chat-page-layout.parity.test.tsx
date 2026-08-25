@@ -6,6 +6,8 @@ import { useChatStore } from '@/features/chat/store/chat.store.js';
 import { apiClient } from '@/shared/api/client.js';
 import { testIds } from '@/shared/testing/testids.js';
 
+type ChatState = ReturnType<typeof useChatStore.getState>;
+
 vi.mock('@/features/config/api/config.queries.js', () => ({
   useConfig: () => ({ data: { decision: { provider: 'glm', model: 'glm-4.6v-flash' } } }),
 }));
@@ -28,9 +30,9 @@ vi.mock('@/shared/api/client.js', () => ({
 // Mock Zustand store — must include all named exports used by ChatPage
 vi.mock('@/features/chat/store/chat.store.js', () => ({
   useChatStore: vi.fn(),
-  selectShowThinking: (s: any) => s.showThinking,
-  selectStreamingState: (s: any) => s.streamingState,
-  selectActiveSessionId: (s: any) => s.activeSessionId,
+  selectShowThinking: (s: ChatState) => s.showThinking,
+  selectStreamingState: (s: ChatState) => s.streamingState,
+  selectActiveSessionId: (s: ChatState) => s.activeSessionId,
 }));
 
 // Mock the chat components that are already tested elsewhere
@@ -82,7 +84,9 @@ describe('ChatPage Layout Parity', () => {
   });
 
   it('renders chat page root with correct testid', () => {
-    vi.mocked(useChatStore).mockImplementation((selector) => selector(mockStore as any));
+    vi.mocked(useChatStore).mockImplementation((selector) =>
+      selector(mockStore as unknown as ChatState)
+    );
     render(<ChatPage />);
 
     const chatPage = screen.getByTestId(testIds.chatPageRoot);
@@ -90,7 +94,9 @@ describe('ChatPage Layout Parity', () => {
   });
 
   it('renders session selector in header', () => {
-    vi.mocked(useChatStore).mockImplementation((selector) => selector(mockStore as any));
+    vi.mocked(useChatStore).mockImplementation((selector) =>
+      selector(mockStore as unknown as ChatState)
+    );
     render(<ChatPage />);
 
     const sessionSelector = screen.getByTestId(testIds.sessionSelector);
@@ -98,7 +104,9 @@ describe('ChatPage Layout Parity', () => {
   });
 
   it('renders message list area', () => {
-    vi.mocked(useChatStore).mockImplementation((selector) => selector(mockStore as any));
+    vi.mocked(useChatStore).mockImplementation((selector) =>
+      selector(mockStore as unknown as ChatState)
+    );
     render(<ChatPage />);
 
     const messageList = screen.getByTestId(testIds.messageList);
@@ -106,7 +114,9 @@ describe('ChatPage Layout Parity', () => {
   });
 
   it('renders composer with textarea', () => {
-    vi.mocked(useChatStore).mockImplementation((selector) => selector(mockStore as any));
+    vi.mocked(useChatStore).mockImplementation((selector) =>
+      selector(mockStore as unknown as ChatState)
+    );
     render(<ChatPage />);
 
     const composerInput = screen.getByTestId(testIds.composerInput);
@@ -114,7 +124,9 @@ describe('ChatPage Layout Parity', () => {
   });
 
   it('renders composer area in footer', () => {
-    vi.mocked(useChatStore).mockImplementation((selector) => selector(mockStore as any));
+    vi.mocked(useChatStore).mockImplementation((selector) =>
+      selector(mockStore as unknown as ChatState)
+    );
     render(<ChatPage />);
 
     const composer = screen.getByPlaceholderText(/Type a message/i);
@@ -122,7 +134,9 @@ describe('ChatPage Layout Parity', () => {
   });
 
   it('renders CoT toggle checkbox', () => {
-    vi.mocked(useChatStore).mockImplementation((selector) => selector(mockStore as any));
+    vi.mocked(useChatStore).mockImplementation((selector) =>
+      selector(mockStore as unknown as ChatState)
+    );
     render(<ChatPage />);
 
     const cotToggle = screen.getByLabelText(/CoT/i);
@@ -130,7 +144,9 @@ describe('ChatPage Layout Parity', () => {
   });
 
   it('calls addSession and setActiveSession when new session button is clicked', async () => {
-    vi.mocked(useChatStore).mockImplementation((selector) => selector(mockStore as any));
+    vi.mocked(useChatStore).mockImplementation((selector) =>
+      selector(mockStore as unknown as ChatState)
+    );
     render(<ChatPage />);
 
     const newSessionBtn = screen.getByTitle('新建会话');
@@ -144,7 +160,9 @@ describe('ChatPage Layout Parity', () => {
 
   it('calls setStreamingState when interrupt button is clicked', () => {
     mockStore.streamingState = 'streaming';
-    vi.mocked(useChatStore).mockImplementation((selector) => selector(mockStore as any));
+    vi.mocked(useChatStore).mockImplementation((selector) =>
+      selector(mockStore as unknown as ChatState)
+    );
     render(<ChatPage />);
 
     const interruptBtn = screen.getByRole('button', { name: /打断/ });
