@@ -9,7 +9,10 @@ export class SemanticArtifactStore {
     this.root = path.resolve(process.cwd(), root);
   }
 
-  async persist(expectedSha256: string, bytes: Buffer): Promise<{ storageKey: string; sizeBytes: number }> {
+  async persist(
+    expectedSha256: string,
+    bytes: Buffer
+  ): Promise<{ storageKey: string; sizeBytes: number }> {
     const actualSha256 = createHash('sha256').update(bytes).digest('hex');
     if (actualSha256 !== expectedSha256.toLowerCase()) {
       throw new Error('浏览器证据内容与声明的 SHA-256 不一致');
@@ -34,5 +37,20 @@ export class SemanticArtifactStore {
       await unlink(temporary).catch(() => undefined);
     }
     return { storageKey, sizeBytes: bytes.byteLength };
+  }
+
+  async delete(storageKey: string): Promise<boolean> {
+    const resolved = path.resolve(storageKey);
+    const relative = path.relative(this.root, resolved);
+    if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
+      throw new Error('证据对象路径不属于配置的存储目录');
+    }
+    try {
+      await unlink(resolved);
+      return true;
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return false;
+      throw error;
+    }
   }
 }

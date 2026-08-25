@@ -22,6 +22,11 @@ import {
   migrationName as migration018Name,
   migrationSql as migration018Sql,
 } from './migrations/018-authoring-amendments.js';
+import {
+  migrationId as migration019Id,
+  migrationName as migration019Name,
+  migrationSql as migration019Sql,
+} from './migrations/019-semantic-evidence-retention.js';
 import { runTrackedMigration } from './migration-runner.js';
 import { BusinessVersionRepository } from './repositories/business-version-repository.js';
 import { SemanticAssetRepository } from './repositories/semantic-asset-repository.js';
@@ -93,6 +98,7 @@ class DatabaseManager {
       { id: migration016Id, name: migration016Name, sql: migration016Sql },
       { id: migration017Id, name: migration017Name, sql: migration017Sql },
       { id: migration018Id, name: migration018Name, sql: migration018Sql },
+      { id: migration019Id, name: migration019Name, sql: migration019Sql },
     ]) {
       runTrackedMigration(this.db, migration, '1.0.0');
     }

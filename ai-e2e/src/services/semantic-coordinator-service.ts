@@ -1050,7 +1050,7 @@ export class SemanticCoordinatorService {
             mediaType: artifact.mimeType,
             storageBackend: 'local_file',
             storageKey: persisted.storageKey,
-            sensitivity: 'sensitive',
+            sensitivity: 'restricted',
             redactionStatus: 'pending',
           });
           this.options.evidence.linkExternalTask({
@@ -1297,7 +1297,7 @@ export class SemanticCoordinatorService {
             mediaType: artifact.mimeType,
             storageBackend: 'local_file',
             storageKey: persisted.storageKey,
-            sensitivity: 'sensitive',
+            sensitivity: 'restricted',
             redactionStatus: 'pending',
           });
           this.options.evidence.linkExternalTask({
