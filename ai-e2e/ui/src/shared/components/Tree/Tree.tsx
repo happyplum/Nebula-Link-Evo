@@ -28,7 +28,8 @@ const TreeNode: React.FC<{
 }> = ({ node, level, selectedKeys, expandedKeys, onSelect, onToggle }) => {
   const isExpanded = expandedKeys.includes(node.key)
   const isSelected = selectedKeys.includes(node.key)
-  const hasChildren = node.children && node.children.length > 0
+  const children = node.children ?? []
+  const hasChildren = children.length > 0
   const isLeaf = node.isLeaf || !hasChildren
 
   return (
@@ -64,7 +65,7 @@ const TreeNode: React.FC<{
 
       {isExpanded && hasChildren && (
         <div>
-          {node.children!.map((child) => (
+          {children.map((child) => (
             <TreeNode
               key={child.key}
               node={child}
