@@ -34,12 +34,13 @@ export class AppService {
     source: 'built-in';
   }> {
     if (!this.toolRegistry) return [];
+    const toolRegistry = this.toolRegistry;
 
     const providers = [{ id: 'browser-execution-tools', name: 'browser-control' }];
 
     return providers
       .map(({ id, name }) => {
-        const provider = this.toolRegistry!.getProvider(id);
+        const provider = toolRegistry.getProvider(id);
         if (!provider) return null;
 
         const status = provider.status;

@@ -126,9 +126,10 @@ export class ScreencastManager {
   setDebugEnabled(enabled: boolean): void {
     if (enabled && process.env.NODE_ENV !== 'production') {
       if (this.debugCounter) return;
-      this.debugCounter = createFrameCounter();
+      const debugCounter = createFrameCounter();
+      this.debugCounter = debugCounter;
       this.debugInterval = setInterval(() => {
-        const s = this.debugCounter!.getSummary();
+        const s = debugCounter.getSummary();
         const reasons = Object.entries(s.dropReasons)
           .map(([k, v]) => `${k}=${v}`)
           .join(', ');

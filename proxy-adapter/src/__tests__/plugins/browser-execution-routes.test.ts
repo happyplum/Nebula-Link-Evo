@@ -342,4 +342,18 @@ describe('browser execution HTTP contract', () => {
       expect(response.statusCode).toBe(400);
     }
   });
+
+  it.each(['type', 'value', 'dispatch'])(
+    'rejects marker %s without its required param before browser access',
+    async (action) => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/debug/api/playwright/execute-by-marker',
+        payload: { snapshot_id: 'snapshot-1', nebula_id: 1, action },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ success: false, error: `${action} 操作缺少 param` });
+    }
+  );
 });

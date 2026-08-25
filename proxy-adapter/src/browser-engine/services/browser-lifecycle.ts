@@ -126,11 +126,13 @@ export class BrowserLifecycle {
     const tabs = [];
 
     for (const p of pages) {
-      if (!this.pageIds.has(p)) {
-        this.pageIds.set(p, crypto.randomUUID());
+      let pageId = this.pageIds.get(p);
+      if (!pageId) {
+        pageId = crypto.randomUUID();
+        this.pageIds.set(p, pageId);
       }
       tabs.push({
-        id: this.pageIds.get(p)!,
+        id: pageId,
         url: p.url(),
         title: await p.title(),
         isActive: p === this.state.page,
