@@ -8,6 +8,7 @@ import { up as up018 } from '../../migrations/018-authoring-amendments.js';
 import { AuthoringAmendmentRepository } from '../authoring-amendment-repository.js';
 import { BusinessVersionRepository } from '../business-version-repository.js';
 import { SemanticAssetRepository } from '../semantic-asset-repository.js';
+import { hashValue } from '../semantic-repository-utils.js';
 import { SemanticWorkflowRepository } from '../semantic-workflow-repository.js';
 
 const HASH_A = 'a'.repeat(64);
@@ -350,6 +351,102 @@ describe('authoring amendment repository', () => {
         .get(fixture.module1Id)
     ).toEqual({ id: fixture.module1RevisionId });
   });
+
+  it('activates an executable candidate only after recording its exact verification', () => {
+    const candidate = assets.createRevision({
+      assetType: 'functional_script',
+      assetId: fixture.scriptId,
+      businessVersionId: fixture.versionId,
+      schemaId: 'nebula.ai-e2e.functional-script/1.0',
+      payload: {
+        schema: 'nebula.ai-e2e.functional-script/1.0',
+        scriptKey: 'login.success',
+        functionalModuleId: fixture.module1Id,
+        pageScope: { entryPageId: fixture.page1Id, allowedTransitions: [] },
+        steps: [{ action: 'click', target: 'submit' }],
+      },
+      validationStatus: 'valid',
+      changeReason: '已验证脚本候选',
+      createdByType: 'child_agent',
+      supersedesRevisionId: fixture.scriptRevisionId,
+      primaryPageRevisionId: fixture.page1RevisionId,
+      changeKind: 'ai_repair',
+    });
+    const created = amendments.createAmendment({
+      jobId: fixture.jobId,
+      threadId: createThread(amendments, fixture).id,
+      idempotencyKey: 'verified-executable-candidate',
+      reason: '更新登录脚本',
+      category: 'script',
+      changes: [
+        {
+          assetType: 'functional_script',
+          assetId: fixture.scriptId,
+          baseRevisionId: fixture.scriptRevisionId,
+          baseRevisionSha256: fixture.scriptRevisionSha256,
+          candidateRevisionId: candidate.id,
+          targetPageDefinitionId: fixture.page1Id,
+          targetFunctionalModuleId: fixture.module1Id,
+          targetUrl: '/login',
+          category: 'script',
+          diff: { steps: { add: ['click submit'] } },
+        },
+      ],
+      validationPlan: { checks: ['real-browser'] },
+      createdBy: 'main-agent',
+    });
+    amendments.queueAtSafeBoundary(created.amendment.id);
+
+    expect(() => amendments.activate(created.amendment.id)).toThrow(
+      'Executable activation requires exact verification scope and dependency closure'
+    );
+
+    const verificationScope = {
+      schema: 'nebula.ai-e2e.verification-scope/1.0',
+      deploymentRevisionId: 'deployment-revision',
+      authoringJobId: fixture.jobId,
+      agentTaskId: 'verification-task',
+      verifiedAssetIds: [fixture.scriptId],
+    };
+    assets.recordVerification({
+      id: 'verification-1',
+      businessVersionId: fixture.versionId,
+      assetType: 'functional_script',
+      assetId: fixture.scriptId,
+      assetRevisionId: candidate.id,
+      deploymentRevisionId: 'deployment-revision',
+      verificationScope,
+      dependencyClosureSha256: HASH_A,
+      status: 'verified',
+      authoringJobId: fixture.jobId,
+    });
+    expect(() =>
+      amendments.recordCandidateVerification(created.amendment.id, [
+        {
+          candidateRevisionId: 'not-an-amendment-candidate',
+          verificationScopeSha256: hashValue(verificationScope),
+          dependencyClosureSha256: HASH_A,
+        },
+      ])
+    ).toThrow('does not match an amendment change');
+    amendments.recordCandidateVerification(created.amendment.id, [
+      {
+        candidateRevisionId: candidate.id,
+        verificationScopeSha256: hashValue(verificationScope),
+        dependencyClosureSha256: HASH_A,
+      },
+    ]);
+
+    expect(amendments.activate(created.amendment.id, 'verification-task').state).toBe('activated');
+    expect(
+      db
+        .prepare(
+          `SELECT id FROM functional_script_revisions
+           WHERE functional_script_id = ? AND lifecycle = 'current'`
+        )
+        .get(fixture.scriptId)
+    ).toEqual({ id: candidate.id });
+  });
 });
 
 function createThread(
@@ -476,6 +573,7 @@ function createFixture(db: DatabaseSync, versions: BusinessVersionRepository) {
     module3RevisionSha256: module3.currentRevision.contentSha256,
     scriptId: script.id,
     scriptRevisionId: script.currentRevision.id,
+    scriptRevisionSha256: script.currentRevision.contentSha256,
   };
 }
 

@@ -600,6 +600,43 @@ export class AuthoringAmendmentRepository {
     });
   }
 
+  recordCandidateVerification(
+    amendmentId: string,
+    verifications: Array<{
+      candidateRevisionId: string;
+      verificationScopeSha256: string;
+      dependencyClosureSha256: string;
+    }>
+  ): AmendmentRecord {
+    for (const verification of verifications) {
+      requireSha256(verification.verificationScopeSha256, 'verificationScopeSha256');
+      requireSha256(verification.dependencyClosureSha256, 'dependencyClosureSha256');
+    }
+    return inImmediateTransaction(this.db, () => {
+      const amendment = this.requireAmendment(amendmentId);
+      if (amendment.state !== 'verifying') {
+        throw new Error('Only a verifying amendment can record candidate verification');
+      }
+      const update = this.db.prepare(
+        `UPDATE authoring_amendment_changes
+         SET verification_scope_sha256 = ?, dependency_closure_sha256 = ?
+         WHERE amendment_id = ? AND candidate_revision_id = ?`
+      );
+      for (const verification of verifications) {
+        const result = update.run(
+          verification.verificationScopeSha256,
+          verification.dependencyClosureSha256,
+          amendmentId,
+          verification.candidateRevisionId
+        );
+        if (Number(result.changes) !== 1) {
+          throw new Error('Candidate verification does not match an amendment change');
+        }
+      }
+      return this.requireAmendment(amendmentId);
+    });
+  }
+
   fail(amendmentId: string, failure: Record<string, unknown>): AmendmentRecord {
     assertNoInlineSecrets(failure);
     return this.finishWithoutActivation(amendmentId, 'failed', failure);

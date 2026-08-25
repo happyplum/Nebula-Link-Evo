@@ -20,12 +20,16 @@ import type {
   CreateAgentTaskInput,
 } from '../../infrastructure/agent-task-client.js';
 import { MemoryCoordinatorSecretStore } from '../../infrastructure/coordinator-secret-store.js';
+import { IntegrationClientError } from '../../infrastructure/integration-client-error.js';
 import type {
   BrowserLeaseView,
   BrowserSessionView,
   SemanticBrowserClientPort,
 } from '../../infrastructure/semantic-browser-client.js';
-import { SemanticCoordinatorService } from '../semantic-coordinator-service.js';
+import {
+  desiredAgentCommand,
+  SemanticCoordinatorService,
+} from '../semantic-coordinator-service.js';
 import { SemanticAuthoringCandidateService } from '../semantic-authoring-candidate-service.js';
 import { SemanticAuthoringService } from '../semantic-authoring-service.js';
 
@@ -339,25 +343,415 @@ describe('SemanticCoordinatorService', () => {
       outcome: 'succeeded',
     });
   });
+
+  it.each([
+    [
+      'interrupted',
+      { status: 'interrupted', error: { code: 'process_restart', message: 'restarted' } },
+      'recoverable_interruption',
+      'process_restart',
+    ],
+    [
+      'interrupted-defaults',
+      { status: 'interrupted' },
+      'recoverable_interruption',
+      'agent_interrupted',
+    ],
+    ['cancelled', { status: 'cancelled' }, 'cancelled', 'run_cancelled'],
+    [
+      'blocked',
+      { status: 'blocked', error: { code: 'login_required', message: 'blocked' } },
+      'precondition_blocked',
+      'login_required',
+    ],
+    ['blocked-defaults', { status: 'blocked' }, 'precondition_blocked', 'agent_blocked'],
+    [
+      'failed',
+      { status: 'failed', error: { code: 'tool_failed', message: 'failed' } },
+      'execution_failed',
+      'tool_failed',
+    ],
+    ['failed-defaults', { status: 'failed' }, 'execution_failed', 'agent_failed'],
+    [
+      'unknown',
+      {
+        status: 'failed',
+        toolCalls: [
+          {
+            toolCallId: 'unknown-call',
+            toolName: 'browser-control.operation_execute',
+            status: 'outcome_unknown',
+            stepId: 'write-step',
+            operationId: 'unknown-operation',
+            operation: 'click',
+          },
+        ],
+      },
+      'outcome_unknown',
+      'browser_outcome_unknown',
+    ],
+    [
+      'oversized',
+      {
+        status: 'completed',
+        output: { result: 'succeeded', reasonClass: 'ok', summary: 'x'.repeat(4_001) },
+      },
+      'execution_failed',
+      'invalid_agent_output',
+    ],
+    [
+      'invalid-result',
+      {
+        status: 'completed',
+        output: {
+          result: 'not-allowed',
+          reasonClass: '',
+          summary: '',
+          checkpointJson: '{invalid',
+          actualPageJson: '[]',
+        },
+      },
+      'execution_failed',
+      'invalid_agent_output',
+    ],
+    [
+      'decision',
+      {
+        status: 'completed',
+        output: {
+          result: 'decision_required',
+          reasonClass: 'operator_choice',
+          summary: 'choose',
+          checkpointJson: '{"step":1}',
+          actualPageJson: '{"url":"/account"}',
+          confirmedOutputsJson: '{"confirmed":true}',
+          partialOutputsJson: '{"partial":true}',
+          sideEffectsJson: '{"writes":0}',
+          downstreamImpactJson: '{"blocked":true}',
+        },
+      },
+      'decision_required',
+      'operator_choice',
+    ],
+  ] as const)(
+    'maps a terminal %s Agent task without weakening the run result',
+    async (_name, override, expectedResult, expectedReason) => {
+      const fixture = createFixture(db, assets);
+      const created = runs.createFormalRun({
+        projectId: 'project-1',
+        businessVersionId: fixture.versionId,
+        clientRunId: `terminal-${_name}`,
+        scenarioRevisionId: fixture.scenarioRevisionId,
+        deploymentRevisionId: fixture.deploymentRevisionId,
+        inputs: {},
+      });
+      runs.command({
+        commandId: `start-${_name}`,
+        runId: created.id,
+        action: 'start',
+        expectedStateVersion: 2,
+        createdBy: 'operator',
+      });
+      const coordinator = new SemanticCoordinatorService({
+        repository: new SemanticCoordinatorRepository(db),
+        workflows,
+        evidence,
+        runs,
+        agentTasks: new FakeAgentTaskClient(undefined, override),
+        browser: new FakeBrowserClient(),
+        secretStore: new MemoryCoordinatorSecretStore(),
+        artifactStore: { persist: async () => ({ storageKey: 'unused', sizeBytes: 0 }) } as never,
+      });
+
+      for (let index = 0; index < 14; index += 1) await coordinator.tick();
+
+      expect(
+        db
+          .prepare(
+            'SELECT result, reason_class FROM execution_attempts WHERE run_id = ? ORDER BY attempt_no DESC LIMIT 1'
+          )
+          .get(created.id)
+      ).toEqual({ result: expectedResult, reason_class: expectedReason });
+    }
+  );
+
+  it.each([
+    [
+      'agent envelope',
+      { schema: 'wrong', service: 'ai-chat-service', protocols: {} },
+      undefined,
+      'capability_mismatch',
+    ],
+    [
+      'agent protocol',
+      {
+        schema: 'nebula.service-capabilities/1.0',
+        service: 'ai-chat-service',
+        protocols: { 'nebula.ai.agent-task': { major: 2 } },
+      },
+      undefined,
+      'capability_mismatch',
+    ],
+    [
+      'browser limits',
+      undefined,
+      { limits: { maxActiveBrowserSessions: 2, maxBrowserContextsPerSession: 1 } },
+      'capability_mismatch',
+    ],
+    ['browser envelope', undefined, { schema: 'wrong' }, 'capability_mismatch'],
+    [
+      'browser protocol',
+      undefined,
+      { protocols: { browserExecution: { major: 2 } } },
+      'capability_mismatch',
+    ],
+    ['agent loopback', undefined, undefined, 'permission_denied'],
+    ['browser loopback', undefined, undefined, 'permission_denied'],
+    ['side-effect authorization', undefined, undefined, 'capability_mismatch'],
+  ] as const)(
+    'fails closed on incompatible %s capabilities',
+    async (kind, agentOverride, browserOverride, code) => {
+      const agent = new FakeAgentTaskClient();
+      const browser = new FakeBrowserClient();
+      if (agentOverride) agent.capabilities = agentOverride;
+      if (browserOverride) browser.capabilities = { ...browser.capabilities, ...browserOverride };
+      if (kind === 'agent loopback') {
+        agent.capabilities = {
+          ...agent.capabilities,
+          features: { ...agent.capabilities.features, localControlPlane: false },
+        };
+      }
+      if (kind === 'browser loopback') {
+        browser.capabilities = {
+          ...browser.capabilities,
+          features: { localControlPlane: false },
+        };
+      }
+      if (kind === 'side-effect authorization') {
+        agent.capabilities = {
+          ...agent.capabilities,
+          features: {
+            ...agent.capabilities.features,
+            sideEffectAuthorization: 'none',
+          },
+        };
+      }
+      const coordinator = new SemanticCoordinatorService({
+        repository: new SemanticCoordinatorRepository(db),
+        workflows,
+        evidence,
+        runs,
+        agentTasks: agent,
+        browser,
+        secretStore: new MemoryCoordinatorSecretStore(),
+      });
+
+      await expect(coordinator.tick()).rejects.toMatchObject({ code });
+    }
+  );
+
+  it('settles an unsupported outbox command as terminal and pauses the owning run', async () => {
+    const fixture = createFixture(db, assets);
+    const created = runs.createFormalRun({
+      projectId: 'project-1',
+      businessVersionId: fixture.versionId,
+      clientRunId: 'unsupported-outbox-run',
+      scenarioRevisionId: fixture.scenarioRevisionId,
+      deploymentRevisionId: fixture.deploymentRevisionId,
+      inputs: {},
+    });
+    runs.command({
+      commandId: 'start-unsupported-outbox-run',
+      runId: created.id,
+      action: 'start',
+      expectedStateVersion: 2,
+      createdBy: 'operator',
+    });
+    evidence.enqueueOutbox({
+      id: 'unsupported-outbox',
+      context: { type: 'run', id: created.id },
+      targetService: 'proxy_adapter',
+      commandType: 'unsupported.command',
+      endpointOrTool: '/unsupported',
+      payloadRedacted: {},
+    });
+    const coordinator = new SemanticCoordinatorService({
+      repository: new SemanticCoordinatorRepository(db),
+      workflows,
+      evidence,
+      runs,
+      agentTasks: new FakeAgentTaskClient(),
+      browser: new FakeBrowserClient(),
+      secretStore: new MemoryCoordinatorSecretStore(),
+    });
+
+    await expect(coordinator.tick()).resolves.toEqual({ action: 'outbox:unsupported.command' });
+    expect(
+      db
+        .prepare('SELECT status, last_error_json FROM integration_outbox WHERE id = ?')
+        .get('unsupported-outbox')
+    ).toMatchObject({ status: 'terminal_failed' });
+    expect(db.prepare('SELECT lifecycle FROM test_runs WHERE id = ?').get(created.id)).toEqual({
+      lifecycle: 'paused',
+    });
+  });
+
+  it('schedules retryable integration failures and terminally fails an acquiring browser job', async () => {
+    const fixture = createFixture(db, assets);
+    const retryRun = runs.createFormalRun({
+      projectId: 'project-1',
+      businessVersionId: fixture.versionId,
+      clientRunId: 'retryable-outbox-run',
+      scenarioRevisionId: fixture.scenarioRevisionId,
+      deploymentRevisionId: fixture.deploymentRevisionId,
+      inputs: {},
+    });
+    evidence.enqueueOutbox({
+      id: 'retryable-session-create',
+      context: { type: 'run', id: retryRun.id },
+      targetService: 'proxy_adapter',
+      commandType: 'browser_session.create',
+      endpointOrTool: '/api/v1/browser-execution/sessions',
+      payloadRedacted: { browserJobId: retryRun.browserJobId },
+    });
+    const retryBrowser = new FakeBrowserClient();
+    retryBrowser.createSessionError = new IntegrationClientError(
+      'proxy-adapter',
+      'browser_unavailable',
+      'retry later',
+      true,
+      503,
+      { nextAttemptAt: '2099-01-01T00:01:00.000Z' }
+    );
+    const retryCoordinator = new SemanticCoordinatorService({
+      repository: new SemanticCoordinatorRepository(db),
+      workflows,
+      evidence,
+      runs,
+      agentTasks: new FakeAgentTaskClient(),
+      browser: retryBrowser,
+      secretStore: new MemoryCoordinatorSecretStore(),
+      now: () => new Date('2026-01-01T00:00:00.000Z'),
+    });
+
+    await retryCoordinator.tick();
+    expect(
+      db
+        .prepare('SELECT status, next_attempt_at FROM integration_outbox WHERE id = ?')
+        .get('retryable-session-create')
+    ).toEqual({
+      status: 'retryable_failed',
+      next_attempt_at: '2099-01-01T00:01:00.000Z',
+    });
+    const abandoned = workflows.claimNextBrowserJob();
+    if (abandoned) workflows.transitionBrowserJob(String(abandoned.id), 'failed');
+
+    const failedRun = runs.createFormalRun({
+      projectId: 'project-1',
+      businessVersionId: fixture.versionId,
+      clientRunId: 'terminal-outbox-run',
+      scenarioRevisionId: fixture.scenarioRevisionId,
+      deploymentRevisionId: fixture.deploymentRevisionId,
+      inputs: {},
+    });
+    workflows.claimNextBrowserJob();
+    evidence.enqueueOutbox({
+      id: 'terminal-session-create',
+      context: { type: 'run', id: failedRun.id },
+      targetService: 'proxy_adapter',
+      commandType: 'browser_session.create',
+      endpointOrTool: '/api/v1/browser-execution/sessions',
+      payloadRedacted: { browserJobId: failedRun.browserJobId },
+    });
+    const terminalBrowser = new FakeBrowserClient();
+    terminalBrowser.createSessionError = new IntegrationClientError(
+      'proxy-adapter',
+      'permission_denied',
+      'fatal',
+      false,
+      403
+    );
+    const terminalCoordinator = new SemanticCoordinatorService({
+      repository: new SemanticCoordinatorRepository(db),
+      workflows,
+      evidence,
+      runs,
+      agentTasks: new FakeAgentTaskClient(),
+      browser: terminalBrowser,
+      secretStore: new MemoryCoordinatorSecretStore(),
+    });
+
+    await terminalCoordinator.tick();
+    expect(
+      db
+        .prepare('SELECT status FROM integration_outbox WHERE id = ?')
+        .get('terminal-session-create')
+    ).toEqual({ status: 'terminal_failed' });
+  });
+
+  it('deduplicates concurrent ticks and caches a compatible capability snapshot', async () => {
+    const agent = new FakeAgentTaskClient();
+    let releaseCapabilities!: () => void;
+    agent.capabilityGate = new Promise<void>((resolve) => {
+      releaseCapabilities = resolve;
+    });
+    const browser = new FakeBrowserClient();
+    const coordinator = new SemanticCoordinatorService({
+      repository: new SemanticCoordinatorRepository(db),
+      workflows,
+      evidence,
+      runs,
+      agentTasks: agent,
+      browser,
+      secretStore: new MemoryCoordinatorSecretStore(),
+      now: () => new Date('2026-01-01T00:00:00.000Z'),
+    });
+
+    const first = coordinator.tick();
+    await expect(coordinator.tick()).resolves.toEqual({ action: 'already_running' });
+    releaseCapabilities();
+    await expect(first).resolves.toEqual({ action: 'idle' });
+    await expect(coordinator.tick()).resolves.toEqual({ action: 'idle' });
+    expect(agent.capabilityCalls).toBe(1);
+    expect(browser.capabilityCalls).toBe(1);
+  });
+
+  it.each([
+    ['cancelling', 'running', 'cancel'],
+    ['paused', 'running', 'pause'],
+    ['running', 'paused', 'resume'],
+    ['running', 'running', null],
+    ['cancelling', 'completed', null],
+  ] as const)('maps run %s and Agent %s to %s', (runState, agentState, command) => {
+    expect(desiredAgentCommand(runState, agentState)).toBe(command);
+  });
 });
 
 class FakeAgentTaskClient implements AgentTaskClientPort {
   createdRequest?: CreateAgentTaskInput;
+  capabilityCalls = 0;
+  capabilityGate?: Promise<void>;
+  capabilities: Record<string, unknown> = {
+    schema: 'nebula.service-capabilities/1.0',
+    service: 'ai-chat-service',
+    protocols: { 'nebula.ai.agent-task': { major: 1, minor: 0 } },
+    features: {
+      localControlPlane: true,
+      sideEffectAuthorization: 'preauthorized_steps_only',
+    },
+    limits: {},
+  };
   private readonly tasks = new Map<string, AgentTaskView>();
 
-  constructor(private readonly authoringOutput?: Record<string, unknown>) {}
+  constructor(
+    private readonly authoringOutput?: Record<string, unknown>,
+    private readonly runTaskOverride?: Partial<AgentTaskView>
+  ) {}
 
   async getCapabilities(): Promise<Record<string, unknown>> {
-    return {
-      schema: 'nebula.service-capabilities/1.0',
-      service: 'ai-chat-service',
-      protocols: { 'nebula.ai.agent-task': { major: 1, minor: 0 } },
-      features: {
-        localControlPlane: true,
-        sideEffectAuthorization: 'preauthorized_steps_only',
-      },
-      limits: {},
-    };
+    this.capabilityCalls += 1;
+    await this.capabilityGate;
+    return this.capabilities;
   }
 
   async createTask(input: CreateAgentTaskInput): Promise<AgentTaskView> {
@@ -407,6 +801,14 @@ class FakeAgentTaskClient implements AgentTaskClientPort {
       startedAt: new Date().toISOString(),
       completedAt: new Date().toISOString(),
     };
+    if (
+      this.runTaskOverride &&
+      !verifying &&
+      !input.clientTaskId.startsWith('authoring-locate:') &&
+      !input.clientTaskId.startsWith('authoring:')
+    ) {
+      Object.assign(task, this.runTaskOverride);
+    }
     this.tasks.set(taskId, task);
     return task;
   }
@@ -426,20 +828,25 @@ class FakeBrowserClient implements SemanticBrowserClientPort {
   closed = false;
   closedWithLease = false;
   revoked = false;
+  capabilityCalls = 0;
+  createSessionError?: Error;
+  capabilities: Record<string, unknown> = {
+    schema: 'nebula.service-capabilities/1.0',
+    service: 'proxy-adapter',
+    protocols: { browserExecution: { major: 1, minor: 0 } },
+    features: { localControlPlane: true },
+    limits: { maxActiveBrowserSessions: 1, maxBrowserContextsPerSession: 1 },
+  };
   private activeLease?: BrowserLeaseView;
   private leaseCounter = 0;
 
   async getCapabilities(): Promise<Record<string, unknown>> {
-    return {
-      schema: 'nebula.service-capabilities/1.0',
-      service: 'proxy-adapter',
-      protocols: { browserExecution: { major: 1, minor: 0 } },
-      features: { localControlPlane: true },
-      limits: { maxActiveBrowserSessions: 1, maxBrowserContextsPerSession: 1 },
-    };
+    this.capabilityCalls += 1;
+    return this.capabilities;
   }
 
   async createSession(): Promise<BrowserSessionView> {
+    if (this.createSessionError) throw this.createSessionError;
     this.closed = false;
     return this.session();
   }

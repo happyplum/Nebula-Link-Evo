@@ -9,7 +9,7 @@
     "preview": "vite preview --host --port 4174",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
-    "test:e2e": "tsc -p tsconfig.playwright.json --noEmit && pnpm build && node scripts/run-e2e.mjs",
+    "test:e2e": "tsc -p tsconfig.playwright.json --noEmit && pnpm --dir ../../proxy-adapter build && pnpm --dir ../../ai-chat-service build && pnpm build && node scripts/run-e2e.mjs",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest"
   },

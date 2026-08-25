@@ -123,14 +123,14 @@ export class SemanticAuthoringCandidateService {
             type: 'string',
             enum: ['candidate_ready', 'no_change', 'blocked'],
           },
-          summary: { type: 'string', minLength: 1, maxLength: 4_000 },
+          summary: { type: 'string' },
           category: {
             type: 'string',
             enum: [...AMENDMENT_CATEGORIES],
           },
-          proposalsJson: { type: 'string', maxLength: 100_000 },
-          validationPlanJson: { type: 'string', maxLength: 20_000 },
-          potentialSideEffectsJson: { type: 'string', maxLength: 20_000 },
+          proposalsJson: { type: 'string' },
+          validationPlanJson: { type: 'string' },
+          potentialSideEffectsJson: { type: 'string' },
         },
         required: ['status', 'summary'],
       },
@@ -191,6 +191,10 @@ export class SemanticAuthoringCandidateService {
     }
     const output = objectValue(agentTask.output);
     const status = output.status;
+    assertOptionalStringLimit(output.summary, 4_000, 'summary');
+    assertOptionalStringLimit(output.proposalsJson, 100_000, 'proposalsJson');
+    assertOptionalStringLimit(output.validationPlanJson, 20_000, 'validationPlanJson');
+    assertOptionalStringLimit(output.potentialSideEffectsJson, 20_000, 'potentialSideEffectsJson');
     const summary = stringValue(output.summary) ?? 'Agent 未返回候选摘要';
     if (status === 'no_change') return { status, summary };
     if (status !== 'candidate_ready') return { status: 'blocked', summary };
@@ -322,8 +326,9 @@ export class SemanticAuthoringCandidateService {
       stringValue(output.summary) ?? agentTask.error?.message ?? '浏览器验证未返回摘要';
     const hasSuccessfulOperation = agentTask.toolCalls.some((call) => call.status === 'succeeded');
     if (agentTask.status === 'completed' && result === 'succeeded' && hasSuccessfulOperation) {
+      this.recordSuccessfulVerification(task, amendment, agentTask.taskId);
       const activated = this.amendments.activate(amendmentId, agentTask.taskId);
-      this.recordSuccessfulVerification(task, activated, agentTask.taskId);
+      this.recordSuccessfulBusinessVersionValidation(task, activated, agentTask.taskId);
       return {
         status: 'activated',
         summary,
@@ -364,6 +369,71 @@ export class SemanticAuthoringCandidateService {
         .map((change) => stringValue(change.assetId))
         .filter((assetId): assetId is string => Boolean(assetId))
     );
+    const scope = {
+      schema: 'nebula.ai-e2e.verification-scope/1.0',
+      deploymentRevisionId,
+      authoringJobId: task.jobId,
+      agentTaskId,
+      verifiedAssetIds: [...verifiedIds].sort(),
+    };
+    const dependencyClosureSha256 = hashValue([]);
+    const executableChanges = amendment.changes.filter((change) =>
+      ['functional_script', 'test_scenario'].includes(stringValue(change.assetType) ?? '')
+    );
+    for (const change of executableChanges) {
+      const assetType = requiredString(change.assetType, 'change.assetType') as
+        | 'functional_script'
+        | 'test_scenario';
+      const assetId = requiredString(change.assetId, 'change.assetId');
+      const candidateRevisionId = requiredString(
+        change.candidateRevisionId,
+        'change.candidateRevisionId'
+      );
+      this.assets.recordVerification({
+        id: stableUuid(agentTaskId, 'asset-verification', assetType, assetId),
+        businessVersionId: task.businessVersionId,
+        assetType,
+        assetId,
+        assetRevisionId: candidateRevisionId,
+        deploymentRevisionId,
+        verificationScope: scope,
+        dependencyClosureSha256,
+        status: 'verified',
+        authoringJobId: task.jobId,
+      });
+    }
+    const verificationScopeSha256 = hashValue(scope);
+    this.amendments.recordCandidateVerification(
+      amendment.id,
+      executableChanges.map((change) => ({
+        candidateRevisionId: requiredString(
+          change.candidateRevisionId,
+          'change.candidateRevisionId'
+        ),
+        verificationScopeSha256,
+        dependencyClosureSha256,
+      }))
+    );
+  }
+
+  private recordSuccessfulBusinessVersionValidation(
+    task: CoordinatorAuthoringTask,
+    amendment: AmendmentRecord,
+    agentTaskId: string
+  ): void {
+    const workspace = this.requireWorkspace(task.businessVersionId);
+    const deploymentRevisionId = workspace.version.deploymentBindings.find(
+      (binding) => binding.isDefault
+    )?.deploymentRevisionId;
+    if (!deploymentRevisionId) throw new Error('业务版本缺少默认部署修订');
+    const verifiedIds = new Set(
+      amendment.changes
+        .filter((change) =>
+          ['functional_script', 'test_scenario'].includes(stringValue(change.assetType) ?? '')
+        )
+        .map((change) => stringValue(change.assetId))
+        .filter((assetId): assetId is string => Boolean(assetId))
+    );
     const executableAssets = [
       ...workspace.functionalScripts.map((asset) => ({
         type: 'functional_script' as const,
@@ -378,21 +448,6 @@ export class SemanticAuthoringCandidateService {
       agentTaskId,
       verifiedAssetIds: [...verifiedIds].sort(),
     };
-    const dependencyClosureSha256 = hashValue([]);
-    for (const entry of executableAssets.filter(({ asset }) => verifiedIds.has(asset.id))) {
-      this.assets.recordVerification({
-        id: stableUuid(agentTaskId, 'asset-verification', entry.type, entry.asset.id),
-        businessVersionId: task.businessVersionId,
-        assetType: entry.type,
-        assetId: entry.asset.id,
-        assetRevisionId: entry.asset.currentRevision.id,
-        deploymentRevisionId,
-        verificationScope: scope,
-        dependencyClosureSha256,
-        status: 'verified',
-        authoringJobId: task.jobId,
-      });
-    }
     const allExecutableAssetsVerified = executableAssets.every(({ asset }) =>
       verifiedIds.has(asset.id)
     );
@@ -627,7 +682,7 @@ export class SemanticAuthoringCandidateService {
         additionalProperties: false,
         properties: {
           status: { type: 'string', enum: ['no_change', 'blocked'] },
-          summary: { type: 'string', minLength: 1, maxLength: 4_000 },
+          summary: { type: 'string' },
         },
         required: ['status', 'summary'],
       },
@@ -932,6 +987,13 @@ function requiredString(value: unknown, label: string): string {
 
 function stringValue(value: unknown): string | undefined {
   return typeof value === 'string' && value ? value : undefined;
+}
+
+function assertOptionalStringLimit(value: unknown, maxBytes: number, label: string): void {
+  if (value === undefined) return;
+  if (typeof value !== 'string' || Buffer.byteLength(value, 'utf8') > maxBytes) {
+    throw new Error(`${label} exceeds the accepted string boundary`);
+  }
 }
 
 function stableUuid(...parts: string[]): string {

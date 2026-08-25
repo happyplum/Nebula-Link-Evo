@@ -1,8 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('creates a semantic project and starts bootstrap exactly once across reload', async ({
-  page,
-}) => {
+test('persists the real candidate, run and evidence journey across reload', async ({ page }) => {
   let bootstrapRequests = 0;
   page.on('request', (request) => {
     if (request.method() === 'POST' && /\/authoring-jobs$/u.test(new URL(request.url()).pathname)) {
@@ -27,9 +25,49 @@ test('creates a semantic project and starts bootstrap exactly once across reload
   await expect(page.getByText(/编排任务：/u)).toBeVisible();
   await expect.poll(() => bootstrapRequests).toBe(1);
 
+  await page.getByRole('tab', { name: /Diff/u }).click();
+  const applyCandidate = page.getByRole('button', { name: /在安全边界应用/u });
+  await expect(applyCandidate).toBeEnabled({ timeout: 20_000 });
+  await expect(page.getByText('candidate_ready')).toBeVisible();
+  await applyCandidate.click();
+  await expect
+    .poll(
+      async () => {
+        const state = (await page.getByText(/编排任务：/u).textContent()) ?? '';
+        if (state.includes('failed')) {
+          const hashQuery = new URL(page.url()).hash.split('?', 2)[1] ?? '';
+          const jobId = new URLSearchParams(hashQuery).get('job');
+          const diagnostic = jobId
+            ? await page.evaluate(async (id) => {
+                const response = await fetch(`/api/v1/authoring-jobs/${encodeURIComponent(id)}`);
+                return response.json();
+              }, jobId)
+            : null;
+          throw new Error(`Authoring verification failed: ${JSON.stringify(diagnostic)}`);
+        }
+        return state;
+      },
+      { timeout: 20_000 }
+    )
+    .toContain('completed');
+  await expect(page.getByText('activated', { exact: true })).toBeVisible();
+
   await page.reload();
   await expect(page.getByRole('heading', { name: '资产编排工作台' })).toBeVisible();
   await expect(page.getByText(/编排任务：/u)).toBeVisible();
   await page.waitForTimeout(500);
   expect(bootstrapRequests).toBe(1);
+
+  const runScenario = page.getByRole('button', { name: '运行场景' });
+  await expect(runScenario).toBeEnabled({ timeout: 20_000 });
+  await runScenario.click();
+  await expect(page).toHaveURL(/\/semantic\/[^/]+\/runs\/[^/?]+/u);
+  await page.getByRole('button', { name: '开始运行' }).click();
+  await expect(page.getByText('运行状态：completed')).toBeVisible({ timeout: 20_000 });
+
+  await page.reload();
+  await expect(page.getByText('运行状态：completed')).toBeVisible();
+  await page.getByRole('tab', { name: '证据' }).click();
+  await expect(page.getByText(/\d+ 条证据/u)).toBeVisible();
+  await expect(page.getByText('当前运行尚未落库证据')).toHaveCount(0);
 });

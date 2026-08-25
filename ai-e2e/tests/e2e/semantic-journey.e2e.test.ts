@@ -1,19 +1,10 @@
-import Fastify, { type FastifyInstance } from 'fastify';
-import { randomUUID } from 'node:crypto';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { spawn, type ChildProcess } from 'node:child_process';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp as buildProxyApp } from '../../../proxy-adapter/src/server.js';
-import { AgentTaskRepository } from '../../../ai-chat-service/src/agent-tasks/repository.js';
-import { AgentTaskService } from '../../../ai-chat-service/src/agent-tasks/service.js';
-import type {
-  AgentTaskExecutionContext,
-  AgentTaskExecutionResult,
-  AgentTaskExecutor,
-  AgentTaskToolCallSummary,
-} from '../../../ai-chat-service/src/agent-tasks/types.js';
-import agentTaskRoutes from '../../../ai-chat-service/src/plugins/routes/api/agent-tasks.js';
 import { DatabaseManager } from '../../src/database/db.js';
 import { hashValue } from '../../src/database/repositories/semantic-repository-utils.js';
 import { AgentTaskClient } from '../../src/infrastructure/agent-task-client.js';
@@ -35,13 +26,12 @@ describe('semantic product journey', () => {
   let root: string;
   let proxyApp: Awaited<ReturnType<typeof buildProxyApp>>;
   let proxyUrl: string;
-  let aiChatApp: FastifyInstance;
+  let aiChatProcess: ChildProcess;
   let aiChatUrl: string;
   let aiE2eApp: ReturnType<typeof createServer>;
   let aiE2eUrl: string;
-  let agentTaskService: AgentTaskService;
   let coordinator: SemanticCoordinatorService;
-  let executor: DeterministicBrowserExecutor;
+  let journeyPlanPath: string;
 
   beforeAll(async () => {
     delete process.env.LIVEKIT_API_KEY;
@@ -50,20 +40,24 @@ describe('semantic product journey', () => {
     proxyApp = await buildProxyApp({ dataDir: join(root, 'proxy'), skipBackups: true });
     proxyUrl = await proxyApp.listen({ host: '127.0.0.1', port: 0 });
 
-    executor = new DeterministicBrowserExecutor(proxyUrl);
-    agentTaskService = new AgentTaskService(
-      new AgentTaskRepository(':memory:'),
-      executor,
-      quietLogger
-    );
-    aiChatApp = Fastify({ logger: false });
-    await aiChatApp.register(agentTaskRoutes, {
-      prefix: '/api/v1',
-      service: agentTaskService,
-      serviceVersion: 'e2e',
-      localControlPlane: true,
+    const dataDir = join(root, 'ai-chat');
+    const configPath = join(root, 'config.json');
+    const pluginLockPath = join(root, 'trusted-harness-plugins.lock.json');
+    journeyPlanPath = join(root, 'journey-plan.json');
+    await mkdir(dataDir, { recursive: true });
+    await writeFile(configPath, JSON.stringify(testConfig()), 'utf8');
+    await writeFile(pluginLockPath, JSON.stringify(testPluginLock(proxyUrl)), 'utf8');
+    await writeJourneyPlan({ formalResult: 'succeeded' });
+    const started = await startAiChatProcess({
+      root,
+      dataDir,
+      configPath,
+      pluginLockPath,
+      proxyUrl,
+      journeyPlanPath,
     });
-    aiChatUrl = await aiChatApp.listen({ host: '127.0.0.1', port: 0 });
+    aiChatProcess = started.process;
+    aiChatUrl = started.url;
 
     DatabaseManager.resetInstance();
     const database = DatabaseManager.getInstance();
@@ -100,8 +94,9 @@ describe('semantic product journey', () => {
   });
 
   afterAll(async () => {
-    await Promise.all([aiE2eApp.close(), aiChatApp.close(), proxyApp.close()]);
-    await agentTaskService.close();
+    await aiE2eApp?.close();
+    if (aiChatProcess) await stopChild(aiChatProcess);
+    await proxyApp?.close();
     DatabaseManager.resetInstance();
     await rm(root, { recursive: true, force: true });
     restoreEnvironment('LIVEKIT_API_KEY', liveKitApiKey);
@@ -139,12 +134,29 @@ describe('semantic product journey', () => {
       )
       .get(workspace.versionId) as { id: string; revision_id: string; payload_json: string };
     const modulePayload = JSON.parse(module.payload_json) as { primaryPageDefinitionId: string };
-    executor.authoringCandidate = {
-      moduleId: module.id,
-      baseRevisionId: module.revision_id,
-      pageId: modulePayload.primaryPageDefinitionId,
-      payload: { ...modulePayload, goal: 'Verified by the product E2E journey' },
-    };
+    await writeJourneyPlan({
+      formalResult: 'succeeded',
+      authoringOutput: {
+        status: 'candidate_ready',
+        summary: 'Generated deterministic module candidate',
+        category: 'repair',
+        proposalsJson: JSON.stringify([
+          {
+            assetType: 'functional_module',
+            assetId: module.id,
+            baseRevisionId: module.revision_id,
+            candidatePayload: { ...modulePayload, goal: 'Verified by the product E2E journey' },
+            category: 'repair',
+            reason: 'E2E candidate',
+            targetUrl: 'https://example.test/',
+            targetPageDefinitionId: modulePayload.primaryPageDefinitionId,
+            targetFunctionalModuleId: module.id,
+          },
+        ]),
+        validationPlanJson: JSON.stringify({ strategy: 'real_browser_verification' }),
+        potentialSideEffectsJson: '{}',
+      },
+    });
 
     const job = await request(
       'POST',
@@ -263,7 +275,29 @@ describe('semantic product journey', () => {
         )
         .get(runView.id)
     ).toEqual({ count: 1 });
-    expect(executor.operations).toContain('page_state');
+    const formalTaskId = String(
+      (
+        db
+          .prepare(
+            `SELECT external_id FROM external_task_links
+             WHERE run_id = ? AND service = 'ai_chat_service' AND kind = 'agent_task'`
+          )
+          .get(runView.id) as { external_id: string }
+      ).external_id
+    );
+    const formalTask = await new AgentTaskClient({
+      baseUrl: aiChatUrl,
+      timeoutMs: 30_000,
+    }).getTask(formalTaskId);
+    if (formalTask.toolCalls.length === 0) {
+      throw new Error(
+        `Formal Agent task executed no browser operation: ${JSON.stringify(formalTask)}`
+      );
+    }
+    expect(formalTask).toMatchObject({
+      status: 'completed',
+      toolCalls: [expect.objectContaining({ operation: 'page_state', status: 'succeeded' })],
+    });
     expect(await fetch(`${aiE2eUrl}/api/projects/${workspace.id}`)).toMatchObject({ status: 404 });
   });
 
@@ -290,7 +324,7 @@ describe('semantic product journey', () => {
       workspace.versionId,
       workspace.deploymentRevisionId
     );
-    executor.formalResult = 'outcome_unknown';
+    await writeJourneyPlan({ formalResult: 'outcome_unknown' });
     try {
       const run = await request('POST', `/api/v1/projects/${workspace.id}/runs`, {
         headers: { 'idempotency-key': 'semantic-e2e-unknown-run' },
@@ -357,7 +391,7 @@ describe('semantic product journey', () => {
         ).count
       ).toBe(agentCount);
     } finally {
-      executor.formalResult = 'succeeded';
+      await writeJourneyPlan({ formalResult: 'succeeded' });
     }
   });
 
@@ -398,159 +432,27 @@ describe('semantic product journey', () => {
           'SELECT target_service, command_type, status, last_error_json FROM integration_outbox'
         )
         .all(),
-      agentTasks: agentLinks.map(({ external_id }) => agentTaskService.get(external_id)),
+      agentTasks: await Promise.all(
+        agentLinks.map(({ external_id }) =>
+          new AgentTaskClient({ baseUrl: aiChatUrl, timeoutMs: 30_000 })
+            .getTask(external_id)
+            .catch((error: unknown) => ({ external_id, error: String(error) }))
+        )
+      ),
     };
     throw new Error(
       `Semantic coordinator did not reach the expected state: ${JSON.stringify(diagnostics)}`
     );
+  }
+
+  async function writeJourneyPlan(plan: Record<string, unknown>): Promise<void> {
+    await writeFile(journeyPlanPath, JSON.stringify(plan), 'utf8');
   }
 });
 
 function restoreEnvironment(name: string, value: string | undefined): void {
   if (value === undefined) delete process.env[name];
   else process.env[name] = value;
-}
-
-class DeterministicBrowserExecutor implements AgentTaskExecutor {
-  authoringCandidate?: {
-    moduleId: string;
-    baseRevisionId: string;
-    pageId: string;
-    payload: unknown;
-  };
-  readonly operations: string[] = [];
-  formalResult: 'succeeded' | 'outcome_unknown' = 'succeeded';
-
-  constructor(private readonly proxyUrl: string) {}
-
-  async execute(context: AgentTaskExecutionContext): Promise<AgentTaskExecutionResult> {
-    const toolCalls = await this.executeAuthorizedSteps(context);
-    const clientTaskId = context.request.clientTaskId;
-    const output = clientTaskId.startsWith('authoring-verification:')
-      ? {
-          result: 'succeeded',
-          reasonClass: 'acceptance_passed',
-          summary: 'Candidate passed the real browser verification',
-        }
-      : clientTaskId.startsWith('authoring:')
-        ? this.authoringOutput()
-        : {
-            result: this.formalResult,
-            reasonClass:
-              this.formalResult === 'succeeded'
-                ? 'acceptance_passed'
-                : 'connection_lost_after_dispatch',
-            summary:
-              this.formalResult === 'succeeded'
-                ? 'All semantic steps passed'
-                : 'The browser outcome cannot be proven',
-            confirmedOutputsJson: '{}',
-          };
-    return {
-      output,
-      terminationReason: 'stop',
-      usage: {
-        inputTokens: 1,
-        outputTokens: 1,
-        totalTokens: 2,
-        modelTurns: 1,
-        toolCalls: toolCalls.length,
-      },
-      toolCalls,
-    };
-  }
-
-  private authoringOutput() {
-    if (!this.authoringCandidate) throw new Error('Authoring candidate was not configured');
-    return {
-      status: 'candidate_ready',
-      summary: 'Generated deterministic module candidate',
-      category: 'repair',
-      proposalsJson: JSON.stringify([
-        {
-          assetType: 'functional_module',
-          assetId: this.authoringCandidate.moduleId,
-          baseRevisionId: this.authoringCandidate.baseRevisionId,
-          candidatePayload: this.authoringCandidate.payload,
-          category: 'repair',
-          reason: 'E2E candidate',
-          targetUrl: 'https://example.test/',
-          targetPageDefinitionId: this.authoringCandidate.pageId,
-          targetFunctionalModuleId: this.authoringCandidate.moduleId,
-        },
-      ]),
-      validationPlanJson: JSON.stringify({ strategy: 'real_browser_verification' }),
-      potentialSideEffectsJson: '{}',
-    };
-  }
-
-  private async executeAuthorizedSteps(
-    context: AgentTaskExecutionContext
-  ): Promise<AgentTaskToolCallSummary[]> {
-    const binding = context.request.browserBinding;
-    const constraints = context.request.toolPolicy.constraints?.[
-      'browser-control.operation_execute'
-    ] as { steps?: Array<Record<string, unknown>> } | undefined;
-    if (!binding || !constraints?.steps) return [];
-    const summaries: AgentTaskToolCallSummary[] = [];
-    for (const step of constraints.steps) {
-      context.beforeToolCall();
-      const operationId = randomUUID();
-      const operation = String(step.operation);
-      const response = await fetch(new URL('/mcp', this.proxyUrl), {
-        method: 'POST',
-        headers: {
-          accept: 'application/json, text/event-stream',
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: randomUUID(),
-          method: 'tools/call',
-          params: {
-            name: 'browser-control.operation_execute',
-            arguments: {
-              sessionId: binding.browserSessionId,
-              leaseId: binding.browserLeaseId,
-              leaseToken: binding.browserLeaseToken,
-              tabId: binding.tabId,
-              request: {
-                schema: 'nebula.browser.operation/1.0',
-                operationId,
-                leaseSequence: binding.browserLeaseSequence,
-                deadlineAt: new Date(Date.now() + 30_000).toISOString(),
-                presentation: { animation: 'off' },
-                kind: step.kind,
-                operation,
-                ...(step.target ? { target: step.target } : {}),
-                ...(step.args ? { args: step.args } : {}),
-                ...(step.capture ? { capture: step.capture } : {}),
-              },
-            },
-          },
-        }),
-        signal: context.signal,
-      });
-      const envelope = (await response.json()) as {
-        result?: { content?: Array<{ type: string; text?: string }> };
-        error?: unknown;
-      };
-      if (!response.ok || envelope.error) throw new Error(JSON.stringify(envelope.error));
-      const text = envelope.result?.content?.find((item) => item.type === 'text')?.text;
-      const record = JSON.parse(text ?? '{}') as { status?: string };
-      if (record.status !== 'succeeded') throw new Error(`Browser operation failed: ${text}`);
-      this.operations.push(operation);
-      summaries.push({
-        toolCallId: `e2e-${operationId}`,
-        toolName: 'browser-control.operation_execute',
-        status: 'succeeded',
-        stepId: String(step.stepId),
-        operationId,
-        operation,
-      });
-    }
-    return summaries;
-  }
 }
 
 function markStarterGraphVerified(versionId: string, deploymentRevisionId: string) {
@@ -611,8 +513,115 @@ function markStarterGraphVerified(versionId: string, deploymentRevisionId: strin
   return { scenarioRevisionId: scenario.revision_id };
 }
 
-const quietLogger = {
-  info: () => undefined,
-  warn: () => undefined,
-  error: () => undefined,
-};
+function testConfig(): Record<string, unknown> {
+  return {
+    version: '2.0',
+    providers: {
+      test: {
+        enabled: true,
+        apiKey: '{E2E_TEST_API_KEY}',
+        baseUrl: 'http://127.0.0.1:1/v1',
+        models: {
+          decision: { type: 'decision', capabilities: ['decision'], maxTokens: 24_000 },
+          vision: { type: 'vision', capabilities: ['vision'], maxTokens: 8_000 },
+        },
+      },
+    },
+    defaults: { mode: 'unified', decision: 'test/decision', vision: 'test/vision' },
+    settings: {
+      timeout: 30_000,
+      maxRetries: 1,
+      temperature: 0,
+      maxTokens: 24_000,
+      maxSteps: 20,
+      contextWindowTokens: 40_000,
+    },
+    mcp: { enabled: false, servers: {} },
+  };
+}
+
+function testPluginLock(proxyUrl: string): Record<string, unknown> {
+  return {
+    schema: 'nebula.ai.trusted-harness-plugins/1.0',
+    abi: { cordis: '4.0.1', deepseekHarness: '0.1.1-rc.2' },
+    plugins: [],
+    mcp: [
+      {
+        transport: 'streamable-http',
+        serverName: 'gateway',
+        url: new URL('/mcp', proxyUrl).toString(),
+        headers: {},
+      },
+    ],
+  };
+}
+
+async function startAiChatProcess(options: {
+  root: string;
+  dataDir: string;
+  configPath: string;
+  pluginLockPath: string;
+  proxyUrl: string;
+  journeyPlanPath: string;
+}): Promise<{ process: ChildProcess; url: string }> {
+  const child = spawn(
+    process.execPath,
+    [fileURLToPath(new URL('./ai-chat-harness-process.mjs', import.meta.url))],
+    {
+      cwd: options.root,
+      env: {
+        ...process.env,
+        AI_CHAT_E2E_CONFIG_PATH: options.configPath,
+        AI_CHAT_E2E_DATA_DIR: options.dataDir,
+        AI_CHAT_E2E_PLUGIN_LOCK_PATH: options.pluginLockPath,
+        AI_E2E_JOURNEY_PLAN_PATH: options.journeyPlanPath,
+        PROXY_ADAPTER_URL: options.proxyUrl,
+        E2E_TEST_API_KEY: 'deterministic-test-key',
+        TEST_MODE: 'true',
+        LOG_LEVEL: 'error',
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    }
+  );
+  return { process: child, url: await waitForReady(child) };
+}
+
+async function waitForReady(child: ChildProcess): Promise<string> {
+  let logs = '';
+  let stdout = '';
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(
+      () => reject(new Error(`ai-chat-service startup timed out: ${logs}`)),
+      30_000
+    );
+    const failed = () => {
+      clearTimeout(timeout);
+      reject(new Error(`ai-chat-service exited before ready: ${logs}`));
+    };
+    child.once('exit', failed);
+    child.stderr?.on('data', (chunk) => (logs += String(chunk)));
+    child.stdout?.on('data', (chunk) => {
+      const text = String(chunk);
+      logs += text;
+      stdout += text;
+      for (const line of stdout.split(/\r?\n/u)) {
+        if (!line.startsWith('E2E_AI_CHAT_READY ')) continue;
+        clearTimeout(timeout);
+        child.off('exit', failed);
+        resolve(
+          String((JSON.parse(line.slice('E2E_AI_CHAT_READY '.length)) as { url: string }).url)
+        );
+        return;
+      }
+      stdout = stdout.slice(Math.max(0, stdout.lastIndexOf('\n') + 1));
+    });
+  });
+}
+
+async function stopChild(child: ChildProcess): Promise<void> {
+  if (child.exitCode !== null) return;
+  const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()));
+  child.kill('SIGTERM');
+  await exited;
+}

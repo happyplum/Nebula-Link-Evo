@@ -430,7 +430,7 @@ function redactDeployment(deployment: Record<string, unknown>): Record<string, u
 }
 
 export function semanticExecutionResultSchema(): Record<string, unknown> {
-  const jsonString = { type: 'string', maxLength: 100_000 };
+  const jsonString = { type: 'string' };
   return {
     type: 'object',
     additionalProperties: false,
@@ -446,8 +446,8 @@ export function semanticExecutionResultSchema(): Record<string, unknown> {
           'outcome_unknown',
         ],
       },
-      reasonClass: { type: 'string', minLength: 1, maxLength: 200 },
-      summary: { type: 'string', minLength: 1, maxLength: 4_000 },
+      reasonClass: { type: 'string' },
+      summary: { type: 'string' },
       actualPageJson: jsonString,
       confirmedOutputsJson: jsonString,
       partialOutputsJson: jsonString,
