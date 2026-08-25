@@ -414,7 +414,7 @@ function createFixture(
       schema: 'nebula.ai-e2e.functional-script/1.0',
       scriptKey: 'account.action',
       functionalModuleId: functionalModule.id,
-      entryPageDefinitionId: page.id,
+      pageScope: { entryPageId: page.id, allowedTransitions: [] },
       steps: effect
         ? [{ id: 'step_effect', action: 'click', sideEffectId: 'effect-1' }]
         : [{ action: 'observe' }],

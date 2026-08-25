@@ -13,6 +13,8 @@
 - [shipped] 新项目通过 `bootstrap=1` 深链接只自动创建一次 bootstrap Agent task；起始脚本/场景保持 `unverified`，不能伪装成可运行版本。
 - [shipped] API/SSE 统一 `{ data, meta }`、`ApiProblem`、snapshot-first + 单调 seq；UI 断线从权威 snapshot 恢复。
 - [shipped] canonical control-plane 跨服务 E2E 使用真实 HTTP、MCP 与 Chromium 验证 ai-e2e 客户端到 ai-chat-service Agent task、proxy-adapter session/lease/operation 的契约，覆盖导航、填写、点击、文本读取、截图/DOM artifact、operation 查询/取消错误，并断言旧路径保持 404。
+- [shipped] 三服务 semantic 产品旅程 E2E 使用真实 proxy、ai-chat Agent Task HTTP、ai-e2e HTTP 与 Chromium 覆盖结构化候选、浏览器验证、原子激活、正式运行和证据封存；同时断言未验证版本拒绝运行、`outcome_unknown` 进入 open decision 且不重放。
+- [shipped] 功能脚本 v1 只使用 canonical `pageScope.entryPageId`；协调器为 authoring 生命周期持有隐藏 control lease，但向 Agent 注入的 `browserBinding.access` 仍按冻结步骤收窄，并在终态用该租约关闭自有 session。
 - [shipped] ai-e2e 后端与 UI 均提供 `test:coverage`；根串行覆盖率命令统一执行，UI 异步 bootstrap 用例等待权威 snapshot 请求结束，避免未结算 React 更新污染测试信号。
 - [tech-debt] 尚未直接消费 ai-chat-service/proxy-adapter 的服务端事件流；当前通过任务/operation 查询和 ai-e2e 持久事件收敛。
 - [tech-debt] 功能脚本完整机器 JSON Schema 尚未抽成统一 validator 包；现有创建、引用、DAG、冻结投影和授权校验继续生效。
