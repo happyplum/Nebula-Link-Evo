@@ -68,6 +68,22 @@ describe('semantic control HTTP clients', () => {
     mockedAxios.create.mockReturnValue(mock as never);
     const client = new SemanticBrowserClient({ baseUrl: 'http://127.0.0.1:3000' });
 
+    mock.get.mockResolvedValueOnce({
+      data: {
+        schema: 'nebula.service-capabilities/1.0',
+        service: 'proxy-adapter',
+        serviceVersion: '2.0.0',
+        protocols: { browserExecution: { major: 1, minor: 0 } },
+        features: {},
+        limits: {},
+        generatedAt: '2026-08-25T00:00:00.000Z',
+      },
+    });
+
+    await expect(client.getCapabilities()).resolves.toMatchObject({
+      service: 'proxy-adapter',
+      protocols: { browserExecution: { major: 1, minor: 0 } },
+    });
     await expect(client.createSession('session-create')).resolves.toMatchObject({ id: 'session-1' });
     await expect(
       client.createLease('session-1', 'lease-create', {
@@ -146,4 +162,3 @@ function leaseView() {
     createdAt: '2026-08-24T00:00:00.000Z',
   };
 }
-

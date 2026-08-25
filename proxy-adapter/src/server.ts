@@ -1,8 +1,9 @@
-import Fastify from 'fastify';
+import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import dotenv from 'dotenv';
 import * as path from 'path';
 import * as fs from 'fs';
+import { fileURLToPath } from 'node:url';
 import { appService } from './services/index.js';
 import { browserClient } from './browser-client.js';
 import { shutdownBrowserEngine } from './browser-engine/index.js';
@@ -34,23 +35,6 @@ if (fs.existsSync(envLocal)) {
   dotenv.config();
 }
 
-const app = Fastify({
-  logger: {
-    level: normalizeLogLevel(),
-  },
-  disableRequestLogging: true,
-});
-
-const PORT = parseInt(process.env.PROXY_PORT || '3000');
-const DEBUG_DB_PATH = path.join(process.cwd(), 'data', 'proxy-adapter', 'debug.sqlite');
-const BROWSER_EXECUTION_DB_PATH = path.join(
-  process.cwd(),
-  'data',
-  'proxy-adapter',
-  'browser-execution.sqlite'
-);
-const BROWSER_ARTIFACT_ROOT = path.join(process.cwd(), 'data', 'proxy-adapter', 'artifacts');
-
 /**
  * CORS origin configuration.
  * - Set CORS_ORIGINS to a comma-separated whitelist (e.g. "http://localhost:5173,http://localhost:3000")
@@ -76,21 +60,44 @@ function resolveCorsOrigin(): (string | RegExp)[] | boolean {
  * - Default: 127.0.0.1 (localhost only)
  * - Set HOST=0.0.0.0 to listen on all interfaces (for Docker/remote)
  */
-const HOST = process.env.HOST || '127.0.0.1';
+export interface BuildProxyAppOptions {
+  dataDir?: string;
+  skipBackups?: boolean;
+}
 
-let toolRegistry: ToolRegistry;
-let browserExecutionService: BrowserExecutionService | undefined;
+export async function buildApp(options: BuildProxyAppOptions = {}): Promise<FastifyInstance> {
+  const app = Fastify({
+    logger: { level: normalizeLogLevel() },
+    disableRequestLogging: true,
+  });
+  const dataDir = options.dataDir ?? path.join(process.cwd(), 'data', 'proxy-adapter');
+  const debugDbPath = path.join(dataDir, 'debug.sqlite');
+  const browserExecutionDbPath = path.join(dataDir, 'browser-execution.sqlite');
+  const browserArtifactRoot = path.join(dataDir, 'artifacts');
+  const toolRegistry = new ToolRegistry();
+  const browserExecutionService = new BrowserExecutionService({
+    repository: new BrowserExecutionRepository(browserExecutionDbPath),
+    browser: new PlaywrightBrowserExecutionBrowser(),
+    artifactStore: new LocalBrowserArtifactStore(browserArtifactRoot),
+    controlPlaneEnabled: true,
+  });
+  let cleanupPromise: Promise<void> | undefined;
 
-async function start() {
-  try {
-    const isTestMode = process.env.TEST_MODE === 'true';
-    if (!['127.0.0.1', 'localhost', '::1'].includes(HOST)) {
-      throw new Error('proxy-adapter must bind to a loopback host');
-    }
+  app.addHook('onClose', async () => {
+    cleanupPromise ??= (async () => {
+      await interactionLogger.destroy();
+      await toolRegistry.shutdownAll();
+      await browserExecutionService.shutdown();
+      await shutdownBrowserEngine();
+    })();
+    await cleanupPromise;
+  });
+
+  const isTestMode = process.env.TEST_MODE === 'true';
 
     // Initialize database backup before starting server (skip in unit tests)
-    if (!isTestMode) {
-      await initializeWithBackup(DEBUG_DB_PATH);
+    if (!isTestMode && options.skipBackups !== true) {
+      await initializeWithBackup(debugDbPath);
     }
 
     await app.register(cors, {
@@ -99,14 +106,6 @@ async function start() {
     });
 
     // Initialize ToolRegistry and register providers
-    toolRegistry = new ToolRegistry();
-
-    browserExecutionService = new BrowserExecutionService({
-      repository: new BrowserExecutionRepository(BROWSER_EXECUTION_DB_PATH),
-      browser: new PlaywrightBrowserExecutionBrowser(),
-      artifactStore: new LocalBrowserArtifactStore(BROWSER_ARTIFACT_ROOT),
-      controlPlaneEnabled: true,
-    });
     browserExecutionService.initialize();
     browserClient.setAccessArbiter(browserExecutionService);
 
@@ -185,40 +184,44 @@ async function start() {
       }
     );
 
-    await app.listen({ port: PORT, host: HOST });
-    app.log.info({ url: `http://localhost:${PORT}` }, 'Proxy Adapter running');
-    app.log.info('Available endpoints:');
-    app.log.info({ endpoint: 'GET  /api/v1/health' });
-    app.log.info({ endpoint: 'GET  /api/v1/capabilities' });
-    app.log.info({ endpoint: 'POST /api/v1/browser-execution/sessions' });
-    app.log.info({ endpoint: 'POST /mcp              - MCP StreamableHTTP' });
-    app.log.info({ endpoint: 'GET  /debug/api/*       - Debug API' });
-  } catch (err) {
-    app.log.error(err);
-    process.exit(1);
+  return app;
+}
+
+export async function start(): Promise<FastifyInstance> {
+  const host = process.env.HOST || '127.0.0.1';
+  const port = parseInt(process.env.PROXY_PORT || '3000');
+  if (!['127.0.0.1', 'localhost', '::1'].includes(host)) {
+    throw new Error('proxy-adapter must bind to a loopback host');
   }
+  const app = await buildApp();
+  await app.listen({ port, host });
+  app.log.info({ url: `http://localhost:${port}` }, 'Proxy Adapter running');
+  app.log.info('Available endpoints:');
+  app.log.info({ endpoint: 'GET  /api/v1/health' });
+  app.log.info({ endpoint: 'GET  /api/v1/capabilities' });
+  app.log.info({ endpoint: 'POST /api/v1/browser-execution/sessions' });
+  app.log.info({ endpoint: 'POST /mcp              - MCP StreamableHTTP' });
+  app.log.info({ endpoint: 'GET  /debug/api/*       - Debug API' });
+
+  let shutdownPromise: Promise<void> | undefined;
+  const shutdown = (signal: 'SIGINT' | 'SIGTERM'): Promise<void> => {
+    shutdownPromise ??= (async () => {
+      app.log.info({ signal }, '[proxy-adapter] shutdown');
+      await app.close();
+    })();
+    return shutdownPromise;
+  };
+  process.once('SIGINT', () => void shutdown('SIGINT').then(() => process.exit(0)));
+  process.once('SIGTERM', () => void shutdown('SIGTERM').then(() => process.exit(0)));
+  return app;
 }
 
-let shutdownPromise: Promise<void> | undefined;
-
-function shutdown(signal: 'SIGINT' | 'SIGTERM'): Promise<void> {
-  shutdownPromise ??= (async () => {
-    app.log.info({ signal }, '[proxy-adapter] shutdown');
-    await app.close();
-    await interactionLogger.destroy();
-    if (toolRegistry) await toolRegistry.shutdownAll();
-    if (browserExecutionService) await browserExecutionService.shutdown();
-    await shutdownBrowserEngine();
-  })();
-  return shutdownPromise;
+const isMain = process.argv[1]
+  ? path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
+  : false;
+if (isMain) {
+  void start().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
 }
-
-process.on('SIGINT', () => {
-  void shutdown('SIGINT').then(() => process.exit(0));
-});
-
-process.on('SIGTERM', () => {
-  void shutdown('SIGTERM').then(() => process.exit(0));
-});
-
-start();
