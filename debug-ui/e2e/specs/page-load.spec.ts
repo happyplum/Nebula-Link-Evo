@@ -89,3 +89,22 @@ test.describe('Debug SSE transport', () => {
     await context.close();
   });
 });
+
+test.describe('Chat SSE transport', () => {
+  test('creates a session and renders a streamed assistant response', async ({ debugPage }) => {
+    await debugPage.getByTestId('activity-btn-ai').click();
+    await expect(debugPage.getByTestId('chat-page-root')).toBeVisible();
+    debugPage.once('dialog', (dialog) => dialog.accept('E2E Chat'));
+    await debugPage.getByTitle('新建会话').click();
+
+    const composer = debugPage.getByTestId('composer-input');
+    await expect(composer).toBeEnabled();
+    await composer.fill('Hello from Playwright');
+    await debugPage.getByTestId('send-button').click();
+
+    await expect(debugPage.getByTestId('message-list')).toContainText('Hello from Playwright');
+    await expect(debugPage.getByTestId('message-list')).toContainText('E2E assistant response', {
+      timeout: 15_000,
+    });
+  });
+});

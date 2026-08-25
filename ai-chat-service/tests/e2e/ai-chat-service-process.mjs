@@ -8,6 +8,19 @@ class DeterministicBrowserAdapter extends LlmAdapter {
   }
 
   async *stream(options) {
+    const isAgentTask = options.tools?.some((tool) => tool.name === 'submit_result');
+    if (!isAgentTask) {
+      yield { type: 'block-start', index: 0, blockType: 'text' };
+      yield { type: 'text-delta', index: 0, text: 'E2E assistant response' };
+      yield {
+        type: 'block-end',
+        index: 0,
+        block: { type: 'text', text: 'E2E assistant response' },
+      };
+      yield { type: 'usage', usage: { inputTokens: 5, outputTokens: 4 } };
+      yield { type: 'finish', reason: { kind: 'stop' } };
+      return;
+    }
     const browserTurn = !options.messages.some((message) =>
       message.content.some((block) => block.type === 'tool-result')
     );
@@ -72,7 +85,11 @@ const shutdown = async () => {
 process.once('SIGINT', () => void shutdown());
 process.once('SIGTERM', () => void shutdown());
 
-const url = await app.listen({ host: '127.0.0.1', port: 0 });
+const configuredPort = Number(process.env.AI_CHAT_E2E_PORT ?? 0);
+if (!Number.isSafeInteger(configuredPort) || configuredPort < 0 || configuredPort > 65_535) {
+  throw new Error('AI_CHAT_E2E_PORT must be a valid port');
+}
+const url = await app.listen({ host: '127.0.0.1', port: configuredPort });
 process.stdout.write(`E2E_AI_CHAT_READY ${JSON.stringify({ url })}\n`);
 await shutdownComplete;
 

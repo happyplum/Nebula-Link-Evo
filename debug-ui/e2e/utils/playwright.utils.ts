@@ -109,15 +109,8 @@ export async function clickAndWait(
   }
 }
 
-/**
- * Fill an input field with typing delay
- */
-export async function fillInput(
-  page: Page,
-  selector: string,
-  value: string,
-  delay = 50
-): Promise<void> {
+/** Fill an input field. */
+export async function fillInput(page: Page, selector: string, value: string): Promise<void> {
   await page.fill(selector, value);
 }
 

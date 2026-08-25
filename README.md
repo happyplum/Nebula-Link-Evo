@@ -123,7 +123,7 @@ curl http://localhost:3000/api/v1/health
 ```bash
 pnpm test           # 全工作区测试
 pnpm test:coverage  # 全工作区串行覆盖率门禁
-pnpm test:e2e       # proxy/Agent/semantic/CLI/Harness/Debug UI 真实 Chromium E2E
+pnpm test:e2e       # proxy/Agent/semantic/CLI/Harness/Debug UI/ai-e2e UI 真实 Chromium E2E
 ```
 
 ## Project Structure

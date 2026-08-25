@@ -11,7 +11,7 @@
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "type-check": "tsc --noEmit",
-    "test:e2e": "playwright test",
+    "test:e2e": "pnpm --filter proxy-adapter build && pnpm --filter ai-chat-service build && node scripts/run-e2e.mjs",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug"
   },

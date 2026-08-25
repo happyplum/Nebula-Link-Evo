@@ -12,16 +12,16 @@ export interface SseMonitor {
   lastStatus: number | null;
 }
 
-export interface DebugPage extends Page {}
+export type DebugPage = Page;
 
 export const test = base.extend<{
   testOptions: TestOptions;
   sseMonitor: SseMonitor;
   debugPage: DebugPage;
 }>({
-  testOptions: async ({}, use) => {
+  testOptions: async ({ baseURL }, use) => {
     await use({
-      debugURL: process.env.DEBUG_UI_URL || 'http://localhost:5173/debug/',
+      debugURL: process.env.DEBUG_UI_URL || baseURL || '/debug/',
       debugStreamPath: '/debug/api/stream',
     });
   },
