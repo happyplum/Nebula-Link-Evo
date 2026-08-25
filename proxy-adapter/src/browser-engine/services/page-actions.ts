@@ -57,9 +57,10 @@ export class PageActions {
   }
 
   private async findFirstMatchingStrategy(locators: string[]): Promise<number> {
+    const page = this.requirePage();
     for (let i = 0; i < locators.length; i++) {
       try {
-        await this.page!.locator(locators[i]).elementHandle({ timeout: 0 });
+        await page.locator(locators[i]).elementHandle({ timeout: 0 });
         return i;
       } catch {
         continue;

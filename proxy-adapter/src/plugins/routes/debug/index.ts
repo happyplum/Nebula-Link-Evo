@@ -765,7 +765,10 @@ const debugRoutes: FastifyPluginAsyncTypebox<DebugRoutesOptions> = async (fastif
             await browserClient.clickByMarker(snapshot_id, nebula_id);
             break;
           case 'type':
-            await browserClient.typeByMarker(snapshot_id, nebula_id, param!);
+            if (param === undefined) {
+              return { success: false, error: 'type 操作缺少 param' };
+            }
+            await browserClient.typeByMarker(snapshot_id, nebula_id, param);
             break;
           case 'focus':
             await browserClient.focusByMarker(snapshot_id, nebula_id);
@@ -777,10 +780,16 @@ const debugRoutes: FastifyPluginAsyncTypebox<DebugRoutesOptions> = async (fastif
             await browserClient.hoverByMarker(snapshot_id, nebula_id);
             break;
           case 'value':
-            await browserClient.setValueByMarker(snapshot_id, nebula_id, param!);
+            if (param === undefined) {
+              return { success: false, error: 'value 操作缺少 param' };
+            }
+            await browserClient.setValueByMarker(snapshot_id, nebula_id, param);
             break;
           case 'dispatch':
-            await browserClient.dispatchEventByMarker(snapshot_id, nebula_id, param!);
+            if (param === undefined) {
+              return { success: false, error: 'dispatch 操作缺少 param' };
+            }
+            await browserClient.dispatchEventByMarker(snapshot_id, nebula_id, param);
             break;
           default:
             return { success: false, error: `未知操作: ${action}` };

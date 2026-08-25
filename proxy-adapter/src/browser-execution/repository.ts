@@ -863,7 +863,11 @@ export class BrowserExecutionRepository {
           input.occurredAt,
           createdAt
         );
-      return this.getSessionEvent(input.sessionId, cursor.seq)!;
+      const event = this.getSessionEvent(input.sessionId, cursor.seq);
+      if (!event) {
+        throw new Error(`Browser session event ${input.sessionId}:${cursor.seq} was not persisted`);
+      }
+      return event;
     });
   }
 
