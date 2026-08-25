@@ -269,7 +269,7 @@ debug-ui  ←──  （仅被用户消费）
 | 规格能力 | 自动化证据 | 独立命令 |
 | --- | --- | --- |
 | proxy canonical session/lease/operation、MCP 与真实 Chromium | `proxy-adapter/tests/e2e/canonical-control-plane.e2e.test.ts` | `pnpm --filter proxy-adapter test:e2e` |
-| ai-chat 受限 Agent、DSH tool loop、Chat 控制/重启恢复、隐藏 raw proxy tool 与持久终态 | `ai-chat-service/src/agent-tasks/agent-browser-loop.e2e.test.ts` | `pnpm --filter ai-chat-service test:e2e` |
+| ai-chat 受限 Agent、DSH tool loop、Chat 控制/重启恢复、Vision 真实 artifact 成功/拒绝链、隐藏 raw proxy tool 与持久终态 | `ai-chat-service/src/agent-tasks/agent-browser-loop.e2e.test.ts` | `pnpm --filter ai-chat-service test:e2e` |
 | ai-e2e semantic candidate、真实浏览器验证、正式 Run 与拒绝策略 | `ai-e2e/tests/e2e/semantic-journey.e2e.test.ts` | `pnpm --filter ai-e2e test:e2e` |
 | browser-control CLI 与 DeepSeek Harness 受控消费者 | `integrations/deepseek-harness-plugin/tests/e2e/controlled-consumers.e2e.test.ts` | `pnpm --filter @nebula-link-evo/deepseek-harness-plugin test:e2e` |
 | Debug UI 启动、canonical Chat/SSE 与会话恢复入口 | `debug-ui/e2e/specs/page-load.spec.ts` | `pnpm --filter debug-ui test:e2e` |

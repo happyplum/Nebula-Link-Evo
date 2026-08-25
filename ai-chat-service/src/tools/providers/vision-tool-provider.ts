@@ -17,7 +17,7 @@ const BINDING_SCHEMA = {
     operationId: { type: 'string' },
     requestHash: { type: 'string' },
     leaseId: { type: 'string' },
-    leaseSequence: { type: 'integer', minimum: 1 },
+    leaseSequence: { type: 'integer' },
     snapshotId: { type: 'string' },
     status: { type: 'string', const: 'succeeded' },
     domArtifact: {
@@ -25,9 +25,9 @@ const BINDING_SCHEMA = {
       additionalProperties: false,
       properties: {
         artifactId: { type: 'string' },
-        sha256: { type: 'string', pattern: '^[a-f0-9]{64}$' },
+        sha256: { type: 'string' },
         mimeType: { type: 'string', const: 'application/json' },
-        sizeBytes: { type: 'integer', minimum: 1 },
+        sizeBytes: { type: 'integer' },
       },
       required: ['artifactId', 'sha256', 'mimeType', 'sizeBytes'],
     },
@@ -107,7 +107,7 @@ export class VisionToolProvider extends EventEmitter implements ToolProvider {
       inputSchema: {
         type: 'object',
         additionalProperties: false,
-        properties: { binding: BINDING_SCHEMA, description: { type: 'string', minLength: 1 } },
+        properties: { binding: BINDING_SCHEMA, description: { type: 'string' } },
         required: ['binding', 'description'],
       },
       providerId: this.id,

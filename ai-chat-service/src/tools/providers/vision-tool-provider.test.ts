@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
+import { assertObjectJsonSchema } from '@deepseek-ai/dsh-tools';
 import type { VisionAnalyzer } from '../../vision/vision-analyzer.js';
+import { VisionAnalysisError } from '../../vision/errors.js';
 import type { VisionSnapshotLoader } from '../../vision/snapshot-loader.js';
 import { VisionToolProvider } from './vision-tool-provider.js';
 import type { GatewayTool } from '../types.js';
@@ -45,6 +47,7 @@ describe('VisionToolProvider', () => {
     expect(
       provider.getTools().every((tool) => tool.inputSchema.additionalProperties === false)
     ).toBe(true);
+    for (const tool of provider.getTools()) assertObjectJsonSchema(tool.inputSchema);
   });
 
   it('loads an immutable binding before resolving a target', async () => {
@@ -132,5 +135,66 @@ describe('VisionToolProvider', () => {
       retryable: false,
     });
     expect(analyzer.analyzePage).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails closed for missing descriptions, missing locators and typed Vision failures', async () => {
+    const analyzer = {
+      analyzePage: vi.fn(async () => ({
+        summary: '',
+        notable_elements: [],
+        risks: [],
+        reasoning: '',
+      })),
+      resolveTarget: vi
+        .fn()
+        .mockResolvedValueOnce({
+          nebula_id: 'missing',
+          confidence: 0.9,
+          ambiguous: false,
+          reasoning: 'missing element',
+        })
+        .mockResolvedValueOnce({
+          nebula_id: '1',
+          confidence: 0.9,
+          ambiguous: false,
+          reasoning: 'no locator',
+        }),
+    };
+    const snapshotWithoutLocators = {
+      ...snapshot,
+      elements_map: {
+        '1': { ...snapshot.elements_map['1'], locator_bundle: { nebula_id: '1' } },
+      },
+    };
+    const loader = {
+      load: vi.fn(async () => ({ snapshot: snapshotWithoutLocators, attachment: {} })),
+    };
+    const provider = new VisionToolProvider(
+      analyzer as unknown as VisionAnalyzer,
+      loader as unknown as VisionSnapshotLoader
+    );
+    await provider.initialize();
+    const analyze = requireTool(provider, 'vision.analyze_page');
+    const resolve = requireTool(provider, 'vision.resolve_target');
+
+    await analyze.execute({ binding: {} });
+    expect(analyzer.analyzePage).toHaveBeenCalledWith(snapshotWithoutLocators, undefined);
+    await expect(resolve.execute({ binding: {}, description: 'Missing' })).resolves.toContain(
+      'VISION_TARGET_LOW_CONFIDENCE'
+    );
+    await expect(resolve.execute({ binding: {}, description: 'No locator' })).resolves.toContain(
+      'VISION_TARGET_HAS_NO_LOCATOR'
+    );
+    await expect(resolve.execute({ binding: {}, description: ' ' })).resolves.toContain(
+      'VISION_SNAPSHOT_REJECTED'
+    );
+    await expect(analyze.execute(null)).resolves.toContain('VISION_SNAPSHOT_REJECTED');
+
+    loader.load.mockRejectedValueOnce(
+      new VisionAnalysisError({ code: 'VISION_TIMEOUT', message: 'timed out', retryable: true })
+    );
+    await expect(analyze.execute({ binding: {} })).resolves.toContain('VISION_TIMEOUT');
+    await provider.shutdown();
+    expect(provider.getTools()).toEqual([]);
   });
 });

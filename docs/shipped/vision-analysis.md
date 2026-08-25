@@ -8,4 +8,4 @@ ai-chat-service 内部 Vision v2 能力。生产工具只注册 `vision.analyze_
 - [shipped] 主代理与子代理均可调用；每次调用只完成一个具有完整输入的分析任务，不保存流程状态、不连续执行、不调度脚本、不操作浏览器。
 - [shipped] 所有环境都不注册 `vision.find_element`，也不接受 raw screenshot/base64 适配输入。
 - [shipped] Vision role 来自 `defaults.vision` Harness model route；provider/secret 缺失时 fail closed 且工具不发布。
-- [shipped] 验收面：`vision-tool-provider.test.ts`、`snapshot-loader.test.ts`、`browser-tool-wrapper.test.ts`；覆盖 binding 字段严格性、session/Tab/operation/requestHash/lease/status 漂移、SHA/MIME/size/ETag、snapshot v2 Schema、低置信度与歧义 fail closed。
+- [shipped] 验收面：`vision-analyzer.test.ts`、`vision-tool-provider.test.ts`、`snapshot-loader.test.ts`、`browser-tool-wrapper.test.ts` 及真实进程 `agent-browser-loop.e2e.test.ts`；真实链由 proxy/Chromium 生成 DOM artifact，经 operation ledger 与 HTTP bytes 校验后调用本地受控视觉 provider，覆盖成功分析/定位、篡改 hash、Tab 漂移、歧义与低置信度 fail closed；Vision 输入 Schema 另由 DSH `assertObjectJsonSchema` 门禁防止工具被 quarantine。
