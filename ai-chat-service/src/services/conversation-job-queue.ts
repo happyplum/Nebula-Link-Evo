@@ -153,6 +153,12 @@ export class ConversationJobQueue {
     });
   }
 
+  private async syncCompletedUnlessPaused(sessionId: string, jobId: string): Promise<void> {
+    const current = await this.getSessionStateDAO()?.get(sessionId);
+    if (current?.status === 'paused') return;
+    await this.syncSessionState(sessionId, { status: 'completed', jobId });
+  }
+
   async enqueue(payload: JobPayload): Promise<string> {
     if (!this.accepting) {
       throw new ServiceUnavailableError('Job queue is shutting down');
@@ -187,10 +193,7 @@ export class ConversationJobQueue {
         while (attempts < MAX_RETRIES) {
           try {
             await originalExecute(context);
-            await this.syncSessionState(payload.sessionId, {
-              status: 'completed',
-              jobId: id,
-            });
+            await this.syncCompletedUnlessPaused(payload.sessionId, id);
             return;
           } catch (error) {
             // Rate-limit errors — block with rate_limit reason (no retry)

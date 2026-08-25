@@ -16,3 +16,4 @@ ai-chat-service 向 debug-ui 提供 Chat SSE 流式传输。每次建连先发�
 - [shipped] 会话 DELETE 使用持久 deletion saga；物理删除完成返回 204，30 秒未完成返回 `503 deletion_pending`，重复删除等待同一 job，重启继续未完成阶段且 deleted tombstone 禁止 resume/复活。
 - [shipped] 验收面：SSE、backpressure、DSH projection/corruption、delete/restart 与 stream-persist-worker 测试。
 - [shipped] Debug UI Playwright 启动完整 ai-chat-service 与确定性 DSH adapter，通过真实 Vite proxy 创建 Chat session、提交消息并从 canonical SSE 渲染 assistant 响应；测试进程使用动态端口和临时数据目录。
+- [shipped] ai-chat-service 真实进程 E2E 通过 canonical HTTP/SSE 验证 pause 只在 DSH flush/projection 后进入持久 `paused`、进程重启后 resume、interrupt/cancel 传播到活动 DSH turn，以及携带任意 `Last-Event-ID` 的重连仍以 id=0 完整 snapshot 启动。

@@ -16,6 +16,18 @@ export default defineConfig({
         branches: 48,
         functions: 62,
         lines: 57,
+        'src/conversation/chat-handler.ts': {
+          statements: 80,
+          branches: 70,
+          functions: 80,
+          lines: 80,
+        },
+        'src/services/conversation-job-queue.ts': {
+          statements: 80,
+          branches: 70,
+          functions: 80,
+          lines: 80,
+        },
       },
     },
   },

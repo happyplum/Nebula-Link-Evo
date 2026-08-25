@@ -40,7 +40,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['ai-chat-service/tests/**/*.ts'],
+    files: ['ai-chat-service/tests/**/*.ts', 'ai-chat-service/*.config.ts'],
     languageOptions: {
       parserOptions: {
         projectService: false,
@@ -95,6 +95,9 @@ export default tseslint.config(
       globals: {
         process: 'readonly',
         URL: 'readonly',
+        DOMException: 'readonly',
+        clearTimeout: 'readonly',
+        setTimeout: 'readonly',
       },
     },
   },

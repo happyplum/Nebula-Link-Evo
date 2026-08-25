@@ -71,8 +71,7 @@ export class ChatHandler {
       });
       setHandle(handle);
       try {
-        await handle.followup(content, messageId);
-        await this.flushAndProject(params.sessionId, handle);
+        await this.followupAtCheckpoint(params.sessionId, handle, abortSignal, content, messageId);
       } finally {
         await handle.dispose();
       }
@@ -99,8 +98,13 @@ export class ChatHandler {
       });
       setHandle(handle);
       try {
-        await handle.followup('请从上次已持久化的安全边界继续。', randomUUID());
-        await this.flushAndProject(sessionId, handle);
+        await this.followupAtCheckpoint(
+          sessionId,
+          handle,
+          abortSignal,
+          '请从上次已持久化的安全边界继续。',
+          randomUUID()
+        );
       } finally {
         await handle.dispose();
       }
@@ -228,6 +232,31 @@ export class ChatHandler {
 
   private publish(events: readonly import('@nebula-link-evo/shared').SessionEvent[]): void {
     for (const event of events) this.sessionEventHub.publish(event.sessionId, event);
+  }
+
+  private applyPauseCheckpoint(sessionId: string): void {
+    if (this.sessionController.shouldPause(sessionId, 'afterGeneration')) {
+      this.sessionController.markAsPaused(sessionId);
+    }
+  }
+
+  private async followupAtCheckpoint(
+    sessionId: string,
+    handle: HarnessSessionHandle,
+    signal: AbortSignal,
+    text: string,
+    messageId: string
+  ): Promise<void> {
+    const cancel = (): void => handle.cancel('user');
+    signal.addEventListener('abort', cancel, { once: true });
+    if (signal.aborted) cancel();
+    try {
+      await handle.followup(text, messageId);
+      await this.flushAndProject(sessionId, handle);
+      this.applyPauseCheckpoint(sessionId);
+    } finally {
+      signal.removeEventListener('abort', cancel);
+    }
   }
 
   private requireSession(sessionId: string) {
