@@ -283,7 +283,7 @@ debug-ui  ←──  （仅被用户消费）
 
 | 缺口                                                                                                | 类型      | 状态  | 影响范围                                                 |
 | --------------------------------------------------------------------------------------------------- | --------- | ----- | -------------------------------------------------------- |
-| Root `pnpm lint` 仍有 220 个既有 warning，`ai-e2e` 包级 lint 另有 7 个既有 warning（均为 0 errors） | tech-debt | known | `debug-ui`、`proxy-adapter`、`ai-chat-service`、`ai-e2e` |
+| Root `pnpm lint` 仍有 195 个测试代码 warning（显式 `any` / 非空断言，0 errors）；各包生产代码及 `ai-e2e` 包级 lint 已零告警 | tech-debt | known | `debug-ui`、`proxy-adapter`、`ai-chat-service` |
 | 并行 Root `pnpm test` 偶尔触发 Windows Vitest hook/资源竞争超时；Windows 发布门使用全仓串行测试     | tech-debt | known | `proxy-adapter`、两个 UI                                 |
 
 详见各包 PRODUCT-SPEC 第 6 节与根 README "Tech Debt" 章节。
