@@ -13,7 +13,7 @@ This directory contains end-to-end tests for the Debug UI interface using Playwr
 Tests in this directory verify the Debug UI functionality including:
 
 - Task execution visualization
-- Real-time log streaming
+- Canonical debug SSE connection, failure fallback, and reconnect
 - Browser interaction controls
 - State management and persistence
 
@@ -35,6 +35,6 @@ pnpm --filter debug-ui exec playwright test --headed
 
 ## Notes
 
-- Tests use Playwright for browser automation
+- Tests use Playwright with the real Vite-to-proxy SSE path
 - Screenshots are captured on test failures and for visual verification
 - Fixtures provide consistent test data and setup
