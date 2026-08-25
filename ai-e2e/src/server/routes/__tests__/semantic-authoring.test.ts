@@ -118,6 +118,34 @@ describe('semantic authoring routes', () => {
     });
   });
 
+  it('controls an authoring job with optimistic pause, resume and cancel commands', async () => {
+    const jobId = await createJob(app, fixture);
+    const command = async (key: string, version: number, action: 'pause' | 'resume' | 'cancel') =>
+      app.inject({
+        method: 'POST',
+        url: `/api/v1/authoring-jobs/${jobId}/commands`,
+        headers: { 'idempotency-key': key, 'if-match': String(version) },
+        payload: {
+          schema: 'nebula.ai-e2e.authoring-command/1.0',
+          action,
+          reason: `测试 ${action}`,
+          createdBy: 'user-1',
+        },
+      });
+
+    const paused = await command('pause-1', 1, 'pause');
+    const replay = await command('pause-1', 1, 'pause');
+    const resumed = await command('resume-1', 2, 'resume');
+    const cancelling = await command('cancel-1', 3, 'cancel');
+    const conflict = await command('cancel-stale', 3, 'cancel');
+
+    expect(paused.json().data).toMatchObject({ lifecycle: 'paused', stateVersion: 2 });
+    expect(replay.json().data).toMatchObject({ lifecycle: 'paused', stateVersion: 2 });
+    expect(resumed.json().data).toMatchObject({ lifecycle: 'running', stateVersion: 3 });
+    expect(cancelling.json().data).toMatchObject({ lifecycle: 'cancelling', stateVersion: 4 });
+    expect(conflict.statusCode).toBe(409);
+  });
+
   it('turns a structured candidate into diff state while chat text remains only audit context', async () => {
     const jobId = await createJob(app, fixture);
     const threadId = await createThread(app, fixture, jobId);

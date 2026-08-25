@@ -63,7 +63,12 @@ describe('semantic control read routes', () => {
       data: {
         schema: 'nebula.service-capabilities/1.0',
         service: 'ai-e2e',
-        features: { workspaceProjection: true, runCommands: true, snapshotFirstEvents: true },
+        features: {
+          workspaceProjection: true,
+          authoringCommands: true,
+          runCommands: true,
+          snapshotFirstEvents: true,
+        },
         limits: { maxActiveBrowserSessions: 1 },
       },
       meta: { requestId: expect.any(String) },

@@ -32,11 +32,7 @@ const DecisionParamsSchema = Type.Object(
 const CreateJobBodySchema = Type.Object(
   {
     schema: Type.Literal('nebula.ai-e2e.create-authoring-job/1.0'),
-    mode: Type.Union([
-      Type.Literal('bootstrap'),
-      Type.Literal('recheck'),
-      Type.Literal('repair'),
-    ]),
+    mode: Type.Union([Type.Literal('bootstrap'), Type.Literal('recheck'), Type.Literal('repair')]),
     intent: Type.Optional(
       Type.Union([Type.Literal('author_assets'), Type.Literal('locate_in_browser')])
     ),
@@ -156,6 +152,22 @@ const AmendmentCommandBodySchema = Type.Union([
     { additionalProperties: false }
   ),
 ]);
+const AuthoringCommandHeaderSchema = Type.Object(
+  {
+    'idempotency-key': Type.String({ minLength: 1, maxLength: 200 }),
+    'if-match': Type.String({ pattern: '^[1-9][0-9]*$' }),
+  },
+  { additionalProperties: true }
+);
+const AuthoringCommandBodySchema = Type.Object(
+  {
+    schema: Type.Literal('nebula.ai-e2e.authoring-command/1.0'),
+    action: Type.Union([Type.Literal('pause'), Type.Literal('resume'), Type.Literal('cancel')]),
+    reason: Type.Optional(Type.String({ minLength: 1, maxLength: 2_000 })),
+    createdBy: Type.String({ minLength: 1, maxLength: 200 }),
+  },
+  { additionalProperties: false }
+);
 
 const UnknownSuccessSchema = apiSuccessSchema(Type.Unknown());
 const ErrorResponses = {
@@ -208,6 +220,33 @@ const semanticAuthoringRoutes: FastifyPluginAsyncTypebox<SemanticAuthoringRoutes
         createdBy: request.body.createdBy,
       });
       return reply.status(result.created ? 201 : 200).send(success(request, result));
+    }
+  );
+
+  fastify.post<{
+    Params: Static<typeof JobParamsSchema>;
+    Headers: Static<typeof AuthoringCommandHeaderSchema>;
+    Body: Static<typeof AuthoringCommandBodySchema>;
+  }>(
+    '/authoring-jobs/:jobId/commands',
+    {
+      schema: {
+        params: JobParamsSchema,
+        headers: AuthoringCommandHeaderSchema,
+        body: AuthoringCommandBodySchema,
+        response: { 200: UnknownSuccessSchema, ...ErrorResponses },
+      },
+    },
+    async (request) => {
+      const result = requireService().commandJob({
+        commandId: request.headers['idempotency-key'],
+        jobId: request.params.jobId,
+        action: request.body.action,
+        expectedStateVersion: Number(request.headers['if-match']),
+        ...(request.body.reason ? { reason: request.body.reason } : {}),
+        createdBy: request.body.createdBy,
+      });
+      return success(request, result);
     }
   );
 

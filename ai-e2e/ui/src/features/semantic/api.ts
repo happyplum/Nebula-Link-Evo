@@ -76,6 +76,25 @@ export const semanticApi = {
     return request<AuthoringSnapshot>(`/api/v1/authoring-jobs/${encodeURIComponent(jobId)}`);
   },
 
+  commandAuthoringJob(jobId: string, stateVersion: number, action: 'pause' | 'resume' | 'cancel') {
+    return request<{ lifecycle: string; stateVersion: number }>(
+      `/api/v1/authoring-jobs/${encodeURIComponent(jobId)}/commands`,
+      {
+        method: 'POST',
+        headers: {
+          'Idempotency-Key': idempotencyKey(`authoring:${action}`),
+          'If-Match': String(stateVersion),
+        },
+        body: JSON.stringify({
+          schema: 'nebula.ai-e2e.authoring-command/1.0',
+          action,
+          reason: '工作台人工控制',
+          createdBy: 'workspace-user',
+        }),
+      }
+    );
+  },
+
   listAmendments(jobId: string) {
     return request<{ amendments: AuthoringAmendment[] }>(
       `/api/v1/authoring-jobs/${encodeURIComponent(jobId)}/amendments`

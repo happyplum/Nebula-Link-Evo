@@ -76,7 +76,8 @@ export function ContextTree({
               <div className="semantic-tree-branch" key={page.id}>
                 <button
                   type="button"
-                  className={selected ? 'is-active' : ''}
+                  className={selected ? 'is-current-page' : ''}
+                  aria-current={selected ? 'page' : undefined}
                   onClick={() => onSelectPage(page.id)}
                 >
                   <span className="semantic-tree-dot" />
@@ -91,6 +92,7 @@ export function ContextTree({
                       type="button"
                       key={module.id}
                       className={`semantic-tree-child${module.id === moduleId ? ' is-active' : ''}`}
+                      aria-current={module.id === moduleId ? 'true' : undefined}
                       onClick={() => {
                         onSelectModule(module.id);
                         onPreview('module');
@@ -126,6 +128,7 @@ export function ContextTree({
                 type="button"
                 key={scenario.id}
                 className={`semantic-scenario-row${scenario.id === scenarioId ? ' is-active' : ''}`}
+                aria-current={scenario.id === scenarioId ? 'true' : undefined}
                 onClick={() => {
                   onSelectScenario(scenario.id);
                   onPreview('scenario');

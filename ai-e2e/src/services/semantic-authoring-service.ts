@@ -121,6 +121,39 @@ export class SemanticAuthoringService {
     }
   }
 
+  commandJob(input: {
+    commandId: string;
+    jobId: string;
+    action: 'pause' | 'resume' | 'cancel';
+    expectedStateVersion: number;
+    reason?: string;
+    createdBy: string;
+  }) {
+    try {
+      const accepted = this.workflows.acceptAuthoringCommand({
+        id: input.commandId,
+        jobId: input.jobId,
+        type: input.action,
+        expectedStateVersion: input.expectedStateVersion,
+        payload: { reason: input.reason ?? null },
+        createdBy: input.createdBy,
+      });
+      if (accepted.status === 'rejected') {
+        throw ServiceError.conflict(
+          `Authoring state version conflict; actual=${accepted.stateVersion}`
+        );
+      }
+      const target =
+        input.action === 'pause' ? 'paused' : input.action === 'resume' ? 'running' : 'cancelling';
+      return this.workflows.applyAuthoringTransition(input.commandId, target, {
+        action: input.action,
+        reason: input.reason ?? null,
+      });
+    } catch (error) {
+      throw mapSemanticError(error);
+    }
+  }
+
   createThread(input: {
     jobId: string;
     businessVersionId: string;

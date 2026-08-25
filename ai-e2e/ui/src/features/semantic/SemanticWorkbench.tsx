@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
@@ -115,7 +121,7 @@ function clampLayout(left: number, right: number) {
   const available = Math.max(1_100, window.innerWidth);
   let nextLeft = Math.min(MAX_LEFT, Math.max(MIN_LEFT, left));
   let nextRight = Math.min(MAX_RIGHT, Math.max(MIN_RIGHT, right));
-  const overflow = nextLeft + nextRight + MIN_BROWSER + 16 - available;
+  const overflow = nextLeft + nextRight + MIN_BROWSER + 24 - available;
   if (overflow > 0) {
     const rightReduction = Math.min(overflow, nextRight - MIN_RIGHT);
     nextRight -= rightReduction;
@@ -355,7 +361,16 @@ export function SemanticWorkbench({
       currentUrl: browserUrl,
       reason: '根据 PRD、初始 semantic 资产图与真实浏览器证据完成首次编排',
     });
-  }, [authoringJobId, browserUrl, createAuthoring, mode, moduleId, searchParams, versionId, workspace]);
+  }, [
+    authoringJobId,
+    browserUrl,
+    createAuthoring,
+    mode,
+    moduleId,
+    searchParams,
+    versionId,
+    workspace,
+  ]);
   const createRun = useMutation({
     mutationFn: semanticApi.createRun,
     onSuccess: (result) => {
@@ -404,6 +419,19 @@ export function SemanticWorkbench({
       void queryClient.invalidateQueries({ queryKey: runKey });
     },
   });
+  const authoringCommand = useMutation({
+    mutationFn: (action: 'pause' | 'resume' | 'cancel') =>
+      semanticApi.commandAuthoringJob(
+        authoringJobId,
+        authoringQuery.data?.stateVersion ?? 0,
+        action
+      ),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: authoringKey }),
+    onError: (error: Error) => {
+      toast.error(error.message);
+      void queryClient.invalidateQueries({ queryKey: authoringKey });
+    },
+  });
   const runDecision = useMutation({
     mutationFn: ({ decisionId, answerKey }: { decisionId: string; answerKey: string }) =>
       semanticApi.answerRunDecision(runId, decisionId, answerKey),
@@ -427,6 +455,7 @@ export function SemanticWorkbench({
     createAuthoring.isPending ||
     createRun.isPending ||
     amendmentMutation.isPending ||
+    authoringCommand.isPending ||
     runCommand.isPending ||
     runDecision.isPending ||
     resumeTodo.isPending;
@@ -602,7 +631,7 @@ export function SemanticWorkbench({
       <div
         className="semantic-body"
         style={{
-          gridTemplateColumns: `${layout.leftWidth}px 8px minmax(${MIN_BROWSER}px, 1fr) 8px ${layout.rightWidth}px`,
+          gridTemplateColumns: `${layout.leftWidth}px 12px minmax(${MIN_BROWSER}px, 1fr) 12px ${layout.rightWidth}px`,
         }}
       >
         <ContextTree
@@ -754,6 +783,39 @@ export function SemanticWorkbench({
                 <small>
                   {authoringJobId.slice(0, 12)} · seq {authoringQuery.data?.seq ?? 0}
                 </small>
+              </span>
+              <span className="semantic-action-cluster" aria-label="编排任务控制">
+                {jobLifecycle(authoringQuery.data) === 'paused' ? (
+                  <button
+                    type="button"
+                    disabled={authoringCommand.isPending}
+                    onClick={() => authoringCommand.mutate('resume')}
+                  >
+                    <CirclePlay aria-hidden="true" />
+                    继续
+                  </button>
+                ) : !terminalJob(jobLifecycle(authoringQuery.data)) &&
+                  jobLifecycle(authoringQuery.data) !== 'cancelling' ? (
+                  <button
+                    type="button"
+                    disabled={authoringCommand.isPending}
+                    onClick={() => authoringCommand.mutate('pause')}
+                  >
+                    <CirclePause aria-hidden="true" />
+                    暂停
+                  </button>
+                ) : null}
+                {!terminalJob(jobLifecycle(authoringQuery.data)) &&
+                jobLifecycle(authoringQuery.data) !== 'cancelling' ? (
+                  <button
+                    type="button"
+                    disabled={authoringCommand.isPending}
+                    onClick={() => authoringCommand.mutate('cancel')}
+                  >
+                    <XCircle aria-hidden="true" />
+                    取消
+                  </button>
+                ) : null}
               </span>
               <button
                 type="button"

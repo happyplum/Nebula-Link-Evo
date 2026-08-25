@@ -4,12 +4,14 @@
 - [shipped] 产品面仅包含独立 semantic 数据库、canonical `/api/v1/*`、受控 Agent/browser 客户端和结构化资产执行链。
 - [shipped] 业务版本与 semantic 资产图：页面→业务模块→功能模块→多个功能脚本→场景 DAG，稳定身份、不可变修订、copy 引用重建和验证失效。
 - [shipped] Authoring `bootstrap/recheck/repair`：持久 job/task/attempt/event、结构化 amendment、Chat scope、同页/跨 URL 影响审批、安全边界排队、真实浏览器验证与原子激活。
+- [shipped] Authoring 作业控制：`pause/resume/cancel` 使用幂等命令与 `If-Match` 乐观并发；协调器在原子操作安全边界向 Agent task 传播控制，重复扫描已存在命令时继续派发 outbox 而不饥饿，暂停保留会话，取消收敛 attempt/job 并关闭自有会话。
 - [shipped] Authoring 验证接入 ai-chat-service Vision v2 工具；候选副作用按 environment、stepId、effectId、数量和 grant 生成冻结授权，production 业务写拒绝。
 - [shipped] 正式 Run：exact valid version/deployment/scenario 冻结 plan/TODO/DAG/变量，支持 start/pause/resume/cancel、依赖跳过、可恢复中断、结果未知决策和 close-browser。
 - [shipped] 可视语义执行：结构化脚本确定性投影为 proxy `operation_execute` 白名单步骤，关联截图/DOM/artifact/evidence，外部调用使用 outbox 与稳定幂等键收敛。
 - [shipped] 全局 FIFO 与恢复：单 active browser session/context/control actor，Authoring 与 Run 共享安全边界，重启恢复 dispatching outbox，未知副作用不盲目重放。
 - [shipped] 生产浏览器中心 UI：左上下文/TODO、中间持续挂载浏览器、右侧 PRD/模块/场景/Diff/影响/决策/证据和常驻 Chat；模块切换不导航，显式定位才创建 navigation-only task。
 - [shipped] 工作台三栏支持指针/键盘调宽、边界约束、双击复位、持久化、缩放/收起/专注、system/light/dark 与 reduced-motion。
+- [shipped] 左侧上下文树以轻量页面上下文、缩进模块和窄强调场景表达层级，避免父子双重大面积选中卡片；工作台浅色/深色次要文本、焦点与操作热区通过 1440/1920 Lighthouse a11y 100 验收。
 - [shipped] 新项目通过 `bootstrap=1` 深链接只自动创建一次 bootstrap Agent task；起始脚本/场景保持 `unverified`，不能伪装成可运行版本。
 - [shipped] API/SSE 统一 `{ data, meta }`、`ApiProblem`、snapshot-first + 单调 seq；UI 断线从权威 snapshot 恢复。
 - [shipped] canonical control-plane 跨服务 E2E 使用真实 HTTP、MCP 与 Chromium 验证 ai-e2e 客户端到 ai-chat-service Agent task、proxy-adapter session/lease/operation 的契约，覆盖导航、填写、点击、文本读取、截图/DOM artifact、operation 查询/取消错误，并断言旧路径保持 404。
@@ -20,3 +22,4 @@
 - [shipped] executable amendment 先把精确 candidate revision verification 与 scope/dependency hash 持久化，再原子激活修订，最后按激活后的完整资产图写业务版本 validation；未验证候选保持 fail closed。
 - [shipped] 协调器直接消费 ai-chat-service Agent task 与 proxy-adapter browser session 的持久 event-log，使用 `external_task_links.last_external_seq` 单调游标补洞；权威快照查询继续用于获得完整终态，重启不从未知增量重建状态。
 - [shipped] `nebula.ai-e2e.functional-script/1.0` 提供可导出的 TypeBox JSON Schema 与独立静态 validator；valid/current 创建及 AI candidate 标记为 valid 前统一拒绝旧 `functionalModuleId`、未知字段、空步骤、非法动作/断言、悬空 step/effect/input 引用和无最终断言脚本。
+- [shipped] 删除未被 canonical 客户端使用的旧双后端 HTTP helper；ai-e2e 仅保留 Agent Task 与 browser-execution v1 客户端，不提供单次生成、Chat session、debug DOM 或 LiveKit 兼容调用。

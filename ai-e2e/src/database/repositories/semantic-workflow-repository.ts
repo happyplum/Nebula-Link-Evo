@@ -186,7 +186,7 @@ export type BrowserJobState =
   | 'failed';
 
 const AUTHORING_TRANSITIONS: Record<AuthoringLifecycle, readonly AuthoringLifecycle[]> = {
-  created: ['planning', 'cancelling', 'cancelled', 'failed'],
+  created: ['planning', 'paused', 'cancelling', 'cancelled', 'failed'],
   planning: ['running', 'paused', 'waiting_decision', 'cancelling', 'failed'],
   running: ['paused', 'waiting_decision', 'completing', 'cancelling', 'failed'],
   paused: ['running', 'waiting_decision', 'cancelling', 'failed'],
@@ -322,7 +322,7 @@ export class SemanticWorkflowRepository {
           throw new Error('Authoring command id was reused with different input');
         }
         return {
-          status: String(existing.status) as 'accepted' | 'rejected',
+          status: existing.status === 'rejected' ? 'rejected' : 'accepted',
           replayed: true,
           stateVersion: this.authoringStateVersion(params.jobId),
         };
@@ -622,9 +622,7 @@ export class SemanticWorkflowRepository {
          JOIN authoring_jobs AS jobs ON jobs.id = amendments.job_id
          WHERE amendments.id = ?`
       )
-      .get(amendmentId) as
-      | { job_id: string; state: string; browser_job_id: string }
-      | undefined;
+      .get(amendmentId) as { job_id: string; state: string; browser_job_id: string } | undefined;
     if (!amendment || amendment.state !== 'verifying') {
       throw new Error('Authoring amendment is not ready for verification');
     }
@@ -706,11 +704,17 @@ export class SemanticWorkflowRepository {
       const command = this.db
         .prepare('SELECT * FROM authoring_commands WHERE id = ?')
         .get(commandId) as Record<string, unknown> | undefined;
-      if (!command || command.status !== 'accepted') throw new Error('Accepted command not found');
+      if (!command || command.status === 'rejected') throw new Error('Accepted command not found');
       const job = this.db
         .prepare('SELECT * FROM authoring_jobs WHERE id = ?')
         .get(command.job_id) as Record<string, unknown> | undefined;
       if (!job) throw new Error('Authoring job not found');
+      if (command.status === 'completed') {
+        return {
+          lifecycle: String(job.lifecycle) as AuthoringLifecycle,
+          stateVersion: Number(job.state_version),
+        };
+      }
       const from = String(job.lifecycle) as AuthoringLifecycle;
       const stateVersion = Number(job.state_version);
       if (stateVersion !== Number(command.expected_state_version)) {
@@ -772,6 +776,45 @@ export class SemanticWorkflowRepository {
     });
   }
 
+  settleAuthoringCancellation(jobId: string): { lifecycle: 'cancelled'; stateVersion: number } {
+    return inImmediateTransaction(this.db, () => {
+      const job = this.db
+        .prepare('SELECT lifecycle, state_version, next_event_seq FROM authoring_jobs WHERE id = ?')
+        .get(jobId) as Record<string, unknown> | undefined;
+      if (!job) throw new Error('Authoring job not found');
+      if (job.lifecycle === 'cancelled') {
+        return { lifecycle: 'cancelled', stateVersion: Number(job.state_version) };
+      }
+      if (job.lifecycle !== 'cancelling') throw new Error('Authoring job is not cancelling');
+      const running = this.db
+        .prepare("SELECT 1 FROM authoring_tasks WHERE job_id = ? AND state = 'running' LIMIT 1")
+        .get(jobId);
+      if (running) throw new Error('Running authoring task must stop before cancellation');
+      const now = new Date().toISOString();
+      const nextVersion = Number(job.state_version) + 1;
+      this.db
+        .prepare(
+          `UPDATE authoring_jobs SET lifecycle = 'cancelled', outcome = 'cancelled',
+             state_version = ?, completed_at = ?, next_event_seq = next_event_seq + 1
+           WHERE id = ?`
+        )
+        .run(nextVersion, now, jobId);
+      this.insertAuthoringEvent(
+        jobId,
+        Number(job.next_event_seq),
+        'authoring.cancelled',
+        'authoring_job',
+        jobId,
+        nextVersion,
+        {},
+        null,
+        null,
+        now
+      );
+      return { lifecycle: 'cancelled', stateVersion: nextVersion };
+    });
+  }
+
   createRun(params: CreateSemanticRunParams): SemanticRunResult {
     this.validateRunInput(params);
     const requestSha256 = hashValue(params);
@@ -806,7 +849,8 @@ export class SemanticWorkflowRepository {
       const id = params.id ?? randomUUID();
       let browserJobId: string;
       if (params.purpose === 'authoring_verification') {
-        if (!params.authoringJobId) throw new Error('Authoring verification requires authoringJobId');
+        if (!params.authoringJobId)
+          throw new Error('Authoring verification requires authoringJobId');
         browserJobId = this.requireAuthoringBrowserJob(
           params.authoringJobId,
           params.businessVersionId

@@ -34,7 +34,7 @@ export class SemanticQueryService {
         runSnapshots: true,
         persistentEventLog: true,
         snapshotFirstEvents: true,
-        authoringCommands: false,
+        authoringCommands: true,
         runCommands: true,
         structuredAmendments: true,
         impactDecisions: true,
