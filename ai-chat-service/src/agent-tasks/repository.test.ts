@@ -149,6 +149,36 @@ describe('AgentTaskRepository', () => {
     expect(repository.reserveTokenBudget('task-budget', 'r2', 100, 20, 80)).toBe(50);
   });
 
+  it('permits numeric token metrics in events without weakening secret rejection', () => {
+    const repository = new AgentTaskRepository(':memory:');
+    repositories.push(repository);
+    const validated = request('event-token-metrics');
+    repository.createOrGet({
+      taskId: 'task-event-token-metrics',
+      request: validated.persistedRequest,
+      requestHash: validated.requestHash,
+    });
+
+    expect(() =>
+      repository.appendEvent('task-event-token-metrics', 'agent_task.budget_updated', {
+        inputTokens: 10,
+        outputTokens: 5,
+        totalTokens: 15,
+        maxTokens: 100,
+      })
+    ).not.toThrow();
+    expect(() =>
+      repository.appendEvent('task-event-token-metrics', 'agent_task.unsafe', {
+        leaseToken: 'plaintext-secret',
+      })
+    ).toThrow('must use a secret reference or hash');
+    expect(() =>
+      repository.appendEvent('task-event-token-metrics', 'agent_task.unsafe', {
+        inputTokens: 'plaintext-secret',
+      })
+    ).toThrow('must use a secret reference or hash');
+  });
+
   it('persists an immutable authorization record before dispatch and recovers unknown outcomes', () => {
     const repository = new AgentTaskRepository(':memory:');
     repositories.push(repository);

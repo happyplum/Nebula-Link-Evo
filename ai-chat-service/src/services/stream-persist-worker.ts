@@ -42,27 +42,26 @@ class StreamPersistWorker extends EventEmitter {
   private healthCheckInterval: NodeJS.Timeout | null = null;
   private shuttingDown = false;
 
-  constructor() {
+  constructor(private readonly databasePath?: string) {
     super();
     this.initializeWorker();
     this.startHealthCheck();
   }
 
   private getWorkerPath(): string {
-    // Production: use compiled dist
-    const prodPath = path.join(__dirname, '../../dist/workers/stream-persist-worker.js');
-    if (existsSync(prodPath)) {
-      return prodPath;
+    const compiledPath = path.join(__dirname, '../workers/stream-persist-worker.js');
+    if (existsSync(compiledPath)) {
+      return compiledPath;
     }
 
-    // Development: use tsx to run TypeScript directly
-    const devPath = path.join(__dirname, '../workers/stream-persist-worker.ts');
-    return devPath;
+    return path.join(__dirname, '../workers/stream-persist-worker.ts');
   }
 
   private initializeWorker(): void {
     const workerPath = this.getWorkerPath();
-    this.worker = new Worker(workerPath);
+    this.worker = new Worker(workerPath, {
+      workerData: this.databasePath ? { databasePath: this.databasePath } : undefined,
+    });
     this.setupWorkerHandlers();
   }
 

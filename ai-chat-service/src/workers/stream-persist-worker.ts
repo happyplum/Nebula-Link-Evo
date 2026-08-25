@@ -8,7 +8,7 @@
  * This runs in a separate Node.js worker thread.
  */
 
-import { parentPort } from 'node:worker_threads';
+import { parentPort, workerData } from 'node:worker_threads';
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 
@@ -19,7 +19,11 @@ import type {
 
 // Initialize database connection
 // Use environment variable if set, otherwise default to conversations.sqlite
-const dbPath = process.env.DATABASE_PATH || path.join(process.cwd(), 'data', 'ai-chat-service', 'conversations.sqlite');
+const configuredDatabasePath = (workerData as { databasePath?: unknown } | undefined)?.databasePath;
+const dbPath =
+  (typeof configuredDatabasePath === 'string' ? configuredDatabasePath : undefined) ||
+  process.env.DATABASE_PATH ||
+  path.join(process.cwd(), 'data', 'ai-chat-service', 'conversations.sqlite');
 const db = new DatabaseSync(dbPath);
 
 // Enable WAL mode for better concurrency
