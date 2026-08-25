@@ -404,11 +404,12 @@ export class BrowserClient {
     viewport?: { width: number; height: number };
   }> {
     try {
+      const status = await browserService.getDebugStatus('snapshot', DIRECT_BROWSER_OWNER);
       return {
-        isOpen: browserService.isOpen(),
-        url: browserService.getCurrentUrl(),
-        title: await browserService.getTitle(DIRECT_BROWSER_OWNER),
-        viewport: browserService.getViewport() ?? undefined,
+        isOpen: status.isOpen,
+        url: status.url ?? undefined,
+        title: status.title ?? undefined,
+        viewport: status.viewport ?? undefined,
       };
     } catch {
       return { isOpen: false };

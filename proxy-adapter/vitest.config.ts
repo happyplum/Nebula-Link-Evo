@@ -23,8 +23,32 @@ export default defineConfig({
         statements: 55,
         functions: 55,
         branches: 47,
-        lines: 55
-      }
-    }
-  }
+        lines: 55,
+        'src/browser-engine/services/browser-service.ts': {
+          statements: 80,
+          branches: 70,
+          functions: 80,
+          lines: 80,
+        },
+        'src/browser-execution/artifact-store.ts': {
+          statements: 80,
+          branches: 70,
+          functions: 90,
+          lines: 80,
+        },
+        'src/browser-execution/repository.ts': {
+          statements: 80,
+          branches: 70,
+          functions: 90,
+          lines: 80,
+        },
+        'src/browser-execution/service.ts': {
+          statements: 80,
+          branches: 70,
+          functions: 85,
+          lines: 80,
+        },
+      },
+    },
+  },
 });

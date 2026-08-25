@@ -423,6 +423,17 @@ export class BrowserService {
 
   /** Build a unified debug status snapshot */
   async getDebugStatus(reason?: DebugStatusReason, owner?: string): Promise<DebugPlaywrightState> {
+    if (browserMutex.isLocked()) {
+      return {
+        isOpen: this.isOpen(),
+        url: this.getCurrentUrl() ?? null,
+        title: null,
+        status: this.isOpen() ? 'ready' : 'unknown',
+        viewport: this.getViewport() ?? undefined,
+        reason,
+      };
+    }
+
     const release = await acquireLock(owner ?? 'BrowserService.getDebugStatus');
     try {
       const isOpen = this.isOpen();
@@ -434,10 +445,6 @@ export class BrowserService {
         } catch {
           // Browser/page teardown may race status snapshots.
         }
-      }
-
-      if (browserMutex.isLocked()) {
-        this.logger.debug('Browser mutex is held while building debug status');
       }
 
       return {

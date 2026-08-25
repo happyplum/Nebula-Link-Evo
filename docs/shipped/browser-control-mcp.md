@@ -22,3 +22,5 @@ proxy-adapter 通过 MCP Server (StreamableHTTP) 只对外暴露受控 `browser-
 - [designed] 浏览器截图、DOM 和媒体属于带完整性信息的短期原始产物；长期证据 manifest、业务关联、保留与 pin 由 ai-e2e 持有，原始产物清理前需可被提升或明确过期。
 - [shipped] 配置入口：消费方通过 `PROXY_ADAPTER_URL + /mcp`（默认 `http://127.0.0.1:3000/mcp`）接入。
 - [shipped] 验收面：既有 MCP/provider 测试 + `browser-execution-service.test.ts`、`browser-execution-routes.test.ts`、`browser-execution-tools-provider.test.ts`、`playwright-browser-execution.test.ts`；2026-08-12 proxy-adapter 全量测试通过。
+- [shipped] 真实进程 E2E 覆盖长 operation 期间 debug status/SSE 可读、debug 写/DOM 拒绝、running cancel 冲突、queued cancel 成功、安全边界恢复，以及进程崩溃重启后 running operation 收敛为 `outcome_unknown`、session 为 `interrupted`、旧 lease 凭证失效。
+- [shipped] browser execution 的 service/repository/artifact-store 与 BrowserService 设置 lines ≥80%、branches ≥70% 文件级覆盖率防回退门槛。
