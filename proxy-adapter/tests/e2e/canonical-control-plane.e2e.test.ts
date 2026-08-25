@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildApp as buildProxyApp } from '../../src/server.js';
 import { SemanticBrowserClient } from '../../../ai-e2e/src/infrastructure/semantic-browser-client.js';
+import { BrowserControlClient } from '../../../integrations/browser-control-client/src/client.js';
 
 describe('canonical cross-service control planes', () => {
   interface BrowserToolResult extends Record<string, unknown> {
@@ -23,6 +24,8 @@ describe('canonical cross-service control planes', () => {
   const mcpClient = new Client({ name: 'canonical-control-plane-e2e', version: '1.0.0' });
   let mcpTransport: StreamableHTTPClientTransport;
   let targetUrl: string;
+  let slowNavigationGate = Promise.resolve();
+  let releaseSlowNavigation = (): void => undefined;
   beforeAll(async () => {
     root = await mkdtemp(join(tmpdir(), 'nebula-control-plane-e2e-'));
     proxyApp = await buildProxyApp({ dataDir: join(root, 'proxy'), skipBackups: true });
@@ -34,13 +37,18 @@ describe('canonical cross-service control planes', () => {
         <button type="button" onclick="document.querySelector('#result').textContent = 'Created ' + document.querySelector('#username').value">Add user</button>
         <p id="result"></p>`)
     );
+    targetApp.get('/slow', async (_request, reply) => {
+      await slowNavigationGate;
+      return reply.type('text/html').send('<!doctype html><title>Slow operation completed</title>');
+    });
     targetUrl = await targetApp.listen({ host: '127.0.0.1', port: 0 });
     mcpTransport = new StreamableHTTPClientTransport(new URL('/mcp', proxyUrl));
     await mcpClient.connect(mcpTransport);
   });
 
   afterAll(async () => {
-    await mcpTransport.close();
+    releaseSlowNavigation();
+    await mcpTransport.close().catch(() => undefined);
     await Promise.all([proxyApp.close(), targetApp.close()]);
     await rm(root, { recursive: true, force: true });
   });
@@ -156,10 +164,99 @@ describe('canonical cross-service control planes', () => {
     });
     expect(cancelled).toMatchObject({ isError: true });
 
+    slowNavigationGate = new Promise<void>((resolve) => {
+      releaseSlowNavigation = resolve;
+    });
+    const runningClient = new BrowserControlClient({ baseUrl: proxyUrl });
+    const queuedClient = new BrowserControlClient({ baseUrl: proxyUrl });
+    const cancelClient = new BrowserControlClient({ baseUrl: proxyUrl });
+    const runningOperationId = randomUUID();
+    const running = runningClient.executeOperation(
+      binding,
+      binding.tabId,
+      browserRequest({
+        operationId: runningOperationId,
+        leaseSequence: binding.leaseSequence,
+        kind: 'act',
+        operation: 'navigate',
+        args: { url: new URL('/slow', targetUrl).toString() },
+      })
+    );
+    let queued: Promise<BrowserToolResult> | undefined;
+    try {
+      await waitForOperationStatus(runningOperationId, 'running', runningClient);
+
+      await expect(runningClient.getOperation(runningOperationId)).resolves.toMatchObject({
+        operationId: runningOperationId,
+        status: 'running',
+      });
+      await expect(readFirstSse(`${proxyUrl}/debug/api/stream`)).resolves.toMatchObject({
+        event: 'debug.snapshot',
+        data: { status: expect.objectContaining({ isOpen: true }) },
+      });
+      for (const blocked of [
+        { method: 'POST', path: '/debug/api/playwright/navigate', body: { url: targetUrl } },
+        { method: 'GET', path: '/debug/api/dom' },
+      ]) {
+        const response = await fetch(`${proxyUrl}${blocked.path}`, {
+          method: blocked.method,
+          headers: blocked.body ? { 'content-type': 'application/json' } : undefined,
+          body: blocked.body ? JSON.stringify(blocked.body) : undefined,
+        });
+        expect(response.status).toBe(409);
+        await expect(response.json()).resolves.toMatchObject({ code: 'browser_busy' });
+      }
+      await expect(cancelClient.cancelOperation(runningOperationId, binding)).rejects.toMatchObject(
+        { code: 'state_conflict' }
+      );
+
+      const queuedOperationId = randomUUID();
+      queued = queuedClient.executeOperation(
+        binding,
+        binding.tabId,
+        browserRequest({
+          operationId: queuedOperationId,
+          leaseSequence: binding.leaseSequence,
+          kind: 'observe',
+          operation: 'title',
+        })
+      ) as Promise<BrowserToolResult>;
+      await waitForOperationStatus(queuedOperationId, 'queued', queuedClient);
+      await expect(cancelClient.cancelOperation(queuedOperationId, binding)).resolves.toMatchObject(
+        {
+          operationId: queuedOperationId,
+          status: 'cancelled',
+        }
+      );
+      releaseSlowNavigation();
+      await expect(running).resolves.toMatchObject({
+        operationId: runningOperationId,
+        status: 'succeeded',
+      });
+      await expect(queued).resolves.toMatchObject({
+        operationId: queuedOperationId,
+        status: 'cancelled',
+      });
+    } finally {
+      releaseSlowNavigation();
+      await Promise.allSettled([running, ...(queued ? [queued] : [])]);
+      await Promise.all([runningClient.close(), queuedClient.close(), cancelClient.close()]).catch(
+        () => undefined
+      );
+    }
+
+    const debugStatus = await fetch(`${proxyUrl}/debug/api/playwright/status`);
+    expect(debugStatus.status).toBe(200);
+    await expect(debugStatus.json()).resolves.toMatchObject({ success: true, isOpen: true });
+
     await client.closeSession(session.id, 'mcp-browser-session-close', {
       leaseId: binding.leaseId,
       leaseToken: binding.leaseToken,
     });
+    const reopened = await fetch(`${proxyUrl}/debug/api/playwright/open`, { method: 'POST' });
+    expect(reopened.status).toBe(200);
+    await expect(reopened.json()).resolves.toMatchObject({ success: true });
+    await fetch(`${proxyUrl}/debug/api/playwright/close`, { method: 'POST' });
   });
 
   async function executeBrowserOperation(
@@ -200,6 +297,72 @@ describe('canonical cross-service control planes', () => {
     const parsed = JSON.parse(text.text) as unknown;
     if (!parsed || typeof parsed !== 'object') throw new Error(`${name} returned invalid JSON`);
     return parsed as BrowserToolResult;
+  }
+
+  async function waitForOperationStatus(
+    operationId: string,
+    expected: string,
+    client?: BrowserControlClient
+  ): Promise<void> {
+    await expect
+      .poll(async () =>
+        client
+          ? (await client.getOperation(operationId)).status
+          : (await callBrowserTool('browser-control.operation_get', { operationId })).status
+      )
+      .toBe(expected);
+  }
+
+  function browserRequest(
+    operation: Record<string, unknown> & {
+      operationId: string;
+      leaseSequence: number;
+      kind: 'act' | 'observe';
+      operation: string;
+    }
+  ) {
+    return {
+      schema: 'nebula.browser.operation/1.0' as const,
+      deadlineAt: new Date(Date.now() + 30_000).toISOString(),
+      presentation: { animation: 'off' as const },
+      ...operation,
+    };
+  }
+
+  async function readFirstSse(
+    url: string
+  ): Promise<{ event: string; data: Record<string, unknown> }> {
+    const controller = new AbortController();
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok || !response.body)
+      throw new Error(`SSE request failed with ${response.status}`);
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    try {
+      while (true) {
+        const chunk = await reader.read();
+        if (chunk.done) throw new Error('SSE stream ended before its snapshot');
+        buffer += decoder.decode(chunk.value, { stream: true });
+        const end = buffer.indexOf('\n\n');
+        if (end < 0) continue;
+        const fields = Object.fromEntries(
+          buffer
+            .slice(0, end)
+            .split('\n')
+            .map((line) => {
+              const separator = line.indexOf(':');
+              return separator < 0
+                ? [line, '']
+                : [line.slice(0, separator), line.slice(separator + 1).trimStart()];
+            })
+        );
+        return { event: fields.event ?? '', data: JSON.parse(fields.data ?? '{}') };
+      }
+    } finally {
+      controller.abort();
+      await reader.cancel().catch(() => undefined);
+    }
   }
 
   function target(semantic: string, candidate: Record<string, unknown>) {

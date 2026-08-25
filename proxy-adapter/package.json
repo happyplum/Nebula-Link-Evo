@@ -13,7 +13,7 @@
     "start": "node dist/server.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "cross-env LOG_LEVEL=error vitest run --config ../vitest.e2e.config.ts",
+    "test:e2e": "pnpm build && cross-env LOG_LEVEL=error vitest run --config ../vitest.e2e.config.ts",
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {

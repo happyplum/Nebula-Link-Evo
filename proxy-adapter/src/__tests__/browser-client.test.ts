@@ -447,10 +447,13 @@ describe('BrowserClient', () => {
 
   describe('getStatus', () => {
     it('should return status from BrowserService', async () => {
-      mockBrowserService.isOpen.mockReturnValue(true);
-      mockBrowserService.getCurrentUrl.mockReturnValue('https://example.com');
-      mockBrowserService.getTitle.mockResolvedValue('Example');
-      mockBrowserService.getViewport.mockReturnValue({ width: 1920, height: 1080 });
+      mockBrowserService.getDebugStatus.mockResolvedValue({
+        isOpen: true,
+        url: 'https://example.com',
+        title: 'Example',
+        viewport: { width: 1920, height: 1080 },
+        status: 'ready',
+      });
 
       const result = await client.getStatus();
       expect(result).toEqual({
@@ -459,12 +462,11 @@ describe('BrowserClient', () => {
         title: 'Example',
         viewport: { width: 1920, height: 1080 },
       });
+      expect(mockBrowserService.getDebugStatus).toHaveBeenCalledWith('snapshot', 'debug-ui');
     });
 
     it('should return isOpen false on error', async () => {
-      mockBrowserService.isOpen.mockImplementation(() => {
-        throw new Error('Failed');
-      });
+      mockBrowserService.getDebugStatus.mockRejectedValue(new Error('Failed'));
       const result = await client.getStatus();
       expect(result).toEqual({ isOpen: false });
     });

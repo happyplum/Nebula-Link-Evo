@@ -96,6 +96,16 @@ async function createSessionAndLease(
 }
 
 describe('BrowserExecutionService', () => {
+  it('shuts down its initialized repository', async () => {
+    const { service } = makeService();
+
+    await service.shutdown();
+
+    await expect(service.createSession('after-dispose', {})).rejects.toThrow(
+      'Browser execution service is not initialized'
+    );
+  });
+
   it('enforces one active visual session and idempotent create semantics', async () => {
     const { service, browser } = makeService();
     const first = await service.createSession('create-1', {

@@ -13,6 +13,25 @@ import {
 import { DOMExtractor } from './dom-extractor.js';
 import { PageActions } from './page-actions.js';
 import { SnapshotCache } from './snapshot-cache.js';
+import { acquireLock } from './browser-lock.js';
+import { BrowserService } from './browser-service.js';
+
+describe('BrowserService debug status', () => {
+  it('returns a synchronous snapshot while a browser operation owns the lock', async () => {
+    const service = BrowserService.getInstance();
+    const release = await acquireLock('debug-status-test');
+    try {
+      await expect(service.getDebugStatus('snapshot')).resolves.toMatchObject({
+        isOpen: false,
+        title: null,
+        status: 'unknown',
+        reason: 'snapshot',
+      });
+    } finally {
+      release();
+    }
+  });
+});
 
 describe('debug browser surface with real Chromium', () => {
   let browser: Browser;
@@ -95,13 +114,27 @@ describe('debug browser surface with real Chromium', () => {
     const saveId = Number(await page.getAttribute('#save', 'data-nebula-id'));
     const hoverId = Number(await page.getAttribute('#hover', 'data-nebula-id'));
 
-    await expect(actions.typeByMarker(snapshot.snapshot_id, inputId, 'marker')).resolves.toMatchObject({ success: true });
-    await expect(actions.focusByMarker(snapshot.snapshot_id, inputId)).resolves.toMatchObject({ success: true });
-    await expect(actions.blurByMarker(snapshot.snapshot_id, inputId)).resolves.toMatchObject({ success: true });
-    await expect(actions.setValueByMarker(snapshot.snapshot_id, inputId, 'updated')).resolves.toMatchObject({ success: true });
-    await expect(actions.clickByMarker(snapshot.snapshot_id, saveId)).resolves.toMatchObject({ success: true });
-    await expect(actions.hoverByMarker(snapshot.snapshot_id, hoverId)).resolves.toMatchObject({ success: true });
-    await expect(actions.dispatchEventByMarker(snapshot.snapshot_id, hoverId, 'change')).resolves.toMatchObject({ success: true });
+    await expect(
+      actions.typeByMarker(snapshot.snapshot_id, inputId, 'marker')
+    ).resolves.toMatchObject({ success: true });
+    await expect(actions.focusByMarker(snapshot.snapshot_id, inputId)).resolves.toMatchObject({
+      success: true,
+    });
+    await expect(actions.blurByMarker(snapshot.snapshot_id, inputId)).resolves.toMatchObject({
+      success: true,
+    });
+    await expect(
+      actions.setValueByMarker(snapshot.snapshot_id, inputId, 'updated')
+    ).resolves.toMatchObject({ success: true });
+    await expect(actions.clickByMarker(snapshot.snapshot_id, saveId)).resolves.toMatchObject({
+      success: true,
+    });
+    await expect(actions.hoverByMarker(snapshot.snapshot_id, hoverId)).resolves.toMatchObject({
+      success: true,
+    });
+    await expect(
+      actions.dispatchEventByMarker(snapshot.snapshot_id, hoverId, 'change')
+    ).resolves.toMatchObject({ success: true });
     await expect(actions.clickByMarker(snapshot.snapshot_id, 999999)).resolves.toMatchObject({
       success: false,
       error: { code: 'element_not_found' },
