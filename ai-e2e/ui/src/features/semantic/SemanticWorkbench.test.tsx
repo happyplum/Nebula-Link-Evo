@@ -300,6 +300,7 @@ describe('SemanticWorkbench', () => {
     );
     await screen.findByRole('button', { name: /订单摘要/ });
     await waitFor(() => expect(api.createAuthoringJob).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(api.getAuthoringSnapshot).toHaveBeenCalledWith('locate-job'));
     expect(api.createAuthoringJob.mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({
         versionId: 'v1',

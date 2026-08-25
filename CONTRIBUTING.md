@@ -5,13 +5,14 @@
 
 ## 开发环境
 
-- Node.js 22.13.0 或更高版本
+- Node.js ^22.19.0 或 >=24.0.0
 - pnpm 10.34.5
 
 ```bash
 pnpm install --frozen-lockfile
 pnpm build
 pnpm test
+pnpm test:coverage
 ```
 
 运行开发环境与包级命令前，请参考 [README](README.md) 和目标包的
@@ -33,6 +34,7 @@ pnpm test
 pnpm exec prettier --check path/to/changed-file.ts
 pnpm build
 pnpm test
+pnpm test:coverage
 ```
 
 根级 `pnpm lint` 和 `pnpm format:check` 仍有已登记的历史技术债；请对本次

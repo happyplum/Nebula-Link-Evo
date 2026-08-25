@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { Composer } from '../Composer.js';
 import { useChatStore } from '../../store/chat.store.js';
 import { testIds } from '@/shared/testing/testids.js';
@@ -16,6 +16,7 @@ describe('Composer', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 202 })));
 
     const state = {
       streamingState: 'idle',
@@ -28,6 +29,10 @@ describe('Composer', () => {
     };
 
     (useChatStore as any).mockImplementation((selector: any) => selector(state));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it('renders input and send button', () => {
@@ -70,7 +75,7 @@ describe('Composer', () => {
     expect(screen.getByTestId(testIds.sendButton)).toBeDisabled();
   });
 
-  it('calls addOptimisticMessage on send', () => {
+  it('calls addOptimisticMessage on send', async () => {
     render(<Composer />);
 
     const input = screen.getByTestId(testIds.composerInput);
@@ -83,6 +88,6 @@ describe('Composer', () => {
 
     expect(mockAddOptimisticMessage).toHaveBeenCalledWith('session-1', 'Hello world');
     expect(input).toHaveValue('');
+    await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
   });
-
 });

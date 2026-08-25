@@ -55,7 +55,7 @@ UI 路由：`/`、`/semantic/:projectId`、`/semantic/:projectId/authoring/:vers
 - 修改模块、页面、路由、功能、状态或运行方式时同步本文件。
 - 修改跨服务协议、公共类型、API/SSE/MCP/工具集合时同步 `docs/PRODUCT-SPEC-INDEX.md` 和受影响包规格。
 - 功能完成后同步 `docs/shipped/ai-e2e-orchestration.md`，不得保留与代码相反的双轨或兼容描述。
-- 验证至少包括后端 type-check/test、UI app tsconfig 严格类型检查/test/build；涉及浏览器交互时补视觉与 a11y 检查。
+- 验证至少包括后端 type-check/test/coverage、UI app tsconfig 严格类型检查/test/coverage/build；涉及浏览器交互时补视觉与 a11y 检查。
 
 ## 6. 已知缺口
 

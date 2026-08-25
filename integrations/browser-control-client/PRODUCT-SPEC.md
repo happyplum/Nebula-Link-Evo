@@ -23,6 +23,7 @@
 | 受控会话     | `src/controlled-session.ts`               | shipped | 协议检查、显式 attach、活动 Tab、control lease、串行、轮换、ledger 恢复与清理      |
 | CLI          | `src/cli.ts`                              | shipped | JSON 低层命令、NDJSON run、交互 shell、act 门禁、稳定退出码                        |
 | 公共入口     | `src/index.ts`                            | shipped | 导出客户端、控制器、错误与公共配置类型                                             |
+| 测试门禁     | `vitest.config.ts`                        | shipped | 全包覆盖率防回退，并对 client/controlled-session 设置模块级阈值                    |
 
 ## 3. CLI 契约
 

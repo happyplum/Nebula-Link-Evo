@@ -256,6 +256,13 @@ debug-ui  ←──  （仅被用户消费）
 3. **同步更新**：在同一次提交中同步所有受影响的 PRODUCT-SPEC 与本索引。
 4. **验证一致性**：检查代码现实、PRODUCT-SPEC、AGENTS、README、长期记忆之间无矛盾。
 
+### 4.4 测试与覆盖率门禁
+
+- 根 `pnpm test` 运行工作区测试；Windows 发布门使用串行工作区执行以避免资源竞争。
+- 根 `pnpm test:coverage` 串行运行所有声明覆盖率脚本的工作区，并由各包 `vitest.config.ts` 提供当前防回退阈值；关键状态机、授权、SSE、Vision、投影/协调器和 browser execution 仍须以 lines ≥80%、branches ≥70% 作为完整验收目标。
+- `pnpm test:e2e` 只用于真实公开入口、真实 transport 和真实 Chromium 的跨服务验证；Fastify `inject`、fake client 或直接 executor 调用只能归入单元/集成测试。
+- CI 的 Node 版本必须满足根 `engines`，并执行 frozen install、build、串行 test、coverage 与跨服务 E2E。UI Playwright 和三服务产品旅程在进入对应 CI 门禁前不得视为完整验收。
+
 ---
 
 ## 5. 仓库范围技术债（影响多个包）

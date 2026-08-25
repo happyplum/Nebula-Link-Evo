@@ -9,3 +9,4 @@
 - [shipped] `run --input <file|->` 顺序执行 `{id,kind,operation,target?,args?}` NDJSON 并逐行输出，首个失败或未知结果停止；自动化 act 必须 `--allow-act`。`shell` 在内存持有 binding，每个 act 单独确认。
 - [shipped] 稳定退出码为 0 成功、1 内部、2 校验、3 连接/兼容、4 领域失败、5 `outcome_unknown`。
 - [shipped] 验收覆盖 HTTP/MCP problem 映射、幂等 header、JSON/NDJSON、act 门禁、token 脱敏、租约轮换、串行、attach/自有清理和未知结果恢复。
+- [shipped] `pnpm --filter @nebula-link-evo/browser-control-client test:coverage` 提供全包覆盖率门禁，并单独约束 `client.ts` 与 `controlled-session.ts`。
