@@ -1365,7 +1365,7 @@ function mapClaimedJob(row: Record<string, unknown>): CoordinatorBrowserJob {
   };
 }
 
-function desiredAgentCommand(
+export function desiredAgentCommand(
   runLifecycle: string,
   agentStatus: string
 ): 'pause' | 'resume' | 'cancel' | null {
@@ -1418,6 +1418,23 @@ function completionFromTask(task: AgentTaskView): {
     };
   }
   const output = objectValue(task.output);
+  const boundedFields = [
+    [output.reasonClass, 200],
+    [output.summary, 4_000],
+    [output.checkpointJson, 100_000],
+    [output.actualPageJson, 100_000],
+    [output.confirmedOutputsJson, 100_000],
+    [output.partialOutputsJson, 100_000],
+    [output.sideEffectsJson, 100_000],
+    [output.downstreamImpactJson, 100_000],
+  ] as const;
+  if (boundedFields.some(([value, maxBytes]) => !isOptionalBoundedString(value, maxBytes))) {
+    return {
+      result: 'execution_failed',
+      reasonClass: 'invalid_agent_output',
+      summary: 'Agent task returned an oversized or invalid output field',
+    };
+  }
   const allowed = new Set([
     'succeeded',
     'assertion_failed',
@@ -1459,6 +1476,13 @@ function optionalJsonObject(value: unknown, key: string): Record<string, Record<
   } catch {
     return {};
   }
+}
+
+function isOptionalBoundedString(value: unknown, maxBytes: number): boolean {
+  return (
+    value === undefined ||
+    (typeof value === 'string' && Buffer.byteLength(value, 'utf8') <= maxBytes)
+  );
 }
 
 function operationSummary(operation: BrowserOperationRecord): Record<string, unknown> {

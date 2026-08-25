@@ -15,7 +15,8 @@
 - [shipped] canonical control-plane 跨服务 E2E 使用真实 HTTP、MCP 与 Chromium 验证 ai-e2e 客户端到 ai-chat-service Agent task、proxy-adapter session/lease/operation 的契约，覆盖导航、填写、点击、文本读取、截图/DOM artifact、operation 查询/取消错误，并断言旧路径保持 404。
 - [shipped] 三服务 semantic 产品旅程 E2E 使用真实 proxy、ai-chat Agent Task HTTP、ai-e2e HTTP 与 Chromium 覆盖结构化候选、浏览器验证、原子激活、正式运行和证据封存；同时断言未验证版本拒绝运行、`outcome_unknown` 进入 open decision 且不重放。
 - [shipped] 功能脚本 v1 只使用 canonical `pageScope.entryPageId`；协调器为 authoring 生命周期持有隐藏 control lease，但向 Agent 注入的 `browserBinding.access` 仍按冻结步骤收窄，并在终态用该租约关闭自有 session。
-- [shipped] ai-e2e 后端与 UI 均提供 `test:coverage`；根串行覆盖率命令统一执行，UI 异步 bootstrap 用例等待权威 snapshot 请求结束，避免未结算 React 更新污染测试信号。
-- [shipped] ai-e2e UI Playwright 使用动态端口、临时 semantic SQLite 和真实生产 bundle/API 创建项目并进入 Authoring 工作台，断言首次 bootstrap 仅创建一次且 reload 不重复；该套件已纳入根 `test:e2e` 与 CI。
+- [shipped] ai-e2e 后端覆盖率门禁合并单元/集成与真实三服务 E2E，并对协调器、语义任务投影和 amendment 激活仓储设置文件级阈值；UI 继续独立提供覆盖率门禁。
+- [shipped] ai-e2e UI Playwright 使用动态端口、临时数据、真实 proxy、确定性 ai-chat DSH Harness、ai-e2e 服务及生产 UI bundle，覆盖首次 bootstrap 一次性、candidate 浏览器验证/激活、正式 Run、证据与 reload 恢复；该套件已纳入根 `test:e2e` 与 CI。
+- [shipped] executable amendment 先把精确 candidate revision verification 与 scope/dependency hash 持久化，再原子激活修订，最后按激活后的完整资产图写业务版本 validation；未验证候选保持 fail closed。
 - [tech-debt] 尚未直接消费 ai-chat-service/proxy-adapter 的服务端事件流；当前通过任务/operation 查询和 ai-e2e 持久事件收敛。
 - [tech-debt] 功能脚本完整机器 JSON Schema 尚未抽成统一 validator 包；现有创建、引用、DAG、冻结投影和授权校验继续生效。

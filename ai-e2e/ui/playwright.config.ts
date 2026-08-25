@@ -28,7 +28,13 @@ export default defineConfig({
     env: {
       AI_E2E_PORT: String(port),
       AI_E2E_DB_PATH: requireEnvironment('AI_E2E_UI_TEST_DB_PATH'),
-      AI_E2E_COORDINATOR_ENABLED: 'false',
+      AI_E2E_COORDINATOR_ENABLED: process.env.AI_E2E_UI_COORDINATOR_ENABLED ?? 'false',
+      ...(process.env.AI_CHAT_SERVICE_URL
+        ? { AI_CHAT_SERVICE_URL: process.env.AI_CHAT_SERVICE_URL }
+        : {}),
+      ...(process.env.PROXY_ADAPTER_URL
+        ? { PROXY_ADAPTER_URL: process.env.PROXY_ADAPTER_URL }
+        : {}),
     },
   },
 });
