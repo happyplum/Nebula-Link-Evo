@@ -40,7 +40,8 @@ export async function verifyHarnessBom(packageRoot: string): Promise<void> {
     }))
   );
   while (pending.length > 0) {
-    const current = pending.pop()!;
+    const current = pending.pop();
+    if (!current) continue;
     if (resolved.has(current.name)) continue;
     const metadata = JSON.parse(await readFile(current.packageJsonPath, 'utf8')) as {
       name: string;

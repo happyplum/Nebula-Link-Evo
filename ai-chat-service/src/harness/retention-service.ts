@@ -76,7 +76,8 @@ async function treeBytes(root: string): Promise<number> {
   let total = 0;
   const pending = [canonical];
   while (pending.length > 0) {
-    const current = pending.pop()!;
+    const current = pending.pop();
+    if (!current) continue;
     let currentStat;
     try {
       currentStat = await lstat(current);

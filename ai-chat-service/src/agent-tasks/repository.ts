@@ -1289,7 +1289,9 @@ export class AgentTaskRepository {
         },
         occurredAt: input.createdAt,
       });
-      return this.getCommand(input.id)!;
+      const created = this.getCommand(input.id);
+      if (!created) throw new Error(`Agent command ${input.id} was not persisted`);
+      return created;
     });
   }
 
@@ -1336,7 +1338,9 @@ export class AgentTaskRepository {
         },
         occurredAt: input.completedAt,
       });
-      return this.getCommand(id)!;
+      const completed = this.getCommand(id);
+      if (!completed) throw new Error(`Agent command ${id} was not persisted`);
+      return completed;
     });
   }
 
@@ -1398,7 +1402,9 @@ export class AgentTaskRepository {
         payload: { checkpointNo: sequence.checkpoint_no, contentSha256 },
         occurredAt: input.createdAt,
       });
-      return this.getLatestCheckpoint(input.taskId)!;
+      const checkpoint = this.getLatestCheckpoint(input.taskId);
+      if (!checkpoint) throw new Error(`Agent checkpoint ${input.id} was not persisted`);
+      return checkpoint;
     });
   }
 

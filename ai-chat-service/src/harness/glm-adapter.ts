@@ -384,7 +384,8 @@ async function* ssePayloads(
       if (parseFailure)
         throw new LlmError(parseFailure.message, 'MALFORMED_RESPONSE', { cause: parseFailure });
       while (queue.length) {
-        const payload = queue.shift()!;
+        const payload = queue.shift();
+        if (payload === undefined) continue;
         yield payload;
         if (payload === '[DONE]') {
           sawDone = true;
