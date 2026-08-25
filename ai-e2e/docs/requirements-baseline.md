@@ -11,7 +11,7 @@
 系统分为三层：
 
 - `proxy-adapter`：浏览器与 Playwright/CDP 能力的唯一所有者，通过 MCP 提供页面分析、操作、实时画面和执行证据。
-- `ai-chat-service`：AI 基础能力层，提供分析/决策模型、单次视觉分析、MCP 工具编排、受限 Agent task 命令/事件控制面和本地只读声明式 Skills runtime；通用视觉 v2 与完整授权仍待实现。
+- `ai-chat-service`：AI 基础能力层，提供分析/决策模型、Vision v2、MCP 工具编排、受限 Agent task 命令/事件控制面、逐 effect 授权和本地只读声明式 Skills runtime。
 - `ai-e2e`：E2E 业务层，持有 PRD、业务版本、页面、功能模块、功能脚本、测试场景、任务依赖、运行上下文和结果报告。
 
 首次提供 PRD 与目标链接时，系统从零分析并生成测试资产；后续运行优先加载已有资产，由子代理验证并在职责范围内修正。
@@ -252,7 +252,7 @@
 - 页面模板语法、参数类型、WHATWG URL 规范化、匹配评分、基线指纹/阈值和多部署 revision 已锁定；完整参数 Schema、运行匹配和基线采集仍待实现。
 - 语义脚本 DSL v1 已在 `semantic-script-schema.md` 锁定并生成可导出 TypeBox JSON Schema；运行投影按 proxy 当前 capability fail closed，不为缺失能力提供兼容动作。
 - 浏览器执行会话、Tab、observe/control 租约、原子操作、去重账本、结果查询、Agent task 和四类目标事件流（Authoring/Run/Agent/Browser）的 API/Schema 已在 `service-api-event-contract.md` 锁定；三服务控制面与 Authoring/Run snapshot-first SSE 已交付。v1 单 BrowserContext、单活动身份与显式串行切换已锁定，同时多身份/多 Context 及后期多 Tab 并发仍需在启用前另行设计。
-- 主代理与子代理运行时采用干净 Agent task、模型不可见短期 opaque 租约 token、hash/process epoch、主代理签发/回收和 proxy SQLite WAL 操作账本的协议已锁定；三服务数据账本已落地，正式任务包 Schema、派发/回收 runtime 与跨服务协调仍未实现。
+- 主代理与子代理运行时采用干净 Agent task、模型不可见短期 opaque 租约 token、hash/process epoch、主代理签发/回收和 proxy SQLite WAL 操作账本；正式 Authoring/Run 任务投影、派发/回收、持久事件游标消费与跨服务协调已交付，独立正式任务包 JSON Schema 仍待实现。
 - 双模型调用、`vision.analyze_page`、`vision.resolve_target`、声明式 Skill manifest、版本 pin 和工具权限交集已在 `ai-model-skill-contract.md` 锁定并接入 Authoring；独立正式 JSON Schema 仍待实现。
 - 决策、内容寻址 artifact、evidence manifest/item 和默认保留结构已落库，证据追加/封存仓储已实现；跨服务脱敏提升、身份访问控制和清理任务仍待实现。
 - 环境风险矩阵、计划级风险投影、staging grant、production 硬拒绝、修订后重新审批和逐 effectId 跨服务授权交集已实现。

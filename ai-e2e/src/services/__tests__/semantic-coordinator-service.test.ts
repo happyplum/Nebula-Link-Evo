@@ -345,6 +345,87 @@ describe('SemanticCoordinatorService', () => {
     });
   });
 
+  it('在安全边界暂停运行中的 Authoring Agent，并在取消后收敛作业和会话', async () => {
+    const fixture = createFixture(db, assets);
+    const versions = new BusinessVersionRepository(db);
+    const amendments = new AuthoringAmendmentRepository(db, assets);
+    const authoring = new SemanticAuthoringService(workflows, assets, amendments, versions);
+    const job = authoring.createJob({
+      businessVersionId: fixture.versionId,
+      mode: 'repair',
+      idempotencyKey: 'controlled-authoring-job',
+      targetType: 'functional_module',
+      targetId: fixture.moduleId,
+      currentUrl: 'https://test.example/account',
+      reason: '验证作业控制',
+      createdBy: 'operator',
+    });
+    const agent = new FakeAgentTaskClient(undefined, undefined, {
+      status: 'running',
+      output: undefined,
+      completedAt: undefined,
+    });
+    const browser = new FakeBrowserClient();
+    const coordinator = new SemanticCoordinatorService({
+      repository: new SemanticCoordinatorRepository(db),
+      workflows,
+      evidence,
+      runs,
+      agentTasks: agent,
+      browser,
+      secretStore: new MemoryCoordinatorSecretStore(),
+      authoringCandidates: new SemanticAuthoringCandidateService(
+        new SemanticQueryRepository(db, versions),
+        assets,
+        amendments
+      ),
+    });
+
+    for (let index = 0; index < 8; index += 1) await coordinator.tick();
+    const running = db
+      .prepare('SELECT state_version FROM authoring_jobs WHERE id = ?')
+      .get(job.id) as { state_version: number };
+    authoring.commandJob({
+      commandId: 'pause-controlled-authoring',
+      jobId: job.id,
+      action: 'pause',
+      expectedStateVersion: running.state_version,
+      createdBy: 'operator',
+    });
+    const pauseActions: string[] = [];
+    for (let index = 0; index < 12; index += 1) {
+      pauseActions.push((await coordinator.tick()).action);
+    }
+    expect(pauseActions).toContain('authoring_agent_task.pause_queued');
+    expect(agent.commands).toContain('pause');
+    expect(browser.closed).toBe(false);
+
+    const paused = db
+      .prepare('SELECT lifecycle, state_version FROM authoring_jobs WHERE id = ?')
+      .get(job.id) as { lifecycle: string; state_version: number };
+    expect(paused.lifecycle).toBe('paused');
+    authoring.commandJob({
+      commandId: 'cancel-controlled-authoring',
+      jobId: job.id,
+      action: 'cancel',
+      expectedStateVersion: paused.state_version,
+      createdBy: 'operator',
+    });
+    for (let index = 0; index < 16; index += 1) await coordinator.tick();
+
+    expect(agent.commands).toContain('cancel');
+    expect(
+      db.prepare('SELECT lifecycle, outcome FROM authoring_jobs WHERE id = ?').get(job.id)
+    ).toEqual({ lifecycle: 'cancelled', outcome: 'cancelled' });
+    expect(
+      db.prepare('SELECT status FROM authoring_attempts WHERE task_id = ?').get(job.taskId)
+    ).toEqual({
+      status: 'cancelled',
+    });
+    expect(browser.closedWithLease).toBe(true);
+    expect(browser.closed).toBe(true);
+  });
+
   it.each([
     [
       'interrupted',
@@ -730,6 +811,7 @@ describe('SemanticCoordinatorService', () => {
 
 class FakeAgentTaskClient implements AgentTaskClientPort {
   createdRequest?: CreateAgentTaskInput;
+  commands: Array<'pause' | 'resume' | 'interrupt' | 'cancel'> = [];
   capabilityCalls = 0;
   capabilityGate?: Promise<void>;
   capabilities: Record<string, unknown> = {
@@ -746,7 +828,8 @@ class FakeAgentTaskClient implements AgentTaskClientPort {
 
   constructor(
     private readonly authoringOutput?: Record<string, unknown>,
-    private readonly runTaskOverride?: Partial<AgentTaskView>
+    private readonly runTaskOverride?: Partial<AgentTaskView>,
+    private readonly authoringTaskOverride?: Partial<AgentTaskView>
   ) {}
 
   async getCapabilities(): Promise<Record<string, unknown>> {
@@ -810,6 +893,9 @@ class FakeAgentTaskClient implements AgentTaskClientPort {
     ) {
       Object.assign(task, this.runTaskOverride);
     }
+    if (this.authoringTaskOverride && input.clientTaskId.startsWith('authoring:')) {
+      Object.assign(task, this.authoringTaskOverride);
+    }
     this.tasks.set(taskId, task);
     return task;
   }
@@ -820,8 +906,19 @@ class FakeAgentTaskClient implements AgentTaskClientPort {
     return task;
   }
 
-  async commandTask(taskId: string): Promise<{ task: AgentTaskView }> {
-    return { task: await this.getTask(taskId) };
+  async commandTask(
+    taskId: string,
+    input: { type: 'pause' | 'resume' | 'interrupt' | 'cancel' }
+  ): Promise<{ task: AgentTaskView }> {
+    const task = await this.getTask(taskId);
+    this.commands.push(input.type);
+    task.status =
+      input.type === 'pause' ? 'paused' : input.type === 'resume' ? 'running' : 'cancelled';
+    task.stateVersion += 1;
+    task.eventSeq += 1;
+    task.updatedAt = new Date().toISOString();
+    if (task.status === 'cancelled') task.completedAt = task.updatedAt;
+    return { task };
   }
 }
 

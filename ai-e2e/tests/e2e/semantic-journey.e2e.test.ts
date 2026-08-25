@@ -296,7 +296,10 @@ describe('semantic product journey', () => {
     }
     expect(formalTask).toMatchObject({
       status: 'completed',
-      toolCalls: [expect.objectContaining({ operation: 'page_state', status: 'succeeded' })],
+      toolCalls: expect.arrayContaining([
+        expect.objectContaining({ operation: 'page_state', status: 'succeeded' }),
+        expect.objectContaining({ operation: 'url', status: 'succeeded' }),
+      ]),
     });
     expect(await fetch(`${aiE2eUrl}/api/projects/${workspace.id}`)).toMatchObject({ status: 404 });
   });
@@ -412,8 +415,9 @@ describe('semantic product journey', () => {
     return { status: response.status, data: payload.data, meta: payload.meta };
   }
 
-  async function tickUntil(predicate: () => boolean, limit = 80): Promise<void> {
-    for (let index = 0; index < limit; index += 1) {
+  async function tickUntil(predicate: () => boolean, timeoutMs = 20_000): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
       await coordinator.tick();
       if (predicate()) return;
       await new Promise((resolve) => setTimeout(resolve, 10));

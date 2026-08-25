@@ -62,7 +62,7 @@ interface ApiProblem {
 
 ### 2.4 能力协商
 
-三项服务均提供 `GET /api/v1/capabilities`；三项服务均已实现，ai-e2e 已声明 `structuredAmendments/runCommands/snapshotFirstEvents`，尚未交付的 Authoring job command 继续以 feature `false` 明示，不得仅凭协议 major 推断写能力：
+三项服务均提供 `GET /api/v1/capabilities`；三项服务均已实现，ai-e2e 已声明 `structuredAmendments/authoringCommands/runCommands/snapshotFirstEvents`，不得仅凭协议 major 推断写能力：
 
 ```ts
 interface ServiceCapabilitiesV1 {
@@ -76,7 +76,7 @@ interface ServiceCapabilitiesV1 {
 }
 ```
 
-- `ai-chat-service` 当前声明 agent-task/skill/browser-operation 协议、任务/结构化输出/模型不可见 binding、预授权步骤包装能力和限制；`taskEvents/taskCommands/skillsRuntime=true`，并声明 loaded Skill version 数与 `maxSkillsPerTask=1`；操作动画不可用，未来再补 vision v2 与完整逐工具副作用授权。它不声明环境矩阵，也不签发审批。
+- `ai-chat-service` 当前声明 agent-task/skill/browser-operation/vision 协议、任务/结构化输出/模型不可见 binding、预授权步骤包装能力和限制；`taskEvents/taskCommands/skillsRuntime/visionV2=true`，并声明 loaded Skill version 数与 `maxSkillsPerTask=1`；逐 effect 工具授权已生效，操作动画不可用。它不声明环境矩阵，也不签发审批。
 - `proxy-adapter` 至少声明 browser-execution/operation 协议、受支持动作/观测、持久账本和可视画面能力；v1 还必须声明 `maxActiveBrowserSessions=1`、`maxBrowserContextsPerSession=1` 且不支持运行中 storage-state 切换。它只执行通用 lease/operation 约束，不解释环境或审批。
 - `ai-e2e` 至少声明 `side-effect-policy/1.0`、四类环境矩阵和审批协议；在创建 run 前执行并缓存短期依赖 preflight，确认 major 兼容、所需功能/Skill/hash 可用。不兼容时返回 `503 dependency_unavailable` 并停止派发。
 - capability 只说明能力，不包含 provider key、lease token、文件路径或其他机密。
@@ -89,7 +89,7 @@ interface ServiceCapabilitiesV1 {
 
 ## 3. `ai-e2e` 对外业务 API
 
-实施状态：业务版本 create/list/get/copy、capability、workspace/分类资产列表、资产 revision 读、Authoring job 创建/结构化 amendment/范围审批/安全边界命令、正式 Run 创建/控制/TODO attempt/决策/恢复，以及 Authoring/Run 权威 snapshot、持久 event-log 和 snapshot-first SSE 已 `shipped`；validate、通用资产 revision 写和 Authoring job pause/resume/cancel 仍为 `pending`。幂等创建端点要求 `Idempotency-Key`；v1 成功响应统一 `{ data, meta }`，错误统一 `ApiProblem`。
+实施状态：业务版本 create/list/get/copy、capability、workspace/分类资产列表、资产 revision 读、Authoring job 创建/暂停/恢复/取消、结构化 amendment/范围审批/安全边界命令、正式 Run 创建/控制/TODO attempt/决策/恢复，以及 Authoring/Run 权威 snapshot、持久 event-log 和 snapshot-first SSE 已 `shipped`；validate 与通用资产 revision 写仍为 `pending`。幂等创建端点要求 `Idempotency-Key`；v1 成功响应统一 `{ data, meta }`，错误统一 `ApiProblem`。
 
 ### 3.1 业务资产
 
@@ -116,22 +116,22 @@ interface ServiceCapabilitiesV1 {
 
 资产生成/复核/修复使用独立耐久工作流：
 
-| Method   | Path                                                                     | 语义                                                                                                                                    |
-| -------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Method   | Path                                                                     | 语义                                                                                                                  |
+| -------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
 | POST     | `/api/v1/business-versions/:versionId/authoring-jobs`                    | 创建 bootstrap/recheck/repair job；`intent` 默认为 `author_assets`，`locate_in_browser` 只创建 navigation-only task。 |
-| GET      | `/api/v1/authoring-jobs/:jobId`                                          | 读取 authoring snapshot、coverage 和 active task。                                                                                      |
-| POST     | `/api/v1/authoring-jobs/:jobId/commands`                                 | `start/pause/resume/cancel`。                                                                                                           |
-| GET      | `/api/v1/authoring-jobs/:jobId/events`                                   | snapshot-first authoring SSE。                                                                                                          |
-| GET      | `/api/v1/authoring-jobs/:jobId/event-log?afterSeq=N&limit=M`             | 持久 authoring event log。                                                                                                              |
-| POST     | `/api/v1/authoring-jobs/:jobId/decisions/:decisionId/answer`             | 回答 authoring decision；长期影响同步 version decision。                                                                                |
-| POST     | `/api/v1/authoring-jobs/:jobId/context-threads`                          | 绑定 URL/页面/当前模块/base revision scope；新 scope 自动使旧候选 stale。                                                               |
-| GET/POST | `/api/v1/authoring-context-threads/:threadId/messages`                   | 读取/追加 Chat 审计消息；文本不直接改变资产状态。                                                                                       |
-| GET/POST | `/api/v1/authoring-jobs/:jobId/amendments`                               | 列表/创建精确 base→candidate 的结构化修改；写要求幂等键。                                                                               |
-| GET      | `/api/v1/authoring-amendments/:amendmentId`                              | 读取 diff、影响范围、审批、验证计划与候选状态。                                                                                         |
-| POST     | `/api/v1/authoring-amendments/:amendmentId/decisions/:decisionId/answer` | 批准或拒绝同页跨模块/跨 URL 范围扩展。                                                                                                  |
-| POST     | `/api/v1/authoring-amendments/:amendmentId/commands`                     | 用户请求安全边界应用或拒绝；协调器内部开始真实验证，验证成功后原子激活，失败保持 current。                                              |
+| GET      | `/api/v1/authoring-jobs/:jobId`                                          | 读取 authoring snapshot、coverage 和 active task。                                                                    |
+| POST     | `/api/v1/authoring-jobs/:jobId/commands`                                 | `pause/resume/cancel`；要求 `Idempotency-Key` 与当前 `stateVersion` 的 `If-Match`。                                   |
+| GET      | `/api/v1/authoring-jobs/:jobId/events`                                   | snapshot-first authoring SSE。                                                                                        |
+| GET      | `/api/v1/authoring-jobs/:jobId/event-log?afterSeq=N&limit=M`             | 持久 authoring event log。                                                                                            |
+| POST     | `/api/v1/authoring-jobs/:jobId/decisions/:decisionId/answer`             | 回答 authoring decision；长期影响同步 version decision。                                                              |
+| POST     | `/api/v1/authoring-jobs/:jobId/context-threads`                          | 绑定 URL/页面/当前模块/base revision scope；新 scope 自动使旧候选 stale。                                             |
+| GET/POST | `/api/v1/authoring-context-threads/:threadId/messages`                   | 读取/追加 Chat 审计消息；文本不直接改变资产状态。                                                                     |
+| GET/POST | `/api/v1/authoring-jobs/:jobId/amendments`                               | 列表/创建精确 base→candidate 的结构化修改；写要求幂等键。                                                             |
+| GET      | `/api/v1/authoring-amendments/:amendmentId`                              | 读取 diff、影响范围、审批、验证计划与候选状态。                                                                       |
+| POST     | `/api/v1/authoring-amendments/:amendmentId/decisions/:decisionId/answer` | 批准或拒绝同页跨模块/跨 URL 范围扩展。                                                                                |
+| POST     | `/api/v1/authoring-amendments/:amendmentId/commands`                     | 用户请求安全边界应用或拒绝；协调器内部开始真实验证，验证成功后原子激活，失败保持 current。                            |
 
-当前实现：job 创建会立即生成首个 task；snapshot/event-log/snapshot-first SSE、context thread、Chat 审计、结构化 amendment、范围审批与安全边界命令已交付。协调器会为 repair task 创建受限 Agent task 和 observe lease，将输出固化为 draft candidate；用户应用后重新调度真实浏览器验证，成功才原子激活。`locate_in_browser` 使用同一 FIFO 和 control lease，只允许 `navigate`/`page_state`，完成后不生成 amendment、不改 current 资产。完整 bootstrap/recheck 阶段图与 job 自身 pause/resume/cancel 仍未交付。
+当前实现：job 创建会立即生成首个 task；snapshot/event-log/snapshot-first SSE、context thread、Chat 审计、结构化 amendment、范围审批、安全边界命令及 job 自身 pause/resume/cancel 已交付。协调器会为 authoring task 创建受限 Agent task 和 observe lease，将输出固化为 draft candidate；用户应用后重新调度真实浏览器验证，成功才原子激活。运行中作业控制在原子操作安全边界传播到 Agent task；暂停保留当前会话，取消在 attempt 终止后收敛 job 并关闭自有会话。`locate_in_browser` 使用同一 FIFO 和 control lease，只允许 `navigate`/`page_state`，完成后不生成 amendment、不改 current 资产。完整多阶段 bootstrap/recheck 阶段图仍未交付。
 
 完整阶段、coverage、candidate 验证和激活规则见 `asset-authoring-repair-contract.md`。
 

@@ -156,13 +156,19 @@ export class SemanticCoordinatorService {
           }
         } else {
           const lifecycle = this.options.repository.getAuthoringJobLifecycle(currentJob.contextId);
+          if (lifecycle === 'cancelling') {
+            this.options.workflows.settleAuthoringCancellation(currentJob.contextId);
+            this.enqueueSessionClose(currentJob, 'authoring_cancelled');
+            return { action: 'authoring.cancelled' };
+          }
           if (
             lifecycle &&
-            ['paused', 'waiting_decision', 'completed', 'cancelled', 'failed'].includes(lifecycle)
+            ['waiting_decision', 'completed', 'cancelled', 'failed'].includes(lifecycle)
           ) {
             this.enqueueSessionClose(currentJob, 'authoring_safe_boundary');
             return { action: 'browser_session.close_queued' };
           }
+          if (lifecycle === 'paused') return { action: 'authoring.paused' };
           const task = this.options.repository.getAuthoringTask(currentJob.contextId, 'ready');
           if (task) {
             this.enqueueAuthoringLeaseCreate(task);
@@ -730,7 +736,7 @@ export class SemanticCoordinatorService {
     if (!TERMINAL_AGENT_STATES.has(task.status)) {
       const desired = desiredAgentCommand(pageTask.runLifecycle, task.status);
       if (desired) {
-        this.options.evidence.enqueueOutbox({
+        const queued = this.options.evidence.enqueueOutbox({
           id: `agent-task-command:${task.taskId}:${desired}:v${task.stateVersion}`,
           context: { type: 'run', id: pageTask.runId },
           pageTaskId: pageTask.pageTaskId,
@@ -743,7 +749,7 @@ export class SemanticCoordinatorService {
             expectedStateVersion: task.stateVersion,
           },
         });
-        return `agent_task.${desired}_queued`;
+        return queued.created ? `agent_task.${desired}_queued` : null;
       }
       return null;
     }
@@ -832,7 +838,38 @@ export class SemanticCoordinatorService {
       terminal: TERMINAL_AGENT_STATES.has(agentTask.status),
       ...(agentTask.output !== undefined ? { resultSha256: hashValue(agentTask.output) } : {}),
     });
-    if (!TERMINAL_AGENT_STATES.has(agentTask.status)) return null;
+    if (!TERMINAL_AGENT_STATES.has(agentTask.status)) {
+      const desired = desiredAgentCommand(task.jobLifecycle, agentTask.status);
+      if (desired) {
+        const queued = this.options.evidence.enqueueOutbox({
+          id: `agent-task-command:${agentTask.taskId}:${desired}:v${agentTask.stateVersion}`,
+          context: { type: 'authoring', id: task.jobId },
+          authoringTaskId: task.taskId,
+          targetService: 'ai_chat_service',
+          commandType: 'agent_task.command',
+          endpointOrTool: '/api/v1/agent-tasks/:taskId/commands',
+          payloadRedacted: {
+            taskId: agentTask.taskId,
+            command: desired,
+            expectedStateVersion: agentTask.stateVersion,
+          },
+        });
+        return queued.created ? `authoring_agent_task.${desired}_queued` : null;
+      }
+      return null;
+    }
+    if (task.jobLifecycle === 'cancelling' || agentTask.status === 'cancelled') {
+      this.options.workflows.completeAuthoringAttempt({
+        taskId: task.taskId,
+        status: 'cancelled',
+        agentTaskId: agentTask.taskId,
+        result: { status: 'cancelled' },
+        startedAt: agentTask.startedAt ?? task.startedAt ?? this.isoNow(),
+      });
+      this.options.workflows.settleAuthoringCancellation(task.jobId);
+      this.enqueueAuthoringSessionClose(task);
+      return 'authoring_task.cancelled';
+    }
     const manifestId = await this.captureAuthoringEvidence(task, agentTask);
     if (task.targetType === 'authoring_amendment') {
       try {

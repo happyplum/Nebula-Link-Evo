@@ -16,6 +16,7 @@ const api = vi.hoisted(() => ({
   listAmendments: vi.fn(),
   listChatMessages: vi.fn(),
   createAuthoringJob: vi.fn(),
+  commandAuthoringJob: vi.fn(),
   commandAmendment: vi.fn(),
   answerAmendmentDecision: vi.fn(),
   createRun: vi.fn(),
@@ -259,6 +260,7 @@ describe('SemanticWorkbench', () => {
     api.listAmendments.mockResolvedValue([]);
     api.listChatMessages.mockResolvedValue([]);
     api.createAuthoringJob.mockResolvedValue({ id: 'locate-job', taskId: 'task1' });
+    api.commandAuthoringJob.mockResolvedValue({ lifecycle: 'paused', stateVersion: 3 });
     api.getRunSnapshot.mockResolvedValue(runSnapshot);
     api.commandRun.mockResolvedValue({ lifecycle: 'running' });
     api.resumeTodo.mockResolvedValue({ state: 'ready' });
@@ -344,6 +346,14 @@ describe('SemanticWorkbench', () => {
     expect(await screen.findByRole('button', { name: /收货地址/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /收货地址/ })).toHaveClass('is-active');
     expect(screen.getByRole('button', { name: /完成结算/ })).toHaveClass('is-active');
+  });
+
+  it('按快照版本暂停 Authoring 作业', async () => {
+    renderAuthoring(
+      '/semantic/p1/authoring/v1?job=job1&url=%2Fcheckout&page=page1&module=m1&scenario=sc1'
+    );
+    fireEvent.click(await screen.findByRole('button', { name: '暂停' }));
+    await waitFor(() => expect(api.commandAuthoringJob).toHaveBeenCalledWith('job1', 2, 'pause'));
   });
 
   it('模块切换后禁止把旧候选应用到错误模块', async () => {

@@ -1,7 +1,7 @@
 # AI E2E 资产生成、复核与局部修复契约
 
-> 状态：`in-progress`。authoring job/task/attempt/event、单版本写锁、结构化 amendment、范围审批、局部 repair Agent 协调、真实浏览器 candidate verification、证据提升与原子激活已交付；完整 PRD bootstrap/recheck 阶段图、coverage 生成和版本 validator 尚未实现。
-> 更新时间：2026-08-12。
+> 状态：`in-progress`。authoring job/task/attempt/event、单版本写锁、作业暂停/恢复/取消、结构化 amendment、范围审批、局部 repair Agent 协调、真实浏览器 candidate verification、证据提升与原子激活已交付；完整 PRD bootstrap/recheck 阶段图、coverage 生成和版本 validator 尚未实现。
+> 更新时间：2026-08-26。
 > 本文把“PRD + 已完成网页从零生成模块级 E2E 资产”和“页面变化后定向修复”定义为可暂停、可恢复、可审计的持久工作流。它不改变功能脚本、场景、浏览器执行和安全审批的既有契约。
 
 ## 1. 核心目标
@@ -25,11 +25,11 @@
 
 ### 3.1 模式
 
-| mode | 触发 | 目标 |
-|---|---|---|
-| `bootstrap` | 新业务版本首次 PRD + URL | 从零生成并验证完整资产图 |
-| `recheck` | copy、部署/Git 变化、定期复核或运行前检查 | 确认页面/脚本是否仍有效，生成影响报告 |
-| `repair` | 运行失败、DOM/交互变化或用户指定资产 | 只修复受影响 revision 并验证 |
+| mode        | 触发                                      | 目标                                  |
+| ----------- | ----------------------------------------- | ------------------------------------- |
+| `bootstrap` | 新业务版本首次 PRD + URL                  | 从零生成并验证完整资产图              |
+| `recheck`   | copy、部署/Git 变化、定期复核或运行前检查 | 确认页面/脚本是否仍有效，生成影响报告 |
+| `repair`    | 运行失败、DOM/交互变化或用户指定资产      | 只修复受影响 revision 并验证          |
 
 ### 3.2 生命周期与结果
 
@@ -177,14 +177,14 @@ created → planning → running ↔ paused/waiting_decision → completing → 
 
 变化分类：
 
-| 类型 | 判定 | 最小修复/验证范围 |
-|---|---|---|
-| `none` | 页面结构变化但 target/precondition/assertion 仍通过 | 不生成 revision，继续 run |
+| 类型           | 判定                                                             | 最小修复/验证范围                                       |
+| -------------- | ---------------------------------------------------------------- | ------------------------------------------------------- |
+| `none`         | 页面结构变化但 target/precondition/assertion 仍通过              | 不生成 revision，继续 run                               |
 | `locator_only` | 只需修改 target candidates，输入/输出/断言/副作用/pageScope 不变 | 当前 script candidate + 单脚本验证 + 原 TODO 新 attempt |
-| `interaction` | 线性步骤/等待/页面转换变化，业务契约不变 | 当前 script + 引用它的场景调用验证 |
-| `contract` | 输入、输出、断言、副作用或 pageScope 改变 | script + 全部直接/传递依赖 scenario；必须主代理决策 |
-| `requirement` | PRD/验收含义变化或页面不再实现原功能 | 暂停并要求产品/用户决定，不能自动修复 |
-| `environment` | 登出、权限、部署、网络或服务异常 | 不修改脚本；主代理恢复前置或终止 |
+| `interaction`  | 线性步骤/等待/页面转换变化，业务契约不变                         | 当前 script + 引用它的场景调用验证                      |
+| `contract`     | 输入、输出、断言、副作用或 pageScope 改变                        | script + 全部直接/传递依赖 scenario；必须主代理决策     |
+| `requirement`  | PRD/验收含义变化或页面不再实现原功能                             | 暂停并要求产品/用户决定，不能自动修复                   |
+| `environment`  | 登出、权限、部署、网络或服务异常                                 | 不修改脚本；主代理恢复前置或终止                        |
 
 模型可以提出分类，最终由确定性 diff、Schema、实际观测和 `ai-e2e` 规则裁决。
 
@@ -238,14 +238,14 @@ revision 激活事务同步维护 `asset_revision_dependencies`，关系至少�
 
 目标业务 API：
 
-| Method | Path | 语义 |
-|---|---|---|
-| POST | `/api/v1/business-versions/:versionId/authoring-jobs` | 创建 bootstrap/recheck/repair job，要求幂等键；可选 `intent=locate_in_browser` 只调度 navigation-only 浏览器任务，不生成候选。 |
-| GET | `/api/v1/authoring-jobs/:jobId` | 返回权威 authoring snapshot、coverage 和 active task。 |
-| POST | `/api/v1/authoring-jobs/:jobId/commands` | `start/pause/resume/cancel`，要求 `If-Match`。 |
-| GET | `/api/v1/authoring-jobs/:jobId/events` | snapshot-first SSE，job-scoped 单调 seq。 |
-| GET | `/api/v1/authoring-jobs/:jobId/event-log` | 持久事件审计/补洞。 |
-| POST | `/api/v1/authoring-jobs/:jobId/decisions/:decisionId/answer` | 回答并应用 authoring decision；长期影响同步 version decision。 |
+| Method | Path                                                         | 语义                                                                                                                           |
+| ------ | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| POST   | `/api/v1/business-versions/:versionId/authoring-jobs`        | 创建 bootstrap/recheck/repair job，要求幂等键；可选 `intent=locate_in_browser` 只调度 navigation-only 浏览器任务，不生成候选。 |
+| GET    | `/api/v1/authoring-jobs/:jobId`                              | 返回权威 authoring snapshot、coverage 和 active task。                                                                         |
+| POST   | `/api/v1/authoring-jobs/:jobId/commands`                     | `start/pause/resume/cancel`，要求 `If-Match`。                                                                                 |
+| GET    | `/api/v1/authoring-jobs/:jobId/events`                       | snapshot-first SSE，job-scoped 单调 seq。                                                                                      |
+| GET    | `/api/v1/authoring-jobs/:jobId/event-log`                    | 持久事件审计/补洞。                                                                                                            |
+| POST   | `/api/v1/authoring-jobs/:jobId/decisions/:decisionId/answer` | 回答并应用 authoring decision；长期影响同步 version decision。                                                                 |
 
 最低事件：`authoring.snapshot/lifecycle_changed/stage_changed/completed`、`authoring_task.state_changed`、`authoring_attempt.completed`、`asset.candidate_created/validated/verified/activated/rejected`、`coverage.changed` 和 `decision.requested/applied`。
 

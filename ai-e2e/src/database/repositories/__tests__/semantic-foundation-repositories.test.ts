@@ -115,6 +115,36 @@ describe('semantic v1 data foundation repositories', () => {
       lifecycle: 'paused',
       stateVersion: 4,
     });
+    expect(
+      workflows.acceptAuthoringCommand({
+        id: 'authoring-resume-1',
+        jobId: authoring.id,
+        type: 'resume',
+        expectedStateVersion: 4,
+        createdBy: 'main-agent',
+      })
+    ).toEqual({ status: 'accepted', replayed: false, stateVersion: 4 });
+    expect(workflows.applyAuthoringTransition('authoring-resume-1', 'running')).toEqual({
+      lifecycle: 'running',
+      stateVersion: 5,
+    });
+    expect(
+      workflows.acceptAuthoringCommand({
+        id: 'authoring-cancel-1',
+        jobId: authoring.id,
+        type: 'cancel',
+        expectedStateVersion: 5,
+        createdBy: 'main-agent',
+      })
+    ).toEqual({ status: 'accepted', replayed: false, stateVersion: 5 });
+    expect(workflows.applyAuthoringTransition('authoring-cancel-1', 'cancelling')).toEqual({
+      lifecycle: 'cancelling',
+      stateVersion: 6,
+    });
+    expect(workflows.settleAuthoringCancellation(authoring.id)).toEqual({
+      lifecycle: 'cancelled',
+      stateVersion: 7,
+    });
     assets.recordBusinessVersionValidation({
       businessVersionId: fixture.versionId,
       deploymentRevisionId: 'deployment-revision',
@@ -211,7 +241,7 @@ describe('semantic v1 data foundation repositories', () => {
         .get(fixture.versionId)
     ).toEqual({ status: 'needs_recheck' });
     expect(versions.findById(fixture.versionId)?.validationStatus).toBe('needs_recheck');
-    expect(workflows.listAuthoringEvents(authoring.id)).toHaveLength(6);
+    expect(workflows.listAuthoringEvents(authoring.id)).toHaveLength(9);
     expect(db.prepare('SELECT COUNT(*) AS count FROM asset_revision_dependencies').get()).toEqual({
       count: 1,
     });
