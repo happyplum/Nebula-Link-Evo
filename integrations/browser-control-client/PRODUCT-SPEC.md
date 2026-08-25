@@ -44,6 +44,7 @@
 | 幂等 header、problem/连接错误映射              | shipped | `client.test.ts`                               |
 | token 脱敏、act 门禁、JSON/NDJSON              | shipped | `cli.test.ts`                                  |
 | 租约轮换、串行、稳定 operationId、未知结果恢复 | shipped | `controlled-session.test.ts`                   |
+| kind/operation 判别参数请求                     | shipped | shared/client/proxy 类型检查 + 操作集成测试     |
 | attach/自有 session 清理差异                   | shipped | `controlled-session.test.ts`                   |
 | CLI 真实 navigate/click/text 与失败关闭        | shipped | `controlled-consumers.e2e.test.ts`             |
 

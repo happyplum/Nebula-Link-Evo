@@ -1106,14 +1106,17 @@ export class BrowserExecutionService {
         'Browser tab is outside the lease policy'
       );
     }
-    for (const field of ['tabId', 'returnToTabId'] as const) {
-      const tabId = input.request.args?.[field];
-      if (typeof tabId === 'string' && !lease.policy.tabIds.includes(tabId)) {
-        throw new BrowserExecutionError(
-          'permission_denied',
-          `Browser operation ${field} is outside the lease policy`
-        );
-      }
+    const referencedTab =
+      input.request.operation === 'switch_tab'
+        ? { field: 'tabId', id: input.request.args.tabId }
+        : input.request.operation === 'close_tab'
+          ? { field: 'returnToTabId', id: input.request.args.returnToTabId }
+          : undefined;
+    if (referencedTab && !lease.policy.tabIds.includes(referencedTab.id)) {
+      throw new BrowserExecutionError(
+        'permission_denied',
+        `Browser operation ${referencedTab.field} is outside the lease policy`
+      );
     }
     return lease;
   }

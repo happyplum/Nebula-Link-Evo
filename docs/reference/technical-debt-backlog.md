@@ -14,14 +14,6 @@ The shipped v1 control planes are intentionally loopback-only and do not require
 
 Expected result: before enabling non-loopback control, create a focused design comparing API key, JWT/refresh token, OAuth2, and session-based options for Fastify HTTP routes, MCP access, debug UI, and ai-e2e surfaces, including tenant isolation and credential rotation.
 
-### Action parameter type strengthening
-
-Status: `pending`
-
-Some action execution paths may still use broad `Record<string, unknown>` parameters instead of the shared discriminated action union.
-
-Expected result: action handlers narrow by action type and use typed params without ad-hoc casts.
-
 ### Environment loading centralization
 
 Status: `pending`

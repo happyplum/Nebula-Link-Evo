@@ -55,7 +55,7 @@
 
 | 功能                    | 入口                         | 状态    | 验收面                                               | 关联模块                                                                                                            |
 | ----------------------- | ---------------------------- | ------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| 浏览器执行线协议        | `types/browser-execution.ts` | shipped | shared build + proxy/client/plugin 类型检查与测试    | operation artifact ref 必含 `sizeBytes`、DOM 可带 `snapshotId`；不含 token hash、artifact bytes 或持久化内部记录    |
+| 浏览器执行线协议        | `types/browser-execution.ts` | shipped | shared build + proxy/client/plugin 类型检查与测试    | `BrowserOperationRequestV1` 以 kind/operation 判别并映射精确 args；artifact ref 必含 `sizeBytes`、DOM 可带 `snapshotId`；不含 token hash、artifact bytes 或持久化内部记录 |
 | Vision snapshot binding | `types/vision-snapshot.ts`   | shipped | shared build + ai-chat-service snapshot-loader tests | session/tab/operation/requestHash/lease/snapshot/artifact hash/MIME/size/status；不含 artifact bytes 或 lease token |
 | SSE 事件契约            | `types/sse-events.ts`        | shipped | `__tests__/sse-events-contract.test.ts`              | types/                                                                                                              |
 | Debug 事件契约          | `types/debug-events.ts`      | shipped | `__tests__/debug-events-contract.test.ts`            | types/                                                                                                              |

@@ -1,7 +1,7 @@
 # AI E2E 跨服务 API 与事件契约
 
 > 状态：已确认目标设计，部分实现。
-> 更新时间：2026-08-24。
+> 更新时间：2026-08-26。
 > 本文固定 `ai-e2e`、`ai-chat-service` 与 `proxy-adapter` 的目标调用面、事件信封、幂等和恢复语义。三服务已分别交付 browser capture/artifact/event、Agent task create/get/command/event/checkpoint/Skill runtime，以及 ai-e2e Authoring/Run 控制面、snapshot-first SSE 和基于 outbox/外部关联的跨服务协调器。核心服务只提供 canonical v1 HTTP 路径与 `browser-control.operation_*` MCP 工具面，不保留旧路径、旧工具或静默回退。
 
 ## 1. 设计目标
@@ -304,15 +304,12 @@ proxy MCP Server 只暴露以下 3 个受控工具；旧 15 个 browser tools �
 `operation_execute` 的逻辑输入：
 
 ```ts
-interface BrowserOperationRequestV1 {
+type BrowserOperationRequestV1 = {
   schema: 'nebula.browser.operation/1.0';
   operationId: string;
   leaseSequence: number;
   deadlineAt: string;
-  kind: 'observe' | 'act';
-  operation: string;
   target?: TargetRefV1;
-  args?: Record<string, unknown>;
   capture?: {
     beforeScreenshot?: boolean;
     afterScreenshot?: boolean;
@@ -323,7 +320,20 @@ interface BrowserOperationRequestV1 {
     label?: string;
     animation: 'normal' | 'fast' | 'off';
   };
-}
+} & BrowserOperationDescriptor;
+
+// 判别联合；BrowserOperationArgsByName 为每个 operation 定义精确参数形状。
+type ArgsField<O extends BrowserOperationName> =
+  BrowserOperationArgsByName[O] extends never
+    ? { args?: never }
+    : O extends 'click'
+      ? { args?: BrowserOperationArgsByName[O] }
+      : { args: BrowserOperationArgsByName[O] };
+type Descriptor<K extends 'observe' | 'act', O extends BrowserOperationName> =
+  O extends BrowserOperationName ? { kind: K; operation: O } & ArgsField<O> : never;
+type BrowserOperationDescriptor =
+  | Descriptor<'observe', ObserveOperation>
+  | Descriptor<'act', ActOperation>;
 ```
 
 上述是 proxy 接收的完整逻辑输入。E2E 模型可写投影还要移除 `operationId`：session、Tab、lease mode/token、operation ID 和关联标签均由 `ai-chat-service` 的受限工具包装层注入；operation ID 由稳定 task/tool-call identity 派生或生成，并与原 tool call 绑定，模型不能覆盖。`observe` 租约只能使用观测集合，`control` 才能使用动作集合。`operation` 只允许：

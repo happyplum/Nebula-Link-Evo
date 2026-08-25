@@ -11,7 +11,7 @@
 | ---------------------------------------------------------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------- |
 | DSH bundle/patch、两个模型工具、逐 act 审批、单 session 占用与 native presentation | Cordis tools/approval；`browser-control-client` | Playwright/CDP、proxy 路由、通用 MCP bridge、专属 UI、秘密注入、E2E 业务策略 |
 
-- 模型参数只有 `{operation,target?,args?}`；浏览器 binding 和凭证全部隐藏注入。
+- 模型参数只有 `{operation,target?,args?}`；args 在 proxy 权威边界按 shared kind/operation 判别映射校验，浏览器 binding 和凭证全部隐藏注入。
 - 同一实例只允许一个 Harness session 持有浏览器，不共享隐藏 binding。
 - 同 profile 不得同时挂载指向同 proxy 的官方通用 MCP bridge。
 
