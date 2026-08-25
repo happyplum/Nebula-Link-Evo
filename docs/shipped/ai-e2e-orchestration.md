@@ -12,6 +12,6 @@
 - [shipped] 工作台三栏支持指针/键盘调宽、边界约束、双击复位、持久化、缩放/收起/专注、system/light/dark 与 reduced-motion。
 - [shipped] 新项目通过 `bootstrap=1` 深链接只自动创建一次 bootstrap Agent task；起始脚本/场景保持 `unverified`，不能伪装成可运行版本。
 - [shipped] API/SSE 统一 `{ data, meta }`、`ApiProblem`、snapshot-first + 单调 seq；UI 断线从权威 snapshot 恢复。
-- [shipped] canonical control-plane 跨服务 E2E 使用真实 HTTP 与 Chromium 验证 ai-e2e 客户端到 ai-chat-service Agent task、proxy-adapter session/lease 的契约，并断言旧路径保持 404。
+- [shipped] canonical control-plane 跨服务 E2E 使用真实 HTTP、MCP 与 Chromium 验证 ai-e2e 客户端到 ai-chat-service Agent task、proxy-adapter session/lease/operation 的契约，覆盖导航、填写、点击、文本读取、截图/DOM artifact、operation 查询/取消错误，并断言旧路径保持 404。
 - [tech-debt] 尚未直接消费 ai-chat-service/proxy-adapter 的服务端事件流；当前通过任务/operation 查询和 ai-e2e 持久事件收敛。
 - [tech-debt] 功能脚本完整机器 JSON Schema 尚未抽成统一 validator 包；现有创建、引用、DAG、冻结投影和授权校验继续生效。
