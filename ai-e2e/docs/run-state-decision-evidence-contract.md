@@ -1,7 +1,7 @@
 # AI E2E 运行状态、决策与证据契约
 
-> 状态：`in-progress`。Run/plan/TODO/dependency/page-task/attempt/variable/decision/command/event 与 artifact/evidence manifest/item 数据模型已交付；正式 Run 原子冻结、乐观命令、TODO attempt、依赖传播、恢复/决策、计划级副作用审批、公开 API、snapshot-first SSE、跨服务 Agent/browser 协调、产物自动提升与生产工作台已实现。证据脱敏/保留清理和项目权限仍未实现。
-> 更新时间：2026-08-24。
+> 状态：`in-progress`。Run/plan/TODO/dependency/page-task/attempt/variable/decision/command/event 与 artifact/evidence manifest/item 数据模型已交付；正式 Run 原子冻结、乐观命令、TODO attempt、依赖传播、恢复/决策、计划级副作用审批、公开 API、snapshot-first SSE、跨服务 Agent/browser 协调、产物自动提升与生产工作台已实现。proxy 短期原始产物 TTL/hold 清理已交付；ai-e2e 长期证据脱敏/保留清理和项目权限仍未实现。
+> 更新时间：2026-08-26。
 > 本文定义测试流程从调度到结果汇总的状态、失败传播、决策记录、证据包和人工控制语义。精确 Run API/SSE 见 `service-api-event-contract.md`；数据库物理字段和 UI 布局可以在实现设计中调整，但不同层级状态不得重新混为一个字段。
 
 ## 1. 核心原则
@@ -245,6 +245,7 @@ open → answered → applied
 - 失败、阻塞、待决策和结果不确定证据默认保留 30 天。
 - 用户可以 pin 重要证据延长保留；删除运行或证据属于独立、可审计操作。
 - `proxy-adapter` 原始短期产物必须在自身清理前被 `ai-e2e` 提升或明确标记丢失。
+- `proxy-adapter` 启动后按固定周期清理 TTL 到期且无有效 hold 的原始产物；共享内容文件仅在最后一个非删除引用消失时移除，并追加 `artifact.deleted` 会话事件。
 
 保留期是可配置默认值，不改变证据清单和审计语义。
 
@@ -304,7 +305,7 @@ open → answered → applied
 - semantic Run 已区分 Run/TODO/page task/attempt/decision/evidence 状态，取消、可恢复中断、结果未知和依赖跳过拥有独立事实。
 - Run 已提供持久 event ID/seq、snapshot-first SSE 与 event-log。
 - 生产 UI 已消费权威 Run snapshot/SSE、TODO/依赖、决策和证据投影。
-- artifact/evidence manifest/item 仓储、proxy 截图/DOM/operation 自动提升、读 API 与 UI 证据定位已交付；自动脱敏与保留清理 worker 未交付。
+- artifact/evidence manifest/item 仓储、proxy 截图/DOM/operation 自动提升、读 API、UI 证据定位及 proxy 短期原始产物清理已交付；ai-e2e 长期证据自动脱敏与保留清理 worker 未交付。
 - semantic 决策已能处理计划级副作用审批、blocked/outcome-unknown 恢复和 Authoring 影响扩展审批。
 
 ## 13. 实现前仍需精确定义

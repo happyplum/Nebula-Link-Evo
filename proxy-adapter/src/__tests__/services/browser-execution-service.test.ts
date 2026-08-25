@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -362,6 +362,107 @@ describe('BrowserExecutionService', () => {
     await expect(service.getArtifactDownload(session.id, artifact.id)).rejects.toMatchObject({
       code: 'state_conflict',
     });
+  });
+
+  it('deletes expired artifacts without removing bytes referenced by an active hold', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'nebula-browser-cleanup-artifacts-'));
+    tempDirectories.push(directory);
+    const repository = new BrowserExecutionRepository(':memory:');
+    let currentTime = '2026-08-12T00:00:00.000Z';
+    const service = new BrowserExecutionService({
+      repository,
+      browser: new FakeBrowser(),
+      artifactStore: new LocalBrowserArtifactStore(directory),
+      clock: { now: () => new Date(currentTime) },
+    });
+    service.initialize();
+    const { session, lease, token } = await createSessionAndLease(service);
+    const executeCapture = () =>
+      service.executeOperation({
+        sessionId: session.id,
+        leaseId: lease.id,
+        leaseToken: token,
+        tabId: 'tab-1',
+        request: operationRequest(lease.sequence, { capture: { afterScreenshot: true } }),
+    });
+    const first = await executeCapture();
+    const second = await executeCapture();
+    const firstRef = first.artifacts.at(0);
+    const secondRef = second.artifacts.at(0);
+    if (!firstRef || !secondRef) throw new Error('Expected both captured artifact references');
+    const firstArtifact = repository.getArtifact(firstRef.id);
+    const secondArtifact = repository.getArtifact(secondRef.id);
+    if (!firstArtifact || !secondArtifact) throw new Error('Expected both captured artifacts');
+    if (!secondArtifact.storageRef) throw new Error('Expected a stored artifact reference');
+    expect(firstArtifact.storageRef).toBe(secondArtifact.storageRef);
+    repository.createArtifactHold({
+      id: 'cleanup-hold',
+      artifactId: secondArtifact.id,
+      ownerService: 'ai-e2e',
+      ownerRef: 'evidence-item-1',
+      requestHash: sha256('cleanup-hold'),
+      createdAt: currentTime,
+    });
+
+    currentTime = '2026-08-20T00:00:00.000Z';
+    await expect(service.cleanupExpiredArtifacts()).resolves.toEqual({
+      recordsDeleted: 1,
+      filesDeleted: 0,
+    });
+    expect(repository.getArtifact(firstArtifact.id)?.status).toBe('deleted');
+    expect(repository.getArtifact(secondArtifact.id)?.status).toBe('available');
+    expect(existsSync(join(directory, secondArtifact.storageRef))).toBe(true);
+    await expect(service.getArtifactDownload(session.id, secondArtifact.id)).resolves.toMatchObject({
+      artifact: { id: secondArtifact.id },
+    });
+
+    repository.releaseArtifactHold('cleanup-hold', currentTime);
+    await expect(service.cleanupExpiredArtifacts()).resolves.toEqual({
+      recordsDeleted: 1,
+      filesDeleted: 1,
+    });
+    expect(repository.getArtifact(secondArtifact.id)?.status).toBe('deleted');
+    expect(existsSync(join(directory, secondArtifact.storageRef))).toBe(false);
+    expect(
+      service.listSessionEvents(session.id, 0, 1000).filter((event) => event.type === 'artifact.deleted')
+    ).toHaveLength(2);
+  });
+
+  it('leaves a failed artifact deletion retryable', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'nebula-browser-cleanup-retry-'));
+    tempDirectories.push(directory);
+    const repository = new BrowserExecutionRepository(':memory:');
+    const artifactStore = new LocalBrowserArtifactStore(directory);
+    let currentTime = '2026-08-12T00:00:00.000Z';
+    const service = new BrowserExecutionService({
+      repository,
+      browser: new FakeBrowser(),
+      artifactStore,
+      clock: { now: () => new Date(currentTime) },
+    });
+    service.initialize();
+    const { session, lease, token } = await createSessionAndLease(service);
+    const operation = await service.executeOperation({
+      sessionId: session.id,
+      leaseId: lease.id,
+      leaseToken: token,
+      tabId: 'tab-1',
+      request: operationRequest(lease.sequence, { capture: { afterScreenshot: true } }),
+    });
+    const artifactRef = operation.artifacts.at(0);
+    if (!artifactRef) throw new Error('Expected a captured artifact reference');
+
+    currentTime = '2026-08-20T00:00:00.000Z';
+    const deleteSpy = vi.spyOn(artifactStore, 'delete').mockRejectedValueOnce(new Error('locked'));
+    await expect(service.cleanupExpiredArtifacts()).rejects.toThrow('locked');
+    expect(repository.getArtifact(artifactRef.id)?.status).toBe('expired');
+
+    deleteSpy.mockRestore();
+    await expect(service.cleanupExpiredArtifacts()).resolves.toEqual({
+      recordsDeleted: 1,
+      filesDeleted: 1,
+    });
+    expect(repository.getArtifact(artifactRef.id)?.status).toBe('deleted');
   });
 
   it('marks an action outcome unknown when execution fails after start', async () => {

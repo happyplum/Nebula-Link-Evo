@@ -930,7 +930,7 @@ manifest sealed 后不可修改；补充证据创建新的 manifest revision 或
 - semantic v1 已有 business version、独立 current asset graph、稳定功能脚本身份、不可变 revision payload/hash、独立功能脚本 Schema validator、scoped verification、dependency index、verified-scope 激活事务、公开 Authoring API 和可视语义执行。
 - `test_runs` 从 verified scenario 原子冻结 base plan、TODO/依赖和初始变量，并通过乐观命令、page task/attempt、Agent/browser 协调、精确依赖传播、恢复/决策应用、持久 seq event 和公开 API/SSE 驱动状态。
 - 持久 outbox、opaque external task link 与确定性协调器已接入网络派发、启动恢复和跨服务状态核对；lease token 只进入本机加密 secret store，不写数据库明文。
-- 内容寻址 artifact、append-only evidence item 和 sealed manifest 已由协调器接入 proxy 截图/DOM/operation 自动提升；保留清理、脱敏完成和 UI 证据时间线尚未实现。
+- 内容寻址 artifact、append-only evidence item 和 sealed manifest 已由协调器接入 proxy 截图/DOM/operation 自动提升，proxy TTL/hold 短期原始产物清理已交付；ai-e2e 长期证据保留清理、脱敏完成和 UI 证据时间线尚未实现。
 - 页面 revision 已保存 Origin 无关签名；运行匹配器、完整参数 Schema 和基线采集仍待实现。
 - 持久 authoring job/task/attempt/command/event、candidate verification/activation、coverage/dependency 和跨 authoring/run 的 browser FIFO 已接入 bootstrap/recheck/repair。
 - 风险投影 hash、policy evaluation/grant/decision、staging 高风险审批、production 业务写硬拒绝和逐 effectId 跨服务参数门禁已交付。

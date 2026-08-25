@@ -241,7 +241,7 @@
 - ai-e2e 只保留 semantic 数据、canonical `/api/v1/*`、结构化 Authoring/Run 和浏览器中心工作台，不提供旧资产、旧路由或任意脚本执行兼容。
 - 项目初始化会原子建立 deployment、业务版本、PRD、页面、模块、观察型脚本和场景，并以 bootstrap job 进入真实网页建模。
 - Agent task、Vision v2、逐 effect 授权、浏览器 FIFO、依赖传播、恢复/决策、revision verification、证据提升和原子激活已接通。
-- 完整参数 Schema/页面匹配与基线采集、证据自动脱敏和保留清理仍为技术债；功能脚本独立 Schema validator 与 Agent/browser 持久 event-log 游标消费已交付。
+- 完整参数 Schema/页面匹配与基线采集、证据自动脱敏和 ai-e2e 长期保留清理仍为技术债；proxy TTL/hold 短期原始产物清理、功能脚本独立 Schema validator 与 Agent/browser 持久 event-log 游标消费已交付。
 
 ## 10. 尚待技术设计的内容
 
