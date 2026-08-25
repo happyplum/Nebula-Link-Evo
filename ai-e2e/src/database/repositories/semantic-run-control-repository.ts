@@ -759,7 +759,8 @@ export class SemanticRunControlRepository {
         String(validation.verification_scope_sha256)
       );
       const scriptPayload = parseObject(script.payload_json);
-      const pageId = requireText(scriptPayload.entryPageDefinitionId, 'entryPageDefinitionId');
+      const pageScope = parseObject(scriptPayload.pageScope);
+      const pageId = requireText(pageScope.entryPageId, 'pageScope.entryPageId');
       const pageRevision = this.db
         .prepare(
           `SELECT id FROM page_definition_revisions

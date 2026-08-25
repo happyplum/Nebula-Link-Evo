@@ -9,8 +9,15 @@ import type { SemanticEvidenceRepository } from '../database/repositories/semant
 import { hashValue } from '../database/repositories/semantic-repository-utils.js';
 import type { SemanticRunControlRepository } from '../database/repositories/semantic-run-control-repository.js';
 import type { SemanticWorkflowRepository } from '../database/repositories/semantic-workflow-repository.js';
-import type { AgentTaskClientPort, AgentTaskView, CreateAgentTaskInput } from '../infrastructure/agent-task-client.js';
-import type { SemanticBrowserClientPort, BrowserOperationRecord } from '../infrastructure/semantic-browser-client.js';
+import type {
+  AgentTaskClientPort,
+  AgentTaskView,
+  CreateAgentTaskInput,
+} from '../infrastructure/agent-task-client.js';
+import type {
+  SemanticBrowserClientPort,
+  BrowserOperationRecord,
+} from '../infrastructure/semantic-browser-client.js';
 import { IntegrationClientError } from '../infrastructure/integration-client-error.js';
 import { SemanticArtifactStore } from '../infrastructure/semantic-artifact-store.js';
 import {
@@ -53,7 +60,13 @@ interface OutboxItem extends Record<string, unknown> {
   attempt_count: number;
 }
 
-const TERMINAL_AGENT_STATES = new Set(['completed', 'failed', 'interrupted', 'cancelled', 'blocked']);
+const TERMINAL_AGENT_STATES = new Set([
+  'completed',
+  'failed',
+  'interrupted',
+  'cancelled',
+  'blocked',
+]);
 const TERMINAL_RUN_STATES = new Set(['completed', 'cancelled']);
 
 export class SemanticCoordinatorService {
@@ -140,7 +153,10 @@ export class SemanticCoordinatorService {
           }
         } else {
           const lifecycle = this.options.repository.getAuthoringJobLifecycle(currentJob.contextId);
-          if (lifecycle && ['paused', 'waiting_decision', 'completed', 'cancelled', 'failed'].includes(lifecycle)) {
+          if (
+            lifecycle &&
+            ['paused', 'waiting_decision', 'completed', 'cancelled', 'failed'].includes(lifecycle)
+          ) {
             this.enqueueSessionClose(currentJob, 'authoring_safe_boundary');
             return { action: 'browser_session.close_queued' };
           }
@@ -233,7 +249,9 @@ export class SemanticCoordinatorService {
     });
   }
 
-  private enqueueLeaseCreate(todo: ReturnType<SemanticCoordinatorRepository['getReadyTodo']> & {}): void {
+  private enqueueLeaseCreate(
+    todo: ReturnType<SemanticCoordinatorRepository['getReadyTodo']> & {}
+  ): void {
     if (!todo) return;
     const projection = buildRunTaskProjection(todo, `pending:${todo.todoId}`);
     this.options.evidence.enqueueOutbox({
@@ -357,7 +375,13 @@ export class SemanticCoordinatorService {
     }
     const session = await this.options.browser.getSession(sessionId);
     const tab = session.tabs.find((candidate) => candidate.isActive) ?? session.tabs[0];
-    if (!tab) throw new IntegrationClientError('proxy-adapter', 'browser_unavailable', '浏览器会话没有可用 Tab', true);
+    if (!tab)
+      throw new IntegrationClientError(
+        'proxy-adapter',
+        'browser_unavailable',
+        '浏览器会话没有可用 Tab',
+        true
+      );
     const issued = await this.options.browser.createLease(sessionId, item.id, {
       mode: 'control',
       ttlSeconds: 300,
@@ -394,7 +418,12 @@ export class SemanticCoordinatorService {
     this.secrets.put(secretRef, leaseToken);
     const todo = this.options.repository.getReadyTodo(runSession?.jobId ?? '');
     if (!todo || todo.todoId !== todoId) {
-      await this.options.browser.revokeLease(sessionId, issued.lease.id, leaseToken, `${item.id}:stale`);
+      await this.options.browser.revokeLease(
+        sessionId,
+        issued.lease.id,
+        leaseToken,
+        `${item.id}:stale`
+      );
       this.secrets.delete(secretRef);
       throw new Error('租约签发后 TODO 已不再可执行');
     }
@@ -458,17 +487,27 @@ export class SemanticCoordinatorService {
     const task = this.options.repository.getAuthoringTask(item.context_id, 'ready');
     if (!task || task.taskId !== taskId) {
       this.options.evidence.settleOutbox(item.id, 'cancelled', {
-        error: { code: 'stale_authoring_task', message: 'Authoring task 已不再可执行', retryable: false },
+        error: {
+          code: 'stale_authoring_task',
+          message: 'Authoring task 已不再可执行',
+          retryable: false,
+        },
       });
       return;
     }
     const session = await this.options.browser.getSession(sessionId);
     const tab = session.tabs.find((candidate) => candidate.isActive) ?? session.tabs[0];
-    if (!tab) throw new IntegrationClientError('proxy-adapter', 'browser_unavailable', '浏览器会话没有可用 Tab', true);
+    if (!tab)
+      throw new IntegrationClientError(
+        'proxy-adapter',
+        'browser_unavailable',
+        '浏览器会话没有可用 Tab',
+        true
+      );
     const requirements = candidates.leaseRequirements(task);
     const issued = await this.options.browser.createLease(sessionId, item.id, {
-      mode: requirements.mode,
-      ttlSeconds: requirements.mode === 'control' ? 300 : 30,
+      mode: 'control',
+      ttlSeconds: 300,
       tabIds: [tab.id],
       operations: requirements.operations,
     });
@@ -487,7 +526,12 @@ export class SemanticCoordinatorService {
           { nextAttemptAt: new Date(Date.parse(active.expiresAt) + 1_000).toISOString() }
         );
       }
-      throw new IntegrationClientError('proxy-adapter', 'lease_token_unavailable', 'Authoring 租约已失效', true);
+      throw new IntegrationClientError(
+        'proxy-adapter',
+        'lease_token_unavailable',
+        'Authoring 租约已失效',
+        true
+      );
     }
     this.secrets.put(secretRef, leaseToken);
     this.options.workflows.startAuthoringTask(taskId);
@@ -527,7 +571,10 @@ export class SemanticCoordinatorService {
 
   private async createAuthoringAgentTask(item: OutboxItem): Promise<void> {
     const payload = payloadObject(item);
-    const request = objectValue(payload.agentRequest) as unknown as Omit<CreateAgentTaskInput, 'browserBinding'>;
+    const request = objectValue(payload.agentRequest) as unknown as Omit<
+      CreateAgentTaskInput,
+      'browserBinding'
+    >;
     const binding = objectValue(payload.browserBinding);
     const secretRef = requiredString(item.secret_binding_ref, 'secretBindingRef');
     const token = this.secrets.get(secretRef);
@@ -545,7 +592,11 @@ export class SemanticCoordinatorService {
         });
       }
       this.options.evidence.settleOutbox(item.id, 'terminal_failed', {
-        error: { code: 'secret_binding_lost', message: 'Authoring 租约 secret 不可恢复', retryable: false },
+        error: {
+          code: 'secret_binding_lost',
+          message: 'Authoring 租约 secret 不可恢复',
+          retryable: false,
+        },
       });
       return;
     }
@@ -578,14 +629,21 @@ export class SemanticCoordinatorService {
 
   private async createAgentTask(item: OutboxItem): Promise<void> {
     const payload = payloadObject(item);
-    const request = objectValue(payload.agentRequest) as unknown as Omit<CreateAgentTaskInput, 'browserBinding'>;
+    const request = objectValue(payload.agentRequest) as unknown as Omit<
+      CreateAgentTaskInput,
+      'browserBinding'
+    >;
     const binding = objectValue(payload.browserBinding);
     const secretRef = requiredString(item.secret_binding_ref, 'secretBindingRef');
     const token = this.secrets.get(secretRef);
     if (!token) {
       await this.interruptOrphanedPageTask(item, 'browser_lease_secret_lost');
       this.options.evidence.settleOutbox(item.id, 'terminal_failed', {
-        error: { code: 'secret_binding_lost', message: '协调器重启后租约明文已销毁', retryable: false },
+        error: {
+          code: 'secret_binding_lost',
+          message: '协调器重启后租约明文已销毁',
+          retryable: false,
+        },
       });
       return;
     }
@@ -684,7 +742,10 @@ export class SemanticCoordinatorService {
         ? {
             decision: {
               category: completion.result,
-              question: completion.result === 'outcome_unknown' ? '该浏览器副作用是否已经发生？' : '如何处理当前页面任务？',
+              question:
+                completion.result === 'outcome_unknown'
+                  ? '该浏览器副作用是否已经发生？'
+                  : '如何处理当前页面任务？',
               facts: { agentTaskId: task.taskId, summary: completion.summary },
               evidenceRefs: manifestId ? [manifestId] : [],
               options: [
@@ -698,7 +759,17 @@ export class SemanticCoordinatorService {
           }
         : {}),
     });
-    this.enqueueLeaseRevoke(pageTask);
+    if (TERMINAL_RUN_STATES.has(this.options.repository.getRunLifecycle(pageTask.runId) ?? '')) {
+      this.enqueueSessionCloseWithLease({
+        contextType: 'run',
+        contextId: pageTask.runId,
+        sessionId: pageTask.browserSessionId,
+        lease: this.options.repository.getExternalLink(pageTask.pageTaskId, 'browser_lease'),
+        pageTaskId: pageTask.pageTaskId,
+      });
+    } else {
+      this.enqueueLeaseRevoke(pageTask);
+    }
     return `agent_task.${task.status}_applied`;
   }
 
@@ -760,7 +831,7 @@ export class SemanticCoordinatorService {
             amendmentId: verification.amendment.id,
           }
         );
-        this.enqueueAuthoringLeaseRevoke(task);
+        this.enqueueAuthoringSessionClose(task);
         return `authoring_verification.${verification.status}`;
       } catch (error) {
         this.options.workflows.completeAuthoringAttempt({
@@ -778,7 +849,7 @@ export class SemanticCoordinatorService {
           code: 'verification_application_failed',
           message: error instanceof Error ? error.message : '验证结果应用失败',
         });
-        this.enqueueAuthoringLeaseRevoke(task);
+        this.enqueueAuthoringSessionClose(task);
         return 'authoring_verification.failed';
       }
     }
@@ -801,15 +872,12 @@ export class SemanticCoordinatorService {
         code: 'candidate_validation_failed',
         message: error instanceof Error ? error.message : '候选校验失败',
       });
-      this.enqueueAuthoringLeaseRevoke(task);
+      this.enqueueAuthoringSessionClose(task);
       return 'authoring_candidate.failed';
     }
     this.options.workflows.completeAuthoringAttempt({
       taskId: task.taskId,
-      status:
-        result.status === 'blocked'
-          ? 'blocked'
-          : 'succeeded',
+      status: result.status === 'blocked' ? 'blocked' : 'succeeded',
       agentTaskId: agentTask.taskId,
       ...(result.firstCandidate
         ? {
@@ -849,7 +917,7 @@ export class SemanticCoordinatorService {
         summary: result.summary,
       });
     }
-    this.enqueueAuthoringLeaseRevoke(task);
+    this.enqueueAuthoringSessionClose(task);
     return `authoring_candidate.${result.status}`;
   }
 
@@ -907,7 +975,10 @@ export class SemanticCoordinatorService {
           metadata: { toolCallId: call.toolCallId },
         });
         for (const artifact of operation.artifacts) {
-          const bytes = await this.options.browser.downloadArtifact(task.browserSessionId, artifact.id);
+          const bytes = await this.options.browser.downloadArtifact(
+            task.browserSessionId,
+            artifact.id
+          );
           const persisted = await this.artifactStore.persist(artifact.sha256, bytes);
           const registered = this.options.evidence.registerArtifact({
             sha256: artifact.sha256,
@@ -955,21 +1026,41 @@ export class SemanticCoordinatorService {
     return manifest.id;
   }
 
-  private enqueueAuthoringLeaseRevoke(task: CoordinatorAuthoringTask): void {
+  private enqueueAuthoringSessionClose(task: CoordinatorAuthoringTask): void {
     const lease = this.options.repository.getAuthoringExternalLink(task.taskId, 'browser_lease');
     if (!lease) return;
-    this.options.evidence.enqueueOutbox({
-      id: `authoring-browser-lease-revoke:${lease.externalId}`,
-      context: { type: 'authoring', id: task.jobId },
+    this.enqueueSessionCloseWithLease({
+      contextType: 'authoring',
+      contextId: task.jobId,
+      sessionId: task.browserSessionId,
+      lease,
       authoringTaskId: task.taskId,
+    });
+  }
+
+  private enqueueSessionCloseWithLease(input: {
+    contextType: 'run' | 'authoring';
+    contextId: string;
+    sessionId: string;
+    lease: { externalId: string; secretRef?: string } | null;
+    pageTaskId?: string;
+    authoringTaskId?: string;
+  }): void {
+    if (!input.lease?.secretRef) return;
+    this.options.evidence.enqueueOutbox({
+      id: `browser-session-close:${input.lease.externalId}`,
+      context: { type: input.contextType, id: input.contextId },
+      ...(input.pageTaskId ? { pageTaskId: input.pageTaskId } : {}),
+      ...(input.authoringTaskId ? { authoringTaskId: input.authoringTaskId } : {}),
       targetService: 'proxy_adapter',
-      commandType: 'browser_lease.revoke',
-      endpointOrTool: '/api/v1/browser-execution/sessions/:sessionId/leases/:leaseId',
+      commandType: 'browser_session.close',
+      endpointOrTool: '/api/v1/browser-execution/sessions/:sessionId',
       payloadRedacted: {
-        browserSessionId: task.browserSessionId,
-        browserLeaseId: lease.externalId,
+        browserSessionId: input.sessionId,
+        browserLeaseId: input.lease.externalId,
+        reason: `${input.contextType}_terminal`,
       },
-      ...(lease.secretRef ? { secretBindingRef: lease.secretRef } : {}),
+      secretBindingRef: input.lease.secretRef,
     });
   }
 
@@ -1024,7 +1115,17 @@ export class SemanticCoordinatorService {
         true
       );
     }
-    const lease = await this.options.browser.revokeLease(sessionId, leaseId, token, item.id);
+    let lease: Awaited<ReturnType<SemanticBrowserClientPort['revokeLease']>>;
+    try {
+      lease = await this.options.browser.revokeLease(sessionId, leaseId, token, item.id);
+    } catch (error) {
+      if (!(error instanceof IntegrationClientError) || error.code !== 'lease_expired') throw error;
+      const session = await this.options.browser.getSession(sessionId);
+      if (session.activeLeases.some((active) => active.id === leaseId)) throw error;
+      if (secretRef) this.secrets.delete(secretRef);
+      this.options.evidence.settleOutbox(item.id, 'confirmed', { resultRef: leaseId });
+      return;
+    }
     if (secretRef) this.secrets.delete(secretRef);
     this.options.evidence.linkExternalTask({
       context: { type: item.context_type, id: item.context_id },
@@ -1041,9 +1142,10 @@ export class SemanticCoordinatorService {
 
   private async closeBrowserSession(item: OutboxItem): Promise<void> {
     const payload = payloadObject(item);
-    const runSession = item.context_type === 'run'
-      ? this.options.repository.getRunBrowserSession(item.context_id)
-      : null;
+    const runSession =
+      item.context_type === 'run'
+        ? this.options.repository.getRunBrowserSession(item.context_id)
+        : null;
     const sessionId = stringValue(payload.browserSessionId) ?? runSession?.sessionId;
     if (!sessionId) throw new Error('关闭浏览器命令找不到关联 session');
     const session = await this.options.browser.getSession(sessionId).catch((error) => {
@@ -1051,10 +1153,19 @@ export class SemanticCoordinatorService {
       throw error;
     });
     if (session && session.status !== 'closed') {
-      if (session.activeLeases.length > 0) {
-        throw new IntegrationClientError('proxy-adapter', 'lease_conflict', '浏览器仍有活动租约', true);
+      const leaseId = stringValue(payload.browserLeaseId);
+      const secretRef = item.secret_binding_ref ? String(item.secret_binding_ref) : undefined;
+      const leaseToken = secretRef ? this.secrets.get(secretRef) : undefined;
+      if (!leaseId || !leaseToken || !session.activeLeases.some((lease) => lease.id === leaseId)) {
+        throw new IntegrationClientError(
+          'proxy-adapter',
+          'lease_conflict',
+          '关闭浏览器需要关联的活动控制租约',
+          false
+        );
       }
-      await this.options.browser.closeSession(sessionId, item.id);
+      await this.options.browser.closeSession(sessionId, item.id, { leaseId, leaseToken });
+      this.secrets.delete(secretRef!);
     }
     const job = this.options.repository.getActiveBrowserJob();
     if (job && job.contextType === item.context_type && job.contextId === item.context_id) {
@@ -1072,7 +1183,10 @@ export class SemanticCoordinatorService {
     this.options.evidence.settleOutbox(item.id, 'confirmed', { resultRef: sessionId });
   }
 
-  private async captureEvidence(pageTask: ActivePageTask, task: AgentTaskView): Promise<string | undefined> {
+  private async captureEvidence(
+    pageTask: ActivePageTask,
+    task: AgentTaskView
+  ): Promise<string | undefined> {
     const manifest = this.options.evidence.createManifest({
       context: { type: 'run', id: pageTask.runId },
       todoId: pageTask.todoId,
@@ -1097,7 +1211,10 @@ export class SemanticCoordinatorService {
           metadata: { toolCallId: call.toolCallId },
         });
         for (const artifact of operation.artifacts) {
-          const bytes = await this.options.browser.downloadArtifact(pageTask.browserSessionId, artifact.id);
+          const bytes = await this.options.browser.downloadArtifact(
+            pageTask.browserSessionId,
+            artifact.id
+          );
           const persisted = await this.artifactStore.persist(artifact.sha256, bytes);
           const registered = this.options.evidence.registerArtifact({
             sha256: artifact.sha256,
@@ -1132,7 +1249,10 @@ export class SemanticCoordinatorService {
         }
       } catch (error) {
         partial = true;
-        this.options.logger?.warn({ err: error, operationId: call.operationId }, '浏览器证据收集不完整');
+        this.options.logger?.warn(
+          { err: error, operationId: call.operationId },
+          '浏览器证据收集不完整'
+        );
       }
     }
     const audit = {
@@ -1190,7 +1310,8 @@ export class SemanticCoordinatorService {
     if (!item.page_task_id) return;
     const job = this.options.repository.getActiveBrowserJob();
     const pageTask = job ? this.options.repository.getActivePageTask(job.id) : null;
-    if (pageTask?.pageTaskId === item.page_task_id) await this.completeInterrupted(pageTask, reasonClass);
+    if (pageTask?.pageTaskId === item.page_task_id)
+      await this.completeInterrupted(pageTask, reasonClass);
   }
 
   private async handleDispatchFailure(item: OutboxItem, error: unknown): Promise<void> {
@@ -1244,7 +1365,10 @@ function mapClaimedJob(row: Record<string, unknown>): CoordinatorBrowserJob {
   };
 }
 
-function desiredAgentCommand(runLifecycle: string, agentStatus: string): 'pause' | 'resume' | 'cancel' | null {
+function desiredAgentCommand(
+  runLifecycle: string,
+  agentStatus: string
+): 'pause' | 'resume' | 'cancel' | null {
   if (runLifecycle === 'cancelling' && !TERMINAL_AGENT_STATES.has(agentStatus)) return 'cancel';
   if (runLifecycle === 'paused' && agentStatus === 'running') return 'pause';
   if (runLifecycle === 'running' && agentStatus === 'paused') return 'resume';
@@ -1252,7 +1376,15 @@ function desiredAgentCommand(runLifecycle: string, agentStatus: string): 'pause'
 }
 
 function completionFromTask(task: AgentTaskView): {
-  result: 'succeeded' | 'assertion_failed' | 'execution_failed' | 'precondition_blocked' | 'recoverable_interruption' | 'decision_required' | 'outcome_unknown' | 'cancelled';
+  result:
+    | 'succeeded'
+    | 'assertion_failed'
+    | 'execution_failed'
+    | 'precondition_blocked'
+    | 'recoverable_interruption'
+    | 'decision_required'
+    | 'outcome_unknown'
+    | 'cancelled';
   reasonClass: string;
   summary: string;
   checkpoint?: Record<string, unknown>;
@@ -1263,10 +1395,20 @@ function completionFromTask(task: AgentTaskView): {
   downstreamImpact?: Record<string, unknown>;
 } {
   if (task.status === 'interrupted') {
-    return { result: 'recoverable_interruption', reasonClass: task.error?.code ?? 'agent_interrupted', summary: task.error?.message ?? 'Agent task interrupted' };
+    return {
+      result: 'recoverable_interruption',
+      reasonClass: task.error?.code ?? 'agent_interrupted',
+      summary: task.error?.message ?? 'Agent task interrupted',
+    };
   }
-  if (task.status === 'cancelled') return { result: 'cancelled', reasonClass: 'run_cancelled', summary: 'Agent task cancelled' };
-  if (task.status === 'blocked') return { result: 'precondition_blocked', reasonClass: task.error?.code ?? 'agent_blocked', summary: task.error?.message ?? 'Agent task blocked' };
+  if (task.status === 'cancelled')
+    return { result: 'cancelled', reasonClass: 'run_cancelled', summary: 'Agent task cancelled' };
+  if (task.status === 'blocked')
+    return {
+      result: 'precondition_blocked',
+      reasonClass: task.error?.code ?? 'agent_blocked',
+      summary: task.error?.message ?? 'Agent task blocked',
+    };
   if (task.status === 'failed') {
     const unknown = task.toolCalls.some((call) => call.status === 'outcome_unknown');
     return {
@@ -1276,10 +1418,24 @@ function completionFromTask(task: AgentTaskView): {
     };
   }
   const output = objectValue(task.output);
-  const allowed = new Set(['succeeded', 'assertion_failed', 'execution_failed', 'precondition_blocked', 'decision_required', 'outcome_unknown']);
-  const result = typeof output.result === 'string' && allowed.has(output.result)
-    ? output.result as 'succeeded' | 'assertion_failed' | 'execution_failed' | 'precondition_blocked' | 'decision_required' | 'outcome_unknown'
-    : 'execution_failed';
+  const allowed = new Set([
+    'succeeded',
+    'assertion_failed',
+    'execution_failed',
+    'precondition_blocked',
+    'decision_required',
+    'outcome_unknown',
+  ]);
+  const result =
+    typeof output.result === 'string' && allowed.has(output.result)
+      ? (output.result as
+          | 'succeeded'
+          | 'assertion_failed'
+          | 'execution_failed'
+          | 'precondition_blocked'
+          | 'decision_required'
+          | 'outcome_unknown')
+      : 'execution_failed';
   return {
     result,
     reasonClass: stringValue(output.reasonClass) ?? 'invalid_agent_output',
@@ -1320,18 +1476,36 @@ function operationSummary(operation: BrowserOperationRecord): Record<string, unk
       mimeType: artifact.mimeType,
     })),
     error: operation.error
-      ? { code: operation.error.code, message: operation.error.message, retryable: operation.error.retryable }
+      ? {
+          code: operation.error.code,
+          message: operation.error.message,
+          retryable: operation.error.retryable,
+        }
       : null,
   };
 }
 
-function requireCapability(value: Record<string, unknown>, service: string, protocol: string): void {
+function requireCapability(
+  value: Record<string, unknown>,
+  service: string,
+  protocol: string
+): void {
   if (value.schema !== 'nebula.service-capabilities/1.0' || value.service !== service) {
-    throw new IntegrationClientError(service === 'ai-chat-service' ? 'ai-chat-service' : 'proxy-adapter', 'capability_mismatch', `${service} capability 信封不兼容`, false);
+    throw new IntegrationClientError(
+      service === 'ai-chat-service' ? 'ai-chat-service' : 'proxy-adapter',
+      'capability_mismatch',
+      `${service} capability 信封不兼容`,
+      false
+    );
   }
   const selected = objectValue(objectValue(value.protocols)[protocol]);
   if (selected.major !== 1) {
-    throw new IntegrationClientError(service === 'ai-chat-service' ? 'ai-chat-service' : 'proxy-adapter', 'capability_mismatch', `${service} 未声明 ${protocol} major 1`, false);
+    throw new IntegrationClientError(
+      service === 'ai-chat-service' ? 'ai-chat-service' : 'proxy-adapter',
+      'capability_mismatch',
+      `${service} 未声明 ${protocol} major 1`,
+      false
+    );
   }
 }
 
@@ -1345,7 +1519,7 @@ function payloadObject(item: OutboxItem): Record<string, unknown> {
 
 function objectValue(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
+    ? (value as Record<string, unknown>)
     : {};
 }
 

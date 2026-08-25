@@ -120,7 +120,7 @@ describe('SemanticCoordinatorService', () => {
         .get(created.id)
     ).toEqual({ count: 1 });
     expect(browser.closed).toBe(true);
-    expect(browser.revoked).toBe(true);
+    expect(browser.closedWithLease).toBe(true);
     expect(agent.createdRequest?.browserBinding.browserLeaseToken).toBe('opaque-lease-token');
     const persistedAgentPayload = db
       .prepare(
@@ -249,7 +249,7 @@ describe('SemanticCoordinatorService', () => {
     expect(candidateRevision.lifecycle).toBe('draft');
     expect(JSON.parse(candidateRevision.payload_json)).toEqual(candidatePayload);
     expect(agent.createdRequest?.browserBinding.access).toBe('observe');
-    expect(browser.revoked).toBe(true);
+    expect(browser.closedWithLease).toBe(true);
     expect(browser.closed).toBe(true);
 
     expect(authoring.command(amendment!.id, { action: 'queue_at_safe_boundary' })).toMatchObject({
@@ -424,6 +424,7 @@ class FakeAgentTaskClient implements AgentTaskClientPort {
 
 class FakeBrowserClient implements SemanticBrowserClientPort {
   closed = false;
+  closedWithLease = false;
   revoked = false;
   private activeLease?: BrowserLeaseView;
   private leaseCounter = 0;
@@ -479,7 +480,16 @@ class FakeBrowserClient implements SemanticBrowserClientPort {
     return lease;
   }
 
-  async closeSession(): Promise<BrowserSessionView> {
+  async closeSession(
+    _sessionId: string,
+    _idempotencyKey: string,
+    credentials?: { leaseId: string; leaseToken: string }
+  ): Promise<BrowserSessionView> {
+    this.closedWithLease = Boolean(
+      credentials?.leaseId === this.activeLease?.id &&
+      credentials.leaseToken === 'opaque-lease-token'
+    );
+    this.activeLease = undefined;
     this.closed = true;
     return this.session('closed');
   }
@@ -599,7 +609,7 @@ function createFixture(db: DatabaseSync, assets: SemanticAssetRepository) {
       schema: 'nebula.ai-e2e.functional-script/1.0',
       scriptKey: 'account.view',
       functionalModuleId: module.id,
-      entryPageDefinitionId: page.id,
+      pageScope: { entryPageId: page.id, allowedTransitions: [] },
       steps: [{ id: 'step_observe', action: 'observe', postconditions: [] }],
       sideEffects: [],
       finalAssertions: [],

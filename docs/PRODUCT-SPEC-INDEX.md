@@ -171,6 +171,7 @@ debug-ui  ←──  （仅被用户消费）
 ### 3.7 ai-e2e 后端消费契约
 
 - AI 调用：只通过 `AgentTaskClient` 到 `/api/v1/agent-tasks` create/get/commands；Authoring 可申请 `vision.analyze_page`/`vision.resolve_target`，不存在单次文本生成或聚合 facade。
+- Semantic 功能脚本 `nebula.ai-e2e.functional-script/1.0` 的入口页字段固定为 `pageScope.entryPageId`，运行时不读取旧根字段；三服务发布门禁以真实 HTTP/MCP/Chromium 验证候选激活、正式运行及未知结果禁止重放。
 - 浏览器调用：只通过 `SemanticBrowserClient` 到 `/api/v1/browser-execution/*`，不得调用 debug 路由或直连 Playwright/CDP。
 - 下游服务缺失或 capability 不兼容时，依赖其执行的请求返回可判定失败，不静默回退。
 - 脚本执行：只执行结构化 semantic 步骤，由 proxy-adapter 可视运行；不存在任意 TypeScript/JavaScript 执行路径。

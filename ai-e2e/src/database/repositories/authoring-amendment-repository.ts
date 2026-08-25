@@ -850,11 +850,12 @@ export class AuthoringAmendmentRepository {
         | undefined;
       if (!script) throw new Error('Functional script ownership is unavailable');
       const basePayload = parseObject(base.payload_json);
+      const pageScope = parseObject(basePayload.pageScope);
       return {
         functionalModuleId: script.functional_module_id,
         pageDefinitionId:
-          typeof basePayload.entryPageDefinitionId === 'string'
-            ? basePayload.entryPageDefinitionId
+          typeof pageScope.entryPageId === 'string'
+            ? pageScope.entryPageId
             : script.primary_page_definition_id,
       };
     }

@@ -11,6 +11,7 @@
 | Authoring | shipped | bootstrap/recheck/repair、结构化 amendment、Chat scope、影响审批、安全边界排队、真实浏览器验证与原子激活 |
 | Run | shipped | 冻结计划、TODO/DAG、page task/attempt、变量、决策、恢复/取消/依赖跳过、证据与 snapshot-first SSE |
 | 跨服务执行 | shipped | ai-chat-service Agent task + Vision v2 + 逐 effect 授权；proxy session/lease/operation/artifact |
+| 三服务 E2E 门禁 | shipped | 真实 HTTP/MCP/Chromium 覆盖候选生成、验证激活、正式运行、未验证拒绝与 `outcome_unknown` 禁止重放 |
 | 浏览器中心 UI | shipped | 项目首页、Authoring/Run 三栏工作台、深链接上下文、显式定位、Diff/审批/证据/Chat、布局与主题偏好 |
 
 ## 2. 服务与模块
@@ -45,10 +46,12 @@ UI 路由：`/`、`/semantic/:projectId`、`/semantic/:projectId/authoring/:vers
 - 新项目首次进入工作台自动且仅自动一次创建 bootstrap job；版本未验证前不能创建正式 Run。
 - 模块/场景切换不导航浏览器；显式定位使用冻结 URL 的 navigation-only task。
 - Agent 输出必须转成结构化候选；同页其他模块与跨 URL 修改必须审批，stale/错误模块候选不可应用。
+- 功能脚本 v1 页面入口只读取 `pageScope.entryPageId`，不兼容旧根字段；正式运行必须冻结该页面的 current revision。
 - 候选浏览器验证成功后记录 executable revision verification；只有全部当前脚本/场景覆盖时版本才为 `valid`。
 - side-effect authorization 精确覆盖 effect-bearing step；staging 高风险必须 grant，production 业务写拒绝。
 - 断线后从 snapshot + seq 恢复，不由本地百分比或 Chat 文本推断状态。
 - 旧 `/api/projects/*` 返回 404，生产/开发构建均不包含旧向导与 fixtures。
+- `pnpm --filter ai-e2e test:e2e` 必须通过真实 proxy、ai-chat Agent Task HTTP 与 Chromium；未知结果停在 open decision，不能自动创建第二个 Agent task。
 
 ## 5. 维护协议 [MUST-MAINTAIN]
 

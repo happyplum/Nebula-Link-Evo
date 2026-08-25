@@ -142,7 +142,7 @@ describe('BusinessVersionRepository', () => {
         schema: 'nebula.ai-e2e.functional-script/1.0',
         scriptKey: 'login.success',
         functionalModuleId: functionalModule.id,
-        entryPageDefinitionId: page.id,
+        pageScope: { entryPageId: page.id, allowedTransitions: [] },
         steps: [],
       },
       createdBy: 'system',

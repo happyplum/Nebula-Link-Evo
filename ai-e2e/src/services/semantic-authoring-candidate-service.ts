@@ -144,8 +144,6 @@ export class SemanticAuthoringCandidateService {
           'browser-control.operation_execute': {
             steps: observationSteps,
           },
-          'vision.analyze_page': { maxCalls: 2 },
-          'vision.resolve_target': { maxCalls: 6 },
         },
       },
       skillPolicy: { allow: [] },
