@@ -62,6 +62,8 @@ AI_E2E_SECRET_STORE_PATH=./data/semantic-secrets
 AI_E2E_EVIDENCE_PATH=./data/semantic-evidence
 ```
 
+环境文件只由 `src/server/index.ts` 加载：先尝试当前工作目录 `.env.local`，再尝试父目录 `.env`，二者都不存在时由 dotenv 回退当前目录 `.env`；启动进程已有的环境变量优先且不会被文件覆盖。UI 与可复用服务对象不重复加载 dotenv。
+
 ### 常用命令
 
 ```powershell

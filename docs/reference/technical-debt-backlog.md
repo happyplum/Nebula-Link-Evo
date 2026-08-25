@@ -14,14 +14,6 @@ The shipped v1 control planes are intentionally loopback-only and do not require
 
 Expected result: before enabling non-loopback control, create a focused design comparing API key, JWT/refresh token, OAuth2, and session-based options for Fastify HTTP routes, MCP access, debug UI, and ai-e2e surfaces, including tenant isolation and credential rotation.
 
-### Environment loading centralization
-
-Status: `pending`
-
-Verification found environment loading still split across startup boundaries such as `proxy-adapter/src/server.ts` and `ai-e2e/src/server/index.ts`. Current ownership should be documented before changing loader behavior.
-
-Expected result: either document the current single source of truth or centralize loading in one startup boundary.
-
 ## Cleanup Rule
 
 Do not recreate the original 36-item plan. When an item above is resolved, remove it from this backlog or link it to the durable owner surface that replaced it.

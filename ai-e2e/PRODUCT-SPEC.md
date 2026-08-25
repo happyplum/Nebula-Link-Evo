@@ -18,7 +18,7 @@
 
 | 模块             | 位置                                                    | 职责                                                   |
 | ---------------- | ------------------------------------------------------- | ------------------------------------------------------ |
-| Server/DI        | `src/server/index.ts`                                   | Fastify、TypeBox、路由、静态 UI、协调循环              |
+| Server/DI        | `src/server/index.ts`                                   | 本进程唯一 dotenv owner（工作目录 `.env.local` → 父目录 `.env` → 默认回退工作目录 `.env`，既有进程变量优先）、Fastify、TypeBox、路由、静态 UI、协调循环 |
 | Project          | `semantic-project-*`                                    | 纯 semantic 项目与起始工作区初始化                     |
 | Business Version | `business-version-*`                                    | 版本、资产图、不可变 revision 与 copy                  |
 | Query            | `semantic-query-*`                                      | workspace、revision、Authoring/Run snapshot/event 投影 |

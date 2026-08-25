@@ -98,6 +98,8 @@ copy .env.example .env
 # 编辑 .env 文件，设置 AI provider API key
 ```
 
+环境文件由各后端进程的可执行入口加载，`shared` 与可复用应用工厂不加载 dotenv：`proxy-adapter`、`ai-chat-service` 按当前工作目录 `.env` → 父目录 `.env` 查找；`ai-e2e` 按当前工作目录 `.env.local` → 父目录 `.env` 查找，二者都不存在时回退当前目录 `.env`。启动进程已有的环境变量优先，不由文件覆盖。AI provider 的 `config/config.json` 搜索是独立配置链，不等同于 dotenv 搜索。
+
 **启动开发模式**：
 
 ```bash

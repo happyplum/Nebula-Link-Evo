@@ -135,6 +135,7 @@ debug-ui  ←──  （仅被用户消费）
 - `vision.analyze_page`/`vision.resolve_target` 只读取一次不可变 snapshot，返回页面摘要或可序列化 locator candidates，不操作浏览器；最终定位重解析仍归 proxy。
 - 模型工具名规则：`nebula__<normalized-product-id>`，超过 64 字符附稳定 SHA-256 短 hash；product-id↔safe-name mapping 在启动装配时固定，更新需修改部署锁并重启。
 - 配置入口：`PROXY_ADAPTER_URL + /mcp`（默认 `http://127.0.0.1:3000/mcp`）。
+- dotenv 所有权按独立进程入口固定：proxy 与 ai-chat 读取工作目录 `.env` 后回退父目录 `.env`，ai-e2e 读取工作目录 `.env.local`、父目录 `.env`，二者均不存在时默认回退工作目录 `.env`；既有 `process.env` 优先，shared、UI 和可复用应用工厂不得加载环境文件。AI provider `config/config.json` 使用独立搜索链。
 
 ### 3.4 共享类型契约（`@nebula-link-evo/shared`）
 
