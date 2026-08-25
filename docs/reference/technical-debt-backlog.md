@@ -6,14 +6,6 @@ The large checklist plan is no longer the durable tracking surface. Completed or
 
 ## Residual Items
 
-### Debug route body schema validation
-
-Status: `pending`
-
-Some debug POST-style routes may still lack explicit body schema validation. Re-check `proxy-adapter/src/plugins/routes/api/debug/` and add TypeBox/Fastify schemas where request bodies are accepted.
-
-Expected result: malformed or missing body fields return `400` before handler logic runs.
-
 ### Authentication design
 
 Status: `pending`

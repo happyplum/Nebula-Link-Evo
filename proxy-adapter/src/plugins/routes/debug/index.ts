@@ -262,6 +262,14 @@ const debugRoutes: FastifyPluginAsyncTypebox<DebugRoutesOptions> = async (fastif
     '/api/playwright/navigate',
     {
       schema: {
+        body: {
+          type: 'object',
+          properties: {
+            url: { type: 'string' },
+          },
+          required: ['url'],
+          additionalProperties: false,
+        },
         response: {
           200: {
             type: 'object',
@@ -594,6 +602,15 @@ const debugRoutes: FastifyPluginAsyncTypebox<DebugRoutesOptions> = async (fastif
     '/api/playwright/type',
     {
       schema: {
+        body: {
+          type: 'object',
+          properties: {
+            selector: { type: 'string' },
+            text: { type: 'string' },
+          },
+          required: ['selector', 'text'],
+          additionalProperties: false,
+        },
         response: {
           200: {
             type: 'object',
@@ -620,6 +637,16 @@ const debugRoutes: FastifyPluginAsyncTypebox<DebugRoutesOptions> = async (fastif
     '/api/playwright/action',
     {
       schema: {
+        body: {
+          type: 'object',
+          properties: {
+            selector: { type: 'string' },
+            action: { type: 'string' },
+            param: { type: 'string' },
+          },
+          required: ['selector', 'action'],
+          additionalProperties: false,
+        },
         response: {
           200: {
             type: 'object',
@@ -769,6 +796,15 @@ const debugRoutes: FastifyPluginAsyncTypebox<DebugRoutesOptions> = async (fastif
     '/api/playwright/scroll',
     {
       schema: {
+        body: {
+          type: 'object',
+          properties: {
+            x: { type: 'number' },
+            y: { type: 'number' },
+          },
+          required: ['x', 'y'],
+          additionalProperties: false,
+        },
         response: {
           200: {
             type: 'object',

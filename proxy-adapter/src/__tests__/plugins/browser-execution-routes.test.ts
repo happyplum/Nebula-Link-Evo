@@ -321,4 +321,25 @@ describe('browser execution HTTP contract', () => {
     expect(dom.json().code).toBe('browser_busy');
     expect(status.statusCode).toBe(200);
   });
+
+  it.each([
+    ['/debug/api/playwright/navigate', {}, { url: {} }],
+    [
+      '/debug/api/playwright/type',
+      { selector: '#name' },
+      { selector: '#name', text: {} },
+    ],
+    [
+      '/debug/api/playwright/action',
+      { selector: '#save' },
+      { selector: '#save', action: {} },
+    ],
+    ['/debug/api/playwright/scroll', { x: 1 }, { x: {}, y: 2 }],
+  ])('rejects malformed bodies before handling %s', async (url, missing, wrongType) => {
+    for (const payload of [missing, wrongType]) {
+      const response = await app.inject({ method: 'POST', url, payload });
+
+      expect(response.statusCode).toBe(400);
+    }
+  });
 });
