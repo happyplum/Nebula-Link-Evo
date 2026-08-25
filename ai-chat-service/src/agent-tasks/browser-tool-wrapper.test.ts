@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { BrowserToolWrapper } from './browser-tool-wrapper.js';
+import {
+  BrowserToolWrapper,
+  type BrowserToolWrapperOptions,
+} from './browser-tool-wrapper.js';
 
 function operationResult(operationId: string, status: string, actual?: unknown) {
   return {
@@ -18,7 +21,10 @@ function operationResult(operationId: string, status: string, actual?: unknown) 
   };
 }
 
-function createWrapper(callTool: ReturnType<typeof vi.fn>) {
+function createWrapper(
+  callTool: ReturnType<typeof vi.fn>,
+  overrides: Partial<BrowserToolWrapperOptions> = {}
+) {
   return new BrowserToolWrapper({
     taskId: 'task-1',
     binding: {
@@ -49,6 +55,7 @@ function createWrapper(callTool: ReturnType<typeof vi.fn>) {
     deadlineAt: Date.now() + 60_000,
     maxToolCalls: 2,
     mcpClient: { callTool },
+    ...overrides,
   });
 }
 
@@ -146,6 +153,23 @@ describe('BrowserToolWrapper', () => {
     expect(callTool).not.toHaveBeenCalled();
   });
 
+  it('rejects missing call identity, unknown steps and exhausted budgets before dispatch', async () => {
+    const callTool = vi.fn();
+    const wrapper = createWrapper(callTool, { maxToolCalls: 1 });
+    const tool = wrapper.createTool();
+
+    await expect(tool.execute({ stepId: 'login' }, undefined)).rejects.toMatchObject({
+      code: 'execution_failed',
+    });
+    await expect(wrapper.execute({ stepId: 'unknown' }, 'call-unknown')).rejects.toMatchObject({
+      code: 'tool_not_allowed',
+    });
+    await expect(wrapper.execute({ stepId: 'login' }, 'call-over-budget')).rejects.toMatchObject({
+      code: 'budget_exceeded',
+    });
+    expect(callTool).not.toHaveBeenCalled();
+  });
+
   it('queries the durable ledger after an ambiguous execute failure', async () => {
     let operationId = '';
     const callTool = vi.fn(async (_server: string, tool: string, args: Record<string, unknown>) => {
@@ -215,6 +239,51 @@ describe('BrowserToolWrapper', () => {
       details: { proxyCode: 'lease_expired', correlationId: 'c-1' },
     });
     expect(callTool).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['permission_denied', 'tool_not_allowed'],
+    ['idempotency_conflict', 'conflict'],
+    ['browser_busy', 'conflict'],
+    ['dependency_unavailable', 'dependency_unavailable'],
+  ])('maps deterministic proxy code %s to %s without unsafe recovery', async (proxyCode, code) => {
+    const callTool = vi.fn(async () => {
+      throw new Error(JSON.stringify({ code: proxyCode, message: proxyCode, retryable: false }));
+    });
+    const wrapper = createWrapper(callTool);
+
+    await expect(wrapper.execute({ stepId: 'login' }, `call-${proxyCode}`)).rejects.toMatchObject({
+      code,
+      details: { proxyCode },
+    });
+    expect(callTool).toHaveBeenCalledTimes(1);
+  });
+
+  it('attempts every pending cancellation even when one proxy cancellation fails', async () => {
+    const executeResolvers = new Map<string, (value: unknown) => void>();
+    const cancelled: string[] = [];
+    const callTool = vi.fn(async (_server: string, tool: string, args: Record<string, unknown>) => {
+      if (tool.endsWith('operation_execute')) {
+        const operationId = (args.request as { operationId: string }).operationId;
+        return await new Promise((resolve) => executeResolvers.set(operationId, resolve));
+      }
+      const operationId = args.operationId as string;
+      cancelled.push(operationId);
+      if (cancelled.length === 1) throw new Error('cancel transport failed');
+      return { parsed: operationResult(operationId, 'cancelled') };
+    });
+    const wrapper = createWrapper(callTool);
+    const first = wrapper.execute({ stepId: 'login' }, 'pending-1');
+    const second = wrapper.execute({ stepId: 'login' }, 'pending-2');
+    await vi.waitFor(() => expect(executeResolvers.size).toBe(2));
+
+    await expect(wrapper.cancelPending()).resolves.toBeUndefined();
+    expect(cancelled).toHaveLength(2);
+
+    for (const [operationId, resolve] of executeResolvers) {
+      resolve({ parsed: operationResult(operationId, 'succeeded') });
+    }
+    await expect(Promise.all([first, second])).resolves.toHaveLength(2);
   });
 
   it('keeps cancel internal and injects credentials', async () => {

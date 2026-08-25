@@ -226,6 +226,18 @@ describe('Agent task routes', () => {
       task: { status: 'cancelled' },
     });
 
+    const replay = await app.inject({
+      method: 'POST',
+      url: `/api/v1/agent-tasks/${taskId}/commands`,
+      payload: {
+        commandId: 'cancel-route-1',
+        type: 'cancel',
+        expectedStateVersion: current.stateVersion,
+      },
+    });
+    expect(replay.statusCode).toBe(200);
+    expect(replay.json()).toEqual(command.json());
+
     const events = await app.inject({
       method: 'GET',
       url: `/api/v1/agent-tasks/${taskId}/event-log?afterSeq=0&limit=100`,
