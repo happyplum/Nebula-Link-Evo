@@ -6,11 +6,12 @@ describe('NebulaGlmLlmAdapter', () => {
   it('creates a deterministic JWT without exposing the source credential', () => {
     const jwt = createGlmJwt('client.secret-value', 100);
     const [header, payload, signature] = jwt.split('.');
-    expect(JSON.parse(Buffer.from(header!, 'base64url').toString())).toEqual({
+    if (!header || !payload || !signature) throw new Error('JWT must contain three segments');
+    expect(JSON.parse(Buffer.from(header, 'base64url').toString())).toEqual({
       alg: 'HS256',
       sign_type: 'SIGN',
     });
-    expect(JSON.parse(Buffer.from(payload!, 'base64url').toString())).toEqual({
+    expect(JSON.parse(Buffer.from(payload, 'base64url').toString())).toEqual({
       api_key: 'client',
       exp: 3700,
       timestamp: 100,
