@@ -12,7 +12,7 @@ afterEach(async () => {
 
 describe('createServer', () => {
   it('does not expose any method or subresource under the removed legacy project API', async () => {
-    const app = createServer();
+    const app = createServer({ logger: false });
     apps.add(app);
 
     await app.ready();
@@ -28,7 +28,7 @@ describe('createServer', () => {
   });
 
   it('registers CORS with credentials support', async () => {
-    const app = createServer();
+    const app = createServer({ logger: false });
     apps.add(app);
 
     app.get('/cors-check', async () => ({ ok: true }));
@@ -49,7 +49,7 @@ describe('createServer', () => {
   });
 
   it('integrates the error handler for service errors', async () => {
-    const app = createServer();
+    const app = createServer({ logger: false });
     apps.add(app);
 
     app.get('/boom', async () => {

@@ -1,4 +1,4 @@
-import Fastify from 'fastify';
+import Fastify, { type FastifyServerOptions } from 'fastify';
 import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
 import { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
@@ -49,6 +49,7 @@ function ensureDatabaseDirectory(dbPath: string): void {
 }
 
 export interface ServerOptions {
+  logger?: FastifyServerOptions['logger'];
   semanticProjectService?: SemanticProjectService;
   businessVersionService?: BusinessVersionService;
   semanticQueryService?: SemanticQueryService;
@@ -58,7 +59,7 @@ export interface ServerOptions {
 
 export function createServer(options: Partial<ServerOptions> = {}) {
   const app = Fastify({
-    logger: true,
+    logger: options.logger ?? true,
     disableRequestLogging: true,
   }).withTypeProvider<TypeBoxTypeProvider>();
 

@@ -10,6 +10,12 @@ import { buildApp as buildProxyApp } from '../../src/server.js';
 import { SemanticBrowserClient } from '../../../ai-e2e/src/infrastructure/semantic-browser-client.js';
 
 describe('canonical cross-service control planes', () => {
+  interface BrowserToolResult extends Record<string, unknown> {
+    operationId: string;
+    status: string;
+    artifacts: Array<{ kind: string }>;
+  }
+
   let root: string;
   let proxyUrl: string;
   let proxyApp: Awaited<ReturnType<typeof buildProxyApp>>;
@@ -58,20 +64,24 @@ describe('canonical cross-service control planes', () => {
       ttlSeconds: 30,
     });
     expect(issued.tokenIssued).toBe(true);
-    expect(issued.token).toBeTruthy();
+    const leaseToken = requireValue(issued.token, 'Control lease must include its token');
     await client.revokeLease(
       session.id,
       issued.lease.id,
-      issued.token!,
+      leaseToken,
       'cross-service-browser-lease-revoke'
     );
     const closeLease = await client.createLease(session.id, 'cross-service-browser-close-lease', {
       mode: 'control',
       ttlSeconds: 30,
     });
+    const closeLeaseToken = requireValue(
+      closeLease.token,
+      'Session close lease must include its token'
+    );
     const closed = await client.closeSession(session.id, 'cross-service-browser-session-close', {
       leaseId: closeLease.lease.id,
-      leaseToken: closeLease.token!,
+      leaseToken: closeLeaseToken,
     });
     expect(closed.status).toBe('closed');
 
@@ -88,11 +98,13 @@ describe('canonical cross-service control planes', () => {
       mode: 'control',
       ttlSeconds: 30,
     });
+    const tab = requireValue(session.tabs[0], 'Browser session must expose its initial tab');
+    const leaseToken = requireValue(issued.token, 'Control lease must include its token');
     const binding = {
       sessionId: session.id,
       leaseId: issued.lease.id,
-      leaseToken: issued.token!,
-      tabId: session.tabs[0]!.id,
+      leaseToken,
+      tabId: tab.id,
       leaseSequence: issued.lease.sequence,
     };
 
@@ -159,7 +171,7 @@ describe('canonical cross-service control planes', () => {
       leaseSequence: number;
     },
     operation: Record<string, unknown>
-  ): Promise<Record<string, any>> {
+  ): Promise<BrowserToolResult> {
     return callBrowserTool('browser-control.operation_execute', {
       sessionId: binding.sessionId,
       leaseId: binding.leaseId,
@@ -179,13 +191,15 @@ describe('canonical cross-service control planes', () => {
   async function callBrowserTool(
     name: string,
     args: Record<string, unknown>
-  ): Promise<Record<string, any>> {
+  ): Promise<BrowserToolResult> {
     const result = await mcpClient.callTool({ name, arguments: args });
     const text = result.content.find(
       (item): item is { type: 'text'; text: string } => item.type === 'text'
     );
     if (!text) throw new Error(`${name} returned no text result`);
-    return JSON.parse(text.text) as Record<string, any>;
+    const parsed = JSON.parse(text.text) as unknown;
+    if (!parsed || typeof parsed !== 'object') throw new Error(`${name} returned invalid JSON`);
+    return parsed as BrowserToolResult;
   }
 
   function target(semantic: string, candidate: Record<string, unknown>) {
@@ -194,5 +208,10 @@ describe('canonical cross-service control planes', () => {
       candidates: [candidate],
       expected: { cardinality: 'exactly_one', visible: true },
     };
+  }
+
+  function requireValue<T>(value: T | null | undefined, message: string): T {
+    if (value === null || value === undefined) throw new Error(message);
+    return value;
   }
 });

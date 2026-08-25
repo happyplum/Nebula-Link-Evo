@@ -89,6 +89,7 @@ describe('semantic product journey', () => {
       ),
     });
     aiE2eApp = createServer({
+      logger: false,
       semanticProjectService: new SemanticProjectService(database.getSemanticProjectRepo()),
       businessVersionService: new BusinessVersionService(versions),
       semanticQueryService: new SemanticQueryService(database.getSemanticQueryRepo()),
