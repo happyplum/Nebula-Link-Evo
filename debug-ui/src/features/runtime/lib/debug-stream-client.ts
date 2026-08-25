@@ -176,11 +176,11 @@ export const debugStreamClient = {
     type: TEvent,
     handler: EventSubscriber
   ): () => void {
-    if (!subscribersByEventType.has(type)) {
-      subscribersByEventType.set(type, new Set());
+    let subscribers = subscribersByEventType.get(type);
+    if (!subscribers) {
+      subscribers = new Set();
+      subscribersByEventType.set(type, subscribers);
     }
-
-    const subscribers = subscribersByEventType.get(type)!;
     subscribers.add(handler as (event: MessageEvent<string>) => void | Promise<void>);
 
     return () => {
