@@ -12,6 +12,12 @@ export default defineConfig({
     include: ['src/**/__tests__/**/*.ts'],
     // Exclude UI tests (they use their own test setup)
     exclude: ['**/node_modules/**', '**/ui/**'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html'],
+      include: ['src/**/*.ts'],
+      exclude: ['src/**/*.test.ts', 'src/**/__tests__/**'],
+    },
   },
   resolve: {
     alias: {
