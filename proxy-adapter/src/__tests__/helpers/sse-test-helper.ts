@@ -53,7 +53,8 @@ export async function consumeSSE(
       },
     });
 
-    const reader = response.body!.getReader();
+    if (!response.body) throw new Error('SSE response must have a body');
+    const reader = response.body.getReader();
     const decoder = new TextDecoder();
 
     while (true) {

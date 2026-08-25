@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockPage } from '../../../../../shared/test-utils/mocks/BrowserContext.mock.js';
+import type { BrowserService as BrowserServiceInstance } from '../../../browser-engine/services/browser-service.js';
 
 // Mock the browser-lifecycle module
 const mockBrowserLifecycle = {
@@ -68,9 +69,9 @@ vi.mock('../../../browser-engine/services/browser-lock.js', () => ({
 }));
 
 describe('BrowserService', () => {
-  let BrowserService: any;
-  let browserService: any;
-  let mockPage: any;
+  let BrowserService: typeof BrowserServiceInstance;
+  let browserService: BrowserServiceInstance;
+  let mockPage: ReturnType<typeof createMockPage>;
 
   beforeEach(async () => {
     vi.clearAllMocks();

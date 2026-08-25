@@ -66,8 +66,9 @@ describe('debug browser surface with real Chromium', () => {
     await actions.clickBySelector('#save');
     await actions.clickBySelector('#save', { force: true });
     const box = await page.locator('#save').boundingBox();
-    await actions.click(box!.x + 2, box!.y + 2);
-    expect(await page.evaluate(() => (window as any).clicks)).toBe(3);
+    if (!box) throw new Error('save button must have a bounding box');
+    await actions.click(box.x + 2, box.y + 2);
+    expect(await page.evaluate(() => (window as Window & { clicks?: number }).clicks)).toBe(3);
 
     await actions.type('#name', 'alice', { delay: 0 });
     expect(await page.inputValue('#name')).toBe('alice');
@@ -81,17 +82,19 @@ describe('debug browser surface with real Chromium', () => {
     await actions.blur('#name');
     expect(await page.evaluate(() => document.activeElement?.id)).not.toBe('name');
     await actions.hover('#hover');
-    expect(await page.evaluate(() => (window as any).hovered)).toBe(true);
+    expect(await page.evaluate(() => (window as Window & { hovered?: boolean }).hovered)).toBe(true);
     await page.evaluate(() =>
       document.querySelector('#events')?.addEventListener('custom-ready', () => {
-        (window as any).customReady = true;
+        (window as Window & { customReady?: boolean }).customReady = true;
       })
     );
     await actions.dispatchEvent('#events', 'custom-ready');
-    expect(await page.evaluate(() => (window as any).customReady)).toBe(true);
+    expect(
+      await page.evaluate(() => (window as Window & { customReady?: boolean }).customReady)
+    ).toBe(true);
 
     expect(await actions.executeScript('return document.title || "surface"')).toBe('surface');
-    const element = await actions.getElementAt(box!.x + 2, box!.y + 2);
+    const element = await actions.getElementAt(box.x + 2, box.y + 2);
     expect(element).toMatchObject({ tag: 'button', id: 'save', isInteractable: true });
     await actions.scroll(0, 500);
     expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
@@ -145,13 +148,14 @@ describe('debug browser surface with real Chromium', () => {
   it('extracts DOM attributes, text, selectors and implicit roles', async () => {
     const input = await page.$('#name');
     const save = await page.$('#save');
-    expect(filterRelevantAttributes(await getElementAttributes(input!))).toMatchObject({
+    if (!input || !save) throw new Error('surface fixture elements must exist');
+    expect(filterRelevantAttributes(await getElementAttributes(input))).toMatchObject({
       id: 'name',
       name: 'name',
       placeholder: 'Your name',
     });
-    expect(await getElementTagName(save!)).toBe('button');
-    expect(await getElementText(save!, 3)).toBe('Sav');
+    expect(await getElementTagName(save)).toBe('button');
+    expect(await getElementText(save, 3)).toBe('Sav');
     expect(escapeSelector('a[href="x"]')).toContain('\\');
     expect(escapeXPath("it's")).toBe("it\\'s");
     expect(getImplicitRole('button')).toBe('button');

@@ -10,7 +10,7 @@ import {
 } from '../../../shared/test-utils/service-lifecycle.js';
 
 describe('service-lifecycle', () => {
-  let testProcess: any = null;
+  let testProcess: Awaited<ReturnType<typeof startService>> | null = null;
   let testServer: Server | null = null;
   // Use ephemeral port range to avoid conflicts
   const BUSY_PORT = 49254;
@@ -26,8 +26,9 @@ describe('service-lifecycle', () => {
       testProcess = null;
     }
     if (testServer) {
+      const server = testServer;
       await new Promise<void>((resolve) => {
-        testServer!.close(() => resolve());
+        server.close(() => resolve());
       });
       testServer = null;
     }
