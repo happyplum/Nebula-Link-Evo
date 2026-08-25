@@ -19,10 +19,11 @@ proxy-adapter 通过 MCP Server (StreamableHTTP) 只对外暴露受控 `browser-
 - [shipped] `shared/types/browser-execution.ts` 以 kind/operation 判别联合映射每个操作的精确 args；proxy 运行时继续拒绝缺失、额外或越界字段，执行分支不再使用字符串键或参数强制转换。
 - [shipped] `operation_execute` 支持 before/after screenshot 与 DOM capture，失败操作即使未主动请求也会尝试保存现场截图；bytes 以 SHA-256 内容寻址写入 `data/proxy-adapter/artifacts`，操作结果只返回 opaque artifact ref。`GET /api/v1/browser-execution/sessions/:sessionId/artifacts/:artifactId` 在返回前复核 storage ref、size 和 SHA-256。
 - [shipped] browser session 持久事件按 session 单调 seq 记录；`/events` 每次连接先发 `browser_session.snapshot`，`/event-log?afterSeq=` 用于审计补洞，heartbeat 不占业务 seq。
-- [pending] set_files、video segment、control 续租、操作动画、自动脱敏和 operation/idempotency 账本保留清理 worker 尚未交付；capability 保持 `operationPresentationAnimation=false`。
+- [pending] set_files、video segment、control 续租、操作动画和自动脱敏尚未交付；capability 保持 `operationPresentationAnimation=false`。
 - [designed] 浏览器截图、DOM 和媒体属于带完整性信息的短期原始产物；长期证据 manifest、业务关联、保留与 pin 由 ai-e2e 持有，原始产物清理前需可被提升或明确过期。
 - [shipped] 配置入口：消费方通过 `PROXY_ADAPTER_URL + /mcp`（默认 `http://127.0.0.1:3000/mcp`）接入。
-- [shipped] 验收面：既有 MCP/provider 测试 + `browser-execution-service.test.ts`、`browser-execution-routes.test.ts`、`browser-execution-tools-provider.test.ts`、`playwright-browser-execution.test.ts`；2026-08-12 proxy-adapter 全量测试通过。
+- [shipped] 验收面：既有 MCP/provider 测试 + `browser-execution-service.test.ts`、`browser-execution-routes.test.ts`、`browser-execution-tools-provider.test.ts`、`playwright-browser-execution.test.ts`；2026-08-26 proxy-adapter 全量 261 项测试通过。
 - [shipped] 真实进程 E2E 覆盖长 operation 期间 debug status/SSE 可读、debug 写/DOM 拒绝、running cancel 冲突、queued cancel 成功、安全边界恢复，以及进程崩溃重启后 running operation 收敛为 `outcome_unknown`、session 为 `interrupted`、旧 lease 凭证失效。
 - [shipped] browser execution 的 service/repository/artifact-store 与 BrowserService 设置 lines ≥80%、branches ≥70% 文件级覆盖率防回退门槛。
 - [shipped] proxy 启动后立即并每分钟运行短期产物保留清理：仅处理 TTL 到期且无有效 upstream hold 的记录；内容寻址文件仍被其他非删除记录引用时保留，最后一个引用删除时才移除文件，并为每条记录追加 `artifact.deleted` 持久事件。清理失败保留 `expired` 状态供后续周期重试。
+- [shipped] 同一每分钟保留周期在 artifact 清理后执行账本清理：只移除关闭/中断/失败 session 下终态超过 7 天、非 `outcome_unknown` 且关联 artifact 已删除的 operation/capture/artifact/hold 元数据；session/lease 幂等键仅在资源终态且没有 queued/running/outcome_unknown operation 时移除，每周期有界批量处理。

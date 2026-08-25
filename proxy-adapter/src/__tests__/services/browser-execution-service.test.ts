@@ -465,6 +465,38 @@ describe('BrowserExecutionService', () => {
     expect(repository.getArtifact(artifactRef.id)?.status).toBe('deleted');
   });
 
+  it('cleans terminal operation and resource idempotency records after seven days', async () => {
+    let currentTime = '2026-08-12T00:00:00.000Z';
+    const repository = new BrowserExecutionRepository(':memory:');
+    const service = new BrowserExecutionService({
+      repository,
+      browser: new FakeBrowser(),
+      clock: { now: () => new Date(currentTime) },
+    });
+    service.initialize();
+    const { session, lease, token } = await createSessionAndLease(service);
+    const request = operationRequest(lease.sequence);
+    await service.executeOperation({
+      sessionId: session.id,
+      leaseId: lease.id,
+      leaseToken: token,
+      tabId: 'tab-1',
+      request,
+    });
+    await service.closeSession(session.id, 'close-session', {
+      sessionId: session.id,
+      leaseId: lease.id,
+      leaseToken: token,
+    });
+
+    currentTime = '2026-08-20T00:00:00.000Z';
+    await expect(service.cleanupExpiredLedger()).resolves.toEqual({
+      operationsDeleted: 1,
+      idempotencyDeleted: 3,
+    });
+    expect(repository.getOperation(request.operationId)).toBeUndefined();
+  });
+
   it('marks an action outcome unknown when execution fails after start', async () => {
     const browser = new FakeBrowser();
     browser.execute.mockRejectedValueOnce(new Error('connection dropped'));

@@ -5,7 +5,10 @@ import { Mutex } from 'async-mutex';
 import { LocalBrowserArtifactStore, type BrowserArtifactStore } from './artifact-store.js';
 import { BrowserExecutionError, toBrowserExecutionProblem } from './errors.js';
 import { hashOpaqueToken, sha256, sha256Bytes } from './hash.js';
-import { BrowserExecutionRepository } from './repository.js';
+import {
+  BrowserExecutionRepository,
+  type BrowserLedgerCleanupResult,
+} from './repository.js';
 import { validateOperationInput } from './validation.js';
 import {
   ACT_OPERATIONS,
@@ -748,6 +751,14 @@ export class BrowserExecutionService {
       }
 
       return { recordsDeleted, filesDeleted };
+    });
+  }
+
+  async cleanupExpiredLedger(): Promise<BrowserLedgerCleanupResult> {
+    this.assertInitialized();
+    return this.operationMutex.runExclusive(async () => {
+      const now = this.now();
+      return this.repository.cleanupExpiredLedger(now, addDays(now, -7));
     });
   }
 

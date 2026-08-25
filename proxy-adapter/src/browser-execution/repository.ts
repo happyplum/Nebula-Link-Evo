@@ -141,6 +141,11 @@ export interface StoredIdempotencyRecord {
   resourceId: string;
 }
 
+export interface BrowserLedgerCleanupResult {
+  operationsDeleted: number;
+  idempotencyDeleted: number;
+}
+
 export interface CreateOperationRecord {
   requestHash: string;
   input: {
@@ -824,6 +829,104 @@ export class BrowserExecutionRepository {
       throw new BrowserExecutionError('state_conflict', `Artifact ${id} is not expired`);
     }
     return this.getArtifactOrThrow(id);
+  }
+
+  cleanupExpiredLedger(
+    now: string,
+    terminalCutoff: string
+  ): BrowserLedgerCleanupResult {
+    return this.transaction(() => {
+      const operationIds = (
+        this.requireDb()
+          .prepare(
+            `SELECT operation.id
+             FROM browser_operations AS operation
+             JOIN browser_sessions AS session ON session.id = operation.session_id
+             WHERE operation.status IN ('succeeded','failed','cancelled')
+               AND operation.completed_at IS NOT NULL AND operation.completed_at <= ?
+               AND session.status IN ('closed','interrupted','failed')
+               AND NOT EXISTS (
+                 SELECT 1 FROM browser_artifacts AS artifact
+                 WHERE artifact.operation_id = operation.id AND artifact.status <> 'deleted'
+               )
+               AND NOT EXISTS (
+                 SELECT 1
+                 FROM browser_artifacts AS artifact
+                 JOIN browser_artifact_holds AS hold ON hold.artifact_id = artifact.id
+                 WHERE artifact.operation_id = operation.id
+                   AND hold.released_at IS NULL
+                   AND (hold.expires_at IS NULL OR hold.expires_at > ?)
+               )
+             ORDER BY operation.completed_at, operation.id
+             LIMIT 500`
+          )
+          .all(terminalCutoff, now) as unknown as Array<{ id: string }>
+      ).map((row) => row.id);
+
+      for (const operationId of operationIds) {
+        this.requireDb()
+          .prepare(
+            `DELETE FROM browser_artifact_holds
+             WHERE artifact_id IN (
+               SELECT id FROM browser_artifacts WHERE operation_id = ?
+             )`
+          )
+          .run(operationId);
+        this.requireDb()
+          .prepare('DELETE FROM browser_artifacts WHERE operation_id = ?')
+          .run(operationId);
+        this.requireDb()
+          .prepare('DELETE FROM browser_operation_captures WHERE operation_id = ?')
+          .run(operationId);
+        this.requireDb().prepare('DELETE FROM browser_operations WHERE id = ?').run(operationId);
+      }
+
+      const idempotencyResult = this.requireDb()
+        .prepare(
+          `DELETE FROM browser_idempotency
+           WHERE rowid IN (
+             SELECT idempotency.rowid
+             FROM browser_idempotency AS idempotency
+             WHERE idempotency.created_at <= ?
+               AND (
+                 (
+                   idempotency.resource_type = 'session'
+                   AND EXISTS (
+                     SELECT 1 FROM browser_sessions AS session
+                     WHERE session.id = idempotency.resource_id
+                       AND session.status IN ('closed','interrupted','failed')
+                   )
+                   AND NOT EXISTS (
+                     SELECT 1 FROM browser_operations AS operation
+                     WHERE operation.session_id = idempotency.resource_id
+                       AND operation.status IN ('queued','running','outcome_unknown')
+                   )
+                 )
+                 OR (
+                   idempotency.resource_type = 'lease'
+                   AND EXISTS (
+                     SELECT 1 FROM browser_leases AS lease
+                     WHERE lease.id = idempotency.resource_id
+                       AND lease.status IN ('revoked','expired')
+                   )
+                   AND NOT EXISTS (
+                     SELECT 1 FROM browser_operations AS operation
+                     WHERE operation.lease_id = idempotency.resource_id
+                       AND operation.status IN ('queued','running','outcome_unknown')
+                   )
+                 )
+               )
+             ORDER BY idempotency.created_at, idempotency.scope, idempotency.key
+             LIMIT 1000
+           )`
+        )
+        .run(terminalCutoff);
+
+      return {
+        operationsDeleted: operationIds.length,
+        idempotencyDeleted: Number(idempotencyResult.changes),
+      };
+    });
   }
 
   appendSessionEvent(input: AppendBrowserSessionEvent): BrowserSessionEventRecord {

@@ -24,7 +24,7 @@ import { BrowserExecutionToolsProvider } from './tools/providers/browser-executi
 import capabilitiesRoutes from './plugins/routes/capabilities.js';
 import browserExecutionRoutes from './plugins/routes/browser-execution.js';
 
-const ARTIFACT_CLEANUP_INTERVAL_MS = 60_000;
+const BROWSER_RETENTION_CLEANUP_INTERVAL_MS = 60_000;
 const envLocal = path.join(process.cwd(), '.env');
 const envRoot = path.join(process.cwd(), '..', '.env');
 
@@ -83,22 +83,26 @@ export async function buildApp(options: BuildProxyAppOptions = {}): Promise<Fast
     controlPlaneEnabled: true,
   });
   let cleanupPromise: Promise<void> | undefined;
-  let artifactCleanupPromise: Promise<void> | undefined;
-  const runArtifactCleanup = (): Promise<void> => {
-    artifactCleanupPromise ??= browserExecutionService
-      .cleanupExpiredArtifacts()
-      .then(({ recordsDeleted, filesDeleted }) => {
-        if (recordsDeleted > 0) {
-          app.log.info({ recordsDeleted, filesDeleted }, 'Expired browser artifacts cleaned');
-        }
-      })
+  let retentionCleanupPromise: Promise<void> | undefined;
+  const runRetentionCleanup = (): Promise<void> => {
+    retentionCleanupPromise ??= (async () => {
+      const artifacts = await browserExecutionService.cleanupExpiredArtifacts();
+      const ledger = await browserExecutionService.cleanupExpiredLedger();
+      if (
+        artifacts.recordsDeleted > 0 ||
+        ledger.operationsDeleted > 0 ||
+        ledger.idempotencyDeleted > 0
+      ) {
+        app.log.info({ artifacts, ledger }, 'Expired browser records cleaned');
+      }
+    })()
       .catch((error: unknown) => {
-        app.log.error({ err: error }, 'Expired browser artifact cleanup failed');
+        app.log.error({ err: error }, 'Expired browser record cleanup failed');
       })
       .finally(() => {
-        artifactCleanupPromise = undefined;
+        retentionCleanupPromise = undefined;
       });
-    return artifactCleanupPromise;
+    return retentionCleanupPromise;
   };
 
   const isTestMode = process.env.TEST_MODE === 'true';
@@ -116,17 +120,17 @@ export async function buildApp(options: BuildProxyAppOptions = {}): Promise<Fast
   // Initialize ToolRegistry and register providers
   browserExecutionService.initialize();
   browserClient.setAccessArbiter(browserExecutionService);
-  const artifactCleanupTimer = setInterval(
-    () => void runArtifactCleanup(),
-    ARTIFACT_CLEANUP_INTERVAL_MS
+  const retentionCleanupTimer = setInterval(
+    () => void runRetentionCleanup(),
+    BROWSER_RETENTION_CLEANUP_INTERVAL_MS
   );
-  artifactCleanupTimer.unref();
-  void runArtifactCleanup();
+  retentionCleanupTimer.unref();
+  void runRetentionCleanup();
 
   app.addHook('onClose', async () => {
     cleanupPromise ??= (async () => {
-      clearInterval(artifactCleanupTimer);
-      await artifactCleanupPromise;
+      clearInterval(retentionCleanupTimer);
+      await retentionCleanupPromise;
       await interactionLogger.destroy();
       await toolRegistry.shutdownAll();
       await browserExecutionService.shutdown();
