@@ -82,9 +82,10 @@ export class PageActions {
       attempts,
       latency_ms: Date.now() - startTime,
       bbox: resolved.bbox,
-      nebulaId: typeof parsedNebulaId === 'number' && Number.isFinite(parsedNebulaId)
-        ? parsedNebulaId
-        : undefined,
+      nebulaId:
+        typeof parsedNebulaId === 'number' && Number.isFinite(parsedNebulaId)
+          ? parsedNebulaId
+          : undefined,
       selector: resolved.locators[0],
     };
   }
@@ -470,7 +471,10 @@ export class PageActions {
     }
   }
 
-  async getElementAt(x: number, y: number): Promise<{
+  async getElementAt(
+    x: number,
+    y: number
+  ): Promise<{
     selector: string;
     tag: string;
     id?: string;

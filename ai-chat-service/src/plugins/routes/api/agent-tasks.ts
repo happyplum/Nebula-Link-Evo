@@ -473,11 +473,6 @@ const agentTaskRoutes: FastifyPluginAsyncTypebox<AgentTaskRoutesOptions> = async
 
 export default agentTaskRoutes;
 
-function writeSse(
-  writer: BoundedSseWriter,
-  type: string,
-  seq: number,
-  data: unknown
-): void {
+function writeSse(writer: BoundedSseWriter, type: string, seq: number, data: unknown): void {
   writer.push(`event: ${type}\nid: ${seq}\ndata: ${JSON.stringify(data)}\n\n`);
 }

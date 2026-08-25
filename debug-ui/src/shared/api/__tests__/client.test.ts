@@ -13,7 +13,10 @@ describe('ApiClient', () => {
     it('should fetch JSON and return parsed data', async () => {
       const data = { status: 'ok' };
       vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-        new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+        new Response(JSON.stringify(data), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
       );
 
       const result = await client.get<{ status: string }>('/api/health');
@@ -23,16 +26,26 @@ describe('ApiClient', () => {
 
     it('should append query params when provided', async () => {
       vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-        new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+        new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
       );
 
       await client.get('/debug/api/tasks', { limit: '10' });
-      expect(fetch).toHaveBeenCalledWith('/debug/api/tasks?limit=10', { signal: expect.any(AbortSignal) });
+      expect(fetch).toHaveBeenCalledWith('/debug/api/tasks?limit=10', {
+        signal: expect.any(AbortSignal),
+      });
     });
 
     it('should throw ApiError on non-ok response', async () => {
       vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
-        Promise.resolve(new Response(JSON.stringify({ error: 'Not Found' }), { status: 404, statusText: 'Not Found' })),
+        Promise.resolve(
+          new Response(JSON.stringify({ error: 'Not Found' }), {
+            status: 404,
+            statusText: 'Not Found',
+          })
+        )
       );
 
       try {
@@ -52,7 +65,10 @@ describe('ApiClient', () => {
     it('should send JSON body with Content-Type header', async () => {
       const body = { url: 'https://example.com', instruction: 'click' };
       vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-        new Response(JSON.stringify({ taskId: '123' }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+        new Response(JSON.stringify({ taskId: '123' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
       );
 
       const result = await client.post<{ taskId: string }>('/api/task', body);
@@ -67,16 +83,25 @@ describe('ApiClient', () => {
 
     it('should send POST without body when omitted', async () => {
       vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-        new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
       );
 
       await client.post('/debug/api/playwright/open');
-      expect(fetch).toHaveBeenCalledWith('/debug/api/playwright/open', { method: 'POST', signal: expect.any(AbortSignal) });
+      expect(fetch).toHaveBeenCalledWith('/debug/api/playwright/open', {
+        method: 'POST',
+        signal: expect.any(AbortSignal),
+      });
     });
 
     it('should throw ApiError on server error', async () => {
       vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-        new Response(JSON.stringify({ detail: 'Internal error' }), { status: 500, statusText: 'Internal Server Error' }),
+        new Response(JSON.stringify({ detail: 'Internal error' }), {
+          status: 500,
+          statusText: 'Internal Server Error',
+        })
       );
 
       await expect(client.post('/api/task', {})).rejects.toThrow(ApiError);
@@ -85,13 +110,14 @@ describe('ApiClient', () => {
 
   describe('delete', () => {
     it('should send DELETE request', async () => {
-      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-        new Response(null, { status: 204 }),
-      );
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 204 }));
 
       const result = await client.delete('/api/resource/1');
       expect(result).toBeUndefined();
-      expect(fetch).toHaveBeenCalledWith('/api/resource/1', { method: 'DELETE', signal: expect.any(AbortSignal) });
+      expect(fetch).toHaveBeenCalledWith('/api/resource/1', {
+        method: 'DELETE',
+        signal: expect.any(AbortSignal),
+      });
     });
   });
 

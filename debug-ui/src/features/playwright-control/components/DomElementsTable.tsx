@@ -136,7 +136,9 @@ export const DomElementsTable: React.FC = () => {
                     {el.bbox ? `(${el.bbox.x}, ${el.bbox.y})` : '-'}
                   </td>
                   <td className={styles.td}>
-                    <span className={`${styles.boolean} ${el.isVisible ? styles.boolTrue : styles.boolFalse}`}>
+                    <span
+                      className={`${styles.boolean} ${el.isVisible ? styles.boolTrue : styles.boolFalse}`}
+                    >
                       {el.isVisible ? '✓' : '✗'}
                     </span>
                   </td>

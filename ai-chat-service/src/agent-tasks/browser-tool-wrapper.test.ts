@@ -1,8 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import {
-  BrowserToolWrapper,
-  type BrowserToolWrapperOptions,
-} from './browser-tool-wrapper.js';
+import { BrowserToolWrapper, type BrowserToolWrapperOptions } from './browser-tool-wrapper.js';
 
 function operationResult(operationId: string, status: string, actual?: unknown) {
   return {

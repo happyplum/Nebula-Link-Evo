@@ -9,7 +9,12 @@ function getInitialShowThinking(): boolean {
   return stored == null ? true : stored === 'true';
 }
 
-import type { ChatMessage, ChatSession, StreamingState, ToolCall } from '@/features/chat/types/index.js';
+import type {
+  ChatMessage,
+  ChatSession,
+  StreamingState,
+  ToolCall,
+} from '@/features/chat/types/index.js';
 import type { PendingJobInfo } from '@nebula-link-evo/shared';
 
 const EMPTY_MESSAGES: ChatMessage[] = [];
@@ -285,7 +290,12 @@ export const useChatStore = create<ChatState>()((set) => ({
     }),
 
   resetStreaming: () =>
-    set({ streamingContent: '', streamingThinking: '', streamingToolCalls: [], streamingState: 'idle' }),
+    set({
+      streamingContent: '',
+      streamingThinking: '',
+      streamingToolCalls: [],
+      streamingState: 'idle',
+    }),
 
   // Loading actions
   setIsLoadingSessions: (loading) => set({ isLoadingSessions: loading }),
@@ -336,7 +346,9 @@ export const useChatStore = create<ChatState>()((set) => ({
       const existing = s.pendingJobs[sessionId];
       if (!existing) return s;
       // Find job by jobId and update status to running
-      const updated = existing.map((job) => (job.jobId === jobId ? { ...job, status: 'running' as const } : job));
+      const updated = existing.map((job) =>
+        job.jobId === jobId ? { ...job, status: 'running' as const } : job
+      );
       // If no job found, return unchanged state
       if (updated.length === existing.length && !existing.some((j) => j.jobId === jobId)) return s;
       return {
@@ -400,4 +412,3 @@ export const selectIsLoadingMessages = (s: ChatState) => s.isLoadingMessages;
 export const selectShowThinking = (s: ChatState) => s.showThinking;
 export const selectScreenshotData = (s: ChatState) => s.screenshotData;
 export const selectConnectivityResult = (s: ChatState) => s.connectivityResult;
-

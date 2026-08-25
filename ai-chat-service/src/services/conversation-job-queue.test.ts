@@ -230,19 +230,18 @@ function createFixture(options: { wait?: () => Promise<void> } = {}) {
     emitJobCompleted: vi.fn(),
     emitJobCancelled: vi.fn(),
     publish: vi.fn(),
-  } as unknown as SessionEventHub & Record<
-    'emitJobQueued' | 'emitJobStarted' | 'emitJobCompleted' | 'emitJobCancelled' | 'publish',
-    ReturnType<typeof vi.fn>
-  >;
+  } as unknown as SessionEventHub &
+    Record<
+      'emitJobQueued' | 'emitJobStarted' | 'emitJobCompleted' | 'emitJobCancelled' | 'publish',
+      ReturnType<typeof vi.fn>
+    >;
   const scheduler = {
     enqueue: vi.fn(),
     wait: vi.fn(options.wait ?? (async () => {})),
     complete: vi.fn(),
     cancel: vi.fn(),
-  } as unknown as HarnessRunScheduler & Record<
-    'enqueue' | 'wait' | 'complete' | 'cancel',
-    ReturnType<typeof vi.fn>
-  >;
+  } as unknown as HarnessRunScheduler &
+    Record<'enqueue' | 'wait' | 'complete' | 'cancel', ReturnType<typeof vi.fn>>;
   const admitNewRun = vi.fn();
   const queue = new ConversationJobQueue(
     {} as StreamPersistWorker,

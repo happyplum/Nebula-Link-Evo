@@ -46,7 +46,9 @@ export class HarnessRetentionService {
 
   async collectEligible(): Promise<number> {
     let collected = 0;
-    for (const candidate of this.repository.listRetentionCandidates(this.options.now?.() ?? Date.now())) {
+    for (const candidate of this.repository.listRetentionCandidates(
+      this.options.now?.() ?? Date.now()
+    )) {
       const sessionId = SessionId(candidate.sessionId);
       const revision = await this.harness.revision(sessionId);
       if (revision && !(await this.harness.purge(sessionId, revision))) continue;
@@ -79,15 +81,18 @@ async function treeBytes(root: string): Promise<number> {
     try {
       currentStat = await lstat(current);
     } catch (error) {
-      if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') continue;
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')
+        continue;
       throw error;
     }
-    if (currentStat.isSymbolicLink()) throw new Error(`Harness storage refuses symbolic link ${current}`);
+    if (currentStat.isSymbolicLink())
+      throw new Error(`Harness storage refuses symbolic link ${current}`);
     if (currentStat.isFile()) {
       total += currentStat.size;
       continue;
     }
-    if (!currentStat.isDirectory()) throw new Error(`Harness storage contains a special file ${current}`);
+    if (!currentStat.isDirectory())
+      throw new Error(`Harness storage contains a special file ${current}`);
     for (const entry of await readdir(current, { withFileTypes: true })) {
       pending.push(join(current, entry.name));
     }

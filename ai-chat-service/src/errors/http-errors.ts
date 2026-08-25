@@ -98,7 +98,11 @@ export function getStatusCode(error: unknown): number {
   if (isHttpError(error)) {
     return error.statusCode;
   }
-  if (error instanceof Error && 'statusCode' in error && typeof (error as { statusCode?: unknown }).statusCode === 'number') {
+  if (
+    error instanceof Error &&
+    'statusCode' in error &&
+    typeof (error as { statusCode?: unknown }).statusCode === 'number'
+  ) {
     return (error as { statusCode: number }).statusCode;
   }
   return 500;

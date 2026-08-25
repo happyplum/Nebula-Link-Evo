@@ -27,7 +27,10 @@ describe('DatabaseBackup', () => {
       const backupPath = await backup.createBackup('test');
 
       expect(backupPath).toBeDefined();
-      const exists = await fs.access(backupPath).then(() => true).catch(() => false);
+      const exists = await fs
+        .access(backupPath)
+        .then(() => true)
+        .catch(() => false);
       expect(exists).toBe(true);
       expect(backupPath).toContain('test.');
       expect(backupPath).toContain('.sqlite');

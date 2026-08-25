@@ -99,9 +99,9 @@ describe('service-lifecycle', () => {
       }
 
       try {
-        await expect(
-          findAvailablePort(49270, 49272)
-        ).rejects.toThrow('No available port found in range');
+        await expect(findAvailablePort(49270, 49272)).rejects.toThrow(
+          'No available port found in range'
+        );
       } finally {
         // Clean up all servers
         await Promise.all(

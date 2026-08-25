@@ -479,17 +479,20 @@ export class AgentTaskRepository {
          ORDER BY task.completed_at ASC`
       )
       .all(successBefore, failureBefore) as unknown as Array<{
-        taskId: string;
-        sessionId: string;
-        status: AgentTaskStatus;
-      }>;
+      taskId: string;
+      sessionId: string;
+      status: AgentTaskStatus;
+    }>;
   }
 
   deleteRetainedTask(taskId: string): void {
     this.transaction(() => {
       const task = this.requireTask(taskId);
       if (!['completed', 'failed', 'interrupted', 'cancelled', 'blocked'].includes(task.status)) {
-        throw new AgentTaskError('conflict', `Agent task ${taskId} is not eligible for retention GC`);
+        throw new AgentTaskError(
+          'conflict',
+          `Agent task ${taskId} is not eligible for retention GC`
+        );
       }
       for (const table of [
         'agent_task_commands',
@@ -512,7 +515,8 @@ export class AgentTaskRepository {
     const updated = this.db
       .prepare('UPDATE agent_tasks SET pinned = ?, updated_at = ? WHERE task_id = ?')
       .run(pinned ? 1 : 0, new Date().toISOString(), taskId);
-    if (updated.changes !== 1) throw new AgentTaskError('not_found', `Agent task ${taskId} was not found`);
+    if (updated.changes !== 1)
+      throw new AgentTaskError('not_found', `Agent task ${taskId} was not found`);
   }
 
   reserveOperation(taskId: string, operation: AgentTaskOperationReservation): void {
@@ -594,7 +598,10 @@ export class AgentTaskRepository {
         .prepare('SELECT status FROM agent_task_operations WHERE task_id = ? AND tool_call_id = ?')
         .get(taskId, toolCallId) as { status: string } | undefined;
       if (existing?.status !== 'dispatched') {
-        throw new AgentTaskError('conflict', `Agent task operation ${toolCallId} is not dispatchable`);
+        throw new AgentTaskError(
+          'conflict',
+          `Agent task operation ${toolCallId} is not dispatchable`
+        );
       }
     }
   }
@@ -613,10 +620,15 @@ export class AgentTaskRepository {
       .run(status, proxyStatus ?? null, new Date().toISOString(), taskId, toolCallId);
     if (updated.changes !== 1) {
       const existing = this.db
-        .prepare('SELECT status, proxy_status FROM agent_task_operations WHERE task_id = ? AND tool_call_id = ?')
+        .prepare(
+          'SELECT status, proxy_status FROM agent_task_operations WHERE task_id = ? AND tool_call_id = ?'
+        )
         .get(taskId, toolCallId) as { status: string; proxy_status: string | null } | undefined;
       if (existing?.status !== status || existing.proxy_status !== (proxyStatus ?? null)) {
-        throw new AgentTaskError('conflict', `Agent task operation ${toolCallId} settlement changed`);
+        throw new AgentTaskError(
+          'conflict',
+          `Agent task operation ${toolCallId} settlement changed`
+        );
       }
     }
   }
@@ -927,7 +939,10 @@ export class AgentTaskRepository {
       const remaining = totalBudget - row.used;
       const outputCap = Math.min(requestedOutput, remaining - estimatedInput);
       if (outputCap < 1) {
-        throw new AgentTaskError('budget_exceeded', 'Agent task token budget cannot reserve this request');
+        throw new AgentTaskError(
+          'budget_exceeded',
+          'Agent task token budget cannot reserve this request'
+        );
       }
       this.db
         .prepare(
@@ -968,7 +983,11 @@ export class AgentTaskRepository {
            WHERE reservation_id = ? AND task_id = ?`
         )
         .get(reservationId, taskId) as
-        | { status: 'reserved' | 'settled'; actual_input: number | null; actual_output: number | null }
+        | {
+            status: 'reserved' | 'settled';
+            actual_input: number | null;
+            actual_output: number | null;
+          }
         | undefined;
       if (!row) throw new AgentTaskError('conflict', 'Token reservation is missing');
       if (row.status === 'settled') {
@@ -1002,16 +1021,25 @@ export class AgentTaskRepository {
         projection.pending_result_hash !== commit.resultHash ||
         projection.pending_result_json !== stableStringify(result.output)
       ) {
-        throw new AgentTaskError('conflict', 'Durable Harness result does not match pending result');
+        throw new AgentTaskError(
+          'conflict',
+          'Durable Harness result does not match pending result'
+        );
       }
       if (projection.projected_dsh_seq > commit.durableSeq) {
-        throw new AgentTaskError('execution_failed', 'Agent task Harness cursor exceeds durable seq');
+        throw new AgentTaskError(
+          'execution_failed',
+          'Agent task Harness cursor exceeds durable seq'
+        );
       }
       let next = projection.projected_dsh_seq;
       for (const event of commit.events) {
         if (event.seq < next) continue;
         if (event.seq !== next || event.seq >= commit.durableSeq) {
-          throw new AgentTaskError('execution_failed', 'Agent task Harness suffix is not contiguous');
+          throw new AgentTaskError(
+            'execution_failed',
+            'Agent task Harness suffix is not contiguous'
+          );
         }
         this.db
           .prepare(
@@ -1030,13 +1058,7 @@ export class AgentTaskRepository {
            SET projected_dsh_seq = ?, durable_dsh_seq = ?, durable_revision = ?,
                result_confirmed_at = ? WHERE task_id = ?`
         )
-        .run(
-          next,
-          commit.durableSeq,
-          commit.durableRevision,
-          new Date().toISOString(),
-          taskId
-        );
+        .run(next, commit.durableSeq, commit.durableRevision, new Date().toISOString(), taskId);
       return this.complete(taskId, result);
     });
   }

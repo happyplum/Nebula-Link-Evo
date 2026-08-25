@@ -97,7 +97,10 @@ export class SessionEventHub {
   /**
    * Emit job.queued event for a session
    */
-  emitJobQueued(sessionId: string, job: { jobId: string; messageId: string; contentPreview: string; createdAt: number }): void {
+  emitJobQueued(
+    sessionId: string,
+    job: { jobId: string; messageId: string; contentPreview: string; createdAt: number }
+  ): void {
     this.publish(sessionId, {
       type: 'job.queued',
       sessionId,

@@ -36,7 +36,7 @@ export const ToolCallCard: React.FC<ToolCallCardProps> = React.memo(
       (e: React.MouseEvent<HTMLDialogElement>) => {
         if (e.target === dialogRef.current) closeDialog();
       },
-      [closeDialog],
+      [closeDialog]
     );
 
     return (
@@ -50,11 +50,7 @@ export const ToolCallCard: React.FC<ToolCallCardProps> = React.memo(
           </code>
         </button>
 
-        <dialog
-          ref={dialogRef}
-          className={styles.dialog}
-          onClick={handleBackdropClick}
-        >
+        <dialog ref={dialogRef} className={styles.dialog} onClick={handleBackdropClick}>
           <div className={styles.dialogContent}>
             <div className={styles.dialogHeader}>
               <code className={styles.dialogTitle}>{displayName}</code>

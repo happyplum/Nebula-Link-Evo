@@ -69,8 +69,12 @@ describe('createHarnessRuntime', () => {
         route: { provider: 'test', model: 'test' },
       });
       await Promise.all([firstSession.followup('one'), secondSession.followup('two')]);
-      expect(firstSession.events().some((event) => JSON.stringify(event).includes('first'))).toBe(true);
-      expect(secondSession.events().some((event) => JSON.stringify(event).includes('second'))).toBe(true);
+      expect(firstSession.events().some((event) => JSON.stringify(event).includes('first'))).toBe(
+        true
+      );
+      expect(secondSession.events().some((event) => JSON.stringify(event).includes('second'))).toBe(
+        true
+      );
       await Promise.all([firstSession.flush(), secondSession.flush()]);
       await Promise.all([firstSession.dispose(), secondSession.dispose()]);
     } finally {

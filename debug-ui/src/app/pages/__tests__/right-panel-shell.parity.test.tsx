@@ -60,9 +60,7 @@ describe('Right Panel Shell Parity Test', () => {
   const renderWithProviders = (ui: React.ReactElement) => {
     return render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
-          {ui}
-        </MemoryRouter>
+        <MemoryRouter>{ui}</MemoryRouter>
       </QueryClientProvider>
     );
   };
@@ -127,7 +125,14 @@ describe('Right Panel Shell Parity Test', () => {
     const rightPanelContent = within(rightPanel);
 
     // Check for common placeholder phrases (case-insensitive)
-    const placeholderPhrases = ['placeholder', 'coming soon', 'TODO', 'TODO:', 'Coming Soon', 'Placeholder'];
+    const placeholderPhrases = [
+      'placeholder',
+      'coming soon',
+      'TODO',
+      'TODO:',
+      'Coming Soon',
+      'Placeholder',
+    ];
 
     placeholderPhrases.forEach((phrase) => {
       expect(rightPanelContent.queryByText(new RegExp(phrase, 'i'))).not.toBeInTheDocument();
@@ -143,7 +148,14 @@ describe('Right Panel Shell Parity Test', () => {
     const domElementsTab = rightPanelContent.getByTestId(testIds.rightPanelTabDomElements);
 
     // Check for placeholder phrases within DOM Elements tab only
-    const placeholderPhrases = ['placeholder', 'coming soon', 'TODO', 'TODO:', 'Coming Soon', 'Placeholder'];
+    const placeholderPhrases = [
+      'placeholder',
+      'coming soon',
+      'TODO',
+      'TODO:',
+      'Coming Soon',
+      'Placeholder',
+    ];
 
     placeholderPhrases.forEach((phrase) => {
       expect(within(domElementsTab).queryByText(new RegExp(phrase, 'i'))).not.toBeInTheDocument();
@@ -165,7 +177,14 @@ describe('Right Panel Shell Parity Test', () => {
       const configTab = rightPanelContent.getByTestId(testIds.configContent);
 
       // Check for placeholder phrases within Config tab only
-      const placeholderPhrases = ['placeholder', 'coming soon', 'TODO', 'TODO:', 'Coming Soon', 'Placeholder'];
+      const placeholderPhrases = [
+        'placeholder',
+        'coming soon',
+        'TODO',
+        'TODO:',
+        'Coming Soon',
+        'Placeholder',
+      ];
 
       placeholderPhrases.forEach((phrase) => {
         expect(within(configTab).queryByText(new RegExp(phrase, 'i'))).not.toBeInTheDocument();

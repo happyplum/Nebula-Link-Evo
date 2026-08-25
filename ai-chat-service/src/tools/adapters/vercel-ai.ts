@@ -33,7 +33,7 @@ function jsonSchemaToZod(schema: Record<string, unknown>): z.ZodTypeAny {
 
 function safeExecute(
   fn: GatewayTool['execute'],
-  swallowErrors: boolean,
+  swallowErrors: boolean
 ): (args: unknown, options: { toolCallId: string; abortSignal?: AbortSignal }) => Promise<string> {
   return async (args, options) => {
     if (!swallowErrors) {
@@ -59,7 +59,7 @@ function safeExecute(
 
 export function gatewayToolToVercelTool(
   gatewayTool: GatewayTool,
-  options: { swallowErrors?: boolean } = {},
+  options: { swallowErrors?: boolean } = {}
 ) {
   return dynamicTool({
     description: gatewayTool.description,
@@ -70,7 +70,7 @@ export function gatewayToolToVercelTool(
 
 export function gatewayToolsToVercelToolMap(
   tools: GatewayTool[],
-  options: { swallowErrors?: boolean } = {},
+  options: { swallowErrors?: boolean } = {}
 ): Record<string, ReturnType<typeof dynamicTool>> {
   const map: Record<string, ReturnType<typeof dynamicTool>> = {};
   for (const t of tools) {

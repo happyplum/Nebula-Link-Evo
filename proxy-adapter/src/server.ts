@@ -95,94 +95,94 @@ export async function buildApp(options: BuildProxyAppOptions = {}): Promise<Fast
 
   const isTestMode = process.env.TEST_MODE === 'true';
 
-    // Initialize database backup before starting server (skip in unit tests)
-    if (!isTestMode && options.skipBackups !== true) {
-      await initializeWithBackup(debugDbPath);
-    }
+  // Initialize database backup before starting server (skip in unit tests)
+  if (!isTestMode && options.skipBackups !== true) {
+    await initializeWithBackup(debugDbPath);
+  }
 
-    await app.register(cors, {
-      origin: resolveCorsOrigin(),
-      credentials: true,
-    });
+  await app.register(cors, {
+    origin: resolveCorsOrigin(),
+    credentials: true,
+  });
 
-    // Initialize ToolRegistry and register providers
-    browserExecutionService.initialize();
-    browserClient.setAccessArbiter(browserExecutionService);
+  // Initialize ToolRegistry and register providers
+  browserExecutionService.initialize();
+  browserClient.setAccessArbiter(browserExecutionService);
 
-    toolRegistry.registerProvider(new BrowserExecutionToolsProvider(browserExecutionService));
+  toolRegistry.registerProvider(new BrowserExecutionToolsProvider(browserExecutionService));
 
-    await toolRegistry.initializeAll();
+  await toolRegistry.initializeAll();
 
-    // Make ToolRegistry accessible through AppService for debug endpoints
-    appService.setToolRegistry(toolRegistry);
+  // Make ToolRegistry accessible through AppService for debug endpoints
+  appService.setToolRegistry(toolRegistry);
 
-    // Register API routes with v1 versioning prefix
-    // Versioned routes (canonical)
-    await app.register(healthRoutes, { prefix: '/api/v1/health' });
-    await app.register(livekitTokenRoutes, { prefix: '/api/v1' });
-    await app.register(capabilitiesRoutes, {
-      prefix: '/api/v1',
-      browserExecutionService,
-    });
-    await app.register(browserExecutionRoutes, {
-      prefix: '/api/v1/browser-execution',
-      browserExecutionService,
-    });
+  // Register API routes with v1 versioning prefix
+  // Versioned routes (canonical)
+  await app.register(healthRoutes, { prefix: '/api/v1/health' });
+  await app.register(livekitTokenRoutes, { prefix: '/api/v1' });
+  await app.register(capabilitiesRoutes, {
+    prefix: '/api/v1',
+    browserExecutionService,
+  });
+  await app.register(browserExecutionRoutes, {
+    prefix: '/api/v1/browser-execution',
+    browserExecutionService,
+  });
 
-    // Register Debug routes
-    await app.register(debugRoutes, {
-      prefix: '/debug',
-      browserExecutionService,
-    });
-    app.log.info({ prefix: '/debug' }, 'Debug routes registered');
-    app.log.info({ subscribers: debugEventHub.getSubscriberCount() }, 'Debug event hub ready');
+  // Register Debug routes
+  await app.register(debugRoutes, {
+    prefix: '/debug',
+    browserExecutionService,
+  });
+  app.log.info({ prefix: '/debug' }, 'Debug routes registered');
+  app.log.info({ subscribers: debugEventHub.getSubscriberCount() }, 'Debug event hub ready');
 
-    // Register MCP Server plugin
-    await app.register(mcpServerPlugin, { toolRegistry });
+  // Register MCP Server plugin
+  await app.register(mcpServerPlugin, { toolRegistry });
 
-    const mcpStatus = appService.getMCPStatus();
-    app.log.info(
-      {
-        browser: mcpStatus.enabled ? 'OK' : 'Disabled',
-        file: mcpStatus.enabled ? 'OK' : 'Disabled',
-      },
-      'MCP Systems status'
-    );
+  const mcpStatus = appService.getMCPStatus();
+  app.log.info(
+    {
+      browser: mcpStatus.enabled ? 'OK' : 'Disabled',
+      file: mcpStatus.enabled ? 'OK' : 'Disabled',
+    },
+    'MCP Systems status'
+  );
 
-    app.get(
-      '/',
-      {
-        schema: {
-          description: 'Get service info and available endpoints',
-          tags: ['Health'],
-          response: {
-            200: {
-              type: 'object',
-              properties: {
-                service: { type: 'string' },
-                version: { type: 'string' },
-                mode: { type: 'string' },
-                endpoints: { type: 'object' },
-              },
+  app.get(
+    '/',
+    {
+      schema: {
+        description: 'Get service info and available endpoints',
+        tags: ['Health'],
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              service: { type: 'string' },
+              version: { type: 'string' },
+              mode: { type: 'string' },
+              endpoints: { type: 'object' },
             },
           },
         },
       },
-      async () => {
-        return {
-          service: 'Proxy Adapter',
-          version: '2.0.0',
-          mode: 'browser-gateway',
-          endpoints: {
-            'GET /api/v1/health': 'Health check',
-            'GET /api/v1/capabilities': 'Browser execution capabilities',
-            'POST /api/v1/browser-execution/sessions': 'Create a controlled browser session',
-            'POST /mcp': 'MCP StreamableHTTP endpoint exposing browser-control tools',
-            'GET /debug/api/*': 'Debug API endpoints',
-          },
-        };
-      }
-    );
+    },
+    async () => {
+      return {
+        service: 'Proxy Adapter',
+        version: '2.0.0',
+        mode: 'browser-gateway',
+        endpoints: {
+          'GET /api/v1/health': 'Health check',
+          'GET /api/v1/capabilities': 'Browser execution capabilities',
+          'POST /api/v1/browser-execution/sessions': 'Create a controlled browser session',
+          'POST /mcp': 'MCP StreamableHTTP endpoint exposing browser-control tools',
+          'GET /debug/api/*': 'Debug API endpoints',
+        },
+      };
+    }
+  );
 
   return app;
 }

@@ -12,10 +12,7 @@ import { parentPort, workerData } from 'node:worker_threads';
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 
-import type {
-  PersistRequest,
-  PersistResponse,
-} from '../services/stream-persist-worker.types.js';
+import type { PersistRequest, PersistResponse } from '../services/stream-persist-worker.types.js';
 
 // Initialize database connection
 // Use environment variable if set, otherwise default to conversations.sqlite

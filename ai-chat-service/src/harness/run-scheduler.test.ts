@@ -51,9 +51,9 @@ describe('HarnessRunScheduler', () => {
     expect(
       db.prepare('SELECT status FROM harness_model_runs WHERE run_id = ?').get('stale')
     ).toEqual({ status: 'cancelled' });
-    expect(() =>
-      restarted.enqueue({ ...request('stale'), ownerId: 'different-session' })
-    ).toThrow('identity is immutable');
+    expect(() => restarted.enqueue({ ...request('stale'), ownerId: 'different-session' })).toThrow(
+      'identity is immutable'
+    );
 
     first.close();
     restarted.close();

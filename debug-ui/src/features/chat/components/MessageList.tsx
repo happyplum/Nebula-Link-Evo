@@ -26,9 +26,14 @@ export const MessageList: React.FC = () => {
   const isStreaming = streamingState === 'streaming';
 
   const streamingMessage = useMemo(() => {
-    if (!isStreaming || (!streamingContent && !streamingThinking && streamingToolCalls.length === 0)) return null;
+    if (
+      !isStreaming ||
+      (!streamingContent && !streamingThinking && streamingToolCalls.length === 0)
+    )
+      return null;
     // Use a stable timestamp based on content data instead of Date.now() which is impure
-    const contentBasedTimestamp = streamingContent.length + streamingThinking.length + streamingToolCalls.length * 1000;
+    const contentBasedTimestamp =
+      streamingContent.length + streamingThinking.length + streamingToolCalls.length * 1000;
     return {
       id: '__streaming__',
       role: 'assistant' as const,
@@ -39,7 +44,9 @@ export const MessageList: React.FC = () => {
     };
   }, [isStreaming, streamingContent, streamingThinking, streamingToolCalls]);
   const visibleCount = useChatStore((s) =>
-    activeSessionId ? (s.visibleMessageCounts[activeSessionId] ?? DEFAULT_PAGE_SIZE) : DEFAULT_PAGE_SIZE,
+    activeSessionId
+      ? (s.visibleMessageCounts[activeSessionId] ?? DEFAULT_PAGE_SIZE)
+      : DEFAULT_PAGE_SIZE
   );
   const expandVisibleMessages = useChatStore((s) => s.expandVisibleMessages);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -50,16 +57,15 @@ export const MessageList: React.FC = () => {
 
   // Determine visible messages (most recent N)
   const hasMore = messages.length > visibleCount;
-  const visibleMessages = hasMore
-    ? messages.slice(messages.length - visibleCount)
-    : messages;
+  const visibleMessages = hasMore ? messages.slice(messages.length - visibleCount) : messages;
 
   // Auto-scroll to bottom when new messages arrive, streaming tool calls update, or streaming content changes
   useEffect(() => {
     const container = containerRef.current;
     if (!container || (messages.length === 0 && streamingToolCalls.length === 0)) return;
 
-    const currentStreamingLength = (streamingContent?.length || 0) + (streamingThinking?.length || 0);
+    const currentStreamingLength =
+      (streamingContent?.length || 0) + (streamingThinking?.length || 0);
     const shouldScroll =
       !isUserScrolling.current ||
       messages.length > prevLengthRef.current ||
@@ -78,9 +84,9 @@ export const MessageList: React.FC = () => {
     const container = containerRef.current;
     if (!container) return;
 
-    const isAtBottom = 
+    const isAtBottom =
       Math.abs(container.scrollHeight - container.scrollTop - container.clientHeight) < 50;
-    
+
     isUserScrolling.current = !isAtBottom;
   };
 
@@ -93,16 +99,14 @@ export const MessageList: React.FC = () => {
   if (messages.length === 0 && !streamingMessage) {
     return (
       <div className={styles.container} data-testid={testIds.messageList}>
-        <div className={styles.emptyState}>
-          No messages yet. Start a conversation!
-        </div>
+        <div className={styles.emptyState}>No messages yet. Start a conversation!</div>
       </div>
     );
   }
 
   return (
-    <div 
-      className={styles.container} 
+    <div
+      className={styles.container}
       ref={containerRef}
       onScroll={handleScroll}
       data-testid={testIds.messageList}
@@ -111,11 +115,7 @@ export const MessageList: React.FC = () => {
     >
       {hasMore && (
         <div className={styles.loadMore}>
-          <button 
-            type="button" 
-            className={styles.loadMoreButton} 
-            onClick={handleLoadMore}
-          >
+          <button type="button" className={styles.loadMoreButton} onClick={handleLoadMore}>
             Load earlier messages
           </button>
         </div>
@@ -128,20 +128,22 @@ export const MessageList: React.FC = () => {
           });
         }
         // Only render assistant bubble if there's actual content (text, thinking, or screenshot)
-        if (message.role === 'assistant' && !message.content && !message.thinking && !message.screenshot) {
+        if (
+          message.role === 'assistant' &&
+          !message.content &&
+          !message.thinking &&
+          !message.screenshot
+        ) {
           // Tool-only message - skip the bubble, tool calls render above
         } else {
           items.push(<MessageBubble key={message.id} message={message} />);
         }
         return items;
       })}
-      {isStreaming && streamingToolCalls.length > 0 &&
-        streamingToolCalls.map((tc) => (
-          <ToolCallCard key={`stc-${tc.id}`} toolCall={tc} />
-        ))}
-      {streamingMessage && (
-        <MessageBubble key={streamingMessage.id} message={streamingMessage} />
-      )}
+      {isStreaming &&
+        streamingToolCalls.length > 0 &&
+        streamingToolCalls.map((tc) => <ToolCallCard key={`stc-${tc.id}`} toolCall={tc} />)}
+      {streamingMessage && <MessageBubble key={streamingMessage.id} message={streamingMessage} />}
     </div>
   );
 };

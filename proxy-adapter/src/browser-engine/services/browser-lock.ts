@@ -26,18 +26,24 @@ export async function acquireLock(
   let timeout: ReturnType<typeof setTimeout> | undefined;
 
   const acquirePromise = browserMutex.acquire();
-  acquirePromise.then((release) => {
-    if (timedOut) {
-      release();
-    }
-  }).catch(() => {
-    // acquire() only rejects when the mutex is canceled; callers handle the raced promise.
-  });
+  acquirePromise
+    .then((release) => {
+      if (timedOut) {
+        release();
+      }
+    })
+    .catch(() => {
+      // acquire() only rejects when the mutex is canceled; callers handle the raced promise.
+    });
 
   const timeoutPromise = new Promise<never>((_, reject) => {
     timeout = setTimeout(() => {
       timedOut = true;
-      reject(new BrowserMutexError(`${owner} timed out acquiring browser mutex after ${timeoutMs}ms${currentOwner ? ` (locked by: ${currentOwner})` : ''}`));
+      reject(
+        new BrowserMutexError(
+          `${owner} timed out acquiring browser mutex after ${timeoutMs}ms${currentOwner ? ` (locked by: ${currentOwner})` : ''}`
+        )
+      );
     }, timeoutMs);
   });
 

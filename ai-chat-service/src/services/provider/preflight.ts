@@ -19,7 +19,7 @@ const logger = createWorkerLogger('Preflight');
  */
 export async function runPreflight(
   registry: ProviderRegistry,
-  providerKeys: string[],
+  providerKeys: string[]
 ): Promise<void> {
   // Probe all enabled providers (errors recorded internally, not thrown)
   for (const key of providerKeys) {

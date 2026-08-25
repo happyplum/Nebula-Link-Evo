@@ -60,7 +60,7 @@ describe('HealthStatusCard', () => {
     } as any);
 
     render(<HealthStatusCard />);
-    
+
     expect(screen.getByText('服务状态')).toBeInTheDocument();
     expect(screen.getByText('正常')).toBeInTheDocument();
     expect(screen.getByText('已连接')).toBeInTheDocument();
@@ -85,7 +85,7 @@ describe('HealthStatusCard', () => {
     } as any);
 
     render(<HealthStatusCard />);
-    
+
     expect(screen.getByText('异常')).toBeInTheDocument();
     expect(screen.getByText('未连接')).toBeInTheDocument();
     expect(screen.getByText('Disabled')).toBeInTheDocument();

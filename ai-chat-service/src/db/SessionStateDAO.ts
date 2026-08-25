@@ -222,7 +222,9 @@ export class SessionStateDAO {
       sessionId: row.session_id,
       status: row.status as SessionStatus,
       lastActiveAt: row.last_active_at,
-      agentState: row.agent_state ? (JSON.parse(row.agent_state) as SessionState['agentState']) : undefined,
+      agentState: row.agent_state
+        ? (JSON.parse(row.agent_state) as SessionState['agentState'])
+        : undefined,
       jobId: row.job_id || undefined,
       version: row.version,
       createdAt: row.created_at,

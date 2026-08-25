@@ -1,7 +1,7 @@
 import pino from 'pino';
 
 const PINO_LEVELS = ['trace', 'debug', 'info', 'warn', 'error', 'fatal'] as const;
-type PinoLevel = typeof PINO_LEVELS[number];
+type PinoLevel = (typeof PINO_LEVELS)[number];
 
 /**
  * Normalize LOG_LEVEL environment variable to a valid Pino level

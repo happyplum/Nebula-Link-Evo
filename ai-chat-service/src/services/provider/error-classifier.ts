@@ -26,9 +26,7 @@ const RATE_LIMIT_PATTERNS = [
  * Used for `retry-after-ms` / `Retry-After-Ms` headers.
  * Returns undefined if parsing fails (conservative fallback).
  */
-export function parseDirectMs(
-  value: string | undefined,
-): number | undefined {
+export function parseDirectMs(value: string | undefined): number | undefined {
   if (!value) return undefined;
   const trimmed = value.trim();
   if (!trimmed) return undefined;
@@ -41,9 +39,7 @@ export function parseDirectMs(
  * Supports both seconds (number) and HTTP-date formats.
  * Returns undefined if parsing fails (conservative fallback).
  */
-export function parseRetryAfterMs(
-  value: string | undefined,
-): number | undefined {
+export function parseRetryAfterMs(value: string | undefined): number | undefined {
   if (!value) return undefined;
 
   const trimmed = value.trim();
@@ -73,50 +69,63 @@ export function parseRetryAfterMs(
 /**
  * Check if an APICallError indicates rate limiting.
  */
-function checkAPICallErrorForRateLimit(error: APICallError, options?: { provider?: string; logger?: { debug: (...args: unknown[]) => void } }): RateLimitClassification {
+function checkAPICallErrorForRateLimit(
+  error: APICallError,
+  options?: { provider?: string; logger?: { debug: (...args: unknown[]) => void } }
+): RateLimitClassification {
   // Primary: HTTP 429 status code
   if (error.statusCode === 429) {
-    const retryAfterMs = parseDirectMs(
-      error.responseHeaders?.['retry-after-ms'] ??
-        error.responseHeaders?.['Retry-After-Ms'],
-    ) ?? parseRetryAfterMs(
-      error.responseHeaders?.['retry-after'] ??
-        error.responseHeaders?.['Retry-After'],
-    );
+    const retryAfterMs =
+      parseDirectMs(
+        error.responseHeaders?.['retry-after-ms'] ?? error.responseHeaders?.['Retry-After-Ms']
+      ) ??
+      parseRetryAfterMs(
+        error.responseHeaders?.['retry-after'] ?? error.responseHeaders?.['Retry-After']
+      );
 
     return {
       isRateLimited: true,
       retryAfterMs,
-      providerError: new ProviderError(PROVIDER_ERRORS.RATE_LIMITED, options?.provider ?? 'unknown', {
-        statusCode: error.statusCode,
-        responseHeaders: error.responseHeaders,
-        responseBody: error.responseBody,
-        retryAfterMs,
-      }, error.message),
+      providerError: new ProviderError(
+        PROVIDER_ERRORS.RATE_LIMITED,
+        options?.provider ?? 'unknown',
+        {
+          statusCode: error.statusCode,
+          responseHeaders: error.responseHeaders,
+          responseBody: error.responseBody,
+          retryAfterMs,
+        },
+        error.message
+      ),
     };
   }
 
   // Fallback: message pattern matching (lower confidence)
   const message = error.message ?? '';
   if (RATE_LIMIT_PATTERNS.some((p) => p.test(message))) {
-    const retryAfterMs = parseDirectMs(
-      error.responseHeaders?.['retry-after-ms'] ??
-        error.responseHeaders?.['Retry-After-Ms'],
-    ) ?? parseRetryAfterMs(
-      error.responseHeaders?.['retry-after'] ??
-        error.responseHeaders?.['Retry-After'],
-    );
+    const retryAfterMs =
+      parseDirectMs(
+        error.responseHeaders?.['retry-after-ms'] ?? error.responseHeaders?.['Retry-After-Ms']
+      ) ??
+      parseRetryAfterMs(
+        error.responseHeaders?.['retry-after'] ?? error.responseHeaders?.['Retry-After']
+      );
 
     return {
       isRateLimited: true,
       retryAfterMs,
-      providerError: new ProviderError(PROVIDER_ERRORS.RATE_LIMITED, options?.provider ?? 'unknown', {
-        statusCode: error.statusCode,
-        responseHeaders: error.responseHeaders,
-        responseBody: error.responseBody,
-        matchedPattern: true,
-        retryAfterMs,
-      }, error.message),
+      providerError: new ProviderError(
+        PROVIDER_ERRORS.RATE_LIMITED,
+        options?.provider ?? 'unknown',
+        {
+          statusCode: error.statusCode,
+          responseHeaders: error.responseHeaders,
+          responseBody: error.responseBody,
+          matchedPattern: true,
+          retryAfterMs,
+        },
+        error.message
+      ),
     };
   }
 
@@ -132,14 +141,20 @@ function checkAPICallErrorForRateLimit(error: APICallError, options?: { provider
  * 3. RetryError wrapping an APICallError that was rate-limited → RATE_LIMITED
  * 4. Generic error with rate-limit message → RATE_LIMITED (lowest confidence)
  */
-export function classifyRateLimitError(error: unknown, options?: { provider?: string; logger?: { debug: (...args: unknown[]) => void } }): RateLimitClassification {
+export function classifyRateLimitError(
+  error: unknown,
+  options?: { provider?: string; logger?: { debug: (...args: unknown[]) => void } }
+): RateLimitClassification {
   const logger = options?.logger;
 
   // Direct APICallError
   if (APICallError.isInstance(error)) {
     const result = checkAPICallErrorForRateLimit(error, options);
     if (result.isRateLimited) {
-      logger?.debug({ isRateLimit: true, provider: options?.provider, retryAfterMs: result.retryAfterMs }, 'Rate-limit error classified');
+      logger?.debug(
+        { isRateLimit: true, provider: options?.provider, retryAfterMs: result.retryAfterMs },
+        'Rate-limit error classified'
+      );
     }
     return result;
   }
@@ -150,7 +165,10 @@ export function classifyRateLimitError(error: unknown, options?: { provider?: st
     if (apiError && APICallError.isInstance(apiError)) {
       const result = checkAPICallErrorForRateLimit(apiError, options);
       if (result.isRateLimited) {
-        logger?.debug({ isRateLimit: true, provider: options?.provider, retryAfterMs: result.retryAfterMs }, 'Rate-limit error classified');
+        logger?.debug(
+          { isRateLimit: true, provider: options?.provider, retryAfterMs: result.retryAfterMs },
+          'Rate-limit error classified'
+        );
       }
       return result;
     }
@@ -162,12 +180,20 @@ export function classifyRateLimitError(error: unknown, options?: { provider?: st
     if (RATE_LIMIT_PATTERNS.some((p) => p.test(message))) {
       const result: RateLimitClassification = {
         isRateLimited: true,
-        providerError: new ProviderError(PROVIDER_ERRORS.RATE_LIMITED, options?.provider ?? 'unknown', {
-          originalError: String(error),
-          matchedPattern: true,
-        }, error.message),
+        providerError: new ProviderError(
+          PROVIDER_ERRORS.RATE_LIMITED,
+          options?.provider ?? 'unknown',
+          {
+            originalError: String(error),
+            matchedPattern: true,
+          },
+          error.message
+        ),
       };
-      logger?.debug({ isRateLimit: true, provider: options?.provider }, 'Rate-limit error classified');
+      logger?.debug(
+        { isRateLimit: true, provider: options?.provider },
+        'Rate-limit error classified'
+      );
       return result;
     }
   }

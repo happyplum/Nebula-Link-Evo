@@ -32,27 +32,34 @@ afterEach(async () => {
 describe('HarnessDeletionService', () => {
   it('physically purges a durable session and decrements attachment refs once', async () => {
     const fixture = await createFixture('delete-complete');
-    const service = new HarnessDeletionService(fixture.db.connection(), fixture.chat, fixture.runtime);
+    const service = new HarnessDeletionService(
+      fixture.db.connection(),
+      fixture.chat,
+      fixture.runtime
+    );
     try {
       await expect(service.deleteSession(fixture.sessionId)).resolves.toBe('deleted');
       expect(fixture.db.getSession(fixture.sessionId)).toBeNull();
       expect(await fixture.runtime.revision(SessionId(fixture.sessionId))).toBeUndefined();
       expect(
-        fixture.db.connection().prepare('SELECT phase FROM deletion_jobs WHERE resource_id = ?').get(
-          fixture.sessionId
-        )
+        fixture.db
+          .connection()
+          .prepare('SELECT phase FROM deletion_jobs WHERE resource_id = ?')
+          .get(fixture.sessionId)
       ).toEqual({ phase: 'completed' });
       expect(
-        fixture.db.connection().prepare('SELECT ref_count FROM harness_attachments WHERE content_hash = ?').get(
-          'sha256:test'
-        )
+        fixture.db
+          .connection()
+          .prepare('SELECT ref_count FROM harness_attachments WHERE content_hash = ?')
+          .get('sha256:test')
       ).toEqual({ ref_count: 1 });
 
       await expect(service.deleteSession(fixture.sessionId)).resolves.toBe('deleted');
       expect(
-        fixture.db.connection().prepare('SELECT ref_count FROM harness_attachments WHERE content_hash = ?').get(
-          'sha256:test'
-        )
+        fixture.db
+          .connection()
+          .prepare('SELECT ref_count FROM harness_attachments WHERE content_hash = ?')
+          .get('sha256:test')
       ).toEqual({ ref_count: 1 });
     } finally {
       await fixture.runtime.dispose();

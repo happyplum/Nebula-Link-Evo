@@ -354,7 +354,10 @@ export default function ChatPage() {
       {isPausing && <div className={styles.pausingFeedback}>⏳ 正在暂停...</div>}
 
       {/* Message Region */}
-      <div className={styles.messageRegion} style={queuePanelHeight > 0 ? { paddingBottom: queuePanelHeight + 16 } : undefined}>
+      <div
+        className={styles.messageRegion}
+        style={queuePanelHeight > 0 ? { paddingBottom: queuePanelHeight + 16 } : undefined}
+      >
         {streamingState === 'blocked' && (
           <div className={styles.blockedBanner}>
             ⚠️ 任务被阻塞 (Blocked). 请人工确认或解决问题后点击 [继续]
@@ -362,9 +365,7 @@ export default function ChatPage() {
         )}
         <MessageList />
         <div ref={queuePanelRef}>
-          {activeSessionId != null && (
-            <QueueFloatingPanel sessionId={activeSessionId} />
-          )}
+          {activeSessionId != null && <QueueFloatingPanel sessionId={activeSessionId} />}
         </div>
       </div>
 

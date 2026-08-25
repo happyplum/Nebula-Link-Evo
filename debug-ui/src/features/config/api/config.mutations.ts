@@ -11,8 +11,7 @@ import type { McpCallRequest, McpCallResponse, TestAiResponse } from '../types/i
 export function useMcpCall() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (req: McpCallRequest) =>
-      apiClient.post<McpCallResponse>(DEBUG_MCP_CALL, req),
+    mutationFn: (req: McpCallRequest) => apiClient.post<McpCallResponse>(DEBUG_MCP_CALL, req),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.mcp.tools });
     },

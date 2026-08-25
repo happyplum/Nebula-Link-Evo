@@ -53,7 +53,7 @@ describe('ConfigPanel', () => {
     } as any);
 
     render(<ConfigPanel />);
-    
+
     expect(screen.getByText('系统配置')).toBeInTheDocument();
     expect(screen.getByText('development')).toBeInTheDocument();
     expect(screen.getByText('决策模型')).toBeInTheDocument();
@@ -68,7 +68,7 @@ describe('ConfigPanel', () => {
     } as any);
 
     render(<ConfigPanel />);
-    
+
     expect(screen.getByText('未知')).toBeInTheDocument();
     expect(screen.getAllByText('未配置')).toHaveLength(2);
   });

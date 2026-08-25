@@ -64,19 +64,21 @@ export function useDebugStream(): DebugStreamHealth {
   const health = useSyncExternalStore(
     subscribeToStreamHealth,
     getStreamHealthSnapshot,
-    getStreamHealthSnapshot,
+    getStreamHealthSnapshot
   );
 
   useEffect(() => {
     debugStreamClient.acquire();
     setStreamHealth({ connectionState: debugStreamClient.getConnectionState() });
 
-    const unsubscribeConnectionState = debugStreamClient.subscribeConnectionState((connectionState) => {
-      setStreamHealth({
-        connectionState,
-        lastMessageAt: connectionState === 'connected' ? Date.now() : streamHealth.lastMessageAt,
-      });
-    });
+    const unsubscribeConnectionState = debugStreamClient.subscribeConnectionState(
+      (connectionState) => {
+        setStreamHealth({
+          connectionState,
+          lastMessageAt: connectionState === 'connected' ? Date.now() : streamHealth.lastMessageAt,
+        });
+      }
+    );
 
     const unsubscribeSnapshot = debugStreamClient.subscribe('debug.snapshot', (event) => {
       const snapshot = parseEventData<DebugSnapshotEvent>(event);

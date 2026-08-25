@@ -130,10 +130,7 @@ export async function startPublisher(
         const reasons = Object.entries(s.dropReasons)
           .map(([k, v]) => `${k}=${v}`)
           .join(', ');
-        logger.debug(
-          { fps: s.fps, drops: s.totalDrops, reasons },
-          'livekit debug stats'
-        );
+        logger.debug({ fps: s.fps, drops: s.totalDrops, reasons }, 'livekit debug stats');
       }, 1000);
     }
 
@@ -242,10 +239,7 @@ async function cleanupPublisher(): Promise<void> {
     const reasons = Object.entries(s.dropReasons)
       .map(([k, v]) => `${k}=${v}`)
       .join(', ');
-    logger.debug(
-      { fps: s.fps, drops: s.totalDrops, reasons },
-      'livekit final debug stats'
-    );
+    logger.debug({ fps: s.fps, drops: s.totalDrops, reasons }, 'livekit final debug stats');
     debugCounter = null;
   }
 
@@ -258,9 +252,7 @@ async function generateToken(): Promise<string> {
   const apiKey = process.env.LIVEKIT_API_KEY;
   const apiSecret = process.env.LIVEKIT_API_SECRET;
   if (!apiKey || !apiSecret) {
-    throw new Error(
-      'LIVEKIT_API_KEY and LIVEKIT_API_SECRET environment variables are required'
-    );
+    throw new Error('LIVEKIT_API_KEY and LIVEKIT_API_SECRET environment variables are required');
   }
   const room = process.env.LIVEKIT_ROOM_NAME || 'nebula-link-screen';
   const { AccessToken } = await import('livekit-server-sdk');

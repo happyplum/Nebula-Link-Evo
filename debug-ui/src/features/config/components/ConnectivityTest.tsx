@@ -41,9 +41,7 @@ export function ConnectivityTest() {
         {mutation.isPending ? '测试中...' : result ? '重新测试' : '测试连接'}
       </button>
 
-      {!result && !mutation.isPending && (
-        <div className={styles.idle}>未测试</div>
-      )}
+      {!result && !mutation.isPending && <div className={styles.idle}>未测试</div>}
 
       {result && (
         <div className={`${styles.result} ${result.ok ? styles.success : styles.failure}`}>

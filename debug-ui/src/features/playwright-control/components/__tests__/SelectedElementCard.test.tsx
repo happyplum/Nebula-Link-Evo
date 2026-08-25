@@ -18,7 +18,7 @@ describe('SelectedElementCard', () => {
 
   it('renders empty state when no element is selected', () => {
     render(<SelectedElementCard />);
-    
+
     expect(screen.getByTestId(testIds.selectedElementCard)).toBeInTheDocument();
     expect(screen.getByText('尚未选择元素')).toBeInTheDocument();
   });
@@ -32,17 +32,17 @@ describe('SelectedElementCard', () => {
         attributes: {
           id: 'submit',
           class: 'btn primary',
-          disabled: 'false'
-        }
-      }
+          disabled: 'false',
+        },
+      },
     });
 
     render(<SelectedElementCard />);
-    
+
     expect(screen.getByText('button')).toBeInTheDocument();
     expect(screen.getByText('button#submit')).toBeInTheDocument();
     expect(screen.getByText('Submit Form')).toBeInTheDocument();
-    
+
     // Check attributes
     expect(screen.getByText('id=')).toBeInTheDocument();
     expect(screen.getByText('"submit"')).toBeInTheDocument();
@@ -55,11 +55,11 @@ describe('SelectedElementCard', () => {
       selectedElement: {
         tag: 'div',
         selector: 'div.container',
-      }
+      },
     });
 
     render(<SelectedElementCard />);
-    
+
     expect(screen.getByText('div')).toBeInTheDocument();
     expect(screen.getByText('div.container')).toBeInTheDocument();
     expect(screen.queryByText('Text')).not.toBeInTheDocument();

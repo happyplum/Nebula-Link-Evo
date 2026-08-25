@@ -24,8 +24,18 @@ export function mapHarnessConfig(
   const vision = config.defaults.vision
     ? parseModelSelector(config.defaults.vision, 'defaults.vision', config)
     : undefined;
-  const maxRetries = positiveIntegerSetting(config.settings.maxRetries, env, 3, 'settings.maxRetries');
-  const timeoutMs = positiveIntegerSetting(config.settings.timeout, env, 30_000, 'settings.timeout');
+  const maxRetries = positiveIntegerSetting(
+    config.settings.maxRetries,
+    env,
+    3,
+    'settings.maxRetries'
+  );
+  const timeoutMs = positiveIntegerSetting(
+    config.settings.timeout,
+    env,
+    30_000,
+    'settings.timeout'
+  );
   const configuredMaxTokens = positiveIntegerSetting(
     config.settings.maxTokens,
     env,
@@ -110,7 +120,8 @@ function buildGlmModels(
   configuredMaxTokens: number
 ): NebulaGlmModel[] {
   const ids = new Set([...Object.keys(provider.models ?? {}), ...(selected ?? [])]);
-  if (ids.size === 0) throw new Error('Provider glm: at least one model must be declared or selected');
+  if (ids.size === 0)
+    throw new Error('Provider glm: at least one model must be declared or selected');
   return [...ids].map((id) => {
     const model = provider.models?.[id];
     return {
@@ -127,7 +138,8 @@ function parseModelSelector(value: string, path: string, config: Config): Harnes
   const provider = separator > 0 ? value.slice(0, separator).trim() : '';
   const model = separator > 0 ? value.slice(separator + 1).trim() : '';
   if (!provider || !model) throw new Error(`${path} must use provider/model format`);
-  if (!config.providers[provider]) throw new Error(`${path} references unknown provider ${provider}`);
+  if (!config.providers[provider])
+    throw new Error(`${path} references unknown provider ${provider}`);
   return { provider, model };
 }
 
@@ -225,11 +237,15 @@ function resolveMcpEnvironment(
     Object.entries(configured).map(([key, value]) => {
       const match = ENV_REFERENCE.exec(value);
       if (!match?.[1]) {
-        throw new Error(`MCP server ${serverName}: env.${key} must be a single {ENV_VAR} reference`);
+        throw new Error(
+          `MCP server ${serverName}: env.${key} must be a single {ENV_VAR} reference`
+        );
       }
       const resolved = env[match[1]];
       if (!resolved) {
-        throw new Error(`MCP server ${serverName}: required environment variable ${match[1]} is not set`);
+        throw new Error(
+          `MCP server ${serverName}: required environment variable ${match[1]} is not set`
+        );
       }
       return [key, resolved];
     })
@@ -278,7 +294,8 @@ function positiveIntegerSetting(
   path: string
 ): number {
   const parsed = Number(settingText(value, env, fallback, path));
-  if (!Number.isSafeInteger(parsed) || parsed <= 0) throw new Error(`${path} must be a positive integer`);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0)
+    throw new Error(`${path} must be a positive integer`);
   return parsed;
 }
 

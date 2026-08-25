@@ -50,20 +50,18 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(
           <div className={styles.bubble}>
             {(message.content || message.isStreaming) && (
               <div className={isUser ? styles.content : styles.markdownContent}>
-                {isUser ? (
-                  message.content
-                ) : (
-                  <MarkdownRenderer content={message.content || ''} />
+                {isUser ? message.content : <MarkdownRenderer content={message.content || ''} />}
+                {message.isStreaming && (
+                  <span className={styles.streamingCursor} aria-hidden="true">
+                    ▌
+                  </span>
                 )}
-                {message.isStreaming && <span className={styles.streamingCursor} aria-hidden="true">▌</span>}
               </div>
             )}
 
             {message.screenshot && (
               <img src={message.screenshot} alt="Screenshot" className={styles.screenshot} />
             )}
-
-
           </div>
           <div className={styles.meta}>{metaLabel}</div>
         </div>

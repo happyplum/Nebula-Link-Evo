@@ -7,7 +7,7 @@ export class ApiError extends Error {
   constructor(
     public readonly status: number,
     public readonly statusText: string,
-    public readonly body: unknown,
+    public readonly body: unknown
   ) {
     super(`API error ${status}: ${statusText}`);
     this.name = 'ApiError';
@@ -86,7 +86,7 @@ export class ApiClient {
 
   private withTimeout(
     signal?: AbortSignal | null,
-    timeoutMs?: number,
+    timeoutMs?: number
   ): { signal: AbortSignal; cleanup: () => void } {
     if (!timeoutMs || timeoutMs <= 0) {
       return {

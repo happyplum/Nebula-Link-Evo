@@ -72,7 +72,7 @@ Browser ←→ Debug UI (:5173 dev)
 | `proxy-adapter`                        | :3000 | 浏览器能力网关（3 个受控 operation MCP 工具、browser-execution 控制面、受仲裁调试流、LiveKit、健康检查） |
 | `ai-chat-service`                      | :3001 | 唯一 AI 驱动核心（统一 Harness、Chat/Agent Task、模型、Vision、MCP/Skills、预算、持久化与插件装配）      |
 | `debug-ui`                             | :5173 | 实时调试监控面板（chat SSE → :3001, browser/debug → :3000）                                              |
-| `ai-e2e`                               | :3002 | 纯 semantic E2E 业务编排；通过 AgentTaskClient 与 SemanticBrowserClient 消费两个基础服务                |
+| `ai-e2e`                               | :3002 | 纯 semantic E2E 业务编排；通过 AgentTaskClient 与 SemanticBrowserClient 消费两个基础服务                 |
 | `shared`                               | —     | 共享类型和工具库                                                                                         |
 | `integrations/browser-control-client`  | —     | 受控 HTTP/MCP 客户端、自动会话控制器与 `nebula-browser` CLI                                              |
 | `integrations/deepseek-harness-plugin` | —     | 仅暴露 observe/act 的 DeepSeek Harness bundle；act 逐次审批                                              |
@@ -124,6 +124,9 @@ curl http://localhost:3000/api/v1/health
 pnpm test           # 全工作区测试
 pnpm test:coverage  # 全工作区串行覆盖率门禁
 pnpm test:e2e       # proxy/Agent/semantic/CLI/Harness/Debug UI/ai-e2e UI 真实 Chromium E2E
+pnpm type-check     # 全工作区 TypeScript 静态检查
+pnpm lint           # 根级源码与测试 lint
+pnpm format:check   # debug-ui/proxy/ai-chat 源码格式门禁
 ```
 
 ## Project Structure
@@ -288,8 +291,7 @@ ai-chat-service (:3001) — 唯一 AI 驱动核心
 
 ### Tech Debt
 
-- [tech-debt] Root `pnpm lint` exits successfully with 0 errors and 207 existing warnings, concentrated in historical test assertions and a small set of existing non-null/`any` declarations. Test files are parsed by the active TypeScript ESLint project; this change introduces no new warning.
-- [tech-debt] Root `pnpm format:check` reports 117 pre-existing source files that do not match the current Prettier configuration; every file changed by the Harness/browser cutover is formatted.
+- [tech-debt] Root `pnpm lint` exits successfully with 0 errors and 220 existing warnings; `ai-e2e` package lint has another 7 existing warnings. They are concentrated in historical test assertions and a small set of non-null/`any` or UI fast-refresh declarations; tests are parsed by the active TypeScript ESLint project.
 - [tech-debt] Parallel root `pnpm test` occasionally hits Windows Vitest hook/resource timeouts (including UI execution hooks, LiveKit canvas, or marker injection). The full serial workspace run is stable and is the release gate on Windows.
 
 ### Known Behaviors

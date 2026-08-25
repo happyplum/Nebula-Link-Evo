@@ -27,9 +27,7 @@ type DebugStreamEventMap = {
 };
 
 type DebugStreamEventType = keyof DebugStreamEventMap;
-type EventSubscriber = (
-  event: MessageEvent<string>,
-) => void | Promise<void>;
+type EventSubscriber = (event: MessageEvent<string>) => void | Promise<void>;
 type SubscriberSet = Set<(event: MessageEvent<string>) => void | Promise<void>>;
 type ConnectionStateSubscriber = (state: DebugStreamConnectionState) => void;
 
@@ -89,11 +87,11 @@ function scheduleReconnect(): void {
 
   const baseDelay = Math.min(
     INITIAL_RECONNECT_DELAY_MS * 2 ** reconnectAttempt,
-    MAX_RECONNECT_DELAY_MS,
+    MAX_RECONNECT_DELAY_MS
   );
   const delay = Math.min(
     Math.round(baseDelay + baseDelay * RECONNECT_JITTER_RATIO * Math.random()),
-    MAX_RECONNECT_DELAY_MS,
+    MAX_RECONNECT_DELAY_MS
   );
 
   reconnectAttempt += 1;
@@ -176,7 +174,7 @@ export const debugStreamClient = {
 
   subscribe<TEvent extends DebugStreamEventType>(
     type: TEvent,
-    handler: EventSubscriber,
+    handler: EventSubscriber
   ): () => void {
     if (!subscribersByEventType.has(type)) {
       subscribersByEventType.set(type, new Set());

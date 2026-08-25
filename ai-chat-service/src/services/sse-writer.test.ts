@@ -24,10 +24,10 @@ describe('BoundedSseWriter', () => {
     vi.useFakeTimers();
     const end = vi.fn();
     const onClose = vi.fn();
-    const writer = new BoundedSseWriter(
-      { write: vi.fn(() => false), end } as never,
-      { writeTimeoutMs: 5_000, onClose }
-    );
+    const writer = new BoundedSseWriter({ write: vi.fn(() => false), end } as never, {
+      writeTimeoutMs: 5_000,
+      onClose,
+    });
     writer.push('event');
     await vi.advanceTimersByTimeAsync(5_001);
     expect(onClose).toHaveBeenCalledWith('timeout');

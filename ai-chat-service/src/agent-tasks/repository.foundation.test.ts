@@ -228,8 +228,6 @@ describe('Agent task command, event and Skill data foundation', () => {
       status: 'rejected',
       error: { code: 'service_restarted' },
     });
-    expect(reopened.listEvents('task-1').map((event) => event.seq)).toEqual([
-      1, 2, 3, 4, 5, 6, 7,
-    ]);
+    expect(reopened.listEvents('task-1').map((event) => event.seq)).toEqual([1, 2, 3, 4, 5, 6, 7]);
   });
 });

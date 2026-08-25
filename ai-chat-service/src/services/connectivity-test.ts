@@ -223,7 +223,9 @@ function isErrorWithCode(error: unknown): error is { code: string; message?: str
 /**
  * Type guard for error objects with a response property
  */
-function isErrorWithResponse(error: unknown): error is { response: { status: number }; message?: string } {
+function isErrorWithResponse(
+  error: unknown
+): error is { response: { status: number }; message?: string } {
   return (
     error !== null &&
     typeof error === 'object' &&
@@ -250,14 +252,22 @@ function isErrorWithMessage(error: unknown): error is { message: string } {
 function normalizeError(error: unknown): { code: NormalizedErrorCode; message: string } {
   // Check error codes first (highest priority for network and timeout errors)
   if (isErrorWithCode(error)) {
-    if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT' || (error.message && error.message.toLowerCase().includes('timeout'))) {
+    if (
+      error.code === 'ECONNABORTED' ||
+      error.code === 'ETIMEDOUT' ||
+      (error.message && error.message.toLowerCase().includes('timeout'))
+    ) {
       return {
         code: 'TIMEOUT',
         message: error.message || 'Request timeout',
       };
     }
 
-    if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND' || error.code === 'ENETUNREACH') {
+    if (
+      error.code === 'ECONNREFUSED' ||
+      error.code === 'ENOTFOUND' ||
+      error.code === 'ENETUNREACH'
+    ) {
       return {
         code: 'NETWORK_ERROR',
         message: error.message || 'Network unreachable',
@@ -295,7 +305,12 @@ function normalizeError(error: unknown): { code: NormalizedErrorCode; message: s
   if (error instanceof Error) {
     const message = error.message.toLowerCase();
 
-    if (message.includes('unauthorized') || message.includes('auth') || message.includes('api key') || message.includes('forbidden')) {
+    if (
+      message.includes('unauthorized') ||
+      message.includes('auth') ||
+      message.includes('api key') ||
+      message.includes('forbidden')
+    ) {
       return {
         code: 'AUTH_ERROR',
         message: error.message,
@@ -316,7 +331,12 @@ function normalizeError(error: unknown): { code: NormalizedErrorCode; message: s
       };
     }
 
-    if (message.includes('network') || message.includes('connect') || message.includes('econn') || message.includes('enet')) {
+    if (
+      message.includes('network') ||
+      message.includes('connect') ||
+      message.includes('econn') ||
+      message.includes('enet')
+    ) {
       return {
         code: 'NETWORK_ERROR',
         message: error.message,

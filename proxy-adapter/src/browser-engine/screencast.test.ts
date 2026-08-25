@@ -23,7 +23,9 @@ describe('ScreencastManager latest frame replay', () => {
 
     await screencastManager.start(page as never);
     frameHandler?.({ data: Buffer.from('jpeg-frame').toString('base64'), sessionId: 1 });
-    await vi.waitFor(() => expect(cdp.send).toHaveBeenCalledWith('Page.screencastFrameAck', { sessionId: 1 }));
+    await vi.waitFor(() =>
+      expect(cdp.send).toHaveBeenCalledWith('Page.screencastFrameAck', { sessionId: 1 })
+    );
 
     const response = {
       write: vi.fn((_data: string | Buffer) => true),
@@ -34,6 +36,8 @@ describe('ScreencastManager latest frame replay', () => {
     screencastManager.addListener(response);
 
     expect(response.write).toHaveBeenCalledOnce();
-    expect(response.write.mock.calls[0]?.[0].toString('ascii')).toContain('Content-Type: image/jpeg');
+    expect(response.write.mock.calls[0]?.[0].toString('ascii')).toContain(
+      'Content-Type: image/jpeg'
+    );
   });
 });

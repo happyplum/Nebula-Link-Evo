@@ -16,7 +16,7 @@ describe('Tabs', () => {
         <div>Tab Content</div>
       </Tabs>
     );
-    
+
     expect(screen.getByTestId(`${testIds.tabsPrefix}tab1`)).toBeInTheDocument();
     expect(screen.getByTestId(`${testIds.tabsPrefix}tab2`)).toBeInTheDocument();
     expect(screen.getByTestId(`${testIds.tabsPrefix}tab3`)).toBeInTheDocument();
@@ -30,7 +30,7 @@ describe('Tabs', () => {
         <div>Tab Content</div>
       </Tabs>
     );
-    
+
     fireEvent.click(screen.getByTestId(`${testIds.tabsPrefix}tab2`));
     expect(onTabChange).toHaveBeenCalledWith('tab2');
   });
@@ -42,12 +42,12 @@ describe('Tabs', () => {
         <div>Tab Content</div>
       </Tabs>
     );
-    
+
     const tab1 = screen.getByTestId(`${testIds.tabsPrefix}tab1`);
-    
+
     fireEvent.keyDown(tab1, { key: 'ArrowRight' });
     expect(onTabChange).toHaveBeenCalledWith('tab2');
-    
+
     fireEvent.keyDown(tab1, { key: 'ArrowLeft' });
     expect(onTabChange).toHaveBeenCalledWith('tab3');
   });

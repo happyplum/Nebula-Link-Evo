@@ -24,7 +24,7 @@ export function createGLMAdapter(config: ProviderConfig): ProviderFn {
     throw new ProviderError(
       PROVIDER_ERRORS.CONFIG_INVALID,
       'glm',
-      'GLM provider requires an apiKey',
+      'GLM provider requires an apiKey'
     );
   }
 
@@ -41,13 +41,13 @@ export function createGLMAdapter(config: ProviderConfig): ProviderFn {
   return (modelId: string) => provider.languageModel(modelId);
 }
 
- function generateJWTToken(apiKey: string): string {
+function generateJWTToken(apiKey: string): string {
   const parts = apiKey.split('.');
   if (parts.length !== 2) {
     throw new ProviderError(
       PROVIDER_ERRORS.CONFIG_INVALID,
       'glm',
-      'Invalid GLM API key format. Expected format: id.secret',
+      'Invalid GLM API key format. Expected format: id.secret'
     );
   }
   const [id, secret] = parts;
@@ -58,7 +58,7 @@ export function createGLMAdapter(config: ProviderConfig): ProviderFn {
     timestamp: Math.floor(Date.now() / 1000),
   };
 
- const base64Header = Buffer.from(JSON.stringify(header)).toString('base64url');
+  const base64Header = Buffer.from(JSON.stringify(header)).toString('base64url');
   const base64Payload = Buffer.from(JSON.stringify(payload)).toString('base64url');
   const signature = crypto
     .createHmac('sha256', secret)

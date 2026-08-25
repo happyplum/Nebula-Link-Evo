@@ -132,10 +132,7 @@ export class ScreencastManager {
         const reasons = Object.entries(s.dropReasons)
           .map(([k, v]) => `${k}=${v}`)
           .join(', ');
-        this.logger.info(
-          { fps: s.fps, drops: s.totalDrops, reasons },
-          'screencast debug stats'
-        );
+        this.logger.info({ fps: s.fps, drops: s.totalDrops, reasons }, 'screencast debug stats');
       }, 1000);
     } else {
       if (this.debugCounter) {

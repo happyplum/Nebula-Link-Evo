@@ -23,7 +23,7 @@ export const SelectedElementCard: React.FC = () => {
         <h3 className={styles.title}>当前元素</h3>
         <span className={styles.tag}>{selectedElement.tag}</span>
       </div>
-      
+
       <div className={styles.content}>
         {selectedElement.markerNumber !== undefined && (
           <div className={styles.row}>
@@ -43,7 +43,7 @@ export const SelectedElementCard: React.FC = () => {
             <span className={styles.value}>{selectedElement.dataNebulaId}</span>
           </div>
         )}
-        
+
         {selectedElement.text && (
           <div className={styles.row}>
             <span className={styles.label}>文本</span>
@@ -55,12 +55,12 @@ export const SelectedElementCard: React.FC = () => {
           <div className={styles.row}>
             <span className={styles.label}>边界框</span>
             <span className={styles.value}>
-              x={selectedElement.bbox.x}, y={selectedElement.bbox.y}, 
-              w={selectedElement.bbox.width}, h={selectedElement.bbox.height}
+              x={selectedElement.bbox.x}, y={selectedElement.bbox.y}, w={selectedElement.bbox.width}
+              , h={selectedElement.bbox.height}
             </span>
           </div>
         )}
-        
+
         {selectedElement.attributes && Object.keys(selectedElement.attributes).length > 0 && (
           <div className={styles.row}>
             <span className={styles.label}>属性</span>

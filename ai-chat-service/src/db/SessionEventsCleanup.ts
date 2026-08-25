@@ -47,15 +47,17 @@ export class SessionEventsCleanup {
   }
 
   private calculateNextRunTime(now: Date): Date {
-    const nextRun = new Date(Date.UTC(
-      now.getUTCFullYear(),
-      now.getUTCMonth(),
-      now.getUTCDate(),
-      this.cronHourUtc,
-      this.cronMinuteUtc,
-      0,
-      0
-    ));
+    const nextRun = new Date(
+      Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        now.getUTCDate(),
+        this.cronHourUtc,
+        this.cronMinuteUtc,
+        0,
+        0
+      )
+    );
 
     if (
       now.getUTCHours() > this.cronHourUtc ||

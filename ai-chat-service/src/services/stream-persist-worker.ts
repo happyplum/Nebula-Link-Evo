@@ -34,8 +34,7 @@ const __dirname = path.dirname(__filename);
 
 class StreamPersistWorker extends EventEmitter {
   private worker: Worker | null = null;
-  private pendingAcks: Map<string, (response: PersistResponse) => void> =
-    new Map();
+  private pendingAcks: Map<string, (response: PersistResponse) => void> = new Map();
   private messageQueue: PersistRequest[] = [];
   private isHealthy: boolean = true;
   private maxQueueSize: number = 1000;

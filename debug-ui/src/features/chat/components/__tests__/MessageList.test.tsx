@@ -6,7 +6,8 @@ import { testIds } from '@/shared/testing/testids.js';
 
 vi.mock('../../store/chat.store.js', () => ({
   useChatStore: vi.fn(),
-  selectActiveMessages: (s: any) => s.activeSessionId ? (s.messagesBySession[s.activeSessionId] || []) : [],
+  selectActiveMessages: (s: any) =>
+    s.activeSessionId ? s.messagesBySession[s.activeSessionId] || [] : [],
   selectActiveSessionId: (s: any) => s.activeSessionId,
   selectStreamingState: (s: any) => s.streamingState,
   selectStreamingContent: (s: any) => s.streamingContent,
@@ -17,10 +18,10 @@ vi.mock('../../store/chat.store.js', () => ({
 
 // Mock HTMLDialogElement methods not available in jsdom
 beforeEach(() => {
-  HTMLDialogElement.prototype.showModal = vi.fn(function(this: HTMLDialogElement) {
+  HTMLDialogElement.prototype.showModal = vi.fn(function (this: HTMLDialogElement) {
     this.open = true;
   });
-  HTMLDialogElement.prototype.close = vi.fn(function(this: HTMLDialogElement) {
+  HTMLDialogElement.prototype.close = vi.fn(function (this: HTMLDialogElement) {
     this.open = false;
   });
 });
@@ -42,11 +43,11 @@ describe('MessageList', () => {
         messagesBySession: { 'session-1': [] },
         visibleMessageCounts: {},
         expandVisibleMessages: vi.fn(),
-      }),
+      })
     );
 
     render(<MessageList />);
-    
+
     expect(screen.getByTestId(testIds.messageList)).toBeInTheDocument();
     expect(screen.getByText('No messages yet. Start a conversation!')).toBeInTheDocument();
   });
@@ -68,11 +69,11 @@ describe('MessageList', () => {
         messagesBySession: { 'session-1': messages },
         visibleMessageCounts: { 'session-1': 50 },
         expandVisibleMessages: vi.fn(),
-      }),
+      })
     );
 
     render(<MessageList />);
-    
+
     expect(screen.getByTestId(testIds.messageList)).toBeInTheDocument();
     expect(screen.getAllByTestId(testIds.messageBubble)).toHaveLength(2);
     expect(screen.getByText('Hello')).toBeInTheDocument();
@@ -91,7 +92,7 @@ describe('MessageList', () => {
         messagesBySession: { 'session-1': [] },
         visibleMessageCounts: {},
         expandVisibleMessages: vi.fn(),
-      }),
+      })
     );
 
     render(<MessageList />);
@@ -106,9 +107,7 @@ describe('MessageList', () => {
       id: 'msg-toolonly',
       role: 'assistant',
       content: '',
-      toolCalls: [
-        { id: 'tc-1', name: 'screenshot', arguments: '{}', status: 'completed' },
-      ],
+      toolCalls: [{ id: 'tc-1', name: 'screenshot', arguments: '{}', status: 'completed' }],
     };
 
     (useChatStore as any).mockImplementation((selector: any) =>
@@ -122,7 +121,7 @@ describe('MessageList', () => {
         messagesBySession: { 'session-1': [toolOnlyMessage] },
         visibleMessageCounts: { 'session-1': 50 },
         expandVisibleMessages: vi.fn(),
-      }),
+      })
     );
 
     const { container } = render(<MessageList />);
@@ -138,9 +137,7 @@ describe('MessageList', () => {
       id: 'msg-mixed',
       role: 'assistant',
       content: 'I will take a screenshot now.',
-      toolCalls: [
-        { id: 'tc-1', name: 'screenshot', arguments: '{}', status: 'completed' },
-      ],
+      toolCalls: [{ id: 'tc-1', name: 'screenshot', arguments: '{}', status: 'completed' }],
     };
 
     (useChatStore as any).mockImplementation((selector: any) =>
@@ -154,7 +151,7 @@ describe('MessageList', () => {
         messagesBySession: { 'session-1': [messageWithContentAndTools] },
         visibleMessageCounts: { 'session-1': 50 },
         expandVisibleMessages: vi.fn(),
-      }),
+      })
     );
 
     render(<MessageList />);
@@ -192,7 +189,7 @@ describe('MessageList', () => {
         messagesBySession: { 'session-1': messages },
         visibleMessageCounts: { 'session-1': 50 },
         expandVisibleMessages: vi.fn(),
-      }),
+      })
     );
 
     // Should render without React key warnings — both tool calls render
@@ -228,7 +225,7 @@ describe('MessageList', () => {
         messagesBySession: { 'session-1': [messageWithEmptyResult] },
         visibleMessageCounts: { 'session-1': 50 },
         expandVisibleMessages: vi.fn(),
-      }),
+      })
     );
 
     const { container } = render(<MessageList />);
@@ -250,9 +247,7 @@ describe('MessageList', () => {
     expect(resultLabels).toHaveLength(2); // One for "参数", one for "结果"
 
     // Verify "结果" label is present
-    const hasResultLabel = Array.from(resultLabels!).some(
-      (label) => label.textContent === '结果',
-    );
+    const hasResultLabel = Array.from(resultLabels!).some((label) => label.textContent === '结果');
     expect(hasResultLabel).toBe(true);
 
     // Verify the empty string result is rendered (empty pre tag)

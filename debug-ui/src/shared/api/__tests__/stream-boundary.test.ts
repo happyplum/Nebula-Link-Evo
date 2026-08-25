@@ -7,7 +7,15 @@ import * as clientExports from '../client.js';
 import * as endpointExports from '../endpoints.js';
 
 describe('Stream boundary — no SSE/WS/MJPEG in REST layer', () => {
-  const streamKeywords = ['sse', 'stream', 'websocket', 'ws', 'mjpeg', 'eventsource', 'event_source'];
+  const streamKeywords = [
+    'sse',
+    'stream',
+    'websocket',
+    'ws',
+    'mjpeg',
+    'eventsource',
+    'event_source',
+  ];
 
   it('client.ts should not export SSE/WS/MJPEG helpers', () => {
     const exportNames = Object.keys(clientExports);
