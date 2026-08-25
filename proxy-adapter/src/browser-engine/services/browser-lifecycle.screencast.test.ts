@@ -5,9 +5,21 @@ const mocks = vi.hoisted(() => {
     on: vi.fn(),
     off: vi.fn(),
     isClosed: vi.fn(() => false),
+    url: vi.fn(() => 'about:blank'),
+    title: vi.fn(async () => 'first'),
+    bringToFront: vi.fn(async () => undefined),
+  };
+  const secondPage = {
+    on: vi.fn(),
+    off: vi.fn(),
+    isClosed: vi.fn(() => false),
+    url: vi.fn(() => 'https://second.test/'),
+    title: vi.fn(async () => 'second'),
+    bringToFront: vi.fn(async () => undefined),
   };
   const context = {
     newPage: vi.fn(async () => page),
+    pages: vi.fn(() => [page, secondPage]),
   };
   const browser = {
     on: vi.fn(),
@@ -19,6 +31,7 @@ const mocks = vi.hoisted(() => {
 
   return {
     page,
+    secondPage,
     context,
     browser,
     launch: vi.fn(async () => browser),
@@ -64,5 +77,28 @@ describe('BrowserLifecycle screencast lifecycle', () => {
     await lifecycle.close();
 
     expect(mocks.stopScreencast).toHaveBeenCalledOnce();
+  });
+
+  it('rebinds LiveKit and MJPEG transports to the selected tab in teardown-first order', async () => {
+    const lifecycle = new BrowserLifecycle();
+    await lifecycle.open({ headless: true, viewport: { width: 1280, height: 720 } });
+    const second = (await lifecycle.getTabs()).find((tab) => tab.title === 'second')!;
+    vi.clearAllMocks();
+
+    await lifecycle.switchTab(second.id);
+    await vi.waitFor(() =>
+      expect(mocks.startPublisher).toHaveBeenCalledWith(mocks.secondPage, {
+        width: 1280,
+        height: 720,
+      })
+    );
+    expect(mocks.stopPublisher).toHaveBeenCalledOnce();
+    expect(mocks.stopScreencast).toHaveBeenCalledOnce();
+    expect(mocks.startScreencast).toHaveBeenCalledWith(mocks.secondPage);
+    expect(mocks.stopPublisher.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.startPublisher.mock.invocationCallOrder[0]!
+    );
+
+    await lifecycle.close();
   });
 });
