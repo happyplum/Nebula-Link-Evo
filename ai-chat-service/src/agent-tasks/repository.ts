@@ -1957,9 +1957,14 @@ function assertNoInlineSecret(value: unknown, path: string): void {
   }
   if (!value || typeof value !== 'object') return;
   for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    const isTokenMetric =
+      ['inputTokens', 'outputTokens', 'totalTokens', 'maxTokens'].includes(key) &&
+      Number.isSafeInteger(child) &&
+      (child as number) >= 0;
     if (
       /(?:password|token|authorization|cookie|api[_-]?key|secret)/i.test(key) &&
       !/(?:ref|refs|hash)$/i.test(key) &&
+      !isTokenMetric &&
       child !== null &&
       child !== ''
     ) {

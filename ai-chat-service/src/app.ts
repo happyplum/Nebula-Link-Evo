@@ -286,7 +286,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       app.log.info({ recoveredProjectionCount }, 'Recovered durable Chat projections');
     }
 
-    persistWorker = new StreamPersistWorker();
+    persistWorker = new StreamPersistWorker(conversationsPath);
     jobQueue = new ConversationJobQueue(
       persistWorker,
       sessionEventHub,

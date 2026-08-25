@@ -8,7 +8,7 @@ ai-chat-service 向 debug-ui 提供 Chat SSE 流式传输。每次建连先发�
 - [shipped] 会话控制路由：`POST /api/v1/chat/sessions/:sessionId/{pause,resume,interrupt,cancel}`。入口：`ai-chat-service/src/plugins/routes/api/chat/control.ts`。
 - [shipped] 会话 CRUD 路由：`* /api/v1/chat/sessions`。入口：`ai-chat-service/src/plugins/routes/api/chat/sessions.ts`。
 - [shipped] Chat 会话控制器（状态机执行入口）：`ai-chat-service/src/services/chat-session-controller.ts`。
-- [shipped] 流式持久化 worker：`ai-chat-service/src/services/stream-persist-worker.ts` + `ai-chat-service/src/workers/stream-persist-worker.ts`。异步持久化流式消息。
+- [shipped] 流式持久化 worker：`ai-chat-service/src/services/stream-persist-worker.ts` + `ai-chat-service/src/workers/stream-persist-worker.ts`。异步持久化流式消息，并由每个 `buildApp({ dataDir })` 将该实例的 `conversations.sqlite` 精确传给 Worker；真实 Worker 回归测试验证不会回落到进程工作目录数据库。
 - [shipped] 后台任务队列：3 次重试 + 10 分钟空闲清理。入口：`ai-chat-service/src/services/conversation-job-queue.ts`。
 - [shipped] Conversation 子系统：`ai-chat-service/src/conversation/`（manager / db / compressor / session-state-dao / session-events-dao / session-event-hub）。
 - [shipped] Chat 生成已进入与 Agent Task 共用的 DSH Agent Loop；zstd JSONL durable log 为模型 transcript 事实源，SQLite 通过 `(sessionId,dshSeq)` 唯一投影和 watermark 保持公开 event/state。
