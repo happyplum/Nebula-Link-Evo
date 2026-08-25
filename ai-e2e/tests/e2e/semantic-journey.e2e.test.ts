@@ -30,6 +30,8 @@ import { SemanticRunService } from '../../src/services/semantic-run-service.js';
 const HASH_B = 'b'.repeat(64);
 
 describe('semantic product journey', () => {
+  const liveKitApiKey = process.env.LIVEKIT_API_KEY;
+  const liveKitApiSecret = process.env.LIVEKIT_API_SECRET;
   let root: string;
   let proxyApp: Awaited<ReturnType<typeof buildProxyApp>>;
   let proxyUrl: string;
@@ -42,6 +44,8 @@ describe('semantic product journey', () => {
   let executor: DeterministicBrowserExecutor;
 
   beforeAll(async () => {
+    delete process.env.LIVEKIT_API_KEY;
+    delete process.env.LIVEKIT_API_SECRET;
     root = await mkdtemp(join(tmpdir(), 'nebula-semantic-journey-'));
     proxyApp = await buildProxyApp({ dataDir: join(root, 'proxy'), skipBackups: true });
     proxyUrl = await proxyApp.listen({ host: '127.0.0.1', port: 0 });
@@ -99,6 +103,8 @@ describe('semantic product journey', () => {
     await agentTaskService.close();
     DatabaseManager.resetInstance();
     await rm(root, { recursive: true, force: true });
+    restoreEnvironment('LIVEKIT_API_KEY', liveKitApiKey);
+    restoreEnvironment('LIVEKIT_API_SECRET', liveKitApiSecret);
   });
 
   it('creates, repairs, verifies, activates and executes a formal run over the three services', async () => {
@@ -398,6 +404,11 @@ describe('semantic product journey', () => {
     );
   }
 });
+
+function restoreEnvironment(name: string, value: string | undefined): void {
+  if (value === undefined) delete process.env[name];
+  else process.env[name] = value;
+}
 
 class DeterministicBrowserExecutor implements AgentTaskExecutor {
   authoringCandidate?: {

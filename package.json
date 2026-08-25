@@ -15,7 +15,7 @@
 "format": "prettier --write \"debug-ui/src/**/*.{ts,tsx}\" \"proxy-adapter/src/**/*.ts\" \"ai-chat-service/src/**/*.ts\"",
 "format:check": "prettier --check \"debug-ui/src/**/*.{ts,tsx}\" \"proxy-adapter/src/**/*.ts\" \"ai-chat-service/src/**/*.ts\"",
     "test": "pnpm -r test",
-    "test:e2e": "pnpm --filter proxy-adapter test:e2e && pnpm --filter ai-chat-service test:e2e",
+    "test:e2e": "pnpm --filter proxy-adapter test:e2e && pnpm --filter ai-chat-service test:e2e && pnpm --filter ai-e2e test:e2e && pnpm --filter @nebula-link-evo/deepseek-harness-plugin test:e2e && pnpm --filter debug-ui test:e2e",
     "test:coverage": "pnpm -r --workspace-concurrency=1 test:coverage"
   },
   "devDependencies": {
