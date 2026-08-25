@@ -105,6 +105,9 @@ export class SemanticCoordinatorService {
       }
       const capabilitySha256 = await this.preflight();
       const job = this.options.repository.getActiveBrowserJob();
+      if (job?.state === 'active' && job.browserSessionId) {
+        await this.reconcileBrowserSessionEvents(job);
+      }
       if (job?.contextType === 'run') {
         const activeTask = this.options.repository.getActivePageTask(job.id);
         if (activeTask) {
@@ -217,6 +220,28 @@ export class SemanticCoordinatorService {
     const sha256 = hashValue({ agent, browser });
     this.capabilitySnapshot = { checkedAt: now, sha256 };
     return sha256;
+  }
+
+  private async reconcileBrowserSessionEvents(job: CoordinatorBrowserJob): Promise<void> {
+    if (!job.browserSessionId || !this.options.browser.listSessionEvents) return;
+    const link = this.options.repository.getBrowserSessionLink(job.contextType, job.contextId);
+    const events = await this.options.browser.listSessionEvents(
+      job.browserSessionId,
+      link?.lastExternalSeq ?? 0,
+      500
+    );
+    const lastSeq = events.at(-1)?.seq;
+    if (lastSeq === undefined) return;
+    const session = await this.options.browser.getSession(job.browserSessionId);
+    this.options.evidence.linkExternalTask({
+      context: { type: job.contextType, id: job.contextId },
+      service: 'proxy_adapter',
+      kind: 'browser_session',
+      externalId: job.browserSessionId,
+      externalState: session.status,
+      lastExternalSeq: lastSeq,
+      terminal: ['closed', 'failed'].includes(session.status),
+    });
   }
 
   private enqueueSessionCreate(job: CoordinatorBrowserJob): void {
@@ -689,6 +714,7 @@ export class SemanticCoordinatorService {
       }
       return null;
     }
+    const eventSeq = await this.reconcileAgentTaskEvents(link.externalId, link.lastExternalSeq);
     const task = await this.options.agentTasks.getTask(link.externalId);
     this.options.evidence.linkExternalTask({
       context: { type: 'run', id: pageTask.runId },
@@ -697,7 +723,7 @@ export class SemanticCoordinatorService {
       kind: 'agent_task',
       externalId: task.taskId,
       externalState: task.status,
-      lastExternalSeq: task.eventSeq,
+      lastExternalSeq: Math.max(task.eventSeq, eventSeq),
       terminal: TERMINAL_AGENT_STATES.has(task.status),
       ...(task.output !== undefined ? { resultSha256: hashValue(task.output) } : {}),
     });
@@ -793,6 +819,7 @@ export class SemanticCoordinatorService {
       }
       return null;
     }
+    const eventSeq = await this.reconcileAgentTaskEvents(link.externalId, link.lastExternalSeq);
     const agentTask = await this.options.agentTasks.getTask(link.externalId);
     this.options.evidence.linkExternalTask({
       context: { type: 'authoring', id: task.jobId },
@@ -801,7 +828,7 @@ export class SemanticCoordinatorService {
       kind: 'agent_task',
       externalId: agentTask.taskId,
       externalState: agentTask.status,
-      lastExternalSeq: agentTask.eventSeq,
+      lastExternalSeq: Math.max(agentTask.eventSeq, eventSeq),
       terminal: TERMINAL_AGENT_STATES.has(agentTask.status),
       ...(agentTask.output !== undefined ? { resultSha256: hashValue(agentTask.output) } : {}),
     });
@@ -1024,6 +1051,12 @@ export class SemanticCoordinatorService {
       taskStatus: agentTask.status,
     });
     return manifest.id;
+  }
+
+  private async reconcileAgentTaskEvents(taskId: string, afterSeq = 0): Promise<number> {
+    if (!this.options.agentTasks.listTaskEvents) return afterSeq;
+    const events = await this.options.agentTasks.listTaskEvents(taskId, afterSeq, 500);
+    return events.at(-1)?.seq ?? afterSeq;
   }
 
   private enqueueAuthoringSessionClose(task: CoordinatorAuthoringTask): void {

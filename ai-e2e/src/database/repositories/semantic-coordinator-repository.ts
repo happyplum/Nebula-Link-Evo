@@ -335,6 +335,18 @@ export class SemanticCoordinatorRepository {
     return row?.lifecycle ?? null;
   }
 
+  getBrowserSessionLink(contextType: 'run' | 'authoring', contextId: string): ExternalLink | null {
+    const row = this.db
+      .prepare(
+        `SELECT * FROM external_task_links
+         WHERE context_type = ? AND context_id = ?
+           AND service = 'proxy_adapter' AND kind = 'browser_session'
+         ORDER BY created_at DESC LIMIT 1`
+      )
+      .get(contextType, contextId) as DbRow | undefined;
+    return row ? mapExternalLink(row) : null;
+  }
+
   setPageTaskAgentTask(pageTaskId: string, agentTaskId: string): void {
     const result = this.db
       .prepare(

@@ -43,6 +43,19 @@ export interface BrowserOperationRecord {
   error?: { code: string; message: string; retryable: boolean; details?: Record<string, unknown> };
 }
 
+export interface BrowserSessionEventRecord {
+  id: string;
+  sessionId: string;
+  seq: number;
+  type: string;
+  entityType: 'session' | 'lease' | 'operation' | 'capture' | 'artifact';
+  entityId: string;
+  stateVersion?: number;
+  payload: Record<string, unknown>;
+  occurredAt: string;
+  createdAt: string;
+}
+
 export interface SemanticBrowserClientPort {
   getCapabilities(): Promise<Record<string, unknown>>;
   createSession(
@@ -50,6 +63,11 @@ export interface SemanticBrowserClientPort {
     options?: { headless?: false; viewport?: { width: number; height: number } }
   ): Promise<BrowserSessionView>;
   getSession(sessionId: string): Promise<BrowserSessionView>;
+  listSessionEvents?(
+    sessionId: string,
+    afterSeq?: number,
+    limit?: number
+  ): Promise<BrowserSessionEventRecord[]>;
   createLease(
     sessionId: string,
     idempotencyKey: string,
@@ -121,6 +139,20 @@ export class SemanticBrowserClient implements SemanticBrowserClientPort {
       this.client.get(`${PREFIX}/sessions/${encodeURIComponent(sessionId)}`, {
         timeout: this.timeoutMs,
         headers: headers(),
+      })
+    );
+  }
+
+  async listSessionEvents(
+    sessionId: string,
+    afterSeq = 0,
+    limit = 500
+  ): Promise<BrowserSessionEventRecord[]> {
+    return this.request(() =>
+      this.client.get(`${PREFIX}/sessions/${encodeURIComponent(sessionId)}/event-log`, {
+        timeout: this.timeoutMs,
+        headers: headers(),
+        params: { afterSeq, limit },
       })
     );
   }

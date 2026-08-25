@@ -10,7 +10,7 @@
 | 业务版本/资产       | shipped | 页面→业务模块→功能模块→功能脚本→场景稳定身份与不可变修订；copy 重建内部引用                                                                                                                        |
 | Authoring           | shipped | bootstrap/recheck/repair、结构化 amendment、Chat scope、影响审批、安全边界排队、真实浏览器验证与原子激活                                                                                           |
 | Run                 | shipped | 冻结计划、TODO/DAG、page task/attempt、变量、决策、恢复/取消/依赖跳过、证据与 snapshot-first SSE                                                                                                   |
-| 跨服务执行          | shipped | ai-chat-service Agent task + Vision v2 + 逐 effect 授权；proxy session/lease/operation/artifact                                                                                                    |
+| 跨服务执行          | shipped | ai-chat-service Agent task/event-log + Vision v2 + 逐 effect 授权；proxy session/lease/operation/artifact/event-log，均按持久 seq 游标恢复                                                        |
 | 三服务 E2E 门禁     | shipped | 真实 HTTP/MCP/Chromium 覆盖候选生成、验证激活、正式运行、未验证拒绝与 `outcome_unknown` 禁止重放                                                                                                   |
 | 浏览器中心 UI       | shipped | 项目首页、Authoring/Run 三栏工作台、深链接上下文、显式定位、Diff/审批/证据/Chat、布局与主题偏好；Playwright 使用真实生产 bundle/API 验证项目创建、candidate 验证激活、正式 Run、证据及 reload 恢复 |
 
@@ -66,6 +66,5 @@ UI 路由：`/`、`/semantic/:projectId`、`/semantic/:projectId/authoring/:vers
 
 | 项目                             | 状态      | 说明                                                                                             |
 | -------------------------------- | --------- | ------------------------------------------------------------------------------------------------ |
-| Agent/browser 服务端事件直连消费 | tech-debt | 当前以任务查询、operation 查询和 ai-e2e 自身 snapshot-first SSE 收敛，尚未直接订阅两个下游事件流 |
 | 完整 JSON Schema validator       | tech-debt | 资产创建已有结构/引用/无环/权限校验，功能脚本契约仍需独立 schema 包统一校验                      |
 | 远程多租户控制面                 | pending   | 当前只允许 loopback 单用户；远程部署前必须增加统一认证、授权和租户隔离                           |
