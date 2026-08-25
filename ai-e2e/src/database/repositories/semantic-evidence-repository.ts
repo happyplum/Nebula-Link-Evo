@@ -108,6 +108,53 @@ export interface LinkExternalTaskParams {
   terminal?: boolean;
 }
 
+export interface EvidenceArtifactCleanupCandidate {
+  id: string;
+  storageBackend: string;
+  storageKey: string;
+}
+
+const ARTIFACT_ELIGIBLE_FOR_DELETION = `
+  deleted_at IS NULL
+  AND pinned_at IS NULL
+  AND (
+    (
+      EXISTS (
+        SELECT 1 FROM evidence_items AS item
+        WHERE item.artifact_object_id = artifact_objects.id
+      )
+      AND NOT EXISTS (
+        SELECT 1
+        FROM evidence_items AS item
+        JOIN evidence_manifests AS manifest ON manifest.id = item.manifest_id
+        WHERE item.artifact_object_id = artifact_objects.id
+          AND (
+            manifest.status <> 'sealed'
+            OR manifest.retention_class IN ('pinned', 'custom')
+            OR (
+              manifest.retention_class = 'success_7d'
+              AND COALESCE(manifest.sealed_at, manifest.created_at) > ?
+            )
+            OR (
+              manifest.retention_class = 'failure_30d'
+              AND COALESCE(manifest.sealed_at, manifest.created_at) > ?
+            )
+          )
+      )
+    )
+    OR (
+      NOT EXISTS (
+        SELECT 1 FROM evidence_items AS item
+        WHERE item.artifact_object_id = artifact_objects.id
+      )
+      AND (
+        (expires_at IS NOT NULL AND expires_at <= ?)
+        OR (expires_at IS NULL AND created_at <= ?)
+      )
+    )
+  )
+`;
+
 export class SemanticEvidenceRepository {
   private readonly db: DatabaseLike;
 
@@ -621,6 +668,97 @@ export class SemanticEvidenceRepository {
           params.terminal ? now : null
         );
       return { id, created: true };
+    });
+  }
+
+  listArtifactsEligibleForDeletion(
+    now: string,
+    successCutoff: string,
+    failureCutoff: string
+  ): EvidenceArtifactCleanupCandidate[] {
+    return this.db
+      .prepare(
+        `SELECT id, storage_backend, storage_key
+         FROM artifact_objects
+         WHERE ${ARTIFACT_ELIGIBLE_FOR_DELETION}
+         ORDER BY created_at, id`
+      )
+      .all(successCutoff, failureCutoff, now, failureCutoff)
+      .map((row) => {
+        const record = row as Record<string, unknown>;
+        return {
+          id: String(record.id),
+          storageBackend: String(record.storage_backend),
+          storageKey: String(record.storage_key),
+        };
+      });
+  }
+
+  claimArtifactDeletion(
+    id: string,
+    deletedAt: string,
+    successCutoff: string,
+    failureCutoff: string
+  ): boolean {
+    return inImmediateTransaction(this.db, () => {
+      const result = this.db
+        .prepare(
+          `UPDATE artifact_objects
+           SET deleted_at = ?
+           WHERE id = ? AND ${ARTIFACT_ELIGIBLE_FOR_DELETION}`
+        )
+        .run(deletedAt, id, successCutoff, failureCutoff, deletedAt, failureCutoff);
+      return Number(result.changes) === 1;
+    });
+  }
+
+  listPendingStorageCleanup(): EvidenceArtifactCleanupCandidate[] {
+    return this.db
+      .prepare(
+        `SELECT artifact.id, artifact.storage_backend, artifact.storage_key
+         FROM artifact_objects AS artifact
+         LEFT JOIN artifact_storage_cleanup_receipts AS receipt
+           ON receipt.artifact_object_id = artifact.id
+         WHERE artifact.deleted_at IS NOT NULL AND receipt.artifact_object_id IS NULL
+         ORDER BY artifact.deleted_at, artifact.id`
+      )
+      .all()
+      .map((row) => {
+        const record = row as Record<string, unknown>;
+        return {
+          id: String(record.id),
+          storageBackend: String(record.storage_backend),
+          storageKey: String(record.storage_key),
+        };
+      });
+  }
+
+  hasOtherLiveStorageReference(storageKey: string, artifactId: string): boolean {
+    return Boolean(
+      this.db
+        .prepare(
+          `SELECT 1 FROM artifact_objects
+           WHERE storage_key = ? AND id <> ? AND deleted_at IS NULL
+           LIMIT 1`
+        )
+        .get(storageKey, artifactId)
+    );
+  }
+
+  recordStorageCleanup(artifactId: string, storageDeletedAt: string): void {
+    inImmediateTransaction(this.db, () => {
+      const artifact = this.db
+        .prepare('SELECT deleted_at FROM artifact_objects WHERE id = ?')
+        .get(artifactId) as { deleted_at: string | null } | undefined;
+      if (!artifact?.deleted_at) throw new Error('Artifact must be logically deleted first');
+      this.db
+        .prepare(
+          `INSERT INTO artifact_storage_cleanup_receipts
+            (artifact_object_id, storage_deleted_at)
+           VALUES (?, ?)
+           ON CONFLICT(artifact_object_id) DO NOTHING`
+        )
+        .run(artifactId, storageDeletedAt);
     });
   }
 

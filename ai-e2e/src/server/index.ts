@@ -21,6 +21,7 @@ import { SemanticCoordinatorService } from '../services/semantic-coordinator-ser
 import { SemanticAuthoringCandidateService } from '../services/semantic-authoring-candidate-service.js';
 import semanticProjectRoutes from './routes/semantic-projects.js';
 import { SemanticProjectService } from '../services/semantic-project-service.js';
+import { SemanticEvidenceRetentionService } from '../services/semantic-evidence-retention-service.js';
 
 const envLocalPath = path.join(process.cwd(), '.env.local');
 const envRootPath = path.join(process.cwd(), '..', '.env');
@@ -36,6 +37,7 @@ if (fs.existsSync(envLocalPath)) {
 const DEFAULT_PORT = 3002;
 const DEFAULT_DB_PATH = './data/ai-e2e-semantic.sqlite';
 const DEFAULT_COORDINATOR_INTERVAL_MS = 500;
+const DEFAULT_EVIDENCE_CLEANUP_INTERVAL_MS = 60_000;
 
 let shutdownHandlersRegistered = false;
 
@@ -180,7 +182,6 @@ export async function start() {
       databaseManager.getAuthoringAmendmentRepo()
     ),
   });
-
   const app = createServer({
     semanticProjectService,
     businessVersionService,
@@ -188,13 +189,25 @@ export async function start() {
     semanticAuthoringService,
     semanticRunService,
   });
-
   try {
+    const evidenceRetention = new SemanticEvidenceRetentionService({
+      repository: databaseManager.getSemanticEvidenceRepo(),
+      successRetentionDays: readPositiveIntegerEnvironment(
+        'AI_E2E_EVIDENCE_SUCCESS_RETENTION_DAYS',
+        7
+      ),
+      failureRetentionDays: readPositiveIntegerEnvironment(
+        'AI_E2E_EVIDENCE_FAILURE_RETENTION_DAYS',
+        30
+      ),
+      logger: app.log,
+    });
     registerGracefulShutdown(app, databaseManager);
 
     if (process.env.AI_E2E_COORDINATOR_ENABLED !== 'false') {
       startCoordinatorLoop(app, semanticCoordinator);
     }
+    startEvidenceRetentionLoop(app, evidenceRetention);
 
     await app.listen({
       port,
@@ -243,4 +256,51 @@ function startCoordinatorLoop(app: AppServer, coordinator: SemanticCoordinatorSe
   timer.unref();
   app.addHook('onClose', async () => clearInterval(timer));
   void run();
+}
+
+function startEvidenceRetentionLoop(
+  app: AppServer,
+  retention: SemanticEvidenceRetentionService
+): void {
+  const intervalMs = readPositiveIntegerEnvironment(
+    'AI_E2E_EVIDENCE_CLEANUP_INTERVAL_MS',
+    DEFAULT_EVIDENCE_CLEANUP_INTERVAL_MS
+  );
+  const run = async () => {
+    const result = await retention.cleanupExpiredArtifacts();
+    if (result.storageFailures > 0) {
+      app.log.warn(result, '长期证据保留清理存在待重试的存储失败');
+    } else if (result.recordsDeleted > 0 || result.filesDeleted > 0) {
+      app.log.info(result, '长期证据保留清理完成');
+    }
+  };
+  let cleanupPromise: Promise<void> | undefined;
+  const invoke = () => {
+    cleanupPromise ??= run()
+      .catch((error: unknown) => {
+        app.log.error({ err: error }, '长期证据保留清理失败');
+      })
+      .finally(() => {
+        cleanupPromise = undefined;
+      });
+    return cleanupPromise;
+  };
+  const timer = setInterval(() => void invoke(), intervalMs);
+  timer.unref();
+  app.addHook('onClose', async () => {
+    clearInterval(timer);
+    await cleanupPromise;
+  });
+  void invoke();
+}
+
+function readPositiveIntegerEnvironment(name: string, fallback: number): number {
+  const configured = process.env[name];
+  if (configured === undefined) return fallback;
+  if (!/^[1-9]\d*$/.test(configured)) {
+    throw new Error(`${name} must be a positive integer`);
+  }
+  const parsed = Number(configured);
+  if (!Number.isSafeInteger(parsed)) throw new Error(`${name} exceeds the safe integer range`);
+  return parsed;
 }

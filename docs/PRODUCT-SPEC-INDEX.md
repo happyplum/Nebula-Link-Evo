@@ -214,7 +214,7 @@ debug-ui  ←──  （仅被用户消费）
 - **资产生成/复核/修复（shipped）**：bootstrap/recheck/repair 均创建结构化 Agent 候选，接入同页跨模块/跨 URL 影响审批、安全边界、真实浏览器验证、revision verification 和原子激活。
 - **产品切换（shipped）**：ai-e2e 已完成纯 semantic clean cut，只使用独立 semantic 数据库和 canonical v1 路由，不提供旧资产导入、读取或兼容。
 - **分层状态与传播（shipped）**：Run/plan/TODO/dependency/page task/attempt/variable/decision/command/event、正式 Run 冻结/命令、Agent/browser 页面执行、依赖传播、恢复/决策与公开 snapshot/SSE 已交付。
-- **决策与证据（in-progress）**：版本/运行决策、计划级 grant、内容寻址 artifact、append-only evidence、sealed manifest、proxy operation/截图/DOM 自动提升及 proxy 短期原始产物 TTL/hold 清理已交付；ai-e2e 长期证据保留清理、脱敏完成和生产 UI 恢复仍 pending。
+- **决策与证据（in-progress）**：版本/运行决策、计划级 grant、内容寻址 artifact、append-only evidence、sealed manifest、proxy operation/截图/DOM 自动提升、proxy 短期原始产物 TTL/hold 清理及 ai-e2e 长期原始证据 7/30 天保留清理已交付；未按项目规则处理的截图/DOM 保持 `restricted/pending`，自动脱敏完成和生产 UI 恢复仍 pending。
 - **DOM 变化局部修复（in-progress）**：当前只有 run 级诊断/自动修复；目标是只修复当前业务版本内受影响的功能脚本并重新验证。
 
 ---

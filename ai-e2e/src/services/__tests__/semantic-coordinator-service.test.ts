@@ -83,8 +83,26 @@ describe('SemanticCoordinatorService', () => {
       createdBy: 'operator',
     });
 
-    const agent = new FakeAgentTaskClient();
+    const agent = new FakeAgentTaskClient(undefined, {
+      toolCalls: [
+        {
+          toolCallId: 'run-call-1',
+          toolName: 'browser-control.operation_execute',
+          status: 'succeeded',
+          stepId: 'read-account',
+          operationId: 'run-operation-1',
+          operation: 'page_state',
+        },
+      ],
+    });
     const browser = new FakeBrowserClient();
+    browser.artifact = {
+      id: 'artifact-1',
+      kind: 'screenshot',
+      sha256: HASH_A,
+      mimeType: 'image/png',
+      bytes: Buffer.from('image'),
+    };
     const coordinator = new SemanticCoordinatorService({
       repository: new SemanticCoordinatorRepository(db),
       workflows,
@@ -116,7 +134,7 @@ describe('SemanticCoordinatorService', () => {
       db
         .prepare('SELECT COUNT(*) AS count FROM external_task_links WHERE run_id = ?')
         .get(created.id)
-    ).toEqual({ count: 3 });
+    ).toEqual({ count: 5 });
     expect(
       db
         .prepare(
@@ -133,6 +151,11 @@ describe('SemanticCoordinatorService', () => {
       )
       .get() as { payload_json_redacted: string };
     expect(persistedAgentPayload.payload_json_redacted).not.toContain('opaque-lease-token');
+    expect(
+      db
+        .prepare('SELECT sensitivity, redaction_status FROM artifact_objects WHERE id IS NOT NULL')
+        .get()
+    ).toEqual({ sensitivity: 'restricted', redaction_status: 'pending' });
   });
 
   it('把重启遗留的 dispatching outbox 恢复为可幂等重放', () => {
@@ -937,6 +960,7 @@ class FakeBrowserClient implements SemanticBrowserClientPort {
   };
   private activeLease?: BrowserLeaseView;
   private leaseCounter = 0;
+  artifact?: { id: string; kind: string; sha256: string; mimeType: string; bytes: Buffer };
 
   async getCapabilities(): Promise<Record<string, unknown>> {
     this.capabilityCalls += 1;
@@ -1010,12 +1034,22 @@ class FakeBrowserClient implements SemanticBrowserClientPort {
       operation: 'page_state',
       status: 'succeeded' as const,
       actual: { url: 'https://test.example/account' },
-      artifacts: [],
+      artifacts: this.artifact
+        ? [
+            {
+              id: this.artifact.id,
+              kind: this.artifact.kind,
+              sha256: this.artifact.sha256,
+              mimeType: this.artifact.mimeType,
+            },
+          ]
+        : [],
     };
   }
 
   async downloadArtifact(): Promise<Buffer> {
-    throw new Error('not used');
+    if (!this.artifact) throw new Error('not used');
+    return this.artifact.bytes;
   }
 
   private session(

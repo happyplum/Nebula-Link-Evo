@@ -10,7 +10,7 @@
 | 业务版本/资产       | shipped | 页面→业务模块→功能模块→功能脚本→场景稳定身份与不可变修订；copy 重建内部引用                                                                                                                        |
 | Authoring           | shipped | bootstrap/recheck/repair、结构化 amendment、Chat scope、影响审批、安全边界排队、作业暂停/恢复/取消、真实浏览器验证与原子激活                                                                       |
 | Run                 | shipped | 冻结计划、TODO/DAG、page task/attempt、变量、决策、恢复/取消/依赖跳过、证据与 snapshot-first SSE                                                                                                   |
-| 跨服务执行          | shipped | ai-chat-service Agent task/event-log + Vision v2 + 逐 effect 授权；浏览器步骤遵循 shared kind/operation→args 判别映射；proxy session/lease/operation/artifact/event-log 及 TTL/hold 短期原始产物清理，均按持久 seq 游标恢复 |
+| 跨服务执行          | shipped | ai-chat-service Agent task/event-log + Vision v2 + 逐 effect 授权；浏览器步骤遵循 shared kind/operation→args 判别映射；proxy session/lease/operation/artifact/event-log 及 TTL/hold 短期原始产物清理、ai-e2e 长期原始证据保留清理，均按持久事实恢复 |
 | 三服务 E2E 门禁     | shipped | 真实 HTTP/MCP/Chromium 覆盖候选生成、验证激活、正式运行、未验证拒绝与 `outcome_unknown` 禁止重放                                                                                                   |
 | 浏览器中心 UI       | shipped | 项目首页、Authoring/Run 三栏工作台、轻量分层上下文树、深链接上下文、显式定位、Diff/审批/证据/Chat、布局与主题偏好；Playwright 使用真实生产 bundle/API 验证完整旅程，明暗主题 Lighthouse a11y 100 |
 
@@ -25,6 +25,7 @@
 | Authoring        | `semantic-authoring-*`                                  | job/task、结构化候选、范围审批、验证与激活             |
 | Run              | `semantic-run-*`、`semantic-task-projection.ts`         | 正式运行、语义步骤投影与逐 effect 授权                 |
 | Coordinator      | `semantic-coordinator-*`                                | FIFO、outbox、Agent/browser 派发、恢复和证据提升       |
+| Evidence         | `semantic-evidence-*`、`semantic-artifact-store.ts`     | 不可变 manifest/item、受限原始对象、7/30 天保留清理与物理删除续跑 |
 | Integrations     | `agent-task-client.ts`、`semantic-browser-client.ts`    | canonical v1 跨服务客户端                              |
 | UI               | `ui/src/features/semantic/`、`ui/src/features/project/` | 浏览器中心工作台与项目入口                             |
 
@@ -50,6 +51,7 @@ UI 路由：`/`、`/semantic/:projectId`、`/semantic/:projectId/authoring/:vers
 - 候选浏览器验证成功后记录 executable revision verification；只有全部当前脚本/场景覆盖时版本才为 `valid`。
 - side-effect authorization 精确覆盖 effect-bearing step；staging 高风险必须 grant，production 业务写拒绝。
 - 断线后从 snapshot + seq 恢复，不由本地百分比或 Chat 文本推断状态。
+- 长期原始证据仅在所有 manifest 引用到期且没有 open/pinned/custom 保留或对象 pin 后删除；成功/失败默认 7/30 天，逻辑删除先于物理回收，重启可续跑，manifest/item/哈希不删除。
 - Authoring 暂停/恢复/取消使用 `If-Match` 与幂等键；运行中的 Agent 在原子操作安全边界接收对应命令，取消完成后关闭自有浏览器会话。
 - 旧 `/api/projects/*` 返回 404，生产/开发构建均不包含旧向导与 fixtures。
 - `pnpm --filter ai-e2e test:e2e` 必须通过真实 proxy、ai-chat Agent Task HTTP 与 Chromium；未知结果停在 open decision，不能自动创建第二个 Agent task。
@@ -68,4 +70,4 @@ UI 路由：`/`、`/semantic/:projectId`、`/semantic/:projectId/authoring/:vers
 | 项目             | 状态    | 说明                                                                   |
 | ---------------- | ------- | ---------------------------------------------------------------------- |
 | 远程多租户控制面 | pending | 当前只允许 loopback 单用户；远程部署前必须增加统一认证、授权和租户隔离 |
-| 长期证据生命周期 | pending | proxy 短期原始产物清理已交付；ai-e2e 长期证据自动脱敏与保留清理未实现  |
+| 长期证据自动脱敏 | pending | proxy 短期原始产物和 ai-e2e 长期原始证据保留清理已交付；未按项目规则完成脱敏的截图/DOM 以 `restricted/pending` 保存，自动脱敏与项目权限仍未实现 |

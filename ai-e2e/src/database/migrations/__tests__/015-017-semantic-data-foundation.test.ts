@@ -6,6 +6,7 @@ import { up as up015 } from '../015-semantic-asset-governance.js';
 import { up as up016 } from '../016-semantic-workflow-foundation.js';
 import { up as up017 } from '../017-semantic-evidence-integration-foundation.js';
 import { up as up018 } from '../018-authoring-amendments.js';
+import { up as up019 } from '../019-semantic-evidence-retention.js';
 
 const EXPECTED_TABLES = [
   'version_decisions',
@@ -43,6 +44,7 @@ const EXPECTED_TABLES = [
   'browser_operation_links',
   'integration_outbox',
   'external_task_links',
+  'artifact_storage_cleanup_receipts',
   'authoring_context_threads',
   'authoring_amendments',
   'authoring_amendment_decisions',
@@ -50,7 +52,7 @@ const EXPECTED_TABLES = [
   'authoring_chat_messages',
 ];
 
-describe('semantic data foundation migrations 015-018', () => {
+describe('semantic data foundation migrations 015-019', () => {
   let db: DatabaseSync;
 
   beforeEach(() => {
@@ -63,7 +65,7 @@ describe('semantic data foundation migrations 015-018', () => {
   afterEach(() => db.close());
 
   it('adds every semantic data domain and is idempotent', () => {
-    for (const migrate of [up015, up016, up017, up018]) {
+    for (const migrate of [up015, up016, up017, up018, up019]) {
       migrate(db);
       expect(() => migrate(db)).not.toThrow();
     }
