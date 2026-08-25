@@ -25,7 +25,7 @@ export default defineConfig({
     ['junit', { outputFile: 'playwright-report/junit/results.xml' }],
   ],
   use: {
-    baseURL: 'http://localhost:5173/debug',
+    baseURL: 'http://localhost:5173/debug/',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -40,10 +40,23 @@ export default defineConfig({
       },
     },
   ],
-  webServer: {
-    command: 'pnpm -C .. dev',
-    url: 'http://localhost:5173/debug/',
-    reuseExistingServer: !process.env.CI,
-    timeout: 180 * 1000,
-  },
+  webServer: [
+    {
+      command: 'node ../proxy-adapter/node_modules/tsx/dist/cli.mjs ../proxy-adapter/src/server.ts',
+      url: 'http://127.0.0.1:3000/api/v1/health',
+      reuseExistingServer: !process.env.CI,
+      timeout: 60 * 1000,
+      env: {
+        HOST: '127.0.0.1',
+        PROXY_PORT: '3000',
+        TEST_MODE: 'true',
+      },
+    },
+    {
+      command: 'node node_modules/vite/bin/vite.js --host 127.0.0.1 --port 5173',
+      url: 'http://127.0.0.1:5173/debug/',
+      reuseExistingServer: !process.env.CI,
+      timeout: 60 * 1000,
+    },
+  ],
 });

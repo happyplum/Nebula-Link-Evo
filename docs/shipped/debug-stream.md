@@ -9,7 +9,7 @@ proxy-adapter 的调试观测面：Debug 事件 SSE 总线、LiveKit 令牌发�
 - [shipped] LiveKit 令牌发放：`GET /api/v1/livekit-token`。路由入口：`proxy-adapter/src/plugins/routes/api/livekit-token.ts`。
 - [shipped] LiveKit 视频流发布：`proxy-adapter/src/services/livekit-publisher.ts`。
 - [shipped] 交互日志：`proxy-adapter/src/services/interaction-logger.ts`，写入本地 DB。
-- [shipped] 验收面：SSE 助手、调试访问仲裁和 `proxy-adapter/src/__tests__/livekit-token.test.ts`。
+- [shipped] 验收面：SSE 助手、调试访问仲裁、`proxy-adapter/src/__tests__/livekit-token.test.ts`，以及 `debug-ui/e2e/specs/page-load.spec.ts` 对真实 Vite proxy SSE 连接、失败降级和重连的 Playwright 验证。
 
 - [shipped] MJPEG 管理器缓存当前页面最近帧，并在新监听者加入时立即写出，避免静态页面订阅永久等待下一次 CDP 变化。
 - [shipped] LiveKit publisher 每 500ms 重发最近 RGBA 帧，晚加入订阅者无需等待页面变化即可获得首个可解码画面。
