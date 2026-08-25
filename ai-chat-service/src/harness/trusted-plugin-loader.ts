@@ -125,7 +125,8 @@ export async function hashPackageTree(packageRoot: string): Promise<string> {
   const files: Array<{ path: string; hash: string }> = [];
   const pending = [canonicalRoot];
   while (pending.length > 0) {
-    const current = pending.pop()!;
+    const current = pending.pop();
+    if (!current) continue;
     for (const entry of await readdir(current, { withFileTypes: true })) {
       if (entry.name === 'node_modules') continue;
       const path = join(current, entry.name);
@@ -354,12 +355,13 @@ function resolveMcpLockEntry(
     Object.fromEntries(
       Object.entries(values).map(([key, value]) => {
         const name = /^\{([A-Za-z_][A-Za-z0-9_]*)\}$/u.exec(value)?.[1];
-        if (!name || !env[name]) {
+        const resolvedValue = name ? env[name] : undefined;
+        if (!resolvedValue) {
           throw new Error(
             `Trusted MCP ${entry.serverName} environment binding ${value} is unavailable`
           );
         }
-        return [key, env[name]!];
+        return [key, resolvedValue];
       })
     );
   return entry.transport === 'stdio'
@@ -383,7 +385,7 @@ function isCordisPlugin(value: unknown): boolean {
   );
 }
 
-function isRecord(value: unknown): value is Record<string, any> {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 

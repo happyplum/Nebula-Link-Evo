@@ -165,7 +165,8 @@ export class HarnessBackupService {
 async function assertSafeTree(root: string): Promise<void> {
   const pending = [resolve(root)];
   while (pending.length > 0) {
-    const current = pending.pop()!;
+    const current = pending.pop();
+    if (!current) continue;
     const currentStat = await lstat(current);
     if (currentStat.isSymbolicLink()) throw new Error(`Backup refuses symbolic link ${current}`);
     if (!currentStat.isDirectory()) continue;
@@ -182,7 +183,8 @@ async function hashTree(root: string): Promise<BackupFile[]> {
   const files: BackupFile[] = [];
   const pending = [resolve(root)];
   while (pending.length > 0) {
-    const current = pending.pop()!;
+    const current = pending.pop();
+    if (!current) continue;
     for (const entry of await readdir(current, { withFileTypes: true })) {
       const child = join(current, entry.name);
       if (entry.isDirectory()) pending.push(child);
