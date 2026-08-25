@@ -1,7 +1,7 @@
 # agent-tasks `ai-chat-service :3001`
 
 - [shipped] `POST /api/v1/agent-tasks` 幂等创建并异步启动 `nebula.ai.agent-task/1.0` 决策模型任务；`GET /api/v1/agent-tasks/:taskId` 查询持久状态、脱敏请求、结构化输出、预算与工具摘要。
-- [shipped] `GET /api/v1/capabilities` 声明 agent-task/skill/browser-operation `1.0`、已实现功能和硬限制；`taskEvents/taskCommands/skillsRuntime=true`、`operationPresentationAnimation=false`，并返回 `maxSkillsPerTask=1` 与 loaded Skill version 数；Agent task 控制面要求 ai-chat-service 绑定 loopback。
+- [shipped] `GET /api/v1/capabilities` 声明 agent-task/skill/browser-operation `1.0`、已实现功能和硬限制；`taskEvents/taskCommands/skillsRuntime=true`、`operationPresentationAnimation=false`，并返回 `maxSkillsPerTask=1` 与 loaded Skill version 数；ai-chat-service 在装配 Harness/数据库/控制路由前拒绝非 loopback bind host。
 - [shipped] `ai-chat-service/src/agent-tasks/` 独立于交互 Chat session：严格校验请求大小、预算、inline secret、response Schema 深度/关键字，使用 `data/ai-chat-service/agent-tasks.sqlite` 持久化；凭证 token 不明文持久化，服务重启把 created/running 收敛为 interrupted。
 - [shipped] Agent 数据 migration 2 使用 checksum 账本、可重入且只增不毁；任务创建/运行/终态与 `stateVersion`、task-scoped 单调 event seq 在同一事务写入，服务重启中断也会追加持久状态事件。
 - [shipped] `POST /api/v1/agent-tasks/:taskId/commands` 已交付：command ID + request hash 幂等、`expectedStateVersion` 乐观冲突拒绝、accepted/terminal 审计事件；pause 不打断已经开始的原子 operation，待其结算或 `outcome_unknown` 后在下一安全 checkpoint 生效，resume 重新竞争全局许可。

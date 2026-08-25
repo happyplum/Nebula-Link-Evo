@@ -178,7 +178,7 @@ debug-ui  ←──  （仅被用户消费）
 - 脚本执行：只执行结构化 semantic 步骤，由 proxy-adapter 可视运行；不存在任意 TypeScript/JavaScript 执行路径。
 - 并发：Authoring 与正式 Run 共享一个 FIFO 浏览器控制槽；同一时刻只有活动执行者持有 control lease。
 - semantic 跨服务调用：`ai-e2e` 先写 integration outbox，再以原幂等键创建/查询 Agent task 与 browser session/lease/operation；SQLite 写事务内不等待网络。启动把遗留 dispatching 恢复为可重放状态，一次性 lease token 只进入本机加密 secret store。
-- v1 三服务新控制面只允许 loopback/local 单用户部署；capability、Origin 和 lease 不替代认证，远程/多用户启用前必须另行交付统一身份、授权与租户隔离。
+- v1 三服务新控制面只允许 loopback/local 单用户部署；proxy 与 ai-chat 的可配置启动入口拒绝非 loopback host，ai-e2e 固定监听 `127.0.0.1`。capability、Origin 和 lease 不替代认证，远程/多用户启用前必须另行交付统一身份、授权与租户隔离。
 - browser lease 使用短期 32-byte opaque token，proxy 只持久化 hash/policy/expiry/process epoch；operation ledger 默认使用 proxy 自有 SQLite WAL。observe 默认最多 30 秒/一次指定观测，control 默认最多 5 分钟并只可在安全边界缩权限续租。
 - environment 来自 immutable deployment revision。local/test 自动允许已声明有界副作用；staging 单项非不可逆 create/update 自动，删除/批量/不可逆/上传在 browser job/control 前做一次当前 run/job 计划级审批；production 只允许显式认证会话变化和只读行为，业务写/上传硬拒绝且 v1 无绕过。权威契约见 `ai-e2e/docs/environment-side-effect-policy-contract.md`。
 
