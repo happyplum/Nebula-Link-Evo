@@ -271,7 +271,7 @@ interface CreateAgentTaskRequestV1 {
 | GET    | `/api/v1/browser-execution/operations/:operationId`                          | 查询原子操作账本和最终/不确定结果。                                       |
 | GET    | `/api/v1/browser-execution/sessions/:sessionId/artifacts/:artifactId`        | 在会话边界内读取短期原始产物；返回前复核 storage ref、size 与 SHA-256。   |
 
-当前实现状态：session 创建/读取/关闭、lease 签发/撤销、operation 查询、真实 before/after screenshot、DOM capture、失败截图、内容寻址短期存储、session SSE、event-log、artifact GET 与 TTL/hold 短期清理已交付。observe/control 创建、opaque token hash/process epoch、单 session 门禁和 SQLite operation ledger 已生效；control 原地续租、自动脱敏、operation/idempotency 账本清理、video 与动画尚未实现。
+当前实现状态：session 创建/读取/关闭、lease 签发/撤销、operation 查询、真实 before/after screenshot、DOM capture、失败截图、内容寻址短期存储、session SSE、event-log、artifact GET、TTL/hold 短期清理与 operation/idempotency 7 天账本清理已交付。observe/control 创建、opaque token hash/process epoch、单 session 门禁和 SQLite operation ledger 已生效；control 原地续租、自动脱敏、video 与动画尚未实现。
 
 浏览器执行会话是应用层身份，与当前 stateless StreamableHTTP MCP transport session 无关。MCP 传输可以每个请求新建 server，仍必须依据 application-level session、lease 和 operation ledger 执行。
 
@@ -289,7 +289,8 @@ v1 每个 application session 从创建到释放只能绑定一个 `BrowserConte
 - `observe` 默认最长 30 秒，限定一次指定 snapshot/观测集合；`control` 单次最长 5 分钟，由 `ai-e2e` 在原子操作安全边界续租。续租不能扩大 Tab、operation 或参数策略，扩大授权必须撤销后重发并记录决策。
 - proxy 重启递增 process epoch，使全部旧租约失效；持久 session/operation 事实仍可查询，但不能凭旧 token 恢复 Context/Cookie。
 - operation ledger 使用 proxy 自有 SQLite WAL（不与其他服务共享）：动作前事务写入 operation ID、request hash、lease/session/Tab、queued 状态和 sequence，状态/结果/产物引用追加更新。崩溃后 started 且无充分完成证据的记录收敛为 `outcome_unknown`。
-- 清理遵循第 2.3 节保留规则；任何被非终态流程、未知结果、决策或 evidence manifest 引用的记录不得提前删除。
+- proxy 启动后立即并每分钟执行账本保留清理：仅清理已关闭/中断/失败 session 下超过 7 天的 succeeded/failed/cancelled operation；关联 artifact 记录必须已完成 TTL/hold 删除，capture/artifact/hold 元数据按外键顺序一并移除。`outcome_unknown`、活动 session 和尚未删除的 artifact 不清理。session/lease 幂等键仅在资源终态超过 7 天且没有 queued/running/outcome_unknown operation 时清理。
+- 清理遵循第 2.3 节保留规则；proxy 可见的非终态 operation、未知结果和有效 upstream artifact hold 不得提前删除。长期 evidence manifest 保存提升后的 operation 摘要、哈希和 artifact，不以永久保留 proxy 热账本作为完整性前提。
 
 ### 5.2 MCP 工具
 

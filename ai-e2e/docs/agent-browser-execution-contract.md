@@ -131,7 +131,7 @@
 - 只读观测可以用新 ID 重新执行；可能产生副作用的动作只能在已确认未执行或完成副作用检查后生成新 ID。
 - 如果服务崩溃、连接中断或 Playwright 返回状态不足以证明动作是否发生，结果必须是 `outcome_unknown`，不能自动归为失败。
 - `outcome_unknown` 由主代理安排页面、DOM 和业务数据检查。确认已生效则补做后置验证；确认未生效才允许创建新操作；仍无法确认则暂停或失败。
-- 去重记录至少覆盖所属测试流程全部非终态生命周期，终态后默认保留 7 天；被未解决决定、`outcome_unknown` 或 evidence manifest 引用时继续保留。具体账本与清理门禁以 `service-api-event-contract.md` 为准。
+- 去重记录至少覆盖所属测试流程全部非终态生命周期，终态后默认保留 7 天；未解决决定、`outcome_unknown` 或有效 upstream artifact hold 继续阻止清理。长期 evidence manifest 保存稳定 operation 摘要和哈希，不要求 proxy 热账本与 30 天媒体保留完全一致；具体门禁以 `service-api-event-contract.md` 为准。
 
 这一区分用于阻止“请求超时后重复创建用户、重复提交、重复删除”等隐性数据破坏。
 
@@ -220,7 +220,7 @@
 ## 15. 仍待实现设计
 
 - Agent task、browser event/artifact 和跨服务证据关联已在 `service-api-event-contract.md` 锁定；proxy 控制面、ai-chat-service Agent task/Skill runtime，以及 ai-e2e 页面任务、下游 event-log 游标消费、Authoring/Run API/SSE、outbox 协调、逐 effectId 参数门禁、证据提升和生产 UI 均已实现。保留清理由各服务产品规格单独追踪。
-- proxy 已实现短期 opaque token + SHA-256 hash/process epoch 和自有 SQLite WAL operation ledger；不扩权续租、7 天保留、pin/引用保护和清理任务仍待实现。
+- proxy 已实现短期 opaque token + SHA-256 hash/process epoch、自有 SQLite WAL operation ledger、TTL/hold 引用保护及 operation/idempotency 7 天保留清理；不扩权续租仍待实现。
 - 动画媒体协议、播放速度和重放索引格式。
 - 同时多身份、多 BrowserContext 与多 Tab 并发需要的隔离和调度模型；v1 单 Context、单活动身份不依赖该扩展。
 

@@ -206,6 +206,128 @@ describe('BrowserExecutionRepository artifact foundation', () => {
     ).toThrow('opaque reference');
   });
 
+  it('purges terminal operations and session or lease idempotency after seven days', () => {
+    const repository = createRepository();
+    repository.completeOperation('operation-1', 'succeeded', now, { actual: { title: 'done' } });
+    repository.insertIdempotency(
+      'session.create',
+      'session-key',
+      sha256('session-create'),
+      'session',
+      'session-1',
+      now
+    );
+    repository.insertIdempotency(
+      'lease.create:session-1',
+      'lease-key',
+      sha256('lease-create'),
+      'lease',
+      'lease-1',
+      now
+    );
+    repository.closeSessionResources('session-1', now);
+
+    expect(
+      repository.cleanupExpiredLedger(
+        '2026-08-20T00:00:00.000Z',
+        '2026-08-13T00:00:00.000Z'
+      )
+    ).toEqual({ operationsDeleted: 1, idempotencyDeleted: 2 });
+    expect(repository.getOperation('operation-1')).toBeUndefined();
+    expect(repository.findIdempotency('session.create', 'session-key')).toBeUndefined();
+    expect(repository.findIdempotency('lease.create:session-1', 'lease-key')).toBeUndefined();
+  });
+
+  it('keeps outcome-unknown operations and their owning resource idempotency', () => {
+    const repository = createRepository();
+    repository.completeOperation('operation-1', 'outcome_unknown', now, {
+      error: {
+        code: 'outcome_unknown',
+        message: 'side effect requires a decision',
+        retryable: false,
+        correlationId: 'operation-1',
+      },
+    });
+    repository.insertIdempotency(
+      'session.create',
+      'session-key',
+      sha256('session-create'),
+      'session',
+      'session-1',
+      now
+    );
+    repository.closeSessionResources('session-1', now);
+
+    expect(
+      repository.cleanupExpiredLedger(
+        '2026-08-20T00:00:00.000Z',
+        '2026-08-13T00:00:00.000Z'
+      )
+    ).toEqual({ operationsDeleted: 0, idempotencyDeleted: 0 });
+    expect(repository.getOperation('operation-1')?.status).toBe('outcome_unknown');
+    expect(repository.findIdempotency('session.create', 'session-key')).toBeDefined();
+  });
+
+  it('waits for artifact cleanup before purging capture and operation metadata', () => {
+    const repository = createRepository();
+    repository.createCapture({
+      id: 'capture-1',
+      operationId: 'operation-1',
+      requestHash: sha256('capture-request'),
+      requested: { afterScreenshot: true },
+      expectedItemCount: 1,
+      createdAt: now,
+    });
+    repository.insertArtifact({
+      id: 'artifact-1',
+      sessionId: 'session-1',
+      operationId: 'operation-1',
+      captureId: 'capture-1',
+      tabId: 'tab-1',
+      kind: 'screenshot',
+      capturePhase: 'after',
+      status: 'available',
+      completeness: 'complete',
+      mimeType: 'image/png',
+      sha256: sha256('image'),
+      sizeBytes: 5,
+      storageBackend: 'local_file',
+      storageRef: 'artifacts/raw/artifact-1.png',
+      redactionStatus: 'pending',
+      retentionClass: 'success_7d',
+      expiresAt: '2026-08-13T00:00:00.000Z',
+      createdAt: now,
+      availableAt: now,
+    });
+    repository.completeCapture('capture-1', {
+      status: 'completed',
+      completeness: 'complete',
+      actualItemCount: 1,
+      completedAt: now,
+    });
+    repository.completeOperation('operation-1', 'succeeded', now);
+    repository.closeSessionResources('session-1', now);
+
+    expect(
+      repository.cleanupExpiredLedger(
+        '2026-08-20T00:00:00.000Z',
+        '2026-08-13T00:00:00.000Z'
+      )
+    ).toEqual({ operationsDeleted: 0, idempotencyDeleted: 0 });
+
+    repository.claimArtifactDeletion('artifact-1');
+    repository.markArtifactDeleted('artifact-1', '2026-08-20T00:00:00.000Z');
+    expect(
+      repository.cleanupExpiredLedger(
+        '2026-08-20T00:00:00.000Z',
+        '2026-08-13T00:00:00.000Z'
+      )
+    ).toEqual({ operationsDeleted: 1, idempotencyDeleted: 0 });
+    expect(repository.getArtifact('artifact-1')).toBeUndefined();
+    expect(repository.getCapture('capture-1')).toBeUndefined();
+    expect(repository.getOperation('operation-1')).toBeUndefined();
+  });
+
   it('reopens an existing database without reapplying schema migrations', () => {
     const directory = mkdtempSync(join(tmpdir(), 'nebula-proxy-artifact-'));
     tempDirectories.push(directory);
