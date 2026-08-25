@@ -10,6 +10,7 @@ proxy-adapter 的调试观测面：Debug 事件 SSE 总线、LiveKit 令牌发�
 - [shipped] LiveKit 视频流发布：`proxy-adapter/src/services/livekit-publisher.ts`。
 - [shipped] 交互日志：`proxy-adapter/src/services/interaction-logger.ts`，写入本地 DB。
 - [shipped] 验收面：SSE 助手、调试访问仲裁、`proxy-adapter/src/__tests__/livekit-token.test.ts`，以及 `debug-ui/e2e/specs/page-load.spec.ts` 对真实 Vite proxy SSE 连接、失败降级和重连的 Playwright 验证。
+- [shipped] Debug UI Playwright 由单一启动器为 proxy-adapter、ai-chat-service 和 Vite 分配隔离动态端口，拒绝复用工作站已有服务；确定性 DSH adapter 不访问外部模型，并通过真实 Chat HTTP/SSE 验证 session 创建、用户消息和流式 assistant 响应渲染。
 
 - [shipped] MJPEG 管理器缓存当前页面最近帧，并在新监听者加入时立即写出，避免静态页面订阅永久等待下一次 CDP 变化。
 - [shipped] LiveKit publisher 每 500ms 重发最近 RGBA 帧，晚加入订阅者无需等待页面变化即可获得首个可解码画面。

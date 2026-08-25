@@ -16,5 +16,6 @@
 - [shipped] 三服务 semantic 产品旅程 E2E 使用真实 proxy、ai-chat Agent Task HTTP、ai-e2e HTTP 与 Chromium 覆盖结构化候选、浏览器验证、原子激活、正式运行和证据封存；同时断言未验证版本拒绝运行、`outcome_unknown` 进入 open decision 且不重放。
 - [shipped] 功能脚本 v1 只使用 canonical `pageScope.entryPageId`；协调器为 authoring 生命周期持有隐藏 control lease，但向 Agent 注入的 `browserBinding.access` 仍按冻结步骤收窄，并在终态用该租约关闭自有 session。
 - [shipped] ai-e2e 后端与 UI 均提供 `test:coverage`；根串行覆盖率命令统一执行，UI 异步 bootstrap 用例等待权威 snapshot 请求结束，避免未结算 React 更新污染测试信号。
+- [shipped] ai-e2e UI Playwright 使用动态端口、临时 semantic SQLite 和真实生产 bundle/API 创建项目并进入 Authoring 工作台，断言首次 bootstrap 仅创建一次且 reload 不重复；该套件已纳入根 `test:e2e` 与 CI。
 - [tech-debt] 尚未直接消费 ai-chat-service/proxy-adapter 的服务端事件流；当前通过任务/operation 查询和 ai-e2e 持久事件收敛。
 - [tech-debt] 功能脚本完整机器 JSON Schema 尚未抽成统一 validator 包；现有创建、引用、DAG、冻结投影和授权校验继续生效。

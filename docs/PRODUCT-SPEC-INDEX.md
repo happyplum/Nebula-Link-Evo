@@ -261,8 +261,20 @@ debug-ui  ←──  （仅被用户消费）
 
 - 根 `pnpm test` 运行工作区测试；Windows 发布门使用串行工作区执行以避免资源竞争。
 - 根 `pnpm test:coverage` 串行运行所有声明覆盖率脚本的工作区，并由各包 `vitest.config.ts` 提供当前防回退阈值；关键状态机、授权、SSE、Vision、投影/协调器和 browser execution 仍须以 lines ≥80%、branches ≥70% 作为完整验收目标。
-- `pnpm test:e2e` 串行执行 proxy canonical control plane、ai-chat Agent browser loop、ai-e2e 三服务 semantic 旅程、CLI/Harness 真实消费者和 Debug UI SSE Playwright；只允许真实公开入口、真实 transport 和真实 Chromium，Fastify `inject`、fake client 或直接 executor 调用只能归入单元/集成测试。
+- `pnpm test:e2e` 串行执行 proxy canonical control plane、ai-chat Agent browser loop、ai-e2e 三服务 semantic 旅程、CLI/Harness 真实消费者、Debug UI Chat/SSE Playwright 与 ai-e2e UI 项目/bootstrap Playwright；只允许真实公开入口、真实 transport 和真实 Chromium，Fastify `inject`、fake client 或直接 executor 调用只能归入单元/集成测试。
 - CI 的 Node 版本必须满足根 `engines`，并执行 frozen install、build、串行 test、coverage 与完整根 E2E；Linux 使用 `xvfb-run` 承载所有 headed Chromium 验收。
+
+关键 shipped 能力的自动化证据映射如下；表内 E2E 均由根 `pnpm test:e2e` 在 CI 中执行：
+
+| 规格能力 | 自动化证据 | 独立命令 |
+| --- | --- | --- |
+| proxy canonical session/lease/operation、MCP 与真实 Chromium | `proxy-adapter/tests/e2e/canonical-control-plane.e2e.test.ts` | `pnpm --filter proxy-adapter test:e2e` |
+| ai-chat 受限 Agent、DSH tool loop、隐藏 raw proxy tool 与持久终态 | `ai-chat-service/src/agent-tasks/agent-browser-loop.e2e.test.ts` | `pnpm --filter ai-chat-service test:e2e` |
+| ai-e2e semantic candidate、真实浏览器验证、正式 Run 与拒绝策略 | `ai-e2e/tests/e2e/semantic-journey.e2e.test.ts` | `pnpm --filter ai-e2e test:e2e` |
+| browser-control CLI 与 DeepSeek Harness 受控消费者 | `integrations/deepseek-harness-plugin/tests/e2e/controlled-consumers.e2e.test.ts` | `pnpm --filter @nebula-link-evo/deepseek-harness-plugin test:e2e` |
+| Debug UI 启动、canonical Chat/SSE 与会话恢复入口 | `debug-ui/e2e/specs/page-load.spec.ts` | `pnpm --filter debug-ui test:e2e` |
+| ai-e2e UI Project、bootstrap 一次性与 Authoring 恢复入口 | `ai-e2e/ui/e2e/project-authoring.spec.ts` | `pnpm --filter ai-e2e-ui test:e2e` |
+| 全工作区单元/集成与覆盖率防回退 | 各包 `*.test.ts(x)` 与 `vitest.config.ts` | `pnpm -r --workspace-concurrency=1 test`、`pnpm test:coverage` |
 
 ---
 
@@ -270,10 +282,9 @@ debug-ui  ←──  （仅被用户消费）
 
 | 缺口                                                                                            | 类型      | 状态  | 影响范围                                       |
 | ----------------------------------------------------------------------------------------------- | --------- | ----- | ---------------------------------------------- |
-| Root `pnpm lint` 仍有 207 个既有 warning（0 errors）；测试已纳入 TypeScript parser project      | tech-debt | known | `debug-ui`、`proxy-adapter`、`ai-chat-service` |
+| Root `pnpm lint` 仍有 220 个既有 warning（0 errors）；测试已纳入 TypeScript parser project      | tech-debt | known | `debug-ui`、`proxy-adapter`、`ai-chat-service` |
 | 并行 Root `pnpm test` 偶尔触发 Windows Vitest hook/资源竞争超时；Windows 发布门使用全仓串行测试 | tech-debt | known | `proxy-adapter`、两个 UI                       |
-| `debug-ui/e2e/` 测试 LSP 报红（`process` 类型推断、空对象模式）                                 | tech-debt | known | `debug-ui`                                     |
-| Root `pnpm format:check` 仍有 117 个既有未格式化源码文件                                        | tech-debt | known | `debug-ui`、`proxy-adapter`、`ai-chat-service` |
+| Root `pnpm format:check` 仍有 119 个既有未格式化源码文件                                        | tech-debt | known | `debug-ui`、`proxy-adapter`、`ai-chat-service` |
 
 详见各包 PRODUCT-SPEC 第 6 节与根 README "Tech Debt" 章节。
 
