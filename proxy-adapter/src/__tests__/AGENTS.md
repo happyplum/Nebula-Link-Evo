@@ -8,13 +8,9 @@ Vitest unit/integration coverage plus Playwright e2e tests for backend and Debug
 
 | Area               | Path                             | Notes                                                  |
 | ------------------ | -------------------------------- | ------------------------------------------------------ |
+| Direct             | `src/__tests__/`                  | Root-level unit and integration tests                  |
 | Unit               | `unit/`, `services/`, `plugins/` | Isolated module/service behavior                       |
 | Integration        | `integration/`                   | Real route/proxy/HTTP behavior (proxy-loop prevention) |
-| Integration (chat) | `integration/chat/`              | 15+ contract test files for chat/session API           |
-| E2E                | `e2e/`, `e2e/debug-ui/`          | Browser-driven Debug UI and workflow coverage          |
-| Conversation       | `conversation/`                  | Persistence and config behavior                        |
-| Config             | `config/`                        | Config loading/validation                              |
-| AI/provider        | `vercel-ai/`                    | Provider integration tests                              |
 | Helpers/fixtures   | `helpers/`, `fixtures/`          | Shared test setup                                      |
 
 ## Commands
@@ -23,7 +19,6 @@ Vitest unit/integration coverage plus Playwright e2e tests for backend and Debug
 pnpm test          # Vitest suite
 pnpm test:coverage # Vitest with coverage
 pnpm test:e2e      # Playwright e2e
-pnpm test:debug    # Debug page smoke check
 ```
 
 ## Working Rules
@@ -39,5 +34,3 @@ pnpm test:debug    # Debug page smoke check
 - No duplicated fixture setup when shared helper exists.
 
 ## Child AGENTS
-
-- `integration/chat/AGENTS.md`

@@ -1,6 +1,6 @@
-# browser-engine `proxy-adapter :3000 /debug/api/*`
+# browser-engine `proxy-adapter :3000 /debug/*`
 
-proxy-adapter 内联 Playwright Chromium 控制层：浏览器生命周期、DOM 提取、点击解析、快照缓存、视觉标记注入、MJPEG 屏播。`playwright-server` 已移除，proxy-adapter 直接控制 Chromium。
+proxy-adapter 内联 Playwright Chromium 控制层：浏览器生命周期、DOM 提取、点击解析、视觉标记注入、MJPEG 屏播。`playwright-server` 已移除，proxy-adapter 直接控制 Chromium。
 
 - [shipped] Playwright Chromium 生命周期与浏览器锁：`proxy-adapter/src/browser-engine/services/browser-lifecycle.ts`、`browser-lock.ts`。
 - [shipped] Playwright/CDP 集成由 proxy-adapter 独占：当前在进程内启动 Chromium，可选通过 `cdpPort` 开放 remote-debugging-port，并由 `screencast.ts` 创建页面 `CDPSession`；不存在外部 `playwright-server` 或 `connectOverCDP` 连接链。
@@ -8,7 +8,6 @@ proxy-adapter 内联 Playwright Chromium 控制层：浏览器生命周期、DOM
 - [shipped] DOM 快照 v2.0（含 `data-nebula-id` 属性）：`proxy-adapter/src/browser-engine/dom-extractor.ts`、`dom-utils.ts`。element 归一化字段 `id` + `locator_bundle`。
 - [shipped] 视觉标记系统（Vision Marker）：通过 `data-nebula-id` 关联操作坐标与 DOM 元素。入口：`proxy-adapter/src/browser-engine/marker-injector.ts`。
 - [shipped] Debug marker 的 `type`、`value`、`dispatch` 操作要求字符串 `param`，缺失时在浏览器访问前返回明确错误。
-- [shipped] 快照缓存：`proxy-adapter/src/browser-engine/services/snapshot-cache.ts`。
 - [shipped] MJPEG 屏播：`proxy-adapter/src/browser-engine/screencast.ts`。浏览器生命周期在 open/close 时启动/停止页面 `CDPSession`，配合 `/debug/*` 路由供应 30FPS 视频流。
 - [shipped] 页面操作执行：`proxy-adapter/src/browser-engine/services/page-actions.ts`。
 - [shipped] DOM 提取器：`proxy-adapter/src/browser-engine/services/dom-extractor.ts`。
