@@ -8,7 +8,7 @@
 - [shipped] Authoring 验证接入 ai-chat-service Vision v2 工具；候选副作用按 environment、stepId、effectId、数量和 grant 生成冻结授权，production 业务写拒绝。
 - [shipped] 正式 Run：exact valid version/deployment/scenario 冻结 plan/TODO/DAG/变量，支持 start/pause/resume/cancel、依赖跳过、可恢复中断、结果未知决策和 close-browser。
 - [shipped] 可视语义执行：结构化脚本确定性投影为 proxy `operation_execute` 白名单步骤，关联截图/DOM/artifact/evidence，外部调用使用 outbox 与稳定幂等键收敛。
-- [shipped] ai-e2e 长期原始证据按成功/失败默认 7/30 天保留；清理 worker 仅在所有引用窗口到期且没有 open/pinned/custom manifest 或对象 pin 后逻辑删除，物理文件回收以持久 receipt 在重启后续跑，并保护共享 storage key。manifest/item/哈希与测试结果继续保留，未按项目规则脱敏的截图/DOM 登记为 `restricted/pending`。
+- [shipped] ai-e2e 长期原始证据按成功/失败默认 7/30 天保留；清理 worker 仅在所有引用窗口到期且没有 open/pinned/custom manifest 或对象 pin 后逻辑删除，物理文件回收以持久 receipt 在重启后续跑，并保护共享 storage key。manifest/item/哈希与测试结果继续保留，未按项目规则脱敏的截图/DOM 登记为 `restricted/pending`。v1 不承诺通用自动脱敏；证据外发、共享、远程/多用户访问或项目级隐私策略启用前，必须先定义并实现脱敏、原件保留与访问权限规则。
 - [shipped] 全局 FIFO 与恢复：单 active browser session/context/control actor，Authoring 与 Run 共享安全边界，重启恢复 dispatching outbox，未知副作用不盲目重放。
 - [shipped] 生产浏览器中心 UI：左上下文/TODO、中间持续挂载浏览器、右侧 PRD/模块/场景/Diff/影响/决策/证据和常驻 Chat；模块切换不导航，显式定位才创建 navigation-only task。
 - [shipped] 工作台三栏支持指针/键盘调宽、边界约束、双击复位、持久化、缩放/收起/专注、system/light/dark 与 reduced-motion。
