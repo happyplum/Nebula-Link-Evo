@@ -38,7 +38,7 @@ export function CreateProjectDialog({ isOpen, onClose }: CreateProjectDialogProp
       onSuccess: (workspace) => {
         setForm(INITIAL_FORM);
         onClose();
-        const initialUrl = new URL('/', form.targetOrigin).toString();
+        const initialUrl = new URL(form.targetOrigin).toString();
         navigate(
           `/semantic/${workspace.id}/authoring/${workspace.versionId}?bootstrap=1&url=${encodeURIComponent(initialUrl)}`
         );

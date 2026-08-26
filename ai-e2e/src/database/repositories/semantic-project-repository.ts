@@ -31,6 +31,10 @@ export interface CreateSemanticProjectWorkspaceInput {
   idempotencyKey: string;
 }
 
+type NormalizedCreateWorkspaceInput = CreateSemanticProjectWorkspaceInput & {
+  targetPath: string;
+};
+
 interface ProjectRow {
   id: string;
   name: string;
@@ -78,7 +82,7 @@ export class SemanticProjectRepository {
       const deploymentPayload = {
         schema: 'nebula.ai-e2e.deployment/1.0',
         origin: normalized.targetOrigin,
-        basePath: '/',
+        basePath: normalized.targetPath,
         environment: normalized.environment,
         allowedOrigins: [normalized.targetOrigin],
       };
@@ -151,6 +155,7 @@ export class SemanticProjectRepository {
           scenarioId,
           scenarioRevisionId,
           projectName: normalized.name,
+          entryPath: normalized.targetPath,
         });
         this.db.prepare(
           `INSERT INTO version_deployment_bindings
@@ -214,12 +219,13 @@ export class SemanticProjectRepository {
     scenarioId: string;
     scenarioRevisionId: string;
     projectName: string;
+    entryPath: string;
   }): void {
     const page = {
       schema: 'nebula.ai-e2e.page-definition/1.0',
       name: '起始页面',
       routeMode: 'path',
-      routeTemplate: '/',
+      routeTemplate: input.entryPath,
       identityQuery: {},
       recognition: { status: 'bootstrap_pending' },
     };
@@ -256,7 +262,7 @@ export class SemanticProjectRepository {
         {
           id: 'assert_page_url',
           kind: 'page.url',
-          expected: { kind: 'literal', value: '/' },
+          expected: { kind: 'literal', value: input.entryPath },
           comparator: 'contains',
           message: '起始页面 URL 可读取',
         },
@@ -315,7 +321,7 @@ export class SemanticProjectRepository {
       page,
       ', page_signature_sha256',
       ', ?',
-      [hashValue({ routeMode: 'path', routeTemplate: '/', identityQuery: {} })]
+      [hashValue({ routeMode: 'path', routeTemplate: input.entryPath, identityQuery: {} })]
     );
     this.db.prepare(
       'INSERT INTO semantic_business_modules (id, business_version_id, module_key, created_at) VALUES (?, ?, ?, ?)'
@@ -432,7 +438,7 @@ export class SemanticProjectRepository {
   }
 }
 
-function normalizeInput(input: CreateSemanticProjectWorkspaceInput): CreateSemanticProjectWorkspaceInput {
+function normalizeInput(input: CreateSemanticProjectWorkspaceInput): NormalizedCreateWorkspaceInput {
   const name = requiredText(input.name, '项目名称', 200);
   const versionName = requiredText(input.versionName, '业务版本名称', 200);
   const createdBy = requiredText(input.createdBy, '创建人', 200);
@@ -463,11 +469,17 @@ function normalizeInput(input: CreateSemanticProjectWorkspaceInput): CreateSeman
     ...(description ? { description } : { description: undefined }),
     versionName,
     targetOrigin: url.origin,
+    targetPath: normalizeTargetPath(url),
     prd: { format: input.prd.format, content },
     createdBy,
   };
   assertNoInlineSecrets({ project: { name, description }, deployment: { origin: url.origin } });
   return normalized;
+}
+
+function normalizeTargetPath(url: URL): string {
+  const pathname = url.pathname.startsWith('/') ? url.pathname : `/${url.pathname}`;
+  return pathname || '/';
 }
 
 function requiredText(value: string, label: string, maxLength: number): string {
