@@ -25,3 +25,4 @@
 - [shipped] `nebula.ai-e2e.functional-script/1.0` 提供可导出的 TypeBox JSON Schema 与独立静态 validator；valid/current 创建及 AI candidate 标记为 valid 前统一拒绝旧 `functionalModuleId`、未知字段、空步骤、非法动作/断言、悬空 step/effect/input 引用和无最终断言脚本。
 - [shipped] 删除未被 canonical 客户端使用的旧双后端 HTTP helper；ai-e2e 仅保留 Agent Task 与 browser-execution v1 客户端，不提供单次生成、Chat session、debug DOM 或 LiveKit 兼容调用。
 - [shipped] 项目创建保留用户入口 URL pathname，将其冻结为 deployment `basePath`、起始页面 `routeTemplate`、starter script URL 断言和工作台深链接；不再把 `/debug/` 等入口错误折叠为 `/`。
+- [shipped] semantic 数据库启动时恢复缺失的全局浏览器 FIFO 游标，按已持久 `browser_jobs.queue_seq` 最大值继续编号，不删除、重排或覆盖既有队列记录。
