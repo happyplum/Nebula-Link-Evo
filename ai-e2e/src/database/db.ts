@@ -102,6 +102,10 @@ class DatabaseManager {
     ]) {
       runTrackedMigration(this.db, migration, '1.0.0');
     }
+    this.db.prepare(
+      `INSERT OR IGNORE INTO browser_job_queue_meta (key, next_queue_seq)
+       SELECT 'global', COALESCE(MAX(queue_seq), 0) + 1 FROM browser_jobs`
+    ).run();
   }
 
   private initRepositories(): void {
