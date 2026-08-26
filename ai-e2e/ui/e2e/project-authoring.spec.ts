@@ -27,6 +27,14 @@ test('persists the real candidate, run and evidence journey across reload', asyn
 
   await page.getByRole('tab', { name: /Diff/u }).click();
   const applyCandidate = page.getByRole('button', { name: /在安全边界应用/u });
+  const approveDecision = page.getByRole('button', { name: '批准', exact: true });
+  await expect(approveDecision.first()).toBeVisible({ timeout: 20_000 });
+  for (let index = 0; index < 5; index += 1) {
+    const count = await approveDecision.count();
+    if (count === 0) break;
+    await approveDecision.first().click();
+    await expect.poll(() => approveDecision.count()).toBeLessThan(count);
+  }
   await expect(applyCandidate).toBeEnabled({ timeout: 20_000 });
   await expect(page.getByText('candidate_ready')).toBeVisible();
   await applyCandidate.click();

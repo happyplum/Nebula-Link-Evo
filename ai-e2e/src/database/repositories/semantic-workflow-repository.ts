@@ -1162,7 +1162,7 @@ export class SemanticWorkflowRepository {
            WHERE jobs.state = 'queued'
              AND (
                (jobs.root_context_type = 'run'
-                 AND runs.lifecycle IN ('created','planning','ready','running','completing'))
+                 AND runs.lifecycle = 'running')
                OR
                (jobs.root_context_type = 'authoring'
                  AND authoring.lifecycle IN ('created','planning','running','completing'))

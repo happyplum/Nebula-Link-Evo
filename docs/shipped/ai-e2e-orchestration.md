@@ -4,9 +4,11 @@
 - [shipped] 产品面仅包含独立 semantic 数据库、canonical `/api/v1/*`、受控 Agent/browser 客户端和结构化资产执行链。
 - [shipped] 业务版本与 semantic 资产图：页面→业务模块→功能模块→多个功能脚本→场景 DAG，稳定身份、不可变修订、copy 引用重建和验证失效。
 - [shipped] Authoring `bootstrap/recheck/repair`：持久 job/task/attempt/event、结构化 amendment、Chat scope、同页/跨 URL 影响审批、安全边界排队、真实浏览器验证与原子激活。
+- [shipped] PRD 多资产 bootstrap：`ingest_prd` Agent 可在单个结构化 amendment 中创建页面、业务模块、功能模块、功能脚本和场景的稳定身份与 draft revision；候选期不进入 workspace，但可在原上下文一次应用其跨模块新建资产，已有资产修订仍受当前模块与基础修订锁约束。审批与真实浏览器验证成功后新建与修订候选一起原子激活。repair/recheck 保持 revision-only，不能借此扩展资产身份。
 - [shipped] Authoring 作业控制：`pause/resume/cancel` 使用幂等命令与 `If-Match` 乐观并发；协调器在原子操作安全边界向 Agent task 传播控制，重复扫描已存在命令时继续派发 outbox 而不饥饿，暂停保留会话，取消收敛 attempt/job 并关闭自有会话。
 - [shipped] Authoring 验证接入 ai-chat-service Vision v2 工具；候选副作用按 environment、stepId、effectId、数量和 grant 生成冻结授权，production 业务写拒绝。
 - [shipped] 正式 Run：exact valid version/deployment/scenario 冻结 plan/TODO/DAG/变量，支持 start/pause/resume/cancel、依赖跳过、可恢复中断、结果未知决策和 close-browser。
+- [shipped] 正式 Run 只有显式 start 进入 `running` 后才可被浏览器 FIFO 领取；创建后的 `ready` Run 不提前抢占 session 或改变状态版本，并发启动按持久 queue sequence 串行执行。
 - [shipped] 可视语义执行：结构化脚本确定性投影为 proxy `operation_execute` 白名单步骤，关联截图/DOM/artifact/evidence，外部调用使用 outbox 与稳定幂等键收敛。
 - [shipped] ai-e2e 长期原始证据按成功/失败默认 7/30 天保留；清理 worker 仅在所有引用窗口到期且没有 open/pinned/custom manifest 或对象 pin 后逻辑删除，物理文件回收以持久 receipt 在重启后续跑，并保护共享 storage key。manifest/item/哈希与测试结果继续保留，未按项目规则脱敏的截图/DOM 登记为 `restricted/pending`。v1 不承诺通用自动脱敏；证据外发、共享、远程/多用户访问或项目级隐私策略启用前，必须先定义并实现脱敏、原件保留与访问权限规则。
 - [shipped] 全局 FIFO 与恢复：单 active browser session/context/control actor，Authoring 与 Run 共享安全边界，重启恢复 dispatching outbox，未知副作用不盲目重放。
@@ -26,4 +28,3 @@
 - [shipped] 删除未被 canonical 客户端使用的旧双后端 HTTP helper；ai-e2e 仅保留 Agent Task 与 browser-execution v1 客户端，不提供单次生成、Chat session、debug DOM 或 LiveKit 兼容调用。
 - [shipped] 项目创建保留用户入口 URL pathname，将其冻结为 deployment `basePath`、起始页面 `routeTemplate`、starter script URL 断言和工作台深链接；不再把 `/debug/` 等入口错误折叠为 `/`。
 - [shipped] semantic 数据库启动时恢复缺失的全局浏览器 FIFO 游标，按已持久 `browser_jobs.queue_seq` 最大值继续编号，不删除、重排或覆盖既有队列记录。
-- [tech-debt] 完整 PRD 多资产 bootstrap 尚未交付：当前 Agent candidate 只能修订 starter graph 的既有稳定资产，不能新增多个页面、模块、脚本和场景；不得把 starter graph 的候选验证/正式 Run 闭环表述为已自动拆分全部 PRD 资产。

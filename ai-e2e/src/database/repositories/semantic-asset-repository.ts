@@ -43,6 +43,43 @@ export interface CreateSemanticRevisionParams {
   changeKind?: 'generated' | 'human_edit' | 'ai_repair' | 'migration' | 'copy';
 }
 
+export type CreateSemanticAssetIdentityParams =
+  | {
+      assetType: 'page_definition';
+      assetId: string;
+      businessVersionId: string;
+      assetKey: string;
+    }
+  | {
+      assetType: 'business_module';
+      assetId: string;
+      businessVersionId: string;
+      assetKey: string;
+    }
+  | {
+      assetType: 'functional_module';
+      assetId: string;
+      businessVersionId: string;
+      assetKey: string;
+      businessModuleId: string;
+      primaryPageDefinitionId: string;
+    }
+  | {
+      assetType: 'functional_script';
+      assetId: string;
+      businessVersionId: string;
+      assetKey: string;
+      name: string;
+      functionalModuleId: string;
+    }
+  | {
+      assetType: 'test_scenario';
+      assetId: string;
+      businessVersionId: string;
+      assetKey: string;
+      name: string;
+    };
+
 export interface SemanticRevisionRecord {
   id: string;
   assetType: SemanticAssetType;
@@ -163,11 +200,135 @@ const REVISION_SPECS: Record<SemanticAssetType, RevisionSpec> = {
   },
 };
 
+function identityOrder(assetType: CreateSemanticAssetIdentityParams['assetType']): number {
+  return {
+    page_definition: -1,
+    business_module: 0,
+    functional_module: 1,
+    functional_script: 2,
+    test_scenario: 3,
+  }[assetType];
+}
+
 export class SemanticAssetRepository {
   private readonly db: DatabaseLike;
 
   constructor(db: SupportedDatabase) {
     this.db = db as unknown as DatabaseLike;
+  }
+
+  createAssetIdentities(paramsList: readonly CreateSemanticAssetIdentityParams[]): void {
+    if (paramsList.length === 0) return;
+    inImmediateTransaction(this.db, () => {
+      const versionIds = new Set(paramsList.map((params) => params.businessVersionId));
+      if (versionIds.size !== 1) throw new Error('Asset identities cannot span business versions');
+      const businessVersionId = paramsList[0]!.businessVersionId;
+      this.requireWritableVersion(businessVersionId);
+      const ordered = [...paramsList].sort(
+        (left, right) => identityOrder(left.assetType) - identityOrder(right.assetType)
+      );
+      for (const params of ordered) {
+        const now = new Date().toISOString();
+        if (params.assetType === 'page_definition') {
+          this.insertIdentity('page_definitions', params, ['page_key'], [params.assetKey], now);
+          continue;
+        }
+        if (params.assetType === 'business_module') {
+          this.insertIdentity(
+            'semantic_business_modules',
+            params,
+            ['module_key'],
+            [params.assetKey],
+            now
+          );
+          continue;
+        }
+        if (params.assetType === 'functional_module') {
+          this.requireIdentityOwner(
+            'semantic_business_modules',
+            params.businessModuleId,
+            businessVersionId,
+            'Business module'
+          );
+          this.requireIdentityOwner(
+            'page_definitions',
+            params.primaryPageDefinitionId,
+            businessVersionId,
+            'Page'
+          );
+          this.insertIdentity(
+            'semantic_functional_modules',
+            params,
+            ['business_module_id', 'module_key', 'primary_page_definition_id'],
+            [params.businessModuleId, params.assetKey, params.primaryPageDefinitionId],
+            now
+          );
+          continue;
+        }
+        if (params.assetType === 'functional_script') {
+          this.requireIdentityOwner(
+            'semantic_functional_modules',
+            params.functionalModuleId,
+            businessVersionId,
+            'Functional module'
+          );
+          this.insertIdentity(
+            'functional_scripts',
+            params,
+            ['functional_module_id', 'script_key', 'name'],
+            [params.functionalModuleId, params.assetKey, params.name],
+            now
+          );
+          continue;
+        }
+        this.insertIdentity(
+          'semantic_test_scenarios',
+          params,
+          ['scenario_key', 'name'],
+          [params.assetKey, params.name],
+          now
+        );
+      }
+    });
+  }
+
+  private insertIdentity(
+    table: string,
+    params: CreateSemanticAssetIdentityParams,
+    columns: string[],
+    values: string[],
+    now: string
+  ): void {
+    const existing = this.db
+      .prepare(`SELECT business_version_id, ${columns.join(', ')} FROM ${table} WHERE id = ?`)
+      .get(params.assetId) as Record<string, unknown> | undefined;
+    if (existing) {
+      const matches =
+        existing.business_version_id === params.businessVersionId &&
+        columns.every((column, index) => existing[column] === values[index]);
+      if (!matches) throw new Error('Semantic asset id was reused with different identity');
+      return;
+    }
+    this.db
+      .prepare(
+        `INSERT INTO ${table} (id, business_version_id, ${columns.join(', ')}, created_at)
+         VALUES (?, ?, ${columns.map(() => '?').join(', ')}, ?)`
+      )
+      .run(params.assetId, params.businessVersionId, ...values, now);
+  }
+
+  private requireIdentityOwner(
+    table: string,
+    assetId: string,
+    businessVersionId: string,
+    label: string
+  ): void {
+    const row = this.db
+      .prepare(`SELECT business_version_id FROM ${table} WHERE id = ?`)
+      .get(assetId) as { business_version_id: string } | undefined;
+    if (!row || row.business_version_id !== businessVersionId) {
+      throw new Error(`${label} does not belong to the business version`);
+    }
   }
 
   createRevision(params: CreateSemanticRevisionParams): SemanticRevisionRecord {

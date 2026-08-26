@@ -8,7 +8,7 @@
 | ------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Semantic 项目初始化 | shipped | 原子创建项目、部署修订、业务版本、PRD 与待验证起始资产图；保留用户入口 URL 的 pathname 作为部署 `basePath` 和起始页面路由；幂等重放且拒绝请求漂移                                                                                                    |
 | 业务版本/资产       | shipped | 页面→业务模块→功能模块→功能脚本→场景稳定身份与不可变修订；copy 重建内部引用                                                                                                                                                                         |
-| Authoring           | shipped | starter graph 上的 bootstrap/recheck/repair、结构化 amendment、Chat scope、影响审批、安全边界排队、作业暂停/恢复/取消、真实浏览器验证与原子激活                                                                                                     |
+| Authoring           | shipped | bootstrap 可从 PRD 结构化创建页面、业务模块、功能模块、功能脚本和场景候选；recheck/repair 修订既有资产；统一使用 amendment、Chat scope、同页/跨 URL 审批、安全边界排队、暂停/恢复/取消、真实浏览器验证与原子激活                                        |
 | Run                 | shipped | 冻结计划、TODO/DAG、page task/attempt、变量、决策、恢复/取消/依赖跳过、证据与 snapshot-first SSE                                                                                                                                                    |
 | 跨服务执行          | shipped | ai-chat-service Agent task/event-log + Vision v2 + 逐 effect 授权；浏览器步骤遵循 shared kind/operation→args 判别映射；proxy session/lease/operation/artifact/event-log 及 TTL/hold 短期原始产物清理、ai-e2e 长期原始证据保留清理，均按持久事实恢复 |
 | 三服务 E2E 门禁     | shipped | 真实 HTTP/MCP/Chromium 覆盖候选生成、验证激活、正式运行、未验证拒绝与 `outcome_unknown` 禁止重放                                                                                                                                                    |
@@ -48,12 +48,14 @@ UI 路由：`/`、`/semantic/:projectId`、`/semantic/:projectId/authoring/:vers
 - 项目输入可包含入口 pathname；部署只保存无凭据 origin 与 `basePath`，工作台深链接和起始页面不得把 `/debug/` 等入口路径折叠成 `/`。
 - 模块/场景切换不导航浏览器；显式定位使用冻结 URL 的 navigation-only task。
 - Agent 输出必须转成结构化候选；同页其他模块与跨 URL 修改必须审批，stale/错误模块候选不可应用。
+- 只有 bootstrap `ingest_prd` Agent task 可提出稳定新资产；新身份在候选期没有 current revision，工作区不可见，但整版本 bootstrap 候选可在原上下文中一次应用跨模块新建资产；已有资产修订仍必须命中当前模块与基础修订锁。验证成功后新建与修订候选一起原子激活。repair/recheck 不得创建资产。
 - 功能脚本 v1 页面入口只读取 `pageScope.entryPageId`，不兼容旧根字段；正式运行必须冻结该页面的 current revision。
 - 候选浏览器验证成功后记录 executable revision verification；只有全部当前脚本/场景覆盖时版本才为 `valid`。
 - side-effect authorization 精确覆盖 effect-bearing step；staging 高风险必须 grant，production 业务写拒绝。
 - 断线后从 snapshot + seq 恢复，不由本地百分比或 Chat 文本推断状态。
 - 长期原始证据仅在所有 manifest 引用到期且没有 open/pinned/custom 保留或对象 pin 后删除；成功/失败默认 7/30 天，逻辑删除先于物理回收，重启可续跑，manifest/item/哈希不删除。
 - Authoring 暂停/恢复/取消使用 `If-Match` 与幂等键；运行中的 Agent 在原子操作安全边界接收对应命令，取消完成后关闭自有浏览器会话。
+- 正式 Run 创建后保持 `ready` 且不得提前占用浏览器 FIFO；只有显式 start 进入 `running` 后才具备领取会话资格。
 - 旧 `/api/projects/*` 返回 404，生产/开发构建均不包含旧向导与 fixtures。
 - `pnpm --filter ai-e2e test:e2e` 必须通过真实 proxy、ai-chat Agent Task HTTP 与 Chromium；未知结果停在 open decision，不能自动创建第二个 Agent task。
 - `pnpm --filter ai-e2e-ui test:e2e` 必须以动态端口和临时数据库启动真实 proxy、ai-chat Harness、ai-e2e 服务与生产 UI bundle，验证项目创建、自动 bootstrap、candidate 浏览器验证/激活、正式 Run、证据及 reload 恢复，不复用已有服务。
@@ -76,6 +78,4 @@ UI 路由：`/`、`/semantic/:projectId`、`/semantic/:projectId/authoring/:vers
 
 ## 7. 已知缺口与技术债
 
-| 缺口 | 类型 | 状态 | 说明 |
-| --- | --- | --- | --- |
-| 完整 PRD 多资产 bootstrap | requirement-gap | tech-debt | 当前 Agent 只能为 starter graph 中的既有稳定资产生成 candidate revision，尚不能按 PRD 新增多个页面、功能模块、功能脚本和场景；因此不得把单 starter graph 的成功旅程描述成“完整自动拆分所有模块和脚本”。完整阶段图、coverage 与版本 validator 仍以 `docs/asset-authoring-repair-contract.md` 为目标。 |
+当前无与本次 PRD 多资产 bootstrap 交付直接相关的已知缺口。

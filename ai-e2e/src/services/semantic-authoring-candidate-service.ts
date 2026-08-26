@@ -6,6 +6,7 @@ import type {
 } from '../database/repositories/authoring-amendment-repository.js';
 import type { CoordinatorAuthoringTask } from '../database/repositories/semantic-coordinator-repository.js';
 import type {
+  CreateSemanticAssetIdentityParams,
   SemanticAssetRepository,
   SemanticAssetType,
 } from '../database/repositories/semantic-asset-repository.js';
@@ -34,6 +35,7 @@ const AMENDMENT_CATEGORIES = new Set<AmendmentCategory>([
 ]);
 
 const CANDIDATE_ASSET_TYPES = new Set<SemanticAssetType>([
+  'page_definition',
   'business_module',
   'functional_module',
   'functional_script',
@@ -103,8 +105,14 @@ export class SemanticAuthoringCandidateService {
         proposalContract: {
           allowedAssetTypes: [...CANDIDATE_ASSET_TYPES],
           proposalFields: [
+            'operation',
             'assetType',
             'assetId',
+            'assetKey',
+            'name',
+            'businessModuleId',
+            'functionalModuleId',
+            'primaryPageDefinitionId',
             'baseRevisionId',
             'candidatePayload',
             'category',
@@ -205,7 +213,12 @@ export class SemanticAuthoringCandidateService {
       throw new Error('候选修改数量必须在 1 到 20 之间');
     }
     const proposals = rawProposals.map((raw) =>
-      validateProposal(raw, task.businessVersionId, context, this.queries)
+      validateProposal(raw, task, context, this.queries)
+    );
+    this.assets.createAssetIdentities(
+      proposals
+        .map((proposal) => proposal.identity)
+        .filter((identity): identity is CreateSemanticAssetIdentityParams => Boolean(identity))
     );
     const thread = this.amendments.createContextThread({
       jobId: task.jobId,
@@ -245,17 +258,34 @@ export class SemanticAuthoringCandidateService {
         changeReason: proposal.reason,
         createdByType: 'main_agent',
         createdById: agentTask.taskId,
-        supersedesRevisionId: proposal.baseRevisionId,
-        sourceRevisionId: proposal.baseRevisionId,
-        changeKind: 'ai_repair',
+        ...(proposal.operation === 'revise'
+          ? {
+              supersedesRevisionId: proposal.baseRevisionId,
+              sourceRevisionId: proposal.baseRevisionId,
+            }
+          : {}),
+        changeKind: proposal.operation === 'create' ? 'generated' : 'ai_repair',
+        ...(proposal.assetType === 'page_definition'
+          ? {
+              pageSignatureSha256: hashValue({
+                routeMode: proposal.candidatePayload.routeMode,
+                routeTemplate: proposal.candidatePayload.routeTemplate,
+                identityQuery: proposal.candidatePayload.identityQuery ?? {},
+              }),
+            }
+          : {}),
       });
+      const baseRevisionId =
+        proposal.operation === 'create' ? revision.id : proposal.baseRevisionId;
+      const baseRevisionSha256 =
+        proposal.operation === 'create' ? revision.contentSha256 : proposal.baseRevisionSha256;
       return {
         revision,
         change: {
           assetType: proposal.assetType,
           assetId: proposal.assetId,
-          baseRevisionId: proposal.baseRevisionId,
-          baseRevisionSha256: proposal.baseRevisionSha256,
+          baseRevisionId,
+          baseRevisionSha256,
           candidateRevisionId: revision.id,
           targetPageDefinitionId: proposal.targetPageDefinitionId,
           ...(proposal.targetFunctionalModuleId
@@ -264,8 +294,9 @@ export class SemanticAuthoringCandidateService {
           targetUrl: proposal.targetUrl,
           category: proposal.category,
           diff: {
+            operation: proposal.operation,
             changedFields: changedFields(proposal.basePayload, proposal.candidatePayload),
-            baseSha256: proposal.baseRevisionSha256,
+            baseSha256: baseRevisionSha256,
             candidateSha256: revision.contentSha256,
             reason: proposal.reason,
           },
@@ -526,7 +557,7 @@ export class SemanticAuthoringCandidateService {
       skillPolicy: { allow: [] },
       budgets: {
         maxDurationMs: 5 * 60_000,
-        maxModelTurns: 12,
+        maxModelTurns: Math.min(20, Math.max(12, steps.length + 1)),
         maxToolCalls: Math.min(50, Math.max(steps.length * 2, 8)),
         maxTokens: 24_000,
       },
@@ -721,6 +752,7 @@ interface AuthoringContext {
 }
 
 interface ValidatedProposal {
+  operation: 'create' | 'revise';
   assetType: SemanticAssetType;
   assetId: string;
   baseRevisionId: string;
@@ -733,6 +765,7 @@ interface ValidatedProposal {
   targetUrl: string;
   targetPageDefinitionId: string;
   targetFunctionalModuleId?: string;
+  identity?: CreateSemanticAssetIdentityParams;
 }
 
 interface VerificationCandidate {
@@ -799,30 +832,79 @@ function resolveContext(
 
 function validateProposal(
   value: unknown,
-  businessVersionId: string,
+  task: CoordinatorAuthoringTask,
   context: AuthoringContext,
   queries: SemanticQueryRepository
 ): ValidatedProposal {
   const proposal = objectValue(value);
+  const operation = (stringValue(proposal.operation) ?? 'revise') as 'create' | 'revise';
+  if (!['create', 'revise'].includes(operation)) throw new Error('proposal.operation 无效');
+  if (operation === 'create' && task.type !== 'ingest_prd') {
+    throw new Error('只有 PRD bootstrap 任务可以创建新资产');
+  }
   const assetType = requiredString(proposal.assetType, 'proposal.assetType') as SemanticAssetType;
   if (!CANDIDATE_ASSET_TYPES.has(assetType))
     throw new Error(`候选资产类型 '${assetType}' 不允许自动修改`);
   const assetId = requiredString(proposal.assetId, 'proposal.assetId');
-  const baseRevisionId = requiredString(proposal.baseRevisionId, 'proposal.baseRevisionId');
-  const base = queries.getRevision(assetType, assetId, baseRevisionId);
-  if (!base) throw new Error('候选基础 revision 不存在');
   const candidatePayload = objectValue(proposal.candidatePayload);
-  if (candidatePayload.schema !== base.schemaId)
-    throw new Error('候选 payload schema 与基础 revision 不一致');
-  if (hashValue(candidatePayload) === base.contentSha256)
-    throw new Error('候选 payload 与基础 revision 完全相同');
   const category = requiredString(proposal.category, 'proposal.category');
   const reason = requiredString(proposal.reason, 'proposal.reason');
   const targetUrl = stringValue(proposal.targetUrl) ?? context.currentUrl;
   const targetPageDefinitionId = stringValue(proposal.targetPageDefinitionId) ?? context.pageId;
+  if (operation === 'create') {
+    if (
+      ![
+        'page_definition',
+        'business_module',
+        'functional_module',
+        'functional_script',
+        'test_scenario',
+      ].includes(assetType)
+    ) {
+      throw new Error(`资产类型 '${assetType}' 不支持创建候选`);
+    }
+    const identity = validateCreatedIdentity(
+      proposal,
+      assetType as CreateSemanticAssetIdentityParams['assetType'],
+      assetId,
+      task.businessVersionId,
+      targetPageDefinitionId
+    );
+    const targetFunctionalModuleId =
+      stringValue(proposal.targetFunctionalModuleId) ??
+      (identity.assetType === 'functional_module'
+        ? identity.assetId
+        : identity.assetType === 'functional_script'
+          ? identity.functionalModuleId
+          : undefined);
+    const schemaId = requiredString(candidatePayload.schema, 'proposal.candidatePayload.schema');
+    return {
+      operation,
+      assetType,
+      assetId,
+      baseRevisionId: '',
+      baseRevisionSha256: '',
+      schemaId,
+      basePayload: {},
+      candidatePayload,
+      category,
+      reason,
+      targetUrl,
+      targetPageDefinitionId,
+      ...(targetFunctionalModuleId ? { targetFunctionalModuleId } : {}),
+      identity,
+    };
+  }
+  const baseRevisionId = requiredString(proposal.baseRevisionId, 'proposal.baseRevisionId');
+  const base = queries.getRevision(assetType, assetId, baseRevisionId);
+  if (!base) throw new Error('候选基础 revision 不存在');
+  if (candidatePayload.schema !== base.schemaId)
+    throw new Error('候选 payload schema 与基础 revision 不一致');
+  if (hashValue(candidatePayload) === base.contentSha256)
+    throw new Error('候选 payload 与基础 revision 完全相同');
   const targetFunctionalModuleId = stringValue(proposal.targetFunctionalModuleId);
-  if (!businessVersionId) throw new Error('businessVersionId is required');
   return {
+    operation,
     assetType,
     assetId,
     baseRevisionId,
@@ -836,6 +918,48 @@ function validateProposal(
     targetPageDefinitionId,
     ...(targetFunctionalModuleId ? { targetFunctionalModuleId } : {}),
   };
+}
+
+function validateCreatedIdentity(
+  proposal: Record<string, unknown>,
+  assetType: CreateSemanticAssetIdentityParams['assetType'],
+  assetId: string,
+  businessVersionId: string,
+  targetPageDefinitionId: string
+): CreateSemanticAssetIdentityParams {
+  const assetKey = requiredString(proposal.assetKey, 'proposal.assetKey');
+  if (assetType === 'page_definition') {
+    return { assetType, assetId, businessVersionId, assetKey };
+  }
+  if (assetType === 'business_module') {
+    return { assetType, assetId, businessVersionId, assetKey };
+  }
+  if (assetType === 'functional_module') {
+    return {
+      assetType,
+      assetId,
+      businessVersionId,
+      assetKey,
+      businessModuleId: requiredString(proposal.businessModuleId, 'proposal.businessModuleId'),
+      primaryPageDefinitionId:
+        stringValue(proposal.primaryPageDefinitionId) ?? targetPageDefinitionId,
+    };
+  }
+  const name = requiredString(proposal.name, 'proposal.name');
+  if (assetType === 'functional_script') {
+    return {
+      assetType,
+      assetId,
+      businessVersionId,
+      assetKey,
+      name,
+      functionalModuleId: requiredString(
+        proposal.functionalModuleId,
+        'proposal.functionalModuleId'
+      ),
+    };
+  }
+  return { assetType, assetId, businessVersionId, assetKey, name };
 }
 
 function compactWorkspace(
@@ -911,6 +1035,7 @@ function buildVerificationSteps(
   const scripts: Array<{ key: string; payload: Record<string, unknown> }> = candidates
     .filter((candidate) => candidate.assetType === 'functional_script')
     .map((candidate) => ({ key: candidate.assetId, payload: candidate.payload }));
+  const scheduledScriptIds = new Set(candidateScripts.keys());
   for (const scenario of candidates.filter(
     (candidate) => candidate.assetType === 'test_scenario'
   )) {
@@ -919,11 +1044,15 @@ function buildVerificationSteps(
       if (!isObject(call)) continue;
       const scriptId = stringValue(call.functionalScriptId);
       if (!scriptId) continue;
+      if (scheduledScriptIds.has(scriptId)) continue;
       const payload =
         candidateScripts.get(scriptId) ??
         workspace.functionalScripts.find((script) => script.id === scriptId)?.currentRevision
           .payload;
-      if (payload) scripts.push({ key: `${scenario.assetId}-${index + 1}-${scriptId}`, payload });
+      if (payload) {
+        scripts.push({ key: `${scenario.assetId}-${index + 1}-${scriptId}`, payload });
+        scheduledScriptIds.add(scriptId);
+      }
     }
   }
   if (scripts.length === 0) {

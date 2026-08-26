@@ -799,24 +799,46 @@ export class AuthoringAmendmentRepository {
          FROM ${spec.table} WHERE id = ?`
       )
       .get(change.candidateRevisionId) as DbRow | undefined;
-    if (
-      !base ||
-      base.asset_id !== change.assetId ||
-      base.business_version_id !== versionId ||
-      base.lifecycle !== 'current' ||
-      base.content_sha256 !== change.baseRevisionSha256
-    ) {
-      throw new Error('Amendment base revision is stale or belongs to another asset');
-    }
-    if (
-      !candidate ||
-      candidate.asset_id !== change.assetId ||
-      candidate.business_version_id !== versionId ||
-      candidate.lifecycle !== 'draft' ||
-      candidate.validation_status !== 'valid' ||
-      candidate.supersedes_revision_id !== change.baseRevisionId
-    ) {
-      throw new Error('Candidate must be a valid draft that supersedes the exact base revision');
+    const createsAsset = change.baseRevisionId === change.candidateRevisionId;
+    if (createsAsset) {
+      if (
+        !base ||
+        base.asset_id !== change.assetId ||
+        base.business_version_id !== versionId ||
+        base.lifecycle !== 'draft' ||
+        base.content_sha256 !== change.baseRevisionSha256 ||
+        !candidate ||
+        candidate.validation_status !== 'valid' ||
+        candidate.supersedes_revision_id !== null
+      ) {
+        throw new Error('Created candidate must be the first valid draft revision of the asset');
+      }
+      const current = this.db
+        .prepare(
+          `SELECT 1 FROM ${spec.table} WHERE ${spec.assetColumn} = ? AND lifecycle = 'current'`
+        )
+        .get(change.assetId);
+      if (current) throw new Error('Created candidate asset already has a current revision');
+    } else {
+      if (
+        !base ||
+        base.asset_id !== change.assetId ||
+        base.business_version_id !== versionId ||
+        base.lifecycle !== 'current' ||
+        base.content_sha256 !== change.baseRevisionSha256
+      ) {
+        throw new Error('Amendment base revision is stale or belongs to another asset');
+      }
+      if (
+        !candidate ||
+        candidate.asset_id !== change.assetId ||
+        candidate.business_version_id !== versionId ||
+        candidate.lifecycle !== 'draft' ||
+        candidate.validation_status !== 'valid' ||
+        candidate.supersedes_revision_id !== change.baseRevisionId
+      ) {
+        throw new Error('Candidate must be a valid draft that supersedes the exact base revision');
+      }
     }
     const ownership = this.resolveChangeOwnership(change, base, versionId);
     if (
@@ -834,6 +856,7 @@ export class AuthoringAmendmentRepository {
     if (
       change.assetType === 'test_scenario' &&
       change.targetUrl === thread.current_url_redacted &&
+      !createsAsset &&
       !parseStringArray(parseObject(thread.context_json_redacted).visibleScenarioIds).includes(
         change.assetId
       )
@@ -960,6 +983,34 @@ export class AuthoringAmendmentRepository {
         baseRevisionSha256: string;
       };
       const spec = REVISION_SPECS[change.assetType];
+      if (change.baseRevisionId === (raw as Record<string, unknown>).candidateRevisionId) {
+        const candidate = this.db
+          .prepare(
+            `SELECT lifecycle, content_sha256 FROM ${spec.table}
+             WHERE id = ? AND ${spec.assetColumn} = ?`
+          )
+          .get(change.baseRevisionId, change.assetId) as DbRow | undefined;
+        const current = this.db
+          .prepare(
+            `SELECT 1 FROM ${spec.table}
+             WHERE ${spec.assetColumn} = ? AND lifecycle = 'current'`
+          )
+          .get(change.assetId);
+        if (
+          !candidate ||
+          candidate.lifecycle !== 'draft' ||
+          candidate.content_sha256 !== change.baseRevisionSha256 ||
+          current
+        ) {
+          this.markStale(amendment.id, {
+            code: 'created_asset_changed',
+            assetType: change.assetType,
+            assetId: change.assetId,
+          });
+          throw new Error('Created candidate asset changed');
+        }
+        continue;
+      }
       const base = this.db
         .prepare(
           `SELECT lifecycle, content_sha256 FROM ${spec.table}
