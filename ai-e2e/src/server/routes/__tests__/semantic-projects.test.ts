@@ -63,7 +63,10 @@ describe('semantic project routes', () => {
       readiness_status: 'unverified',
     });
     expect(db.prepare('SELECT payload_json FROM deployment_profile_revisions').get()).toMatchObject({
-      payload_json: expect.stringContaining('https://example.test'),
+      payload_json: expect.stringContaining('"basePath":"/app"'),
+    });
+    expect(db.prepare('SELECT payload_json FROM page_definition_revisions').get()).toMatchObject({
+      payload_json: expect.stringContaining('"routeTemplate":"/app"'),
     });
 
     const replay = await app.inject({
