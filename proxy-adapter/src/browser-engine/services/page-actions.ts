@@ -91,6 +91,42 @@ export class PageActions {
     };
   }
 
+  private async runMarkerAction(
+    snapshotId: string,
+    nebulaId: number,
+    act: (resolved: ResolvedTarget, resolutionService: ClickResolutionService) => Promise<void>
+  ): Promise<MarkerActionResult> {
+    const page = this.requirePage();
+    const startTime = Date.now();
+
+    try {
+      const resolutionService = new ClickResolutionService(page);
+      const resolved = await resolutionService.resolveTarget({
+        snapshot_id: snapshotId,
+        nebula_id: nebulaId.toString(),
+      });
+
+      const strategy = await this.determineStrategy(resolved.locators, resolved);
+      const attempts = resolved.locators.length;
+
+      await act(resolved, resolutionService);
+
+      return this.buildMarkerActionSuccessResult(startTime, strategy, attempts, resolved);
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      return {
+        success: false,
+        strategy_used: 'none',
+        attempts: 0,
+        latency_ms: Date.now() - startTime,
+        error: {
+          code: this.getErrorCode(err.message),
+          message: err.message,
+        },
+      };
+    }
+  }
+
   async click(x: number, y: number): Promise<void> {
     const page = this.requirePage();
     await page.mouse.click(x, y);
@@ -119,35 +155,9 @@ export class PageActions {
   }
 
   async clickByMarker(snapshotId: string, nebulaId: number): Promise<MarkerActionResult> {
-    const page = this.requirePage();
-    const startTime = Date.now();
-
-    try {
-      const resolutionService = new ClickResolutionService(page);
-      const resolved = await resolutionService.resolveTarget({
-        snapshot_id: snapshotId,
-        nebula_id: nebulaId.toString(),
-      });
-
-      const strategy = await this.determineStrategy(resolved.locators, resolved);
-      const attempts = resolved.locators.length;
-
+    return this.runMarkerAction(snapshotId, nebulaId, async (resolved, resolutionService) => {
       await resolutionService.executeWithFallback(resolved);
-
-      return this.buildMarkerActionSuccessResult(startTime, strategy, attempts, resolved);
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      return {
-        success: false,
-        strategy_used: 'none',
-        attempts: 0,
-        latency_ms: Date.now() - startTime,
-        error: {
-          code: this.getErrorCode(err.message),
-          message: err.message,
-        },
-      };
-    }
+    });
   }
 
   async type(selector: string, text: string, options?: TypeOptions): Promise<void> {
@@ -190,35 +200,9 @@ export class PageActions {
     text: string,
     options?: TypeOptions
   ): Promise<MarkerActionResult> {
-    const page = this.requirePage();
-    const startTime = Date.now();
-
-    try {
-      const resolutionService = new ClickResolutionService(page);
-      const resolved = await resolutionService.resolveTarget({
-        snapshot_id: snapshotId,
-        nebula_id: nebulaId.toString(),
-      });
-
-      const strategy = await this.determineStrategy(resolved.locators, resolved);
-      const attempts = resolved.locators.length;
-
+    return this.runMarkerAction(snapshotId, nebulaId, async (resolved) => {
       await this.type(resolved.locators[0], text, options);
-
-      return this.buildMarkerActionSuccessResult(startTime, strategy, attempts, resolved);
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      return {
-        success: false,
-        strategy_used: 'none',
-        attempts: 0,
-        latency_ms: Date.now() - startTime,
-        error: {
-          code: this.getErrorCode(err.message),
-          message: err.message,
-        },
-      };
-    }
+    });
   }
 
   async scroll(x: number = 0, y: number = 0): Promise<void> {
@@ -237,35 +221,9 @@ export class PageActions {
   }
 
   async focusByMarker(snapshotId: string, nebulaId: number): Promise<MarkerActionResult> {
-    const page = this.requirePage();
-    const startTime = Date.now();
-
-    try {
-      const resolutionService = new ClickResolutionService(page);
-      const resolved = await resolutionService.resolveTarget({
-        snapshot_id: snapshotId,
-        nebula_id: nebulaId.toString(),
-      });
-
-      const strategy = await this.determineStrategy(resolved.locators, resolved);
-      const attempts = resolved.locators.length;
-
+    return this.runMarkerAction(snapshotId, nebulaId, async (resolved) => {
       await this.focus(resolved.locators[0]);
-
-      return this.buildMarkerActionSuccessResult(startTime, strategy, attempts, resolved);
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      return {
-        success: false,
-        strategy_used: 'none',
-        attempts: 0,
-        latency_ms: Date.now() - startTime,
-        error: {
-          code: this.getErrorCode(err.message),
-          message: err.message,
-        },
-      };
-    }
+    });
   }
 
   async blur(selector: string): Promise<void> {
@@ -279,35 +237,9 @@ export class PageActions {
   }
 
   async blurByMarker(snapshotId: string, nebulaId: number): Promise<MarkerActionResult> {
-    const page = this.requirePage();
-    const startTime = Date.now();
-
-    try {
-      const resolutionService = new ClickResolutionService(page);
-      const resolved = await resolutionService.resolveTarget({
-        snapshot_id: snapshotId,
-        nebula_id: nebulaId.toString(),
-      });
-
-      const strategy = await this.determineStrategy(resolved.locators, resolved);
-      const attempts = resolved.locators.length;
-
+    return this.runMarkerAction(snapshotId, nebulaId, async (resolved) => {
       await this.blur(resolved.locators[0]);
-
-      return this.buildMarkerActionSuccessResult(startTime, strategy, attempts, resolved);
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      return {
-        success: false,
-        strategy_used: 'none',
-        attempts: 0,
-        latency_ms: Date.now() - startTime,
-        error: {
-          code: this.getErrorCode(err.message),
-          message: err.message,
-        },
-      };
-    }
+    });
   }
 
   async hover(selector: string): Promise<void> {
@@ -316,35 +248,9 @@ export class PageActions {
   }
 
   async hoverByMarker(snapshotId: string, nebulaId: number): Promise<MarkerActionResult> {
-    const page = this.requirePage();
-    const startTime = Date.now();
-
-    try {
-      const resolutionService = new ClickResolutionService(page);
-      const resolved = await resolutionService.resolveTarget({
-        snapshot_id: snapshotId,
-        nebula_id: nebulaId.toString(),
-      });
-
-      const strategy = await this.determineStrategy(resolved.locators, resolved);
-      const attempts = resolved.locators.length;
-
+    return this.runMarkerAction(snapshotId, nebulaId, async (resolved) => {
       await this.hover(resolved.locators[0]);
-
-      return this.buildMarkerActionSuccessResult(startTime, strategy, attempts, resolved);
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      return {
-        success: false,
-        strategy_used: 'none',
-        attempts: 0,
-        latency_ms: Date.now() - startTime,
-        error: {
-          code: this.getErrorCode(err.message),
-          message: err.message,
-        },
-      };
-    }
+    });
   }
 
   async setValue(selector: string, value: string): Promise<void> {
@@ -371,35 +277,9 @@ export class PageActions {
     nebulaId: number,
     value: string
   ): Promise<MarkerActionResult> {
-    const page = this.requirePage();
-    const startTime = Date.now();
-
-    try {
-      const resolutionService = new ClickResolutionService(page);
-      const resolved = await resolutionService.resolveTarget({
-        snapshot_id: snapshotId,
-        nebula_id: nebulaId.toString(),
-      });
-
-      const strategy = await this.determineStrategy(resolved.locators, resolved);
-      const attempts = resolved.locators.length;
-
+    return this.runMarkerAction(snapshotId, nebulaId, async (resolved) => {
       await this.setValue(resolved.locators[0], value);
-
-      return this.buildMarkerActionSuccessResult(startTime, strategy, attempts, resolved);
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      return {
-        success: false,
-        strategy_used: 'none',
-        attempts: 0,
-        latency_ms: Date.now() - startTime,
-        error: {
-          code: this.getErrorCode(err.message),
-          message: err.message,
-        },
-      };
-    }
+    });
   }
 
   async dispatchEvent(selector: string, eventType: string): Promise<void> {
@@ -421,35 +301,9 @@ export class PageActions {
     nebulaId: number,
     eventType: string
   ): Promise<MarkerActionResult> {
-    const page = this.requirePage();
-    const startTime = Date.now();
-
-    try {
-      const resolutionService = new ClickResolutionService(page);
-      const resolved = await resolutionService.resolveTarget({
-        snapshot_id: snapshotId,
-        nebula_id: nebulaId.toString(),
-      });
-
-      const strategy = await this.determineStrategy(resolved.locators, resolved);
-      const attempts = resolved.locators.length;
-
+    return this.runMarkerAction(snapshotId, nebulaId, async (resolved) => {
       await this.dispatchEvent(resolved.locators[0], eventType);
-
-      return this.buildMarkerActionSuccessResult(startTime, strategy, attempts, resolved);
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      return {
-        success: false,
-        strategy_used: 'none',
-        attempts: 0,
-        latency_ms: Date.now() - startTime,
-        error: {
-          code: this.getErrorCode(err.message),
-          message: err.message,
-        },
-      };
-    }
+    });
   }
 
   async executeScript(script: string): Promise<unknown> {
