@@ -26,3 +26,4 @@
 - [shipped] 删除未被 canonical 客户端使用的旧双后端 HTTP helper；ai-e2e 仅保留 Agent Task 与 browser-execution v1 客户端，不提供单次生成、Chat session、debug DOM 或 LiveKit 兼容调用。
 - [shipped] 项目创建保留用户入口 URL pathname，将其冻结为 deployment `basePath`、起始页面 `routeTemplate`、starter script URL 断言和工作台深链接；不再把 `/debug/` 等入口错误折叠为 `/`。
 - [shipped] semantic 数据库启动时恢复缺失的全局浏览器 FIFO 游标，按已持久 `browser_jobs.queue_seq` 最大值继续编号，不删除、重排或覆盖既有队列记录。
+- [tech-debt] 完整 PRD 多资产 bootstrap 尚未交付：当前 Agent candidate 只能修订 starter graph 的既有稳定资产，不能新增多个页面、模块、脚本和场景；不得把 starter graph 的候选验证/正式 Run 闭环表述为已自动拆分全部 PRD 资产。
