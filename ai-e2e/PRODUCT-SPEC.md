@@ -8,7 +8,7 @@
 | ------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Semantic 项目初始化 | shipped | 原子创建项目、部署修订、业务版本、PRD 与待验证起始资产图；保留用户入口 URL 的 pathname 作为部署 `basePath` 和起始页面路由；幂等重放且拒绝请求漂移                                                                                                    |
 | 业务版本/资产       | shipped | 页面→业务模块→功能模块→功能脚本→场景稳定身份与不可变修订；copy 重建内部引用                                                                                                                                                                         |
-| Authoring           | shipped | bootstrap/recheck/repair、结构化 amendment、Chat scope、影响审批、安全边界排队、作业暂停/恢复/取消、真实浏览器验证与原子激活                                                                                                                        |
+| Authoring           | shipped | starter graph 上的 bootstrap/recheck/repair、结构化 amendment、Chat scope、影响审批、安全边界排队、作业暂停/恢复/取消、真实浏览器验证与原子激活                                                                                                     |
 | Run                 | shipped | 冻结计划、TODO/DAG、page task/attempt、变量、决策、恢复/取消/依赖跳过、证据与 snapshot-first SSE                                                                                                                                                    |
 | 跨服务执行          | shipped | ai-chat-service Agent task/event-log + Vision v2 + 逐 effect 授权；浏览器步骤遵循 shared kind/operation→args 判别映射；proxy session/lease/operation/artifact/event-log 及 TTL/hold 短期原始产物清理、ai-e2e 长期原始证据保留清理，均按持久事实恢复 |
 | 三服务 E2E 门禁     | shipped | 真实 HTTP/MCP/Chromium 覆盖候选生成、验证激活、正式运行、未验证拒绝与 `outcome_unknown` 禁止重放                                                                                                                                                    |
@@ -73,3 +73,9 @@ UI 路由：`/`、`/semantic/:projectId`、`/semantic/:projectId/authoring/:vers
 | loopback 单用户控制面      | shipped | v1 明确拒绝非 loopback；远程/多用户属于产品范围扩展，启用前必须另行定义并交付统一认证、授权和租户隔离，而不是当前实现债务                              |
 | 受限原始证据与保留清理     | shipped | proxy 短期产物和 ai-e2e 长期证据 7/30 天清理已交付；未按项目规则处理的截图/DOM 以 `restricted/pending` 保存，v1 不承诺通用自动脱敏                     |
 | 外发或项目级隐私策略启用门 | shipped | 开放证据外发、共享、远程/多用户访问或项目级隐私策略前，必须先定义可验证的脱敏、原件保留与访问权限规则并完成实现；没有验收标准时不得先行实现通用 worker |
+
+## 7. 已知缺口与技术债
+
+| 缺口 | 类型 | 状态 | 说明 |
+| --- | --- | --- | --- |
+| 完整 PRD 多资产 bootstrap | requirement-gap | tech-debt | 当前 Agent 只能为 starter graph 中的既有稳定资产生成 candidate revision，尚不能按 PRD 新增多个页面、功能模块、功能脚本和场景；因此不得把单 starter graph 的成功旅程描述成“完整自动拆分所有模块和脚本”。完整阶段图、coverage 与版本 validator 仍以 `docs/asset-authoring-repair-contract.md` 为目标。 |
