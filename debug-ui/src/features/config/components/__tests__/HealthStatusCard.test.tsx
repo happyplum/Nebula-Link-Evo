@@ -14,7 +14,7 @@ const useHealthMock = vi.mocked(useHealth) as unknown as {
 
 describe('HealthStatusCard', () => {
   it('renders loading state', () => {
-useHealthMock.mockReturnValue({
+    useHealthMock.mockReturnValue({
       data: undefined,
       isLoading: true,
       error: null,
@@ -25,7 +25,7 @@ useHealthMock.mockReturnValue({
   });
 
   it('renders error state', () => {
-useHealthMock.mockReturnValue({
+    useHealthMock.mockReturnValue({
       data: undefined,
       isLoading: false,
       error: new Error('Failed to load'),
@@ -36,7 +36,7 @@ useHealthMock.mockReturnValue({
   });
 
   it('renders empty state when no health data', () => {
-useHealthMock.mockReturnValue({
+    useHealthMock.mockReturnValue({
       data: null,
       isLoading: false,
       error: null,
@@ -47,7 +47,7 @@ useHealthMock.mockReturnValue({
   });
 
   it('renders health data correctly', () => {
-useHealthMock.mockReturnValue({
+    useHealthMock.mockReturnValue({
       data: {
         status: 'healthy',
         config: 'ok',
@@ -72,7 +72,7 @@ useHealthMock.mockReturnValue({
   });
 
   it('renders unhealthy state correctly', () => {
-useHealthMock.mockReturnValue({
+    useHealthMock.mockReturnValue({
       data: {
         status: 'error',
         config: 'ok',

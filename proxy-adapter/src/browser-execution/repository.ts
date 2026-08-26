@@ -831,10 +831,7 @@ export class BrowserExecutionRepository {
     return this.getArtifactOrThrow(id);
   }
 
-  cleanupExpiredLedger(
-    now: string,
-    terminalCutoff: string
-  ): BrowserLedgerCleanupResult {
+  cleanupExpiredLedger(now: string, terminalCutoff: string): BrowserLedgerCleanupResult {
     return this.transaction(() => {
       const operationIds = (
         this.requireDb()

@@ -326,16 +326,8 @@ describe('browser execution HTTP contract', () => {
 
   it.each([
     ['/debug/api/playwright/navigate', {}, { url: {} }],
-    [
-      '/debug/api/playwright/type',
-      { selector: '#name' },
-      { selector: '#name', text: {} },
-    ],
-    [
-      '/debug/api/playwright/action',
-      { selector: '#save' },
-      { selector: '#save', action: {} },
-    ],
+    ['/debug/api/playwright/type', { selector: '#name' }, { selector: '#name', text: {} }],
+    ['/debug/api/playwright/action', { selector: '#save' }, { selector: '#save', action: {} }],
     ['/debug/api/playwright/scroll', { x: 1 }, { x: {}, y: 2 }],
   ])('rejects malformed bodies before handling %s', async (url, missing, wrongType) => {
     for (const payload of [missing, wrongType]) {

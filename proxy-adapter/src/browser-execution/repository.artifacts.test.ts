@@ -228,10 +228,7 @@ describe('BrowserExecutionRepository artifact foundation', () => {
     repository.closeSessionResources('session-1', now);
 
     expect(
-      repository.cleanupExpiredLedger(
-        '2026-08-20T00:00:00.000Z',
-        '2026-08-13T00:00:00.000Z'
-      )
+      repository.cleanupExpiredLedger('2026-08-20T00:00:00.000Z', '2026-08-13T00:00:00.000Z')
     ).toEqual({ operationsDeleted: 1, idempotencyDeleted: 2 });
     expect(repository.getOperation('operation-1')).toBeUndefined();
     expect(repository.findIdempotency('session.create', 'session-key')).toBeUndefined();
@@ -259,10 +256,7 @@ describe('BrowserExecutionRepository artifact foundation', () => {
     repository.closeSessionResources('session-1', now);
 
     expect(
-      repository.cleanupExpiredLedger(
-        '2026-08-20T00:00:00.000Z',
-        '2026-08-13T00:00:00.000Z'
-      )
+      repository.cleanupExpiredLedger('2026-08-20T00:00:00.000Z', '2026-08-13T00:00:00.000Z')
     ).toEqual({ operationsDeleted: 0, idempotencyDeleted: 0 });
     expect(repository.getOperation('operation-1')?.status).toBe('outcome_unknown');
     expect(repository.findIdempotency('session.create', 'session-key')).toBeDefined();
@@ -309,19 +303,13 @@ describe('BrowserExecutionRepository artifact foundation', () => {
     repository.closeSessionResources('session-1', now);
 
     expect(
-      repository.cleanupExpiredLedger(
-        '2026-08-20T00:00:00.000Z',
-        '2026-08-13T00:00:00.000Z'
-      )
+      repository.cleanupExpiredLedger('2026-08-20T00:00:00.000Z', '2026-08-13T00:00:00.000Z')
     ).toEqual({ operationsDeleted: 0, idempotencyDeleted: 0 });
 
     repository.claimArtifactDeletion('artifact-1');
     repository.markArtifactDeleted('artifact-1', '2026-08-20T00:00:00.000Z');
     expect(
-      repository.cleanupExpiredLedger(
-        '2026-08-20T00:00:00.000Z',
-        '2026-08-13T00:00:00.000Z'
-      )
+      repository.cleanupExpiredLedger('2026-08-20T00:00:00.000Z', '2026-08-13T00:00:00.000Z')
     ).toEqual({ operationsDeleted: 1, idempotencyDeleted: 0 });
     expect(repository.getArtifact('artifact-1')).toBeUndefined();
     expect(repository.getCapture('capture-1')).toBeUndefined();

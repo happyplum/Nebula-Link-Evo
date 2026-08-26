@@ -82,7 +82,9 @@ describe('debug browser surface with real Chromium', () => {
     await actions.blur('#name');
     expect(await page.evaluate(() => document.activeElement?.id)).not.toBe('name');
     await actions.hover('#hover');
-    expect(await page.evaluate(() => (window as Window & { hovered?: boolean }).hovered)).toBe(true);
+    expect(await page.evaluate(() => (window as Window & { hovered?: boolean }).hovered)).toBe(
+      true
+    );
     await page.evaluate(() =>
       document.querySelector('#events')?.addEventListener('custom-ready', () => {
         (window as Window & { customReady?: boolean }).customReady = true;

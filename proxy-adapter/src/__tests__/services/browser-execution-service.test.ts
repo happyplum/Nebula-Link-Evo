@@ -394,7 +394,7 @@ describe('BrowserExecutionService', () => {
         leaseToken: token,
         tabId: 'tab-1',
         request: operationRequest(lease.sequence, { capture: { afterScreenshot: true } }),
-    });
+      });
     const first = await executeCapture();
     const second = await executeCapture();
     const firstRef = first.artifacts.at(0);
@@ -422,9 +422,11 @@ describe('BrowserExecutionService', () => {
     expect(repository.getArtifact(firstArtifact.id)?.status).toBe('deleted');
     expect(repository.getArtifact(secondArtifact.id)?.status).toBe('available');
     expect(existsSync(join(directory, secondArtifact.storageRef))).toBe(true);
-    await expect(service.getArtifactDownload(session.id, secondArtifact.id)).resolves.toMatchObject({
-      artifact: { id: secondArtifact.id },
-    });
+    await expect(service.getArtifactDownload(session.id, secondArtifact.id)).resolves.toMatchObject(
+      {
+        artifact: { id: secondArtifact.id },
+      }
+    );
 
     repository.releaseArtifactHold('cleanup-hold', currentTime);
     await expect(service.cleanupExpiredArtifacts()).resolves.toEqual({
@@ -434,7 +436,9 @@ describe('BrowserExecutionService', () => {
     expect(repository.getArtifact(secondArtifact.id)?.status).toBe('deleted');
     expect(existsSync(join(directory, secondArtifact.storageRef))).toBe(false);
     expect(
-      service.listSessionEvents(session.id, 0, 1000).filter((event) => event.type === 'artifact.deleted')
+      service
+        .listSessionEvents(session.id, 0, 1000)
+        .filter((event) => event.type === 'artifact.deleted')
     ).toHaveLength(2);
   });
 
