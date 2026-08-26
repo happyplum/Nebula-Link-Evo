@@ -44,7 +44,7 @@
 | 幂等 header、problem/连接错误映射              | shipped | `client.test.ts`                               |
 | token 脱敏、act 门禁、JSON/NDJSON              | shipped | `cli.test.ts`                                  |
 | 租约轮换、串行、稳定 operationId、未知结果恢复 | shipped | `controlled-session.test.ts`                   |
-| kind/operation 判别参数请求                     | shipped | shared/client/proxy 类型检查 + 操作集成测试     |
+| kind/operation 判别参数请求                    | shipped | shared/client/proxy 类型检查 + 操作集成测试    |
 | attach/自有 session 清理差异                   | shipped | `controlled-session.test.ts`                   |
 | CLI 真实 navigate/click/text 与失败关闭        | shipped | `controlled-consumers.e2e.test.ts`             |
 
@@ -55,7 +55,7 @@
 
 ## 6. 已知边界
 
-| 边界                                       | 状态    | 说明                              |
-| ------------------------------------------ | ------- | --------------------------------- |
-| 远程认证、多租户、stdio MCP、公共 npm 发布 | pending | v1 不承诺                         |
-| 秘密注入                                   | pending | v1 要求用户在可视浏览器中手工输入 |
+| 边界                                       | 状态    | 说明                                        |
+| ------------------------------------------ | ------- | ------------------------------------------- |
+| 远程认证、多租户、stdio MCP、公共 npm 发布 | shipped | v1 明确不承诺；扩展产品范围前需另行定义契约 |
+| 秘密注入                                   | shipped | v1 明确要求用户在可视浏览器中手工输入       |

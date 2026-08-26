@@ -1,6 +1,6 @@
 # AI E2E 运行状态、决策与证据契约
 
-> 状态：`in-progress`。Run/plan/TODO/dependency/page-task/attempt/variable/decision/command/event 与 artifact/evidence manifest/item 数据模型已交付；正式 Run 原子冻结、乐观命令、TODO attempt、依赖传播、恢复/决策、计划级副作用审批、公开 API、snapshot-first SSE、跨服务 Agent/browser 协调、产物自动提升与生产工作台已实现。proxy 短期原始产物 TTL/hold 清理和 ai-e2e 长期原始证据保留清理已交付；ai-e2e 自动脱敏和项目权限仍未实现。
+> 状态：`in-progress`。Run/plan/TODO/dependency/page-task/attempt/variable/decision/command/event 与 artifact/evidence manifest/item 数据模型已交付；正式 Run 原子冻结、乐观命令、TODO attempt、依赖传播、恢复/决策、计划级副作用审批、公开 API、snapshot-first SSE、跨服务 Agent/browser 协调、产物自动提升与生产工作台已实现。proxy 短期原始产物 TTL/hold 清理和 ai-e2e 长期原始证据保留清理已交付；未按项目规则处理的证据保持 `restricted/pending`。通用自动脱敏与项目级权限须在外发、共享、远程/多用户访问或项目隐私策略启用前先定义验收标准，不属于当前 v1 承诺。
 > 更新时间：2026-08-26。
 > 本文定义测试流程从调度到结果汇总的状态、失败传播、决策记录、证据包和人工控制语义。精确 Run API/SSE 见 `service-api-event-contract.md`；数据库物理字段和 UI 布局可以在实现设计中调整，但不同层级状态不得重新混为一个字段。
 
@@ -30,17 +30,17 @@ created → planning ─────────→ ready → running ↔ paused
                └→ cancelled(side_effect_policy_denied)
 ```
 
-| 生命周期 | 语义 |
-|---|---|
-| `created` | 已创建，尚未冻结运行计划。 |
-| `planning` | 正在校验版本、部署、参数并展开调用图。 |
-| `ready` | 基础运行计划已冻结，可开始调度。 |
-| `running` | 主代理正在调度或等待一个活动页面任务结果。 |
-| `paused` | 不再派发新操作，保存暂停原因和检查点；可由等待计划级审批、用户暂停或运行中决策触发。 |
-| `completing` | 不再执行普通 TODO，正在汇总结果或执行显式收尾。 |
-| `completed` | 运行已封存，不再变化。 |
-| `cancelling` | 正在取消未开始工作并等待活动原子操作到达安全边界。 |
-| `cancelled` | 运行被取消并封存；已发生副作用不会自动回滚。 |
+| 生命周期     | 语义                                                                                 |
+| ------------ | ------------------------------------------------------------------------------------ |
+| `created`    | 已创建，尚未冻结运行计划。                                                           |
+| `planning`   | 正在校验版本、部署、参数并展开调用图。                                               |
+| `ready`      | 基础运行计划已冻结，可开始调度。                                                     |
+| `running`    | 主代理正在调度或等待一个活动页面任务结果。                                           |
+| `paused`     | 不再派发新操作，保存暂停原因和检查点；可由等待计划级审批、用户暂停或运行中决策触发。 |
+| `completing` | 不再执行普通 TODO，正在汇总结果或执行显式收尾。                                      |
+| `completed`  | 运行已封存，不再变化。                                                               |
+| `cancelling` | 正在取消未开始工作并等待活动原子操作到达安全边界。                                   |
+| `cancelled`  | 运行被取消并封存；已发生副作用不会自动回滚。                                         |
 
 终态结果单独记录：
 
@@ -54,18 +54,18 @@ created → planning ─────────→ ready → running ↔ paused
 
 一个 TODO 对应冻结运行计划中的一次具体功能脚本调用：
 
-| 状态 | 语义 | 可否继续 |
-|---|---|---|
-| `waiting_dependencies` | 等待上游 TODO 产生必须输出。 | 上游变化后自动重算 |
-| `ready` | 依赖和输入已满足，可派发。 | 是 |
-| `running` | 已交给一个页面任务，存在活动执行尝试。 | 等待尝试结束 |
-| `waiting_decision` | 需要主代理或用户裁决。 | 决策持久化后 |
-| `blocked` | 缺少登录、权限、环境、数据等外部前置条件。 | 主代理追加前置任务或明确终止后 |
-| `interrupted` | 登出、错误页面、连接丢失等意外打断，恢复条件明确或待检查。 | 主代理完成恢复检查后 |
-| `passed` | 功能脚本全部硬断言通过并发布输出。 | 终态 |
-| `failed` | 在当前运行策略内不可恢复或修复/重试已结束。 | 终态 |
-| `skipped` | 因明确上游失败、缺失输出或策略决定而未执行。 | 终态 |
-| `cancelled` | 运行取消时尚未完成。 | 终态 |
+| 状态                   | 语义                                                       | 可否继续                       |
+| ---------------------- | ---------------------------------------------------------- | ------------------------------ |
+| `waiting_dependencies` | 等待上游 TODO 产生必须输出。                               | 上游变化后自动重算             |
+| `ready`                | 依赖和输入已满足，可派发。                                 | 是                             |
+| `running`              | 已交给一个页面任务，存在活动执行尝试。                     | 等待尝试结束                   |
+| `waiting_decision`     | 需要主代理或用户裁决。                                     | 决策持久化后                   |
+| `blocked`              | 缺少登录、权限、环境、数据等外部前置条件。                 | 主代理追加前置任务或明确终止后 |
+| `interrupted`          | 登出、错误页面、连接丢失等意外打断，恢复条件明确或待检查。 | 主代理完成恢复检查后           |
+| `passed`               | 功能脚本全部硬断言通过并发布输出。                         | 终态                           |
+| `failed`               | 在当前运行策略内不可恢复或修复/重试已结束。                | 终态                           |
+| `skipped`              | 因明确上游失败、缺失输出或策略决定而未执行。               | 终态                           |
+| `cancelled`            | 运行取消时尚未完成。                                       | 终态                           |
 
 `blocked`、`interrupted` 和 `waiting_decision` 是可恢复状态，不立即触发依赖跳过。只有主代理把 TODO 收敛为 `failed`、`skipped` 或 `cancelled` 后，才向下游传播终态影响。
 
@@ -93,16 +93,16 @@ created → planning ─────────→ ready → running ↔ paused
 
 ## 3. 失败与中断分类
 
-| 分类 | 默认处理 | 是否属于业务失败 |
-|---|---|---|
-| `business_assertion` | 固化证据，TODO 最终失败；依赖其输出的节点跳过，独立节点继续。 | 是 |
-| `script_drift` | 子代理在授权范围内提出新脚本修订，主代理追加计划修订并重试。 | 修复耗尽后是 |
-| `precondition_missing` | TODO 进入 blocked，由主代理安排登录、造数、权限或环境前置任务。 | 未解决时影响最终结果，但不伪装成断言失败 |
-| `recoverable_interruption` | TODO 进入 interrupted，主代理恢复环境并检查副作用后恢复或重派。 | 否，恢复失败后可转最终失败 |
-| `infrastructure` | 对只读或可证明未执行的操作按预算重试；否则暂停检查。 | 否，但耗尽后导致流程失败 |
-| `outcome_unknown` | 查询操作账本并检查页面/数据副作用；禁止盲重试。 | 尚未裁决 |
-| `decision_required` | 停止相关分支并创建决策请求。 | 否 |
-| `cancelled` | 停止未开始工作，记录已发生副作用和可选清理建议。 | 否 |
+| 分类                       | 默认处理                                                        | 是否属于业务失败                         |
+| -------------------------- | --------------------------------------------------------------- | ---------------------------------------- |
+| `business_assertion`       | 固化证据，TODO 最终失败；依赖其输出的节点跳过，独立节点继续。   | 是                                       |
+| `script_drift`             | 子代理在授权范围内提出新脚本修订，主代理追加计划修订并重试。    | 修复耗尽后是                             |
+| `precondition_missing`     | TODO 进入 blocked，由主代理安排登录、造数、权限或环境前置任务。 | 未解决时影响最终结果，但不伪装成断言失败 |
+| `recoverable_interruption` | TODO 进入 interrupted，主代理恢复环境并检查副作用后恢复或重派。 | 否，恢复失败后可转最终失败               |
+| `infrastructure`           | 对只读或可证明未执行的操作按预算重试；否则暂停检查。            | 否，但耗尽后导致流程失败                 |
+| `outcome_unknown`          | 查询操作账本并检查页面/数据副作用；禁止盲重试。                 | 尚未裁决                                 |
+| `decision_required`        | 停止相关分支并创建决策请求。                                    | 否                                       |
+| `cancelled`                | 停止未开始工作，记录已发生副作用和可选清理建议。                | 否                                       |
 
 主代理每次收敛失败必须同时给出：尝试结果、原因分类、是否可恢复、可能副作用、缺失输出、受影响下游、下一步动作和证据完整度。
 
@@ -230,11 +230,11 @@ open → answered → applied
 
 ### 8.1 默认采集级别
 
-| 级别 | 内容 | 默认用途 |
-|---|---|---|
-| `standard` | 操作账本、语义步骤、检查点截图/DOM、断言实际值、失败现场 | 普通运行默认 |
+| 级别         | 内容                                                                           | 默认用途           |
+| ------------ | ------------------------------------------------------------------------------ | ------------------ |
+| `standard`   | 操作账本、语义步骤、检查点截图/DOM、断言实际值、失败现场                       | 普通运行默认       |
 | `diagnostic` | standard + 每步前后截图、受限 console/network 元数据、失败前后媒体片段或 trace | 调试运行或重现难题 |
-| `minimal` | 只保存脱敏结构化结果和失败必要现场 | 高敏数据环境 |
+| `minimal`    | 只保存脱敏结构化结果和失败必要现场                                             | 高敏数据环境       |
 
 实时视频始终用于可视执行，但默认不等于永久录像。历史“重放”优先使用语义步骤、操作时间线、截图和短媒体片段，不重新执行副作用动作。
 
@@ -307,7 +307,7 @@ open → answered → applied
 - semantic Run 已区分 Run/TODO/page task/attempt/decision/evidence 状态，取消、可恢复中断、结果未知和依赖跳过拥有独立事实。
 - Run 已提供持久 event ID/seq、snapshot-first SSE 与 event-log。
 - 生产 UI 已消费权威 Run snapshot/SSE、TODO/依赖、决策和证据投影。
-- artifact/evidence manifest/item 仓储、proxy 截图/DOM/operation 自动提升、读 API、UI 证据定位、proxy 短期原始产物清理及 ai-e2e 长期原始证据保留清理 worker 已交付；自动脱敏 worker 未交付，未脱敏截图/DOM 保持 `restricted/pending`。
+- artifact/evidence manifest/item 仓储、proxy 截图/DOM/operation 自动提升、读 API、UI 证据定位、proxy 短期原始产物清理及 ai-e2e 长期原始证据保留清理 worker 已交付；未按项目规则处理的截图/DOM 保持 `restricted/pending`。v1 不承诺通用自动脱敏，相关 worker 必须在脱敏、原件保留与访问权限规则获批后再实现。
 - semantic 决策已能处理计划级副作用审批、blocked/outcome-unknown 恢复和 Authoring 影响扩展审批。
 
 ## 13. 实现前仍需精确定义

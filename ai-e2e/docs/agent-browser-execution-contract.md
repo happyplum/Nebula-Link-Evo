@@ -1,6 +1,6 @@
 # AI E2E 代理与浏览器执行契约
 
-> 状态：`in-progress`。proxy 浏览器控制/取证/事件、ai-chat-service Agent task 命令/事件/Skills、ai-e2e FIFO 编排、跨服务持久事件游标关联与证据提升已交付；proxy 续租、媒体清理/脱敏及远程多租户控制面仍待实现。
+> 状态：`in-progress`。proxy 浏览器控制/取证/事件、ai-chat-service Agent task 命令/事件/Skills、ai-e2e FIFO 编排、跨服务持久事件游标关联与证据提升已交付；set_files、video 和操作动画仍待实现。control 原地续租、通用自动脱敏与远程多租户不属于当前 v1 承诺，启用条件见本文边界。
 > 更新时间：2026-08-26。
 > 本文定义主代理、页面子代理、`ai-chat-service` 与 `proxy-adapter` 之间的运行边界。精确 HTTP/MCP 路由和逻辑 JSON Schema 见 `service-api-event-contract.md`；鉴权与持久化实现可以调整，但所有权、幂等、串行、暂停和证据语义不得弱化。
 
@@ -211,7 +211,7 @@
 ## 14. 当前实现差距
 
 - `proxy-adapter` 已交付 application session、稳定 Tab、observe/control lease、`operationId` 去重、queued cancel、持久结果查询和重启 `outcome_unknown`；当前 MCP Server 只暴露 3 个受控 operation 工具。
-- proxy 已交付受控 dom_snapshot、before/after screenshot、失败截图、内容寻址短期 artifact、完整性校验、browser session SSE/event-log、会话范围 artifact GET 与 TTL/hold 短期清理；set_files、video、操作动画、control 原地续租和自动脱敏仍未实现。
+- proxy 已交付受控 dom_snapshot、before/after screenshot、失败截图、内容寻址短期 artifact、完整性校验、browser session SSE/event-log、会话范围 artifact GET 与 TTL/hold 短期清理；set_files、video 和操作动画仍未实现。control 原地续租与通用自动脱敏不是 v1 承诺：前者由安全边界撤销/重发覆盖，后者须在证据外发、共享、远程/多用户访问或项目级隐私策略启用前先定义验收标准。
 - browser execution 事件已按 session 持久化单调 seq 并采用 snapshot-first SSE；ai-e2e 协调器直接按持久 seq 游标消费 browser event-log，并通过 operation GET 和 opaque external link 写入业务证据关联。
 - `ai-chat-service` 已交付独立受限 Agent task POST/GET/commands、持久状态、精确工具白名单、预算、结构化结果、模型不可见 browser binding、snapshot-first events/event-log 与单 Skill runtime；ai-e2e semantic 页面任务和 Authoring repair 已消费 create/get/commands/event-log，完整终态仍以权威 task snapshot 收敛。
 - `ai-e2e` 只使用 Agent + MCP 可视执行链，不存在本地脚本子进程执行路径。
@@ -220,7 +220,7 @@
 ## 15. 仍待实现设计
 
 - Agent task、browser event/artifact 和跨服务证据关联已在 `service-api-event-contract.md` 锁定；proxy 控制面、ai-chat-service Agent task/Skill runtime，以及 ai-e2e 页面任务、下游 event-log 游标消费、Authoring/Run API/SSE、outbox 协调、逐 effectId 参数门禁、证据提升和生产 UI 均已实现。保留清理由各服务产品规格单独追踪。
-- proxy 已实现短期 opaque token + SHA-256 hash/process epoch、自有 SQLite WAL operation ledger、TTL/hold 引用保护及 operation/idempotency 7 天保留清理；不扩权续租仍待实现。
+- proxy 已实现短期 opaque token + SHA-256 hash/process epoch、自有 SQLite WAL operation ledger、TTL/hold 引用保护及 operation/idempotency 7 天保留清理；客户端在原子操作安全边界撤销并重发 control lease，v1 不提供原地续租。
 - 动画媒体协议、播放速度和重放索引格式。
 - 同时多身份、多 BrowserContext 与多 Tab 并发需要的隔离和调度模型；v1 单 Context、单活动身份不依赖该扩展。
 

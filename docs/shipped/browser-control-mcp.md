@@ -19,7 +19,9 @@ proxy-adapter 通过 MCP Server (StreamableHTTP) 只对外暴露受控 `browser-
 - [shipped] `shared/types/browser-execution.ts` 以 kind/operation 判别联合映射每个操作的精确 args；proxy 运行时继续拒绝缺失、额外或越界字段，执行分支不再使用字符串键或参数强制转换。
 - [shipped] `operation_execute` 支持 before/after screenshot 与 DOM capture，失败操作即使未主动请求也会尝试保存现场截图；bytes 以 SHA-256 内容寻址写入 `data/proxy-adapter/artifacts`，操作结果只返回 opaque artifact ref。`GET /api/v1/browser-execution/sessions/:sessionId/artifacts/:artifactId` 在返回前复核 storage ref、size 和 SHA-256。
 - [shipped] browser session 持久事件按 session 单调 seq 记录；`/events` 每次连接先发 `browser_session.snapshot`，`/event-log?afterSeq=` 用于审计补洞，heartbeat 不占业务 seq。
-- [pending] set_files、video segment、control 续租、操作动画和自动脱敏尚未交付；capability 保持 `operationPresentationAnimation=false`。
+- [pending] set_files、video segment 和操作动画尚未交付；capability 保持 `operationPresentationAnimation=false`。
+- [shipped] control lease 最长 5 分钟，客户端仅在原子操作安全边界撤销并重发；v1 不提供原地续租，只有运行指标证明轮换影响任务后才可另行定义续租协议。
+- [shipped] v1 对未按上层项目规则处理的截图/DOM 保持受限原始证据语义，不承诺通用自动脱敏；开放证据外发、共享、远程/多用户访问或项目级隐私策略前，必须先定义脱敏与权限验收标准。
 - [designed] 浏览器截图、DOM 和媒体属于带完整性信息的短期原始产物；长期证据 manifest、业务关联、保留与 pin 由 ai-e2e 持有，原始产物清理前需可被提升或明确过期。
 - [shipped] 配置入口：消费方通过 `PROXY_ADAPTER_URL + /mcp`（默认 `http://127.0.0.1:3000/mcp`）接入。
 - [shipped] 验收面：既有 MCP/provider 测试 + `browser-execution-service.test.ts`、`browser-execution-routes.test.ts`、`browser-execution-tools-provider.test.ts`、`playwright-browser-execution.test.ts`；2026-08-26 proxy-adapter 全量测试通过。

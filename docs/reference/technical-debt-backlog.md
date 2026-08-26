@@ -6,13 +6,7 @@ The large checklist plan is no longer the durable tracking surface. Completed or
 
 ## Residual Items
 
-### Remote authentication design
-
-Status: `pending`
-
-The shipped v1 control planes are intentionally loopback-only and do not require a global authentication layer. Remote deployment remains blocked until a durable authentication, authorization, and tenant-isolation design is approved.
-
-Expected result: before enabling non-loopback control, create a focused design comparing API key, JWT/refresh token, OAuth2, and session-based options for Fastify HTTP routes, MCP access, debug UI, and ai-e2e surfaces, including tenant isolation and credential rotation.
+No active residual item from the 2026-06-12 review remains in this backlog. Remote/multi-user control, universal evidence redaction, and in-place control-lease renewal are conditional product-scope extensions rather than current v1 implementation debt. Their fail-closed gates are recorded in the owning PRODUCT-SPEC and contract documents; implementation requires explicit acceptance criteria first.
 
 ## Cleanup Rule
 
