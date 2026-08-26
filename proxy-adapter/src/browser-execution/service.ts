@@ -5,10 +5,7 @@ import { Mutex } from 'async-mutex';
 import { LocalBrowserArtifactStore, type BrowserArtifactStore } from './artifact-store.js';
 import { BrowserExecutionError, toBrowserExecutionProblem } from './errors.js';
 import { hashOpaqueToken, sha256, sha256Bytes } from './hash.js';
-import {
-  BrowserExecutionRepository,
-  type BrowserLedgerCleanupResult,
-} from './repository.js';
+import { BrowserExecutionRepository, type BrowserLedgerCleanupResult } from './repository.js';
 import { validateOperationInput } from './validation.js';
 import {
   ACT_OPERATIONS,

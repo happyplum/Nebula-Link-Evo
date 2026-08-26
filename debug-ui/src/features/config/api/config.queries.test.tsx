@@ -176,7 +176,9 @@ describe('config.queries', () => {
       const { result } = renderHook(() => useMcpTools(), { wrapper: createWrapper() });
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-      expect(mustExist(result.current.data, 'MCP tools response').tools[0].inputSchema).toBeUndefined();
+      expect(
+        mustExist(result.current.data, 'MCP tools response').tools[0].inputSchema
+      ).toBeUndefined();
     });
 
     it('fetches /debug/api/mcp/tools endpoint', async () => {

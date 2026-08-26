@@ -14,7 +14,7 @@ const useMcpStatusMock = vi.mocked(useMcpStatus) as unknown as {
 
 describe('McpStatusList', () => {
   it('renders loading state', () => {
-useMcpStatusMock.mockReturnValue({
+    useMcpStatusMock.mockReturnValue({
       data: undefined,
       isLoading: true,
       error: null,
@@ -25,7 +25,7 @@ useMcpStatusMock.mockReturnValue({
   });
 
   it('renders error state', () => {
-useMcpStatusMock.mockReturnValue({
+    useMcpStatusMock.mockReturnValue({
       data: undefined,
       isLoading: false,
       error: new Error('Failed to load'),
@@ -36,7 +36,7 @@ useMcpStatusMock.mockReturnValue({
   });
 
   it('renders empty state when no data', () => {
-useMcpStatusMock.mockReturnValue({
+    useMcpStatusMock.mockReturnValue({
       data: null,
       isLoading: false,
       error: null,
@@ -47,7 +47,7 @@ useMcpStatusMock.mockReturnValue({
   });
 
   it('renders disabled state', () => {
-useMcpStatusMock.mockReturnValue({
+    useMcpStatusMock.mockReturnValue({
       data: {
         enabled: false,
         servers: [],
@@ -62,7 +62,7 @@ useMcpStatusMock.mockReturnValue({
   });
 
   it('renders empty servers list', () => {
-useMcpStatusMock.mockReturnValue({
+    useMcpStatusMock.mockReturnValue({
       data: {
         enabled: true,
         servers: [],
@@ -77,7 +77,7 @@ useMcpStatusMock.mockReturnValue({
   });
 
   it('renders servers with state machine states and handles view tools click', () => {
-useMcpStatusMock.mockReturnValue({
+    useMcpStatusMock.mockReturnValue({
       data: {
         enabled: true,
         servers: [
@@ -105,7 +105,7 @@ useMcpStatusMock.mockReturnValue({
   });
 
   it('renders reconnecting state with loading indicator', () => {
-useMcpStatusMock.mockReturnValue({
+    useMcpStatusMock.mockReturnValue({
       data: {
         enabled: true,
         servers: [
@@ -123,7 +123,7 @@ useMcpStatusMock.mockReturnValue({
   });
 
   it('renders failed state with error indicator', () => {
-useMcpStatusMock.mockReturnValue({
+    useMcpStatusMock.mockReturnValue({
       data: {
         enabled: true,
         servers: [
@@ -139,7 +139,7 @@ useMcpStatusMock.mockReturnValue({
   });
 
   it('renders starting state with loading indicator', () => {
-useMcpStatusMock.mockReturnValue({
+    useMcpStatusMock.mockReturnValue({
       data: {
         enabled: true,
         servers: [

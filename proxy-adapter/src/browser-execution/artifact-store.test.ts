@@ -38,13 +38,15 @@ describe('LocalBrowserArtifactStore', () => {
     await expect(store.delete(stored.storageRef)).resolves.toBe(false);
   });
 
-  it.each(['../escape.png', 'zz/not-a-hash.png', `${'a'.repeat(64)}.png`, `aa/${'a'.repeat(64)}.txt`])(
-    'rejects invalid storage reference %s',
-    async (storageRef) => {
-      const store = createStore();
+  it.each([
+    '../escape.png',
+    'zz/not-a-hash.png',
+    `${'a'.repeat(64)}.png`,
+    `aa/${'a'.repeat(64)}.txt`,
+  ])('rejects invalid storage reference %s', async (storageRef) => {
+    const store = createStore();
 
-      await expect(store.read(storageRef)).rejects.toThrow('storage reference is invalid');
-      await expect(store.delete(storageRef)).rejects.toThrow('storage reference is invalid');
-    }
-  );
+    await expect(store.read(storageRef)).rejects.toThrow('storage reference is invalid');
+    await expect(store.delete(storageRef)).rejects.toThrow('storage reference is invalid');
+  });
 });

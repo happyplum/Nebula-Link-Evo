@@ -376,10 +376,7 @@ function parseKey(request: Extract<BrowserOperationRequestV1, { operation: 'pres
     return raw;
   }
   const { key, modifiers } = raw;
-  if (
-    !ALLOWED_KEYS.has(key) ||
-    modifiers.some((item) => !ALLOWED_MODIFIERS.has(item))
-  ) {
+  if (!ALLOWED_KEYS.has(key) || modifiers.some((item) => !ALLOWED_MODIFIERS.has(item))) {
     throw new BrowserExecutionError('validation_failed', 'press.key is invalid');
   }
   return [...new Set(modifiers), key].join('+');

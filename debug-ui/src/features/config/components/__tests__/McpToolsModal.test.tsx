@@ -25,14 +25,14 @@ describe('McpToolsModal', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-useMcpCallMock.mockReturnValue({
+    useMcpCallMock.mockReturnValue({
       mutateAsync: mockMutateAsync,
       isPending: false,
     } as unknown);
   });
 
   it('does not render when serverName is null', () => {
-useMcpToolsMock.mockReturnValue({
+    useMcpToolsMock.mockReturnValue({
       data: undefined,
       isLoading: false,
       error: null,
@@ -43,7 +43,7 @@ useMcpToolsMock.mockReturnValue({
   });
 
   it('renders loading state', () => {
-useMcpToolsMock.mockReturnValue({
+    useMcpToolsMock.mockReturnValue({
       data: undefined,
       isLoading: true,
       error: null,
@@ -54,7 +54,7 @@ useMcpToolsMock.mockReturnValue({
   });
 
   it('renders error state', () => {
-useMcpToolsMock.mockReturnValue({
+    useMcpToolsMock.mockReturnValue({
       data: undefined,
       isLoading: false,
       error: new Error('Failed to load'),
@@ -65,7 +65,7 @@ useMcpToolsMock.mockReturnValue({
   });
 
   it('renders empty state when no tools for server', () => {
-useMcpToolsMock.mockReturnValue({
+    useMcpToolsMock.mockReturnValue({
       data: {
         tools: [{ name: 'other-server.tool1', description: 'desc' }],
       },
@@ -78,7 +78,7 @@ useMcpToolsMock.mockReturnValue({
   });
 
   it('renders tools list and handles execution', async () => {
-useMcpToolsMock.mockReturnValue({
+    useMcpToolsMock.mockReturnValue({
       data: {
         tools: [
           {
@@ -138,7 +138,7 @@ useMcpToolsMock.mockReturnValue({
   });
 
   it('handles invalid JSON input', async () => {
-useMcpToolsMock.mockReturnValue({
+    useMcpToolsMock.mockReturnValue({
       data: {
         tools: [{ name: 'test-server.my-tool', description: 'A test tool' }],
       },

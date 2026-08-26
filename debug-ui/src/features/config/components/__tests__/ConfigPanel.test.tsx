@@ -14,7 +14,7 @@ const useConfigMock = vi.mocked(useConfig) as unknown as {
 
 describe('ConfigPanel', () => {
   it('renders loading state', () => {
-useConfigMock.mockReturnValue({
+    useConfigMock.mockReturnValue({
       data: undefined,
       isLoading: true,
       error: null,
@@ -25,7 +25,7 @@ useConfigMock.mockReturnValue({
   });
 
   it('renders error state', () => {
-useConfigMock.mockReturnValue({
+    useConfigMock.mockReturnValue({
       data: undefined,
       isLoading: false,
       error: new Error('Failed to load'),
@@ -36,7 +36,7 @@ useConfigMock.mockReturnValue({
   });
 
   it('renders empty state when no config', () => {
-useConfigMock.mockReturnValue({
+    useConfigMock.mockReturnValue({
       data: null,
       isLoading: false,
       error: null,
@@ -47,7 +47,7 @@ useConfigMock.mockReturnValue({
   });
 
   it('renders config data correctly', () => {
-useConfigMock.mockReturnValue({
+    useConfigMock.mockReturnValue({
       data: {
         mode: 'development',
         decision: { provider: 'anthropic', model: 'claude-3-opus' },
@@ -65,7 +65,7 @@ useConfigMock.mockReturnValue({
   });
 
   it('renders fallback text for missing config values', () => {
-useConfigMock.mockReturnValue({
+    useConfigMock.mockReturnValue({
       data: {},
       isLoading: false,
       error: null,
