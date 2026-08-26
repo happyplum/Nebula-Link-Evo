@@ -369,6 +369,34 @@ describe('SemanticWorkbench', () => {
     expect(screen.getByRole('button', { name: /在安全边界应用/ })).toBeDisabled();
   });
 
+  it('PRD bootstrap 允许在当前上下文应用跨模块新建资产', async () => {
+    api.getAuthoringSnapshot.mockResolvedValue({
+      ...snapshot,
+      job: { ...snapshot.job, mode: 'bootstrap' },
+    });
+    api.listAmendments.mockResolvedValue([
+      {
+        ...amendment,
+        changes: [
+          ...amendment.changes,
+          {
+            assetType: 'functional_module',
+            assetId: 'm-new',
+            targetFunctionalModuleId: 'm-new',
+            baseRevisionId: 'new-revision',
+            candidateRevisionId: 'new-revision',
+            baseRevisionSha256: 'new-revision-sha',
+          },
+        ],
+      },
+    ]);
+    renderAuthoring(
+      '/semantic/p1/authoring/v1?job=job1&url=%2Fcheckout&page=page1&module=m1&scenario=sc1'
+    );
+    fireEvent.click(await screen.findByRole('tab', { name: /Diff/ }));
+    expect(screen.getByRole('button', { name: /在安全边界应用/ })).toBeEnabled();
+  });
+
   it('运行页以持久化状态提供暂停运行、恢复 TODO 和证据入口', async () => {
     renderRun();
     expect(await screen.findByText('运行状态：paused')).toBeInTheDocument();

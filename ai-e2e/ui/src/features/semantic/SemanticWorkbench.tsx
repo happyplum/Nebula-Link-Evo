@@ -508,7 +508,10 @@ export function SemanticWorkbench({
       };
     for (const change of amendment.changes) {
       const targetModuleId = text(change.targetFunctionalModuleId, '');
-      if (targetModuleId && targetModuleId !== moduleId)
+      const isBootstrapCreate =
+        text(authoringQuery.data?.job.mode) === 'bootstrap' &&
+        text(change.baseRevisionId) === text(change.candidateRevisionId);
+      if (!isBootstrapCreate && targetModuleId && targetModuleId !== moduleId)
         return { allowed: false, reason: '候选属于其他模块，切回原模块后才能应用' };
       const assetType = text(change.assetType);
       const assetId = text(change.assetId);

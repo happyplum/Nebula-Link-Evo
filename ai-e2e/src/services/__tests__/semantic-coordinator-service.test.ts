@@ -312,6 +312,167 @@ describe('SemanticCoordinatorService', () => {
     ).toEqual({ count: 2 });
   });
 
+  it('将 PRD bootstrap 输出的新模块、脚本和场景作为不可见候选并在验证后原子激活', async () => {
+    const fixture = createFixture(db, assets);
+    const versions = new BusinessVersionRepository(db);
+    const amendments = new AuthoringAmendmentRepository(db, assets);
+    const authoring = new SemanticAuthoringService(workflows, assets, amendments, versions);
+    const moduleId = '20000000-0000-4000-8000-000000000001';
+    const scriptId = '20000000-0000-4000-8000-000000000002';
+    const scenarioId = '20000000-0000-4000-8000-000000000003';
+    const pageId = '20000000-0000-4000-8000-000000000004';
+    const job = authoring.createJob({
+      businessVersionId: fixture.versionId,
+      mode: 'bootstrap',
+      idempotencyKey: 'bootstrap-product-navigation',
+      currentUrl: 'https://test.example/account',
+      reason: '根据 PRD 增加产品导航覆盖',
+      createdBy: 'operator',
+    });
+    const scriptPayload = functionalScriptFixture({
+      scriptKey: 'navigation.inspect',
+      name: '检查产品导航',
+      moduleId,
+      pageId,
+    });
+    const agent = new FakeAgentTaskClient({
+      status: 'candidate_ready',
+      summary: '已从 PRD 拆分产品导航模块、脚本和场景',
+      category: 'scenario_add',
+      proposalsJson: JSON.stringify([
+        {
+          operation: 'create',
+          assetType: 'page_definition',
+          assetId: pageId,
+          assetKey: 'navigation',
+          candidatePayload: {
+            schema: 'nebula.ai-e2e.page-definition/1.0',
+            name: '产品导航页',
+            routeMode: 'path',
+            routeTemplate: '/navigation',
+            identityQuery: {},
+            runtimeParams: {},
+            ignoredQueryKeys: [],
+            authRequirement: { kind: 'anonymous' },
+            recognition: [],
+            allowedTransitionPageIds: [],
+          },
+          category: 'requirement',
+          reason: 'PRD 识别出独立产品导航页面',
+          targetUrl: 'https://test.example/navigation',
+          targetPageDefinitionId: pageId,
+        },
+        {
+          operation: 'create',
+          assetType: 'functional_module',
+          assetId: moduleId,
+          assetKey: 'navigation',
+          businessModuleId: fixture.businessModuleId,
+          primaryPageDefinitionId: pageId,
+          candidatePayload: {
+            schema: 'nebula.ai-e2e.functional-module/1.0',
+            name: '产品导航',
+            sortOrder: 1,
+            primaryPageDefinitionId: pageId,
+          },
+          category: 'module_call',
+          reason: 'PRD 要求覆盖产品导航',
+          targetUrl: 'https://test.example/navigation',
+          targetPageDefinitionId: pageId,
+        },
+        {
+          operation: 'create',
+          assetType: 'functional_script',
+          assetId: scriptId,
+          assetKey: 'navigation.inspect',
+          name: '检查产品导航',
+          functionalModuleId: moduleId,
+          candidatePayload: scriptPayload,
+          category: 'script',
+          reason: '生成可执行导航检查',
+          targetUrl: 'https://test.example/navigation',
+          targetPageDefinitionId: pageId,
+        },
+        {
+          operation: 'create',
+          assetType: 'test_scenario',
+          assetId: scenarioId,
+          assetKey: 'navigation-flow',
+          name: '产品导航流程',
+          candidatePayload: {
+            schema: 'nebula.ai-e2e.scenario/1.0',
+            scenarioKey: 'navigation-flow',
+            name: '产品导航流程',
+            purpose: '验证产品导航可用',
+            prdSourceRefs: [],
+            actors: [],
+            initialAuth: { kind: 'anonymous' },
+            inputs: [],
+            finalAcceptance: [],
+            calls: [{ callKey: 'inspect', functionalScriptId: scriptId }],
+            edges: [],
+            exports: [],
+          },
+          category: 'scenario_add',
+          reason: '形成 PRD 验收场景',
+          targetUrl: 'https://test.example/navigation',
+          targetPageDefinitionId: pageId,
+          targetFunctionalModuleId: moduleId,
+        },
+      ]),
+      validationPlanJson: JSON.stringify({ strategy: 'static_then_browser_verification' }),
+      potentialSideEffectsJson: '{}',
+    });
+    const coordinator = new SemanticCoordinatorService({
+      repository: new SemanticCoordinatorRepository(db),
+      workflows,
+      evidence,
+      runs,
+      agentTasks: agent,
+      browser: new FakeBrowserClient(),
+      secretStore: new MemoryCoordinatorSecretStore(),
+      authoringCandidates: new SemanticAuthoringCandidateService(
+        new SemanticQueryRepository(db, versions),
+        assets,
+        amendments
+      ),
+    });
+
+    for (let index = 0; index < 16; index += 1) await coordinator.tick();
+
+    let amendment = amendments.listAmendments(job.id)[0]!;
+    expect(amendment.state).toBe('waiting_decision');
+    expect(versions.getAssetGraph(fixture.versionId).functionalModules).toHaveLength(1);
+    expect(
+      db.prepare('SELECT COUNT(*) AS count FROM semantic_functional_modules WHERE id = ?').get(moduleId)
+    ).toEqual({ count: 1 });
+    for (const decisionId of amendment.decisionIds) {
+      amendment = authoring.answerDecision({
+        amendmentId: amendment.id,
+        decisionId,
+        answer: 'approve',
+        reason: '批准 PRD bootstrap 范围',
+        answeredBy: 'operator',
+      });
+    }
+    expect(authoring.command(amendment.id, { action: 'queue_at_safe_boundary' }).state).toBe(
+      'verifying'
+    );
+    for (let index = 0; index < 18; index += 1) await coordinator.tick();
+
+    const graph = versions.getAssetGraph(fixture.versionId);
+    expect(amendments.getAmendment(amendment.id)?.state).toBe('activated');
+    expect(graph.functionalModules.some((entry) => entry.id === moduleId)).toBe(true);
+    expect(graph.pages.some((entry) => entry.id === pageId)).toBe(true);
+    expect(graph.functionalScripts.some((entry) => entry.id === scriptId)).toBe(true);
+    expect(graph.scenarios.some((entry) => entry.id === scenarioId)).toBe(true);
+    expect(
+      (agent.createdRequest?.toolPolicy.constraints?.['browser-control.operation_execute'] as {
+        steps: unknown[];
+      }).steps
+    ).toHaveLength(2);
+  });
+
   it('将显式浏览器定位限制为 navigation-only 控制任务且不生成候选', async () => {
     const fixture = createFixture(db, assets);
     const versions = new BusinessVersionRepository(db);
@@ -1331,6 +1492,9 @@ function createFixture(db: DatabaseSync, assets: SemanticAssetRepository) {
     scenarioRevisionId: scenario.currentRevision.id,
     pageId: page.id,
     moduleId: module.id,
+    businessModuleId: businessModule.id,
+    scriptId: script.id,
+    scenarioId: scenario.id,
     moduleRevisionId: module.currentRevision.id,
     modulePayload: module.currentRevision.payload,
   };

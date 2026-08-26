@@ -334,18 +334,7 @@ describe('semantic v1 data foundation repositories', () => {
     const run = workflows.createRun(input);
     const replay = workflows.createRun(input);
     expect(replay).toEqual({ ...run, created: false });
-    expect(workflows.claimNextBrowserJob()).toMatchObject({
-      id: run.browserJobId,
-      root_context_id: run.id,
-      state: 'acquiring',
-    });
     expect(workflows.claimNextBrowserJob()).toBeNull();
-    workflows.transitionBrowserJob(run.browserJobId, 'active', {
-      browserSessionId: 'browser-session-1',
-      capabilitySnapshotSha256: HASH_B,
-    });
-    workflows.transitionBrowserJob(run.browserJobId, 'releasing');
-    workflows.transitionBrowserJob(run.browserJobId, 'completed');
     expect(
       db
         .prepare('SELECT todo_key, state FROM run_todos WHERE run_id = ? ORDER BY todo_key')

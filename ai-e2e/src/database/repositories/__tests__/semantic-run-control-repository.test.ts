@@ -42,7 +42,7 @@ describe('semantic run control repository', () => {
     const created = runs.createFormalRun(runInput(fixture, 'run-success'));
 
     expect(created).toMatchObject({ lifecycle: 'ready', admission: 'ready', stateVersion: 2 });
-    expect(workflows.claimNextBrowserJob()).toMatchObject({ root_context_id: created.id });
+    expect(workflows.claimNextBrowserJob()).toBeNull();
     expect(
       db
         .prepare('SELECT todo_key, state FROM run_todos WHERE run_id = ? ORDER BY todo_key')
@@ -59,6 +59,7 @@ describe('semantic run control repository', () => {
       expectedStateVersion: 2,
       createdBy: 'operator',
     });
+    expect(workflows.claimNextBrowserJob()).toMatchObject({ root_context_id: created.id });
     const firstTodo = getTodo(db, created.id, 'first');
     const task = startTodo(runs, created.id, firstTodo.id);
     expect(
@@ -115,6 +116,14 @@ describe('semantic run control repository', () => {
         answeredBy: 'operator',
       })
     ).toEqual({ decisionStatus: 'applied' });
+    expect(workflows.claimNextBrowserJob()).toBeNull();
+    runs.command({
+      commandId: 'start-staging',
+      runId: created.id,
+      action: 'start',
+      expectedStateVersion: 3,
+      createdBy: 'operator',
+    });
     expect(workflows.claimNextBrowserJob()).toMatchObject({ root_context_id: created.id });
     expect(
       db
