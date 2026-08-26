@@ -25,7 +25,6 @@
     "@sinclair/typebox": "catalog:",
     "async-mutex": "^0.5.0",
     "dotenv": "catalog:",
-    "execa": "^9.0.0",
     "fastify": "catalog:",
     "fastify-plugin": "catalog:",
     "livekit-server-sdk": "catalog:",
@@ -35,15 +34,10 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@types/js-yaml": "^4.0.9",
     "@types/node": "catalog:",
     "@vitest/coverage-v8": "catalog:",
     "cross-env": "^10.1.0",
-    "esbuild": "catalog:",
     "eventsource-parser": "^3.0.6",
-    "js-yaml": "catalog:",
-    "jsdom": "^28.1.0",
-    "terser": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

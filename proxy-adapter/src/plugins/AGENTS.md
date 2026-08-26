@@ -18,7 +18,7 @@ plugins/
 
 ## Working Rules
 
-- Keep handlers thin — delegate to services/chat handlers.
+- Keep handlers thin — delegate to services.
 - Routes are registered explicitly by `server.ts`; do not reintroduce autoload or an unused plugin barrel.
 - Use TypeBox/Fastify schema where existing routes already do.
 

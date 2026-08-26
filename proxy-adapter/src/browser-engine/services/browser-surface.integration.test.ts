@@ -1,6 +1,6 @@
 import { gunzipSync } from 'node:zlib';
 import { chromium, type Browser, type Page } from 'playwright';
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   escapeSelector,
   escapeXPath,
@@ -12,7 +12,6 @@ import {
 } from '../dom-utils.js';
 import { DOMExtractor } from './dom-extractor.js';
 import { PageActions } from './page-actions.js';
-import { SnapshotCache } from './snapshot-cache.js';
 import { acquireLock } from './browser-lock.js';
 import { BrowserService } from './browser-service.js';
 
@@ -162,25 +161,5 @@ describe('debug browser surface with real Chromium', () => {
     expect(escapeXPath("it's")).toBe("it\\'s");
     expect(getImplicitRole('button')).toBe('button');
     expect(getImplicitRole('video')).toBeUndefined();
-  });
-});
-
-describe('SnapshotCache', () => {
-  it('enforces TTL and LRU eviction while maintaining hit statistics', () => {
-    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000);
-    const cache = new SnapshotCache(2, 50);
-    const snapshot = { snapshot_id: 'a' } as never;
-    cache.set('a', snapshot);
-    cache.set('b', { snapshot_id: 'b' } as never);
-    expect(cache.get('a')).toBe(snapshot);
-    cache.set('c', { snapshot_id: 'c' } as never);
-    expect(cache.get('b')).toBeUndefined();
-    now.mockReturnValue(1_100);
-    expect(cache.get('a')).toBeUndefined();
-    expect(cache.invalidate('c')).toBe(true);
-    expect(cache.getStats()).toMatchObject({ size: 0, hits: 1, misses: 2, hitRate: 33.33 });
-    cache.clear();
-    expect(cache.getStats()).toMatchObject({ hits: 0, misses: 0, hitRate: 0 });
-    now.mockRestore();
   });
 });
