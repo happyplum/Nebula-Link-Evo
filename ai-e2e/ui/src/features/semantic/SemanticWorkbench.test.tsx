@@ -1,7 +1,7 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SemanticWorkbench } from './SemanticWorkbench.js';
 import type {
   AuthoringAmendment,
@@ -27,6 +27,21 @@ const api = vi.hoisted(() => ({
 }));
 
 vi.mock('./api.js', () => ({ semanticApi: api }));
+
+const stream = vi.hoisted(() => {
+  const state = { authoring: 'idle', run: 'idle' };
+  return {
+    state,
+    useSemanticEventStream: vi.fn((options: { snapshotEvent?: string }) =>
+      options.snapshotEvent === 'authoring.snapshot' ? state.authoring : state.run
+    ),
+  };
+});
+
+vi.mock('./useSemanticEventStream.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./useSemanticEventStream.js')>();
+  return { ...actual, useSemanticEventStream: stream.useSemanticEventStream };
+});
 
 const revision = (id: string, payload: Record<string, unknown>, readinessStatus?: string) => ({
   id,
@@ -209,7 +224,8 @@ const runSnapshot: RunSnapshot = {
 };
 
 function renderAuthoring(
-  entry = '/semantic/p1/authoring/v1?url=%2Fcheckout%2Fcart_8A21&page=page1&module=m1&scenario=sc1'
+  entry = '/semantic/p1/authoring/v1?url=%2Fcheckout%2Fcart_8A21&page=page1&module=m1&scenario=sc1',
+  options: { eventStreams?: boolean } = {}
 ) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -220,7 +236,9 @@ function renderAuthoring(
         <Routes>
           <Route
             path="/semantic/:projectId/authoring/:versionId"
-            element={<SemanticWorkbench mode="authoring" eventStreams={false} />}
+            element={
+              <SemanticWorkbench mode="authoring" eventStreams={options.eventStreams ?? false} />
+            }
           />
         </Routes>
       </MemoryRouter>
@@ -228,7 +246,7 @@ function renderAuthoring(
   );
 }
 
-function renderRun() {
+function renderRun(options: { eventStreams?: boolean } = {}) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -242,7 +260,7 @@ function renderRun() {
         <Routes>
           <Route
             path="/semantic/:projectId/runs/:runId"
-            element={<SemanticWorkbench mode="run" eventStreams={false} />}
+            element={<SemanticWorkbench mode="run" eventStreams={options.eventStreams ?? false} />}
           />
         </Routes>
       </MemoryRouter>
@@ -264,6 +282,13 @@ describe('SemanticWorkbench', () => {
     api.getRunSnapshot.mockResolvedValue(runSnapshot);
     api.commandRun.mockResolvedValue({ lifecycle: 'running' });
     api.resumeTodo.mockResolvedValue({ state: 'ready' });
+    stream.state.authoring = 'idle';
+    stream.state.run = 'idle';
+    stream.useSemanticEventStream.mockClear();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('切换模块只改变上下文，不重挂载或导航浏览器；显式定位才创建安全任务', async () => {
@@ -407,5 +432,139 @@ describe('SemanticWorkbench', () => {
     await waitFor(() => expect(api.resumeTodo).toHaveBeenCalledWith('run1', 'todo1'));
     fireEvent.click(screen.getByRole('tab', { name: '证据' }));
     expect(screen.getByText('当前运行尚未落库证据')).toBeInTheDocument();
+  });
+
+  describe('snapshot 轮询与 SSE live 协同', () => {
+    const AUTHORING_ENTRY =
+      '/semantic/p1/authoring/v1?job=job1&url=%2Fcheckout&page=page1&module=m1&scenario=sc1';
+
+    async function flushAsyncWork() {
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+    }
+
+    async function advanceTimers(ms: number) {
+      await act(async () => {
+        vi.advanceTimersByTime(ms);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+    }
+
+    it('authoring SSE live 时停止自身 snapshot 轮询，workspace 不加轮询', async () => {
+      vi.useFakeTimers();
+      stream.state.authoring = 'live';
+      renderAuthoring(AUTHORING_ENTRY, { eventStreams: true });
+      await flushAsyncWork();
+      expect(api.getAuthoringSnapshot).toHaveBeenCalledTimes(1);
+      expect(api.getWorkspace).toHaveBeenCalledTimes(1);
+      expect(stream.useSemanticEventStream).toHaveBeenCalledWith(
+        expect.objectContaining({ snapshotEvent: 'authoring.snapshot', enabled: true })
+      );
+      expect(stream.useSemanticEventStream).toHaveBeenCalledWith(
+        expect.objectContaining({ snapshotEvent: 'run.snapshot', enabled: false })
+      );
+      await advanceTimers(9_000);
+      expect(api.getAuthoringSnapshot).toHaveBeenCalledTimes(1);
+      expect(api.getWorkspace).toHaveBeenCalledTimes(1);
+    });
+
+    it('run SSE live 时停止自身 snapshot 轮询，workspace 不加轮询', async () => {
+      vi.useFakeTimers();
+      stream.state.run = 'live';
+      renderRun({ eventStreams: true });
+      await flushAsyncWork();
+      expect(api.getRunSnapshot).toHaveBeenCalledTimes(1);
+      expect(api.getWorkspace).toHaveBeenCalledTimes(1);
+      expect(stream.useSemanticEventStream).toHaveBeenCalledWith(
+        expect.objectContaining({ snapshotEvent: 'run.snapshot', enabled: true })
+      );
+      await advanceTimers(9_000);
+      expect(api.getRunSnapshot).toHaveBeenCalledTimes(1);
+      expect(api.getWorkspace).toHaveBeenCalledTimes(1);
+    });
+
+    it('authoring SSE connecting 时仍按 3 秒轮询', async () => {
+      vi.useFakeTimers();
+      stream.state.authoring = 'connecting';
+      renderAuthoring(AUTHORING_ENTRY, { eventStreams: true });
+      await flushAsyncWork();
+      expect(api.getAuthoringSnapshot).toHaveBeenCalledTimes(1);
+      await advanceTimers(3_000);
+      expect(api.getAuthoringSnapshot).toHaveBeenCalledTimes(2);
+    });
+
+    it('run SSE reconnecting 时仍按 3 秒轮询', async () => {
+      vi.useFakeTimers();
+      stream.state.run = 'reconnecting';
+      renderRun({ eventStreams: true });
+      await flushAsyncWork();
+      expect(api.getRunSnapshot).toHaveBeenCalledTimes(1);
+      await advanceTimers(3_000);
+      expect(api.getRunSnapshot).toHaveBeenCalledTimes(2);
+    });
+
+    it('authoring SSE idle 时仍按 3 秒轮询', async () => {
+      vi.useFakeTimers();
+      renderAuthoring(AUTHORING_ENTRY, { eventStreams: true });
+      await flushAsyncWork();
+      expect(api.getAuthoringSnapshot).toHaveBeenCalledTimes(1);
+      await advanceTimers(3_000);
+      expect(api.getAuthoringSnapshot).toHaveBeenCalledTimes(2);
+    });
+
+    it('未启用事件流时 run snapshot 仍按 3 秒轮询', async () => {
+      vi.useFakeTimers();
+      renderRun();
+      await flushAsyncWork();
+      expect(api.getRunSnapshot).toHaveBeenCalledTimes(1);
+      await advanceTimers(3_000);
+      expect(api.getRunSnapshot).toHaveBeenCalledTimes(2);
+    });
+
+    it.each(['failed', 'completed', 'cancelled'])(
+      'authoring 终态 %s 即使 SSE connecting 也停止轮询',
+      async (lifecycle) => {
+        vi.useFakeTimers();
+        stream.state.authoring = 'connecting';
+        api.getAuthoringSnapshot.mockResolvedValue({
+          ...snapshot,
+          job: { ...snapshot.job, lifecycle },
+        });
+        renderAuthoring(AUTHORING_ENTRY, { eventStreams: true });
+        await flushAsyncWork();
+        expect(api.getAuthoringSnapshot).toHaveBeenCalledTimes(1);
+        await advanceTimers(9_000);
+        expect(api.getAuthoringSnapshot).toHaveBeenCalledTimes(1);
+      }
+    );
+
+    it.each(['completed', 'cancelled'])('run 终态 %s 停止轮询', async (lifecycle) => {
+      vi.useFakeTimers();
+      api.getRunSnapshot.mockResolvedValue({
+        ...runSnapshot,
+        run: { ...runSnapshot.run, lifecycle },
+      });
+      renderRun({ eventStreams: true });
+      await flushAsyncWork();
+      expect(api.getRunSnapshot).toHaveBeenCalledTimes(1);
+      await advanceTimers(9_000);
+      expect(api.getRunSnapshot).toHaveBeenCalledTimes(1);
+    });
+
+    it('run failed 不是停止条件，SSE idle 时仍按 3 秒轮询', async () => {
+      vi.useFakeTimers();
+      api.getRunSnapshot.mockResolvedValue({
+        ...runSnapshot,
+        run: { ...runSnapshot.run, lifecycle: 'failed' },
+      });
+      renderRun({ eventStreams: true });
+      await flushAsyncWork();
+      expect(api.getRunSnapshot).toHaveBeenCalledTimes(1);
+      await advanceTimers(3_000);
+      expect(api.getRunSnapshot).toHaveBeenCalledTimes(2);
+    });
   });
 });

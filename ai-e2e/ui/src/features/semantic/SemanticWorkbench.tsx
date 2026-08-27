@@ -204,31 +204,6 @@ export function SemanticWorkbench({
     [authoringJobId]
   );
   const runKey = useMemo(() => ['semantic-run', runId] as const, [runId]);
-  const runQuery = useQuery({
-    queryKey: runKey,
-    queryFn: () => semanticApi.getRunSnapshot(runId),
-    enabled: mode === 'run' && Boolean(runId),
-    refetchInterval: (query) =>
-      ['completed', 'cancelled'].includes(runLifecycle(query.state.data)) ? false : 3_000,
-  });
-  const runVersionId = text(runQuery.data?.run.businessVersionId, '');
-  const versionId = pathVersionId ?? searchParams.get('version') ?? runVersionId;
-  const workspaceQuery = useQuery({
-    queryKey: ['semantic-workspace', versionId],
-    queryFn: () => semanticApi.getWorkspace(versionId),
-    enabled: Boolean(versionId),
-  });
-  const authoringQuery = useQuery({
-    queryKey: authoringKey,
-    queryFn: () => semanticApi.getAuthoringSnapshot(authoringJobId),
-    enabled: mode === 'authoring' && Boolean(authoringJobId),
-    refetchInterval: (query) => (terminalJob(jobLifecycle(query.state.data)) ? false : 3_000),
-  });
-  const amendmentsQuery = useQuery({
-    queryKey: ['semantic-amendments', authoringJobId],
-    queryFn: () => semanticApi.listAmendments(authoringJobId),
-    enabled: mode === 'authoring' && Boolean(authoringJobId),
-  });
 
   const authoringStream = useSemanticEventStream<AuthoringSnapshot>({
     enabled: eventStreams && mode === 'authoring' && Boolean(authoringJobId),
@@ -241,6 +216,35 @@ export function SemanticWorkbench({
     endpoint: `/api/v1/runs/${encodeURIComponent(runId)}/events`,
     snapshotEvent: 'run.snapshot',
     queryKey: runKey,
+  });
+
+  const runQuery = useQuery({
+    queryKey: runKey,
+    queryFn: () => semanticApi.getRunSnapshot(runId),
+    enabled: mode === 'run' && Boolean(runId),
+    refetchInterval: (query) =>
+      ['completed', 'cancelled'].includes(runLifecycle(query.state.data)) || runStream === 'live'
+        ? false
+        : 3_000,
+  });
+  const runVersionId = text(runQuery.data?.run.businessVersionId, '');
+  const versionId = pathVersionId ?? searchParams.get('version') ?? runVersionId;
+  const workspaceQuery = useQuery({
+    queryKey: ['semantic-workspace', versionId],
+    queryFn: () => semanticApi.getWorkspace(versionId),
+    enabled: Boolean(versionId),
+  });
+  const authoringQuery = useQuery({
+    queryKey: authoringKey,
+    queryFn: () => semanticApi.getAuthoringSnapshot(authoringJobId),
+    enabled: mode === 'authoring' && Boolean(authoringJobId),
+    refetchInterval: (query) =>
+      terminalJob(jobLifecycle(query.state.data)) || authoringStream === 'live' ? false : 3_000,
+  });
+  const amendmentsQuery = useQuery({
+    queryKey: ['semantic-amendments', authoringJobId],
+    queryFn: () => semanticApi.listAmendments(authoringJobId),
+    enabled: mode === 'authoring' && Boolean(authoringJobId),
   });
 
   const threadId = text(authoringQuery.data?.contextThreads.at(-1)?.id, '');
