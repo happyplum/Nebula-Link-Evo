@@ -1,6 +1,6 @@
 # Debug Page Integration — API Quick Reference
 
-**Base URLs:** `http://localhost:3000` (proxy-adapter)
+**Base URLs:** `http://127.0.0.1:3000` (proxy-adapter)、`http://127.0.0.1:3001` (ai-chat-service)
 **Auth:** None (local dev tool)
 
 ---
@@ -43,19 +43,14 @@ DELETE /api/v1/chat/sessions/:id                 Delete session
 ### Messages
 
 ```
-GET    /api/v1/chat/sessions/:id/messages        Message history
 POST   /api/v1/chat/sessions/:id/messages        Send message (async)
 ```
 
-| Endpoint             | Body / Query             | Success Response           |
-| -------------------- | ------------------------ | -------------------------- |
-| `GET /:id/messages`  | `?limit&offset`          | `200 [MessageResponse]`    |
-| `POST /:id/messages` | `{content, screenshot?}` | `202 AsyncMessageResponse` |
+| Endpoint             | Body            | Success Response           |
+| -------------------- | --------------- | -------------------------- |
+| `POST /:id/messages` | `{content}`     | `202 AsyncMessageResponse` |
 
 ```typescript
-// MessageResponse
-{ id: string, session_id: string, role: 'user'|'assistant', content: string, created_at: string, metadata: Record<string, unknown> }
-
 // AsyncMessageResponse (202)
 { jobId: string, runId: string, sessionId: string, messageId: string }
 ```
@@ -66,18 +61,18 @@ POST   /api/v1/chat/sessions/:id/messages        Send message (async)
 GET    /api/v1/chat/sessions/:id/stream          Event stream
 ```
 
-**Note:** `Last-Event-ID` header and `afterSeq` query param are not supported. Reconnect always rebuilds from a fresh `session.snapshot` event — there is no cursor-based replay.
+可见历史和 live 状态都由此流提供；连接或重连始终先接收完整 Agent Stream snapshot。
 
 **Response:** `text/event-stream`, 15s heartbeat, 5min idle timeout
 
 ```
-event: session.snapshot
+event: agent_stream.snapshot
 id: 42
-data: {"sessionId":"...","messages":[...],"state":"running"}
+data: {"schema":"nebula.ai.agent-stream.snapshot/1.0","streamId":"...","seq":42,"state":"streaming","generatedAt":"...","turns":[...]}
 
-event: assistant.delta
+event: agent_stream.event
 id: 43
-data: {"sessionId":"...","messageId":"...","text":"Hello"}
+data: {"schema":"nebula.ai.agent-stream.event/1.0","streamId":"...","turnId":"...","sectionId":"...","seq":43,"occurredAt":"...","type":"content.delta","delta":"Hello"}
 ```
 
 ### Session Control
@@ -114,37 +109,20 @@ POST   /api/v1/chat/connectivity-test         Test AI provider
 
 ---
 
-## SSE Event Types
+## Agent Stream Event Types
 
-| Event                   | Key Fields                             | When                            |
-| ----------------------- | -------------------------------------- | ------------------------------- |
-| `session.snapshot`      | messages[], state, jobId?, agentState? | Initial connect or gap recovery |
-| `message.created`       | messageId, content                     | User message persisted          |
-| `assistant.started`     | messageId                              | AI begins response              |
-| `assistant.delta`       | messageId, text                        | Streaming token                 |
-| `assistant.completed`   | messageId, terminal_reason?            | AI finishes                     |
-| `assistant.thinking`    | messageId, text                        | Chain-of-thought                |
-| `assistant.tool_call`   | messageId, toolCall, toolCallId?       | MCP invocation                  |
-| `assistant.tool_result` | messageId, result, toolCallId?         | MCP response                    |
-| `run.error`             | error                                  | Execution failure               |
+| SSE event | Payload | When |
+| --- | --- | --- |
+| `agent_stream.snapshot` | `AgentStreamSnapshotV1` | 每次连接的第一条非 heartbeat 数据 |
+| `agent_stream.event` | `AgentStreamEventV1` | 已持久化事实的单调 live 投影 |
 
-All events: `seq?` (monotonic), `sessionId`, `runId?`
+Event payload 的 `type` 只允许 `stream.state`、`turn.upsert`、`section.upsert`、`content.delta`、`section.remove`、`turn.completed`。Section 覆盖 user/content/reasoning/activity/plan/decision/agent/media/file/notice/error/turn-summary。
 
 **SSE wire format:** `event: <type>\nid: <seq>\ndata: <json>\n\n`
 
-### Frontend SSE Mapping (chat.ts → handleSSEMessage)
+### Frontend Mapping
 
-| SSE Event               | Frontend Action                                     |
-| ----------------------- | --------------------------------------------------- |
-| `session.snapshot`      | Hydrate messages, set state, resume if running      |
-| `message.created`       | Append user message to chat                         |
-| `assistant.started`     | Create assistant placeholder, mark running          |
-| `assistant.delta`       | Append text to assistant message                    |
-| `assistant.completed`   | Finalize assistant message, mark idle               |
-| `assistant.thinking`    | Append to thinking section (toggle via #cot-toggle) |
-| `assistant.tool_call`   | Render tool call card in chat                       |
-| `assistant.tool_result` | Update tool card with result                        |
-| `run.error`             | Show error, mark session idle                       |
+`useChatStream` 用 shared 运行时守卫解析 snapshot/event，经 `requestAnimationFrame` 批处理后交给公共 reducer；`MessageList` 只用 `AgentStreamRenderer` comfortable 模式呈现。业务状态与权限不从渲染文本反推。
 
 ---
 
@@ -244,12 +222,9 @@ GET    /debug/api/interactions/stats          Statistics
 
 | Selector              | Element  | Purpose                        |
 | --------------------- | -------- | ------------------------------ |
-| `#chat-messages`      | div      | Message container              |
 | `#chat-input`         | textarea | Message input                  |
 | `#session-select`     | select   | Session dropdown               |
-| `#cot-toggle`         | checkbox | Show/hide chain-of-thought     |
 | `#chat-control-bar`   | div      | Interrupt/pause/resume buttons |
-| `#screenshot-preview` | div      | Screenshot attachment preview  |
 
 ---
 

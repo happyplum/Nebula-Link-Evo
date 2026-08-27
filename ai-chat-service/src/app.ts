@@ -128,6 +128,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       await requireProxyBrowserCapabilities(serviceConfig.gatewayUrl);
     }
     database.initialize(conversationsPath);
+    sessionEventHub.bindPersistence(database.getSessionEventsDAO());
     runScheduler = new HarnessRunScheduler(database.connection());
     await localAppService.initialize(options.configPath, serviceConfig.gatewayUrl);
     const providerRegistry = localAppService.getRegistry();

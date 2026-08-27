@@ -1,10 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import {
-  SessionSelector,
-  MessageList,
-  Composer,
-  QueueFloatingPanel,
-} from '@/features/chat/components/index.js';
+import React, { useEffect, useState } from 'react';
+import { SessionSelector, MessageList, Composer } from '@/features/chat/components/index.js';
 import {
   API_CHAT_SESSIONS,
   apiChatSession,
@@ -22,7 +17,6 @@ import { useSessions } from '@/shared/query/hooks.js';
 import type { ConfigResponse } from '@/features/config/types/index.js';
 import {
   useChatStore,
-  selectShowThinking,
   selectStreamingState,
   selectActiveSessionId,
 } from '@/features/chat/store/chat.store.js';
@@ -32,19 +26,6 @@ import styles from './ChatPage.module.css';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
-}
-
-function toOptionalNumber(value: unknown): number | undefined {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value;
-  }
-
-  if (typeof value === 'string') {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : undefined;
-  }
-
-  return undefined;
 }
 
 function normalizeSession(payload: unknown): ChatSession | null {
@@ -58,8 +39,7 @@ function normalizeSession(payload: unknown): ChatSession | null {
       typeof payload.title === 'string' && payload.title.trim()
         ? payload.title
         : `会话 ${payload.id.slice(0, 8)}`,
-    created_at: toOptionalNumber(payload.created_at),
-    createdAt: toOptionalNumber(payload.createdAt),
+    created_at: typeof payload.created_at === 'string' ? payload.created_at : undefined,
     status:
       payload.status === 'idle' ||
       payload.status === 'running' ||
@@ -72,11 +52,7 @@ function normalizeSession(payload: unknown): ChatSession | null {
 }
 
 function extractSessions(data: unknown): ChatSession[] {
-  const raw = Array.isArray(data)
-    ? data
-    : isRecord(data) && Array.isArray(data.sessions)
-      ? data.sessions
-      : [];
+  const raw = Array.isArray(data) ? data : [];
 
   return raw.map(normalizeSession).filter((session): session is ChatSession => session !== null);
 }
@@ -107,29 +83,13 @@ function toRequestUrl(path: string): string {
 export default function ChatPage() {
   const streamingState = useChatStore(selectStreamingState);
   const activeSessionId = useChatStore(selectActiveSessionId);
-  const showThinking = useChatStore(selectShowThinking);
   const addSession = useChatStore((s) => s.addSession);
   const removeSession = useChatStore((s) => s.removeSession);
   const setActiveSession = useChatStore((s) => s.setActiveSession);
   const setStreamingState = useChatStore((s) => s.setStreamingState);
-  const setShowThinking = useChatStore((s) => s.setShowThinking);
-  const updateSession = useChatStore((s) => s.updateSession);
   const setSessions = useChatStore((s) => s.setSessions);
   const setIsLoadingSessions = useChatStore((s) => s.setIsLoadingSessions);
   const [isPausing, setIsPausing] = useState(false);
-  const queuePanelRef = useRef<HTMLDivElement>(null);
-  const [queuePanelHeight, setQueuePanelHeight] = useState(0);
-
-  useEffect(() => {
-    if (!queuePanelRef.current) return;
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        setQueuePanelHeight(entry.contentRect.height);
-      }
-    });
-    observer.observe(queuePanelRef.current);
-    return () => observer.disconnect();
-  }, []);
   const { data: configData } = useConfig();
   const { data: sessionsData, isFetching: isFetchingSessions } = useSessions();
   const sseEnabled =
@@ -152,12 +112,16 @@ export default function ChatPage() {
     }
 
     const normalizedSessions = extractSessions(sessionsData);
+    const currentActiveSessionId = useChatStore.getState().activeSessionId;
     setSessions(normalizedSessions);
 
-    if (!activeSessionId || !normalizedSessions.some((session) => session.id === activeSessionId)) {
+    if (
+      !currentActiveSessionId ||
+      !normalizedSessions.some((session) => session.id === currentActiveSessionId)
+    ) {
       setActiveSession(normalizedSessions[0]?.id ?? null);
     }
-  }, [activeSessionId, sessionsData, setActiveSession, setSessions]);
+  }, [sessionsData, setActiveSession, setSessions]);
 
   const handleCreateSession = async () => {
     const defaults = getDefaultChatConfig(configData);
@@ -202,26 +166,6 @@ export default function ChatPage() {
       await queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
     } catch (error) {
       console.error('Failed to delete session', error);
-    }
-  };
-
-  const handleRenameSession = async () => {
-    if (!activeSessionId) return;
-    const newTitle = window.prompt('请输入新的会话名称：');
-    if (newTitle && newTitle.trim() !== '') {
-      const title = newTitle.trim();
-      updateSession(activeSessionId, { title });
-
-      try {
-        await fetch(toRequestUrl(apiChatSession(activeSessionId)), {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title }),
-        });
-        await queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
-      } catch (error) {
-        console.error('Failed to rename session', error);
-      }
     }
   };
 
@@ -280,28 +224,11 @@ export default function ChatPage() {
       {/* Header Bar */}
       <div className={styles.header}>
         <div className={styles.headerLeft}>
-          <select className={styles.statusFilter} defaultValue="" title="按状态筛选">
-            <option value="">全部</option>
-            <option value="idle">⏸️空闲</option>
-            <option value="running">▶️运行</option>
-            <option value="paused">⏸️暂停</option>
-            <option value="blocked">🚫阻塞</option>
-            <option value="completed">✅完成</option>
-          </select>
           <div className={styles.sessionSelectorWrapper}>
             <SessionSelector />
           </div>
         </div>
         <div className={styles.headerRight}>
-          <label className={styles.cotToggle} title="显示思考过程">
-            <input
-              type="checkbox"
-              checked={showThinking}
-              onChange={(e) => setShowThinking(e.target.checked)}
-            />
-            <span>CoT</span>
-          </label>
-          <div className={styles.divider} />
           <button
             type="button"
             className={styles.iconBtn}
@@ -313,7 +240,7 @@ export default function ChatPage() {
         </div>
       </div>
 
-      {/* Control Bar — hidden when idle, matches legacy chat-control-bar */}
+      {/* Active session controls */}
       {streamingState !== 'idle' && (
         <div className={styles.controlBar}>
           <button
@@ -350,29 +277,18 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* Pausing Feedback — legacy: #pausing-feedback */}
+      {/* Pausing feedback */}
       {isPausing && <div className={styles.pausingFeedback}>⏳ 正在暂停...</div>}
 
       {/* Message Region */}
-      <div
-        className={styles.messageRegion}
-        style={queuePanelHeight > 0 ? { paddingBottom: queuePanelHeight + 16 } : undefined}
-      >
-        {streamingState === 'blocked' && (
-          <div className={styles.blockedBanner}>
-            ⚠️ 任务被阻塞 (Blocked). 请人工确认或解决问题后点击 [继续]
-          </div>
-        )}
+      <div className={styles.messageRegion}>
         <MessageList />
-        <div ref={queuePanelRef}>
-          {activeSessionId != null && <QueueFloatingPanel sessionId={activeSessionId} />}
-        </div>
       </div>
 
       {/* Footer / Composer */}
       <div className={styles.footer}>
         <div className={styles.composerWrapper}>
-          <Composer onRenameSession={handleRenameSession} onDeleteSession={handleDeleteSession} />
+          <Composer onDeleteSession={handleDeleteSession} />
         </div>
       </div>
     </div>

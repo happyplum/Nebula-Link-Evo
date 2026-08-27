@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { isAgentStreamEvent } from '@nebula-link-evo/shared/types/agent-stream';
 import { AgentTaskRepository } from '../../../agent-tasks/repository.js';
 import { AgentTaskService } from '../../../agent-tasks/service.js';
 import type { AgentTaskExecutor } from '../../../agent-tasks/types.js';
@@ -74,6 +75,30 @@ describe('Agent task routes', () => {
 
     const get = await app.inject({ method: 'GET', url: `/api/v1/agent-tasks/${task.taskId}` });
     expect(get.statusCode).toBe(200);
+    await vi.waitFor(async () => {
+      const activity = await app.inject({
+        method: 'GET',
+        url: `/api/v1/agent-tasks/${task.taskId}/activity-log?afterSeq=0&limit=100`,
+      });
+      expect(activity.statusCode).toBe(200);
+      const events = activity.json();
+      expect(events.every(isAgentStreamEvent)).toBe(true);
+      expect(events).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            schema: 'nebula.ai.agent-stream.event/1.0',
+            streamId: task.taskId,
+            type: 'section.upsert',
+            section: expect.objectContaining({ sectionId: expect.any(String) }),
+          }),
+        ])
+      );
+    });
+    const missingActivity = await app.inject({
+      method: 'GET',
+      url: '/api/v1/agent-tasks/missing/activity-log',
+    });
+    expect(missingActivity.statusCode).toBe(404);
     const capabilities = await app.inject({ method: 'GET', url: '/api/v1/capabilities' });
     expect(capabilities.json()).toMatchObject({
       features: {

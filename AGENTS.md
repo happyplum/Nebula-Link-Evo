@@ -58,7 +58,7 @@ pnpm format         # prettier --write debug-ui/src proxy-adapter/src ai-chat-se
 - Build order is strict: `shared` → `browser-control-client` → `deepseek-harness-plugin` → `debug-ui` → `proxy-adapter` → `ai-chat-service` → `ai-e2e`.
 - `start.bat` is not a thin wrapper around `pnpm build`: it builds `shared`, starts LiveKit, verifies ports, then builds/starts `proxy-adapter` and `ai-chat-service` (if applicable).
 - `proxy-adapter` startup order matters: env load → DB backup init outside tests → plugin registration → `AppService.initialize()` → browser-execution provider → MCP/debug surfaces.
-- Chat reconnect always reboots from a fresh `session.snapshot`; there is no `Last-Event-ID` replay contract to preserve.
+- Chat reconnect always reboots from a fresh `agent_stream.snapshot` and then accepts only `agent_stream.event`; there is no parallel Chat wire contract.
 - `ai-chat-service` 配置加载器只按工作目录依次搜索 `config/config.json`、`../config/config.json`、`../../config/config.json`、`nebula-link-evo/config/config.json`（显式 `configPath` 优先）；不会自动搜索包内配置。`proxy-adapter` 不读取 AI provider 配置。
 - 环境文件按进程入口独立加载且入口是本进程唯一 owner：`proxy-adapter/src/server.ts` 与 `ai-chat-service/src/server.ts` 依次尝试工作目录 `.env`、父目录 `.env`；`ai-e2e/src/server/index.ts` 依次尝试工作目录 `.env.local`、父目录 `.env`，二者均不存在时由 dotenv 回退工作目录 `.env`。均以既有 `process.env` 为最高优先级。不得在 `shared` 或可复用 `buildApp()` 中增加 dotenv 副作用。
 - 升级被 `pnpm-workspace.yaml#patchedDependencies` 覆盖的依赖时，必须同步评估对应 patch：上游已包含所需行为时删除 patch 配置与文件，否则针对新版本重建 patch；两种情况都必须重新生成并校验 lockfile、Harness BOM/patch hash 及相关持久化测试，不得留下失效或无引用 patch。

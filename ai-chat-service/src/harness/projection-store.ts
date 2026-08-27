@@ -1,10 +1,12 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { SessionEvent as DshSessionEvent, TurnEndReason } from '@deepseek-ai/dsh-session';
 import type { ContentBlock } from '@deepseek-ai/dsh-llm';
-import type {
-  SessionEvent as PublicSessionEvent,
-  SessionEventType as PublicSessionEventType,
-} from '@nebula-link-evo/shared/types/sse-events';
+import {
+  AGENT_STREAM_EVENT_SCHEMA,
+  type AgentStreamEventV1,
+  type AgentStreamSectionV1,
+  type AgentStreamTurnV1,
+} from '@nebula-link-evo/shared/types/agent-stream';
 import type { SessionEventsDAO } from '../db/SessionEventsDAO.js';
 
 interface ProjectionStateRow {
@@ -13,15 +15,16 @@ interface ProjectionStateRow {
   deleted_at: string | null;
 }
 
-interface ProjectedPublicEvent {
-  type: PublicSessionEventType;
-  payload: Record<string, unknown>;
-}
+type ProjectedAgentEvent = AgentStreamEventV1 extends infer Event
+  ? Event extends AgentStreamEventV1
+    ? Omit<Event, 'schema' | 'streamId' | 'seq'>
+    : never
+  : never;
 
 export interface ProjectionCatchUpResult {
   projectedDshSeq: number;
   durableDshSeq: number;
-  publicEvents: PublicSessionEvent[];
+  publicEvents: AgentStreamEventV1[];
 }
 
 export class HarnessProjectionCorruptionError extends Error {
@@ -31,7 +34,7 @@ export class HarnessProjectionCorruptionError extends Error {
   }
 }
 
-/** Transactional SQLite read model over the durable DSH event prefix. */
+/** Transactional user-facing projection over a committed DSH event prefix. */
 export class HarnessProjectionStore {
   constructor(
     private readonly db: DatabaseSync,
@@ -47,7 +50,7 @@ export class HarnessProjectionStore {
   ): ProjectionCatchUpResult {
     assertSeq(durableDshSeq, 'durableDshSeq');
     this.db.exec('BEGIN IMMEDIATE');
-    const committedEvents: PublicSessionEvent[] = [];
+    const committedEvents: AgentStreamEventV1[] = [];
     try {
       this.ensureProjection(sessionId);
       const state = this.getState(sessionId);
@@ -71,14 +74,18 @@ export class HarnessProjectionStore {
           );
         }
         const projected = this.projectEvent(sessionId, event);
-        const publicEvent = projected ? this.insertPublicEvent(sessionId, projected) : undefined;
+        let lastPublicSeq: number | null = null;
+        for (const candidate of projected) {
+          const publicEvent = this.insertPublicEvent(sessionId, candidate);
+          committedEvents.push(publicEvent);
+          lastPublicSeq = publicEvent.seq;
+        }
         this.db
           .prepare(
             `INSERT INTO harness_projected_events(session_id, dsh_seq, dsh_event_type, public_seq)
              VALUES (?, ?, ?, ?)`
           )
-          .run(sessionId, event.seq, event.type, publicEvent?.seq ?? null);
-        if (publicEvent) committedEvents.push(publicEvent);
+          .run(sessionId, event.seq, event.type, lastPublicSeq);
         nextDshSeq += 1;
       }
       if (nextDshSeq !== durableDshSeq) {
@@ -94,8 +101,9 @@ export class HarnessProjectionStore {
         )
         .run(nextDshSeq, durableDshSeq, durableRevision ?? null, sessionId);
       this.db.exec('COMMIT');
-      for (const event of committedEvents)
-        this.publicEvents.observeCommittedSeq(sessionId, event.seq ?? 0);
+      for (const event of committedEvents) {
+        this.publicEvents.observeCommittedSeq(sessionId, event.seq);
+      }
       return { projectedDshSeq: nextDshSeq, durableDshSeq, publicEvents: committedEvents };
     } catch (error) {
       this.db.exec('ROLLBACK');
@@ -144,152 +152,182 @@ export class HarnessProjectionStore {
          FROM harness_session_projection WHERE session_id = ?`
       )
       .get(sessionId) as ProjectionStateRow | undefined;
-    if (!row)
+    if (!row) {
       throw new HarnessProjectionCorruptionError(`Projection state is missing for ${sessionId}`);
+    }
     return row;
   }
 
-  private projectEvent(
-    sessionId: string,
-    event: DshSessionEvent
-  ): ProjectedPublicEvent | undefined {
+  private projectEvent(sessionId: string, event: DshSessionEvent): ProjectedAgentEvent[] {
+    const occurredAt = new Date(event.time).toISOString();
     if (event.type === 'user/message') {
       const content = contentText(event.data.content);
-      this.insertMessage(sessionId, String(event.data.id), 'user', content, event.time);
-      return {
-        type: 'message.created',
-        payload: { sessionId, messageId: String(event.data.id), content },
-      };
+      const messageId = String(event.data.id);
+      this.insertMessage(sessionId, messageId, 'user', content, event.time);
+      const turnId = `user:${messageId}`;
+      return [
+        turnUpsert(
+          turnId,
+          'user',
+          textSection('user', `user:${messageId}`, content, occurredAt, false),
+          occurredAt
+        ),
+      ];
     }
     if (event.type === 'turn/start') {
       this.updateStatus(sessionId, 'running');
-      return {
-        type: 'assistant.started',
-        payload: {
-          sessionId,
-          runId: runId(sessionId, event.data.turn),
-          messageId: assistantMessageId(sessionId, event.data.turn),
-        },
-      };
+      const turnId = runId(sessionId, event.data.turn);
+      return [
+        turnUpsert(
+          turnId,
+          'assistant',
+          reasoningSection(turnId, occurredAt, 'running'),
+          occurredAt
+        ),
+        streamState(turnId, 'streaming', occurredAt),
+      ];
     }
     if (event.type === 'assistant/chunk') {
+      const turnId = runId(sessionId, event.data.turn);
       const chunk = event.data.chunk;
       if (chunk.type === 'text-delta') {
-        return {
-          type: 'assistant.delta',
-          payload: {
-            sessionId,
-            runId: runId(sessionId, event.data.turn),
-            messageId: assistantMessageId(sessionId, event.data.turn),
-            text: chunk.text,
+        return [
+          {
+            type: 'content.delta',
+            turnId,
+            sectionId: `${turnId}:content`,
+            occurredAt,
+            delta: chunk.text,
           },
-        };
+        ];
       }
       if (chunk.type === 'reasoning-delta') {
-        return {
-          type: 'assistant.thinking',
-          payload: {
-            sessionId,
-            runId: runId(sessionId, event.data.turn),
-            messageId: assistantMessageId(sessionId, event.data.turn),
-            text: chunk.text,
-          },
-        };
+        return [sectionUpsert(turnId, reasoningSection(turnId, occurredAt, 'running'), occurredAt)];
       }
-      return undefined;
+      return [];
     }
     if (event.type === 'assistant/message') {
+      const turnId = runId(sessionId, event.data.turn);
       const id = assistantMessageId(sessionId, event.data.turn);
-      this.appendAssistantMessage(
-        sessionId,
-        id,
-        visibleText(event.data.message.content),
-        event.time
-      );
-      return undefined;
+      const content = visibleText(event.data.message.content);
+      this.appendAssistantMessage(sessionId, id, content, event.time);
+      return [
+        sectionUpsert(
+          turnId,
+          textSection('content', `${turnId}:content`, content, occurredAt, false),
+          occurredAt
+        ),
+      ];
     }
     if (event.type === 'tool/call') {
-      return {
-        type: 'assistant.tool_call',
-        payload: {
-          sessionId,
-          runId: runId(sessionId, event.data.turn),
-          messageId: assistantMessageId(sessionId, event.data.turn),
-          toolCallId: String(event.data.callId),
-          toolCall: {
-            id: String(event.data.callId),
-            function: { name: event.data.name },
-            arguments: event.data.arguments,
-          },
-        },
-      };
+      const turnId = runId(sessionId, event.data.turn);
+      const callId = String(event.data.callId);
+      return [
+        sectionUpsert(
+          turnId,
+          activitySection(callId, occurredAt, 'running', safeName(event.data.name)),
+          occurredAt
+        ),
+      ];
     }
     if (event.type === 'tool/result') {
-      return {
-        type: 'assistant.tool_result',
-        payload: {
-          sessionId,
-          runId: runId(sessionId, event.data.turn),
-          messageId: assistantMessageId(sessionId, event.data.turn),
-          toolCallId: String(event.data.message.source.callId),
-          result: contentText(event.data.message.content),
-        },
-      };
+      const turnId = runId(sessionId, event.data.turn);
+      const callId = String(event.data.message.source.callId);
+      const result = event.data.message.content[0];
+      const errorCode = event.data.error?.code;
+      const state =
+        errorCode === 'OUTCOME_UNKNOWN'
+          ? 'outcome_unknown'
+          : errorCode === 'TOOL_NOT_STARTED'
+            ? 'skipped'
+            : result.isError === true
+              ? 'failed'
+              : 'completed';
+      return [
+        sectionUpsert(
+          turnId,
+          activitySection(
+            callId,
+            occurredAt,
+            state,
+            '工具执行',
+            state === 'outcome_unknown'
+              ? '工具结果未知，不会自动重试。'
+              : state === 'skipped'
+                ? '工具未开始执行。'
+                : state === 'failed'
+                  ? `工具执行失败：${safeName(errorCode ?? 'execution_failed')}`
+                  : '工具已完成，详细结果通过受控证据查看。'
+          ),
+          occurredAt
+        ),
+      ];
     }
-    if (event.type === 'turn/end')
-      return this.projectTurnEnd(sessionId, event.data.turn, event.data.reason);
-    return undefined;
+    if (event.type === 'turn/end') {
+      return this.projectTurnEnd(sessionId, event.data.turn, event.data.reason, occurredAt);
+    }
+    return [];
   }
 
   private projectTurnEnd(
     sessionId: string,
     turn: number,
-    reason: TurnEndReason
-  ): ProjectedPublicEvent {
-    const common = {
-      sessionId,
-      runId: runId(sessionId, turn),
-      messageId: assistantMessageId(sessionId, turn),
-    };
+    reason: TurnEndReason,
+    occurredAt: string
+  ): ProjectedAgentEvent[] {
+    const turnId = runId(sessionId, turn);
+    const reasoning = sectionUpsert(
+      turnId,
+      reasoningSection(turnId, occurredAt, reason.kind === 'error' ? 'failed' : 'completed'),
+      occurredAt
+    );
     if (reason.kind === 'error') {
       this.updateStatus(sessionId, 'blocked');
-      return {
-        type: 'run.error',
-        payload: {
-          ...common,
-          error: `${reason.error.code}: ${reason.error.message}`,
-          ...(reason.error.code === 'TIMEOUT' ? { code: 'TIMEOUT' } : {}),
-        },
-      };
+      return [
+        reasoning,
+        sectionUpsert(
+          turnId,
+          {
+            type: 'error',
+            sectionId: `${turnId}:error`,
+            createdAt: occurredAt,
+            updatedAt: occurredAt,
+            title: '本轮执行失败',
+            message: safeError(reason.error.message),
+            code: reason.error.code,
+            recoverable: reason.error.code === 'TIMEOUT',
+          },
+          occurredAt
+        ),
+        turnCompleted(turnId, 'failed', occurredAt),
+        streamState(turnId, 'failed', occurredAt),
+      ];
     }
-    const terminalReason =
-      reason.kind === 'max-tokens'
-        ? 'max_steps_reached'
-        : reason.kind === 'aborted' || reason.kind === 'interrupted'
-          ? 'abort'
-          : reason.kind === 'blocked'
-            ? 'pause'
-            : 'stop';
-    this.updateStatus(
-      sessionId,
-      reason.kind === 'blocked'
-        ? 'paused'
-        : reason.kind === 'aborted' || reason.kind === 'interrupted'
-          ? 'interrupted'
-          : 'completed'
-    );
-    return { type: 'assistant.completed', payload: { ...common, terminal_reason: terminalReason } };
+    const cancelled = reason.kind === 'aborted' || reason.kind === 'interrupted';
+    const paused = reason.kind === 'blocked';
+    this.updateStatus(sessionId, paused ? 'paused' : cancelled ? 'interrupted' : 'completed');
+    return [
+      reasoning,
+      turnCompleted(turnId, cancelled ? 'cancelled' : 'completed', occurredAt),
+      streamState(turnId, paused ? 'paused' : cancelled ? 'cancelled' : 'completed', occurredAt),
+    ];
   }
 
-  private insertPublicEvent(sessionId: string, event: ProjectedPublicEvent): PublicSessionEvent {
+  private insertPublicEvent(sessionId: string, event: ProjectedAgentEvent): AgentStreamEventV1 {
     const seq = this.nextPublicSeq(sessionId);
+    const publicEvent = {
+      schema: AGENT_STREAM_EVENT_SCHEMA,
+      streamId: sessionId,
+      seq,
+      ...event,
+    } as AgentStreamEventV1;
     this.db
       .prepare(
         `INSERT INTO session_events(session_id, seq, event_type, payload, created_at, ttl_expires_at)
-         VALUES (?, ?, ?, ?, ?, NULL)`
+         VALUES (?, ?, 'agent_stream.event', ?, ?, NULL)`
       )
-      .run(sessionId, seq, event.type, JSON.stringify(event.payload), new Date().toISOString());
-    return { type: event.type, seq, ...event.payload } as PublicSessionEvent;
+      .run(sessionId, seq, JSON.stringify(publicEvent), event.occurredAt);
+    return publicEvent;
   }
 
   private nextPublicSeq(sessionId: string): number {
@@ -323,7 +361,7 @@ export class HarnessProjectionStore {
   ): void {
     const existing = this.db.prepare('SELECT id FROM messages WHERE id = ?').get(id);
     if (existing) {
-      this.db.prepare('UPDATE messages SET content = content || ? WHERE id = ?').run(content, id);
+      this.db.prepare('UPDATE messages SET content = ? WHERE id = ?').run(content, id);
       return;
     }
     this.insertMessage(sessionId, id, 'assistant', content, time);
@@ -345,6 +383,97 @@ export class HarnessProjectionStore {
       )
       .run(status, now, now, sessionId);
   }
+}
+
+function textSection(
+  type: 'user' | 'content',
+  sectionId: string,
+  markdown: string,
+  occurredAt: string,
+  streaming: boolean
+): AgentStreamSectionV1 {
+  return { type, sectionId, createdAt: occurredAt, updatedAt: occurredAt, markdown, streaming };
+}
+
+function reasoningSection(
+  turnId: string,
+  occurredAt: string,
+  state: 'running' | 'completed' | 'failed'
+): Extract<AgentStreamSectionV1, { type: 'reasoning' }> {
+  return {
+    type: 'reasoning',
+    sectionId: `${turnId}:reasoning`,
+    createdAt: occurredAt,
+    updatedAt: occurredAt,
+    visibility: 'summary',
+    summary: state === 'running' ? '正在分析上下文与可用能力' : '已完成分析与决策',
+    state,
+  };
+}
+
+function activitySection(
+  callId: string,
+  occurredAt: string,
+  state: Extract<AgentStreamSectionV1, { type: 'activity' }>['state'],
+  title: string,
+  summary?: string
+): Extract<AgentStreamSectionV1, { type: 'activity' }> {
+  return {
+    type: 'activity',
+    sectionId: `tool:${callId}`,
+    createdAt: occurredAt,
+    updatedAt: occurredAt,
+    kind: title.includes('browser') ? 'browser' : 'tool',
+    state,
+    title,
+    ...(summary ? { summary } : {}),
+  };
+}
+
+function turnUpsert(
+  turnId: string,
+  role: AgentStreamTurnV1['role'],
+  section: AgentStreamSectionV1,
+  occurredAt: string
+): ProjectedAgentEvent {
+  return {
+    type: 'turn.upsert',
+    turnId,
+    sectionId: section.sectionId,
+    occurredAt,
+    turn: {
+      turnId,
+      role,
+      state: role === 'assistant' ? 'streaming' : 'completed',
+      createdAt: occurredAt,
+      updatedAt: occurredAt,
+      sections: [section],
+    },
+  };
+}
+
+function sectionUpsert(
+  turnId: string,
+  section: AgentStreamSectionV1,
+  occurredAt: string
+): ProjectedAgentEvent {
+  return { type: 'section.upsert', turnId, sectionId: section.sectionId, occurredAt, section };
+}
+
+function streamState(
+  turnId: string,
+  state: Extract<AgentStreamEventV1, { type: 'stream.state' }>['state'],
+  occurredAt: string
+): ProjectedAgentEvent {
+  return { type: 'stream.state', turnId, sectionId: `${turnId}:state`, occurredAt, state };
+}
+
+function turnCompleted(
+  turnId: string,
+  state: Extract<AgentStreamEventV1, { type: 'turn.completed' }>['state'],
+  occurredAt: string
+): ProjectedAgentEvent {
+  return { type: 'turn.completed', turnId, sectionId: `${turnId}:summary`, occurredAt, state };
 }
 
 function contentText(content: readonly ContentBlock[]): string {
@@ -380,7 +509,23 @@ function assistantMessageId(sessionId: string, turn: number): string {
   return `${sessionId}:assistant:${turn}`;
 }
 
+function safeName(value: unknown): string {
+  const normalized = String(value ?? '工具执行')
+    .replace(/[\r\n\t]/gu, ' ')
+    .trim();
+  return normalized.slice(0, 120) || '工具执行';
+}
+
+function safeError(value: unknown): string {
+  const normalized = String(value ?? '执行失败').replace(
+    /(?:authorization|bearer|token|secret|password|lease)[=: ]+[^\s,;]+/giu,
+    '[已脱敏]'
+  );
+  return normalized.slice(0, 4096);
+}
+
 function assertSeq(value: number, name: string): void {
-  if (!Number.isSafeInteger(value) || value < 0)
+  if (!Number.isSafeInteger(value) || value < 0) {
     throw new TypeError(`${name} must be a non-negative integer`);
+  }
 }

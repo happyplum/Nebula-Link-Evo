@@ -6,6 +6,9 @@
 - [shipped] Agent 数据 migration 2 使用 checksum 账本、可重入且只增不毁；任务创建/运行/终态与 `stateVersion`、task-scoped 单调 event seq 在同一事务写入，服务重启中断也会追加持久状态事件。
 - [shipped] `POST /api/v1/agent-tasks/:taskId/commands` 已交付：command ID + request hash 幂等、`expectedStateVersion` 乐观冲突拒绝、accepted/terminal 审计事件；pause 不打断已经开始的原子 operation，待其结算或 `outcome_unknown` 后在下一安全 checkpoint 生效，resume 重新竞争全局许可。
 - [shipped] `GET /api/v1/agent-tasks/:taskId/events` 每次连接先发送当前 `agent_task.snapshot`，再发送提交后的 task-scoped 单调 live event；`event-log?afterSeq=&limit=` 提供持久审计与补洞，heartbeat 不占 seq。
+- [shipped] `GET /api/v1/agent-tasks/:taskId/activity` 提供 snapshot-first 脱敏呈现 SSE，`activity-log?afterSeq=&limit=` 提供独立活动游标读取；与 `/events`/`event-log` 控制面审计序号和职责严格分离。
+- [shipped] Agent Task activity projector 按持久事件顺序呈现模型轮次、Skill、Tool、browser operation、中间答复、预算和终态；Tool 失败、跳过、取消与 `outcome_unknown` 保持不同状态，原始结果不进入活动流。
+- [shipped] Agent Task 活动 snapshot 分页读取全部持久审计事件，重连或超过单页事件数仍可重建正在运行的稳定 section；不存在的 task 在 activity 查询、订阅和 snapshot 入口统一返回 404。
 - [shipped] 重启恢复覆盖 created/running/paused：统一收敛为 `interrupted(service_restarted)`，遗留 accepted command 收敛为 rejected；暂停任务只在同一服务进程且安全执行上下文仍存在时允许 resume。
 - [shipped] `AI_SKILLS_DIRS` 使用平台路径分隔符配置本地只读 Skill roots；每个 package 固定为 `<skillId>/<semver>/{manifest.json,instructions.md}`，拒绝目录逃逸、symlink、额外文件、超限内容、Schema/hash/目录名不一致、同版本漂移及启动时缺失的必需工具引用。
 - [shipped] `GET /api/v1/skills` 返回已加载 Skill 的安全 catalog（id/version/contentHash/描述/角色/工具 patterns），不返回指令正文、sourceRef 或本地路径；空 catalog 不影响 runtime 协议可用性。

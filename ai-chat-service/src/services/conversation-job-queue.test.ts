@@ -187,10 +187,7 @@ describe('ConversationJobQueue', () => {
     expect(fixture.queue.cancelJob(jobId)).toBe(false);
     expect(fixture.queue.cancelJob('missing')).toBe(false);
     expect(fixture.scheduler.cancel).toHaveBeenCalledWith(jobId);
-    expect(fixture.eventHub.publish).toHaveBeenCalledWith(
-      'queued-session',
-      expect.objectContaining({ type: 'job.cancelled', jobId })
-    );
+    expect(fixture.eventHub.emitJobCancelled).toHaveBeenCalledWith('queued-session', jobId);
     releaseScheduler();
     await waitForJob(fixture.queue, jobId, 'cancelled');
 

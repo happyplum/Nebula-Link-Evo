@@ -1,113 +1,46 @@
-/**
- * Stream Routes - SSE streaming endpoint
- * Relative path: /:id/stream
- */
 import { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import { Type } from '@sinclair/typebox';
+import type {
+  AgentStreamEventV1,
+  AgentStreamSnapshotV1,
+  AgentStreamState,
+} from '@nebula-link-evo/shared/types/agent-stream';
 import type { ChatHandler } from '../../../../conversation/chat-handler.js';
 import type { ConversationManager } from '../../../../conversation/manager.js';
-import type { SessionEventsDAO } from '../../../../conversation/session-events-dao.js';
-import type { ChatSessionController } from '../../../../services/chat-session-controller.js';
-import type { SessionEvent, SessionSnapshotEvent, SessionState } from '@nebula-link-evo/shared';
-import { eventToSSEFormat } from '@nebula-link-evo/shared';
 import type { ConversationJobQueue } from '../../../../services/conversation-job-queue.js';
-import { getRuntimeSessionState } from './runtime-state.js';
+import type { ChatSessionController } from '../../../../services/chat-session-controller.js';
 import { BoundedSseWriter } from '../../../../services/sse-writer.js';
+import { buildChatAgentStreamSnapshot } from '../../../../agent-stream/snapshot.js';
+import { getRuntimeSessionState } from './runtime-state.js';
 
-function writeSSEEvent(writer: BoundedSseWriter, event: SessionEvent, eventId: string): void {
-  const formatted = eventToSSEFormat(event, eventId);
-  writer.push(`event: ${formatted.event}\nid: ${eventId}\ndata: ${formatted.data}\n\n`);
-}
-
-function writeBootstrapEvent(
+function writeSse(
   writer: BoundedSseWriter,
-  event: SessionEvent,
-  lastDeliveredSeq: { value: number }
+  type: 'agent_stream.snapshot' | 'agent_stream.event',
+  seq: number,
+  data: AgentStreamSnapshotV1 | AgentStreamEventV1
 ): void {
-  if (event.seq !== undefined) {
-    if (event.seq <= lastDeliveredSeq.value) {
-      return;
-    }
-    lastDeliveredSeq.value = event.seq;
-  }
-
-  const eventId = event.seq !== undefined ? String(event.seq) : '';
-  writeSSEEvent(writer, event, eventId);
+  writer.push(`event: ${type}\nid: ${seq}\ndata: ${JSON.stringify(data)}\n\n`);
 }
 
-async function buildSnapshotEvent(
+async function buildSnapshot(
   conversationManager: ConversationManager,
   sessionId: string,
-  sessionEventsDAO: SessionEventsDAO | null,
+  chatHandler: ChatHandler,
   jobQueue?: ConversationJobQueue,
   controller?: ChatSessionController
-): Promise<SessionSnapshotEvent> {
-  const messages = conversationManager.getMessages(sessionId);
-  const runtimeState = await getRuntimeSessionState(conversationManager, sessionId, controller);
-  const activeToolCalls = conversationManager.getActiveToolCalls(sessionId);
-  const pendingJobs = jobQueue?.getPendingJobs(sessionId) ?? [];
-
-  const assistantIds = messages.filter((m) => m.role === 'assistant').map((m) => m.id);
-  const thinkingMap =
-    sessionEventsDAO?.getThinkingForSession(sessionId, assistantIds) ?? new Map<string, string>();
-
-  // Build tool result lookup: tool_call_id → result string
-  const toolResultMap = new Map<string, string>();
-  for (const m of messages) {
-    if (m.role === 'tool' && m.metadata?.tool_call_id) {
-      toolResultMap.set(m.metadata.tool_call_id as string, m.content);
-    }
-  }
-
-  return {
-    type: 'session.snapshot',
-    seq: 0,
+): Promise<AgentStreamSnapshotV1> {
+  const runtime = await getRuntimeSessionState(conversationManager, sessionId, controller);
+  const pending = jobQueue?.getPendingJobs(sessionId) ?? [];
+  const runtimeState = pending.some((job) => job.status === 'queued')
+    ? 'streaming'
+    : mapRuntimeState(runtime.status);
+  const events = await chatHandler.getSessionEventsDAO().getEventsAfter(sessionId, 0);
+  return buildChatAgentStreamSnapshot(
     sessionId,
-    lastSeq: sessionEventsDAO?.getLastSeq(sessionId) ?? undefined,
-    messages: messages
-      .filter((m) => m.role !== 'tool')
-      .map((m) => {
-        const result: {
-          id: string;
-          role: string;
-          content: string;
-          thinking?: string;
-          tool_calls?: import('@nebula-link-evo/shared/types/sse-events').ToolCall[];
-          created_at: string;
-        } = {
-          id: m.id,
-          role: m.role,
-          content: m.content,
-          created_at: m.created_at,
-        };
-
-        const thinking = thinkingMap.get(m.id);
-        if (thinking) {
-          result.thinking = thinking;
-        }
-
-        // Extract tool_calls stored in message metadata for assistant messages,
-        // merging tool results from tool-role messages so the snapshot is self-contained.
-        if (m.role === 'assistant' && m.metadata?.tool_calls) {
-          const calls = m.metadata
-            .tool_calls as import('@nebula-link-evo/shared/types/sse-events').ToolCall[];
-          result.tool_calls = calls.map((tc) => {
-            const tcId = (tc as Record<string, unknown>).id as string | undefined;
-            if (tcId && toolResultMap.has(tcId)) {
-              return { ...tc, result: toolResultMap.get(tcId) };
-            }
-            return tc;
-          });
-        }
-
-        return result;
-      }),
-    state: runtimeState.status as SessionState,
-    jobId: runtimeState.jobId,
-    agentState: runtimeState.agentState,
-    ...(activeToolCalls.length > 0 ? { activeToolCalls } : {}),
-    ...(pendingJobs.length > 0 ? { pendingJobs } : {}),
-  };
+    conversationManager.getMessages(sessionId),
+    events,
+    runtimeState
+  );
 }
 
 const streamRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
@@ -117,51 +50,42 @@ const streamRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
   const chatHandler = (fastify as typeof fastify & { chatHandler?: ChatHandler }).chatHandler;
   const jobQueue = (fastify as typeof fastify & { jobQueue?: ConversationJobQueue }).jobQueue;
 
-  // GET /:id/stream - SSE streaming endpoint with full snapshot bootstrap
   fastify.get<{ Params: { id: string } }>(
     '/:id/stream',
     {
       schema: {
-        description: 'SSE stream for full snapshot bootstrap and live session events',
+        description: 'Snapshot-first user-facing Agent activity stream',
         tags: ['Chat', 'SSE'],
-        params: Type.Object({
-          id: Type.String(),
-        }),
+        params: Type.Object({ id: Type.String() }),
       },
     },
     async (request, reply) => {
       const { id: sessionId } = request.params;
-
-      const session = conversationManager.getSession(sessionId);
-      if (!session) {
+      if (!conversationManager.getSession(sessionId)) {
         reply.status(404);
         return { success: false, error: 'Session not found' };
       }
 
-      const sessionEventsDAO = chatHandler.getSessionEventsDAO();
-      const eventHub = chatHandler.getSessionEventHub();
-      const lastDeliveredSeq = { value: 0 };
-      const bufferedEvents: SessionEvent[] = [];
+      const buffered: AgentStreamEventV1[] = [];
       let bootstrapComplete = false;
+      let lastSeq = 0;
       let unsubscribe = (): void => {};
-      const writer = new BoundedSseWriter(reply.raw, {
-        onClose: () => unsubscribe(),
-      });
-
-      unsubscribe = eventHub.subscribe(sessionId, (event: SessionEvent) => {
+      const writer = new BoundedSseWriter(reply.raw, { onClose: () => unsubscribe() });
+      unsubscribe = chatHandler.getSessionEventHub().subscribe(sessionId, (event) => {
         try {
           if (!bootstrapComplete) {
-            if (bufferedEvents.length >= 256) {
+            if (buffered.length >= 256) {
               writer.close('overflow', true);
               return;
             }
-            bufferedEvents.push(event);
+            buffered.push(event);
             return;
           }
-
-          writeBootstrapEvent(writer, event, lastDeliveredSeq);
+          if (event.seq <= lastSeq) return;
+          writeSse(writer, 'agent_stream.event', event.seq, event);
+          lastSeq = event.seq;
         } catch {
-          // Ignore write errors (client disconnected)
+          // The writer close callback owns subscription cleanup.
         }
       });
 
@@ -172,48 +96,45 @@ const streamRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           'X-Accel-Buffering': 'no',
           Connection: 'keep-alive',
         });
-
-        const snapshotEvent = await buildSnapshotEvent(
+        const snapshot = await buildSnapshot(
           conversationManager,
           sessionId,
-          sessionEventsDAO,
+          chatHandler,
           jobQueue,
           fastify.chatSessionController
         );
-        writeSSEEvent(writer, snapshotEvent, '0');
-
+        writeSse(writer, 'agent_stream.snapshot', snapshot.seq, snapshot);
+        lastSeq = snapshot.seq;
         bootstrapComplete = true;
-        for (const event of bufferedEvents) {
-          writeBootstrapEvent(writer, event, lastDeliveredSeq);
+        for (const event of buffered) {
+          if (event.seq <= lastSeq) continue;
+          writeSse(writer, 'agent_stream.event', event.seq, event);
+          lastSeq = event.seq;
         }
       } catch (error) {
         unsubscribe();
         throw error;
       }
 
-      const heartbeatInterval = setInterval(() => {
+      const heartbeat = setInterval(() => {
         try {
           writer.push(':heartbeat\n\n');
         } catch {
-          clearInterval(heartbeatInterval);
+          clearInterval(heartbeat);
         }
-      }, 15000);
-
+      }, 15_000);
       const timeout = setTimeout(
         () => {
-          clearInterval(heartbeatInterval);
+          clearInterval(heartbeat);
           unsubscribe();
           writer.close('closed', true);
         },
         5 * 60 * 1000
       );
 
-      // Keep the handler alive until the client disconnects or timeout fires.
-      // Without this, Fastify may finalize the raw response when the handler
-      // returns, closing the SSE stream before live events can be delivered.
       return new Promise<void>((resolve) => {
         request.raw.on('close', () => {
-          clearInterval(heartbeatInterval);
+          clearInterval(heartbeat);
           clearTimeout(timeout);
           unsubscribe();
           writer.close();
@@ -225,3 +146,19 @@ const streamRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
 };
 
 export default streamRoutes;
+
+function mapRuntimeState(status: string): AgentStreamState {
+  switch (status) {
+    case 'running':
+      return 'streaming';
+    case 'paused':
+    case 'blocked':
+      return 'paused';
+    case 'completed':
+      return 'completed';
+    case 'interrupted':
+      return 'recovering';
+    default:
+      return 'idle';
+  }
+}

@@ -1,101 +1,95 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { Composer } from '../Composer.js';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatStore } from '../../store/chat.store.js';
+import { Composer } from '../Composer.js';
 import { testIds } from '@/shared/testing/testids.js';
 
-type ChatState = ReturnType<typeof useChatStore.getState>;
-type StoreMock = {
-  mockImplementation: (
-    implementation: (selector: (state: Record<string, unknown>) => unknown) => unknown
-  ) => void;
-};
-const storeMock = useChatStore as unknown as StoreMock;
-
-vi.mock('../../store/chat.store.js', () => ({
-  useChatStore: vi.fn(),
-  selectScreenshotData: (s: ChatState) => s.screenshotData,
-  selectStreamingState: (s: ChatState) => s.streamingState,
-  selectActiveSessionId: (s: ChatState) => s.activeSessionId,
-}));
-
 describe('Composer', () => {
-  const mockAddOptimisticMessage = vi.fn();
-
   beforeEach(() => {
-    vi.clearAllMocks();
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 202 })));
-
-    const state = {
-      streamingState: 'idle',
-      activeSessionId: 'session-1',
-      screenshotData: null,
-      addOptimisticMessage: mockAddOptimisticMessage,
-      setStreamingState: vi.fn(),
-      setScreenshotData: vi.fn(),
-      clearScreenshotData: vi.fn(),
-    };
-
-    storeMock.mockImplementation((selector) => selector(state));
+    useChatStore.getState().reset();
+    useChatStore.getState().setSessions([{ id: 'session-1', title: '测试会话' }]);
+    useChatStore.getState().setActiveSession('session-1');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ messageId: 'message-1' }), {
+          status: 202,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    );
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it('renders input and send button', () => {
+  it('发送时创建并对账乐观 turn，Enter 发送且 Shift+Enter 保留换行', async () => {
     render(<Composer />);
-    expect(screen.getByTestId(testIds.composerInput)).toBeInTheDocument();
-    expect(screen.getByTestId(testIds.sendButton)).toBeInTheDocument();
-  });
-
-  it('disables input when streaming', () => {
-    storeMock.mockImplementation((selector) =>
-      selector({
-        streamingState: 'streaming',
-        activeSessionId: 'session-1',
-        screenshotData: null,
-        addOptimisticMessage: mockAddOptimisticMessage,
-        setStreamingState: vi.fn(),
-        setScreenshotData: vi.fn(),
-        clearScreenshotData: vi.fn(),
-      })
-    );
-    render(<Composer />);
-    expect(screen.getByTestId(testIds.composerInput)).toBeDisabled();
-    expect(screen.getByTestId(testIds.sendButton)).toBeDisabled();
-  });
-
-  it('disables input when no active session', () => {
-    storeMock.mockImplementation((selector) =>
-      selector({
-        streamingState: 'idle',
-        activeSessionId: null,
-        screenshotData: null,
-        addOptimisticMessage: mockAddOptimisticMessage,
-        setStreamingState: vi.fn(),
-        setScreenshotData: vi.fn(),
-        clearScreenshotData: vi.fn(),
-      })
-    );
-    render(<Composer />);
-    expect(screen.getByTestId(testIds.composerInput)).toBeDisabled();
-    expect(screen.getByTestId(testIds.sendButton)).toBeDisabled();
-  });
-
-  it('calls addOptimisticMessage on send', async () => {
-    render(<Composer />);
-
     const input = screen.getByTestId(testIds.composerInput);
-    const button = screen.getByTestId(testIds.sendButton);
 
-    fireEvent.change(input, { target: { value: 'Hello world' } });
-    expect(button).not.toBeDisabled();
+    Object.defineProperty(input, 'scrollHeight', { configurable: true, value: 260 });
+    fireEvent.change(input, { target: { value: '检查结算页' } });
+    expect(input).toHaveStyle({ height: '200px' });
 
-    fireEvent.click(button);
+    fireEvent.keyDown(input, { key: 'Enter', shiftKey: true });
+    expect(fetch).not.toHaveBeenCalled();
+    fireEvent.keyDown(input, { key: 'Enter' });
 
-    expect(mockAddOptimisticMessage).toHaveBeenCalledWith('session-1', 'Hello world');
-    expect(input).toHaveValue('');
     await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v1/chat/sessions/session-1/messages'),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ content: '检查结算页' }),
+      })
+    );
+    expect(input).toHaveValue('');
+    expect(useChatStore.getState().activityBySession['session-1']?.turns[0]?.turnId).toBe(
+      'user:message-1'
+    );
+  });
+
+  it('禁用空白、无会话和流式中的发送，并支持删除会话入口', () => {
+    const onDelete = vi.fn();
+    const { rerender } = render(<Composer onDeleteSession={onDelete} />);
+    const input = screen.getByTestId(testIds.composerInput);
+    expect(screen.getByTestId(testIds.sendButton)).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: '删除会话' }));
+    expect(onDelete).toHaveBeenCalledOnce();
+
+    act(() => useChatStore.getState().setActiveSession(null));
+    expect(input).toBeDisabled();
+
+    act(() => {
+      useChatStore.getState().setActiveSession('session-1');
+      useChatStore.getState().setStreamingState('streaming');
+    });
+    rerender(<Composer />);
+    expect(screen.getByTestId(testIds.composerInput)).toBeDisabled();
+  });
+
+  it('HTTP 失败时进入失败状态，缺失 messageId 时保留乐观 turn', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 500 }));
+    render(<Composer />);
+    fireEvent.change(screen.getByTestId(testIds.composerInput), { target: { value: '失败消息' } });
+    fireEvent.click(screen.getByTestId(testIds.sendButton));
+    await waitFor(() =>
+      expect(useChatStore.getState().activityBySession['session-1']?.state).toBe('failed')
+    );
+
+    act(() => useChatStore.getState().setStreamingState('idle'));
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response('{}', { status: 202, headers: { 'Content-Type': 'application/json' } })
+    );
+    fireEvent.change(screen.getByTestId(testIds.composerInput), { target: { value: '无 ID' } });
+    fireEvent.click(screen.getByTestId(testIds.sendButton));
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    expect(
+      useChatStore
+        .getState()
+        .activityBySession['session-1']?.turns.some((turn) => turn.turnId.startsWith('optimistic:'))
+    ).toBe(true);
   });
 });

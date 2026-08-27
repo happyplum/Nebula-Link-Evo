@@ -7,7 +7,6 @@ import { StreamPersistWorker } from './stream-persist-worker.js';
 import type { SessionEventHub } from '../conversation/session-event-hub.js';
 import { ProviderError, PROVIDER_ERRORS } from './provider/errors.js';
 import { createWorkerLogger } from './logger.js';
-import type { PendingJobInfo } from '@nebula-link-evo/shared';
 import type { HarnessRunScheduler } from '../harness/run-scheduler.js';
 
 const logger = createWorkerLogger('ConversationJobQueue');
@@ -95,6 +94,15 @@ export interface JobPayload {
   messageId?: string;
   contentPreview?: string;
   idempotencyKey?: string;
+}
+
+interface PendingJobInfo {
+  jobId: string;
+  sessionId: string;
+  messageId: string;
+  contentPreview: string;
+  createdAt: string;
+  status: 'queued' | 'running';
 }
 
 export class ConversationJobQueue {
@@ -403,11 +411,7 @@ export class ConversationJobQueue {
       this.runScheduler?.cancel(jobId);
 
       if (this.eventHub) {
-        this.eventHub.publish(job.sessionId, {
-          type: 'job.cancelled',
-          sessionId: job.sessionId,
-          jobId,
-        });
+        this.eventHub.emitJobCancelled(job.sessionId, jobId);
       }
 
       // Clean up lock if no other jobs are queued for this session

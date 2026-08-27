@@ -230,8 +230,10 @@ export class ChatHandler {
     this.publish(result.publicEvents);
   }
 
-  private publish(events: readonly import('@nebula-link-evo/shared').SessionEvent[]): void {
-    for (const event of events) this.sessionEventHub.publish(event.sessionId, event);
+  private publish(
+    events: readonly import('@nebula-link-evo/shared/types/agent-stream').AgentStreamEventV1[]
+  ): void {
+    for (const event of events) this.sessionEventHub.publish(event.streamId, event);
   }
 
   private applyPauseCheckpoint(sessionId: string): void {

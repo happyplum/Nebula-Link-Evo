@@ -30,6 +30,7 @@
     "vitest": "catalog:"
   },
   "dependencies": {
+    "@nebula-link-evo/agent-activity-ui": "workspace:*",
     "@nebula-link-evo/shared": "workspace:*",
     "@tanstack/react-query": "^5.96.0",
     "dayjs": "^1.11.20",

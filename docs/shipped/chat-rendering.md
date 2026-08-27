@@ -1,11 +1,12 @@
 # chat-rendering `debug-ui /#/chat`
 
-debug-ui 的 Chat 渲染子系统。optimistic incremental append + SSE 唯一历史/live 源。
+debug-ui 的 Chat 使用统一 Agent Stream 活动模型和 comfortable 公共 renderer。
 
-- [shipped] Optimistic incremental append：`sendMessage()` 执行乐观增量追加，禁止全列表 DOM 重绘。入口：`debug-ui/src/features/chat/hooks/useChatStream.ts` + `chat.store.ts`。
-- [shipped] `assistant.started` / stream fallback 占位必须 incremental append，不强制 `renderCurrentSessionMessages()`。
-- [shipped] `message.created` 把临时 DOM `data-id` 转换为 server ID，避免重复 user bubble。
-- [shipped] SSE 单源：`/#/chat` 必须以 SSE 作为唯一历史与 live 源；禁止调用 `GET /api/v1/chat/sessions/:id/messages` 水合可见历史。
-- [shipped] `session.snapshot` bootstrap：每次 Chat SSE 连接必须 bootstrap 完整 `session.snapshot`，无 `Last-Event-ID` / `lastEventId` resume 契约。
-- [shipped] Chat feature 模块：`debug-ui/src/features/chat/`（store/chat.store、hooks/useChatStream、types）。
-- [shipped] 验收面：parity 测试 `chat-sync-pagination.parity.test.tsx`、`stream-boundary.test.ts`。
+- [shipped] `@nebula-link-evo/agent-activity-ui` 提供无副作用 reducer、确定性 replay、稳定 section 更新、连续 Activity 分组、32 项边界、`compact/comfortable` 密度和业务 slots。
+- [shipped] `/#/chat` 的可见历史与 live 状态只来自 `agent_stream.snapshot` + `agent_stream.event`；公开消息历史 GET、旧事件监听器和协议 adapter 均不存在。
+- [shipped] optimistic user turn 在发送时增量追加；即使服务端 snapshot 先于 POST 返回，也会按正式 user turn 去重，不产生双份消息。
+- [shipped] live 更新通过 `requestAnimationFrame` 批处理，并保留来源 session id；切换会话不会把缓冲事件写入其他 stream。
+- [shipped] content、reasoning 摘要、Skill、Tool、browser、Agent、证据、决策、错误和 turn summary 均由公共 renderer 呈现；独立 Message/Thinking/Tool/Queue 卡片已删除。
+- [shipped] Chat 页面保留会话选择、Composer、pause/resume/interrupt/cancel；Composer 只提交文本，不上传不受 immutable snapshot 边界支持的原始截图。
+- [shipped] 公共样式提供可见 `focus-visible`、44px 操作热区、ARIA live/busy、CSS 变量主题与 reduced-motion。
+- [shipped] 验收面：`chat.store.test.ts`、`useChatStream.test.ts`、公共 reducer/renderer/replay 测试与 debug-ui Playwright Chat 旅程。

@@ -133,6 +133,9 @@ export class AgentTaskModelExecutor {
         throw new AgentTaskError('budget_exceeded', 'Agent task token budget was exceeded');
       }
       const terminationReason = lastTurnReason(allDurable.events);
+      context.emitEvent('agent_task.content', {
+        markdown: summarizePublicOutput(submitted.output),
+      });
       context.emitEvent('agent_task.model_turn', {
         phase: 'completed',
         modelTurns: usage.modelTurns,
@@ -432,6 +435,15 @@ export class AgentTaskModelExecutor {
       totalTokens,
     });
   }
+}
+
+function summarizePublicOutput(value: unknown): string {
+  if (Array.isArray(value)) return `已生成结构化结果（${value.length} 项）。`;
+  if (value && typeof value === 'object') {
+    const keys = Object.keys(value as Record<string, unknown>).slice(0, 12);
+    return keys.length > 0 ? `已生成结构化结果：${keys.join('、')}。` : '已生成结构化结果。';
+  }
+  return '已生成任务结果。';
 }
 
 function toDshTool(tool: GatewayTool, safeName: string): ToolDefinition {
