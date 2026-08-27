@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.js';
 import './app/globals.css';
+import '@nebula-link-evo/agent-activity-ui/styles.css';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) throw new Error('AI E2E UI root element was not found');

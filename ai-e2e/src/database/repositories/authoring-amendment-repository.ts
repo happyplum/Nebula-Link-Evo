@@ -431,19 +431,6 @@ export class AuthoringAmendmentRepository {
     });
   }
 
-  listChatMessages(threadId: string): Array<Record<string, unknown>> {
-    if (!this.db.prepare('SELECT id FROM authoring_context_threads WHERE id = ?').get(threadId)) {
-      throw new Error('Authoring context thread not found');
-    }
-    return this.db
-      .prepare(
-        `SELECT id, thread_id, role, content, amendment_id, created_by, created_at
-         FROM authoring_chat_messages WHERE thread_id = ? ORDER BY created_at, rowid`
-      )
-      .all(threadId)
-      .map((row) => mapRow(row as DbRow));
-  }
-
   answerDecision(params: {
     amendmentId: string;
     decisionId: string;

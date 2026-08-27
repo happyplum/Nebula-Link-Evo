@@ -10,6 +10,8 @@ import {
   apiSuccessSchema,
 } from '../../types/semantic-api.js';
 import fp from '../plugins/fastify-plugin.js';
+import type { AgentActivityRepository } from '../../database/repositories/agent-activity-repository.js';
+import { AGENT_STREAM_EVENT_SCHEMA } from '@nebula-link-evo/shared/types/agent-stream';
 
 const IdSchema = Type.String({ minLength: 1, maxLength: 200 });
 const HashSchema = Type.String({ pattern: '^[a-fA-F0-9]{64}$' });
@@ -124,17 +126,6 @@ const CreateAmendmentBodySchema = Type.Object(
   { additionalProperties: false }
 );
 
-const ChatMessageBodySchema = Type.Object(
-  {
-    schema: Type.Literal('nebula.ai-e2e.authoring-chat-message/1.0'),
-    role: Type.Union([Type.Literal('user'), Type.Literal('assistant'), Type.Literal('system')]),
-    content: Type.String({ minLength: 1, maxLength: 20_000 }),
-    amendmentId: Type.Optional(IdSchema),
-    createdBy: Type.String({ minLength: 1, maxLength: 200 }),
-  },
-  { additionalProperties: false }
-);
-
 const DecisionAnswerBodySchema = Type.Object(
   {
     schema: Type.Literal('nebula.ai-e2e.impact-decision-answer/1.0'),
@@ -179,6 +170,7 @@ const ErrorResponses = {
 
 export interface SemanticAuthoringRoutesOptions {
   service?: SemanticAuthoringService;
+  activity?: AgentActivityRepository;
 }
 
 const semanticAuthoringRoutes: FastifyPluginAsyncTypebox<SemanticAuthoringRoutesOptions> = async (
@@ -219,6 +211,40 @@ const semanticAuthoringRoutes: FastifyPluginAsyncTypebox<SemanticAuthoringRoutes
         ...(request.body.reason ? { reason: request.body.reason } : {}),
         createdBy: request.body.createdBy,
       });
+      if (request.body.reason) {
+        const occurredAt = new Date().toISOString();
+        const turnId = `user:${result.id}`;
+        options.activity?.append(
+          { type: 'authoring', id: result.id },
+          `user:${result.id}`,
+          {
+            schema: AGENT_STREAM_EVENT_SCHEMA,
+            streamId: result.id,
+            turnId,
+            sectionId: `${turnId}:content`,
+            seq: 1,
+            occurredAt,
+            type: 'turn.upsert',
+            turn: {
+              turnId,
+              role: 'user',
+              state: 'completed',
+              createdAt: occurredAt,
+              updatedAt: occurredAt,
+              sections: [
+                {
+                  type: 'user',
+                  sectionId: `${turnId}:content`,
+                  createdAt: occurredAt,
+                  updatedAt: occurredAt,
+                  markdown: request.body.reason,
+                },
+              ],
+            },
+          },
+          { authoringTaskId: result.taskId }
+        );
+      }
       return reply.status(result.created ? 201 : 200).send(success(request, result));
     }
   );
@@ -333,45 +359,6 @@ const semanticAuthoringRoutes: FastifyPluginAsyncTypebox<SemanticAuthoringRoutes
       },
     },
     async (request) => success(request, requireService().getAmendment(request.params.amendmentId))
-  );
-
-  fastify.post<{
-    Params: Static<typeof ThreadParamsSchema>;
-    Body: Static<typeof ChatMessageBodySchema>;
-  }>(
-    '/authoring-context-threads/:threadId/messages',
-    {
-      schema: {
-        params: ThreadParamsSchema,
-        body: ChatMessageBodySchema,
-        response: { 201: UnknownSuccessSchema, ...ErrorResponses },
-      },
-    },
-    async (request, reply) =>
-      reply.status(201).send(
-        success(
-          request,
-          requireService().addChatMessage({
-            threadId: request.params.threadId,
-            role: request.body.role,
-            content: request.body.content,
-            ...(request.body.amendmentId ? { amendmentId: request.body.amendmentId } : {}),
-            createdBy: request.body.createdBy,
-          })
-        )
-      )
-  );
-
-  fastify.get<{ Params: Static<typeof ThreadParamsSchema> }>(
-    '/authoring-context-threads/:threadId/messages',
-    {
-      schema: {
-        params: ThreadParamsSchema,
-        response: { 200: UnknownSuccessSchema, ...ErrorResponses },
-      },
-    },
-    async (request) =>
-      success(request, { messages: requireService().listChatMessages(request.params.threadId) })
   );
 
   fastify.post<{

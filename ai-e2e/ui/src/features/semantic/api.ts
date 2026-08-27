@@ -194,10 +194,4 @@ export const semanticApi = {
       { method: 'POST' }
     );
   },
-
-  listChatMessages(threadId: string) {
-    return request<{ messages: Array<Record<string, unknown>> }>(
-      `/api/v1/authoring-context-threads/${encodeURIComponent(threadId)}/messages`
-    ).then((result) => result.messages);
-  },
 };

@@ -146,7 +146,7 @@ describe('semantic authoring routes', () => {
     expect(conflict.statusCode).toBe(409);
   });
 
-  it('turns a structured candidate into diff state while chat text remains only audit context', async () => {
+  it('turns a structured candidate into diff state and exposes no public legacy message route', async () => {
     const jobId = await createJob(app, fixture);
     const threadId = await createThread(app, fixture, jobId);
     const candidate = createModuleCandidate(
@@ -185,10 +185,8 @@ describe('semantic authoring routes', () => {
       state: 'candidate_ready',
       changes: [{ candidateRevisionId: candidate.id, diff: { name: '新登录目标' } }],
     });
-    expect(message.statusCode).toBe(201);
-    expect(messages.json().data.messages).toEqual([
-      expect.objectContaining({ content: '把登录模块重新排一下', amendmentId: null }),
-    ]);
+    expect(message.statusCode).toBe(404);
+    expect(messages.statusCode).toBe(404);
     expect(
       db
         .prepare('SELECT state FROM authoring_amendments WHERE id = ?')

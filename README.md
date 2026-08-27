@@ -42,7 +42,7 @@ Browser ←→ Debug UI (:5173 dev)
 
 **工具与扩展**：Chat 与 Agent Task 共用每个 Fastify 实例唯一的 DSH Agent Loop。ai-chat-service 通过模型不可见的 DSH MCP transport 连接 proxy `/mcp`，启动时把严格 Schema 校验后的产品 wrapper 一次性投影到 ToolRuntime；模型只选择已授权 step，运行时注入 session/Tab/lease/token/target/args。扩展只允许部署期精确锁定的同进程插件或已配置 MCP server，运行期不安装、不热同步组合树；required gateway 发现、Schema 或 capability 不满足即启动失败。
 
-**上下文管理**：DSH compaction、retry、token meter 与持久 JSONL transcript 统一承载上下文；SQLite 保存控制面和公开事件投影。Chat SSE 每次建连先发送完整 `session.snapshot` 再继续 live stream。
+**上下文与活动呈现**：DSH compaction、retry、token meter 与持久 JSONL transcript 统一承载上下文；SQLite 保存控制面和公开活动投影。Chat 与 Agent Task 从已提交事实生成统一 Agent Stream，连接先发送 `agent_stream.snapshot`，随后只发送 `agent_stream.event`；默认不公开原始 reasoning、Skill 指令或 Tool 结果。
 
 ### 实时观测与控制
 
@@ -225,12 +225,11 @@ AGPL 允许个人和企业使用、修改与分发软件，但必须遵守其开
 
 ### Debug Chat Rendering
 
-- `sendMessage()` performs optimistic incremental append (no full message-list DOM wipe).
-- `assistant.started` / stream fallback placeholders append incrementally instead of forcing `renderCurrentSessionMessages()`.
-- `message.created` confirms optimistic user messages by transitioning temp DOM `data-id` to server ID, avoiding duplicate user bubbles.
-- `/#/chat` uses SSE as the only history and live source; it must not call `GET /api/v1/chat/sessions/:id/messages` to hydrate visible chat history.
-- Every chat SSE connection must bootstrap with a full `session.snapshot`, then continue with live events only; no `lastEventId` / `Last-Event-ID` resume contract remains in the product behavior.
-- `session.snapshot` is responsible for carrying restorable assistant thinking/history, so reconnects and page re-entry rebuild from snapshot rather than cursor-based replay.
+- `@nebula-link-evo/agent-activity-ui` is the only Agent activity reducer/renderer used by debug-ui and ai-e2e; it exposes compact/comfortable density and business slots without owning API, SSE, store or permissions.
+- `/#/chat` uses `agent_stream.snapshot` + `agent_stream.event` as the only visible history/live source. The public message-history GET and bespoke Message/Thinking/Tool cards do not exist.
+- Optimistic user turns reconcile with server turns even when the snapshot arrives before the message POST response; live events are RAF-batched and remain bound to their originating session.
+- Authoring uses the compact renderer with a repair composer; formal Run uses the same compact renderer read-only. Structured amendments, decisions and run state remain authoritative business facts.
+- Activity summaries are sanitized and capped; raw reasoning, Skill instructions, secrets, lease tokens and oversized Tool results are never renderer inputs.
 
 ### Debug UI Monitor Sidebar
 

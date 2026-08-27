@@ -124,23 +124,18 @@ POST /api/v1/chat/sessions/:id/messages
 ChatHandler.handleChatSend()
     │
     ▼
-ChatHandler.executeAIResponse()  [recursive, max 10 tool loops]
+统一 DSH Agent Loop
     │
-    ├─ Build system prompt (with MCP tool descriptions)
-    ├─ decideStream() with callbacks:
-    │   ├─ onToken/delta  → SSE: assistant.delta
-    │   ├─ onThinking     → SSE: assistant.thinking
-    │   ├─ onToolCall     → SSE: assistant.tool_call
-    │   ├─ onDone         → SSE: assistant.completed
-    │   └─ onUsage        → token usage stats
+    ├─ provider/model、ToolRuntime、Skill、预算与 checkpoint
+    ├─ DSH JSONL append + SQLite projection watermark
+    ├─ durable model/content/tool/skill/usage 事实
     │
-    ├─ If tool_calls detected:
-    │   ├─ Execute via MCPSDKClient
-    │   ├─ Save as tool role message (DB)
-    │   ├─ Publish SSE: assistant.tool_result
-    │   └─ Recurse → executeAIResponse()
-    │
-    └─ Checkpoint: pauseAfterGeneration / pauseAfterExecution
+    ▼
+HarnessProjectionStore / SessionEventHub
+    ├─ 投影 shared AgentStreamEventV1
+    ├─ 默认 reasoning 阶段摘要；仅显式 public 才含正文
+    ├─ Tool/Skill 只含脱敏摘要、版本/hash、预算和 artifact ref
+    └─ SQLite 事务提交后广播
 ```
 
 ### SSE Streaming (GET /api/v1/chat/sessions/:id/stream)
@@ -148,25 +143,19 @@ ChatHandler.executeAIResponse()  [recursive, max 10 tool loops]
 ```
 Client connects ──▶ SessionEventHub.subscribe()
                        │
-                       ├─ First connect: send session.snapshot
-                        ├─ Reconnect: rebuild from session.snapshot (no Last-Event-ID replay)
+                       ├─ First event: agent_stream.snapshot
+                       ├─ Live events: agent_stream.event
+                       ├─ Bootstrap buffer closes snapshot/live race
                        ├─ Heartbeat: 15s interval
                        └─ Timeout: 5min idle disconnect
 ```
 
 ### SSE Event Types
 
-| Event                   | Description                         |
-| ----------------------- | ----------------------------------- |
-| `session.snapshot`      | Full session state on first connect |
-| `message.created`       | New message persisted to DB         |
-| `assistant.started`     | AI response generation begins       |
-| `assistant.delta`       | Streaming token chunk               |
-| `assistant.completed`   | AI response finished                |
-| `assistant.thinking`    | AI reasoning/thinking content       |
-| `assistant.tool_call`   | AI requests tool execution          |
-| `assistant.tool_result` | Tool execution result returned      |
-| `run.error`             | Runtime error during generation     |
+| Event | Description |
+| --- | --- |
+| `agent_stream.snapshot` | 完整、脱敏、可恢复的当前活动快照 |
+| `agent_stream.event` | 已持久化事实的单调 live 呈现事件 |
 
 ---
 
@@ -217,7 +206,6 @@ Client connects ──▶ SessionEventHub.subscribe()
 | GET    | `/api/v1/chat/sessions`              | List all sessions    |
 | GET    | `/api/v1/chat/sessions/:id`          | Get session details  |
 | DELETE | `/api/v1/chat/sessions/:id`          | Delete session       |
-| GET    | `/api/v1/chat/sessions/:id/messages` | Get session messages |
 | POST   | `/api/v1/chat/sessions/:id/messages` | Send message (async) |
 
 ### Chat Control API
@@ -286,6 +274,6 @@ SessionEventHub (SSE streaming)
 | --------------- | ---------- | ------------------------------------------------------------------------ |
 | Sessions        | SQLite     | Session metadata, config, state                                          |
 | Messages        | SQLite     | User + assistant + tool messages                                         |
-| Events          | SQLite     | `session.snapshot` 恢复所需的 thinking / tool 历史；不用于 cursor replay |
+| Events          | SQLite     | 已持久 DSH/控制面事实及 Agent Stream 投影所需事件                           |
 | Failure Samples | Filesystem | Interaction failure logs                                                 |
 | Live Event Hub  | Memory     | 只转发给在线 subscriber，不缓存、不重放                                  |

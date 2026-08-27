@@ -197,28 +197,6 @@ export class SemanticAuthoringService {
     return amendment;
   }
 
-  addChatMessage(input: {
-    threadId: string;
-    role: 'user' | 'assistant' | 'system';
-    content: string;
-    amendmentId?: string;
-    createdBy: string;
-  }) {
-    try {
-      return this.amendments.addChatMessage(input);
-    } catch (error) {
-      throw mapSemanticError(error);
-    }
-  }
-
-  listChatMessages(threadId: string) {
-    try {
-      return this.amendments.listChatMessages(threadId);
-    } catch (error) {
-      throw mapSemanticError(error);
-    }
-  }
-
   answerDecision(input: {
     amendmentId: string;
     decisionId: string;

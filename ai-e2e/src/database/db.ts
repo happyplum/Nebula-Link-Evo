@@ -27,6 +27,11 @@ import {
   migrationName as migration019Name,
   migrationSql as migration019Sql,
 } from './migrations/019-semantic-evidence-retention.js';
+import {
+  migrationId as migration020Id,
+  migrationName as migration020Name,
+  migrationSql as migration020Sql,
+} from './migrations/020-agent-activity.js';
 import { runTrackedMigration } from './migration-runner.js';
 import { BusinessVersionRepository } from './repositories/business-version-repository.js';
 import { SemanticAssetRepository } from './repositories/semantic-asset-repository.js';
@@ -37,6 +42,7 @@ import { AuthoringAmendmentRepository } from './repositories/authoring-amendment
 import { SemanticRunControlRepository } from './repositories/semantic-run-control-repository.js';
 import { SemanticCoordinatorRepository } from './repositories/semantic-coordinator-repository.js';
 import { SemanticProjectRepository } from './repositories/semantic-project-repository.js';
+import { AgentActivityRepository } from './repositories/agent-activity-repository.js';
 
 export function generateId(): string {
   return randomBytes(8).toString('hex');
@@ -56,6 +62,7 @@ class DatabaseManager {
   private authoringAmendmentRepo: AuthoringAmendmentRepository | null = null;
   private semanticRunControlRepo: SemanticRunControlRepository | null = null;
   private semanticCoordinatorRepo: SemanticCoordinatorRepository | null = null;
+  private agentActivityRepo: AgentActivityRepository | null = null;
 
   private constructor() {}
 
@@ -99,13 +106,16 @@ class DatabaseManager {
       { id: migration017Id, name: migration017Name, sql: migration017Sql },
       { id: migration018Id, name: migration018Name, sql: migration018Sql },
       { id: migration019Id, name: migration019Name, sql: migration019Sql },
+      { id: migration020Id, name: migration020Name, sql: migration020Sql },
     ]) {
       runTrackedMigration(this.db, migration, '1.0.0');
     }
-    this.db.prepare(
-      `INSERT OR IGNORE INTO browser_job_queue_meta (key, next_queue_seq)
+    this.db
+      .prepare(
+        `INSERT OR IGNORE INTO browser_job_queue_meta (key, next_queue_seq)
        SELECT 'global', COALESCE(MAX(queue_seq), 0) + 1 FROM browser_jobs`
-    ).run();
+      )
+      .run();
   }
 
   private initRepositories(): void {
@@ -116,16 +126,14 @@ class DatabaseManager {
     this.semanticWorkflowRepo = new SemanticWorkflowRepository(this.db);
     this.semanticEvidenceRepo = new SemanticEvidenceRepository(this.db);
     this.semanticQueryRepo = new SemanticQueryRepository(this.db, this.businessVersionRepo);
-    this.authoringAmendmentRepo = new AuthoringAmendmentRepository(
-      this.db,
-      this.semanticAssetRepo
-    );
+    this.authoringAmendmentRepo = new AuthoringAmendmentRepository(this.db, this.semanticAssetRepo);
     this.semanticRunControlRepo = new SemanticRunControlRepository(
       this.db,
       this.semanticWorkflowRepo,
       this.semanticEvidenceRepo
     );
     this.semanticCoordinatorRepo = new SemanticCoordinatorRepository(this.db);
+    this.agentActivityRepo = new AgentActivityRepository(this.db);
   }
 
   getDatabase(): Database.Database {
@@ -147,18 +155,50 @@ class DatabaseManager {
       this.authoringAmendmentRepo = null;
       this.semanticRunControlRepo = null;
       this.semanticCoordinatorRepo = null;
+      this.agentActivityRepo = null;
     }
   }
 
-  getSemanticProjectRepo(): SemanticProjectRepository { if (!this.semanticProjectRepo) throw new Error('Database not initialized'); return this.semanticProjectRepo; }
-  getBusinessVersionRepo(): BusinessVersionRepository { if (!this.businessVersionRepo) throw new Error('Database not initialized'); return this.businessVersionRepo; }
-  getSemanticAssetRepo(): SemanticAssetRepository { if (!this.semanticAssetRepo) throw new Error('Database not initialized'); return this.semanticAssetRepo; }
-  getSemanticWorkflowRepo(): SemanticWorkflowRepository { if (!this.semanticWorkflowRepo) throw new Error('Database not initialized'); return this.semanticWorkflowRepo; }
-  getSemanticEvidenceRepo(): SemanticEvidenceRepository { if (!this.semanticEvidenceRepo) throw new Error('Database not initialized'); return this.semanticEvidenceRepo; }
-  getSemanticQueryRepo(): SemanticQueryRepository { if (!this.semanticQueryRepo) throw new Error('Database not initialized'); return this.semanticQueryRepo; }
-  getAuthoringAmendmentRepo(): AuthoringAmendmentRepository { if (!this.authoringAmendmentRepo) throw new Error('Database not initialized'); return this.authoringAmendmentRepo; }
-  getSemanticRunControlRepo(): SemanticRunControlRepository { if (!this.semanticRunControlRepo) throw new Error('Database not initialized'); return this.semanticRunControlRepo; }
-  getSemanticCoordinatorRepo(): SemanticCoordinatorRepository { if (!this.semanticCoordinatorRepo) throw new Error('Database not initialized'); return this.semanticCoordinatorRepo; }
+  getSemanticProjectRepo(): SemanticProjectRepository {
+    if (!this.semanticProjectRepo) throw new Error('Database not initialized');
+    return this.semanticProjectRepo;
+  }
+  getBusinessVersionRepo(): BusinessVersionRepository {
+    if (!this.businessVersionRepo) throw new Error('Database not initialized');
+    return this.businessVersionRepo;
+  }
+  getSemanticAssetRepo(): SemanticAssetRepository {
+    if (!this.semanticAssetRepo) throw new Error('Database not initialized');
+    return this.semanticAssetRepo;
+  }
+  getSemanticWorkflowRepo(): SemanticWorkflowRepository {
+    if (!this.semanticWorkflowRepo) throw new Error('Database not initialized');
+    return this.semanticWorkflowRepo;
+  }
+  getSemanticEvidenceRepo(): SemanticEvidenceRepository {
+    if (!this.semanticEvidenceRepo) throw new Error('Database not initialized');
+    return this.semanticEvidenceRepo;
+  }
+  getSemanticQueryRepo(): SemanticQueryRepository {
+    if (!this.semanticQueryRepo) throw new Error('Database not initialized');
+    return this.semanticQueryRepo;
+  }
+  getAuthoringAmendmentRepo(): AuthoringAmendmentRepository {
+    if (!this.authoringAmendmentRepo) throw new Error('Database not initialized');
+    return this.authoringAmendmentRepo;
+  }
+  getSemanticRunControlRepo(): SemanticRunControlRepository {
+    if (!this.semanticRunControlRepo) throw new Error('Database not initialized');
+    return this.semanticRunControlRepo;
+  }
+  getSemanticCoordinatorRepo(): SemanticCoordinatorRepository {
+    if (!this.semanticCoordinatorRepo) throw new Error('Database not initialized');
+    return this.semanticCoordinatorRepo;
+  }
+  getAgentActivityRepo(): AgentActivityRepository {
+    if (!this.agentActivityRepo) throw new Error('Database not initialized');
+    return this.agentActivityRepo;
+  }
 }
 
 export { DatabaseManager };

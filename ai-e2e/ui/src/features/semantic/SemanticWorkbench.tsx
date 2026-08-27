@@ -14,7 +14,6 @@ import {
   GripVertical,
   LocateFixed,
   Maximize2,
-  MessageSquareText,
   Moon,
   PanelLeftClose,
   PanelLeftOpen,
@@ -30,7 +29,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner';
 import { semanticApi } from './api.js';
 import { BrowserStage } from './BrowserStage.js';
-import { ChatPanel } from './ChatPanel.js';
+import { AgentActivityPanel } from './AgentActivityPanel.js';
 import { ContextTree } from './ContextTree.js';
 import { InspectorPanel, type ContextPreview, type InspectorTab } from './InspectorPanel.js';
 import type {
@@ -42,6 +41,7 @@ import type {
 } from './types.js';
 import { record, text } from './types.js';
 import { useSemanticEventStream } from './useSemanticEventStream.js';
+import { useAgentActivityStream } from './useAgentActivityStream.js';
 import './semantic.css';
 
 const STORAGE_KEY = 'ai-e2e.semantic.layout.v1';
@@ -247,18 +247,19 @@ export function SemanticWorkbench({
     enabled: mode === 'authoring' && Boolean(authoringJobId),
   });
 
-  const threadId = text(authoringQuery.data?.contextThreads.at(-1)?.id, '');
-  const chatQuery = useQuery({
-    queryKey: ['semantic-chat', threadId],
-    queryFn: () => semanticApi.listChatMessages(threadId),
-    enabled: Boolean(threadId),
+  const activityContextId = mode === 'run' ? runId : authoringJobId;
+  const activitySnapshot = useAgentActivityStream({
+    enabled: eventStreams && Boolean(activityContextId),
+    endpoint:
+      mode === 'run'
+        ? `/api/v1/runs/${encodeURIComponent(runId)}/activity`
+        : `/api/v1/authoring-jobs/${encodeURIComponent(authoringJobId)}/activity`,
   });
 
   useEffect(() => {
     if (!authoringQuery.data?.seq) return;
     void queryClient.invalidateQueries({ queryKey: ['semantic-amendments', authoringJobId] });
-    if (threadId) void queryClient.invalidateQueries({ queryKey: ['semantic-chat', threadId] });
-  }, [authoringJobId, authoringQuery.data?.seq, queryClient, threadId]);
+  }, [authoringJobId, authoringQuery.data?.seq, queryClient]);
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(layout));
@@ -940,47 +941,44 @@ export function SemanticWorkbench({
             }
             onRunDecision={(decisionId, answerKey) => runDecision.mutate({ decisionId, answerKey })}
           />
-          {mode === 'authoring' ? (
-            <ChatPanel
-              collapsed={layout.chatCollapsed}
-              busy={busy}
-              scope={{
-                version: workspace.version.name,
-                url: browserUrl,
-                module: currentModule
-                  ? assetName(currentModule.currentRevision.payload, currentModule.moduleKey)
-                  : '—',
-                revision: currentModule?.currentRevision.contentSha256 ?? '',
-              }}
-              messages={chatQuery.data ?? []}
-              onToggle={() =>
-                setLayout((current) => ({ ...current, chatCollapsed: !current.chatCollapsed }))
-              }
-              onSend={(message) =>
-                createAuthoring.mutate({
-                  versionId,
-                  mode: 'repair',
-                  intent: 'author_assets',
-                  targetType: 'functional_module',
-                  targetId: moduleId,
-                  currentUrl: browserUrl,
-                  reason: message,
-                })
-              }
-            />
-          ) : (
-            <div className="semantic-run-summary">
-              <MessageSquareText aria-hidden="true" />
-              <span>
-                <strong>运行控制由持久化事件驱动</strong>
-                <small>Chat 不参与真实状态判断；需要修订时返回资产编排。</small>
-              </span>
-              <Link
-                to={`/semantic/${projectId}/authoring/${versionId}?page=${encodeURIComponent(pageId)}&module=${encodeURIComponent(moduleId)}&scenario=${encodeURIComponent(scenarioId)}&url=${encodeURIComponent(browserUrl)}`}
-              >
-                返回编排
-              </Link>
-            </div>
+          <AgentActivityPanel
+            collapsed={layout.chatCollapsed}
+            busy={busy}
+            readOnly={mode === 'run'}
+            scope={{
+              version: workspace.version.name,
+              url: browserUrl,
+              module: currentModule
+                ? assetName(currentModule.currentRevision.payload, currentModule.moduleKey)
+                : '—',
+              revision: currentModule?.currentRevision.contentSha256 ?? '',
+            }}
+            snapshot={activitySnapshot}
+            onToggle={() =>
+              setLayout((current) => ({ ...current, chatCollapsed: !current.chatCollapsed }))
+            }
+            onSend={
+              mode === 'authoring'
+                ? (message) =>
+                    createAuthoring.mutate({
+                      versionId,
+                      mode: 'repair',
+                      intent: 'author_assets',
+                      targetType: 'functional_module',
+                      targetId: moduleId,
+                      currentUrl: browserUrl,
+                      reason: message,
+                    })
+                : undefined
+            }
+          />
+          {mode === 'run' && (
+            <Link
+              className="semantic-run-return"
+              to={`/semantic/${projectId}/authoring/${versionId}?page=${encodeURIComponent(pageId)}&module=${encodeURIComponent(moduleId)}&scenario=${encodeURIComponent(scenarioId)}&url=${encodeURIComponent(browserUrl)}`}
+            >
+              需要修改资产？返回编排
+            </Link>
           )}
         </aside>
       </div>
@@ -1056,6 +1054,7 @@ function UrlEditor({
     <div className="semantic-url-editor">
       <LocateFixed aria-hidden="true" />
       <input
+        name="browser-target-url"
         value={draft}
         onChange={(event) => setDraft(event.target.value)}
         aria-label="浏览器目标 URL"

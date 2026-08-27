@@ -14,7 +14,6 @@ const api = vi.hoisted(() => ({
   getWorkspace: vi.fn(),
   getAuthoringSnapshot: vi.fn(),
   listAmendments: vi.fn(),
-  listChatMessages: vi.fn(),
   createAuthoringJob: vi.fn(),
   commandAuthoringJob: vi.fn(),
   commandAmendment: vi.fn(),
@@ -276,7 +275,6 @@ describe('SemanticWorkbench', () => {
     api.getWorkspace.mockResolvedValue(workspace);
     api.getAuthoringSnapshot.mockResolvedValue(snapshot);
     api.listAmendments.mockResolvedValue([]);
-    api.listChatMessages.mockResolvedValue([]);
     api.createAuthoringJob.mockResolvedValue({ id: 'locate-job', taskId: 'task1' });
     api.commandAuthoringJob.mockResolvedValue({ lifecycle: 'paused', stateVersion: 3 });
     api.getRunSnapshot.mockResolvedValue(runSnapshot);

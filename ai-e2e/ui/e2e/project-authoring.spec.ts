@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 test('persists the real candidate, run and evidence journey across reload', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
   let bootstrapRequests = 0;
   page.on('request', (request) => {
     if (request.method() === 'POST' && /\/authoring-jobs$/u.test(new URL(request.url()).pathname)) {
@@ -24,6 +25,34 @@ test('persists the real candidate, run and evidence journey across reload', asyn
   await expect(page.getByRole('heading', { name: '资产编排工作台' })).toBeVisible();
   await expect(page.getByText(/编排任务：/u)).toBeVisible();
   await expect.poll(() => bootstrapRequests).toBe(1);
+
+  const workbench = page.locator('.semantic-root');
+  const theme = page.getByRole('button', { name: '主题：system' });
+  await theme.click();
+  await expect(workbench).toHaveAttribute('data-theme', 'dark');
+  await page.getByRole('button', { name: '主题：dark' }).click();
+  await expect(workbench).toHaveAttribute('data-theme', 'light');
+  const visibleTargetSelector = ['button', 'a[href]', 'input', 'textarea', '[role="tab"]']
+    .map((selector) => `${selector}:visible`)
+    .join(', ');
+  const undersizedTargets = await page.locator(visibleTargetSelector).evaluateAll((elements) =>
+    elements
+      .map((element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          name:
+            element.getAttribute('aria-label') ?? element.textContent?.trim() ?? element.tagName,
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+        };
+      })
+      .filter(({ width, height }) => width < 44 || height < 44)
+  );
+  expect(undersizedTargets).toEqual([]);
+  await expect(page.locator('input:not([name]), textarea:not([name])')).toHaveCount(0);
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  const browserRegion = await page.getByRole('region', { name: '只读浏览器画面' }).boundingBox();
+  expect(browserRegion?.width).toBeGreaterThanOrEqual(760);
 
   await page.getByRole('tab', { name: /Diff/u }).click();
   const applyCandidate = page.getByRole('button', { name: /在安全边界应用/u });

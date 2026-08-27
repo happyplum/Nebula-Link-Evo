@@ -10,7 +10,7 @@ export function App() {
       <HashRouter>
         <Routes />
       </HashRouter>
-      <Toaster position="top-right" richColors />
+      <Toaster position="top-right" offset={{ top: '72px', right: '12px' }} richColors />
     </QueryClientProvider>
   );
 }

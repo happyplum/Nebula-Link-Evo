@@ -8,6 +8,10 @@ import type {
 import type { SemanticEvidenceRepository } from '../database/repositories/semantic-evidence-repository.js';
 import { hashValue } from '../database/repositories/semantic-repository-utils.js';
 import type { SemanticRunControlRepository } from '../database/repositories/semantic-run-control-repository.js';
+import type {
+  AgentActivityRepository,
+  ActivityContext,
+} from '../database/repositories/agent-activity-repository.js';
 import type { SemanticWorkflowRepository } from '../database/repositories/semantic-workflow-repository.js';
 import type {
   AgentTaskClientPort,
@@ -26,10 +30,7 @@ import {
 } from '../infrastructure/coordinator-secret-store.js';
 import { buildRunTaskProjection } from './semantic-task-projection.js';
 import { SemanticAuthoringCandidateService } from './semantic-authoring-candidate-service.js';
-import {
-  completionFromTask,
-  desiredAgentCommand,
-} from './semantic-agent-task-completion.js';
+import { completionFromTask, desiredAgentCommand } from './semantic-agent-task-completion.js';
 
 export { desiredAgentCommand };
 
@@ -46,6 +47,7 @@ export interface SemanticCoordinatorOptions {
   runs: SemanticRunControlRepository;
   agentTasks: AgentTaskClientPort;
   browser: SemanticBrowserClientPort;
+  activity?: AgentActivityRepository;
   artifactStore?: SemanticArtifactStore;
   secretStore?: CoordinatorSecretStorePort;
   authoringCandidates?: SemanticAuthoringCandidateService;
@@ -726,7 +728,12 @@ export class SemanticCoordinatorService {
       }
       return null;
     }
-    const eventSeq = await this.reconcileAgentTaskEvents(link.externalId, link.lastExternalSeq);
+    const eventSeq = await this.reconcileAgentTaskEvents(
+      { type: 'run', id: pageTask.runId },
+      link.externalId,
+      { pageTaskId: pageTask.pageTaskId, todoId: pageTask.todoId },
+      link.lastExternalSeq
+    );
     const task = await this.options.agentTasks.getTask(link.externalId);
     this.options.evidence.linkExternalTask({
       context: { type: 'run', id: pageTask.runId },
@@ -831,7 +838,12 @@ export class SemanticCoordinatorService {
       }
       return null;
     }
-    const eventSeq = await this.reconcileAgentTaskEvents(link.externalId, link.lastExternalSeq);
+    const eventSeq = await this.reconcileAgentTaskEvents(
+      { type: 'authoring', id: task.jobId },
+      link.externalId,
+      { authoringTaskId: task.taskId },
+      link.lastExternalSeq
+    );
     const agentTask = await this.options.agentTasks.getTask(link.externalId);
     this.options.evidence.linkExternalTask({
       context: { type: 'authoring', id: task.jobId },
@@ -1096,7 +1108,17 @@ export class SemanticCoordinatorService {
     return manifest.id;
   }
 
-  private async reconcileAgentTaskEvents(taskId: string, afterSeq = 0): Promise<number> {
+  private async reconcileAgentTaskEvents(
+    context: ActivityContext,
+    taskId: string,
+    links: { pageTaskId?: string; authoringTaskId?: string; todoId?: string },
+    afterSeq = 0
+  ): Promise<number> {
+    if (this.options.activity && this.options.agentTasks.listTaskActivity) {
+      const cursor = this.options.activity.cursor(context, taskId);
+      const activity = await this.options.agentTasks.listTaskActivity(taskId, cursor, 500);
+      for (const event of activity) this.options.activity.append(context, taskId, event, links);
+    }
     if (!this.options.agentTasks.listTaskEvents) return afterSeq;
     const events = await this.options.agentTasks.listTaskEvents(taskId, afterSeq, 500);
     return events.at(-1)?.seq ?? afterSeq;

@@ -1,8 +1,8 @@
 # AI E2E 跨服务 API 与事件契约
 
-> 状态：已确认目标设计，部分实现。
-> 更新时间：2026-08-26。
-> 本文固定 `ai-e2e`、`ai-chat-service` 与 `proxy-adapter` 的目标调用面、事件信封、幂等和恢复语义。三服务已分别交付 browser capture/artifact/event、Agent task create/get/command/event/checkpoint/Skill runtime，以及 ai-e2e Authoring/Run 控制面、snapshot-first SSE 和基于 outbox/外部关联的跨服务协调器。核心服务只提供 canonical v1 HTTP 路径与 `browser-control.operation_*` MCP 工具面，不保留旧路径、旧工具或静默回退。
+> 状态：canonical v1 控制面与 Agent 活动呈现流已实现。
+> 更新时间：2026-08-27。
+> 本文固定 `ai-e2e`、`ai-chat-service` 与 `proxy-adapter` 的目标调用面、事件信封、幂等和恢复语义。三服务已分别交付 browser capture/artifact/event、Agent task create/get/command/event/checkpoint/Skill runtime/activity，以及 ai-e2e Authoring/Run 控制面、活动流和基于 outbox/外部关联的跨服务协调器。核心服务只提供 canonical v1 HTTP 路径与 `browser-control.operation_*` MCP 工具面，不保留旧路径、旧工具或静默回退。
 
 ## 1. 设计目标
 
@@ -10,7 +10,7 @@
 - `ai-chat-service` 只执行受限 Agent 任务、模型调用、单次视觉分析和 Skills，不解释 E2E 业务状态。
 - `proxy-adapter` 只托管浏览器执行会话、Tab、控制租约、原子操作、实时画面和短期原始产物。
 - 所有跨服务写操作可幂等重放，服务重启后可查询事实并收敛，不依赖一次 HTTP/SSE 连接持续存活。
-- Chat SSE、Debug SSE 与项目阶段 SSE 各自保持已登记的 canonical 行为；Authoring、Run、Agent task 和 Browser session 四类 SSE 各自 snapshot-first、各自单调序号，不共享业务状态或恢复游标。
+- Agent 活动流只负责脱敏呈现；Authoring/Run/Agent task/Browser session 控制面事件继续负责协调、权限、恢复和审计。两类事件各自使用独立单调序号和游标，不得混用。
 
 ## 2. 通用传输规范
 
@@ -123,15 +123,16 @@ interface ServiceCapabilitiesV1 {
 | POST     | `/api/v1/authoring-jobs/:jobId/commands`                                 | `pause/resume/cancel`；要求 `Idempotency-Key` 与当前 `stateVersion` 的 `If-Match`。                                   |
 | GET      | `/api/v1/authoring-jobs/:jobId/events`                                   | snapshot-first authoring SSE。                                                                                        |
 | GET      | `/api/v1/authoring-jobs/:jobId/event-log?afterSeq=N&limit=M`             | 持久 authoring event log。                                                                                            |
+| GET      | `/api/v1/authoring-jobs/:jobId/activity`                                 | 脱敏 Agent 活动 SSE；先发 `agent_stream.snapshot`，再发 `agent_stream.event`。                                         |
+| GET      | `/api/v1/authoring-jobs/:jobId/activity-log?afterSeq=N&limit=M`           | 按独立活动游标读取持久呈现事件。                                                                                       |
 | POST     | `/api/v1/authoring-jobs/:jobId/decisions/:decisionId/answer`             | 回答 authoring decision；长期影响同步 version decision。                                                              |
 | POST     | `/api/v1/authoring-jobs/:jobId/context-threads`                          | 绑定 URL/页面/当前模块/base revision scope；新 scope 自动使旧候选 stale。                                             |
-| GET/POST | `/api/v1/authoring-context-threads/:threadId/messages`                   | 读取/追加 Chat 审计消息；文本不直接改变资产状态。                                                                     |
 | GET/POST | `/api/v1/authoring-jobs/:jobId/amendments`                               | 列表/创建精确 base→candidate 的结构化修改；写要求幂等键。                                                             |
 | GET      | `/api/v1/authoring-amendments/:amendmentId`                              | 读取 diff、影响范围、审批、验证计划与候选状态。                                                                       |
 | POST     | `/api/v1/authoring-amendments/:amendmentId/decisions/:decisionId/answer` | 批准或拒绝同页跨模块/跨 URL 范围扩展。                                                                                |
 | POST     | `/api/v1/authoring-amendments/:amendmentId/commands`                     | 用户请求安全边界应用或拒绝；协调器内部开始真实验证，验证成功后原子激活，失败保持 current。                            |
 
-当前实现：job 创建会立即生成首个 task；snapshot/event-log/snapshot-first SSE、context thread、Chat 审计、结构化 amendment、范围审批、安全边界命令及 job 自身 pause/resume/cancel 已交付。协调器会为 authoring task 创建受限 Agent task 和 observe lease，将输出固化为 draft candidate；用户应用后重新调度真实浏览器验证，成功才原子激活。运行中作业控制在原子操作安全边界传播到 Agent task；暂停保留当前会话，取消在 attempt 终止后收敛 job 并关闭自有会话。`locate_in_browser` 使用同一 FIFO 和 control lease，只允许 `navigate`/`page_state`，完成后不生成 amendment、不改 current 资产。完整多阶段 bootstrap/recheck 阶段图仍未交付。
+当前实现：job 创建会立即生成首个 task；控制面 snapshot/event-log/SSE、context thread、内部消息审计、结构化 amendment、范围审批、安全边界命令及 job 自身 pause/resume/cancel 已交付。公开消息查询/提交路径已移除；用户意见通过创建 repair job 进入活动投影和结构化候选流程。协调器会为 authoring task 创建受限 Agent task 和 observe lease，将输出固化为 draft candidate；用户应用后重新调度真实浏览器验证，成功才原子激活。运行中作业控制在原子操作安全边界传播到 Agent task；暂停保留当前会话，取消在 attempt 终止后收敛 job 并关闭自有会话。`locate_in_browser` 使用同一 FIFO 和 control lease，只允许 `navigate`/`page_state`，完成后不生成 amendment、不改 current 资产。
 
 完整阶段、coverage、candidate 验证和激活规则见 `asset-authoring-repair-contract.md`。
 
@@ -171,6 +172,8 @@ verification scope 由服务端从精确 deployment revision、冻结的 Git/bui
 | POST   | `/api/v1/runs/:runId/decisions/:decisionId/answer` | 回答一次开放决策；影响需求的答案应用时追加版本决定。  |
 | GET    | `/api/v1/runs/:runId/events`                       | Run SSE；每次连接先发完整 snapshot，再发 live event。 |
 | GET    | `/api/v1/runs/:runId/event-log?afterSeq=N&limit=M` | 审计和补洞读取持久事件，不替代 snapshot bootstrap。   |
+| GET    | `/api/v1/runs/:runId/activity`                     | compact 只读 Agent 活动 SSE。                         |
+| GET    | `/api/v1/runs/:runId/activity-log?afterSeq=N&limit=M` | 按独立活动游标读取持久呈现事件。                     |
 
 当前实现：正式 Run 公开创建、start/pause/resume/cancel/close-browser 命令、TODO page task/attempt/显式恢复、决策回答，以及 snapshot、plan、TODO、decision、evidence、event-log 与 snapshot-first SSE 已交付。Run 创建只接受精确 valid business-version validation 与 current verified scenario/script revision；跨服务协调器已把冻结脚本投影为受限 Agent task，通过 control lease 可视执行并以业务验收结果收敛 TODO。
 
@@ -202,6 +205,8 @@ interface RunCommandRequestV1 {
 | POST   | `/api/v1/agent-tasks/:taskId/commands`                     | shipped：以 command ID/hash 幂等和 `expectedStateVersion` 乐观并发执行 `pause/resume/interrupt/cancel`；不推断浏览器操作回滚。 |
 | GET    | `/api/v1/agent-tasks/:taskId/events`                       | shipped：Agent 任务 SSE；先发当前 `agent_task.snapshot`，再发提交后的单调 live event。                                         |
 | GET    | `/api/v1/agent-tasks/:taskId/event-log?afterSeq=N&limit=M` | shipped：读取持久 Agent 审计事件，用于诊断与受控补洞。                                                                         |
+| GET    | `/api/v1/agent-tasks/:taskId/activity`                     | shipped：脱敏呈现 SSE；先发 `agent_stream.snapshot`，再发 `agent_stream.event`。                                                |
+| GET    | `/api/v1/agent-tasks/:taskId/activity-log?afterSeq=N&limit=M` | shipped：读取脱敏活动事件；不返回 secret、Skill 指令、未授权 reasoning 或原始 Tool 结果。                                    |
 | GET    | `/api/v1/skills`                                           | shipped：读取当前已加载 Skill 的安全 catalog；不返回指令正文、sourceRef 或文件路径。                                           |
 
 当前控制语义：pause 只允许首个工具调用开始前，并与 `safe_pause` checkpoint 在同一事务落盘；工具已开始时 pause 返回结构化 conflict，调用方应选择 interrupt/cancel。interrupt/cancel 立即形成任务终态且不推断外部副作用回滚。服务重启将 created/running/paused 收敛为 interrupted，并将遗留 accepted command 收敛为 rejected；paused 只在同一进程仍保有安全运行上下文时允许 resume。capability 声明 `taskCommands=true/taskEvents=true`。
@@ -252,6 +257,15 @@ interface CreateAgentTaskRequestV1 {
 - 默认每个页面任务创建新 Agent task。恢复只接受调用方提供的显式 checkpoint，不依赖旧对话隐式记忆。
 
 任务状态为 `created/running/paused/completed/failed/interrupted/cancelled/blocked`。终态结果至少包含 `status`、`terminationReason`、符合 `responseSchema` 的 `output`、工具调用摘要、Skill 版本/hash 和预算消耗。Agent task 的 `completed` 只表示结构化任务完成，不等于 E2E TODO 通过。
+
+### 4.2 Agent Stream 呈现契约
+
+- `AgentStreamSnapshotV1/EventV1/TurnV1/SectionV1` 由 shared 定义；event 必须携带稳定 `streamId/turnId/sectionId/seq/occurredAt`。
+- Activity kind 为 `skill/tool/browser/agent/evidence/read/search/edit/command/mcp`；状态为 `queued/running/completed/failed/blocked/cancelled/skipped/outcome_unknown`。
+- 投影必须先持久化 DSH/Task 事实再广播，不能把未提交 provider chunk 直接发送给 UI。
+- reasoning 默认只输出确定性阶段摘要；只有明确 `visibility=public` 才能包含正文，否则为 `summary` 或 `redacted`。
+- Tool/Skill 仅输出脱敏名称、状态、摘要、版本/hash、预算与 artifact 引用；摘要上限 4 KiB，大结果由证据引用承载。
+- `/events`、`event-log` 是控制面审计；`/activity`、`activity-log` 是用户呈现，二者不能共享 cursor 或相互替代。
 
 `POST /api/v1/ai/generate` 服务无 session、无 tool 的单次纯文本生成；它不得被扩展为隐式拥有无限工具的 E2E 执行入口。
 
@@ -407,7 +421,7 @@ interface RunEventV1 {
 - `Last-Event-ID` 可以作为网络优化提示，但不是正确性契约；服务可以忽略。
 - `event-log?afterSeq=` 供审计、诊断和受控补洞，不允许只靠增量重建未知起点状态。
 - heartbeat 不占业务 seq，不写持久事件表。
-- Chat SSE 的 `session.snapshot → live` 行为是 canonical 契约；项目 SSE 与 Debug SSE 只按各自已登记路径提供，不存在旧路径并行面。
+- Chat 与 Agent 活动 SSE 固定为 `agent_stream.snapshot → agent_stream.event`；控制面 snapshot-first SSE 与 Debug SSE 继续按各自契约工作，不存在协议适配层。
 
 ## 7. 跨服务编排与恢复
 

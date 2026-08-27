@@ -22,6 +22,8 @@ import { SemanticAuthoringCandidateService } from '../services/semantic-authorin
 import semanticProjectRoutes from './routes/semantic-projects.js';
 import { SemanticProjectService } from '../services/semantic-project-service.js';
 import { SemanticEvidenceRetentionService } from '../services/semantic-evidence-retention-service.js';
+import agentActivityRoutes from './routes/agent-activity.js';
+import type { AgentActivityRepository } from '../database/repositories/agent-activity-repository.js';
 
 const envLocalPath = path.join(process.cwd(), '.env.local');
 const envRootPath = path.join(process.cwd(), '..', '.env');
@@ -57,6 +59,7 @@ export interface ServerOptions {
   semanticQueryService?: SemanticQueryService;
   semanticAuthoringService?: SemanticAuthoringService;
   semanticRunService?: SemanticRunService;
+  agentActivityRepository?: AgentActivityRepository;
 }
 
 export function createServer(options: Partial<ServerOptions> = {}) {
@@ -85,10 +88,15 @@ export function createServer(options: Partial<ServerOptions> = {}) {
   app.register(semanticAuthoringRoutes, {
     prefix: '/api/v1',
     service: options.semanticAuthoringService,
+    activity: options.agentActivityRepository,
   });
   app.register(semanticRunRoutes, {
     prefix: '/api/v1',
     service: options.semanticRunService,
+  });
+  app.register(agentActivityRoutes, {
+    prefix: '/api/v1',
+    repository: options.agentActivityRepository,
   });
 
   // Serve built frontend (ui/dist/) at /ai-e2e/ prefix
@@ -157,7 +165,9 @@ export async function start() {
   ensureDatabaseDirectory(dbPath);
   databaseManager.init(dbPath);
 
-  const semanticProjectService = new SemanticProjectService(databaseManager.getSemanticProjectRepo());
+  const semanticProjectService = new SemanticProjectService(
+    databaseManager.getSemanticProjectRepo()
+  );
   const businessVersionService = new BusinessVersionService(
     databaseManager.getBusinessVersionRepo()
   );
@@ -176,6 +186,7 @@ export async function start() {
     runs: databaseManager.getSemanticRunControlRepo(),
     agentTasks: new AgentTaskClient(),
     browser: new SemanticBrowserClient(),
+    activity: databaseManager.getAgentActivityRepo(),
     authoringCandidates: new SemanticAuthoringCandidateService(
       databaseManager.getSemanticQueryRepo(),
       databaseManager.getSemanticAssetRepo(),
@@ -188,6 +199,7 @@ export async function start() {
     semanticQueryService,
     semanticAuthoringService,
     semanticRunService,
+    agentActivityRepository: databaseManager.getAgentActivityRepo(),
   });
   try {
     const evidenceRetention = new SemanticEvidenceRetentionService({
