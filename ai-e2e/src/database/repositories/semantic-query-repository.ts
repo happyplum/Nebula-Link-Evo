@@ -78,9 +78,20 @@ export class SemanticQueryRepository {
   }
 
   getWorkspace(versionId: string): SemanticWorkspaceV1 | null {
-    const version = this.versions.findDetail(versionId);
+    const version = this.versions.findById(versionId);
     if (!version) return null;
     const graph = this.versions.getAssetGraph(versionId);
+    const deploymentBindings = this.db
+      .prepare(
+        `SELECT binding_key, deployment_revision_id, is_default
+         FROM version_deployment_bindings
+         WHERE business_version_id = ? ORDER BY binding_key`
+      )
+      .all(versionId) as Array<{
+      binding_key: string;
+      deployment_revision_id: string;
+      is_default: number | bigint;
+    }>;
     const prdDocuments = this.db
       .prepare(
         `SELECT id, document_key, format, raw_content, content_sha256, parsed_json,
@@ -103,7 +114,24 @@ export class SemanticQueryRepository {
       .map(mapWorkspaceValidation);
     return {
       schema: 'nebula.ai-e2e.workspace/1.0',
-      version,
+      version: {
+        ...version,
+        deploymentBindings: deploymentBindings.map((row) => ({
+          bindingKey: row.binding_key,
+          deploymentRevisionId: row.deployment_revision_id,
+          isDefault: Number(row.is_default) === 1,
+        })),
+        assets: {
+          pages: graph.pages.length,
+          businessModules: graph.businessModules.length,
+          functionalModules: graph.functionalModules.length,
+          functionalScripts: graph.functionalScripts.length,
+          scenarios: graph.scenarios.length,
+          staleExecutableAssets: [...graph.functionalScripts, ...graph.scenarios].filter(
+            (asset) => asset.currentRevision.readinessStatus === 'stale'
+          ).length,
+        },
+      },
       prdDocuments,
       ...graph,
       validations,
