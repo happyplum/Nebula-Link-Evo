@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { LlmAdapter } from '@deepseek-ai/dsh-llm';
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm';
-import { SessionId } from '@deepseek-ai/dsh-session';
+import { SessionId, type SessionEvent as DshSessionEvent } from '@deepseek-ai/dsh-session';
 import { ConversationDatabase } from '../db/ConversationDatabase.js';
 import { createHarnessRuntime } from './runtime.js';
 import { HarnessProjectionStore } from './projection-store.js';
@@ -65,13 +65,14 @@ describe('HarnessProjectionStore', () => {
       expect(first.projectedDshSeq).toBe(durableSeq);
       expect(first.publicEvents.map((event) => event.type)).toEqual(
         expect.arrayContaining([
-          'assistant.started',
-          'message.created',
-          'assistant.thinking',
-          'assistant.delta',
-          'assistant.completed',
+          'turn.upsert',
+          'section.upsert',
+          'content.delta',
+          'turn.completed',
+          'stream.state',
         ])
       );
+      expect(JSON.stringify(first.publicEvents)).not.toContain('思考');
       expect(
         db.getMessagesBySession('chat-1').map((message) => [message.role, message.content])
       ).toEqual([
@@ -105,6 +106,55 @@ describe('HarnessProjectionStore', () => {
       .prepare('UPDATE harness_session_projection SET projected_dsh_seq = 2 WHERE session_id = ?')
       .run('chat-corrupt');
     expect(() => projection.catchUp('chat-corrupt', 1, [])).toThrow(/exceeds durable DSH seq/);
+  });
+
+  it('projects failed, skipped and unknown Tool results without exposing raw output', async () => {
+    const db = new ConversationDatabase();
+    db.initialize(':memory:');
+    db.createSession({ id: 'chat-tools', title: 'chat', provider: 'test', model: 'test' });
+    db.getSessionStateDAO().create({ sessionId: 'chat-tools', status: 'idle' });
+    const projection = new HarnessProjectionStore(db.connection(), db.getSessionEventsDAO());
+    const baseTime = Date.parse('2026-08-27T08:00:00.000Z');
+    const events = [
+      { seq: 0, time: baseTime, type: 'turn/start', data: { turn: 0 } },
+      {
+        seq: 1,
+        time: baseTime + 1,
+        type: 'tool/call',
+        data: { turn: 0, step: 0, callId: 'call-1', name: 'browser.read', arguments: '{}' },
+      },
+      {
+        seq: 2,
+        time: baseTime + 2,
+        type: 'tool/result',
+        data: {
+          turn: 0,
+          step: 0,
+          message: {
+            id: 'result-1',
+            role: 'user',
+            source: { kind: 'tool', callId: 'call-1' },
+            content: [
+              {
+                type: 'tool-result',
+                toolCallId: 'call-1',
+                content: [{ type: 'text', text: 'secret raw result' }],
+                isError: true,
+              },
+            ],
+          },
+          error: { name: 'Error', code: 'OUTCOME_UNKNOWN' },
+        },
+      },
+    ] as unknown as DshSessionEvent[];
+
+    const result = projection.catchUp('chat-tools', 3, events);
+    const finalTool = result.publicEvents.filter((event) => event.type === 'section.upsert').at(-1);
+    expect(finalTool).toMatchObject({
+      section: { type: 'activity', state: 'outcome_unknown' },
+    });
+    expect(JSON.stringify(result.publicEvents)).not.toContain('secret raw result');
+    await db.close();
   });
 
   it('rejects normal projection after tombstone while allowing deletion catch-up', () => {

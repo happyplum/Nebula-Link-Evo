@@ -10,7 +10,7 @@ import connectivityTestRoutes from './connectivity-test.js';
 
 const chatRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
   // Register session routes at /sessions prefix
-  // Routes: GET /, GET /:id, GET /:id/messages, POST /:id/messages
+  // Routes: GET /, GET /:id, POST /:id/messages
   await fastify.register(sessionRoutes, { prefix: '/sessions' });
 
   // Register control routes at /sessions prefix (for /sessions/:id/{pause,resume,cancel,interrupt})

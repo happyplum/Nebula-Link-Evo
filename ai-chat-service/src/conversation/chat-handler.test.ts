@@ -43,7 +43,7 @@ describe('ChatHandler', () => {
     );
     expect(fixture.eventHub.publish).toHaveBeenCalledWith(
       'session-1',
-      expect.objectContaining({ type: 'assistant.completed', sessionId: 'session-1' })
+      expect.objectContaining({ type: 'stream.state', streamId: 'session-1' })
     );
     expect(fixture.controller.markAsPaused).toHaveBeenCalledWith('session-1');
     expect(fixture.handle.dispose).toHaveBeenCalledOnce();
@@ -229,7 +229,18 @@ function createFixture(
     catchUp: vi.fn(() => ({
       projectedDshSeq: 1,
       durableDshSeq: 1,
-      publicEvents: [{ type: 'assistant.completed', sessionId: 'session-1' }],
+      publicEvents: [
+        {
+          schema: 'nebula.ai.agent-stream.event/1.0',
+          streamId: 'session-1',
+          turnId: 'session-1:turn:1',
+          sectionId: 'session-1:turn:1:state',
+          seq: 1,
+          occurredAt: '2026-08-27T00:00:00.000Z',
+          type: 'stream.state',
+          state: 'completed',
+        },
+      ],
     })),
   } as unknown as HarnessProjectionStore & {
     state: ReturnType<typeof vi.fn>;

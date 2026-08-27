@@ -505,9 +505,9 @@ it('pauses and resumes Chat at a durable checkpoint through canonical HTTP and f
     let sessionUrl = await createChatSession(currentUrl, 'Chat control E2E');
     const initial = await readFirstSse(`${sessionUrl}/stream`);
     expect(initial).toMatchObject({
-      event: 'session.snapshot',
+      event: 'agent_stream.snapshot',
       id: 0,
-      data: { state: 'idle', messages: [] },
+      data: { state: 'idle', turns: [] },
     });
 
     await postJson(`${sessionUrl}/messages`, { content: 'Pause after this response' }, 202);
@@ -518,13 +518,22 @@ it('pauses and resumes Chat at a durable checkpoint through canonical HTTP and f
 
     const paused = await readFirstSse(`${sessionUrl}/stream`, { 'Last-Event-ID': '999999' });
     expect(paused).toMatchObject({
-      event: 'session.snapshot',
-      id: 0,
+      event: 'agent_stream.snapshot',
       data: {
         state: 'paused',
-        messages: expect.arrayContaining([
-          expect.objectContaining({ role: 'user', content: 'Pause after this response' }),
-          expect.objectContaining({ role: 'assistant', content: 'E2E assistant response' }),
+        turns: expect.arrayContaining([
+          expect.objectContaining({
+            role: 'user',
+            sections: expect.arrayContaining([
+              expect.objectContaining({ type: 'user', markdown: 'Pause after this response' }),
+            ]),
+          }),
+          expect.objectContaining({
+            role: 'assistant',
+            sections: expect.arrayContaining([
+              expect.objectContaining({ type: 'content', markdown: 'E2E assistant response' }),
+            ]),
+          }),
         ]),
       },
     });
@@ -551,12 +560,16 @@ it('pauses and resumes Chat at a durable checkpoint through canonical HTTP and f
     await waitForChatStatus(sessionUrl, 'idle');
     const resumed = await readFirstSse(`${sessionUrl}/stream`);
     expect(resumed).toMatchObject({
-      event: 'session.snapshot',
-      id: 0,
+      event: 'agent_stream.snapshot',
       data: {
         state: 'idle',
-        messages: expect.arrayContaining([
-          expect.objectContaining({ role: 'assistant', content: 'E2E assistant response' }),
+        turns: expect.arrayContaining([
+          expect.objectContaining({
+            role: 'assistant',
+            sections: expect.arrayContaining([
+              expect.objectContaining({ type: 'content', markdown: 'E2E assistant response' }),
+            ]),
+          }),
         ]),
       },
     });
@@ -576,10 +589,15 @@ it('pauses and resumes Chat at a durable checkpoint through canonical HTTP and f
         expect.arrayContaining([expect.objectContaining({ operation: command, status: 'success' })])
       );
       const snapshot = await readFirstSse(`${controlledUrl}/stream`);
-      const messages = snapshot.data.messages as Array<{ role: string; content: string }>;
-      expect(messages).not.toEqual(
+      const turns = snapshot.data.turns as Array<Record<string, unknown>>;
+      expect(turns).not.toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ role: 'assistant', content: 'E2E assistant response' }),
+          expect.objectContaining({
+            role: 'assistant',
+            sections: expect.arrayContaining([
+              expect.objectContaining({ type: 'content', markdown: 'E2E assistant response' }),
+            ]),
+          }),
         ])
       );
     }

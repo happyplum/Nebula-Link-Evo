@@ -2,33 +2,34 @@
 
 ## Overview
 
-Chat UI owns session message state, optimistic sends, SSE snapshot/bootstrap, and streamed assistant/tool output.
+Chat UI owns session selection, optimistic sends, Agent Stream snapshot/bootstrap, and streamed activity rendering.
 
 ## Where To Look
 
 | Area        | Path                     | Notes                                                          |
 | ----------- | ------------------------ | -------------------------------------------------------------- |
-| Stream hook | `hooks/useChatStream.ts` | `EventSource`, seq dedupe, reconnect backoff, RAF batching     |
-| Store       | `store/chat.store.ts`    | Session-scoped messages, pagination, optimistic reconciliation |
-| Components  | `components/`            | Composer, message list, tool-call rendering                    |
-| Types       | `types/`                 | Frontend-local message/tool-call shapes                        |
+| Stream hook | `hooks/useChatStream.ts` | `EventSource`, strict Agent Stream guards, RAF batching          |
+| Store       | `store/chat.store.ts`    | Session-scoped snapshots and optimistic reconciliation           |
+| Components  | `components/`            | Composer and shared `AgentStreamRenderer` host                    |
+| Types       | `types/`                 | Frontend-local session and control state                          |
 
 ## Working Rules
 
-- Treat `session.snapshot` as the authoritative bootstrap.
-- Preserve seq-based dedupe for non-snapshot SSE events.
-- Keep delta/thinking updates batched with `requestAnimationFrame`; per-token state writes regress rendering.
-- Reconcile server `message.created` against optimistic `temp-*` messages instead of showing both.
-- Attach tool calls/results to the active assistant message; do not maintain parallel UI-only event state.
+- Treat `agent_stream.snapshot` as the authoritative bootstrap and accept only the shared v1 schema.
+- Apply `agent_stream.event` through the shared reducer; do not create frontend compatibility adapters.
+- Keep live updates batched with `requestAnimationFrame`; per-token state writes regress rendering.
+- Reconcile server user turns against optimistic turns instead of showing both.
+- Render content, reasoning, Skill, Tool and Agent activity only through `@nebula-link-evo/agent-activity-ui`.
 
 ## Contributor Traps
 
-- Reconnect attempts are capped; changing caps changes UX and test timing.
-- `assistant.completed` must flush buffered deltas before finalizing state.
-- Visibility toggles and pagination live in the store, not per-component local state.
+- A snapshot can arrive before the message POST resolves; reconciliation must remove the optimistic duplicate.
+- Buffered entries retain their originating session id so a session switch cannot apply them to another stream.
+- Raw reasoning, Skill instructions and Tool results are not frontend data; render only the service projection.
 
 ## Anti-Patterns
 
 - No manual polling for chat updates.
-- No component-local message source of truth.
+- No component-local activity source of truth.
 - No SSE event handling outside hooks/store utilities.
+- No legacy Chat SSE discriminants or bespoke thinking/tool cards.

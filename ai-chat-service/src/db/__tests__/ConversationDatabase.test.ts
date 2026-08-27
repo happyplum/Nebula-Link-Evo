@@ -28,10 +28,19 @@ describe('ConversationDatabase', () => {
       content: 'hello',
     });
     const state = await db.getSessionStateDAO().get(session.id);
-    const seq = db.getSessionEventsDAO().appendEventSync(session.id, 'message.created', {
-      sessionId: session.id,
-      messageId: message.id,
-      content: message.content,
+    const occurredAt = new Date().toISOString();
+    const seq = db.getSessionEventsDAO().appendEventSync(session.id, 'agent_stream.event', {
+      type: 'section.upsert',
+      turnId: `user:${message.id}`,
+      sectionId: `user:${message.id}`,
+      occurredAt,
+      section: {
+        type: 'user',
+        sectionId: `user:${message.id}`,
+        createdAt: occurredAt,
+        updatedAt: occurredAt,
+        markdown: message.content,
+      },
     });
 
     expect(db.getMessagesBySession(session.id)).toHaveLength(1);

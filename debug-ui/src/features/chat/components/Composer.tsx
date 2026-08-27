@@ -1,11 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import {
-  useChatStore,
-  selectStreamingState,
-  selectActiveSessionId,
-  selectScreenshotData,
-} from '../store/chat.store.js';
-import { apiChatSessionMessages, DEBUG_PLAYWRIGHT_SCREENSHOT } from '@/shared/api/endpoints.js';
+import { useChatStore, selectStreamingState, selectActiveSessionId } from '../store/chat.store.js';
+import { apiChatSessionMessages } from '@/shared/api/endpoints.js';
 import { testIds } from '@/shared/testing/testids.js';
 import styles from './Composer.module.css';
 
@@ -23,38 +18,29 @@ function toRequestUrl(path: string): string {
 }
 
 interface ComposerProps {
-  onRenameSession?: () => void;
   onDeleteSession?: () => void;
 }
 
-export const Composer: React.FC<ComposerProps> = ({ onRenameSession, onDeleteSession }) => {
+export const Composer: React.FC<ComposerProps> = ({ onDeleteSession }) => {
   const [input, setInput] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const streamingState = useChatStore(selectStreamingState);
   const activeSessionId = useChatStore(selectActiveSessionId);
-  const screenshotData = useChatStore(selectScreenshotData);
-  const addOptimisticMessage = useChatStore((s) => s.addOptimisticMessage);
-  const setScreenshotData = useChatStore((s) => s.setScreenshotData);
-  const clearScreenshotData = useChatStore((s) => s.clearScreenshotData);
+  const addOptimisticTurn = useChatStore((s) => s.addOptimisticTurn);
+  const reconcileOptimisticTurn = useChatStore((s) => s.reconcileOptimisticTurn);
   const setStreamingState = useChatStore((s) => s.setStreamingState);
 
   const isStreaming = streamingState === 'streaming';
   const isComposerDisabled = isStreaming || !activeSessionId;
-  const isScreenshotDisabled = isStreaming || !activeSessionId;
 
   const handleSend = async () => {
     const content = input.trim();
 
     if (!content || isComposerDisabled || !activeSessionId) return;
 
-    if (screenshotData != null) {
-      addOptimisticMessage(activeSessionId, content, screenshotData);
-    } else {
-      addOptimisticMessage(activeSessionId, content);
-    }
+    const optimisticTurnId = addOptimisticTurn(activeSessionId, content);
     setInput('');
-    clearScreenshotData();
     setStreamingState('streaming');
 
     // Reset textarea height
@@ -63,14 +49,16 @@ export const Composer: React.FC<ComposerProps> = ({ onRenameSession, onDeleteSes
     }
 
     try {
-      await fetch(toRequestUrl(apiChatSessionMessages(activeSessionId)), {
+      const response = await fetch(toRequestUrl(apiChatSessionMessages(activeSessionId)), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          content,
-          screenshot: screenshotData ?? undefined,
-        }),
+        body: JSON.stringify({ content }),
       });
+      if (!response.ok) throw new Error(`发送失败：HTTP ${response.status}`);
+      const payload = (await response.json()) as { messageId?: unknown };
+      if (typeof payload.messageId === 'string') {
+        reconcileOptimisticTurn(activeSessionId, optimisticTurnId, payload.messageId);
+      }
     } catch (error) {
       console.error('Failed to send chat message', error);
       setStreamingState('error');
@@ -101,33 +89,8 @@ export const Composer: React.FC<ComposerProps> = ({ onRenameSession, onDeleteSes
     }
   }, [activeSessionId, isStreaming]);
 
-  const handleScreenshot = async () => {
-    try {
-      setScreenshotData('loading'); // Just to show active state if needed, or we can leave it
-      const res = await fetch(toRequestUrl(DEBUG_PLAYWRIGHT_SCREENSHOT));
-      if (!res.ok) throw new Error('Failed to fetch screenshot');
-      const data = await res.json();
-      if (data.screenshot) {
-        setScreenshotData(`data:image/png;base64,${data.screenshot}`);
-      } else {
-        clearScreenshotData();
-      }
-    } catch (e) {
-      console.error('Screenshot failed', e);
-      clearScreenshotData();
-    }
-  };
-
   return (
     <div className={styles.container}>
-      {screenshotData && (
-        <div className={styles.screenshotPreview}>
-          <img src={screenshotData} alt="Screenshot preview" />
-          <button type="button" className={styles.removeScreenshot} onClick={clearScreenshotData}>
-            ✕
-          </button>
-        </div>
-      )}
       <textarea
         ref={textareaRef}
         className={styles.input}
@@ -140,16 +103,6 @@ export const Composer: React.FC<ComposerProps> = ({ onRenameSession, onDeleteSes
         rows={1}
       />
       <div className={styles.actions}>
-        {onRenameSession && (
-          <button
-            type="button"
-            className={styles.sessionAction}
-            onClick={onRenameSession}
-            title="重命名会话"
-          >
-            ✏️
-          </button>
-        )}
         {onDeleteSession && (
           <button
             type="button"
@@ -157,19 +110,10 @@ export const Composer: React.FC<ComposerProps> = ({ onRenameSession, onDeleteSes
             onClick={onDeleteSession}
             title="删除会话"
           >
-            🗑️
+            删除会话
           </button>
         )}
         <div className={styles.actionsSpacer} />
-        <button
-          type="button"
-          className={`${styles.screenshotButton} ${screenshotData ? styles.screenshotActive : ''}`}
-          onClick={handleScreenshot}
-          disabled={isScreenshotDisabled}
-          title="附加截图"
-        >
-          📷
-        </button>
         <button
           type="button"
           className={styles.sendButton}

@@ -1,47 +1,7 @@
-/* Composer — matches legacy chat input area styling */
 .container {
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-
-.screenshotPreview {
-  position: relative;
-  display: inline-flex;
-  max-width: 120px;
-  max-height: 80px;
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  border: 1px solid var(--border-color);
-}
-
-.screenshotPreview img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.removeScreenshot {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.6);
-  color: white;
-  border: none;
-  cursor: pointer;
-  font-size: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-}
-
-.screenshotActive {
-  background: var(--accent-primary);
-  color: white;
 }
 
 .inputRow {
@@ -49,7 +9,6 @@
   gap: 12px;
 }
 
-/* Text input — legacy: textarea/input */
 .input {
   flex: 1;
   background: rgba(255, 255, 255, 0.03);
@@ -91,18 +50,17 @@
   align-items: flex-end;
 }
 
-/* Spacer pushes screenshot/send to the right */
 .actionsSpacer {
   flex: 1;
 }
 
-/* Session-level action buttons (rename, delete) */
 .sessionAction {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 12px;
   border-radius: var(--radius-md);
   background: transparent;
   color: var(--text-muted);
@@ -123,46 +81,12 @@
   border-color: var(--accent-error);
 }
 
-/* Screenshot button */
-.screenshotButton {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: var(--radius-md);
-  background: var(--bg-tertiary);
-  color: var(--text-muted);
-  border: 1px solid var(--border-color);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-size: 14px;
-}
-
-.screenshotButton:hover:not(:disabled) {
-  background: var(--bg-elevated);
-  border-color: var(--border-hover);
-  color: var(--text-primary);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-sm);
-}
-
-.screenshotButton:active:not(:disabled) {
-  transform: translateY(0);
-}
-
-.screenshotButton:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* Send button — legacy: button.primary */
 .sendButton {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 44px;
   border-radius: var(--radius-md);
   background: var(--accent-gradient);
   color: white;

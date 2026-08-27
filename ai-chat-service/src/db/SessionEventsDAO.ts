@@ -1,14 +1,12 @@
 import { DatabaseSync } from 'node:sqlite';
-import type {
-  SessionEvent,
-  SessionEventType,
-  SessionState as SseSessionState,
-} from '@nebula-link-evo/shared/types/sse-events';
-import type { Message } from './types.js';
+import {
+  AGENT_STREAM_EVENT_SCHEMA,
+  type AgentStreamEventV1,
+} from '@nebula-link-evo/shared/types/agent-stream';
 
 interface BufferedEvent {
   readonly sessionId: string;
-  readonly eventType: SessionEventType;
+  readonly eventType: 'agent_stream.event';
   readonly payload: string;
   readonly ttlSeconds?: number;
   readonly seq?: number;
@@ -24,11 +22,6 @@ interface SessionEventRow {
   readonly payload: string;
   readonly created_at: string;
   readonly ttl_expires_at: string | null;
-}
-
-interface SnapshotResult {
-  readonly messages: Message[];
-  readonly state: SseSessionState;
 }
 
 const FLUSH_INTERVAL_MS = 100;
@@ -67,7 +60,7 @@ export class SessionEventsDAO {
 
   async appendEvent(
     sessionId: string,
-    eventType: SessionEventType,
+    eventType: 'agent_stream.event',
     payload: Record<string, unknown>,
     ttlSeconds?: number
   ): Promise<number> {
@@ -91,7 +84,7 @@ export class SessionEventsDAO {
 
   appendEventSync(
     sessionId: string,
-    eventType: SessionEventType,
+    eventType: 'agent_stream.event',
     payload: Record<string, unknown>,
     ttlSeconds?: number
   ): number {
@@ -131,7 +124,7 @@ export class SessionEventsDAO {
 
   appendLiveEvent(
     sessionId: string,
-    eventType: SessionEventType,
+    eventType: 'agent_stream.event',
     payload: Record<string, unknown>,
     ttlSeconds?: number
   ): number {
@@ -160,13 +153,13 @@ export class SessionEventsDAO {
     sessionId: string,
     lastSeq: number,
     limit: number = MAX_REPLAY_LIMIT
-  ): Promise<SessionEvent[]> {
+  ): Promise<AgentStreamEventV1[]> {
     const clampedLimit = Math.min(limit, MAX_REPLAY_LIMIT);
     const minSeq = this.getMinSeq(sessionId);
     const effectiveLastSeq = minSeq !== null && lastSeq < minSeq ? minSeq - 1 : lastSeq;
     const stmt = this.db.prepare(
       `SELECT * FROM session_events
-       WHERE session_id = ? AND seq > ?
+       WHERE session_id = ? AND event_type = 'agent_stream.event' AND seq > ?
        ORDER BY seq ASC
        LIMIT ?`
     );
@@ -180,7 +173,8 @@ export class SessionEventsDAO {
 
   getMinSeq(sessionId: string): number | null {
     const stmt = this.db.prepare(
-      `SELECT MIN(seq) as min_seq FROM session_events WHERE session_id = ?`
+      `SELECT MIN(seq) as min_seq FROM session_events
+       WHERE session_id = ? AND event_type = 'agent_stream.event'`
     );
     const row = stmt.get(sessionId) as { readonly min_seq: number | null };
     return row.min_seq;
@@ -188,7 +182,8 @@ export class SessionEventsDAO {
 
   getLastSeq(sessionId: string): number | null {
     const stmt = this.db.prepare(
-      `SELECT MAX(seq) as max_seq FROM session_events WHERE session_id = ?`
+      `SELECT MAX(seq) as max_seq FROM session_events
+       WHERE session_id = ? AND event_type = 'agent_stream.event'`
     );
     const row = stmt.get(sessionId) as { readonly max_seq: number | null };
     return row.max_seq;
@@ -198,110 +193,6 @@ export class SessionEventsDAO {
   observeCommittedSeq(sessionId: string, seq: number): void {
     const current = this.sessionSeqCounters.get(sessionId) ?? this.getLastSeq(sessionId) ?? 0;
     if (seq > current) this.sessionSeqCounters.set(sessionId, seq);
-  }
-
-  async getSnapshot(sessionId: string): Promise<SnapshotResult> {
-    const stmt = this.db.prepare(
-      `SELECT * FROM session_events
-       WHERE session_id = ?
-       ORDER BY seq ASC`
-    );
-    const rows = stmt.all(sessionId) as unknown as SessionEventRow[];
-
-    const messages: Message[] = [];
-    let state: SseSessionState = 'idle';
-
-    for (const row of rows) {
-      const event = this.rowToEvent(row);
-      switch (event.type) {
-        case 'message.created':
-          messages.push({
-            id: event.messageId,
-            session_id: event.sessionId,
-            role: 'user',
-            content: event.content,
-            created_at: new Date().toISOString(),
-            metadata: null,
-          });
-          break;
-        case 'assistant.started':
-          state = 'running';
-          break;
-        case 'assistant.completed':
-          state = 'completed';
-          break;
-        case 'run.error':
-          state = 'idle';
-          break;
-      }
-    }
-
-    return { messages, state };
-  }
-
-  getThinkingForSession(
-    sessionId: string,
-    assistantMessageIds: readonly string[]
-  ): Map<string, string> {
-    const thinkingMap = new Map<string, string>();
-    if (assistantMessageIds.length === 0) {
-      return thinkingMap;
-    }
-
-    const startedStmt = this.db.prepare(
-      `SELECT payload FROM session_events
-       WHERE session_id = ? AND event_type = 'assistant.started'
-       ORDER BY seq ASC`
-    );
-    const startedRows = startedStmt.all(sessionId) as Array<{ readonly payload: string }>;
-    const tempMessageIds: string[] = [];
-    for (const row of startedRows) {
-      try {
-        const payload = JSON.parse(row.payload) as { readonly messageId: string };
-        tempMessageIds.push(payload.messageId);
-      } catch {
-        // Skip malformed historical payloads.
-      }
-    }
-
-    if (tempMessageIds.length === 0) {
-      return thinkingMap;
-    }
-
-    const thinkingStmt = this.db.prepare(
-      `SELECT payload FROM session_events
-       WHERE session_id = ? AND event_type = 'assistant.thinking'
-       ORDER BY seq ASC`
-    );
-    const thinkingRows = thinkingStmt.all(sessionId) as Array<{ readonly payload: string }>;
-    const thinkingByTextId = new Map<string, string>();
-    for (const row of thinkingRows) {
-      try {
-        const payload = JSON.parse(row.payload) as {
-          readonly messageId: string;
-          readonly text: string;
-        };
-        const existing = thinkingByTextId.get(payload.messageId) || '';
-        thinkingByTextId.set(payload.messageId, existing + payload.text);
-      } catch {
-        // Skip malformed historical payloads.
-      }
-    }
-
-    const mapLen = Math.min(tempMessageIds.length, assistantMessageIds.length);
-    for (let i = 0; i < mapLen; i += 1) {
-      const tempMessageId = tempMessageIds[i];
-      const assistantMessageId = assistantMessageIds[i];
-      if (tempMessageId === undefined || assistantMessageId === undefined) {
-        continue;
-      }
-      const thinking = thinkingByTextId.get(tempMessageId);
-      if (thinking) {
-        thinkingMap.set(assistantMessageId, thinking);
-      }
-    }
-
-    return thinkingMap;
   }
 
   async cleanupExpired(): Promise<number> {
@@ -487,12 +378,13 @@ export class SessionEventsDAO {
     return seq;
   }
 
-  private rowToEvent(row: SessionEventRow): SessionEvent {
+  private rowToEvent(row: SessionEventRow): AgentStreamEventV1 {
     const payload = JSON.parse(row.payload) as Record<string, unknown>;
     return {
+      schema: AGENT_STREAM_EVENT_SCHEMA,
+      streamId: row.session_id,
       seq: row.seq,
-      type: row.event_type as SessionEvent['type'],
       ...payload,
-    } as SessionEvent;
+    } as AgentStreamEventV1;
   }
 }

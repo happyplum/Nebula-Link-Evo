@@ -9,7 +9,11 @@ import type {
   UpdateSessionStateParams,
   UpdateSessionParams,
 } from '../db/types.js';
-import type { ToolCall } from '@nebula-link-evo/shared';
+
+interface ToolCall {
+  function?: { name: string };
+  [key: string]: unknown;
+}
 
 interface ListOptions {
   limit?: number;

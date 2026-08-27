@@ -1,6 +1,6 @@
 /**
  * Session Routes - Session CRUD operations
- * Relative paths: /, /:id, /:id/messages
+ * Relative paths: /, /:id, /:id/messages (POST only)
  */
 import { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import { Type, Static } from '@sinclair/typebox';
@@ -41,16 +41,6 @@ const CreateSessionResponseSchema = Type.Object({
   success: Type.Boolean(),
   session: SessionResponseSchema,
 });
-
-const MessageResponseSchema = Type.Object({
-  id: Type.String(),
-  role: Type.String(),
-  content: Type.String(),
-  thinking: Type.Optional(Type.String()),
-  created_at: Type.String(),
-});
-
-const MessageListResponseSchema = Type.Array(MessageResponseSchema);
 
 const ErrorResponseSchema = Type.Object({
   error: Type.String(),
@@ -432,77 +422,6 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     }
   );
 
-  // GET /:id/messages - Get message history
-  fastify.get<{
-    Params: { id: string };
-    Querystring: { limit?: number; offset?: number };
-  }>(
-    '/:id/messages',
-    {
-      schema: {
-        description: 'Get message history for a specific session',
-        tags: ['Chat'],
-        params: Type.Object({
-          id: Type.String(),
-        }),
-        querystring: Type.Object({
-          limit: Type.Optional(Type.Number({ minimum: 1 })),
-          offset: Type.Optional(Type.Number({ minimum: 0 })),
-        }),
-        response: {
-          200: MessageListResponseSchema,
-          404: ErrorResponseSchema,
-        },
-      },
-    },
-    async (request, reply) => {
-      const { id: sessionId } = request.params;
-      const { limit, offset } = request.query;
-
-      try {
-        const session = conversationManager.getSession(sessionId);
-
-        if (!session) {
-          reply.status(404);
-          return { error: `Session ${sessionId} not found` };
-        }
-
-        const messages = conversationManager.getMessages(sessionId, { limit, offset });
-
-        const sessionEventsDAO = fastify.conversationDatabase.getSessionEventsDAO();
-        const assistantIds = messages.filter((m) => m.role === 'assistant').map((m) => m.id);
-        const thinkingMap =
-          sessionEventsDAO.getThinkingForSession(sessionId, assistantIds) ??
-          new Map<string, string>();
-
-        return messages.map((m) => {
-          const result: {
-            id: string;
-            role: string;
-            content: string;
-            created_at: string;
-            thinking?: string;
-          } = {
-            id: m.id,
-            role: m.role,
-            content: m.content,
-            created_at: m.created_at,
-          };
-          const thinking = thinkingMap.get(m.id);
-          if (thinking) {
-            result.thinking = thinking;
-          }
-          return result;
-        });
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        request.log.error({ error: errorMessage, sessionId }, 'Failed to get messages');
-        reply.status(500);
-        return { error: errorMessage };
-      }
-    }
-  );
-
   // POST /:id/messages - Async message endpoint
   fastify.post<{
     Params: { id: string };
@@ -528,7 +447,6 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     async (request, reply) => {
       const { id: sessionId } = request.params;
       const { content, screenshot } = request.body;
-      const sessionEventsDAO = fastify.conversationDatabase.getSessionEventsDAO();
       const sessionEventHub = chatHandler.getSessionEventHub();
       const runId = randomUUID();
 
@@ -581,17 +499,21 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
             },
           });
         } catch (innerError) {
-          const errorMessage =
-            innerError instanceof Error ? innerError.message : String(innerError);
-          const errorPayload = {
-            sessionId,
-            error: errorMessage,
-          };
-          const errorSeq = await sessionEventsDAO.appendEvent(sessionId, 'run.error', errorPayload);
-          sessionEventHub.publish(sessionId, {
-            type: 'run.error',
-            seq: errorSeq,
-            ...errorPayload,
+          const occurredAt = new Date().toISOString();
+          sessionEventHub.persistAndPublish(sessionId, {
+            type: 'section.upsert',
+            turnId: `run:${runId}`,
+            sectionId: `run:${runId}:error`,
+            occurredAt,
+            section: {
+              type: 'error',
+              sectionId: `run:${runId}:error`,
+              createdAt: occurredAt,
+              updatedAt: occurredAt,
+              title: '消息执行失败',
+              message: '消息未能进入执行队列，请检查服务状态后重试。',
+              recoverable: true,
+            },
           });
           throw innerError;
         }

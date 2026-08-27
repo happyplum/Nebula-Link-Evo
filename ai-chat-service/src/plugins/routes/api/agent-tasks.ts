@@ -6,6 +6,7 @@ import type { AgentTaskEventRecord } from '../../../agent-tasks/repository.js';
 import { buildAgentTaskCapabilities } from '../../../agent-tasks/capabilities.js';
 import type { SkillCatalogEntry } from '../../../skills/runtime.js';
 import { BoundedSseWriter } from '../../../services/sse-writer.js';
+import type { AgentStreamEventV1 } from '@nebula-link-evo/shared/types/agent-stream';
 
 const ProblemSchema = Type.Object(
   {
@@ -141,6 +142,21 @@ const EventLogQuerySchema = Type.Object(
     limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 1000 })),
   },
   { additionalProperties: false }
+);
+const AgentStreamEventSchema = Type.Object(
+  {
+    schema: Type.Literal('nebula.ai.agent-stream.event/1.0'),
+    streamId: Type.String(),
+    turnId: Type.String(),
+    sectionId: Type.String(),
+    seq: Type.Integer({ minimum: 0 }),
+    occurredAt: Type.String(),
+    type: Type.String(),
+  },
+  // Variant payloads are validated by the shared AgentStreamEventV1 guard at the
+  // consumer boundary. Keeping them here is required because Fastify serializes
+  // response objects from this schema and would otherwise strip section/state/delta.
+  { additionalProperties: true }
 );
 const SkillCatalogEntrySchema = Type.Object(
   {
@@ -397,6 +413,106 @@ const agentTaskRoutes: FastifyPluginAsyncTypebox<AgentTaskRoutesOptions> = async
         request.query.afterSeq ?? 0,
         request.query.limit ?? 100
       )
+  );
+
+  fastify.get<{
+    Params: { taskId: string };
+    Querystring: { afterSeq?: number; limit?: number };
+  }>(
+    '/agent-tasks/:taskId/activity-log',
+    {
+      preHandler: requireLocalControlPlane,
+      schema: {
+        description: 'Read sanitized user-facing Agent activity after a presentation cursor',
+        tags: ['Agent Tasks'],
+        params: TaskIdParamsSchema,
+        querystring: EventLogQuerySchema,
+        response: {
+          200: Type.Array(AgentStreamEventSchema),
+          400: ErrorSchema,
+          403: ErrorSchema,
+          404: ErrorSchema,
+          500: ErrorSchema,
+        },
+      },
+    },
+    async (request) =>
+      options.service.listActivity(
+        request.params.taskId,
+        request.query.afterSeq ?? 0,
+        request.query.limit ?? 100
+      )
+  );
+
+  fastify.get<{ Params: { taskId: string } }>(
+    '/agent-tasks/:taskId/activity',
+    {
+      preHandler: requireLocalControlPlane,
+      schema: {
+        description: 'Snapshot-first sanitized user-facing Agent activity stream',
+        tags: ['Agent Tasks', 'SSE'],
+        params: TaskIdParamsSchema,
+      },
+    },
+    async (request, reply) => {
+      const buffered: AgentStreamEventV1[] = [];
+      let bootstrapComplete = false;
+      let lastSeq = 0;
+      let unsubscribe = (): void => {};
+      const writer = new BoundedSseWriter(reply.raw, { onClose: () => unsubscribe() });
+      unsubscribe = options.service.subscribeActivity(request.params.taskId, (event) => {
+        try {
+          if (!bootstrapComplete) {
+            if (buffered.length >= 256) {
+              writer.close('overflow', true);
+              return;
+            }
+            buffered.push(event);
+            return;
+          }
+          if (event.seq <= lastSeq) return;
+          writeSse(writer, 'agent_stream.event', event.seq, event);
+          lastSeq = event.seq;
+        } catch {
+          // The close handler releases the subscription.
+        }
+      });
+      try {
+        reply.raw.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          Connection: 'keep-alive',
+          'X-Accel-Buffering': 'no',
+        });
+        const snapshot = options.service.getActivitySnapshot(request.params.taskId);
+        writeSse(writer, 'agent_stream.snapshot', snapshot.seq, snapshot);
+        lastSeq = snapshot.seq;
+        bootstrapComplete = true;
+        for (const event of buffered) {
+          if (event.seq <= lastSeq) continue;
+          writeSse(writer, 'agent_stream.event', event.seq, event);
+          lastSeq = event.seq;
+        }
+      } catch (error) {
+        unsubscribe();
+        throw error;
+      }
+      const heartbeat = setInterval(() => {
+        try {
+          writer.push(': keepalive\n\n');
+        } catch {
+          clearInterval(heartbeat);
+        }
+      }, 15_000);
+      return new Promise<void>((resolve) => {
+        request.raw.on('close', () => {
+          clearInterval(heartbeat);
+          unsubscribe();
+          writer.close();
+          resolve();
+        });
+      });
+    }
   );
 
   fastify.get<{ Params: { taskId: string } }>(

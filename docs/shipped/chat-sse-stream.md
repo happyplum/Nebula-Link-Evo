@@ -1,19 +1,12 @@
 # chat-sse-stream `ai-chat-service :3001 /api/v1/chat/sessions/:sessionId/stream`
 
-ai-chat-service 向 debug-ui 提供 Chat SSE 流式传输。每次建连先发完整 `session.snapshot` 再续 live stream；无 `Last-Event-ID` / `lastEventId` resume 契约。
+ai-chat-service 从已持久 DSH 事实投影统一、脱敏、可恢复的 Agent Stream。
 
-- [shipped] Chat SSE 路由：`GET /api/v1/chat/sessions/:sessionId/stream`（SSE）。入口：`ai-chat-service/src/plugins/routes/api/chat/stream.ts`。
-- [shipped] 每次建连必须先发完整 `session.snapshot`，然后继续 live events only。`session.snapshot` 负责承载可恢复的 assistant thinking / 历史。
-- [shipped] 无 `Last-Event-ID` / `lastEventId` resume 契约——重连从头重建（从 snapshot），不做 cursor-based replay。
-- [shipped] 会话控制路由：`POST /api/v1/chat/sessions/:sessionId/{pause,resume,interrupt,cancel}`。入口：`ai-chat-service/src/plugins/routes/api/chat/control.ts`。
-- [shipped] 会话 CRUD 路由：`* /api/v1/chat/sessions`。入口：`ai-chat-service/src/plugins/routes/api/chat/sessions.ts`。
-- [shipped] Chat 会话控制器（状态机执行入口）：`ai-chat-service/src/services/chat-session-controller.ts`。
-- [shipped] 流式持久化 worker：`ai-chat-service/src/services/stream-persist-worker.ts` + `ai-chat-service/src/workers/stream-persist-worker.ts`。异步持久化流式消息，并由每个 `buildApp({ dataDir })` 将该实例的 `conversations.sqlite` 精确传给 Worker；真实 Worker 回归测试验证不会回落到进程工作目录数据库。
-- [shipped] 后台任务队列：3 次重试 + 10 分钟空闲清理。入口：`ai-chat-service/src/services/conversation-job-queue.ts`。
-- [shipped] Conversation 子系统：`ai-chat-service/src/conversation/`（manager / db / compressor / session-state-dao / session-events-dao / session-event-hub）。
-- [shipped] Chat 生成已进入与 Agent Task 共用的 DSH Agent Loop；zstd JSONL durable log 为模型 transcript 事实源，SQLite 通过 `(sessionId,dshSeq)` 唯一投影和 watermark 保持公开 event/state。
-- [shipped] live event 只在 DSH flush/catch-up 与 SQLite seq/state/projection 事务提交后广播；每订阅者队列最多 256 条、单次写超时 5 秒，溢出/超时断连，重连仍依赖 snapshot。
-- [shipped] 会话 DELETE 使用持久 deletion saga；物理删除完成返回 204，30 秒未完成返回 `503 deletion_pending`，重复删除等待同一 job，重启继续未完成阶段且 deleted tombstone 禁止 resume/复活。
-- [shipped] 验收面：SSE、backpressure、DSH projection/corruption、delete/restart 与 stream-persist-worker 测试。
-- [shipped] Debug UI Playwright 启动完整 ai-chat-service 与确定性 DSH adapter，通过真实 Vite proxy 创建 Chat session、提交消息并从 canonical SSE 渲染 assistant 响应；测试进程使用动态端口和临时数据目录。
-- [shipped] ai-chat-service 真实进程 E2E 通过 canonical HTTP/SSE 验证 pause 只在 DSH flush/projection 后进入持久 `paused`、进程重启后 resume、interrupt/cancel 传播到活动 DSH turn，以及携带任意 `Last-Event-ID` 的重连仍以 id=0 完整 snapshot 启动。
+- [shipped] Chat SSE 只发送 `agent_stream.snapshot` 和 `agent_stream.event`；连接先发送完整 snapshot，再续单调 live event。
+- [shipped] provider chunk、Skill/Tool 生命周期和中间答复必须先进入 durable DSH/SQLite 投影，再由 SessionEventHub 广播；未提交 chunk 不进入 UI。
+- [shipped] snapshot 重建用户、assistant、content、reasoning 摘要、activity、终态和当前 stream state；连接期间以 bootstrap buffer 消除 snapshot/live 竞态。
+- [shipped] reasoning 默认只输出确定性阶段摘要；Tool/Skill 只输出脱敏名称、状态、摘要、固定版本/hash、预算和 artifact 引用。摘要最多 4 KiB，不输出原始 Skill 指令、secret、lease token 或超大 Tool 结果。
+- [shipped] live 订阅者队列最多 256 条、单次写超时 5 秒；溢出或超时后断连，客户端重新从 snapshot 建立状态。
+- [shipped] 公开消息历史读取入口不存在；POST 仍异步提交用户消息。会话 CRUD、删除 saga 与 pause/resume/interrupt/cancel 保持 canonical 路由。
+- [shipped] Chat 与 Agent Task 共用 DSH Agent Loop，并产生相同 shared Agent Stream 事件结构；控制面审计事件不作为 UI 兼容输入。
+- [shipped] 验收面：projection store、ConversationDatabase、Chat route/backpressure、真实进程 HTTP/SSE 与 debug-ui Playwright 测试。

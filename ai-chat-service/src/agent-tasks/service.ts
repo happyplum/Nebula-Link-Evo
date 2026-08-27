@@ -18,6 +18,11 @@ import type { SkillRuntime } from '../skills/runtime.js';
 import type { HarnessRuntime } from '../harness/types.js';
 import { recoverDurableHarnessResult } from './executor.js';
 import type { HarnessRunScheduler } from '../harness/run-scheduler.js';
+import type {
+  AgentStreamEventV1,
+  AgentStreamSnapshotV1,
+} from '@nebula-link-evo/shared/types/agent-stream';
+import { buildAgentTaskActivitySnapshot, projectAgentTaskEvent } from './activity-projector.js';
 
 export interface CreateAgentTaskOptions {
   idempotencyKey?: string;
@@ -178,6 +183,42 @@ export class AgentTaskService {
       throw new AgentTaskError('validation_failed', 'limit must be between 1 and 1000');
     }
     return this.repository.listEvents(taskId, afterSeq, limit);
+  }
+
+  listActivity(taskId: string, afterSeq = 0, limit = 100): AgentStreamEventV1[] {
+    this.get(taskId);
+    if (!Number.isSafeInteger(afterSeq) || afterSeq < 0) {
+      throw new AgentTaskError('validation_failed', 'afterSeq must be a non-negative integer');
+    }
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1000) {
+      throw new AgentTaskError('validation_failed', 'limit must be between 1 and 1000');
+    }
+    const sourceAfter = Math.max(0, Math.floor(afterSeq / 4) - 1);
+    return this.repository
+      .listEvents(taskId, sourceAfter, 1000)
+      .flatMap(projectAgentTaskEvent)
+      .filter((event) => event.seq > afterSeq)
+      .slice(0, limit);
+  }
+
+  getActivitySnapshot(taskId: string): AgentStreamSnapshotV1 {
+    const task = this.get(taskId);
+    const events: AgentTaskEventRecord[] = [];
+    let afterSeq = 0;
+    while (true) {
+      const batch = this.repository.listEvents(taskId, afterSeq, 1000);
+      events.push(...batch);
+      if (batch.length < 1000) break;
+      afterSeq = batch[batch.length - 1].seq;
+    }
+    return buildAgentTaskActivitySnapshot(task, events);
+  }
+
+  subscribeActivity(taskId: string, listener: (event: AgentStreamEventV1) => void): () => void {
+    this.get(taskId);
+    return this.repository.subscribeEvents(taskId, (event) => {
+      for (const projected of projectAgentTaskEvent(event)) listener(projected);
+    });
   }
 
   getSnapshot(taskId: string): {

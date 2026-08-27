@@ -30,18 +30,6 @@
   min-width: 0;
 }
 
-.statusFilter {
-  font-size: 13px;
-  width: 80px;
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border-glass);
-  border-radius: var(--radius-md);
-  padding: 6px 10px;
-  color: var(--text-primary);
-  flex-shrink: 0;
-  color-scheme: dark;
-}
-
 .sessionSelectorWrapper {
   flex: 1;
   min-width: 0;
@@ -85,23 +73,6 @@
   margin-left: 8px;
 }
 
-.cotToggle {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  cursor: pointer;
-  user-select: none;
-  color: var(--text-primary);
-}
-
-.divider {
-  width: 1px;
-  height: 16px;
-  background: var(--border-color);
-  margin: 0 4px;
-}
-
 /* Icon buttons — legacy: standard button */
 .iconBtn {
   background: var(--bg-tertiary);
@@ -126,10 +97,6 @@
 
 .iconBtn:active {
   transform: translateY(0);
-}
-
-.errorText {
-  color: var(--accent-error);
 }
 
 /* Control Bar — legacy: .flex.gap-2.p-2.border-b.bg-tertiary */
@@ -160,7 +127,9 @@
   white-space: nowrap;
   background: transparent;
   color: white;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
 }
 
 .controlBtn:disabled {
@@ -222,16 +191,6 @@
   border-bottom: 1px solid var(--accent-warning);
 }
 
-/* Blocked banner */
-.blockedBanner {
-  padding: 8px;
-  background: var(--accent-warning);
-  color: #fff;
-  text-align: center;
-  font-size: 12px;
-  z-index: 10;
-}
-
 /* Message region */
 .messageRegion {
   flex: 1;
@@ -256,30 +215,6 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-
-.footerTop {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.modelSelectWrapper {
-  display: flex;
-  gap: 8px;
-  flex: 1;
-}
-
-.modelSelect {
-  font-size: 13px;
-  flex: 1;
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border-glass);
-  border-radius: var(--radius-md);
-  padding: 6px 10px;
-  color: var(--text-primary);
-  font-family: inherit;
-  color-scheme: dark;
 }
 
 .composerWrapper {
