@@ -1,0 +1,37 @@
+{
+  "name": "@nebula-link-evo/agent-activity-ui",
+  "version": "0.0.1",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./styles.css": "./dist/styles.css"
+  },
+  "scripts": {
+    "build": "tsc -b && node scripts/build-styles.mjs",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\""
+  },
+  "dependencies": {
+    "@nebula-link-evo/shared": "workspace:*",
+    "react": "^19.2.4"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/node": "catalog:",
+    "@types/react": "^19.2.14",
+    "@vitest/coverage-v8": "catalog:",
+    "jsdom": "^28.1.0",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

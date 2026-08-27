@@ -95,6 +95,40 @@ importers:
         specifier: ^8.20.0
         version: 8.56.1(eslint@10.9.0(jiti@2.7.0))(typescript@5.9.3)
 
+  agent-activity-ui:
+    dependencies:
+      '@nebula-link-evo/shared':
+        specifier: workspace:*
+        version: link:../shared
+      react:
+        specifier: ^19.2.4
+        version: 19.2.4
+    devDependencies:
+      '@testing-library/jest-dom':
+        specifier: ^6.9.1
+        version: 6.9.1
+      '@testing-library/react':
+        specifier: ^16.3.2
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.19.21
+      '@types/react':
+        specifier: ^19.2.14
+        version: 19.2.14
+      '@vitest/coverage-v8':
+        specifier: 'catalog:'
+        version: 4.0.18(vitest@4.0.18(@opentelemetry/api@1.9.1)(@types/node@22.19.21)(jiti@2.7.0)(jsdom@28.1.0)(lightningcss@1.32.0)(terser@5.46.0)(tsx@4.22.4)(yaml@2.9.0))
+      jsdom:
+        specifier: ^28.1.0
+        version: 28.1.0
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.0.18(@opentelemetry/api@1.9.1)(@types/node@22.19.21)(jiti@2.7.0)(jsdom@28.1.0)(lightningcss@1.32.0)(terser@5.46.0)(tsx@4.22.4)(yaml@2.9.0)
+
   ai-chat-service:
     dependencies:
       '@ai-sdk/openai-compatible':
@@ -327,6 +361,9 @@ importers:
 
   ai-e2e/ui:
     dependencies:
+      '@nebula-link-evo/agent-activity-ui':
+        specifier: workspace:*
+        version: link:../../agent-activity-ui
       '@nebula-link-evo/shared':
         specifier: workspace:*
         version: link:../../shared
@@ -445,6 +482,9 @@ importers:
 
   debug-ui:
     dependencies:
+      '@nebula-link-evo/agent-activity-ui':
+        specifier: workspace:*
+        version: link:../agent-activity-ui
       '@nebula-link-evo/shared':
         specifier: workspace:*
         version: link:../shared

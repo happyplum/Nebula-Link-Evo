@@ -17,27 +17,6 @@ export type {
 
 export { VISION_MARKER_API_VERSION } from './vision-marker.js';
 
-// SSE event types
-export type {
-  SessionEvent,
-  SessionEventType,
-  SessionSnapshotEvent,
-  MessageCreatedEvent,
-  AssistantStartedEvent,
-  AssistantDeltaEvent,
-  AssistantCompletedEvent,
-  AssistantThinkingEvent,
-  AssistantToolCallEvent,
-  AssistantToolResultEvent,
-  RunErrorEvent,
-  SSEFormattedEvent,
-  SessionState,
-  SessionAgentState,
-  ToolCall,
-} from './sse-events.js';
-
-export { eventToSSEFormat } from './sse-events.js';
-
 // Debug SSE event types
 export type {
   DebugStreamEvent,
@@ -60,6 +39,9 @@ export { MAX_SCREENSHOT_SIZE_BYTES } from './constants.js';
 
 // Browser execution wire contracts
 export * from './browser-execution.js';
+
+// User-facing Agent activity stream wire contracts
+export * from './agent-stream.js';
 
 // Immutable proxy-owned evidence passed to bounded Vision tools
 export type {

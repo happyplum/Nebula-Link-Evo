@@ -1,0 +1,243 @@
+.nebula-agent-stream {
+  --agent-stream-accent: var(--color-primary, #2a8ea1);
+  --agent-stream-accent-soft: color-mix(in srgb, var(--agent-stream-accent) 12%, transparent);
+  --agent-stream-surface: var(--color-surface, #ffffff);
+  --agent-stream-surface-muted: var(--color-surface-muted, #f4f7f9);
+  --agent-stream-border: var(--color-border, #d8e1e7);
+  --agent-stream-text: var(--color-text, #16232b);
+  --agent-stream-muted: var(--color-text-secondary, #5b6c76);
+  --agent-stream-danger: var(--color-danger, #c43845);
+  display: grid;
+  gap: 14px;
+  color: var(--agent-stream-text);
+  font: inherit;
+}
+
+.nebula-agent-stream--compact {
+  gap: 10px;
+}
+
+.nebula-agent-stream__turn {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.nebula-agent-stream--compact .nebula-agent-stream__turn {
+  gap: 8px;
+}
+
+.nebula-agent-stream__content,
+.nebula-agent-stream__panel,
+.nebula-agent-stream__notice,
+.nebula-agent-stream__activity,
+.nebula-agent-stream__reasoning,
+.nebula-agent-stream__activity-group {
+  border: 1px solid var(--agent-stream-border);
+  border-radius: 12px;
+  background: var(--agent-stream-surface);
+}
+
+.nebula-agent-stream__content,
+.nebula-agent-stream__panel,
+.nebula-agent-stream__notice,
+.nebula-agent-stream__activity {
+  padding: 12px 14px;
+}
+
+.nebula-agent-stream--compact
+  :is(
+    .nebula-agent-stream__content,
+    .nebula-agent-stream__panel,
+    .nebula-agent-stream__notice,
+    .nebula-agent-stream__activity
+  ) {
+  padding: 9px 11px;
+}
+
+.nebula-agent-stream__content--user {
+  width: min(82%, 680px);
+  margin-inline-start: auto;
+  border-color: color-mix(in srgb, var(--agent-stream-accent) 35%, var(--agent-stream-border));
+  background: var(--agent-stream-accent-soft);
+}
+
+.nebula-agent-stream__plain-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+
+.nebula-agent-stream__cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-inline-start: 3px;
+  background: var(--agent-stream-accent);
+  vertical-align: text-bottom;
+  animation: nebula-agent-stream-pulse 900ms ease-in-out infinite;
+}
+
+.nebula-agent-stream details > summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 14px;
+  cursor: pointer;
+  color: var(--agent-stream-text);
+  list-style: none;
+}
+
+.nebula-agent-stream details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.nebula-agent-stream details > summary::before {
+  content: '›';
+  color: var(--agent-stream-muted);
+  transition: transform 200ms ease;
+}
+
+.nebula-agent-stream details[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.nebula-agent-stream details > summary:focus-visible,
+.nebula-agent-stream a:focus-visible,
+.nebula-agent-stream button:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--agent-stream-accent) 55%, transparent);
+  outline-offset: 2px;
+}
+
+.nebula-agent-stream__reasoning > .nebula-agent-stream__plain-text,
+.nebula-agent-stream__activity-list {
+  margin: 0 14px 14px;
+}
+
+.nebula-agent-stream__activity-list {
+  display: grid;
+  gap: 8px;
+}
+
+.nebula-agent-stream__activity {
+  border-inline-start: 3px solid var(--agent-stream-accent);
+  background: var(--agent-stream-surface-muted);
+}
+
+.nebula-agent-stream__activity[data-state='failed'],
+.nebula-agent-stream__notice[data-tone='error'] {
+  border-inline-start-color: var(--agent-stream-danger);
+}
+
+.nebula-agent-stream__activity-heading,
+.nebula-agent-stream__panel-heading,
+.nebula-agent-stream__turn-summary,
+.nebula-agent-stream__metadata {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nebula-agent-stream__activity-heading strong,
+.nebula-agent-stream__panel-heading strong {
+  min-width: 0;
+  flex: 1;
+}
+
+.nebula-agent-stream__kind,
+.nebula-agent-stream__status {
+  color: var(--agent-stream-muted);
+  font-size: 0.78rem;
+}
+
+.nebula-agent-stream__kind {
+  border-radius: 999px;
+  padding: 3px 7px;
+  background: var(--agent-stream-accent-soft);
+  color: var(--agent-stream-accent);
+  font-weight: 650;
+}
+
+.nebula-agent-stream p {
+  margin: 8px 0 0;
+  color: var(--agent-stream-muted);
+  line-height: 1.55;
+}
+
+.nebula-agent-stream__metadata {
+  margin-top: 8px;
+  color: var(--agent-stream-muted);
+  font:
+    0.75rem ui-monospace,
+    SFMono-Regular,
+    Consolas,
+    monospace;
+  overflow-wrap: anywhere;
+}
+
+.nebula-agent-stream__artifact {
+  min-height: 44px;
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  overflow-wrap: anywhere;
+  color: var(--agent-stream-accent);
+}
+
+.nebula-agent-stream__plan {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding-inline-start: 20px;
+}
+
+.nebula-agent-stream__plan li {
+  min-height: 32px;
+  padding-inline-start: 4px;
+}
+
+.nebula-agent-stream__plan li > span:last-child {
+  float: inline-end;
+}
+
+.nebula-agent-stream__notice[data-tone='success'] {
+  border-color: #52a779;
+}
+
+.nebula-agent-stream__notice[data-tone='warning'],
+.nebula-agent-stream__panel[data-tone='decision'] {
+  border-color: #c58a32;
+}
+
+.nebula-agent-stream__turn-summary {
+  justify-content: space-between;
+  color: var(--agent-stream-muted);
+  font-size: 0.78rem;
+}
+
+.nebula-agent-stream__empty {
+  min-height: 88px;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  color: var(--agent-stream-muted);
+}
+
+@keyframes nebula-agent-stream-pulse {
+  50% {
+    opacity: 0.2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nebula-agent-stream *,
+  .nebula-agent-stream *::before,
+  .nebula-agent-stream *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}

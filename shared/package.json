@@ -16,9 +16,9 @@
       "types": "./dist/types/index.d.ts",
       "import": "./dist/types/index.js"
     },
-    "./types/sse-events": {
-      "types": "./dist/types/sse-events.d.ts",
-      "import": "./dist/types/sse-events.js"
+    "./types/agent-stream": {
+      "types": "./dist/types/agent-stream.d.ts",
+      "import": "./dist/types/agent-stream.js"
     },
     "./types/vision-marker": {
       "types": "./dist/types/vision-marker.d.ts",
