@@ -12,7 +12,7 @@
 | Run                 | shipped | 冻结计划、TODO/DAG、page task/attempt、变量、决策、恢复/取消/依赖跳过、证据、权威控制面 SSE 与 compact 只读 Agent 活动流                                                                                                                           |
 | 跨服务执行          | shipped | ai-chat-service Agent task/event-log + Vision v2 + 逐 effect 授权；浏览器步骤遵循 shared kind/operation→args 判别映射；proxy session/lease/operation/artifact/event-log 及 TTL/hold 短期原始产物清理、ai-e2e 长期原始证据保留清理，均按持久事实恢复 |
 | 三服务 E2E 门禁     | shipped | 真实 HTTP/MCP/Chromium 覆盖候选生成、验证激活、正式运行、未验证拒绝与 `outcome_unknown` 禁止重放                                                                                                                                                    |
-| 浏览器中心 UI       | shipped | 项目首页、Authoring/Run 三栏工作台、轻量分层上下文树、深链接上下文、显式定位、Diff/审批/证据/Chat、布局与主题偏好；Playwright 使用真实生产 bundle/API 验证完整旅程，明暗主题 Lighthouse a11y 100                                                    |
+| 浏览器中心 UI       | shipped | 项目首页、Authoring/Run 三栏工作台、轻量分层上下文树、深链接上下文、显式定位、Diff/审批/证据/Chat、布局与主题偏好；工作台采用低噪声冷蓝视觉体系、浮动面板和渐隐选中轨，突出持续挂载的浏览器主舞台；Playwright 使用真实生产 bundle/API 验证完整旅程  |
 
 ## 2. 服务与模块
 
@@ -28,7 +28,7 @@
 | Agent Activity   | `agent-activity-repository.ts`、`server/routes/agent-activity.ts` | additive 持久活动序列、独立外部 cursor、控制面事实投影、snapshot-first SSE 与 activity-log                                                       |
 | Evidence         | `semantic-evidence-*`、`semantic-artifact-store.ts`     | 不可变 manifest/item、受限原始对象、7/30 天保留清理与物理删除续跑                                                                                       |
 | Integrations     | `agent-task-client.ts`、`semantic-browser-client.ts`    | canonical v1 跨服务客户端                                                                                                                               |
-| UI               | `ui/src/features/semantic/`、`ui/src/features/project/` | 浏览器中心工作台与项目入口                                                                                                                              |
+| UI               | `ui/src/features/semantic/`、`ui/src/features/project/` | 浏览器中心工作台与项目入口；维护统一的浮动工作区表面、上下文树层级、浏览器主舞台和明暗主题视觉语义                                                      |
 
 ## 3. 路由
 
@@ -56,6 +56,7 @@ UI 路由：`/`、`/semantic/:projectId`、`/semantic/:projectId/authoring/:vers
 - 断线后从 snapshot + seq 恢复，不由本地百分比或 Chat 文本推断状态。
 - Agent Task activity-log 使用独立 activity cursor 聚合；不得复用控制面 external event cursor。Authoring/Run 本地活动 seq 单调、可重启恢复、按业务上下文隔离且不重复。
 - Authoring 用户意见、候选、Skill、Tool、浏览器验证、审批与激活在同一 compact 活动流呈现；结构化 amendment/decision 仍是业务事实。Run 活动流只读，资产修改必须返回 Authoring。
+- 1440px 与 1920px 下浏览器始终是最强视觉与空间锚点；左侧页面/模块/场景使用树线、状态点、细强调轨和渐隐背景表达层级，不使用父子嵌套的大面积选中卡片；右侧检查器与 Agent 活动使用独立浮动表面，明暗主题保持等价层级与可见焦点。
 - 公开 Authoring message 查询/提交路由不存在；历史内部消息审计只作为活动投影来源，不删除数据库记录。
 - 长期原始证据仅在所有 manifest 引用到期且没有 open/pinned/custom 保留或对象 pin 后删除；成功/失败默认 7/30 天，逻辑删除先于物理回收，重启可续跑，manifest/item/哈希不删除。
 - Authoring 暂停/恢复/取消使用 `If-Match` 与幂等键；运行中的 Agent 在原子操作安全边界接收对应命令，取消完成后关闭自有浏览器会话。

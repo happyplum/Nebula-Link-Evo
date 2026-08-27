@@ -19,7 +19,7 @@
 - [shipped] Authoring 使用 compact 公共 renderer 和 repair Composer 串联用户意见、候选、Skill/Tool、审批、验证与激活；Run 使用同一 compact 只读流，资产修改必须返回 Authoring。结构化 amendment/decision 始终是业务事实。
 - [shipped] 公开 authoring context message 查询/提交路径已移除；内部消息审计记录保留并作为活动投影来源，不清理历史数据库。
 - [shipped] 工作台三栏支持指针/键盘调宽、边界约束、双击复位、持久化、缩放/收起/专注、system/light/dark 与 reduced-motion。
-- [shipped] 左侧上下文树以轻量页面上下文、缩进模块和窄强调场景表达层级，避免父子双重大面积选中卡片；工作台浅色/深色次要文本、焦点与操作热区通过 1440/1920 Lighthouse a11y 100 验收。
+- [shipped] 浏览器中心工作台完成低噪声冷蓝视觉重构：三栏改为有留白的浮动工作区表面，中间浏览器以独立深色画布和工具条成为主舞台；左侧上下文树以树线、状态点、细强调轨和渐隐背景表达页面/模块/场景层级，消除父子嵌套的大面积选中卡片；右侧检查器、Diff 与 Agent 活动形成清晰上下层级。浅色/深色、1440/1920、44px 热区和键盘 `focus-visible` 均纳入真实生产 UI E2E 门禁。
 - [shipped] 新项目通过 `bootstrap=1` 深链接只自动创建一次 bootstrap Agent task；起始脚本/场景保持 `unverified`，不能伪装成可运行版本。
 - [shipped] API/SSE 统一 `{ data, meta }`、`ApiProblem`、snapshot-first + 单调 seq；UI 断线从权威 snapshot 恢复。
 - [shipped] canonical control-plane 跨服务 E2E 使用真实 HTTP、MCP 与 Chromium 验证 ai-e2e 客户端到 ai-chat-service Agent task、proxy-adapter session/lease/operation 的契约，覆盖导航、填写、点击、文本读取、截图/DOM artifact、operation 查询/取消错误，并断言旧路径保持 404。
