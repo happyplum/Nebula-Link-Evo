@@ -3,7 +3,6 @@ import type {
   DebugPlaywrightState,
   DebugStreamEvent,
 } from '@nebula-link-evo/shared/types/debug-events.js';
-import { eventToSSEFormat } from '@nebula-link-evo/shared/types/sse-events';
 import { browserClient } from '../../../browser-client.js';
 import { debugEventHub } from '../../../services/debug-event-hub.js';
 
@@ -12,8 +11,7 @@ function writeDebugEvent(
   event: DebugStreamEvent
 ): void {
   const eventId = event.seq !== undefined ? String(event.seq) : '';
-  const formatted = eventToSSEFormat(event, eventId);
-  reply.raw.write(`event: ${formatted.event}\nid: ${eventId}\ndata: ${formatted.data}\n\n`);
+  reply.raw.write(`event: ${event.type}\nid: ${eventId}\ndata: ${JSON.stringify(event)}\n\n`);
 }
 
 function buildSnapshotEvent(

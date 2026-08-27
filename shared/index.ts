@@ -11,33 +11,6 @@ export * from './types/index.js';
 // Constants
 export { MAX_SCREENSHOT_SIZE_BYTES } from './types/constants.js';
 
-// SSE Events - export all interfaces and types
-export type {
-  SessionEvent,
-  SessionState,
-  SSEFormattedEvent,
-  SessionEventType,
-  SessionSnapshotEvent,
-  SessionAgentState,
-  MessageCreatedEvent,
-  AssistantStartedEvent,
-  AssistantDeltaEvent,
-  AssistantCompletedEvent,
-  AssistantThinkingEvent,
-  AssistantToolCallEvent,
-  AssistantToolResultEvent,
-  RunErrorEvent,
-  JobQueuedEvent,
-  JobStartedEvent,
-  JobCancelledEvent,
-  JobCompletedEvent,
-  PendingJobInfo,
-  ToolCall,
-} from './types/sse-events.js';
-export {
-  eventToSSEFormat,
-} from './types/sse-events.js';
-
 // Debug SSE Events
 export type {
   DebugStreamEvent,

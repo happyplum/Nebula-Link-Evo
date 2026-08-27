@@ -1,6 +1,7 @@
 packages:
   - debug-ui
   - shared
+  - agent-activity-ui
   - proxy-adapter
   - ai-chat-service
   - ai-e2e
