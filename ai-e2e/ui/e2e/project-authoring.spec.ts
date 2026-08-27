@@ -50,6 +50,14 @@ test('persists the real candidate, run and evidence journey across reload', asyn
   );
   expect(undersizedTargets).toEqual([]);
   await expect(page.locator('input:not([name]), textarea:not([name])')).toHaveCount(0);
+  await page.getByRole('link', { name: '返回业务版本列表' }).focus();
+  await page.keyboard.press('Shift+Tab');
+  await expect(page.locator('.semantic-skip')).toBeFocused();
+  expect(
+    await page.evaluate(
+      "Number.parseFloat(getComputedStyle(document.querySelector('.semantic-skip')).outlineWidth)"
+    )
+  ).toBeGreaterThanOrEqual(2);
   await page.setViewportSize({ width: 1920, height: 1080 });
   const browserRegion = await page.getByRole('region', { name: '只读浏览器画面' }).boundingBox();
   expect(browserRegion?.width).toBeGreaterThanOrEqual(760);

@@ -38,7 +38,7 @@ export const BrowserStage = memo(function BrowserStage({
         </div>
         <span className="semantic-readonly">
           <Eye aria-hidden="true" />
-          只读观察
+          {browserActive ? '实时画面' : '只读观察'}
         </span>
       </header>
       <div className="semantic-browser-viewport">

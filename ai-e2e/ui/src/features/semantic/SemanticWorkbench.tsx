@@ -15,6 +15,7 @@ import {
   LocateFixed,
   Maximize2,
   Moon,
+  Orbit,
   PanelLeftClose,
   PanelLeftOpen,
   RefreshCw,
@@ -572,8 +573,13 @@ export function SemanticWorkbench({
           <ArrowLeft aria-hidden="true" />
         </Link>
         <div className="semantic-product">
-          <span>NEBULA</span>
-          <h1>{mode === 'run' ? '运行工作台' : '资产编排工作台'}</h1>
+          <span className="semantic-product-mark" aria-hidden="true">
+            <Orbit />
+          </span>
+          <div>
+            <small>NEBULA E2E</small>
+            <h1>{mode === 'run' ? '运行工作台' : '资产编排工作台'}</h1>
+          </div>
         </div>
         <div className="semantic-context-strip">
           <ContextItem label="业务版本" value={workspace.version.name} />

@@ -49,10 +49,12 @@ export function ContextTree({
     <aside className="semantic-context-tree" aria-label="资产与运行上下文">
       <div className="semantic-panel-heading">
         <div>
-          <small>AUTHORING SCOPE</small>
+          <small>WORKSPACE MAP</small>
           <strong>资产上下文</strong>
         </div>
-        <span>{workspace.functionalModules.length + workspace.scenarios.length}</span>
+        <span title="模块与场景总数">
+          {workspace.functionalModules.length + workspace.scenarios.length}
+        </span>
       </div>
       <div className="semantic-tree-scroll">
         <button type="button" className="semantic-tree-root" onClick={() => onPreview('prd')}>
@@ -65,7 +67,10 @@ export function ContextTree({
 
         <div className="semantic-tree-group">
           <div className="semantic-tree-label">
-            <Layers3 aria-hidden="true" /> 页面与模块
+            <span>
+              <Layers3 aria-hidden="true" /> 页面与模块
+            </span>
+            <small>{workspace.pages.length} 页</small>
           </div>
           {workspace.pages.map((page) => {
             const pageModules = workspace.functionalModules.filter(
@@ -117,7 +122,10 @@ export function ContextTree({
 
         <div className="semantic-tree-group">
           <div className="semantic-tree-label">
-            <Network aria-hidden="true" /> 场景调用 DAG
+            <span>
+              <Network aria-hidden="true" /> 场景调用 DAG
+            </span>
+            <small>{workspace.scenarios.length} 个</small>
           </div>
           {workspace.scenarios.map((scenario) => {
             const calls = Array.isArray(scenario.currentRevision.payload.calls)
@@ -147,7 +155,10 @@ export function ContextTree({
         {todos.length > 0 && (
           <div className="semantic-tree-group semantic-todos">
             <div className="semantic-tree-label">
-              <CheckCircle2 aria-hidden="true" /> 运行 TODO
+              <span>
+                <CheckCircle2 aria-hidden="true" /> 运行 TODO
+              </span>
+              <small>{todos.length} 项</small>
             </div>
             {todos.map((todo, index) => {
               const state = text(todo.state, 'pending');
