@@ -13,6 +13,11 @@
 - [shipped] ai-e2e 长期原始证据按成功/失败默认 7/30 天保留；清理 worker 仅在所有引用窗口到期且没有 open/pinned/custom manifest 或对象 pin 后逻辑删除，物理文件回收以持久 receipt 在重启后续跑，并保护共享 storage key。manifest/item/哈希与测试结果继续保留，未按项目规则脱敏的截图/DOM 登记为 `restricted/pending`。v1 不承诺通用自动脱敏；证据外发、共享、远程/多用户访问或项目级隐私策略启用前，必须先定义并实现脱敏、原件保留与访问权限规则。
 - [shipped] 全局 FIFO 与恢复：单 active browser session/context/control actor，Authoring 与 Run 共享安全边界，重启恢复 dispatching outbox，未知副作用不盲目重放。
 - [shipped] 生产浏览器中心 UI：左上下文/TODO、中间持续挂载浏览器、右侧 PRD/模块/场景/Diff/影响/决策/证据和常驻 Chat；模块切换不导航，显式定位才创建 navigation-only task。
+- [shipped] additive migration 020 新增 Authoring/Run Agent 活动事件与独立外部 activity cursor；保留既有 semantic 数据库和历史记录，不复用控制面 `last_external_seq`，不执行破坏性迁移。
+- [shipped] ai-e2e 从 Agent Task `activity-log` 聚合多页面 Agent 活动，并将 authoring/run 生命周期、候选、审批、浏览器验证、激活、失败、依赖跳过和未知结果投影到各业务上下文的本地单调活动序列。
+- [shipped] `GET /api/v1/authoring-jobs/:jobId/{activity,activity-log}` 与 `GET /api/v1/runs/:runId/{activity,activity-log}` 提供 snapshot-first SSE 和持久呈现日志；跨 context 数据不可见，刷新与服务重启后按 seq 恢复且不重复。
+- [shipped] Authoring 使用 compact 公共 renderer 和 repair Composer 串联用户意见、候选、Skill/Tool、审批、验证与激活；Run 使用同一 compact 只读流，资产修改必须返回 Authoring。结构化 amendment/decision 始终是业务事实。
+- [shipped] 公开 authoring context message 查询/提交路径已移除；内部消息审计记录保留并作为活动投影来源，不清理历史数据库。
 - [shipped] 工作台三栏支持指针/键盘调宽、边界约束、双击复位、持久化、缩放/收起/专注、system/light/dark 与 reduced-motion。
 - [shipped] 左侧上下文树以轻量页面上下文、缩进模块和窄强调场景表达层级，避免父子双重大面积选中卡片；工作台浅色/深色次要文本、焦点与操作热区通过 1440/1920 Lighthouse a11y 100 验收。
 - [shipped] 新项目通过 `bootstrap=1` 深链接只自动创建一次 bootstrap Agent task；起始脚本/场景保持 `unverified`，不能伪装成可运行版本。

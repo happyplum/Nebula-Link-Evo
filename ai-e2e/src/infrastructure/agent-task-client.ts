@@ -2,6 +2,10 @@ import axios, { isAxiosError, type AxiosInstance } from 'axios';
 import { randomUUID } from 'node:crypto';
 import { IntegrationClientError } from './integration-client-error.js';
 import type { BrowserTargetRefV1 } from '@nebula-link-evo/shared/types/browser-execution';
+import {
+  isAgentStreamEvent,
+  type AgentStreamEventV1,
+} from '@nebula-link-evo/shared/types/agent-stream';
 
 export type AgentTaskStatus =
   | 'created'
@@ -123,6 +127,11 @@ export interface AgentTaskClientPort {
     afterSeq?: number,
     limit?: number
   ): Promise<AgentTaskEventRecord[]>;
+  listTaskActivity?(
+    taskId: string,
+    afterSeq?: number,
+    limit?: number
+  ): Promise<AgentStreamEventV1[]>;
   commandTask(
     taskId: string,
     input: {
@@ -195,6 +204,25 @@ export class AgentTaskClient implements AgentTaskClientPort {
         params: { afterSeq, limit },
       })
     );
+  }
+
+  async listTaskActivity(taskId: string, afterSeq = 0, limit = 500): Promise<AgentStreamEventV1[]> {
+    const result = await this.request<unknown>(() =>
+      this.client.get(`/api/v1/agent-tasks/${encodeURIComponent(taskId)}/activity-log`, {
+        timeout: this.timeoutMs,
+        headers: headers(),
+        params: { afterSeq, limit },
+      })
+    );
+    if (!Array.isArray(result) || !result.every(isAgentStreamEvent)) {
+      throw new IntegrationClientError(
+        'ai-chat-service',
+        'invalid_response',
+        'ai-chat-service returned an invalid Agent activity stream payload',
+        false
+      );
+    }
+    return result;
   }
 
   async commandTask(

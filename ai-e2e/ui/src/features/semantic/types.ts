@@ -149,15 +149,6 @@ export interface LayoutPreferences {
   theme: 'system' | 'light' | 'dark';
 }
 
-export interface ChatMessage {
-  id: string;
-  threadId: string;
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  amendmentId?: string;
-  createdAt: string;
-}
-
 export function text(value: unknown, fallback = '—'): string {
   return typeof value === 'string' && value ? value : fallback;
 }

@@ -27,7 +27,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@nebula-link-evo/shared': path.resolve(__dirname, '../shared/src'),
+      '@nebula-link-evo/shared': path.resolve(__dirname, '../shared'),
     },
   },
 });

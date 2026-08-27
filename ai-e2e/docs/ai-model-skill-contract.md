@@ -1,6 +1,6 @@
 # AI 模型角色与 Skills 运行契约
 
-> 状态：统一 DSH Harness、Agent task 命令/事件、Vision v2 与 Skills Runtime 已实现；完整跨服务副作用授权仍在推进。
+> 状态：统一 DSH Harness、Agent task 命令/审计/活动、Vision v2、Skills Runtime 与跨服务逐 effect 授权已实现。
 > 更新时间：2026-08-24。
 > 本文定义 `ai-chat-service` 的统一 DSH Agent Loop、分析/决策模型、单次视觉模型、受限 Agent task 与 Skills runtime。当前已交付 Pi/GLM provider route、JSONL persistence/SQLite projection、MCP ToolRuntime、`vision.analyze_page`/`vision.resolve_target`、Agent task 控制面、模型不可见 browser wrapper 与本地只读单 Skill runtime；完整 policy evaluation/active grant 交集仍是目标协议。
 
@@ -206,9 +206,9 @@ provider/runtime 可用工具
 - Skill 默认无环境变量、文件系统、网络、secret store 和浏览器生命周期权限。
 - secret 值仅在确定性的输入/工具边界按 secret ref 注入；模型和 Skill 指令只看到引用或脱敏替代值。
 - Skill 指令中的工具名、模型角色或输出 Schema 与 manifest 不一致时加载失败。
-- Skill 版本/hash、实际工具调用和预算消耗写入 Agent task 审计，并由 `ai-e2e` 关联到 evidence manifest。
+- Skill 版本/hash、实际工具调用和预算消耗写入 Agent task 控制面审计，并由 `ai-e2e` 关联到 evidence manifest；用户界面只消费另行脱敏投影的 Agent Stream。
 
-当前 v1 服务端 Skill 工具 policy 只放行 `vision.*` 与 `browser-control.operation_execute` 命名空间；后者仍必须通过 task 精确 allowlist、冻结 browser step/effectId/数量边界、observe/control binding 与有效 lease。任务与 Skill 的模型 turn/tool/token 上限取更小值。运行时发布 `agent_task.skill_loaded/skill_execute/skill_result/skill_failure`，事件只含安全元数据和消耗，不含指令正文。
+当前 v1 服务端 Skill 工具 policy 只放行 `vision.*` 与 `browser-control.operation_execute` 命名空间；后者仍必须通过 task 精确 allowlist、冻结 browser step/effectId/数量边界、observe/control binding 与有效 lease。任务与 Skill 的模型 turn/tool/token 上限取更小值。控制面记录 Skill 生命周期事实；Agent Stream 只投影脱敏名称、状态、固定版本/hash、预算和 artifact 引用，不含指令正文或原始 Tool 结果。
 
 未来如需可执行代码 Skill，必须另设受信代码包、签名、sandbox、资源配额和供应链审计协议，不属于 v1。
 
@@ -249,6 +249,7 @@ provider/runtime 可用工具
 ## 7. 当前实现差距
 
 - Chat 与 Agent Task 已共用每应用实例唯一的 DSH Agent Loop；各自使用独立 session/tool scope 和 canonical v1 公开控制面。raw proxy operation 仅存在于模型不可见 transport child scope。
+- Chat 与 Agent Task 已统一投影 shared Agent Stream；reasoning 默认是确定性阶段摘要，只有服务端显式公开才包含正文。控制面审计事件与呈现活动流保持独立序号和职责。
 - `/api/v1/ai/generate` 使用无 session、无 tool 的单次 `ctx.llm.stream()`。
 - Vision v2 与 proxy immutable snapshot binding 已交付；ai-e2e 通用 authoring/Run 消费仍需逐业务流程接入。
 - 当前 Skills Runtime 已支持本地只读目录加载、immutable registry/version/hash、task 单 Skill exact pin/policy hash、Schema/hash/path 校验、指令装载、权限/预算收缩、catalog 与执行事件；多 Skill 组合/嵌套调用不在 v1。
@@ -266,6 +267,7 @@ provider/runtime 可用工具
 7. Agent 结构化完成不自动等于 E2E TODO 通过；输出须由 `ai-e2e` 验收。
 8. Agent 中断或工具超时不会触发未知副作用操作的盲目重试。
 9. 模型、Skill、视觉结果和不可信页面内容无法新增/替换 effectId、扩大数量或绕过 production/staging 门禁；授权不匹配在 proxy operation 前被拒绝。
+10. Agent 活动流不包含原始 reasoning、Skill 指令、secret、lease token 或超大 Tool 结果；断线后可从 snapshot 确定性恢复且不改变控制面业务状态。
 
 ## 9. 关联文档
 

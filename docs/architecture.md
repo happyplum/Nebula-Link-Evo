@@ -132,7 +132,7 @@ AI Providers                            Chromium
 **使用场景:**
 
 - 会话历史查询
-- SSE 事件持久化（用于 `session.snapshot` 恢复 thinking / tool 历史；不提供 `Last-Event-ID` 断点重放）
+- Agent Stream 投影所需的持久事件；Chat/Task 呈现只从已提交事实构建 snapshot/live，不透传 provider 内存 chunk
 - 失败会话恢复
 
 ### Filesystem
