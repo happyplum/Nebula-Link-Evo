@@ -166,6 +166,7 @@ docs/               # Documentation
 - [AI Models & Skills](ai-e2e/docs/ai-model-skill-contract.md) — 双模型、单次视觉分析、受限 Agent task 与声明式 Skills
 - [AI E2E Asset Authoring & Repair](ai-e2e/docs/asset-authoring-repair-contract.md) — 从零生成、复核、真实验证、影响分析与局部修复
 - [AI E2E Environment & Side Effects](ai-e2e/docs/environment-side-effect-policy-contract.md) — 环境矩阵、副作用风险投影、计划级审批与执行门禁
+- [UI Performance Baseline](docs/performance/ui-performance-baseline.md) — Debug UI 与 AI E2E UI 的冷启动 LCP、传输量和复测方法
 
 ## Contributing and Security
 
