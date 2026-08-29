@@ -12,7 +12,7 @@
 - 提供 6 大面板：Monitor（监控）、Control（控制）、AI（对话）、History（历史）、Interactions（交互）、DOM Elements。
 - 提供"双画布系统"：MJPEG 30FPS 实时视频流 + 带标注的截图画面。
 - 提供统一 Agent 活动渲染：optimistic user turn + Agent Stream snapshot/live 单一数据源。
-- 提供 LiveKit 升级路径：token 拉取成功时切换到 LiveKit 视频传输。
+- 提供 LiveKit 升级路径：新用户默认 MJPEG，选择 WebRTC 时按需加载 LiveKit；既有持久化传输选择继续生效，token 拉取成功后切换到 LiveKit 视频传输。
 
 ### 边界
 
@@ -51,7 +51,7 @@
 | Agent activity UI          | `@nebula-link-evo/agent-activity-ui`                                                                                                                                                                                            | shipped | 公共 reducer、renderer、主题与业务 slots                                                              | 本包不维护协议 adapter                                                                    |
 | Playwright-control feature | `src/features/playwright-control/`（store/control.store、lib/{dom-elements,logger}、components/{BrowserBasicShell,PageInteractionShell,OperationLogsShell,DomElementsTable,SelectedElementCard}、api/{control.adapters,index}） | shipped | 浏览器控制 UI、操作日志、DOM 元素表                                                                 |                                                                                          |
 | Config feature             | `src/features/config/`（types、ConfigSummary、MCPModal 等）                                                                                                                                                                     | shipped | 无 secret 运行配置、健康检查、MCP 工具展示、AI connectivity test                                    | 不提供 key preview/verify UI                                                             |
-| Liveview feature           | `src/features/liveview/`（components/{LiveViewCanvas,LiveKitView,LiveViewOverlayLayer,TransportToggle}、hooks/useLiveKit、lib/{mjpeg-parser,coordinates}）                                                                      | shipped | MJPEG 画布 + LiveKit 升级路径 + 覆盖层                                                              | LiveKit 不可用时降级到 LiveViewCanvas；LiveKit 必须保留最后一帧 + overlay 状态跨瞬时断连 |
+| Liveview feature           | `src/features/liveview/`（components/{LiveViewCanvas,LiveKitView,LiveViewOverlayLayer,TransportToggle}、hooks/useLiveKit、lib/{mjpeg-parser,coordinates}）                                                                      | shipped | MJPEG 画布 + 按需 LiveKit 升级路径 + 覆盖层                                                         | 新用户默认 MJPEG；选择 WebRTC 才加载 LiveKit；加载/不可用时保留 LiveViewCanvas；LiveKit 必须保留最后一帧 + overlay 状态跨瞬时断连 |
 | Shared UI                  | `src/shared/ui/`（Tabs、StatusIndicator、Modal、LoadingSpinner、ImagePreviewModal、Accordion）                                                                                                                                  | shipped | 可复用组件                                                                                          |                                                                                          |
 | Shared API                 | `src/shared/api/`（client、endpoints）                                                                                                                                                                                          | shipped | REST 客户端与端点定义                                                                               |                                                                                          |
 | Shared Query               | `src/shared/query/`（query-client、query-keys、hooks、QueryProvider）                                                                                                                                                           | shipped | TanStack Query 配置                                                                                 |                                                                                          |
@@ -100,7 +100,7 @@
 | comfortable 公共活动渲染                                | features/chat/components/MessageList                       | shipped | renderer/store 单元测试                                               | chat、agent UI     |
 | pause/blocked/resume/cancel 控制状态                     | app/pages/ChatPage + features/chat                         | shipped | store 与路由交互测试                                                  | chat               |
 | MJPEG 双画布（视频流 + 标注截图）                        | features/liveview/components/LiveViewCanvas                | shipped | parity 测试 + `LiveKitView.test.tsx`                                 | liveview           |
-| LiveKit 升级路径                                         | features/liveview/components/LiveKitView、hooks/useLiveKit | shipped | `useLiveKit.test.ts` + `picker-liveview-integration.parity.test.tsx` | liveview           |
+| LiveKit 按需升级路径                                     | features/runtime/MonitorMainShell、features/liveview       | shipped | `runtime.store.defaults.test.ts` + `LiveKitView.test.tsx` + `useLiveKit.test.ts` + `page-load.spec.ts` | runtime、liveview |
 | LiveKit 跨瞬时断连保帧                                   | features/liveview                                          | shipped | parity 测试                                                          | liveview           |
 | 刷新 DOM 截图（兼容 base64 与 gzip JPEG）                | features/runtime（MonitorSidebarShell）                    | shipped | README "Debug UI Monitor Sidebar" 章节                               | runtime            |
 | 截图解码失败可见错误（不仅"暂无截图"占位）               | features/runtime                                           | shipped | README                                                               | runtime            |
@@ -146,7 +146,6 @@
 | 缺口                                               | 类型      | 状态    | 备注                                                   |
 | -------------------------------------------------- | --------- | ------- | ------------------------------------------------------ |
 | History / Interactions / DOM Elements 面板功能登记 | tech-debt | partial | 当前条目状态为 partial，需后续按页面细化功能清单       |
-| LiveKit 客户端静态进入首屏预加载                   | tech-debt | known   | Vite 8 生产构建的 LiveKit vendor 约 514 kB（gzip 约 133 kB）并被 `modulepreload`；当前禁止 lazy/code splitting，后续若优化首屏需先调整该产品边界并复验切换、降级与断连保帧 |
 
 ---
 

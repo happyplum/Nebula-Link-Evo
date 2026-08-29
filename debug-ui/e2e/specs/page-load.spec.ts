@@ -26,6 +26,32 @@ test.describe('Debug UI shell', () => {
     await debugPage.getByTestId('tabs-config').click();
     await expect(debugPage.getByTestId('config-content')).toBeVisible();
   });
+
+  test('loads LiveKit only after WebRTC is selected', async ({ browser, testOptions }) => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    const livekitRequests: string[] = [];
+    let healthResponses = 0;
+
+    page.on('request', (request) => {
+      if (request.url().toLowerCase().includes('livekit')) livekitRequests.push(request.url());
+    });
+    page.on('response', (response) => {
+      if (new URL(response.url()).pathname === '/debug/api/health' && response.ok()) {
+        healthResponses += 1;
+      }
+    });
+
+    await page.goto(testOptions.debugURL);
+    await expect(page.getByTestId('monitor-main')).toBeVisible();
+    await expect.poll(() => healthResponses).toBeGreaterThan(0);
+    expect(livekitRequests).toEqual([]);
+
+    await page.getByRole('button', { name: 'WebRTC', exact: true }).click();
+    await expect.poll(() => livekitRequests.length).toBeGreaterThan(0);
+
+    await context.close();
+  });
 });
 
 test.describe('Debug SSE transport', () => {

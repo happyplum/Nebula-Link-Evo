@@ -16,6 +16,7 @@ Liveview renders the remote browser via stream-first transport, maps image coord
 ## Working Rules
 
 - Prefer the live stream first and fall back to polling screenshots only when the stream is unavailable.
+- Keep the LiveKit component/client behind the WebRTC selection boundary; do not re-export it from a statically imported barrel, and keep MJPEG mounted while the chunk loads or fails.
 - Keep `ImageBitmap`, Blob URL, `AbortController`, and `ResizeObserver` cleanup symmetrical.
 - Recompute fit rect from container dimensions and actual image size before forwarding overlay clicks.
 - Close the previous bitmap before replacing it.

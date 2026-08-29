@@ -33,9 +33,9 @@ interface RuntimeState {
 const persistedTransport = (() => {
   try {
     const v = localStorage.getItem('liveviewTransport');
-    return v === 'mjpeg' || v === 'webrtc' ? v : 'webrtc';
+    return v === 'mjpeg' || v === 'webrtc' ? v : 'mjpeg';
   } catch {
-    return 'webrtc' as const;
+    return 'mjpeg' as const;
   }
 })();
 

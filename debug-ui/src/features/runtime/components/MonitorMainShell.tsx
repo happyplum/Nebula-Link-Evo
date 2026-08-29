@@ -1,10 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ComponentType } from 'react';
 import { testIds } from '@/shared/testing/testids.js';
-import {
-  LiveKitView,
-  LiveViewCanvas,
-  TransportToggle,
-} from '@/features/liveview/components/index.js';
+import { LiveViewCanvas, TransportToggle } from '@/features/liveview/components/index.js';
 import {
   useRuntimeStore,
   selectPlaywrightUrl,
@@ -20,6 +16,11 @@ const TASK_STATUS_LABEL: Record<ServiceStatus, string> = {
   unhealthy: '异常',
   unknown: '空闲',
 };
+
+type LiveKitViewComponent = ComponentType<{
+  className?: string;
+  onRenderError?: (error: Error) => void;
+}>;
 
 export function MonitorMainShell() {
   const { refreshNow } = useBrowserStatus();
@@ -47,9 +48,27 @@ export function MonitorMainShell() {
   }, [incrementLiveviewRefreshKey, refreshNow]);
 
   const [webrtcFailed, setWebrtcFailed] = useState(false);
+  const [LiveKitView, setLiveKitView] = useState<LiveKitViewComponent | null>(null);
   const handleRenderError = useCallback(() => setWebrtcFailed(true), []);
   const effectiveTransport =
     preferredTransport === 'webrtc' && webrtcFailed ? 'mjpeg' : preferredTransport;
+
+  useEffect(() => {
+    if (effectiveTransport !== 'webrtc' || LiveKitView) return;
+
+    let cancelled = false;
+    void import('@/features/liveview/components/LiveKitView.js')
+      .then(({ default: Component }) => {
+        if (!cancelled) setLiveKitView(() => Component);
+      })
+      .catch(() => {
+        if (!cancelled) handleRenderError();
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [effectiveTransport, handleRenderError, LiveKitView]);
 
   // Reset WebRTC failure when browser reopens — publisher restarts fresh
   const [prevPlaywrightIsOpen, setPrevPlaywrightIsOpen] = useState(playwrightIsOpen);
@@ -103,7 +122,7 @@ export function MonitorMainShell() {
           </div>
         </div>
         <div className={styles.liveviewCanvasWrap}>
-          {effectiveTransport === 'webrtc' ? (
+          {effectiveTransport === 'webrtc' && LiveKitView ? (
             <LiveKitView className={styles.liveviewCanvas} onRenderError={handleRenderError} />
           ) : (
             <LiveViewCanvas className={styles.liveviewCanvas} />
