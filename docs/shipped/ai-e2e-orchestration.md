@@ -2,6 +2,7 @@
 
 - [shipped] 纯 semantic 项目初始化：`POST /api/v1/projects` 原子创建项目、不可变部署修订、业务版本、PRD 和待验证起始资产图；支持幂等重放并拒绝请求漂移。
 - [shipped] 产品面仅包含独立 semantic 数据库、canonical `/api/v1/*`、受控 Agent/browser 客户端和结构化资产执行链。
+- [shipped] semantic SQLite runtime 使用 `better-sqlite3` 13 的 N-API 实现；既有 migration、repository、真实文件库及三服务启动契约保持不变。
 - [shipped] 业务版本与 semantic 资产图：页面→业务模块→功能模块→多个功能脚本→场景 DAG，稳定身份、不可变修订、copy 引用重建和验证失效。
 - [shipped] Authoring `bootstrap/recheck/repair`：持久 job/task/attempt/event、结构化 amendment、Chat scope、同页/跨 URL 影响审批、安全边界排队、真实浏览器验证与原子激活。
 - [shipped] PRD 多资产 bootstrap：`ingest_prd` Agent 可在单个结构化 amendment 中创建页面、业务模块、功能模块、功能脚本和场景的稳定身份与 draft revision；候选期不进入 workspace，但可在原上下文一次应用其跨模块新建资产，已有资产修订仍受当前模块与基础修订锁约束。审批与真实浏览器验证成功后新建与修订候选一起原子激活。repair/recheck 保持 revision-only，不能借此扩展资产身份。

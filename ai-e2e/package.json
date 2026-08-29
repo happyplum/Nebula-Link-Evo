@@ -26,12 +26,12 @@
     "@nebula-link-evo/shared": "workspace:*",
     "@sinclair/typebox": "catalog:",
     "axios": "catalog:",
-    "better-sqlite3": "^11.10.0",
+    "better-sqlite3": "^13.0.3",
     "dotenv": "catalog:",
     "fastify": "catalog:"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.13",
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:",
