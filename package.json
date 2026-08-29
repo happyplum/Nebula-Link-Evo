@@ -5,7 +5,7 @@
   "engines": {
     "node": "^22.19.0 || >=24.0.0"
   },
-  "packageManager": "pnpm@10.34.5",
+  "packageManager": "pnpm@11.24.0",
   "scripts": {
     "predev": "cmd /c tools\\livekit\\start.bat",
     "dev": "pnpm --filter shared build && pnpm -r --parallel --filter shared --filter debug-ui --filter proxy-adapter --filter ai-chat-service dev",

@@ -264,7 +264,7 @@ const agentTaskRoutes: FastifyPluginAsyncTypebox<AgentTaskRoutesOptions> = async
         },
       },
     },
-    async () => options.skillCatalog ?? []
+    async () => [...(options.skillCatalog ?? [])]
   );
 
   fastify.post<{ Body: unknown; Headers: { 'idempotency-key'?: string } }>(

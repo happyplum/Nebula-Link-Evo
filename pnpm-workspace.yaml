@@ -8,16 +8,10 @@ packages:
   - ai-e2e/ui
   - integrations/*
 
-onlyBuiltDependencies:
-  - better-sqlite3
-  - esbuild
-  - koffi
-  - sharp
-
 catalog:
   '@fastify/autoload': ^5.10.0
   '@fastify/cors': ^11.3.0
-  '@fastify/type-provider-typebox': ^4.1.0
+  '@fastify/type-provider-typebox': ^5.2.0
   '@fastify/websocket': ^11.1.0
   '@livekit/rtc-node': ^0.13.34
   '@sinclair/typebox': ^0.32.37
@@ -42,10 +36,27 @@ catalog:
   zod: ^4.5.2
 
 allowBuilds:
+  '@deepseek-ai/dsh-subprocess-local': false
+  '@google/genai': false
   better-sqlite3: true
   esbuild: true
   koffi: true
+  node-pty: false
+  protobufjs: false
   sharp: true
+
+minimumReleaseAgeExclude:
+  - '@ai-sdk/gateway@4.0.68'
+  - '@ai-sdk/openai-compatible@3.0.40'
+  - '@ai-sdk/provider-utils@5.0.33'
+  - 'ai@7.0.84'
+  - 'express-rate-limit@8.7.0'
+  - 'ip-address@10.5.1'
+  - 'lucide-react@1.35.0'
+  - 'pretty-ms@9.3.1'
+  - 'react-router-dom@7.18.3'
+  - 'react-router@7.18.3'
+  - 'zod@4.5.2'
 
 overrides:
   use-sync-external-store: 1.6.0
