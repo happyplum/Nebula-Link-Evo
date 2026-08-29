@@ -13,7 +13,6 @@
     "declaration": true,
     "composite": true,
     "resolveJsonModule": true,
-    "baseUrl": ".",
     "paths": {
       "@nebula-link-evo/browser-control-client": ["../browser-control-client/src/index.ts"],
       "@nebula-link-evo/shared": ["../../shared/index.ts"],

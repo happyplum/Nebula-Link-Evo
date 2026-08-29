@@ -45,6 +45,12 @@ jobs:
       - name: Verify Harness dependency BOM
         run: pnpm --filter ai-chat-service verify:harness-bom
 
+      - name: Verify TypeScript toolchain
+        run: |
+          pnpm exec tsc --version | grep -E '^Version 7\.'
+          pnpm exec tsc6 --version | grep -E '^Version 6\.'
+          pnpm peers check
+
       - name: Install Playwright Chromium
         run: pnpm --filter proxy-adapter exec playwright install --with-deps chromium
 
