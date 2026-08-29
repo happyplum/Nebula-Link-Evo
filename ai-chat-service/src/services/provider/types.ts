@@ -5,7 +5,7 @@
  * These types define the contract for provider registration and model resolution
  * without importing runtime dependencies from Vercel AI SDK.
  *
- * Wave 2 will connect ProviderInstance to the actual LanguageModelV3 type
+ * Wave 2 will connect ProviderInstance to the actual LanguageModelV4 type
  * from @ai-sdk/provider. For now, we use 'unknown' as the type alias.
  */
 
@@ -30,7 +30,7 @@ export interface ProviderConfig {
  * A registry entry for an installed provider.
  */
 export interface ProviderEntry {
-  /** The provider instance (LanguageModelV3 from @ai-sdk/provider) */
+  /** The provider instance (LanguageModelV4 from @ai-sdk/provider) */
   instance: unknown;
 
   /** NPM package name that provides this provider */

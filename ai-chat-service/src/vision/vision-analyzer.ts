@@ -1,5 +1,5 @@
 import { generateText } from 'ai';
-import type { LanguageModelV3 } from '@ai-sdk/provider';
+import type { LanguageModelV4 } from '@ai-sdk/provider';
 import type { DOMSnapshotResponse } from '@nebula-link-evo/shared';
 import type { VisionConfig } from './types.js';
 import type { VisionMatchResult, VisionPageAnalysis } from './types.js';
@@ -11,10 +11,10 @@ import {
 } from './prompts/element-finding.js';
 
 export class VisionAnalyzer {
-  private model: LanguageModelV3;
+  private model: LanguageModelV4;
   private config: VisionConfig;
 
-  constructor(model: LanguageModelV3, config: VisionConfig) {
+  constructor(model: LanguageModelV4, config: VisionConfig) {
     this.model = model;
     this.config = config;
   }

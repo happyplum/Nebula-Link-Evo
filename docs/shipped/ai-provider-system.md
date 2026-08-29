@@ -2,7 +2,7 @@
 
 多 AI provider 编排子系统：Agent loop 常规模型通过 DSH Pi adapter、GLM 通过 Nebula JWT adapter；canonical provider/model 配置驱动启动 preflight，`/api/v1/ai/generate` 为无 session/tool 的单次 DSH LLM stream。
 
-- [shipped] Provider 注册与加载：`ai-chat-service/src/services/provider/`（registry / resolver / loader / preflight / errors / error-classifier / token-estimator / adapters/glm / types）。
+- [shipped] Provider 注册与加载：`ai-chat-service/src/services/provider/`（registry / resolver / loader / preflight / errors / error-classifier / token-estimator / adapters/glm / types）；统一使用 AI SDK 7 的 `LanguageModelV4` 契约。
 - [shipped] Provider 别名与 SDK 包名规范化（I/O 前完成）：
   - `normalizeNpmPackage()`：bare names（如 `openai`）→ `@ai-sdk/openai`；省略 → `@ai-sdk/openai-compatible`；invalid → `ProviderError(CONFIG_INVALID)`。
   - `parseProviderModel('provider/model/variant')`：保留首个 `/` 后所有 model 段。
