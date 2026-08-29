@@ -21,7 +21,6 @@ const IdempotencyHeaderSchema = Type.Object(
 );
 const VersionParamsSchema = Type.Object({ versionId: IdSchema }, { additionalProperties: false });
 const JobParamsSchema = Type.Object({ jobId: IdSchema }, { additionalProperties: false });
-const ThreadParamsSchema = Type.Object({ threadId: IdSchema }, { additionalProperties: false });
 const AmendmentParamsSchema = Type.Object(
   { amendmentId: IdSchema },
   { additionalProperties: false }
