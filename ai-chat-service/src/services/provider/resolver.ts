@@ -1,10 +1,10 @@
-import type { LanguageModelV3 } from '@ai-sdk/provider';
+import type { LanguageModelV4 } from '@ai-sdk/provider';
 import { parseProviderModel } from './errors.js';
 import type { ProviderRegistry } from './registry.js';
 
 /** Resolved AI models for a session's decision capabilities. */
 export interface ResolvedModels {
-  decision: LanguageModelV3;
+  decision: LanguageModelV4;
 }
 
 /** Session fields used for model resolution. */
@@ -19,13 +19,13 @@ interface ConfigDefaults {
 }
 
 /**
- * Resolves a "provider/model" string to a concrete LanguageModelV3
+ * Resolves a "provider/model" string to a concrete LanguageModelV4
  * by parsing the provider key and delegating to the registry.
  */
 export async function resolveModel(
   providerModel: string,
   registry: ProviderRegistry
-): Promise<LanguageModelV3> {
+): Promise<LanguageModelV4> {
   const { provider, model } = parseProviderModel(providerModel);
   return registry.resolve(provider, model);
 }

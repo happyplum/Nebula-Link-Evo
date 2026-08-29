@@ -68,7 +68,7 @@ describe('GLM Adapter', () => {
     const providerFn = createGLMAdapter(config);
     const model = providerFn('glm-4');
 
-    // The model should have the expected LanguageModelV3 interface
+    // The model should have the expected LanguageModelV4 interface
     expect(model).toBeDefined();
     expect(typeof model.doGenerate).toBe('function');
     expect(typeof model.doStream).toBe('function');

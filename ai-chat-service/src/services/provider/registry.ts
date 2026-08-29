@@ -1,4 +1,4 @@
-import type { LanguageModelV3 } from '@ai-sdk/provider';
+import type { LanguageModelV4 } from '@ai-sdk/provider';
 import type { ProviderConfig } from './types.js';
 import {
   ProviderError,
@@ -9,8 +9,8 @@ import {
 import { loadProviderPackage } from './loader.js';
 import { createGLMAdapter } from './adapters/glm.js';
 
-/** Callable that produces a LanguageModelV3 for a given model ID. */
-type ProviderFn = (modelId: string) => LanguageModelV3;
+/** Callable that produces a LanguageModelV4 for a given model ID. */
+type ProviderFn = (modelId: string) => LanguageModelV4;
 
 /** Probed availability state for a provider alias. */
 export interface AvailabilityStatus {
@@ -73,7 +73,7 @@ function resolveFactoryName(npmPackage: string): string {
 }
 
 /**
- * Provider Registry — resolves provider keys + model IDs to LanguageModelV3 instances.
+ * Provider Registry — resolves provider keys + model IDs to LanguageModelV4 instances.
  *
  * Resolution order:
  *   1. Cache (previously loaded providers)
@@ -89,7 +89,7 @@ export class ProviderRegistry {
     this.config = config;
   }
 
-  async resolve(providerKey: string, modelId: string): Promise<LanguageModelV3> {
+  async resolve(providerKey: string, modelId: string): Promise<LanguageModelV4> {
     const providerConfig = this.config[providerKey];
     if (!providerConfig) {
       throw new ProviderError(

@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
-import type { LanguageModelV3 } from '@ai-sdk/provider';
+import type { LanguageModelV4 } from '@ai-sdk/provider';
 import type { ProviderConfig } from '../types.js';
 import { ProviderError, PROVIDER_ERRORS } from '../errors.js';
 
@@ -9,14 +9,14 @@ export interface GLMProviderConfig {
   baseUrl?: string;
 }
 
-/** Callable that produces a LanguageModelV3 for a given model ID. */
-type ProviderFn = (modelId: string) => LanguageModelV3;
+/** Callable that produces a LanguageModelV4 for a given model ID. */
+type ProviderFn = (modelId: string) => LanguageModelV4;
 
 /**
  * Creates a GLM provider adapter with JWT token authentication.
  *
  * @param config - Provider configuration containing apiKey (format: id.secret)
- * @returns A function that creates LanguageModelV3 instances for given model IDs
+ * @returns A function that creates LanguageModelV4 instances for given model IDs
  * @throws {ProviderError} If apiKey is missing or has invalid format
  */
 export function createGLMAdapter(config: ProviderConfig): ProviderFn {
