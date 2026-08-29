@@ -322,7 +322,7 @@ export class PageActions {
 
       return result;
     } catch (error) {
-      throw new Error(`Script execution failed: ${(error as Error).message}`);
+      throw new Error(`Script execution failed: ${(error as Error).message}`, { cause: error });
     }
   }
 

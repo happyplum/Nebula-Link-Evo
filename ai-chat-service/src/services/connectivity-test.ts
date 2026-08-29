@@ -18,11 +18,7 @@ export interface ConnectivityTestResponse {
 }
 
 export type NormalizedErrorCode =
-  | 'AUTH_ERROR'
-  | 'NETWORK_ERROR'
-  | 'MODEL_NOT_FOUND'
-  | 'TIMEOUT'
-  | 'UNKNOWN_ERROR';
+  'AUTH_ERROR' | 'NETWORK_ERROR' | 'MODEL_NOT_FOUND' | 'TIMEOUT' | 'UNKNOWN_ERROR';
 
 const CONNECTIVITY_TIMEOUT_MS = 10000;
 

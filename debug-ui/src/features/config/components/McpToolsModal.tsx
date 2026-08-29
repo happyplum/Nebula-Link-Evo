@@ -122,7 +122,7 @@ export function McpToolsModal({ serverName, onClose }: McpToolsModalProps) {
 
     const actualToolName = fullToolName.substring(serverName.length + 1);
 
-    let parsedArgs: Record<string, unknown> = {};
+    let parsedArgs: Record<string, unknown>;
     try {
       parsedArgs = JSON.parse(argsInput);
     } catch {

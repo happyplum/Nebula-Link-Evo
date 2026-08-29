@@ -22,13 +22,13 @@
   },
   "dependencies": {
     "@nebula-link-evo/shared": "workspace:*",
-    "react": "^19.2.4"
+    "react": "^19.2.8"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",
-    "@testing-library/react": "^16.3.2",
+    "@testing-library/react": "^16.3.3",
     "@types/node": "catalog:",
-    "@types/react": "^19.2.14",
+    "@types/react": "^19.2.18",
     "@vitest/coverage-v8": "catalog:",
     "jsdom": "^28.1.0",
     "typescript": "catalog:",

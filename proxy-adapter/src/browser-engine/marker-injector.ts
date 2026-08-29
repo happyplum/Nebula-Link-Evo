@@ -204,6 +204,6 @@ export async function injectMarkers(page: Page): Promise<MarkerInjectionResult> 
     return result;
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
-    throw new Error(`Marker injection failed: ${message}`);
+    throw new Error(`Marker injection failed: ${message}`, { cause: error });
   }
 }

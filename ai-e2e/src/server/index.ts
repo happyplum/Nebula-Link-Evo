@@ -1,4 +1,4 @@
-import Fastify, { type FastifyServerOptions } from 'fastify';
+import Fastify, { LogController, type FastifyServerOptions } from 'fastify';
 import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
 import { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
@@ -65,7 +65,7 @@ export interface ServerOptions {
 export function createServer(options: Partial<ServerOptions> = {}) {
   const app = Fastify({
     logger: options.logger ?? true,
-    disableRequestLogging: true,
+    logController: new LogController({ disableRequestLogging: true }),
   }).withTypeProvider<TypeBoxTypeProvider>();
 
   app.register(cors, {

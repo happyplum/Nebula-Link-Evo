@@ -1,4 +1,4 @@
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { LogController, type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import { join } from 'node:path';
 import { dirname } from 'node:path';
@@ -68,7 +68,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const agentTasksPath = join(dataDir, 'agent-tasks.sqlite');
   const app = Fastify({
     logger: { level: serviceConfig.logLevel },
-    disableRequestLogging: true,
+    logController: new LogController({ disableRequestLogging: true }),
   });
 
   const database = new ConversationDatabase();

@@ -21,11 +21,9 @@ import debugRoutes from '../../plugins/routes/debug/index.js';
 class RouteTestBrowser implements BrowserExecutionBrowser {
   readonly open = vi.fn(async () => undefined);
   readonly close = vi.fn(async () => undefined);
-  readonly getTabs = vi.fn(
-    async (): Promise<BrowserTabSummary[]> => [
-      { id: '52d25db9-d44f-497a-9ec6-580aab5a4905', url: 'about:blank', title: '', isActive: true },
-    ]
-  );
+  readonly getTabs = vi.fn(async (): Promise<BrowserTabSummary[]> => [
+    { id: '52d25db9-d44f-497a-9ec6-580aab5a4905', url: 'about:blank', title: '', isActive: true },
+  ]);
   readonly execute = vi.fn(
     async (_input: ExecuteBrowserOperationInput): Promise<BrowserOperationExecutionResult> => ({
       actual: 'about:blank',

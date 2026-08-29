@@ -16,14 +16,14 @@
     "test:e2e:debug": "playwright test --debug"
   },
   "devDependencies": {
-    "@playwright/test": "^1.58.2",
+    "@playwright/test": "^1.62.1",
     "@testing-library/jest-dom": "^6.9.1",
-    "@testing-library/react": "^16.3.2",
+    "@testing-library/react": "^16.3.3",
     "@types/node": "catalog:",
-    "@types/react": "^19.2.14",
-    "@types/react-dom": "^19.2.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
+    "@vitejs/plugin-react": "^6.1.1",
     "@vitest/coverage-v8": "catalog:",
-    "@vitejs/plugin-react": "^4.7.0",
     "jsdom": "^28.1.0",
     "typescript": "catalog:",
     "vite": "catalog:",
@@ -32,14 +32,14 @@
   "dependencies": {
     "@nebula-link-evo/agent-activity-ui": "workspace:*",
     "@nebula-link-evo/shared": "workspace:*",
-    "@tanstack/react-query": "^5.96.0",
-    "dayjs": "^1.11.20",
+    "@tanstack/react-query": "^5.102.8",
+    "dayjs": "^1.11.23",
     "livekit-client": "catalog:",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "react-markdown": "^10.1.0",
-    "react-router-dom": "^7.13.2",
+    "react-router-dom": "^7.18.3",
     "remark-gfm": "^4.0.1",
-    "zustand": "^5.0.12"
+    "zustand": "^5.0.15"
   }
 }

@@ -5,13 +5,7 @@ export interface MessageMetadata {
 }
 
 export type SessionStatus =
-  | 'idle'
-  | 'running'
-  | 'paused'
-  | 'blocked'
-  | 'interrupted'
-  | 'cancelled'
-  | 'completed';
+  'idle' | 'running' | 'paused' | 'blocked' | 'interrupted' | 'cancelled' | 'completed';
 
 export interface Session {
   readonly id: string;

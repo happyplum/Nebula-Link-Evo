@@ -21,17 +21,17 @@
   },
   "dependencies": {
     "@fastify/cors": "catalog:",
-    "@fastify/static": "^8.0.0",
+    "@fastify/static": "^10.1.3",
     "@fastify/type-provider-typebox": "catalog:",
     "@nebula-link-evo/shared": "workspace:*",
     "@sinclair/typebox": "catalog:",
     "axios": "catalog:",
-    "better-sqlite3": "^11.0.0",
+    "better-sqlite3": "^11.10.0",
     "dotenv": "catalog:",
     "fastify": "catalog:"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.8",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:",

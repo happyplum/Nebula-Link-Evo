@@ -32,11 +32,9 @@ afterEach(() => {
 class FakeBrowser implements BrowserExecutionBrowser {
   readonly open = vi.fn(async () => undefined);
   readonly close = vi.fn(async () => undefined);
-  readonly getTabs = vi.fn(
-    async (): Promise<BrowserTabSummary[]> => [
-      { id: 'tab-1', url: 'https://example.test', title: 'Example', isActive: true },
-    ]
-  );
+  readonly getTabs = vi.fn(async (): Promise<BrowserTabSummary[]> => [
+    { id: 'tab-1', url: 'https://example.test', title: 'Example', isActive: true },
+  ]);
   readonly execute = vi.fn(
     async (_input: ExecuteBrowserOperationInput): Promise<BrowserOperationExecutionResult> => ({
       actual: { ok: true },

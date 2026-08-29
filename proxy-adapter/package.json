@@ -13,7 +13,7 @@
     "start": "node dist/server.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "pnpm build && cross-env LOG_LEVEL=error vitest run --config ../vitest.e2e.config.ts",
+    "test:e2e": "pnpm build && cross-env LOG_LEVEL=error vitest run --config vitest.e2e.config.ts",
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
@@ -29,7 +29,7 @@
     "fastify-plugin": "catalog:",
     "livekit-server-sdk": "catalog:",
     "pino": "^10.3.1",
-    "playwright": "^1.58.2",
+    "playwright": "^1.62.1",
     "sharp": "catalog:",
     "zod": "catalog:"
   },
@@ -37,7 +37,7 @@
     "@types/node": "catalog:",
     "@vitest/coverage-v8": "catalog:",
     "cross-env": "^10.1.0",
-    "eventsource-parser": "^3.0.6",
+    "eventsource-parser": "^3.1.1",
     "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

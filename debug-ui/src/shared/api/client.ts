@@ -25,7 +25,9 @@ export class ApiClient {
       return this.handleResponse<T>(res);
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error(`Request to ${target} timed out after ${ApiClient.DEFAULT_TIMEOUT_MS}ms`);
+        throw new Error(`Request to ${target} timed out after ${ApiClient.DEFAULT_TIMEOUT_MS}ms`, {
+          cause: error,
+        });
       }
       throw error;
     } finally {
@@ -46,7 +48,9 @@ export class ApiClient {
       return this.handleResponse<T>(res);
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error(`Request to ${url} timed out after ${ApiClient.DEFAULT_TIMEOUT_MS}ms`);
+        throw new Error(`Request to ${url} timed out after ${ApiClient.DEFAULT_TIMEOUT_MS}ms`, {
+          cause: error,
+        });
       }
       throw error;
     } finally {
@@ -61,7 +65,9 @@ export class ApiClient {
       return this.handleResponse<T>(res);
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error(`Request to ${url} timed out after ${ApiClient.DEFAULT_TIMEOUT_MS}ms`);
+        throw new Error(`Request to ${url} timed out after ${ApiClient.DEFAULT_TIMEOUT_MS}ms`, {
+          cause: error,
+        });
       }
       throw error;
     } finally {
