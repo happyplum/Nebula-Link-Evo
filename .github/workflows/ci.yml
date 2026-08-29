@@ -36,6 +36,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Check dependency graph deduplication
+        run: pnpm dedupe --check
+
+      - name: Audit production dependencies
+        run: pnpm audit --prod
+
+      - name: Verify Harness dependency BOM
+        run: pnpm --filter ai-chat-service verify:harness-bom
+
       - name: Install Playwright Chromium
         run: pnpm --filter proxy-adapter exec playwright install --with-deps chromium
 
