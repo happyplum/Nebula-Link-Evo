@@ -13,6 +13,7 @@ debug-ui 的 6 大面板监控系统：Monitor（监控）、Control（控制）
 - [shipped] 配置面板（health、MCP tools、API keys、AI test）：`debug-ui/src/features/config/`。
 - [shipped] 集中式 testid 注册表：`debug-ui/src/shared/testing/testids.ts`。必须从此取，禁止散落。
 - [shipped] Vite 配置：base `/debug/`，dev proxy `/api` → :3001、`/debug/api` → :3000。
+- [shipped] 冷启动性能基线固定于 [`docs/performance/ui-performance-baseline.md`](../performance/ui-performance-baseline.md)：Fast 3G + CPU 4× 条件下，LiveKit 按需加载后首屏 LCP 为 3,133 ms、JS/CSS 传输为 172,078 B，且控制交互 EventTiming 保持 184 ms。
 - [partial] [tech-debt] History / Interactions / DOM Elements 面板功能登记为 partial，需后续按页面细化功能清单。
 - [shipped] 验收面：单元测试 + parity 测试（`picker-liveview-integration.parity.test.tsx` 等）。
 - [shipped] `pnpm --filter debug-ui test:coverage` 统计 UI 生产源码并设置防回退阈值；测试 setup 固定结构测试使用 MJPEG、模拟 Canvas context，组件网络调用由用例显式 stub，避免 LiveKit、jsdom Canvas 和真实网络噪声。
