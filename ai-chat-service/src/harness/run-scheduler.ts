@@ -222,8 +222,7 @@ export class HarnessRunScheduler {
 
   private get(runId: string): RunRow | undefined {
     return this.db.prepare('SELECT * FROM harness_model_runs WHERE run_id = ?').get(runId) as
-      | RunRow
-      | undefined;
+      RunRow | undefined;
   }
 
   private assertIdentity(row: RunRow, request: HarnessRunRequest): void {

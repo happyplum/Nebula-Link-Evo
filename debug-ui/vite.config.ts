@@ -33,11 +33,21 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
-    rollupOptions: {
+    rolldownOptions: {
       output: {
-        manualChunks: {
-          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-livekit': ['livekit-client'],
+        codeSplitting: {
+          groups: [
+            {
+              name: 'vendor-react',
+              test: /node_modules[\\/](react|react-dom|react-router-dom)[\\/]/u,
+              includeDependenciesRecursively: true,
+            },
+            {
+              name: 'vendor-livekit',
+              test: /node_modules[\\/]livekit-client[\\/]/u,
+              includeDependenciesRecursively: true,
+            },
+          ],
         },
       },
     },

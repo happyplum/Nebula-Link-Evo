@@ -123,7 +123,9 @@ async function resolvePackageJson(
         }
       }
       const parent = dirname(current);
-      if (parent === current) throw new Error(`Cannot resolve package.json for ${name}`);
+      if (parent === current) {
+        throw new Error(`Cannot resolve package.json for ${name}`, { cause: error });
+      }
       current = parent;
     }
   }

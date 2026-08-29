@@ -334,8 +334,7 @@ export class BrowserExecutionRepository {
 
   getSession(id: string): BrowserSessionRecord | undefined {
     const row = this.requireDb().prepare('SELECT * FROM browser_sessions WHERE id = ?').get(id) as
-      | SessionRow
-      | undefined;
+      SessionRow | undefined;
     return row ? mapSession(row) : undefined;
   }
 
@@ -368,8 +367,7 @@ export class BrowserExecutionRepository {
 
   getLease(id: string): BrowserLeaseRecord | undefined {
     const row = this.requireDb().prepare('SELECT * FROM browser_leases WHERE id = ?').get(id) as
-      | LeaseRow
-      | undefined;
+      LeaseRow | undefined;
     return row ? mapLease(row) : undefined;
   }
 
@@ -715,8 +713,7 @@ export class BrowserExecutionRepository {
 
   getArtifact(id: string): BrowserArtifactRecord | undefined {
     const row = this.requireDb().prepare('SELECT * FROM browser_artifacts WHERE id = ?').get(id) as
-      | ArtifactRow
-      | undefined;
+      ArtifactRow | undefined;
     return row ? mapArtifact(row) : undefined;
   }
 

@@ -146,6 +146,7 @@
 | 缺口                                               | 类型      | 状态    | 备注                                                   |
 | -------------------------------------------------- | --------- | ------- | ------------------------------------------------------ |
 | History / Interactions / DOM Elements 面板功能登记 | tech-debt | partial | 当前条目状态为 partial，需后续按页面细化功能清单       |
+| LiveKit 客户端静态进入首屏预加载                   | tech-debt | known   | Vite 8 生产构建的 LiveKit vendor 约 514 kB（gzip 约 133 kB）并被 `modulepreload`；当前禁止 lazy/code splitting，后续若优化首屏需先调整该产品边界并复验切换、降级与断连保帧 |
 
 ---
 

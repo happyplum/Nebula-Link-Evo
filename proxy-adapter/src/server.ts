@@ -1,4 +1,4 @@
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { LogController, type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import dotenv from 'dotenv';
 import * as path from 'path';
@@ -69,7 +69,7 @@ export interface BuildProxyAppOptions {
 export async function buildApp(options: BuildProxyAppOptions = {}): Promise<FastifyInstance> {
   const app = Fastify({
     logger: { level: normalizeLogLevel() },
-    disableRequestLogging: true,
+    logController: new LogController({ disableRequestLogging: true }),
   });
   const dataDir = options.dataDir ?? path.join(process.cwd(), 'data', 'proxy-adapter');
   const debugDbPath = path.join(dataDir, 'debug.sqlite');

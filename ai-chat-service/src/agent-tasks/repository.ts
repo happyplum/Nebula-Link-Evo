@@ -726,8 +726,7 @@ export class AgentTaskRepository {
 
   get(taskId: string): AgentTaskView | null {
     const row = this.db.prepare('SELECT * FROM agent_tasks WHERE task_id = ?').get(taskId) as
-      | TaskRow
-      | undefined;
+      TaskRow | undefined;
     return row ? this.toView(row) : null;
   }
 
@@ -1181,8 +1180,7 @@ export class AgentTaskRepository {
   getPersistenceState(taskId: string): AgentTaskPersistenceState {
     this.requireTask(taskId);
     const row = this.db.prepare('SELECT * FROM agent_task_state WHERE task_id = ?').get(taskId) as
-      | TaskStateRow
-      | undefined;
+      TaskStateRow | undefined;
     if (!row) throw new AgentTaskError('not_found', `Agent task state ${taskId} was not found`);
     return mapTaskState(row);
   }
@@ -1346,8 +1344,7 @@ export class AgentTaskRepository {
 
   getCommand(id: string): AgentTaskCommandRecord | null {
     const row = this.db.prepare('SELECT * FROM agent_task_commands WHERE id = ?').get(id) as
-      | TaskCommandRow
-      | undefined;
+      TaskCommandRow | undefined;
     return row ? mapTaskCommand(row) : null;
   }
 
@@ -1714,8 +1711,7 @@ export class AgentTaskRepository {
 
   private getByIdempotencyKey(key: string): AgentTaskView | null {
     const row = this.db.prepare('SELECT * FROM agent_tasks WHERE idempotency_key = ?').get(key) as
-      | TaskRow
-      | undefined;
+      TaskRow | undefined;
     return row ? this.toView(row) : null;
   }
 

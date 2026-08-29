@@ -40,7 +40,9 @@ export async function requireProxyBrowserCapabilities(
       headers: { accept: 'application/json' },
     });
   } catch (error) {
-    throw new Error(`proxy-adapter capability discovery failed: ${errorMessage(error)}`);
+    throw new Error(`proxy-adapter capability discovery failed: ${errorMessage(error)}`, {
+      cause: error,
+    });
   }
   if (!response.ok) {
     throw new Error(`proxy-adapter capability discovery returned HTTP ${response.status}`);
@@ -50,7 +52,9 @@ export async function requireProxyBrowserCapabilities(
   try {
     payload = await response.json();
   } catch (error) {
-    throw new Error(`proxy-adapter capability response is not valid JSON: ${errorMessage(error)}`);
+    throw new Error(`proxy-adapter capability response is not valid JSON: ${errorMessage(error)}`, {
+      cause: error,
+    });
   }
   assertCapabilities(payload);
   return payload;
