@@ -63,6 +63,7 @@ pnpm format         # prettier --write debug-ui/src proxy-adapter/src ai-chat-se
 - 环境文件按进程入口独立加载且入口是本进程唯一 owner：`proxy-adapter/src/server.ts` 与 `ai-chat-service/src/server.ts` 依次尝试工作目录 `.env`、父目录 `.env`；`ai-e2e/src/server/index.ts` 依次尝试工作目录 `.env.local`、父目录 `.env`，二者均不存在时由 dotenv 回退工作目录 `.env`。均以既有 `process.env` 为最高优先级。不得在 `shared` 或可复用 `buildApp()` 中增加 dotenv 副作用。
 - 升级被 `pnpm-workspace.yaml#patchedDependencies` 覆盖的依赖时，必须同步评估对应 patch：上游已包含所需行为时删除 patch 配置与文件，否则针对新版本重建 patch；两种情况都必须重新生成并校验 lockfile、Harness BOM/patch hash 及相关持久化测试，不得留下失效或无引用 patch。
 - pnpm 11 依赖安装保留默认 24 小时 `minimumReleaseAge` 与显式 `allowBuilds`；不得全局关闭供应链冷却或放宽构建脚本，确需立即采用的新版本只能在核验后按精确版本加入 `minimumReleaseAgeExclude`。
+- TypeScript 构建与类型检查由 `@typescript/native` alias 提供的 7.x 原生 `tsc` 执行；`typescript` alias 固定指向 `@typescript/typescript6`，只为 `typescript-eslint` 等编译器 API 消费方提供兼容层。两者必须并存，并通过 `pnpm exec tsc --version`、`pnpm exec tsc6 --version` 与 `pnpm peers check` 验证。
 
 ## Repository-wide constraints
 

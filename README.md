@@ -126,10 +126,12 @@ curl http://localhost:3000/api/v1/health
 pnpm test           # 全工作区测试
 pnpm test:coverage  # 全工作区串行覆盖率门禁
 pnpm test:e2e       # proxy/Agent/semantic/CLI/Harness/Debug UI/ai-e2e UI 真实 Chromium E2E
-pnpm type-check     # 全工作区 TypeScript 静态检查
+pnpm type-check     # 全工作区 TypeScript 7 原生静态检查
 pnpm lint           # 根级源码与测试 lint
 pnpm format:check   # debug-ui/proxy/ai-chat 源码格式门禁
 ```
+
+工作区使用 TypeScript 7 的原生 `tsc` 执行构建与类型检查，同时通过 `typescript` npm alias 提供 `@typescript/typescript6` API，供 `typescript-eslint` 等仍需编译器 API 的工具使用；不得移除任一侧或用 peer override 替代该兼容机制。
 
 ## Project Structure
 

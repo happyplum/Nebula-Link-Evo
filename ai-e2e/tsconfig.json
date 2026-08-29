@@ -12,7 +12,6 @@
     "rootDir": "./src",
     "resolveJsonModule": true,
     "declaration": false,
-    "baseUrl": ".",
     "paths": {
       "@nebula-link-evo/shared": ["../shared/index.ts"],
       "@nebula-link-evo/shared/*": ["../shared/*"]

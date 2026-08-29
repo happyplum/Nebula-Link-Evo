@@ -15,6 +15,7 @@ catalog:
   '@fastify/websocket': ^11.1.0
   '@livekit/rtc-node': ^0.13.34
   '@sinclair/typebox': ^0.32.37
+  '@typescript/native': npm:typescript@^7.0.2
   '@types/node': ^22.20.1
   '@types/ws': ^8.18.1
   '@vitest/coverage-v8': ^4.1.11
@@ -29,7 +30,7 @@ catalog:
   sharp: ^0.35.4
   terser: ^5.0.0
   tsx: ^4.23.12
-  typescript: ^5.9.3
+  typescript: npm:@typescript/typescript6@^6.0.2
   vite: ^8.2.2
   vitest: ^4.1.11
   ws: ^8.19.0
