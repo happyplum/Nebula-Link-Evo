@@ -71,7 +71,7 @@ pnpm type-check   # tsc --noEmit
 - No hardcoded `localhost` URLs in module code.
 - No duplicating backend validation in the UI.
 - No CSS-in-JS or Tailwind (CSS Modules only).
-- No code splitting or lazy loading (Vite handles build optimization).
+- No broad route/component splitting. LiveKit is the approved on-demand boundary: fresh users start on MJPEG, an existing persisted transport choice is preserved, and selecting WebRTC loads the LiveKit component/client while MJPEG remains visible during loading or load failure.
 - No SSR or server components (SPA with HashRouter).
 - No plain DOM or window.\* global patterns (use React idioms).
 

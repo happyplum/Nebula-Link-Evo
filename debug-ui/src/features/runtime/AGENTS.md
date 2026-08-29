@@ -16,6 +16,7 @@ Runtime owns the Monitor sidebar/main shell components, LiveView canvas integrat
 
 - Playwright status (isOpen, url, status) is synced via `useBrowserStatus` hook polling `/debug/api/health` every 4s; the hook updates both `runtime.store` and `control.store`.
 - LiveView transport and refresh state live in the runtime store.
+- Fresh users default to MJPEG; a valid persisted MJPEG/WebRTC choice remains authoritative so LiveKit is only requested when WebRTC is actually selected.
 - Monitor shells compose cards from REST API data — no real-time push.
 - Snapshot version tracks LiveView canvas invalidation.
 
