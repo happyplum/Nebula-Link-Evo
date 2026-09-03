@@ -46,6 +46,9 @@ yolov8n.pt
 # Database files
 *.sqlite
 
+# AI chat verified runtime backups
+ai-chat-service/data/**/backups/harness-*/
+
 # Project specific
 .temp/
 .tmp/

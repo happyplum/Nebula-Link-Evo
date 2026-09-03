@@ -17,4 +17,5 @@ proxy-adapter 的调试观测面：Debug 事件 SSE 总线、LiveKit 令牌发�
 - [shipped] LiveKit publisher 每 500ms 重发最近 RGBA 帧，晚加入订阅者无需等待页面变化即可获得首个可解码画面。
 - [shipped] MJPEG 路由在代理热重启后可基于仍存活的当前浏览器页面惰性恢复 screencast，避免连接状态正常但流端点持续返回 502。
 - [shipped] 根目录 `pnpm dev` 通过 `predev` 启动并检查 LiveKit，确保 Debug UI 的 WebRTC 模式不依赖另行手动启动 7880 服务。
+- [shipped] Windows `start-dev.bat` 依次启动 LiveKit、proxy-adapter、ai-chat-service、ai-e2e 与 Debug UI；ai-chat-service 提供与根启动/停止链匹配的 `start.bat`/`stop.bat`，以 3001 监听作为就绪检查并按监听 PID 精确停止。
 - [shipped] LiveKit 凭证入口会在当前页面可用但 Publisher 未运行时触发异步恢复，WebRTC 不再要求关闭并重新打开浏览器。

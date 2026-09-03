@@ -105,6 +105,9 @@ copy .env.example .env
 ```bash
 pnpm dev
 # 同时启动 debug-ui (5173)、proxy-adapter (3000)、ai-chat-service (3001)
+
+# Windows：构建并启动全部后端服务，再启动 Debug UI 开发服务器
+start-dev.bat
 ```
 
 **启动生产模式**：
