@@ -112,7 +112,7 @@ echo   PID:
 netstat -ano | findstr ":3002.*LISTENING"
 echo.
 echo   UI:  http://localhost:3002/ai-e2e/
-echo   API: http://localhost:3002/api/health
+echo   API: http://localhost:3002/api/v1/capabilities
 echo.
 echo   Press Ctrl+C in the AI E2E window to stop.
 echo   Or run stop.bat from this directory.

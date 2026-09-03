@@ -33,18 +33,20 @@ echo ==========================================
 echo   Development mode ready!
 echo.
 echo   Services:
-echo     Playwright Server:  http://localhost:3001
 echo     Proxy Adapter:     http://localhost:3000
+echo     AI Chat Service:   http://localhost:3001
+echo     AI E2E:            http://localhost:3002/ai-e2e/
 echo     LiveKit Server:    ws://localhost:7880
 echo     Debug UI:          http://localhost:5173/debug/
 echo.
 echo   API Endpoints:
-echo     Health:            http://localhost:3000/api/health
+echo     Proxy Health:      http://localhost:3000/api/v1/health
+echo     AI Chat Health:    http://localhost:3001/health
 echo     Debug Health:      http://localhost:3000/debug/api/health
 echo.
-echo   WebSocket Endpoints:
-echo     Debug WS:          ws://localhost:5173/ws/debug
-echo     Chat WS:           ws://localhost:5173/ws/chat
+echo   SSE Endpoints:
+echo     Debug SSE:         http://localhost:3000/debug/stream
+echo     Chat SSE:          http://localhost:3001/api/v1/chat/sessions/{sessionId}/stream
 echo.
 echo To stop: run stop.bat
 echo ==========================================
