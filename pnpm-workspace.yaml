@@ -11,7 +11,7 @@ packages:
 catalog:
   '@fastify/autoload': ^5.10.0
   '@fastify/cors': ^11.3.0
-  '@fastify/type-provider-typebox': ^5.2.0
+  '@fastify/type-provider-typebox': ^6.1.0
   '@fastify/websocket': ^11.1.0
   '@livekit/rtc-node': ^0.13.34
   '@sinclair/typebox': ^0.32.37
