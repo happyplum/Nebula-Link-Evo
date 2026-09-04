@@ -31,8 +31,8 @@ catalogs:
       specifier: ^1.20.0
       version: 1.20.0
     dotenv:
-      specifier: ^16.6.1
-      version: 16.6.1
+      specifier: ^17.4.2
+      version: 17.4.2
     fastify:
       specifier: ^5.12.1
       version: 5.12.1
@@ -273,7 +273,7 @@ importers:
         version: 1.20.0(debug@4.4.3(supports-color@7.2.0))(supports-color@7.2.0)
       dotenv:
         specifier: 'catalog:'
-        version: 16.6.1
+        version: 17.4.2
       eventsource-parser:
         specifier: 3.1.0
         version: 3.1.0
@@ -340,7 +340,7 @@ importers:
         version: 13.0.3
       dotenv:
         specifier: 'catalog:'
-        version: 16.6.1
+        version: 17.4.2
       fastify:
         specifier: 'catalog:'
         version: 5.12.1
@@ -657,7 +657,7 @@ importers:
         version: 0.5.0
       dotenv:
         specifier: 'catalog:'
-        version: 16.6.1
+        version: 17.4.2
       fastify:
         specifier: 'catalog:'
         version: 5.12.1
@@ -5117,8 +5117,8 @@ packages:
   dom-accessibility-api@0.6.3:
     resolution: {integrity: sha512-7ZgogeTnjuHbo+ct10G9Ffp0mif17idi0IyWNVA/wcwcm7NPOD/WEHVP3n7n3MhXqxoIYm8d6MuZohYWIZ4T3w==}
 
-  dotenv@16.6.1:
-    resolution: {integrity: sha512-uBq4egWHTcTt33a72vpSG0z3HnPuIl6NqYcTrKEg2azoEyl2hpW0zqlxysq2pK9HlDIHyHyakeYaYnSAwd8bow==}
+  dotenv@17.4.2:
+    resolution: {integrity: sha512-nI4U3TottKAcAD9LLud4Cb7b2QztQMUEfHbvhTH09bqXTxnSie8WnjPALV/WMCrJZ6UV/qHJ6L03OqO3LcdYZw==}
     engines: {node: '>=12'}
 
   dunder-proto@1.0.1:
@@ -11765,7 +11765,7 @@ snapshots:
 
   dom-accessibility-api@0.6.3: {}
 
-  dotenv@16.6.1: {}
+  dotenv@17.4.2: {}
 
   dunder-proto@1.0.1:
     dependencies:
