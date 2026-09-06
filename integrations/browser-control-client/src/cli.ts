@@ -329,7 +329,10 @@ function extractGlobalOptions(argv: string[]): { baseUrl?: string; rest: string[
       if (!baseUrl) throw usageError('--base-url requires a value');
       index += 1;
     } else {
-      rest.push(argv[index]!);
+      const arg = argv[index];
+      if (arg !== undefined) {
+        rest.push(arg);
+      }
     }
   }
   return { baseUrl, rest };

@@ -62,7 +62,7 @@ describe('DeepSeek Harness browser plugin', () => {
     expect(result.isError).toBe(false);
     expect(harness.approvalRequests).toEqual(['nebula_browser_act']);
     expect(harness.executeSession).toHaveBeenCalledOnce();
-    const [input, authorize, signal] = harness.executeSession.mock.calls[0]!;
+    const [input, authorize, signal] = harness.executeSession.mock.calls[0];
     expect(input.key).toBe('root-1:call-act:nebula_browser_act');
     expect(await authorize?.()).toBe(true);
     expect(signal).toBeInstanceOf(AbortSignal);
