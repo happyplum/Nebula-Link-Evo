@@ -11,7 +11,7 @@ Browser MCP gateway source — Playwright engine, tool providers, browser sessio
 | Server bootstrap | `server.ts`     | Route registration, service init                               |
 | Services         | `services/`     | Browser session mgmt, action execution, logging, diagnostics   |
 | Plugins          | `plugins/`      | Fastify plugins and route modules                              |
-| Tool registry    | `tools/`        | ToolRegistry + browser-control provider + MCP Server adapters   |
+| Tool registry    | `tools/`        | ToolRegistry + browser-execution tools provider + MCP Server adapters |
 | Browser engine   | `browser-engine/` | Playwright Chromium lifecycle                                |
 | Browser client   | `browser-client.ts` | Shared browser page/context accessor                       |
 | Browser execution | `browser-execution/` | Session, lease, operation, artifact and event control plane |

@@ -37,7 +37,7 @@ Provider.initialize()
 
 ## Working Rules
 
-- All tool registration goes through `ToolRegistry.register()`.
+- All tool registration goes through `ToolRegistry.registerProvider()`.
 - `isAvailable` is a lazy callback — checked at call time, not registration time.
 - MCP Server caches tools at plugin init time (`mcp-server/index.ts`); tool list changes after init require restart.
 - Required provider init errors must fail startup.
