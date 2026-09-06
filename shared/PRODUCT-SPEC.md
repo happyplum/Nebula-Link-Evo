@@ -1,6 +1,6 @@
 # shared — 产品规格 (PRODUCT-SPEC)
 
-> 一句话目标：为所有后端包提供共享、框架中立、运行时安全的类型与工具，避免跨包契约漂移。
+> 一句话目标：为所有后端包与前端消费方（debug-ui、agent-activity-ui）提供共享、框架中立、运行时安全的类型与工具，避免跨包契约漂移。
 > 端口：无（库包） ｜ 包名：`@nebula-link-evo/shared` ｜ 角色：依赖图最底层
 
 ---
@@ -9,7 +9,7 @@
 
 ### 目标
 
-- 沉淀跨包共享的纯类型、纯函数与测试辅助，保证 `proxy-adapter` / `ai-chat-service` / `ai-e2e` / `integrations/*` 之间契约一致。
+- 沉淀跨包共享的纯类型、纯函数与测试辅助，保证 `proxy-adapter` / `ai-chat-service` / `ai-e2e` / `integrations/*` 与前端消费方（`debug-ui`、`agent-activity-ui`）之间契约一致。
 - 框架中立、服务中立，**不引入任何后端业务语义**。
 
 ### 边界
@@ -44,11 +44,14 @@
 | --------------------------- | ----------------------------------------------------------------------------------- |
 | `.`（root）                 | 运行时类型 + 工具                                                                   |
 | `./types`                   | 仅类型                                                                              |
+| `./types/agent-stream`      | Chat、Agent Task、Authoring 与 Run 共用的脱敏活动 snapshot/event/section v1          |
+| `./types/vision-marker`     | 视觉标记线协议                                                                      |
+| `./types/debug-events`      | Debug 事件契约                                                                      |
 | `./types/browser-execution` | 浏览器 execution session/lease/operation/target/capability/problem 线协议与操作常量 |
 | `./types/vision-snapshot`   | proxy-owned immutable snapshot/artifact binding，供 ai-chat-service Vision v2 校验  |
-| `./types/agent-stream`      | Chat、Agent Task、Authoring 与 Run 共用的脱敏活动 snapshot/event/section v1          |
 | `./utils`                   | 仅工具                                                                              |
-| `./test-utils`              | 测试辅助（源码引用，不入 build）                                                    |
+
+> `test-utils/` 不在 `package.json` `exports` 中：它不进 `tsc -b` 构建产物，消费方按源码相对路径引用。
 
 ---
 

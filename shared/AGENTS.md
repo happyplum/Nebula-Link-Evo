@@ -8,7 +8,7 @@ Workspace package published as `@nebula-link-evo/shared`. Shared runtime-safe ty
 
 | Area            | Path            | Notes                                                              |
 | --------------- | --------------- | ------------------------------------------------------------------ |
-| Package exports | `package.json`  | Root + `./types`, `./types/browser-execution`, `./utils` subpaths  |
+| Package exports | `package.json`  | Root + `./types`, `./types/agent-stream`, `./types/vision-marker`, `./types/debug-events`, `./types/browser-execution`, `./types/vision-snapshot`, `./utils` subpaths |
 | Build scope     | `tsconfig.json` | Builds `types/`, `utils/`, `index.ts`; excludes `test-utils/`      |
 | Public entry    | `index.ts`      | Re-exports shared types, SSE helpers, utils                        |
 | Runtime types   | `types/`        | Browser-execution/vision bindings, SSE/debug events, vision marker |
