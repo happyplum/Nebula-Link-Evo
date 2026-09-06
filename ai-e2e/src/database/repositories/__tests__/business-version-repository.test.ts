@@ -479,4 +479,122 @@ describe('BusinessVersionRepository', () => {
       'broken',
     ]);
   });
+
+  it('fail-closes scenario calls on runWhen and for_each repeat until implemented', () => {
+    const version = repository.create({
+      projectId: 'project-1',
+      versionKey: 'repeat-guard',
+      name: 'Repeat Guard',
+      createdBy: 'user-1',
+      requestId: 'create-repeat-guard',
+    }).version;
+    const page = repository.createPage({
+      businessVersionId: version.id,
+      pageKey: 'login',
+      payload: {
+        schema: 'nebula.ai-e2e.page-definition/1.0',
+        name: '登录页',
+        routeMode: 'path',
+        routeTemplate: '/login',
+        identityQuery: {},
+        runtimeParams: {},
+        ignoredQueryKeys: [],
+        authRequirement: { kind: 'anonymous' },
+        recognition: [],
+        allowedTransitionPageIds: [],
+      },
+      createdBy: 'system',
+    });
+    const businessModule = repository.createBusinessModule({
+      businessVersionId: version.id,
+      moduleKey: 'account',
+      payload: {
+        schema: 'nebula.ai-e2e.business-module/1.0',
+        name: '账号',
+        sortOrder: 0,
+        prdSourceRefs: [],
+      },
+      createdBy: 'system',
+    });
+    const functionalModule = repository.createFunctionalModule({
+      businessVersionId: version.id,
+      businessModuleId: businessModule.id,
+      moduleKey: 'login',
+      primaryPageDefinitionId: page.id,
+      payload: {
+        schema: 'nebula.ai-e2e.functional-module/1.0',
+        name: '登录',
+        sortOrder: 0,
+        primaryPageDefinitionId: page.id,
+      },
+      createdBy: 'system',
+    });
+    const script = repository.createFunctionalScript({
+      businessVersionId: version.id,
+      functionalModuleId: functionalModule.id,
+      scriptKey: 'login.repeat',
+      name: '重复登录',
+      payload: functionalScriptFixture({
+        scriptKey: 'login.repeat',
+        name: '重复登录',
+        moduleId: functionalModule.id,
+        pageId: page.id,
+      }),
+      createdBy: 'system',
+      readinessStatus: 'verified',
+    });
+    const scenarioPayload = (call: Record<string, unknown>) => ({
+      schema: 'nebula.ai-e2e.scenario/1.0',
+      scenarioKey: 'repeat-flow',
+      name: '重复流程',
+      purpose: '校验重复/条件字段',
+      prdSourceRefs: [],
+      actors: [],
+      initialAuth: { kind: 'anonymous' },
+      inputs: [],
+      finalAcceptance: [],
+      calls: [{ callKey: 'first', functionalScriptId: script.id, ...call }],
+      edges: [],
+      exports: [],
+    });
+
+    expect(() =>
+      repository.createScenario({
+        businessVersionId: version.id,
+        scenarioKey: 'repeat-flow',
+        name: '重复流程',
+        payload: scenarioPayload({ runWhen: { kind: 'exists', ref: { kind: 'scenario_input', name: 'enabled' } } }),
+        createdBy: 'system',
+      })
+    ).toThrow(/runWhen/);
+    expect(() =>
+      repository.createScenario({
+        businessVersionId: version.id,
+        scenarioKey: 'repeat-flow',
+        name: '重复流程',
+        payload: scenarioPayload({
+          repeat: { kind: 'for_each', scenarioInput: 'users', maxItems: 10 },
+        }),
+        createdBy: 'system',
+      })
+    ).toThrow(/for_each/);
+    expect(() =>
+      repository.createScenario({
+        businessVersionId: version.id,
+        scenarioKey: 'repeat-flow',
+        name: '重复流程',
+        payload: scenarioPayload({ repeat: 0 }),
+        createdBy: 'system',
+      })
+    ).toThrow(/unsupported repeat/);
+    expect(
+      repository.createScenario({
+        businessVersionId: version.id,
+        scenarioKey: 'repeat-flow',
+        name: '重复流程',
+        payload: scenarioPayload({ repeat: { kind: 'count', count: 3 } }),
+        createdBy: 'system',
+      }).scenarioKey
+    ).toBe('repeat-flow');
+  });
 });

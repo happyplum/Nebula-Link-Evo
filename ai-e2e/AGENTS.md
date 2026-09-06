@@ -20,7 +20,7 @@
 ## 启动顺序
 
 1. 读取环境变量。
-2. 初始化纯 semantic SQLite migration 001、014–018 和仓储。
+2. 初始化纯 semantic SQLite migration 001、014–020 和仓储。
 3. 创建 Project、BusinessVersion、Query、Authoring、Run 服务。
 4. 创建 semantic 协调器并接入 AgentTaskClient、SemanticBrowserClient。
 5. 注册 `/api/v1/*`、静态 UI 与 SPA fallback。

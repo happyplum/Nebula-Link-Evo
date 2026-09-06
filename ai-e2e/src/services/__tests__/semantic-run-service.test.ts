@@ -124,6 +124,41 @@ describe('SemanticRunService', () => {
     );
   });
 
+  it.each([
+    ["Side-effect 'effect-1' is not declared", 400, 'side_effect_declaration_required'],
+    [
+      "Side-effect 'effect-1' has no finite affectedItems bound",
+      400,
+      'side_effect_bound_invalid',
+    ],
+    ['Side-effect approval grant was revoked', 409, 'side_effect_approval_revoked'],
+    ['Side-effect approval grant is inactive or stale', 409, 'side_effect_approval_stale'],
+    ['Side-effect approval is stale: risk projection changed', 409, 'side_effect_approval_stale'],
+    [
+      'Run has an open decision and cannot start or resume',
+      409,
+      'side_effect_approval_required',
+    ],
+  ])('maps side-effect error "%s" to its dedicated ApiProblem code', (message, statusCode, code) => {
+    const repository = createRepository();
+    repository.command.mockImplementation(() => {
+      throw new Error(message);
+    });
+    const service = new SemanticRunService(
+      repository as unknown as SemanticRunControlRepository
+    );
+
+    expect(() =>
+      service.command({
+        commandId: 'command-side-effect',
+        runId: 'run-1',
+        action: 'start',
+        expectedStateVersion: 2,
+        createdBy: 'tester',
+      })
+    ).toThrowError(expect.objectContaining({ statusCode, code, message }));
+  });
+
   it('preserves an existing ServiceError without changing its status or details', () => {
     const repository = createRepository();
     const expected = ServiceError.forbidden('grant revoked');

@@ -132,6 +132,159 @@ describe('semantic run control repository', () => {
     ).toEqual({ status: 'active', approved_by: 'operator' });
   });
 
+  it('treats file-upload effects as staging high risk requiring approval', () => {
+    const fixture = createFixture(db, assets, 'staging', {
+      kind: 'update',
+      reversibility: 'reversible',
+      stepActionType: 'set_files',
+    });
+    const created = runs.createFormalRun(runInput(fixture, 'run-upload'));
+
+    expect(created).toMatchObject({ lifecycle: 'paused', admission: 'approval_required' });
+    expect(created.decisionId).toBeTruthy();
+  });
+
+  it('expires the active approval grant when the run is cancelled after start', () => {
+    const fixture = createFixture(db, assets, 'staging', {
+      kind: 'delete',
+      reversibility: 'irreversible',
+    });
+    const created = runs.createFormalRun(runInput(fixture, 'run-cancel-grant'));
+    runs.answerDecision({
+      runId: created.id,
+      decisionId: created.decisionId!,
+      answerKey: 'approve',
+      reason: '已确认',
+      answeredBy: 'operator',
+    });
+    const readyVersion = Number(
+      (db.prepare('SELECT state_version AS v FROM test_runs WHERE id = ?').get(created.id) as {
+        v: number;
+      }).v
+    );
+    runs.command({
+      commandId: 'start-cancel-grant',
+      runId: created.id,
+      action: 'start',
+      expectedStateVersion: readyVersion,
+      createdBy: 'operator',
+    });
+    runs.command({
+      commandId: 'cancel-cancel-grant',
+      runId: created.id,
+      action: 'cancel',
+      expectedStateVersion: readyVersion + 1,
+      createdBy: 'operator',
+    });
+    expect(
+      db
+        .prepare(
+          'SELECT status, reason_json FROM side_effect_approval_grants WHERE context_id = ?'
+        )
+        .get(created.id)
+    ).toEqual({
+      status: 'expired',
+      reason_json: expect.stringContaining('context_terminated'),
+    });
+  });
+
+  it('expires the grant and pauses for re-approval when start finds a stale projection', () => {
+    const fixture = createFixture(db, assets, 'staging', {
+      kind: 'delete',
+      reversibility: 'irreversible',
+    });
+    const created = runs.createFormalRun(runInput(fixture, 'run-stale'));
+    runs.answerDecision({
+      runId: created.id,
+      decisionId: created.decisionId!,
+      answerKey: 'approve',
+      reason: '已确认',
+      answeredBy: 'operator',
+    });
+    db.prepare('UPDATE test_runs SET side_effect_projection_sha256 = ? WHERE id = ?').run(
+      'c'.repeat(64),
+      created.id
+    );
+    const readyVersion = Number(
+      (db.prepare('SELECT state_version AS v FROM test_runs WHERE id = ?').get(created.id) as {
+        v: number;
+      }).v
+    );
+    expect(() =>
+      runs.command({
+        commandId: 'start-stale',
+        runId: created.id,
+        action: 'start',
+        expectedStateVersion: readyVersion,
+        createdBy: 'operator',
+      })
+    ).toThrow(/stale/i);
+    expect(db.prepare('SELECT lifecycle FROM test_runs WHERE id = ?').get(created.id)).toEqual({
+      lifecycle: 'paused',
+    });
+    expect(
+      db.prepare('SELECT status FROM side_effect_approval_grants WHERE context_id = ?').get(
+        created.id
+      )
+    ).toEqual({ status: 'expired' });
+    expect(
+      db
+        .prepare(
+          "SELECT COUNT(*) AS open_decisions FROM decision_requests WHERE run_id = ? AND status = 'open'"
+        )
+        .get(created.id)
+    ).toEqual({ open_decisions: 1 });
+    const rejected = db
+      .prepare("SELECT error_json FROM run_commands WHERE id = 'start-stale'")
+      .get() as { error_json: string };
+    expect(rejected.error_json).toContain('side_effect_approval_stale');
+    expect(
+      db
+        .prepare(
+          "SELECT payload_json FROM run_events WHERE run_id = ? AND type = 'run.command_rejected'"
+        )
+        .get(created.id)
+    ).toEqual({
+      payload_json: expect.stringContaining('side_effect_approval_stale'),
+    });
+    const reopenDecision = db
+      .prepare(
+        "SELECT id FROM decision_requests WHERE run_id = ? AND status = 'open' ORDER BY created_at DESC LIMIT 1"
+      )
+      .get(created.id) as { id: string };
+    expect(() =>
+      runs.answerDecision({
+        runId: created.id,
+        decisionId: reopenDecision.id,
+        answerKey: 'approve',
+        reason: '漂移下不应可批准',
+        answeredBy: 'operator',
+      })
+    ).toThrow(/stale: risk projection changed/);
+  });
+
+  it('rejects resume with a side-effect approval code while a decision is open', () => {
+    const fixture = createFixture(db, assets, 'staging', {
+      kind: 'delete',
+      reversibility: 'irreversible',
+    });
+    const created = runs.createFormalRun(runInput(fixture, 'run-open-decision'));
+    const pausedVersion = Number(
+      (db.prepare('SELECT state_version AS v FROM test_runs WHERE id = ?').get(created.id) as {
+        v: number;
+      }).v
+    );
+    expect(() =>
+      runs.command({
+        commandId: 'resume-open-decision',
+        runId: created.id,
+        action: 'resume',
+        expectedStateVersion: pausedVersion,
+        createdBy: 'operator',
+      })
+    ).toThrow(/open decision and cannot start or resume/i);
+  });
+
   it('denies production business writes and leaves no acquirable browser job', () => {
     const fixture = createFixture(db, assets, 'production', {
       kind: 'create',
@@ -432,7 +585,8 @@ function createFixture(
               name: '执行账号操作',
               intent: '执行受控副作用',
               action: {
-                type: 'click',
+                type:
+                  typeof effect.stepActionType === 'string' ? effect.stepActionType : 'click',
                 target: {
                   semantic: '账号操作按钮',
                   candidates: [
@@ -440,6 +594,10 @@ function createFixture(
                   ],
                   expected: { cardinality: 'exactly_one', visible: true, enabled: true },
                 },
+                ...(typeof effect.stepActionType === 'string' &&
+                effect.stepActionType === 'set_files'
+                  ? { artifacts: [] }
+                  : {}),
               },
               postconditions: [],
               sideEffectId: 'effect-1',

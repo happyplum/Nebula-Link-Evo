@@ -628,6 +628,7 @@ export class SemanticAuthoringCandidateService {
         kind: kind as 'create' | 'update' | 'delete' | 'auth_change',
         maxAffectedItems: step.maxAffectedItems ?? 1,
         reversibility: reversibility as 'reversible' | 'compensatable' | 'irreversible',
+        ...(step.operation === 'set_files' ? { usesFileUpload: true } : {}),
       };
     });
     const projectionSha256 = hashValue({
@@ -647,7 +648,8 @@ export class SemanticAuthoringCandidateService {
       (effect) =>
         effect.kind === 'delete' ||
         effect.maxAffectedItems > 1 ||
-        effect.reversibility === 'irreversible'
+        effect.reversibility === 'irreversible' ||
+        effect.usesFileUpload === true
     );
     const needsApproval = deployment.environment === 'staging' && highRisk;
     if (needsApproval && amendment.decisions.some((decision) => decision.state !== 'approved')) {

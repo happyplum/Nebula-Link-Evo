@@ -68,6 +68,21 @@ export class SemanticRunService {
 function mapRunError(error: unknown): Error {
   if (error instanceof ServiceError) return error;
   const message = error instanceof Error ? error.message : 'Semantic run operation failed';
+  if (/is not declared/i.test(message)) {
+    return new ServiceError(message, 400, 'side_effect_declaration_required');
+  }
+  if (/no finite affectedItems/i.test(message)) {
+    return new ServiceError(message, 400, 'side_effect_bound_invalid');
+  }
+  if (/approval grant was revoked/i.test(message)) {
+    return new ServiceError(message, 409, 'side_effect_approval_revoked');
+  }
+  if (/approval is stale|grant is inactive or stale|evaluation is missing/i.test(message)) {
+    return new ServiceError(message, 409, 'side_effect_approval_stale');
+  }
+  if (/open decision/i.test(message)) {
+    return new ServiceError(message, 409, 'side_effect_approval_required');
+  }
   if (/not found|does not belong/i.test(message)) return ServiceError.notFound(message);
   if (
     /state|lifecycle|running|ready|paused|decision|conflict|reused|active|owns|resume|transition/i.test(

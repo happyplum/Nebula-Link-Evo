@@ -36,8 +36,7 @@
     "react-router-dom": "^7.18.3",
     "sonner": "^2.0.8",
     "tailwind-merge": "^3.6.0",
-    "tailwindcss-animate": "^1.0.7",
-    "zustand": "^5.0.15"
+    "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",

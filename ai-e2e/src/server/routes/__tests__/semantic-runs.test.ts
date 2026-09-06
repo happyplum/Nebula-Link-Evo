@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SemanticRunService } from '../../../services/semantic-run-service.js';
+import { ServiceError } from '../../../services/service-error.js';
 import errorHandlerPlugin from '../../plugins/error-handler.js';
 import semanticRunRoutes from '../semantic-runs.js';
 
@@ -111,6 +112,54 @@ describe('semantic run routes', () => {
     expect(close.statusCode).toBe(202);
     expect(service.closeBrowser).toHaveBeenCalledWith('close-1', 'run-1', 'operator');
     expect(invalid.statusCode).toBe(400);
+  });
+
+  it('surfaces dedicated side_effect ApiProblem codes from the run command route', async () => {
+    service.command = vi.fn(() => {
+      throw new ServiceError(
+        'Side-effect approval is stale: risk projection changed',
+        409,
+        'side_effect_approval_stale'
+      );
+    });
+    const stale = await app.inject({
+      method: 'POST',
+      url: '/api/v1/runs/run-1/commands',
+      headers: { 'idempotency-key': 'command-stale', 'if-match': 'W/"3"' },
+      payload: {
+        schema: 'nebula.ai-e2e.run-command/1.0',
+        action: 'start',
+        createdBy: 'operator',
+      },
+    });
+    expect(stale.statusCode).toBe(409);
+    expect(stale.json()).toMatchObject({
+      code: 'side_effect_approval_stale',
+      retryable: false,
+    });
+
+    service.command = vi.fn(() => {
+      throw new ServiceError(
+        "Side-effect 'effect-1' is not declared",
+        400,
+        'side_effect_declaration_required'
+      );
+    });
+    const undeclared = await app.inject({
+      method: 'POST',
+      url: '/api/v1/runs/run-1/commands',
+      headers: { 'idempotency-key': 'command-undeclared', 'if-match': 'W/"3"' },
+      payload: {
+        schema: 'nebula.ai-e2e.run-command/1.0',
+        action: 'start',
+        createdBy: 'operator',
+      },
+    });
+    expect(undeclared.statusCode).toBe(400);
+    expect(undeclared.json()).toMatchObject({
+      code: 'side_effect_declaration_required',
+      retryable: false,
+    });
   });
 
   it('keeps run identity on worker TODO, attempt, recovery and decision calls', async () => {

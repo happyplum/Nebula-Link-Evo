@@ -48,7 +48,7 @@ interface ApiProblem {
 }
 ```
 
-错误码至少区分：`validation_failed`、`not_found`、`state_conflict`、`idempotency_conflict`、`permission_denied`、`browser_busy`、`lease_expired`、`budget_exceeded`、`dependency_unavailable`、`outcome_unknown`、`side_effect_declaration_required`、`side_effect_bound_invalid`、`side_effect_policy_denied`、`side_effect_approval_required`、`side_effect_approval_stale`、`side_effect_approval_revoked` 和 `internal_error`。响应不得包含 secret、控制租约 token、完整 DOM 或模型原始机密输入。
+错误码至少区分：`validation_failed`、`not_found`、`state_conflict`、`idempotency_conflict`、`permission_denied`、`browser_busy`、`lease_expired`、`budget_exceeded`、`dependency_unavailable`、`outcome_unknown`、`side_effect_declaration_required`、`side_effect_bound_invalid`、`side_effect_policy_denied`、`side_effect_approval_required`、`side_effect_approval_stale`、`side_effect_approval_revoked` 和 `internal_error`。其中 5 个 `side_effect_*` code 已在 ai-e2e 路由层发射（declaration_required/bound_invalid 于创建、approval_required/stale/revoked 于 start/resume 命令）；`side_effect_policy_denied` 保持 run 终止原因 JSON code 语义。响应不得包含 secret、控制租约 token、完整 DOM 或模型原始机密输入。
 
 ### 2.3 请求头与并发控制
 
@@ -89,7 +89,7 @@ interface ServiceCapabilitiesV1 {
 
 ## 3. `ai-e2e` 对外业务 API
 
-实施状态：业务版本 create/list/get/copy、capability、workspace/分类资产列表、资产 revision 读、Authoring job 创建/暂停/恢复/取消、结构化 amendment/范围审批/安全边界命令、正式 Run 创建/控制/TODO attempt/决策/恢复，以及 Authoring/Run 权威 snapshot、持久 event-log 和 snapshot-first SSE 已 `shipped`；validate 与通用资产 revision 写仍为 `pending`。幂等创建端点要求 `Idempotency-Key`；v1 成功响应统一 `{ data, meta }`，错误统一 `ApiProblem`。
+实施状态：业务版本 create/list/get/copy、capability、workspace/分类资产列表、资产 revision 读、Authoring job 创建/暂停/恢复/取消、结构化 amendment/范围审批/安全边界命令、正式 Run 创建/控制/TODO attempt/决策/恢复，以及 Authoring/Run 权威 snapshot、持久 event-log 和 snapshot-first SSE 已 `shipped`；`validate`、版本作用域写路由（`pages/modules/functional-scripts/scenarios` 的 POST）、通用资产 revision 写与 activate、authoring job 级 decisions answer 及 deployment-profiles 管理路由仍为 `pending`。幂等创建端点要求 `Idempotency-Key`；v1 成功响应统一 `{ data, meta }`，错误统一 `ApiProblem`。
 
 ### 3.1 业务资产
 
@@ -103,16 +103,16 @@ interface ServiceCapabilitiesV1 {
 | GET      | `/api/v1/business-versions/:versionId/workspace`                    | 读取工作台聚合投影：current PRD、页面、业务/功能模块、功能脚本、场景及当前版本验证；不创建第二份业务状态。       |
 | POST     | `/api/v1/business-versions/:versionId/copy`                         | 原子深复制当前有效资产并重建内部 ID。                                                                            |
 | POST     | `/api/v1/business-versions/:versionId/validate`                     | 执行 Schema、引用、页面签名、调用图和待重检校验，不启动浏览器运行，也不能单独授予可运行 valid。                  |
-| GET/POST | `/api/v1/business-versions/:versionId/pages`                        | 列表或创建页面定义。                                                                                             |
-| GET/POST | `/api/v1/business-versions/:versionId/modules`                      | 列表或创建业务/功能模块。                                                                                        |
-| GET/POST | `/api/v1/business-versions/:versionId/functional-scripts`           | 列表或创建稳定脚本身份。                                                                                         |
-| GET/POST | `/api/v1/business-versions/:versionId/scenarios`                    | 列表或创建稳定场景身份。                                                                                         |
+| GET/POST | `/api/v1/business-versions/:versionId/pages`                        | GET 列表已交付；POST 创建页面定义为 pending。                                                                   |
+| GET/POST | `/api/v1/business-versions/:versionId/modules`                      | GET 列表已交付；POST 创建业务/功能模块为 pending。                                                              |
+| GET/POST | `/api/v1/business-versions/:versionId/functional-scripts`           | GET 列表已交付；POST 创建稳定脚本身份为 pending。                                                               |
+| GET/POST | `/api/v1/business-versions/:versionId/scenarios`                    | GET 列表已交付；POST 创建稳定场景身份为 pending。                                                               |
 | GET      | `/api/v1/assets/:assetType/:assetId/revisions`                      | 查询不可变修订历史、current、静态校验和按 scope 派生的验证摘要。                                                 |
 | GET      | `/api/v1/assets/:assetType/:assetId/revisions/:revisionId`          | 读取精确 payload/hash、来源、依赖闭包、验证记录与引用摘要。                                                      |
-| POST     | `/api/v1/assets/:assetType/:assetId/revisions`                      | 创建不可变修订；`assetType` 只允许登记的资产类型。                                                               |
-| POST     | `/api/v1/assets/:assetType/:assetId/revisions/:revisionId/activate` | 校验后切换唯一 current；功能脚本/场景还要求真实验证，copy 的 stale current 只能由系统事务创建；要求 `If-Match`。 |
+| POST     | `/api/v1/assets/:assetType/:assetId/revisions`                      | pending：创建不可变修订；`assetType` 只允许登记的资产类型。                                                      |
+| POST     | `/api/v1/assets/:assetType/:assetId/revisions/:revisionId/activate` | pending：校验后切换唯一 current；功能脚本/场景还要求真实验证，copy 的 stale current 只能由系统事务创建；要求 `If-Match`。 |
 
-部署 profile 是 project-scoped 稳定资产，通过 `/api/v1/projects/:projectId/deployment-profiles` 及其 revision 路由管理；业务版本只绑定精确 deployment revision，不复制 secret 值。
+部署 profile 是 project-scoped 稳定资产，目标通过 `/api/v1/projects/:projectId/deployment-profiles` 及其 revision 路由管理；业务版本只绑定精确 deployment revision，不复制 secret 值。当前实现为 pending：deployment profile 仅在项目创建时内联创建默认 profile（表结构已交付），独立管理路由尚未提供。
 
 资产生成/复核/修复使用独立耐久工作流：
 
@@ -125,7 +125,7 @@ interface ServiceCapabilitiesV1 {
 | GET      | `/api/v1/authoring-jobs/:jobId/event-log?afterSeq=N&limit=M`             | 持久 authoring event log。                                                                                            |
 | GET      | `/api/v1/authoring-jobs/:jobId/activity`                                 | 脱敏 Agent 活动 SSE；先发 `agent_stream.snapshot`，再发 `agent_stream.event`。                                         |
 | GET      | `/api/v1/authoring-jobs/:jobId/activity-log?afterSeq=N&limit=M`           | 按独立活动游标读取持久呈现事件。                                                                                       |
-| POST     | `/api/v1/authoring-jobs/:jobId/decisions/:decisionId/answer`             | 回答 authoring decision；长期影响同步 version decision。                                                              |
+| POST     | `/api/v1/authoring-jobs/:jobId/decisions/:decisionId/answer`             | pending：job 级决策回答；当前已交付的是 amendment 级 `/authoring-amendments/:amendmentId/decisions/:decisionId/answer`。 |
 | POST     | `/api/v1/authoring-jobs/:jobId/context-threads`                          | 绑定 URL/页面/当前模块/base revision scope；新 scope 自动使旧候选 stale。                                             |
 | GET/POST | `/api/v1/authoring-jobs/:jobId/amendments`                               | 列表/创建精确 base→candidate 的结构化修改；写要求幂等键。                                                             |
 | GET      | `/api/v1/authoring-amendments/:amendmentId`                              | 读取 diff、影响范围、审批、验证计划与候选状态。                                                                       |
@@ -169,6 +169,9 @@ verification scope 由服务端从精确 deployment revision、冻结的 Git/bui
 | GET    | `/api/v1/runs/:runId/decisions`                    | 返回决策请求和答案。                                  |
 | GET    | `/api/v1/runs/:runId/evidence`                     | 返回 manifest 和授权后的产物链接，不内联大媒体。      |
 | POST   | `/api/v1/runs/:runId/commands`                     | 提交 `start/pause/resume/cancel/close_browser` 命令。 |
+| POST   | `/api/v1/runs/:runId/todos/:todoId/start`          | 显式开始指定 TODO 的页面任务尝试（权威恢复/重派入口）。 |
+| POST   | `/api/v1/runs/:runId/todos/:todoId/attempts`       | 提交 TODO attempt 的完成结果（含验收结果与输出）。    |
+| POST   | `/api/v1/runs/:runId/todos/:todoId/resume`         | 恢复处于中断/可恢复状态的 TODO 页面任务。              |
 | POST   | `/api/v1/runs/:runId/decisions/:decisionId/answer` | 回答一次开放决策；影响需求的答案应用时追加版本决定。  |
 | GET    | `/api/v1/runs/:runId/events`                       | Run SSE；每次连接先发完整 snapshot，再发 live event。 |
 | GET    | `/api/v1/runs/:runId/event-log?afterSeq=N&limit=M` | 审计和补洞读取持久事件，不替代 snapshot bootstrap。   |
@@ -239,6 +242,24 @@ interface CreateAgentTaskRequestV1 {
     browserLeaseSequence: number;
     access: 'observe' | 'control';
   };
+  sideEffectAuthorization?: {
+    contextType: 'run' | 'authoring';
+    contextId: string;
+    environment: 'local' | 'test' | 'staging' | 'production';
+    policyVersion: string;
+    policyEvaluationId: string;
+    policyResult: 'auto_allowed' | 'approval_required';
+    projectionSha256: string;
+    effects: Array<{
+      stepId: string;
+      effectId: string;
+      kind: 'create' | 'update' | 'delete' | 'auth_change';
+      maxAffectedItems: number;
+      reversibility: 'reversible' | 'compensatable' | 'irreversible';
+      usesFileUpload?: boolean;
+    }>;
+    grant?: { grantId: string; status: 'active'; approvedProjectionSha256: string };
+  };
   correlation?: Record<string, string>;
 }
 ```
@@ -247,7 +268,7 @@ interface CreateAgentTaskRequestV1 {
 
 - `input` 在任务开始后不可变；业务输入和页面任务包由 `ai-e2e` 生成。
 - 页面任务 `input` 必须包含所需 actor、派发时已确认认证态和本任务允许的认证状态变化；只包含 actorKey/角色和 secret reference，不包含凭据值。子代理不得据此自行扩展登录或切换身份。
-- 任何可能写浏览器的页面任务 `input` 还必须包含策略版本、policy evaluation 引用、风险投影 hash、当前脚本步骤对应的 effectId/数量边界，以及 staging 高风险时的 active grant 引用；这些字段不可由模型生成或覆盖。
+- 任何可能写浏览器的页面任务，其创建请求还必须通过顶层 `sideEffectAuthorization` 字段携带策略版本、policy evaluation 引用、风险投影 hash、当前脚本步骤对应的 effectId/数量边界，以及 staging 高风险时的 active grant 引用（见上方接口定义与 `semantic-task-projection`）；这些字段不可由模型生成或覆盖。
 - `correlation` 对 `ai-chat-service` 不透明，只允许受限字符串；不能决定业务流程。
 - `responseSchema` 必须受平台大小、深度和关键字白名单约束，防止任意递归 Schema。
 - `browserBinding` 是模型不可见的执行能力；`observe` 只能读取 snapshot/页面状态，`control` 才能提交 act。租约 token 只存在于受限任务运行态或 secret store，不进入模型消息、普通日志、事件 payload 或数据库明文字段。
@@ -402,17 +423,17 @@ interface RunEventV1 {
 }
 ```
 
-最低事件集：`run.snapshot/run.lifecycle_changed/run.completed`、`todo.state_changed`、`attempt.started/attempt.completed`、`page_task.started/page_task.completed`、`decision.requested/decision.answered/decision.applied`、`side_effect_policy.evaluated`、`side_effect_approval.requested/granted/revoked/expired`、`browser.operation_linked`、`evidence.manifest_sealed` 和 `run.command_rejected`。
+最低事件集（与实现一致）：`run.created/run.lifecycle_changed/run.state_changed/run.completed/run.command_rejected/run.coordinator_paused/browser_session.attached`、`todo.state_changed`、`attempt.completed`、`page_task.started`、`decision.requested/decision.applied` 和 `side_effect_policy.evaluated`。staging 高风险副作用审批不发射独立 `side_effect_approval.*` token：attempt 级决策发射 `decision.requested/applied`（category=`side_effect_approval`）；run 创建时的审批请求不发射 `decision.requested`，由 snapshot bootstrap 与 `run.lifecycle_changed` 承载，回答后发射 `decision.applied`。页面任务中断不发射 `page_task.interrupted`，由 `attempt.completed`（result=`recoverable_interruption`）与 `todo.state_changed` 承载；`attempt.started`、`page_task.completed`、`browser.operation_linked`、`evidence.manifest_sealed` 等更细粒度 token 当前不发射，相关事实分别由 attempt/page_task 状态投影、external task link 与 evidence manifest 查询承载。
 
 ### 6.2 Agent 与浏览器事件
 
 - `AgentTaskEventV1` 使用 task-scoped `seq`；当前事件集包含 `agent_task.snapshot/created/state_changed/model_turn/tool_call/tool_result/budget_updated/command.accepted/command.completed/command.rejected/checkpoint.created/skill_loaded/skill_execute/skill_result/skill_failure`。
-- `BrowserEventV1` 使用 browser-session-scoped `seq`，最低事件集：`browser_session.snapshot`、`tab.created/selected/closed`、`lease.issued/revoked/expired`、`operation.queued/started/completed`、`target.resolved/stale/ambiguous`、`artifact.created/deleted`、`animation.started/completed`。
+- `BrowserEventV1` 使用 browser-session-scoped `seq`。当前实际发射集：`browser_session.snapshot/state_changed`、`lease.issued/revoked`、`operation.queued/started/completed`（失败由 `operation.completed` payload 的 `status`/`errorCode` 表达，不发射独立 `operation.failed`）、`capture.started/completed`、`artifact.created/deleted`。目标集还包括 `tab.created/selected/closed`、`lease.expired`、`target.resolved/stale/ambiguous`、`operation.accepted/cancelled`、`animation.started/completed`——这些 token 当前不发射，相关事实由 operation 结果（`resolvedTarget`/error problem）与 session 状态投影承载。
 - Agent/浏览器事件只有过程事实；`ai-e2e` 写入自己的关联事件后才成为业务时间线的一部分。
 
 ### 6.3 Authoring 事件
 
-`AuthoringEventV1` 使用 authoring-job-scoped `seq/stateVersion` 和同一通用因果字段。最低事件集：`authoring.snapshot/lifecycle_changed/stage_changed/completed`、`authoring_task.state_changed`、`authoring_attempt.completed`、`asset.candidate_created/validated/verified/activated/rejected`、`coverage.changed`、`decision.requested/applied`、`side_effect_policy.evaluated` 和 `side_effect_approval.requested/granted/revoked/expired`。
+`AuthoringEventV1` 使用 authoring-job-scoped `seq/stateVersion` 和同一通用因果字段。最低事件集（与实现一致）：`authoring.created/state_changed/settled/cancelled/context_bound/command_rejected/verification_scheduled`、`authoring_task.created/state_changed`、`authoring_attempt.completed`、`asset.candidate_created/failed/rejected/queued_at_safe_boundary/verification_started/activated`、`asset.revision_activated` 和 `decision.applied`。authoring 决策创建时不发射 `decision.requested`（创建事实由 snapshot bootstrap 承载），回答/应用发射 `decision.applied`；暂停不发射 `authoring.paused`，由 `authoring.state_changed`（to=`paused`）承载；终态收敛 token 是 `authoring.settled`（非 `completed`）；阶段推进事实由 `authoring.state_changed` 与 amendment/candidate 事件承载，不发射独立的 `authoring.stage_changed`/`coverage.changed`。
 
 ### 6.4 SSE 重连
 

@@ -114,7 +114,16 @@ export function createServer(options: Partial<ServerOptions> = {}) {
     if (request.url.startsWith('/ai-e2e/') && !ASSET_EXT.test(request.url)) {
       return reply.sendFile('index.html');
     }
-    reply.code(404).send({ error: 'Not Found' });
+    const correlationHeader = request.headers['x-correlation-id'];
+    const correlationId = Array.isArray(correlationHeader)
+      ? correlationHeader[0] ?? request.id
+      : correlationHeader ?? request.id;
+    reply.code(404).send({
+      code: 'not_found',
+      message: `No route for ${request.method} ${request.url}`,
+      retryable: false,
+      correlationId,
+    });
   });
 
   return app;

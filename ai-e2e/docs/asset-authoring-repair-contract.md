@@ -242,12 +242,12 @@ revision 激活事务同步维护 `asset_revision_dependencies`，关系至少�
 | ------ | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
 | POST   | `/api/v1/business-versions/:versionId/authoring-jobs`        | 创建 bootstrap/recheck/repair job，要求幂等键；可选 `intent=locate_in_browser` 只调度 navigation-only 浏览器任务，不生成候选。 |
 | GET    | `/api/v1/authoring-jobs/:jobId`                              | 返回权威 authoring snapshot、coverage 和 active task。                                                                         |
-| POST   | `/api/v1/authoring-jobs/:jobId/commands`                     | `start/pause/resume/cancel`，要求 `If-Match`。                                                                                 |
+| POST   | `/api/v1/authoring-jobs/:jobId/commands`                     | `pause/resume/cancel`，要求 `If-Match`。job 创建即自动生成首个 task 并开始，`start` 不作为公开命令提供（`authoring_commands.type` 的 DB 约束保留 `start`/`answer_decision` 作为前向兼容枚举）。 |
 | GET    | `/api/v1/authoring-jobs/:jobId/events`                       | snapshot-first SSE，job-scoped 单调 seq。                                                                                      |
 | GET    | `/api/v1/authoring-jobs/:jobId/event-log`                    | 持久事件审计/补洞。                                                                                                            |
-| POST   | `/api/v1/authoring-jobs/:jobId/decisions/:decisionId/answer` | 回答并应用 authoring decision；长期影响同步 version decision。                                                                 |
+| POST   | `/api/v1/authoring-jobs/:jobId/decisions/:decisionId/answer` | pending：job 级决策回答；当前已交付的是 amendment 级 `/authoring-amendments/:amendmentId/decisions/:decisionId/answer`。 |
 
-最低事件：`authoring.snapshot/lifecycle_changed/stage_changed/completed`、`authoring_task.state_changed`、`authoring_attempt.completed`、`asset.candidate_created/validated/verified/activated/rejected`、`coverage.changed` 和 `decision.requested/applied`。
+最低事件集（与实现一致，同 `service-api-event-contract.md` §6.3）：`authoring.created/state_changed/settled/cancelled/context_bound/command_rejected/verification_scheduled`、`authoring_task.created/state_changed`、`authoring_attempt.completed`、`asset.candidate_created/failed/rejected/queued_at_safe_boundary/verification_started/activated`、`asset.revision_activated` 和 `decision.applied`。authoring 决策创建时不发射 `decision.requested`（由 snapshot 承载）；暂停不发射 `authoring.paused`，由 `authoring.state_changed`（to=`paused`）承载；终态收敛 token 是 `authoring.settled`（非 `completed`）；阶段推进由 `authoring.state_changed` 与 amendment/candidate 事件承载，不发射独立的 `authoring.stage_changed`/`coverage.changed`。
 
 所有外部 Agent/browser 调用继续通过 integration outbox；job state/event 同事务，SSE 不是状态源。
 

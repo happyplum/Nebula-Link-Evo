@@ -1,7 +1,7 @@
 # AI E2E 目标数据模型
 
-> 状态：`shipped`。纯 semantic migration 001、014–018 已交付项目、资产治理、authoring/run/browser queue、decision/policy/evidence/outbox/external link、结构化 amendment/Chat scope 表与核心仓储；Project/Authoring/Run API/SSE 和跨服务协调器已接入。
-> 更新时间：2026-08-24。
+> 状态：`shipped`。纯 semantic migration 001、014–020 已交付项目、资产治理、authoring/run/browser queue、decision/policy/evidence/outbox/external link、结构化 amendment、长期证据保留清理（019）、agent activity（020）与核心仓储；Project/Authoring/Run API/SSE 和跨服务协调器已接入。
+> 更新时间：2026-09-05。
 > 本文定义 `ai-e2e` 首期最终关系模型、不可变修订、版本复制事务、页面规范化、运行数据与证据存储。迁移编号和物理 SQL 在实施时按现有 SQLite migration 链追加，但不得改变本文的所有权和唯一性约束。
 
 ### 当前物理映射
@@ -536,6 +536,10 @@ type JsonValue = JsonScalar | JsonValue[] | { [key: string]: JsonValue };
 - `actorKey` 在场景内唯一，`initialAuth` 和每个 `authContext` 引用必须存在；actor 只描述非秘密别名与角色，凭据继续通过受控输入/secret reference 绑定。
 - `authContext.after` 与 `before` 不同的调用必须引用声明 `auth_change` 的脚本；声明 `auth_change` 的调用不得把结果写成 `unchanged`。
 - 全部认证变化调用必须由依赖边形成单一顺序；展开计划时沿该顺序模拟唯一活动身份，任何 TODO 的 `before` 无法由 `initialAuth` 或已验证前序变化到达时拒绝计划。
+
+> 当前实现注记（fail-closed）：`for_each` 与 `runWhen` 的运行时语义尚未实现，validator 在场景写入（含 revision 创建）时对二者显式拒绝；`repeat` 当前仅接受 1–100 的固定次数（number 或 `{kind:'count',count}`）。完整实现为独立 pending 项。
+
+- `test_scenario` revision 创建拒绝畸形结构：非对象 payload、非数组 `calls`、条目缺 `callKey`/`functionalScriptId`（空 `calls` 数组的场景 revision 本身合法）；正式 Run 创建对零 calls 场景显式拒绝。
 - scenario revision 引用脚本稳定 ID；run plan 冻结时解析到 current valid script revision。
 
 ## 9. 业务版本 copy 事务
@@ -697,7 +701,7 @@ scope 至少冻结 deployment revision、Git/build 标识、角色、locale、vi
 | `current_policy_evaluation_id` | TEXT | 最近一次策略评估 |
 | `active_approval_grant_id` | TEXT NULL | 仅 staging 高风险且 grant active 时存在 |
 | `pause_reason_json` | TEXT NULL | 结构化暂停原因 |
-| `termination_reason_json` | TEXT NULL | 取消/终态原因；区分用户取消、approval_denied 与 side_effect_policy_denied |
+| `termination_reason_json` | TEXT NULL | 取消/终态原因；区分用户取消、`decision_rejected`（审批拒绝，含 decisionId）与 side_effect_policy_denied |
 | `summary_json` | TEXT NULL | 终态统计，不是状态源 |
 | `started_at/completed_at/created_at` | TEXT |  |
 
@@ -923,14 +927,14 @@ manifest sealed 后不可修改；补充证据创建新的 manifest revision 或
 
 跨服务调用不能纳入 SQLite 事务，采用 outbox/状态机：先记录 intent/command，再调用外部服务，最后以幂等回调/查询收敛。不得在持有 SQLite write transaction 时等待模型或浏览器网络调用。
 
-纯 semantic migration 001、014–018 在独立数据库中按固定顺序执行；015+ 使用 checksum/状态账本覆盖失败 rollback 与 checksum 漂移拒绝。
+纯 semantic migration 001、014–020 在独立数据库中按固定顺序执行；015+ 使用 checksum/状态账本覆盖失败 rollback 与 checksum 漂移拒绝。
 
 ## 16. 当前实现差距
 
 - semantic v1 已有 business version、独立 current asset graph、稳定功能脚本身份、不可变 revision payload/hash、独立功能脚本 Schema validator、scoped verification、dependency index、verified-scope 激活事务、公开 Authoring API 和可视语义执行。
 - `test_runs` 从 verified scenario 原子冻结 base plan、TODO/依赖和初始变量，并通过乐观命令、page task/attempt、Agent/browser 协调、精确依赖传播、恢复/决策应用、持久 seq event 和公开 API/SSE 驱动状态。
 - 持久 outbox、opaque external task link 与确定性协调器已接入网络派发、启动恢复和跨服务状态核对；lease token 只进入本机加密 secret store，不写数据库明文。
-- 内容寻址 artifact、append-only evidence item 和 sealed manifest 已由协调器接入 proxy 截图/DOM/operation 自动提升，proxy TTL/hold 短期原始产物清理已交付；ai-e2e 长期证据保留清理、脱敏完成和 UI 证据时间线尚未实现。
+- 内容寻址 artifact、append-only evidence item 和 sealed manifest 已由协调器接入 proxy 截图/DOM/operation 自动提升，proxy TTL/hold 短期原始产物清理与 ai-e2e 长期证据保留清理（019，默认 7/30 天 + `artifact_storage_cleanup_receipts` 物理删除续跑）均已交付；通用自动脱敏与 UI 证据时间线仍待实现。
 - 页面 revision 已保存 Origin 无关签名；运行匹配器、完整参数 Schema 和基线采集仍待实现。
 - 持久 authoring job/task/attempt/command/event、candidate verification/activation、coverage/dependency 和跨 authoring/run 的 browser FIFO 已接入 bootstrap/recheck/repair。
 - 风险投影 hash、policy evaluation/grant/decision、staging 高风险审批、production 业务写硬拒绝和逐 effectId 跨服务参数门禁已交付。

@@ -254,7 +254,7 @@
 - 浏览器执行会话、Tab、observe/control 租约、原子操作、去重账本、结果查询、Agent task 和四类目标事件流（Authoring/Run/Agent/Browser）的 API/Schema 已在 `service-api-event-contract.md` 锁定；三服务控制面与 Authoring/Run snapshot-first SSE 已交付。v1 单 BrowserContext、单活动身份与显式串行切换已锁定，同时多身份/多 Context 及后期多 Tab 并发仍需在启用前另行设计。
 - 主代理与子代理运行时采用干净 Agent task、模型不可见短期 opaque 租约 token、hash/process epoch、主代理签发/回收和 proxy SQLite WAL 操作账本；正式 Authoring/Run 任务投影、派发/回收、持久事件游标消费与跨服务协调已交付，独立正式任务包 JSON Schema 仍待实现。
 - 双模型调用、`vision.analyze_page`、`vision.resolve_target`、声明式 Skill manifest、版本 pin 和工具权限交集已在 `ai-model-skill-contract.md` 锁定并接入 Authoring；独立正式 JSON Schema 仍待实现。
-- 决策、内容寻址 artifact、evidence manifest/item 和默认保留结构已落库，证据追加/封存仓储已实现；跨服务脱敏提升、身份访问控制和清理任务仍待实现。
+- 决策、内容寻址 artifact、evidence manifest/item 和默认保留结构已落库，证据追加/封存仓储已实现；proxy TTL/hold 短期清理与 ai-e2e 长期证据 7/30 天保留清理已交付，跨服务脱敏提升与身份访问控制仍待实现。
 - 环境风险矩阵、计划级风险投影、staging grant、production 硬拒绝、修订后重新审批和逐 effectId 跨服务授权交集已实现。
 - 首期非本机/多用户部署不在当前信任边界内；若未来开放，必须先设计统一身份、授权和租户隔离，不以 capability/lease 代替认证。
 - 可视操作动画的表现、节奏和重放协议。

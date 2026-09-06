@@ -144,6 +144,7 @@ function buildSideEffectAuthorization(
       kind: kind as 'create' | 'update' | 'delete' | 'auth_change',
       maxAffectedItems: step.maxAffectedItems ?? 1,
       reversibility: reversibility as 'reversible' | 'compensatable' | 'irreversible',
+      ...(step.operation === 'set_files' ? { usesFileUpload: true } : {}),
     };
   });
   const environment = String(todo.deployment.environment);
