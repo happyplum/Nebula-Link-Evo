@@ -30,7 +30,7 @@ describe('nebula-browser CLI', () => {
     });
 
     expect(code).toBe(0);
-    expect(JSON.parse(stdout[0]!)).toEqual({ service: 'proxy-adapter' });
+    expect(JSON.parse(stdout[0])).toEqual({ service: 'proxy-adapter' });
     expect(client.close).toHaveBeenCalledOnce();
   });
 
@@ -205,7 +205,7 @@ describe('nebula-browser CLI', () => {
 
     expect(code).toBe(4);
     expect(stdout).toHaveLength(1);
-    expect(JSON.parse(stdout[0]!)).toMatchObject({ id: 'failed-step', ok: false });
+    expect(JSON.parse(stdout[0])).toMatchObject({ id: 'failed-step', ok: false });
     expect(executeOperation).toHaveBeenCalledOnce();
   });
 
@@ -261,7 +261,7 @@ describe('nebula-browser CLI', () => {
 
     expect(code).toBe(3);
     expect(stderr).toHaveLength(1);
-    expect(JSON.parse(stderr[0]!)).toMatchObject({
+    expect(JSON.parse(stderr[0])).toMatchObject({
       code: 'dependency_unavailable',
       message: 'cleanup failed',
     });
