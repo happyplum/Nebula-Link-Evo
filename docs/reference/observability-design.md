@@ -52,6 +52,8 @@ Defer distributed tracing until the service topology or debugging needs justify 
 
 ## Metric Catalog
 
+> 指标归属：本目录以 proxy-adapter 为主视角；`nebula_queued_jobs`/`nebula_running_jobs`（conversation job queue）与 `nebula_ai_provider_latency_ms`/`nebula_ai_provider_errors_total`（provider calls）按当前服务拓扑属于 `ai-chat-service` 的采集点。全目录均为 reference design，未实现。
+
 | Metric                              | Type      | Labels                            | Collection point              |
 | ----------------------------------- | --------- | --------------------------------- | ----------------------------- |
 | `nebula_http_request_duration_ms`   | Histogram | method, route, status_code        | Fastify `onResponse`          |

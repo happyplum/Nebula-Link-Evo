@@ -35,3 +35,5 @@
 - [shipped] 删除未被 canonical 客户端使用的旧双后端 HTTP helper；ai-e2e 仅保留 Agent Task 与 browser-execution v1 客户端，不提供单次生成、Chat session、debug DOM 或 LiveKit 兼容调用。
 - [shipped] 项目创建保留用户入口 URL pathname，将其冻结为 deployment `basePath`、起始页面 `routeTemplate`、starter script URL 断言和工作台深链接；不再把 `/debug/` 等入口错误折叠为 `/`。
 - [shipped] semantic 数据库启动时恢复缺失的全局浏览器 FIFO 游标，按已持久 `browser_jobs.queue_seq` 最大值继续编号，不删除、重排或覆盖既有队列记录。
+- [shipped] 副作用审批生命周期闭环：staging 高风险评估纳入 `usesFileUpload` 上传维度；`side_effect_approval_grants` 在 run 终态（`context_terminated`）、审批决策拒绝（`decision_rejected`）与投影漂移（`projection_stale`）时自动置 `expired`（`revoked` 枚举预留）；start/resume 命令重查 policy evaluation 投影 hash 与 active grant，漂移时过期 grant、转入 `paused(approval_required)` 并创建新一轮审批 decision，命令记 rejected；`side_effect_declaration_required/bound_invalid/approval_required/approval_stale/approval_revoked` 五个 ApiProblem 错误码经 `mapRunError` 在路由层发射（`side_effect_policy_denied` 保持终止原因 JSON code）。
+- [shipped] 场景调用 fail-closed：`validateScenarioPayload` 与 test_scenario revision 创建对 `runWhen` 与 `repeat.for_each` 显式拒绝（`validation_failed`），`repeat` 仅接受 1–100 固定次数；authoring 候选不再能携带未实现编排字段静默入库。完整 for_each/runWhen 实现为独立 pending。
