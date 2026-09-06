@@ -80,6 +80,46 @@ export default tseslint.config(
     },
   },
   {
+    files: ['shared/**/*.ts'],
+    languageOptions: {
+      parserOptions: {
+        projectService: false,
+        project: ['./shared/tsconfig.lint.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+  },
+  {
+    files: ['integrations/browser-control-client/src/**/*.ts'],
+    languageOptions: {
+      parserOptions: {
+        projectService: false,
+        project: ['./integrations/browser-control-client/tsconfig.lint.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+  },
+  {
+    files: ['integrations/deepseek-harness-plugin/src/**/*.ts'],
+    languageOptions: {
+      parserOptions: {
+        projectService: false,
+        project: ['./integrations/deepseek-harness-plugin/tsconfig.lint.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+  },
+  {
+    files: ['agent-activity-ui/src/**/*.ts', 'agent-activity-ui/src/**/*.tsx'],
+    languageOptions: {
+      parserOptions: {
+        projectService: false,
+        project: ['./agent-activity-ui/tsconfig.lint.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+  },
+  {
     files: ['ai-e2e/ui/e2e/**/*.ts', 'ai-e2e/ui/playwright.config.ts'],
     languageOptions: {
       parserOptions: {

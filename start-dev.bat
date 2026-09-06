@@ -45,7 +45,7 @@ echo     AI Chat Health:    http://localhost:3001/health
 echo     Debug Health:      http://localhost:3000/debug/api/health
 echo.
 echo   SSE Endpoints:
-echo     Debug SSE:         http://localhost:3000/debug/stream
+echo     Debug SSE:         http://localhost:3000/debug/api/stream
 echo     Chat SSE:          http://localhost:3001/api/v1/chat/sessions/{sessionId}/stream
 echo.
 echo To stop: run stop.bat

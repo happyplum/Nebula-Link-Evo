@@ -8,6 +8,7 @@ AI-assisted browser automation platform. `proxy-adapter` is the browser capabili
 
 ```text
 shared/             Shared types and utilities (no src/ dir — source at package root)
+agent-activity-ui/  Stateless Agent-activity reducer + React renderer library shared by debug-ui and ai-e2e/ui (build-only, no port, not in pnpm dev)
 proxy-adapter/      Browser MCP gateway — MCP Server, Playwright control, debug streams (:3000)
   src/mcp-server/   MCP Server transport (StreamableHTTP)
   src/tools/        ToolRegistry + providers + MCP Server adapter
@@ -19,8 +20,9 @@ integrations/        Local controlled consumers (no browser engine ownership)
   browser-control-client/    Shared HTTP/MCP client + nebula-browser CLI
   deepseek-harness-plugin/   DeepSeek Harness controlled DSH bundle
 config/             Shared config templates (not a package)
+patches/            pnpm patchedDependencies patch files (not a package)
 tools/              Utility scripts (not a package)
-docs/               Architecture docs, API references, skill docs (not a package)
+docs/               Architecture docs, API references, shipped manifests (not a package)
 ```
 
 ## Core product boundaries
@@ -30,7 +32,7 @@ docs/               Architecture docs, API references, skill docs (not a package
 - `ai-chat-service` owns reusable AI capabilities. The analysis/decision model understands requirements and browser evidence, plans the next test action, and consumes MCP/vision tools; the vision model interprets screenshots together with DOM evidence for text-only analysis models.
 - MCP client/tool orchestration belongs in `ai-chat-service`. Its shipped reusable Skills runtime loads only local immutable declarative packages, pins id/version/content hash, permits at most one current Skill per Agent task, and can only shrink the task's tool and budget authority. Vision v2 and per-effect policy/grant intersection are shipped; Vision remains a stateless immutable-snapshot evidence helper and never owns browser execution.
 - `ai-e2e` owns PRD-driven E2E product orchestration, not generic AI or browser infrastructure. A page contains functional modules, a functional module contains multiple reusable functional scripts, and scenarios compose script calls across modules/pages.
-- Target agent orchestration is page-scoped: the main AI owns flow/TODO dependencies, shared run variables, decisions and dispatch; each child AI executes only its assigned page-scene fragment. Default to a clean child context, but allow the main AI to resume an interrupted context after explicit state and side-effect checks.
+- Target agent orchestration is page-scoped: the main AI owns flow/TODO dependencies, shared run variables, decisions and dispatch; each child AI executes only its assigned page-scene fragment. Every dispatch defaults to a clean child context; resuming an interrupted context after explicit state and side-effect checks is the planned extension (pending, see `docs/PRODUCT-SPEC-INDEX.md` §3.9).
 - The E2E authority is a structured semantic script executed visibly through `proxy-adapter`; ai-e2e no longer contains a TypeScript subprocess executor or debug-browser path.
 - The ai-e2e main agent is a durable workflow coordinator backed by authoring job/task/attempt/event state, not a long-lived model conversation. Bootstrap, recheck and repair separate candidate generation, validation, real browser verification and atomic activation; see `ai-e2e/docs/asset-authoring-repair-contract.md`.
 - Cross-service APIs, scoped Agent tasks, browser operation tools, snapshot-first events, idempotency and recovery are fixed in `ai-e2e/docs/service-api-event-contract.md`; dual-model and declarative Skill rules are fixed in `ai-e2e/docs/ai-model-skill-contract.md`. Proxy session/lease/operation、截图/DOM 与 browser events，ai-chat-service Agent task/Skill/Vision v2/逐 effect 授权，以及 ai-e2e Project/Authoring/Run API、outbox 协调、可视语义执行、证据提升和生产工作台均已交付。
@@ -40,10 +42,10 @@ docs/               Architecture docs, API references, skill docs (not a package
 ## Commands
 
 ```bash
-pnpm dev            # shared build + parallel dev for shared/debug-ui/proxy-adapter/ai-chat-service
-pnpm build          # shared → integrations → debug-ui → proxy-adapter → ai-chat-service → ai-e2e
+pnpm dev            # predev starts LiveKit → shared build → parallel dev for shared/debug-ui/proxy-adapter/ai-chat-service
+pnpm build          # shared → agent-activity-ui → integrations → debug-ui → proxy-adapter → ai-chat-service → ai-e2e
 pnpm test           # pnpm -r test (vitest everywhere)
-pnpm lint           # eslint debug-ui/src proxy-adapter/src ai-chat-service/src
+pnpm lint           # eslint across debug-ui / ai-e2e/ui / proxy-adapter / ai-chat-service / shared / integrations / agent-activity-ui
 pnpm format         # prettier --write debug-ui/src proxy-adapter/src ai-chat-service/src
 ```
 
@@ -55,9 +57,9 @@ pnpm format         # prettier --write debug-ui/src proxy-adapter/src ai-chat-se
 
 ## Hidden runtime order
 
-- Build order is strict: `shared` → `browser-control-client` → `deepseek-harness-plugin` → `debug-ui` → `proxy-adapter` → `ai-chat-service` → `ai-e2e`.
-- `start.bat` is not a thin wrapper around `pnpm build`: it builds `shared`, starts LiveKit, verifies ports, then builds/starts `proxy-adapter` and `ai-chat-service` (if applicable).
-- `proxy-adapter` startup order matters: env load → DB backup init outside tests → plugin registration → `AppService.initialize()` → browser-execution provider → MCP/debug surfaces.
+- Build order is strict: `shared` → `agent-activity-ui` → `browser-control-client` → `deepseek-harness-plugin` → `debug-ui` → `proxy-adapter` → `ai-chat-service` → `ai-e2e`.
+- `start.bat` is not a thin wrapper around `pnpm build`: it builds `shared`, starts LiveKit, verifies ports, then builds/starts `proxy-adapter`, `ai-chat-service` and `ai-e2e`.
+- `proxy-adapter` startup order matters: env load → DB backup init outside tests → browser-execution service init → tool provider registration (`ToolRegistry.registerProvider`) → HTTP routes → MCP/debug surfaces. `AppService` is only a tool/MCP inventory facade (`setToolRegistry`) and no longer owns browser lifecycle.
 - Chat reconnect always reboots from a fresh `agent_stream.snapshot` and then accepts only `agent_stream.event`; there is no parallel Chat wire contract.
 - `ai-chat-service` 配置加载器只按工作目录依次搜索 `config/config.json`、`../config/config.json`、`../../config/config.json`、`nebula-link-evo/config/config.json`（显式 `configPath` 优先）；不会自动搜索包内配置。`proxy-adapter` 不读取 AI provider 配置。
 - 环境文件按进程入口独立加载且入口是本进程唯一 owner：`proxy-adapter/src/server.ts` 与 `ai-chat-service/src/server.ts` 依次尝试工作目录 `.env`、父目录 `.env`；`ai-e2e/src/server/index.ts` 依次尝试工作目录 `.env.local`、父目录 `.env`，二者均不存在时由 dotenv 回退工作目录 `.env`。均以既有 `process.env` 为最高优先级。不得在 `shared` 或可复用 `buildApp()` 中增加 dotenv 副作用。
@@ -91,6 +93,9 @@ pnpm format         # prettier --write debug-ui/src proxy-adapter/src ai-chat-se
 
 ## Local AGENTS
 
+Package-level entries (nested `AGENTS.md` under `debug-ui/src/**`, `debug-ui/e2e/`, `proxy-adapter/src/**` follow the nearest-doc principle and are not individually listed here):
+
+- `agent-activity-ui/AGENTS.md`
 - `debug-ui/AGENTS.md`
 - `proxy-adapter/AGENTS.md`
 - `ai-chat-service/AGENTS.md`
@@ -117,6 +122,7 @@ pnpm format         # prettier --write debug-ui/src proxy-adapter/src ai-chat-se
 
 - `docs/PRODUCT-SPEC-INDEX.md` — 根索引 + 跨包契约 + 全局修改维护协议
 - `shared/PRODUCT-SPEC.md`
+- `agent-activity-ui/PRODUCT-SPEC.md`
 - `proxy-adapter/PRODUCT-SPEC.md`
 - `ai-chat-service/PRODUCT-SPEC.md`
 - `debug-ui/PRODUCT-SPEC.md`
@@ -132,5 +138,5 @@ pnpm format         # prettier --write debug-ui/src proxy-adapter/src ai-chat-se
 - **修改 / 开发功能单元前**：先加载该单元对应的 `docs/shipped/<unit>.md` shipped 清单，了解已落实事实和当前边界。
 - **开发前记录计划**：可用 `[pending]` 记录计划开发的内容（文件路径、预期行为、接口签名）；落地后改为 `[shipped]`。
 - **功能单元开发完毕后**：必须维护对应的 `docs/shipped/<unit>.md` shipped 清单——将 `[pending]` 改为 `[shipped]`、追加新事实、修正过时标记，不新建重复条目。
-- **单元级事实不入 README**：每个功能单元独立一份文件；根 README 与 `docs/shipped/README.md` 只放索引，不放单元事实。
+- **单元级事实默认入 shipped 文件**：每个功能单元独立一份文件；`docs/shipped/README.md` 只放索引。根 README 不新增单元事实章节，仅保留既有被包级 `PRODUCT-SPEC.md` 显式引用为验收面的章节（Debug Chat Rendering、Debug UI Monitor Sidebar、AI Provider System 等），这些章节随对应 shipped 单元同步维护。
 <!-- shipped-workflow:end -->
