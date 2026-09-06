@@ -82,7 +82,8 @@ proxy-adapter (:3000)
 Browser
     │ http://localhost:5173/debug (Vite dev server)
     │
-    ├─ /api/* → proxy-adapter (:3000)
+    ├─ /api/v1/{chat,ai,test-ai,config} → ai-chat-service (:3001)
+    ├─ /api/* (其他，含 browser-execution) → proxy-adapter (:3000)
     ├─ /debug/api/* → proxy-adapter (:3000)
     └─ /debug/* (其他) → Vite 本地处理
 ```
@@ -93,7 +94,8 @@ Browser
 Browser
     │ http://localhost:5173/debug (debug-ui 独立部署/Vite dev server)
     │
-     ├─ /api/* → proxy-adapter (:3000)
+     ├─ /api/v1/{chat,ai,test-ai,config} → ai-chat-service (:3001)
+     ├─ /api/* (其他) → proxy-adapter (:3000)
      └─ /debug/api/* → proxy-adapter (:3000)
 ```
 
@@ -152,7 +154,7 @@ AI Providers                            Chromium
 ## 参考文档
 
 - [AI Operation Flow](reference/ai-operation-flow.md) — AI 操作流程与执行模型
-- [AI E2E UI Architecture](reference/ai-e2e-ui-architecture.md) — AI E2E UI 的 Atlas 视觉系统、路由、Tab 与 SSE 架构
+- [AI E2E UI Architecture](reference/ai-e2e-ui-architecture.md) — ai-e2e semantic 工作台（项目首页 / 版本列表 / Authoring+Run 工作台）的路由、Atlas 视觉系统、事件流与只读 BrowserStage 架构
 - [AI E2E Version & Page Assets](../ai-e2e/docs/version-page-asset-contract.md) — 业务版本 copy、部署、页面锚点、URL 参数和页面基线契约
 - [AI E2E Agent & Browser Execution](../ai-e2e/docs/agent-browser-execution-contract.md) — 页面任务包、Agent 作用域、浏览器控制租约、原子操作和可视事件契约
 - [AI E2E Run State, Decision & Evidence](../ai-e2e/docs/run-state-decision-evidence-contract.md) — 分层状态、失败传播、决策、证据和人工控制契约
@@ -162,3 +164,4 @@ AI Providers                            Chromium
 - [Proxy Adapter Observability Design](reference/observability-design.md) — proxy-adapter 可观测性设计参考
 - [Technical Debt Backlog](reference/technical-debt-backlog.md) — 已从大型清理计划提炼出的剩余维护项
 - [Debug Page Integration API Reference](reference/debug-page-integration-api-reference.md) — 完整的 API 端点、SSE 事件参考
+- [Documentation Maintenance Redesign](superpowers/specs/2026-07-08-documentation-maintenance-design.md) — 2026-07-08 文档维护体系重设计的历史设计稿（PRODUCT-SPEC/shipped 工作流的前身，仅作存档，现状以根 `AGENTS.md` 与 `PRODUCT-SPEC-INDEX.md` 为准）

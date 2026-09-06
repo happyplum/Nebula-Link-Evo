@@ -34,11 +34,13 @@ DELETE /api/v1/chat/sessions/:id                 Delete session
   message_count: number
   provider: string
   model: string
-  status?: 'idle' | 'running' | 'paused' | 'blocked' | 'completed'
+  status?: 'idle' | 'running' | 'paused' | 'interrupted' | 'cancelled' | 'completed'
   jobId?: string
   agentState?: SessionAgentState
 }
 ```
+
+`status` 的权威口径为六态状态机（`idle/running/paused/interrupted/cancelled/completed`）；公共响应 schema 与 GET 端点实际还返回第七个值 `blocked`——process_restart 恢复路径的瞬态（`recoverRunningSessions()` 将重启时 running 的会话标记为 blocked，可 resume），不纳入六态权威状态机口径。
 
 ### Messages
 
@@ -126,7 +128,9 @@ Event payload 的 `type` 只允许 `stream.state`、`turn.upsert`、`section.ups
 
 ---
 
-## Debug API (Playwright / Tasks / MCP)
+## Debug API (Playwright / MCP)
+
+以下路由均由 proxy-adapter (:3000) 提供。受控浏览器会话活动期间，写入/直接页面采集类路由被仲裁并以 409 `browser_busy` 拒绝。
 
 ### Browser Control
 
@@ -134,25 +138,31 @@ Event payload 的 `type` 只允许 `stream.state`、`turn.upsert`、`section.ups
 POST   /debug/api/playwright/open             Open browser
 POST   /debug/api/playwright/close            Close browser
 GET    /debug/api/playwright/status           Browser status
+GET    /debug/api/playwright/tabs             List tabs
+POST   /debug/api/playwright/tabs/switch      {id} Switch tab
 POST   /debug/api/playwright/navigate         {url} Navigate
-GET    /debug/api/playwright/screenshot       Screenshot (image/png)
-GET    /debug/api/dom                         DOM snapshot (?version)
+GET    /debug/api/playwright/screenshot       Screenshot ({success, screenshot, viewport})
+GET    /debug/api/playwright/screenshot/stream  MJPEG live view stream
+GET    /debug/api/dom                         DOM snapshot (simplified + elements map)
 GET    /debug/api/playwright/element-at       ?x&y Element at coords
 POST   /debug/api/playwright/click            {x, y} Click coordinates
+POST   /debug/api/playwright/click-by-selector {selector} Click by CSS selector
 POST   /debug/api/playwright/type             {selector, text} Type text
 POST   /debug/api/playwright/action           {selector, action, param?} CSS action
 POST   /debug/api/playwright/click-by-marker  {snapshot_id, nebula_id}
 POST   /debug/api/playwright/execute-by-marker {snapshot_id, nebula_id, action, param?}
+POST   /debug/api/playwright/execute-script   {script, args?} Evaluate script in page
+GET    /debug/api/playwright/cookies          Get cookies
+GET    /debug/api/playwright/local-storage    Get local storage
 POST   /debug/api/playwright/scroll           {x, y} Scroll
 ```
 
-### Tasks & Health
+### Debug SSE & Health
 
 ```
-GET    /debug/api/tasks                       Task history (?limit)
-GET    /debug/api/tasks/:id                   Specific task
+GET    /debug/api/stream                      Debug event stream (debug.snapshot / debug.* / 15s debug.keepalive)
 GET    /debug/api/health                      Service health
-POST   /api/v1/test-ai                        AI/model and gateway capability preflight
+POST   /api/v1/test-ai                        AI/model and gateway capability preflight (ai-chat-service :3001)
 ```
 
 ### MCP
@@ -169,62 +179,6 @@ POST   /debug/api/mcp/call                    {server, tool, args?} Invoke tool
 GET    /debug/api/interactions                History (?limit, offset, action_type, success, locator_strategy, start_time)
 GET    /debug/api/interactions/stats          Statistics
 ```
-
----
-
-## Global Objects (window.\*)
-
-### Core
-
-| Object                 | Type          | Description                 |
-| ---------------------- | ------------- | --------------------------- |
-| `window.chatManager`   | ChatManager   | Chat session management     |
-| `window.liveView`      | LiveView      | Dual-canvas browser preview |
-| `window.router`        | Navigo        | Hash router                 |
-| `window.chatComponent` | ChatComponent | Full-screen overlay         |
-
-### UI
-
-| Function              | Signature                  |
-| --------------------- | -------------------------- |
-| `window.showSuccess`  | `(msg: string) => void`    |
-| `window.showError`    | `(msg: string) => void`    |
-| `window.showWarning`  | `(msg: string) => void`    |
-| `window.appendLog`    | `(msg: string) => void`    |
-| `window.updateStatus` | `(status: string) => void` |
-
-### API Helpers
-
-| Function                    | Returns                |
-| --------------------------- | ---------------------- |
-| `window.fetchConfig()`      | Backend config         |
-| `window.fetchHistory()`     | Task history           |
-| `window.testConnectivity()` | AI connectivity result |
-| `window.fetchMCPTools()`    | MCP tool list          |
-
-### Playwright
-
-| Function                         | Action              |
-| -------------------------------- | ------------------- |
-| `window.initPlaywrightControl()` | Wire UI controls    |
-| `window.playwrightOpen()`        | Open browser        |
-| `window.playwrightClose()`       | Close browser       |
-| `window.playwrightNavigate(url)` | Navigate            |
-| `window.playwrightScreenshot()`  | Screenshot          |
-| `window.playwrightClick(x, y)`   | Click               |
-| `window.fetchDOM()`              | Get DOM snapshot    |
-| `window.renderElementsMap()`     | Render elements     |
-| `window.fetchInteractions()`     | Interaction history |
-
----
-
-## Key DOM Elements
-
-| Selector              | Element  | Purpose                        |
-| --------------------- | -------- | ------------------------------ |
-| `#chat-input`         | textarea | Message input                  |
-| `#session-select`     | select   | Session dropdown               |
-| `#chat-control-bar`   | div      | Interrupt/pause/resume buttons |
 
 ---
 

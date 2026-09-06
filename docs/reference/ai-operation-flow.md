@@ -20,7 +20,7 @@
 │  ┌────▼──────────────▼──────────────▼──────────────────────────┐ │
 │  │                   Services Layer                          │ │
 │  │ ChatHandler │ ConversationManager │ SessionEventHub          │ │
-│  │ ChatSessionController │ MCPSDKClient │ ToolRegistry/Vision    │ │
+│  │ ChatSessionController │ DSH Harness Runtime │ ToolRegistry    │ │
 │  └─────────────────────┬─────────────────────────────────────┘ │
 │                        │                                       │
 │  ┌─────────────────────▼─────────────────────────────────────┐ │
@@ -30,11 +30,11 @@
 │                        │                                       │
 │  ┌─────────────────────▼─────────────────────────────────────┐ │
 │  │           MCP Client → proxy-adapter (:3000)                │ │
-│  │  MCP-over-HTTP for browser-control.*     │ │
+│  │  loopback /mcp for browser-control.*       │ │
 │  └────────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
 
-AI 能力经 MCP-over-HTTP 路由到 proxy-adapter (:3000)，后者内进程运行 Playwright 引擎控制 Chromium。
+浏览器工具经 DSH harness 的 MCP client（`ai-chat-service/src/harness/runtime.ts` 装配 `dsh-mcp-client`，`gateway-tool-bridge.ts` 把准入的产品工具投影进模型 ToolRuntime）通过 loopback `/mcp` 消费 proxy-adapter (:3000)，后者内进程运行 Playwright 引擎控制 Chromium。旧 `MCPSDKClient/MCPClientProvider` 双 transport 已删除。
 ```
 
 ---
@@ -161,38 +161,39 @@ Client connects ──▶ SessionEventHub.subscribe()
 
 ## Session State Machine
 
+权威口径为六态：`idle / running / paused / interrupted / cancelled / completed`（见 `docs/shipped/session-state-machine.md` 与 `ai-chat-service/PRODUCT-SPEC.md` §4）。
+
 ```
-         ┌──────────┐
-    ┌───▶│   idle   │◀───┐
-    │    └────┬─────┘    │
-    │         │ message   │ complete
-    │         ▼           │
-    │    ┌──────────┐    │
-    │    │ running  │────┘
-    │    └────┬─────┘
-    │         │ pause (wait-to-complete)
-    │    ┌────▼─────┐
-    │    │  paused  │───▶ resume ──▶ running
-    │    └──────────┘
-    │         │
-    │    ┌────▼──────┐
-    │    │  blocked  │ (awaiting user input / MCP)
-    │    └────┬──────┘
-    │         │ resolve
-    │         ▼
-    │    running
-    │
-    ├─ interrupt ──▶ ┌──────────────┐
-    │                 │ interrupted  │
-    │                 └──────┬───────┘
-    │                        │ new message
-    │                        ▼
-    │                   running
-    │
-    └─ cancel ────▶ ┌────────────┐
-                     │ cancelled  │
-                     └────────────┘
+         ┌──────────┐  message
+    ┌───▶│   idle   │────────────┐
+    │    └──────────┘            ▼
+    │                        ┌──────────┐  generation complete
+    │    cleanup             │ running  │─────────────────────┐
+    │         ▲              └─┬───┬──┬─┘                     ▼
+    │         │                │   │   └─ interrupt      ┌───────────┐
+    │         │        pause   │   │       │             │ completed │
+    │         │  (wait-to-    │   │       ▼             └─────┬─────┘
+    │         │   complete)   │   │  ┌────────────┐           │
+    │         │               ▼   │  │ interrupted │          │
+    │         │          ┌─────────┐└───┬─────────┘          │
+    │         │          │ paused  │    │ new message        │
+    │         │          └────┬────┘    │ → running          │
+    │         │               │ resume → running             │
+    │         │               │                             │
+    │         │      cancel (any state except idle/cancelled)  │
+    │         │               │                             │
+    │         │               ▼                             │
+    │         │         ┌────────────┐                      │
+    └─────────┴─────────│ cancelled  │                      │
+                       └────────────┘                      │
 ```
+
+要点：
+
+- `running → paused`：pause 请求为 wait-to-complete 语义，在 DSH flush/projection 安全边界（checkpoint）落地后持久化。
+- `running → completed`：消息 job 完成后由持久 job queue 写入；随后 cleanup 回到 `idle`。
+- `interrupted` 通过新消息回到 `running`；`cancelled` 为终态。
+- `blocked` 仍存在于公共响应 schema（`SessionStatusSchema` 第七个枚举值）与 process_restart 恢复路径：`ChatSessionController.recoverRunningSessions()` 将重启时仍为 running 的会话标记为 blocked，可被 resume；它是瞬态，不纳入六态权威状态机口径。
 
 ---
 
@@ -228,26 +229,37 @@ Client connects ──▶ SessionEventHub.subscribe()
 
 ### Debug API
 
-| Method | Path                               | Description                   |
-| ------ | ---------------------------------- | ----------------------------- |
-| GET    | `/debug/api/health`                | Service health check          |
-| POST   | `/debug/api/ai/test`               | Test AI provider connectivity |
-| POST   | `/debug/api/key/verify`            | Verify API keys               |
-| GET    | `/debug/api/playwright/status`     | Browser service status        |
-| POST   | `/debug/api/playwright/navigate`   | Navigate browser              |
-| POST   | `/debug/api/playwright/screenshot` | Take screenshot               |
-| GET    | `/debug/api/dom`                   | Get current page DOM          |
-| GET    | `/debug/api/element-at`            | Get element at coordinates    |
-| POST   | `/debug/api/click`                 | Click element                 |
-| POST   | `/debug/api/type`                  | Type text                     |
-| POST   | `/debug/api/action`                | Execute generic action        |
-| POST   | `/debug/api/marker`                | Marker operations             |
-| POST   | `/debug/api/scroll`                | Scroll page                   |
-| GET    | `/debug/api/mcp/status`            | MCP service status            |
-| GET    | `/debug/api/mcp/tools`             | List MCP tools                |
-| POST   | `/debug/api/mcp/call`              | Call MCP tool                 |
-| GET    | `/debug/api/interactions/stats`    | Interaction statistics        |
-| GET    | `/debug/api/failure-samples`       | Failure sample collection     |
+> 以下路由由 proxy-adapter 提供（见 `proxy-adapter/src/plugins/routes/debug/`）；AI provider 连通性测试已迁至 ai-chat-service 的 `POST /api/v1/test-ai`。受控浏览器会话活动期间，写入/直接页面采集类 debug 路由会被仲裁并以 409 `browser_busy` 拒绝。
+
+| Method | Path                                          | Description                     |
+| ------ | --------------------------------------------- | ------------------------------- |
+| GET    | `/debug/api/health`                           | Service health check            |
+| POST   | `/debug/api/playwright/open`                  | Open browser                    |
+| POST   | `/debug/api/playwright/close`                 | Close browser                   |
+| GET    | `/debug/api/playwright/status`                | Browser service status          |
+| GET    | `/debug/api/playwright/tabs`                  | List tabs                       |
+| POST   | `/debug/api/playwright/tabs/switch`           | Switch tab `{id}`               |
+| POST   | `/debug/api/playwright/navigate`              | Navigate browser `{url}`        |
+| GET    | `/debug/api/playwright/screenshot`            | Take screenshot                 |
+| GET    | `/debug/api/playwright/screenshot/stream`     | MJPEG live view stream          |
+| GET    | `/debug/api/dom`                              | Get current page DOM            |
+| GET    | `/debug/api/playwright/element-at`            | Get element at coordinates      |
+| POST   | `/debug/api/playwright/click`                 | Click coordinates `{x, y}`      |
+| POST   | `/debug/api/playwright/click-by-selector`     | Click by CSS selector           |
+| POST   | `/debug/api/playwright/click-by-marker`       | Click `{snapshot_id, nebula_id}` |
+| POST   | `/debug/api/playwright/execute-by-marker`     | CSS action by marker            |
+| POST   | `/debug/api/playwright/execute-script`        | Evaluate script in page         |
+| GET    | `/debug/api/playwright/cookies`               | Get cookies                     |
+| GET    | `/debug/api/playwright/local-storage`         | Get local storage               |
+| POST   | `/debug/api/playwright/type`                  | Type text `{selector, text}`    |
+| POST   | `/debug/api/playwright/action`                | CSS action `{selector, action}` |
+| POST   | `/debug/api/playwright/scroll`                | Scroll page `{x, y}`            |
+| GET    | `/debug/api/stream`                           | Debug SSE event stream          |
+| GET    | `/debug/api/mcp/status`                       | MCP service status              |
+| GET    | `/debug/api/mcp/tools`                        | List MCP tools                  |
+| POST   | `/debug/api/mcp/call`                         | Call MCP tool                   |
+| GET    | `/debug/api/interactions`                     | Interaction history             |
+| GET    | `/debug/api/interactions/stats`               | Interaction statistics          |
 
 ---
 
@@ -255,14 +267,13 @@ Client connects ──▶ SessionEventHub.subscribe()
 
 ```
 ChatHandler (agent loop)
-├── MCPSDKClient (tool calls)
+├── DSH Harness Runtime (统一 Agent Loop；MCP 工具调用经 dsh-mcp-client → loopback /mcp)
 ├── ConversationManager (DB operations)
-├── SessionEventHub (SSE pub/sub)
-└── MCPSDKClient (tool descriptions for prompt)
+└── SessionEventHub (SSE pub/sub)
 
 ChatSessionController (lifecycle)
 ├── AbortController per session
-└── State machine (idle/running/paused/blocked/interrupted/cancelled)
+└── State machine (idle/running/paused/interrupted/cancelled/completed)
 
 SessionEventHub (SSE streaming)
 └── Map<sessionId, Map<subscriberId, callback>> — no caching
@@ -275,5 +286,5 @@ SessionEventHub (SSE streaming)
 | Sessions        | SQLite     | Session metadata, config, state                                          |
 | Messages        | SQLite     | User + assistant + tool messages                                         |
 | Events          | SQLite     | 已持久 DSH/控制面事实及 Agent Stream 投影所需事件                           |
-| Failure Samples | Filesystem | Interaction failure logs                                                 |
+| Interactions    | SQLite     | proxy-adapter 调试交互记录与统计（`debug-db.ts`，含 failure_count）          |
 | Live Event Hub  | Memory     | 只转发给在线 subscriber，不缓存、不重放                                  |
