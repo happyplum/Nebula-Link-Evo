@@ -11,7 +11,7 @@ pnpm dev          # tsx watch src/server.ts
 pnpm build        # tsc → dist/
 pnpm start        # node dist/server.js
 pnpm test         # Vitest
-pnpm test:e2e     # Playwright e2e
+pnpm test:e2e     # Playwright-driven Vitest e2e (vitest run --config vitest.e2e.config.ts)
 ```
 
 ## Where To Look
@@ -19,8 +19,8 @@ pnpm test:e2e     # Playwright e2e
 | Area             | Path                                                      | Notes                                                         |
 | ---------------- | --------------------------------------------------------- | ------------------------------------------------------------- |
 | Server entry     | `src/server.ts`                                           | Env load, plugins, route registration                         |
-| App service      | `src/services/app-service.ts`                             | Browser session management, config, singleton facade          |
-| Tool registry    | `src/tools/`                                              | ToolRegistry + browser-control provider + MCP Server adapters |
+| App service      | `src/services/app-service.ts`                             | Tool/MCP inventory singleton facade (browser lifecycle lives in `src/browser-execution/`) |
+| Tool registry    | `src/tools/`                                              | ToolRegistry + browser-execution tools provider + MCP Server adapters |
 | Controlled tools | `src/tools/providers/browser-execution-tools-provider.ts` | Only operation_execute/get/cancel                             |
 | Execution plane  | `src/browser-execution/`                                  | Session/Tab/lease/operation/artifact/event ledger             |
 | MCP Server       | `src/mcp-server/`                                         | StreamableHTTP plugin + transport                             |

@@ -8,7 +8,7 @@ Browser session service layer: browser lifecycle, controlled execution, interact
 
 | File                    | Purpose                                            |
 | ----------------------- | -------------------------------------------------- |
-| `app-service.ts`        | Singleton facade — browser lifecycle and MCP state |
+| `app-service.ts`        | Singleton facade — tool/MCP inventory projection (browser lifecycle lives in `src/browser-execution/`) |
 | `index.ts`              | Barrel re-exports                                  |
 | `interaction-logger.ts` | Async interaction logging                          |
 | `livekit-publisher.ts`  | LiveKit room token publishing                      |
@@ -17,7 +17,7 @@ Browser session service layer: browser lifecycle, controlled execution, interact
 
 ## Patterns
 
-- `AppService` is the public facade for browser lifecycle and MCP inventory; controlled session/lease/operation behavior belongs to `BrowserExecutionService`.
+- `AppService` is the public facade for tool/MCP inventory status; browser lifecycle and controlled session/lease/operation behavior belong to `BrowserExecutionService` (`src/browser-execution/`).
 - Services stay isolated from route modules — route handlers delegate, never implement business logic.
 - Debug event hub fans out browser events to connected UI consumers.
 
