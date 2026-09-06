@@ -209,7 +209,7 @@ function validateSideEffectAuthorization(
     ) as unknown as (typeof value.effects)[number];
     assertAllowedKeys(
       record as unknown as Record<string, unknown>,
-      ['stepId', 'effectId', 'kind', 'maxAffectedItems', 'reversibility'],
+      ['stepId', 'effectId', 'kind', 'maxAffectedItems', 'reversibility', 'usesFileUpload'],
       'sideEffectAuthorization effect'
     );
     if (byStep.has(record.stepId)) fail(`Duplicate side-effect authorization for ${record.stepId}`);
@@ -240,7 +240,8 @@ function validateSideEffectAuthorization(
     (effect) =>
       effect.kind === 'delete' ||
       effect.maxAffectedItems > 1 ||
-      effect.reversibility === 'irreversible'
+      effect.reversibility === 'irreversible' ||
+      effect.usesFileUpload === true
   );
   if (value.environment === 'staging' && highRisk) {
     const grant = requireObject(
