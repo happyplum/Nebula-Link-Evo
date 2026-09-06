@@ -46,13 +46,13 @@ Browser ←→ Debug UI (:5173 dev)
 
 ### 实时观测与控制
 
-**Debug UI**：基于 React 19 的 6 个面板实时监控系统状态，包括 Monitor（监控）、Control（控制）、AI（AI 对话）、History（历史）、Interactions（交互）、DOM Elements（DOM 元素）。
+**Debug UI**：基于 React 19 的实时监控工作台，提供 Monitor（监控）、Control（控制）、AI（对话）三个活动视图，加右侧 DOM Elements（DOM 元素）/ 配置双标签面板；History（历史）与 Interactions（交互）活动视图规划中、当前未实现。
 
 **双画布系统**：MJPEG 30FPS 实时视频流和带标注的截图画面，同步显示浏览器状态和 AI 分析结果。
 
 **元素选择器**：鼠标悬停高亮显示页面元素，点击即可查看元素详情和可执行操作。
 
-**交互分析**：支持按操作类型、执行状态、策略类型、时间范围过滤历史交互记录，便于调试和优化任务执行。
+**交互分析**：后端 `/api/interactions` 支持按操作类型、执行状态、策略类型、时间范围过滤历史交互记录；对应过滤 UI 视图规划中（见 `debug-ui/PRODUCT-SPEC.md` 第 6 节）。
 
 ## Tech Stack
 
@@ -61,7 +61,7 @@ Browser ←→ Debug UI (:5173 dev)
 | Frontend | React 19 + TypeScript + Vite + CSS Modules                                 |
 | Backend  | Node.js + Fastify 5                                                        |
 | Browser  | Playwright + Chromium                                                      |
-| AI       | Vercel AI SDK (@ai-sdk/openai-compatible, @ai-sdk/openai, GLM JWT adapter) |
+| AI       | Vercel AI SDK（默认依赖 `@ai-sdk/openai-compatible`；`@ai-sdk/openai` 为运行期动态加载支持项，非默认依赖；GLM JWT adapter） |
 | Protocol | MCP (Model Context Protocol)                                               |
 | Storage  | SQLite (sessions, messages, events)                                        |
 
@@ -74,6 +74,7 @@ Browser ←→ Debug UI (:5173 dev)
 | `debug-ui`                             | :5173 | 实时调试监控面板（chat SSE → :3001, browser/debug → :3000）                                              |
 | `ai-e2e`                               | :3002 | 纯 semantic E2E 业务编排；通过 AgentTaskClient 与 SemanticBrowserClient 消费两个基础服务                 |
 | `shared`                               | —     | 共享类型和工具库                                                                                         |
+| `agent-activity-ui`                    | —     | 无状态 Agent 活动 reducer + React renderer 库（debug-ui 与 ai-e2e/ui 共用）                               |
 | `integrations/browser-control-client`  | —     | 受控 HTTP/MCP 客户端、自动会话控制器与 `nebula-browser` CLI                                              |
 | `integrations/deepseek-harness-plugin` | —     | 仅暴露 observe/act 的 DeepSeek Harness bundle；act 逐次审批                                              |
 
@@ -145,8 +146,11 @@ proxy-adapter/      # Browser MCP gateway (Fastify, MCP Server, Playwright contr
   src/tools/        #   ToolRegistry + browser-execution provider
 ai-chat-service/    # AI chat backend (Fastify, conversation, chat SSE, provider orchestration)
 ai-e2e/             # E2E automation orchestrator (consumes proxy-adapter and ai-chat-service HTTP APIs)
+  ui/               #   Nested workspace — React SPA served at /ai-e2e/ (:5174 dev)
 shared/             # Shared types & utils (@nebula-link-evo/shared)
+agent-activity-ui/  # Stateless Agent-activity reducer + React renderer (@nebula-link-evo/agent-activity-ui)
 integrations/       # Local controlled clients and harness adapters
+patches/            # pnpm patchedDependencies patch files
 docs/               # Documentation
 ```
 
@@ -303,4 +307,4 @@ ai-chat-service (:3001) — 唯一 AI 驱动核心
 
 ### Known Behaviors
 
-- Screencast debug counter only activates on new stream connections via `?debug=true`; relay/parser/canvas counters respond to mid-stream toggle immediately (requires page refresh to see screencast counter changes).
+- 视频帧计数器由构建期环境变量 `VITE_VIDEO_DEBUG=1` 启用（编译期常量，需重新构建生效），不存在运行期中途开关。

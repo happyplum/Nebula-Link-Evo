@@ -6,7 +6,7 @@
 
 ## Non-obvious constraints
 
-- `tools/livekit/` is a managed runtime bundle: checked-in binary, `.version` marker, and start/stop batch scripts live together.
+- `tools/livekit/` is a managed runtime bundle: the `livekit-server.exe` binary and its `.version` marker are gitignored local runtime artifacts (only `.gitkeep` and the start/stop batch scripts are checked in); `start.bat` materializes them.
 - `tools/livekit/start.bat` can auto-download newer LiveKit releases from GitHub and rewrites `.version`; treat version drift here as operational state, not just source edits.
 - LiveKit process management is port-based on `7880`. Keep shutdown/startup logic precise.
 
