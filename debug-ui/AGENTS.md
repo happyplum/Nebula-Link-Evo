@@ -38,7 +38,7 @@ pnpm type-check   # tsc --noEmit
 
 ## Runtime Model
 
-- **Dev**: Vite dev server (`:5173`), proxies canonical AI routes (`/api/v1/chat`, `/api/v1/ai`, `/api/v1/test-ai`, `/api/v1/config`) → `:3001`, browser/debug (`/api`, `/debug/api`, `/debug/stream`, `/mcp`) → `:3000`
+- **Dev**: Vite dev server (`:5173`), proxies canonical AI routes (`/api/v1/chat`, `/api/v1/ai`, `/api/v1/test-ai`, `/api/v1/config`) → `:3001`, browser/debug (`/api`, `/debug/api` incl. `/debug/api/stream`, `/mcp`) → `:3000`
 - **Prod**: Standalone build, accessed directly (not served by proxy-adapter)
 - Routes: `/` → DebugPage, `/chat` → ChatPage (via HashRouter)
 - Modules use same-origin paths: `/api`, `/debug/api`
@@ -47,9 +47,9 @@ pnpm type-check   # tsc --noEmit
 
 - **App Shell**: App.tsx with HashRouter, routes defined in src/app/
 - **Feature-based**: Each feature (layout, runtime, chat, etc.) has its own directory with components and hooks
-- **State Management**: Zustand stores for global state (layout, runtime, chat, playwright-control, config)
+- **State Management**: Zustand stores for global state (layout, runtime, chat, playwright-control); config feature is TanStack Query only
 - **Data Fetching**: TanStack Query for REST API calls (sessions, messages, playwright, etc.)
-- **SSE**: Custom hooks for streaming (useChatSession)
+- **SSE**: Custom hooks for streaming (chat: `useChatStream`; runtime debug stream: `useDebugStream`)
 - **Liveview**: Imperative canvas island (LiveViewCanvas.tsx) for MJPEG stream and DOM overlay
 
 ## Conventions
@@ -58,10 +58,10 @@ pnpm type-check   # tsc --noEmit
 - TypeScript with `.js` extension for local imports
 - CSS Modules for all component styling (`.module.css`)
 - `@/` alias for `src/` imports
-- State management via Zustand stores (slices in src/features/\*/store.ts)
+- State management via Zustand stores (features that own global state keep them in `src/features/<name>/store/`)
 - Data fetching via TanStack Query (useQuery, useMutation)
 - Centralized testids in `src/shared/testing/testids.ts`
-- Feature directory structure: components/, hooks/, store.ts, index.ts
+- Feature directory structure: `components/`, `hooks/`, plus `store/`/`api/`/`lib/` only when the feature needs them
 - Zustand selector 返回数组、对象或集合时，空值回退必须使用模块级稳定常量（如 `EMPTY_MESSAGES`），不得在 selector 内用 `?? []` / `?? {}` 创建新引用，以免触发 `useSyncExternalStore` 重渲染循环。
 - No external UI component libraries (custom components with Radix primitives where needed)
 

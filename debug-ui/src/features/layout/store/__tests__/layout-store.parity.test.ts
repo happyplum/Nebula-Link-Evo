@@ -12,15 +12,13 @@ describe('Layout Store Parity Test', () => {
     });
   });
 
-  it('asserts ActivityIcon type includes exactly: monitor, control, ai, history, interactions', () => {
+  it('asserts ActivityIcon type includes exactly: monitor, control, ai', () => {
     const { setActiveActivityIcon } = useLayoutStore.getState();
 
     // Test all valid ActivityIcon values
     expect(() => setActiveActivityIcon('monitor')).not.toThrow();
     expect(() => setActiveActivityIcon('control')).not.toThrow();
     expect(() => setActiveActivityIcon('ai')).not.toThrow();
-    expect(() => setActiveActivityIcon('history')).not.toThrow();
-    expect(() => setActiveActivityIcon('interactions')).not.toThrow();
 
     // Verify state changes correctly
     setActiveActivityIcon('monitor');
@@ -31,12 +29,6 @@ describe('Layout Store Parity Test', () => {
 
     setActiveActivityIcon('ai');
     expect(useLayoutStore.getState().activeActivityIcon).toBe('ai');
-
-    setActiveActivityIcon('history');
-    expect(useLayoutStore.getState().activeActivityIcon).toBe('history');
-
-    setActiveActivityIcon('interactions');
-    expect(useLayoutStore.getState().activeActivityIcon).toBe('interactions');
   });
 
   it('asserts default activeActivityIcon is monitor', () => {
@@ -62,12 +54,6 @@ describe('Layout Store Parity Test', () => {
     setActiveActivityIcon('ai');
     expect(useLayoutStore.getState().activeActivityIcon).toBe('ai');
 
-    setActiveActivityIcon('history');
-    expect(useLayoutStore.getState().activeActivityIcon).toBe('history');
-
-    setActiveActivityIcon('interactions');
-    expect(useLayoutStore.getState().activeActivityIcon).toBe('interactions');
-
     setActiveActivityIcon('monitor');
     expect(useLayoutStore.getState().activeActivityIcon).toBe('monitor');
   });
@@ -86,12 +72,6 @@ describe('Layout Store Parity Test', () => {
     setActiveActivityIcon('ai');
     expect(useLayoutStore.getState().activeRightTab).toBe('config');
 
-    setActiveActivityIcon('history');
-    expect(useLayoutStore.getState().activeRightTab).toBe('config');
-
-    setActiveActivityIcon('interactions');
-    expect(useLayoutStore.getState().activeRightTab).toBe('config');
-
     setActiveActivityIcon('monitor');
     expect(useLayoutStore.getState().activeRightTab).toBe('config');
   });
@@ -105,13 +85,7 @@ describe('Layout Store Parity Test', () => {
     expect(initialRightTab).toBe('config');
 
     // Switch through all activities
-    const activities: Array<'monitor' | 'control' | 'ai' | 'history' | 'interactions'> = [
-      'monitor',
-      'control',
-      'ai',
-      'history',
-      'interactions',
-    ];
+    const activities: Array<'monitor' | 'control' | 'ai'> = ['monitor', 'control', 'ai'];
 
     activities.forEach((activity) => {
       setActiveActivityIcon(activity);

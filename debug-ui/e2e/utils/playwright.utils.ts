@@ -7,7 +7,6 @@ import { TIMEOUTS } from '../constants';
 
 export const DEBUG_UI_URL = process.env.DEBUG_UI_URL || 'http://localhost:5173/debug';
 export const API_URL = process.env.API_URL || 'http://localhost:3000/api';
-export const WS_URL = process.env.WS_URL || 'ws://localhost:3000/ws/debug';
 
 /**
  * Navigate to Debug UI and wait for page load

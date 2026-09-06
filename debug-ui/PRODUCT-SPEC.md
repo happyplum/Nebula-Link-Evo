@@ -1,6 +1,6 @@
 # debug-ui — 产品规格 (PRODUCT-SPEC)
 
-> 一句话目标：作为平台的**主调试监控面板**，通过 Chat SSE 连接 `ai-chat-service`、通过 REST/SSE 连接 `proxy-adapter`，提供实时观测、控制、对话、历史、交互、DOM 元素六大面板。
+> 一句话目标：作为平台的**主调试监控面板**，通过 Chat SSE 连接 `ai-chat-service`、通过 REST/SSE 连接 `proxy-adapter`，提供 Monitor/Control/AI 三个活动视图与右侧 DOM Elements/配置双标签面板。
 > 端口：`:5173`（Vite dev） ｜ 生产：独立 build 直接访问 ｜ 路由：HashRouter ｜ base path：`/debug/`
 
 ---
@@ -9,7 +9,7 @@
 
 ### 目标
 
-- 提供 6 大面板：Monitor（监控）、Control（控制）、AI（对话）、History（历史）、Interactions（交互）、DOM Elements。
+- 提供 3 个活动视图（Monitor 监控、Control 控制、AI 对话）与右侧 DOM Elements/配置双标签面板；History 与 Interactions 活动视图为规划项，当前未实现。
 - 提供"双画布系统"：MJPEG 30FPS 实时视频流 + 带标注的截图画面。
 - 提供统一 Agent 活动渲染：optimistic user turn + Agent Stream snapshot/live 单一数据源。
 - 提供 LiveKit 升级路径：新用户默认 MJPEG，选择 WebRTC 时按需加载 LiveKit；既有持久化传输选择继续生效，token 拉取成功后切换到 LiveKit 视频传输。
@@ -22,8 +22,8 @@
 | 6 大 feature 模块（layout / runtime / chat / playwright-control / config / liveview） | `proxy-adapter` :3000 的 browser debug REST + MJPEG + DOM 快照 + debug stream | 浏览器引擎、AI provider、MCP Server                  |
 | E2E 测试（`e2e/`，Playwright）                                                        | `@nebula-link-evo/shared` 类型                                                | 任何后端业务逻辑                                     |
 | App Shell（HashRouter、routes、layout）                                               |                                                                               | `proxy-adapter/src/static/debug/` 历史路径（已废弃） |
-| Zustand stores（layout / runtime / chat / playwright-control / config）               |                                                                               | Tailwind / CSS-in-JS（仅用 CSS Modules）             |
-|                                                                                       |                                                                               | SSR / server components / 代码分割                   |
+| Zustand stores（layout / runtime / chat / playwright-control）                        |                                                                               | Tailwind / CSS-in-JS（仅用 CSS Modules）             |
+|                                                                                       |                                                                               | SSR / server components / 宽泛路由或组件代码分割     |
 
 ### 硬约束
 
@@ -31,7 +31,7 @@
 - **不**在 module 代码中硬编码 `localhost` URL（用 same-origin `/api`、`/debug/api`）。
 - **不**在后端验证已在 UI 中重复实现。
 - **不**使用 CSS-in-JS 或 Tailwind。
-- **不**使用 code splitting 或 lazy loading（Vite 处理 build 优化）。
+- **不**做宽泛路由/组件 code splitting 或 lazy loading；LiveKit 视图（`MonitorMainShell` 动态 import）是唯一批准的按需加载边界，配套 `vite.config.ts` 的 vendor-react / vendor-livekit 分组。
 - **不**使用 SSR / server components（纯 SPA）。
 - **不**使用 plain DOM 或 `window.*` 全局模式（用 React idioms）。
 - **`/#/chat` 必须以 Agent Stream SSE 作为唯一历史与 live 源**；公开消息历史 GET 已移除。
@@ -47,10 +47,10 @@
 | App Shell                  | `src/main.tsx`、`src/app/`（App、routes、layout）                                                                                                                                                                               | shipped | 入口、HashRouter、路由表                                                                            | 路由：`/` → DebugPage、`/chat` → ChatPage                                                |
 | Layout feature             | `src/features/layout/`（store/layout.store、index）                                                                                                                                                                             | shipped | 全局布局状态                                                                                        | Zustand store                                                                            |
 | Runtime feature            | `src/features/runtime/`（store/runtime.store、lib/{debug-stream-client,apply-playwright-status}、hooks/{useDebugStream,useBrowserStatus}、components/{MonitorSidebarShell,MonitorMainShell}）                                   | shipped | 运行时状态、debug stream 客户端、监控主面板                                                         | 监控面板                                                                                 |
-| Chat feature               | `src/features/chat/`（store/chat.store、hooks/useChatStream、components/{MessageList,Composer}、types）                                                                                                                         | shipped | 会话选择、optimistic user turn、Agent Stream 连接与控制操作                                           | comfortable 公共 renderer；无独立 Thinking/Tool/Message 卡片                             |
+| Chat feature               | `src/features/chat/`（store/chat.store、hooks/useChatStream、components/{MessageList,Composer,SessionSelector}、types）                                                                                                                         | shipped | 会话选择、optimistic user turn、Agent Stream 连接与控制操作                                           | comfortable 公共 renderer；无独立 Thinking/Tool/Message 卡片                             |
 | Agent activity UI          | `@nebula-link-evo/agent-activity-ui`                                                                                                                                                                                            | shipped | 公共 reducer、renderer、主题与业务 slots                                                              | 本包不维护协议 adapter                                                                    |
 | Playwright-control feature | `src/features/playwright-control/`（store/control.store、lib/{dom-elements,logger}、components/{BrowserBasicShell,PageInteractionShell,OperationLogsShell,DomElementsTable,SelectedElementCard}、api/{control.adapters,index}） | shipped | 浏览器控制 UI、操作日志、DOM 元素表                                                                 |                                                                                          |
-| Config feature             | `src/features/config/`（types、ConfigSummary、MCPModal 等）                                                                                                                                                                     | shipped | 无 secret 运行配置、健康检查、MCP 工具展示、AI connectivity test                                    | 不提供 key preview/verify UI                                                             |
+| Config feature             | `src/features/config/`（api、components/{ConfigPanel,HealthStatusCard,McpStatusList,McpToolsModal,ConnectivityTest,AiTest}、types）                                                                                                                                                                     | shipped | 无 secret 运行配置、健康检查、MCP 工具展示、AI connectivity test                                    | 不提供 key preview/verify UI                                                             |
 | Liveview feature           | `src/features/liveview/`（components/{LiveViewCanvas,LiveKitView,LiveViewOverlayLayer,TransportToggle}、hooks/useLiveKit、lib/{mjpeg-parser,coordinates}）                                                                      | shipped | MJPEG 画布 + 按需 LiveKit 升级路径 + 覆盖层                                                         | 新用户默认 MJPEG；选择 WebRTC 才加载 LiveKit；加载/不可用时保留 LiveViewCanvas；LiveKit 必须保留最后一帧 + overlay 状态跨瞬时断连 |
 | Shared UI                  | `src/shared/ui/`（Tabs、StatusIndicator、Modal、LoadingSpinner、ImagePreviewModal、Accordion）                                                                                                                                  | shipped | 可复用组件                                                                                          |                                                                                          |
 | Shared API                 | `src/shared/api/`（client、endpoints）                                                                                                                                                                                          | shipped | REST 客户端与端点定义                                                                               |                                                                                          |
@@ -71,9 +71,9 @@
 | `/`（DebugPage）                     | Monitor（MonitorSidebarShell + MonitorMainShell）                                                                 | shipped | `proxy-adapter` :3000（debug stream、MJPEG、DOM 快照）    | 监控浏览器状态、AI 分析结果   |
 | `/`（DebugPage → Control 标签）      | Control（BrowserBasicShell + PageInteractionShell + OperationLogsShell + DomElementsTable + SelectedElementCard） | shipped | `proxy-adapter` :3000（playwright control、DOM elements） | 浏览器控制台                  |
 | `/chat`（ChatPage）                  | comfortable Agent 活动面板                                                                                         | shipped | `ai-chat-service` :3001（Agent Stream SSE、control）      | snapshot/live 唯一呈现源       |
-| `/`（DebugPage → History 标签）      | History 面板                                                                                                      | partial | `proxy-adapter` :3000                                     | 历史交互记录                  |
-| `/`（DebugPage → Interactions 标签） | Interactions 面板                                                                                                 | partial | `proxy-adapter` :3000                                     | 按操作类型/状态/策略/时间过滤 |
-| `/`（DebugPage → DOM Elements 标签） | DOM Elements 面板                                                                                                 | partial | `proxy-adapter` :3000                                     | 元素详情与可执行操作          |
+| `/`（DebugPage → DOM Elements 右面板标签） | DOM Elements 面板（DomElementsTable + SelectedElementCard）                                                      | shipped | `proxy-adapter` :3000                                     | 元素详情与可执行操作          |
+| `/`（DebugPage → 配置 右面板标签）    | 配置面板（ConfigPanel：health、MCP 工具、public AI config、AI test）                                              | shipped | `ai-chat-service` :3001                                   | 无 secret 运行状态            |
+| History / Interactions 活动视图       | （规划）History 面板、Interactions 面板                                                                           | planned | `proxy-adapter` :3000（规划数据源）                       | 历史交互记录 / 按操作过滤     |
 
 > LiveView 画布是 imperative canvas island（LiveViewCanvas.tsx），作为子组件嵌入到 Monitor 中，不是独立路由。
 
@@ -83,7 +83,7 @@
 | ------------------------------------------------------------ | ----------------- | ----------------------------------------------------- |
 | `/api/v1/chat/*`、`/api/v1/ai/*`、`/api/v1/{test-ai,config}` | `ai-chat-service` | Chat SSE/session/control、单次 AI、无 secret 运行状态 |
 | `/debug/api/*`（dev proxy → :3000）                          | `proxy-adapter`   | browser control、DOM elements                         |
-| `/debug/stream`（SSE）                                       | `proxy-adapter`   | debug event stream                                    |
+| `/debug/api/stream`（SSE）                                  | `proxy-adapter`   | debug event stream                                    |
 | MJPEG 流                                                     | `proxy-adapter`   | 实时视频流（30FPS）                                   |
 | `/api/v1/livekit-token`                                      | `proxy-adapter`   | LiveKit 升级                                          |
 
@@ -93,7 +93,7 @@
 
 | 功能                                                     | 入口                                                       | 状态    | 验收面                                                               | 关联模块           |
 | -------------------------------------------------------- | ---------------------------------------------------------- | ------- | -------------------------------------------------------------------- | ------------------ |
-| 6 大面板监控                                             | features/{runtime,playwright-control,chat,layout}          | shipped | 单元 + parity 测试                                                   | 全部 features      |
+| 活动视图与右面板监控（Monitor/Control/AI + DOM Elements/配置） | features/{runtime,playwright-control,chat,layout,config}  | shipped | 单元 + parity 测试                                                   | 全部 features      |
 | Optimistic user turn 与服务端 turn 去重                  | features/chat/hooks/useChatStream + chat.store             | shipped | `chat.store.test.ts`                                                  | chat               |
 | Agent Stream snapshot/live 单源                          | features/chat                                              | shipped | `useChatStream.test.ts`                                               | chat、shared       |
 | RAF 批处理与跨 session 隔离                              | features/chat/hooks/useChatStream                          | shipped | `useChatStream.test.ts`                                               | chat               |
@@ -106,7 +106,7 @@
 | 截图解码失败可见错误（不仅"暂无截图"占位）               | features/runtime                                           | shipped | README                                                               | runtime            |
 | DOM 快照 v2 element 归一化（`id` + `locator_bundle`）    | features/playwright-control/lib/dom-elements               | shipped | README + parity 测试                                                 | playwright-control |
 | 元素选择器（hover 高亮 + click 详情）                    | features/playwright-control                                | shipped | parity 测试                                                          | playwright-control |
-| 按操作类型/状态/策略/时间过滤历史                        | features/runtime + History/Interactions 面板               | partial | 单元测试                                                             | runtime            |
+| 历史交互过滤（按操作类型/状态/策略/时间）               | features/runtime（规划）                                    | planned | —（History/Interactions 活动视图未实现）                              | runtime            |
 | 集中式 testid                                            | shared/testing/testids                                     | shipped | `testids.test.ts`                                                    | shared/testing     |
 | 配置面板（health、MCP tools、public AI config、AI test） | features/config                                            | shipped | parity 测试                                                          | config             |
 
@@ -145,7 +145,7 @@
 
 | 缺口                                               | 类型      | 状态    | 备注                                                   |
 | -------------------------------------------------- | --------- | ------- | ------------------------------------------------------ |
-| History / Interactions / DOM Elements 面板功能登记 | tech-debt | partial | 当前条目状态为 partial，需后续按页面细化功能清单       |
+| History / Interactions 活动视图未实现              | tech-debt | planned | UI 上不可达；恢复时需同步路由登记、功能清单与 shipped/debug-ui-panels.md |
 
 ---
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Feature-based frontend modules. Each feature is a self-contained domain with components, hooks, and Zustand store.
+Feature-based frontend modules. Each feature is a self-contained domain with components and hooks; only features that own global state also keep a Zustand store.
 
 ## Structure
 
@@ -21,7 +21,7 @@ features/
 | Feature            | Key Files                                                     | Notes                                              |
 | ------------------ | ------------------------------------------------------------- | -------------------------------------------------- |
 | Chat               | `chat/store/chat.store.ts`, `chat/components/`                | Zustand store, message rendering, SSE streaming    |
-| Config             | `config/store/`, `config/components/`                         | Provider settings, runtime parameters              |
+| Config             | `config/api/`, `config/components/`                           | Provider settings, runtime parameters (query-only, no store) |
 | Layout             | `layout/`                                                     | Sidebar, resizable panels, tab navigation          |
 | Liveview           | `liveview/components/LiveViewCanvas.tsx`                      | Imperative canvas island for MJPEG + DOM overlay   |
 | Playwright-control | `playwright-control/components/`, `playwright-control/store/` | URL bar, element hover highlight, action triggers  |
@@ -29,8 +29,8 @@ features/
 
 ## Conventions
 
-- Feature directory pattern: `components/`, `hooks/`, `store.ts`, `index.ts`
-- Each feature owns its Zustand store slice (imported by App.tsx)
+- Feature directory pattern: `components/`, `hooks/`, optional `store/` (`<name>.store.ts`) and `api/`/`lib/` when needed — not every feature has all of them
+- Only features that own global state create a Zustand store (layout / runtime / chat / playwright-control); config is query-only
 - CSS Modules per component (`.module.css` in component directory)
 - TanStack Query for REST API calls; SSE hooks for streaming
 - Centralized testids in `../shared/testing/testids.ts`
@@ -40,7 +40,7 @@ features/
 
 - No importing one feature's components from another — extract to shared/ instead.
 - No business logic in components — keep in hooks or store actions.
-- No direct SSE in components — use chat feature hooks.
+- No direct SSE handling in components — keep it in feature-level hooks/lib (chat: `useChatStream`; runtime: `useDebugStream`).
 
 ## Child AGENTS
 

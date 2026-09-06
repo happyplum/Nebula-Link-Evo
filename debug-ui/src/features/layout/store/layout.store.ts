@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type ActivityIcon = 'monitor' | 'control' | 'ai' | 'history' | 'interactions';
+export type ActivityIcon = 'monitor' | 'control' | 'ai';
 export type RightPanelTab = 'dom-elements' | 'config';
 
 interface LayoutState {

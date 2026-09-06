@@ -15,7 +15,7 @@ System configuration, health, MCP tool management, and AI connectivity testing.
 
 - Queries use shared `apiClient` + `queryKeys` from `src/shared/`.
 - `useMcpCall` invalidates `mcp.tools` query on success.
-- Component tree: `ConfigPanel` → health card, MCP section, public model roles, connectivity/AI tests. Never display key values or key previews.
+- Composition: `DebugPage` renders `ConfigPanel` (transport mode + decision provider/model), `HealthStatusCard`, `McpStatusList` (+`McpToolsModal`), `ConnectivityTest` and `AiTest` as siblings in the right-panel config tab. Never display key values or key previews.
 
 ## Anti-Patterns
 

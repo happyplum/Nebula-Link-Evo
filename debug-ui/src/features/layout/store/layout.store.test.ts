@@ -79,11 +79,6 @@ describe('layout.store', () => {
       useLayoutStore.getState().setActiveActivityIcon('ai');
       expect(useLayoutStore.getState().activeActivityIcon).toBe('ai');
     });
-
-    it('switches to history icon', () => {
-      useLayoutStore.getState().setActiveActivityIcon('history');
-      expect(useLayoutStore.getState().activeActivityIcon).toBe('history');
-    });
   });
 
   describe('setActiveRightTab', () => {
