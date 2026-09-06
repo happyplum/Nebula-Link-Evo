@@ -3,7 +3,6 @@ import type { Page, BrowserContext as PlaywrightBrowserContext } from 'playwrigh
 import type {
   BrowserState,
   OpenBrowserOptions,
-  NavigateOptions,
 } from '../../../proxy-adapter/src/browser-engine/services/browser-lifecycle.js';
 
 /**
@@ -147,11 +146,25 @@ export function createBrowserContextMock(config?: {
 /**
  * Create a mock BrowserLifecycle (browser manager)
  */
+export interface MockBrowserLifecycle {
+  getState: ReturnType<typeof vi.fn<() => BrowserState>>;
+  isOpen: ReturnType<typeof vi.fn<() => boolean>>;
+  getPage: ReturnType<typeof vi.fn>;
+  getCdpPort: ReturnType<typeof vi.fn<() => number>>;
+  getCurrentUrl: ReturnType<typeof vi.fn>;
+  getTitle: ReturnType<typeof vi.fn>;
+  open: ReturnType<typeof vi.fn>;
+  close: ReturnType<typeof vi.fn>;
+  navigate: ReturnType<typeof vi.fn>;
+  screenshot: ReturnType<typeof vi.fn>;
+  getCdpEndpoint: ReturnType<typeof vi.fn>;
+}
+
 export function createBrowserLifecycleMock(config?: {
   state?: Partial<BrowserState>;
   shouldFailOnOpen?: boolean;
   shouldFailOnNavigate?: boolean;
-}): any {
+}): MockBrowserLifecycle {
   const mockState: BrowserState = {
     browser: null,
     context: null,
@@ -179,7 +192,9 @@ export function createBrowserLifecycleMock(config?: {
         throw new Error('Failed to open browser');
       }
 
-      mockState.browser = { newContext: vi.fn(async () => mockContext) } as any;
+      mockState.browser = {
+        newContext: vi.fn(async () => mockContext),
+      } as unknown as BrowserState['browser'];
       mockState.context = mockContext;
       mockState.page = mockPage;
       mockState.lastHeadless = options.headless ?? null;
@@ -196,7 +211,7 @@ export function createBrowserLifecycleMock(config?: {
       mockState.lastCdpPort = null;
     }),
     navigate: vi.fn(
-      async (url: string, waitUntil?: 'load' | 'domcontentloaded' | 'networkidle') => {
+      async (url: string, _waitUntil?: 'load' | 'domcontentloaded' | 'networkidle') => {
         if (config?.shouldFailOnNavigate) {
           throw new Error('Failed to navigate');
         }
@@ -206,7 +221,7 @@ export function createBrowserLifecycleMock(config?: {
         await mockPage.goto(url);
       }
     ),
-    screenshot: vi.fn(async (fullPage: boolean = false) => {
+    screenshot: vi.fn(async (_fullPage: boolean = false) => {
       if (!mockState.page) {
         throw new Error('Browser not opened');
       }
@@ -226,11 +241,22 @@ export function createBrowserLifecycleMock(config?: {
 /**
  * Create a mock ElementHandle
  */
+export interface MockElementHandle {
+  textContent: ReturnType<typeof vi.fn<() => Promise<string>>>;
+  isVisible: ReturnType<typeof vi.fn<() => Promise<boolean>>>;
+  isEnabled: ReturnType<typeof vi.fn<() => Promise<boolean>>>;
+  click: ReturnType<typeof vi.fn>;
+  fill: ReturnType<typeof vi.fn>;
+  boundingBox: ReturnType<
+    typeof vi.fn<() => { x: number; y: number; width: number; height: number }>
+  >;
+}
+
 export function createMockElementHandle(overrides?: {
   textContent?: string;
   isVisible?: boolean;
   isEnabled?: boolean;
-}): any {
+}): MockElementHandle {
   return {
     textContent: vi.fn(async () => overrides?.textContent || ''),
     isVisible: vi.fn(async () => overrides?.isVisible !== false),

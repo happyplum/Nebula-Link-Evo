@@ -2,7 +2,6 @@ import { spawn, ChildProcess } from 'node:child_process';
 import { createServer as createNetServer, Server as NetServer } from 'net';
 import { join } from 'path';
 
-const CHECK_PORT_TIMEOUT = 2000;
 const DEFAULT_PORT_RANGE_START = 30000;
 const DEFAULT_PORT_RANGE_END = 40000;
 
@@ -128,7 +127,10 @@ export async function startService(
     stdio: 'inherit',
   });
 
-  let childProcess = child as any;
+  const childProcess: ServiceProcess = Object.assign(child, {
+    serviceName,
+    servicePort: actualPort,
+  });
 
   // Store service name and port on child process for cleanup
   childProcess.serviceName = serviceName;
@@ -159,18 +161,27 @@ export async function startService(
 }
 
 /**
- * Stop a service gracefully
- * @param serviceProcess - Process to stop (can be any, looks for servicePort property)
+ * A spawned service process annotated with its service name and port for cleanup.
  */
-export async function stopService(serviceProcess: any): Promise<void> {
-  const process = serviceProcess as ChildProcess;
+export interface ServiceProcess extends ChildProcess {
+  serviceName: string;
+  servicePort: number;
+}
+
+/**
+ * Stop a service gracefully
+ * @param serviceProcess - Process to stop (accepts the {@link ServiceProcess} shape)
+ */
+export async function stopService(serviceProcess: unknown): Promise<void> {
+  const process = serviceProcess as ChildProcess | null;
 
   if (!process || process.killed) {
     return;
   }
 
-  const serviceName = serviceProcess.serviceName || 'unknown';
-  const port = serviceProcess.servicePort || 'unknown';
+  const annotated = serviceProcess as Partial<ServiceProcess>;
+  const serviceName = annotated.serviceName || 'unknown';
+  const port = annotated.servicePort || 'unknown';
 
   console.log(
     `[service-lifecycle] Stopping ${serviceName} service (PID: ${process.pid}, port: ${port})...`
