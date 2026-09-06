@@ -58,6 +58,7 @@ export interface AgentTaskSideEffectAuthorization {
     kind: 'create' | 'update' | 'delete' | 'auth_change';
     maxAffectedItems: number;
     reversibility: 'reversible' | 'compensatable' | 'irreversible';
+    usesFileUpload?: boolean;
   }>;
   grant?: {
     grantId: string;
