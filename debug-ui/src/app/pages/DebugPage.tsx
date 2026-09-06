@@ -48,8 +48,6 @@ const SIDEBAR_TITLES: Record<ActivityIcon, string> = {
   monitor: '状态',
   control: '控制',
   ai: 'AI',
-  history: '历史',
-  interactions: '交互',
 };
 
 export default function DebugPage() {

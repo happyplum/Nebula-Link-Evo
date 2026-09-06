@@ -4,7 +4,6 @@ import { defineConfig } from 'vite';
 
 const aiTarget = process.env.DEBUG_UI_AI_TARGET ?? 'http://localhost:3001';
 const proxyTarget = process.env.DEBUG_UI_PROXY_TARGET ?? 'http://localhost:3000';
-const proxyWebSocketTarget = proxyTarget.replace(/^http/u, 'ws');
 
 export default defineConfig({
   base: '/debug/',
@@ -24,9 +23,7 @@ export default defineConfig({
 
       // Browser/Debug endpoints -> 3000
       '/api': { target: proxyTarget, changeOrigin: true },
-      '/ws': { target: proxyWebSocketTarget, ws: true, changeOrigin: true },
       '/debug/api': { target: proxyTarget, changeOrigin: true },
-      '/debug/stream': { target: proxyTarget, changeOrigin: true },
       '/mcp': { target: proxyTarget, changeOrigin: true },
     },
   },

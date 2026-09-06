@@ -14,14 +14,14 @@ Runtime owns the Monitor sidebar/main shell components, LiveView canvas integrat
 
 ## Working Rules
 
-- Playwright status (isOpen, url, status) is synced via `useBrowserStatus` hook polling `/debug/api/health` every 4s; the hook updates both `runtime.store` and `control.store`.
+- Playwright status (isOpen, url, status) syncs stream-first: `useBrowserStatus` mounts `useDebugStream` (SSE via `lib/debug-stream-client.ts` → `/debug/api/stream`) and applies `debug.snapshot`/`debug.status` events to both `runtime.store` and `control.store`; `/debug/api/health` is polled every 4s only as a fallback after the stream has been down for a 5s grace period.
 - LiveView transport and refresh state live in the runtime store.
 - Fresh users default to MJPEG; a valid persisted MJPEG/WebRTC choice remains authoritative so LiveKit is only requested when WebRTC is actually selected.
-- Monitor shells compose cards from REST API data — no real-time push.
+- Monitor status/tabs cards get real-time updates from the debug SSE stream; screenshot and tab detail cards still read REST data.
 - Snapshot version tracks LiveView canvas invalidation.
 
 ## Anti-Patterns
 
-- No per-component polling — use the shared `useBrowserStatus` hook.
+- No per-component polling — use the shared `useBrowserStatus` hook (stream-first with polling fallback).
 - No duplicated browser-open/url bookkeeping outside runtime/control stores.
-- No WebSocket references — all real-time updates go through SSE (chat feature).
+- No WebSocket references — all real-time updates go through SSE (this feature's `useDebugStream`/`/debug/api/stream`; chat uses `useChatStream`).

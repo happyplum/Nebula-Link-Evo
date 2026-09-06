@@ -23,7 +23,6 @@ e2e/
 
 ## Contributor Traps
 
-- `phase2-full-flow.e2e.test.ts` uses a different suffix than the `.spec.ts` majority.
 - Some flows depend on live backend/browser services; flaky coverage should document why instead of silently disappearing.
 - Debug stream monitoring is fixture-owned; only tests that must intercept a failure may create an isolated page.
 

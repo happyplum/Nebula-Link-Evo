@@ -9,7 +9,7 @@ Playwright-control owns browser state, DOM snapshot normalization, marker toggle
 | Area        | Path                      | Notes                                                       |
 | ----------- | ------------------------- | ----------------------------------------------------------- |
 | Store       | `store/control.store.ts`  | Browser open/url, viewport, selected element, marker toggle |
-| Adapters    | `lib/control.adapters.ts` | Typed wrappers for control endpoints                        |
+| Adapters    | `api/control.adapters.ts` | Typed wrappers for control endpoints (re-exported via `api/index.ts`) |
 | DOM helpers | `lib/dom-elements.ts`     | Snapshot normalization and locator bundle handling          |
 | Components  | `components/`             | URL bar, element picker, action controls                    |
 
