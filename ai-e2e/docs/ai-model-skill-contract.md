@@ -1,8 +1,8 @@
 # AI 模型角色与 Skills 运行契约
 
 > 状态：统一 DSH Harness、Agent task 命令/审计/活动、Vision v2、Skills Runtime 与跨服务逐 effect 授权已实现。
-> 更新时间：2026-08-24。
-> 本文定义 `ai-chat-service` 的统一 DSH Agent Loop、分析/决策模型、单次视觉模型、受限 Agent task 与 Skills runtime。当前已交付 Pi/GLM provider route、JSONL persistence/SQLite projection、MCP ToolRuntime、`vision.analyze_page`/`vision.resolve_target`、Agent task 控制面、模型不可见 browser wrapper 与本地只读单 Skill runtime；完整 policy evaluation/active grant 交集仍是目标协议。
+> 更新时间：2026-09-05。
+> 本文定义 `ai-chat-service` 的统一 DSH Agent Loop、分析/决策模型、单次视觉模型、受限 Agent task 与 Skills runtime。当前已交付 Pi/GLM provider route、JSONL persistence/SQLite projection、MCP ToolRuntime、`vision.analyze_page`/`vision.resolve_target`、Agent task 控制面、模型不可见 browser wrapper、本地只读单 Skill runtime，以及逐调用 policy evaluation/风险投影/active grant/参数级数量交集（见 `service-api-event-contract.md` §4.1 与 shipped/agent-tasks.md）。
 
 ## 1. 服务边界
 
@@ -253,7 +253,7 @@ provider/runtime 可用工具
 - `/api/v1/ai/generate` 使用无 session、无 tool 的单次 `ctx.llm.stream()`。
 - Vision v2 与 proxy immutable snapshot binding 已交付；ai-e2e 通用 authoring/Run 消费仍需逐业务流程接入。
 - 当前 Skills Runtime 已支持本地只读目录加载、immutable registry/version/hash、task 单 Skill exact pin/policy hash、Schema/hash/path 校验、指令装载、权限/预算收缩、catalog 与执行事件；多 Skill 组合/嵌套调用不在 v1。
-- 当前 Agent browser wrapper 已冻结 `stepId/kind/operation/effectId` 并限制 observe/control，模糊失败先查询 operation ledger；仍没有 policy evaluation、风险投影 hash、active grant 与参数级数量的完整逐调用交集校验。
+- 当前 Agent browser wrapper 已冻结 `stepId/kind/operation/effectId` 并限制 observe/control，模糊失败先查询 operation ledger；逐调用 policy evaluation、风险投影 hash、active grant 与参数级数量的交集校验已随 2026-08-26 门禁贯通交付（调用方通过 `sideEffectAuthorization` 传入，wrapper 在每次 dispatch 前校验并持久化操作记录，见 `service-api-event-contract.md` §4.1）。
 - 当前 `ai-e2e` prompts 是业务侧模板，可继续作为迁移输入；不得把它们直接等同于可复用 Skill。
 
 ## 8. 验收原则

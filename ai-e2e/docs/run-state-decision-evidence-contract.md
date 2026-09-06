@@ -16,9 +16,7 @@
 
 ### 2.1 项目工作流
 
-现有项目状态 `draft → configuring → analyzing → analyzed → exploring → explored → generating → ready → running → completed` 只表示项目准备阶段，不承担单次测试流程、TODO 或浏览器操作状态。
-
-项目可以存在多次历史测试流程；一次流程结束不应抹去项目仍可再次运行的事实。目标实现时应把项目“当前阶段”与具体测试流程结果解耦。
+纯 semantic 项目没有独立状态机：项目创建是单事务原子工作区（name/description/时间戳/latestVersion 投影），就绪状态由业务版本的 `needs_recheck`/validation 聚合表达；单次测试流程、TODO 或浏览器操作状态不属于项目级概念。
 
 ### 2.2 测试流程生命周期与结果
 
@@ -41,6 +39,8 @@ created → planning ─────────→ ready → running ↔ paused
 | `completed`  | 运行已封存，不再变化。                                                               |
 | `cancelling` | 正在取消未开始工作并等待活动原子操作到达安全边界。                                   |
 | `cancelled`  | 运行被取消并封存；已发生副作用不会自动回滚。                                         |
+
+> 当前实现注记：formal run 的校验与计划冻结在创建事务内同步完成，`planning` 不作为独立落库状态出现（创建结果直接为 `ready`/`paused(approval_required)`/`cancelled(side_effect_policy_denied)`）。
 
 终态结果单独记录：
 
@@ -151,13 +151,15 @@ open → answered → applied
 
 `answered` 只表示已有决定；只有决定已经写入正确载体并生成恢复/计划修订后才是 `applied`。恢复命令必须引用已 applied 的决策 ID。
 
+> 当前实现注记：formal run 的回答与应用在同一事务内直接落 `applied`，不经过 `answered` 中间态；`answered` 目前仅在 authoring amendment 的拒绝分支使用。DB 约束保留全部状态枚举供前向使用。
+
 ### 5.5 计划级副作用审批
 
 - local/test 自动通过已声明、有界副作用的策略评估，不伪造用户 decision/grant。
 - staging 高风险计划在任何 control lease 或写操作前创建一次 `side_effect_approval` 用户决策；批准后持久化仅属于当前 run/authoring job 的 active grant。
 - grant 绑定业务版本、deployment revision、策略版本和脱敏风险投影 hash；不写入版本长期决定、不随 copy、不用于下一次运行。
 - 纯 locator/证据修复且安全投影不变时沿用 grant；新增/扩大副作用、增加上传、降低可逆性或改变 deployment/policy 时 grant expired，流程在安全边界重新等待审批。
-- 用户拒绝时不派发尚未开始的写操作；formal run 记为 `cancelled` 且原因是 `approval_denied`，不伪装为业务断言失败。production 业务写入在 planning 阶段封存为 `cancelled(side_effect_policy_denied)`，没有审批越权路径。
+- 用户拒绝时不派发尚未开始的写操作；formal run 记为 `cancelled` 且终止原因 code 为 `decision_rejected`（含 decisionId），不伪装为业务断言失败。production 业务写入在 planning 阶段封存为 `cancelled(side_effect_policy_denied)`，没有审批越权路径。
 - 决策答案、grant、每次 effectId 使用、撤销/过期和实际副作用进入同一审计链；详细投影与环境矩阵见 `environment-side-effect-policy-contract.md`。
 
 ## 6. 暂停、恢复、取消与人工接管

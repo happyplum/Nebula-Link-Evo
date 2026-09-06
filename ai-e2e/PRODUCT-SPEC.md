@@ -1,5 +1,7 @@
 # ai-e2e 产品规格
 
+> 端口：服务 `:3002`（固定监听 `127.0.0.1`）｜ dev UI `:5174` ｜ 生产 UI 由本服务挂载在 `/ai-e2e/`（SPA fallback 仅限 `/ai-e2e/*`）｜ API 只暴露 canonical `/api/v1` ｜ 数据库 `./data/ai-e2e-semantic.sqlite`
+
 ## 1. 定位与状态
 
 `ai-e2e` 是纯 semantic 的 PRD 驱动浏览器 E2E 编排产品，不提供旧脚本链或向后兼容。
@@ -12,6 +14,8 @@
 | Run                 | shipped | 冻结计划、TODO/DAG、page task/attempt、变量、决策、恢复/取消/依赖跳过、证据、权威控制面 SSE 与 compact 只读 Agent 活动流                                                                                                                           |
 | 跨服务执行          | shipped | ai-chat-service Agent task/event-log + Vision v2 + 逐 effect 授权；浏览器步骤遵循 shared kind/operation→args 判别映射；proxy session/lease/operation/artifact/event-log 及 TTL/hold 短期原始产物清理、ai-e2e 长期原始证据保留清理，均按持久事实恢复 |
 | 三服务 E2E 门禁     | shipped | 真实 HTTP/MCP/Chromium 覆盖候选生成、验证激活、正式运行、未验证拒绝与 `outcome_unknown` 禁止重放                                                                                                                                                    |
+| 副作用审批生命周期  | shipped | staging 高风险（含 `usesFileUpload` 上传维度）进入计划级审批；grant 在 run 终态/决策拒绝/投影漂移时自动过期（`context_terminated`/`decision_rejected`/`projection_stale`）；start/resume 重查 policy evaluation 投影 hash 与 active grant，漂移时转 `paused(approval_required)` 并创建新一轮审批；5 个 `side_effect_*` ApiProblem 错误码在路由层发射 |
+| 场景 fail-closed   | shipped | `runWhen` 与 `repeat.for_each` 在场景写入（`createScenario`、`validateGraph` 与 test_scenario revision 创建）时显式拒绝，不静默退化；固定次数 repeat（1–100）正常展开 |
 | 浏览器中心 UI       | shipped | 项目首页、Authoring/Run 三栏工作台、轻量分层上下文树、深链接上下文、显式定位、Diff/审批/证据/Chat、布局与主题偏好；工作台采用低噪声冷蓝视觉体系、浮动面板和渐隐选中轨，突出持续挂载的浏览器主舞台；Playwright 使用真实生产 bundle/API 验证完整旅程  |
 
 ## 2. 服务与模块
@@ -83,4 +87,4 @@ UI 路由：`/`、`/semantic/:projectId`、`/semantic/:projectId/authoring/:vers
 
 ## 7. 已知缺口与技术债
 
-当前无与本次 PRD 多资产 bootstrap 交付直接相关的已知缺口。
+当前无与本次 PRD 多资产 bootstrap 交付直接相关的已知缺口。跨文档登记的 pending/in-progress 项见 `docs/PRODUCT-SPEC-INDEX.md` §3.9（页面锚点运行匹配与基线采集、页面任务上下文续接、生产 UI 恢复、DOM 变化局部修复）、`ai-e2e/docs/service-api-event-contract.md` §3（版本作用域写路由、validate、通用资产 revision 写与 activation、deployment-profiles 管理路由）及 `ai-e2e/docs/target-data-model.md` §16（通用自动脱敏与 UI 证据时间线）。

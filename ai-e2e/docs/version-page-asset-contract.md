@@ -54,6 +54,8 @@
 
 项目支持多套命名部署 profile，每次业务版本绑定和运行都引用精确 immutable deployment revision；environment 只能取 `local/test/staging/production`，参与副作用策略、验证 scope 和风险投影，但不参与页面逻辑身份。deployment environment/profile 变化必须产生新 revision，并使旧验证与审批授权失效。
 
+> 当前实现注记（pending）：多套命名 profile 的管理路由尚未提供（见 `service-api-event-contract.md` §3.1）；项目初始化目前只在创建事务内联生成一个默认 deployment profile。
+
 ## 5. 页面定义与页面锚点
 
 页面定义表示稳定的逻辑页面；页面锚点表示某次调用中带具体参数的页面目标。

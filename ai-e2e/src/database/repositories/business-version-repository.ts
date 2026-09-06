@@ -1701,6 +1701,18 @@ function validateScenarioPayload(payload: JsonObject, scriptIds: ReadonlySet<str
         `Scenario call ${raw.callKey} references a missing functional script`
       );
     }
+    if (raw.runWhen !== undefined) {
+      throw new BusinessVersionRepositoryError(
+        'validation_failed',
+        `Scenario call ${raw.callKey} uses runWhen; conditional branches are rejected until implemented`
+      );
+    }
+    if (!isSupportedRepeat(raw.repeat)) {
+      throw new BusinessVersionRepositoryError(
+        'validation_failed',
+        `Scenario call ${raw.callKey} has an unsupported repeat; only a 1-100 count (number or {kind:'count',count}) is allowed and for_each is rejected until implemented`
+      );
+    }
     callKeys.add(raw.callKey);
   }
   const adjacency = new Map(Array.from(callKeys, (key) => [key, [] as string[]]));
@@ -1741,6 +1753,60 @@ function validateScenarioPayload(payload: JsonObject, scriptIds: ReadonlySet<str
       'validation_failed',
       'Scenario call graph must be acyclic'
     );
+  }
+}
+
+function isSupportedRepeat(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (typeof value === 'number') {
+    return Number.isInteger(value) && value > 0 && value <= 100;
+  }
+  if (!isObject(value)) return false;
+  if (value.kind !== undefined && value.kind !== 'count') return false;
+  const count = value.count;
+  return (
+    typeof count === 'number' && Number.isInteger(count) && count > 0 && count <= 100
+  );
+}
+
+/**
+ * Fail-closed structural gate for scenario payloads written as revisions (authoring path).
+ * Rejects `runWhen` and `repeat.for_each` until conditional branches and dataset fan-out
+ * are implemented; full graph validation stays with `validateScenarioPayload`.
+ */
+export function assertScenarioCallSupport(payload: unknown): void {
+  if (!isObject(payload)) {
+    throw new BusinessVersionRepositoryError(
+      'validation_failed',
+      'Scenario payload must be an object'
+    );
+  }
+  const calls = payload.calls;
+  if (!Array.isArray(calls)) {
+    throw new BusinessVersionRepositoryError(
+      'validation_failed',
+      'Scenario payload must contain a calls array'
+    );
+  }
+  for (const raw of calls) {
+    if (!isObject(raw) || typeof raw.callKey !== 'string' || typeof raw.functionalScriptId !== 'string') {
+      throw new BusinessVersionRepositoryError(
+        'validation_failed',
+        'Scenario call is invalid'
+      );
+    }
+    if (raw.runWhen !== undefined) {
+      throw new BusinessVersionRepositoryError(
+        'validation_failed',
+        `Scenario call ${String(raw.callKey)} uses runWhen; conditional branches are rejected until implemented`
+      );
+    }
+    if (!isSupportedRepeat(raw.repeat)) {
+      throw new BusinessVersionRepositoryError(
+        'validation_failed',
+        `Scenario call ${String(raw.callKey)} has an unsupported repeat; only a 1-100 count (number or {kind:'count',count}) is allowed and for_each is rejected until implemented`
+      );
+    }
   }
 }
 

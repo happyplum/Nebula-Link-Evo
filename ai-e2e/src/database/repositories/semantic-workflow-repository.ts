@@ -1060,6 +1060,10 @@ export class SemanticWorkflowRepository {
     });
   }
 
+  // Legacy transition helper: no production caller currently creates 'accepted' run commands
+  // (command() in semantic-run-control-repository records completed/rejected only). If this is
+  // ever revived, terminal transitions must also expire the active approval grant — see
+  // SemanticRunControlRepository.expireActiveGrant.
   applyRunTransition(
     commandId: string,
     to: RunLifecycle,

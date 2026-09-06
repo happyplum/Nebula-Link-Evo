@@ -205,6 +205,7 @@ interface SemanticStep {
 
 ```ts
 type BrowserAction =
+  | { type: 'observe' }
   | { type: 'navigate'; pageAnchor: PageAnchorExpression; waitFor: 'commit' | 'domcontentloaded' | 'load' }
   | { type: 'click'; target: TargetDefinition; button?: 'left' | 'middle' | 'right'; clickCount?: 1 | 2 }
   | { type: 'fill'; target: TargetDefinition; value: ValueExpression }
@@ -242,6 +243,7 @@ type AllowedKey =
 
 ### 7.1 动作规则
 
+- `observe` 是无参数纯观测动作：步骤只采集页面状态供后续断言/输出引用，不产生任何副作用，也不要求副作用声明。
 - `navigate` 只接收页面锚点表达式，不接受任意完整 URL；Origin 来自冻结部署。
 - `fill` 清空后设置最终值，是普通表单默认动作；`type_text` 只用于必须模拟逐字键入的控件。
 - `delayMs` 范围 0–100，属于可视输入节奏，不用作正确性等待。
@@ -525,7 +527,7 @@ interface PageAnchorExpression {
 
 ## 16. 当前实现边界
 
-- `FunctionalScriptV1Schema` 提供稳定 JSON Schema ID；独立 validator 在 valid/current 写入前执行大小、未知字段、输入/输出、页面范围、步骤、动作、断言、副作用和引用检查。
+- `FunctionalScriptV1Schema` 提供稳定 JSON Schema ID；独立 validator 在 valid/current 写入前执行大小、未知字段（当前 inputs/steps/target 生效；断言与副作用对象的未知字段拒绝尚未落地）、输入/输出、页面范围、步骤、动作（含 `observe`）、断言 kind、副作用声明和引用检查。§13 第 5 条中的部分参数范围校验（`AllowedKey` 白名单、`scroll.amount`、`delayMs` 等）在独立 validator 中尚未完全落地，运行期由 proxy capability 边界兜底。
 - 旧 `functionalModuleId`、字符串 action、空步骤、无最终断言、任意代码/动作和悬空引用直接失败，不提供兼容转换。
 - 运行投影只接受 proxy-adapter 当前 capability 可执行的原子动作；契约中尚无下游能力的动作会 fail closed，不能降级为 `dom_script`。
 

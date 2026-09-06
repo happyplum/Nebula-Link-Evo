@@ -4,7 +4,10 @@ import { up as up014 } from '../../migrations/014-semantic-asset-foundation.js';
 import { up as up015 } from '../../migrations/015-semantic-asset-governance.js';
 import { up as up016 } from '../../migrations/016-semantic-workflow-foundation.js';
 import { up as up017 } from '../../migrations/017-semantic-evidence-integration-foundation.js';
-import { BusinessVersionRepository } from '../business-version-repository.js';
+import {
+  BusinessVersionRepository,
+  BusinessVersionRepositoryError,
+} from '../business-version-repository.js';
 import { SemanticAssetRepository } from '../semantic-asset-repository.js';
 import { SemanticEvidenceRepository } from '../semantic-evidence-repository.js';
 import { hashValue } from '../semantic-repository-utils.js';
@@ -551,6 +554,91 @@ describe('semantic v1 data foundation repositories', () => {
       })
     ).toThrow('Inline secret-like value');
   });
+
+  it('fail-closes scenario revisions carrying runWhen or for_each repeat at creation', () => {
+    const fixture = createFixture(db, versions);
+    const basePayload = {
+      schema: 'nebula.ai-e2e.scenario/1.0',
+      scenarioKey: 'guarded-flow',
+      name: '受控流程',
+      purpose: '校验旁路拒绝',
+      prdSourceRefs: [],
+      actors: [],
+      initialAuth: { kind: 'anonymous' },
+      inputs: [],
+      finalAcceptance: [],
+      calls: [
+        {
+          callKey: 'first',
+          functionalScriptId: fixture.scriptId,
+          runWhen: { kind: 'exists', ref: { kind: 'scenario_input', name: 'enabled' } },
+        },
+      ],
+      edges: [],
+      exports: [],
+    };
+    expect(() =>
+      assets.createRevision({
+        assetType: 'test_scenario',
+        assetId: fixture.scenarioId,
+        businessVersionId: fixture.versionId,
+        schemaId: 'nebula.ai-e2e.scenario/1.0',
+        payload: basePayload,
+        validationStatus: 'pending',
+        changeReason: 'authoring candidate guard',
+        createdByType: 'child_agent',
+        createdById: 'child-1',
+      })
+    ).toThrow(BusinessVersionRepositoryError);
+    expect(() =>
+      assets.createRevision({
+        assetType: 'test_scenario',
+        assetId: fixture.scenarioId,
+        businessVersionId: fixture.versionId,
+        schemaId: 'nebula.ai-e2e.scenario/1.0',
+        payload: {
+          ...basePayload,
+          calls: [
+            {
+              callKey: 'first',
+              functionalScriptId: fixture.scriptId,
+              repeat: { kind: 'for_each', scenarioInput: 'users', maxItems: 5 },
+            },
+          ],
+        },
+        validationStatus: 'pending',
+        changeReason: 'authoring candidate guard',
+        createdByType: 'child_agent',
+        createdById: 'child-1',
+      })
+    ).toThrow(/for_each/);
+    expect(() =>
+      assets.createRevision({
+        assetType: 'test_scenario',
+        assetId: fixture.scenarioId,
+        businessVersionId: fixture.versionId,
+        schemaId: 'nebula.ai-e2e.scenario/1.0',
+        payload: { ...basePayload, calls: 'not-an-array' },
+        validationStatus: 'pending',
+        changeReason: 'authoring candidate guard',
+        createdByType: 'child_agent',
+        createdById: 'child-1',
+      })
+    ).toThrow(/calls array/);
+    expect(() =>
+      assets.createRevision({
+        assetType: 'test_scenario',
+        assetId: fixture.scenarioId,
+        businessVersionId: fixture.versionId,
+        schemaId: 'nebula.ai-e2e.scenario/1.0',
+        payload: { ...basePayload, calls: [42] },
+        validationStatus: 'pending',
+        changeReason: 'authoring candidate guard',
+        createdByType: 'child_agent',
+        createdById: 'child-1',
+      })
+    ).toThrow(/Scenario call is invalid/);
+  });
 });
 
 function createFixture(db: DatabaseSync, versions: BusinessVersionRepository) {
@@ -666,6 +754,7 @@ function createFixture(db: DatabaseSync, versions: BusinessVersionRepository) {
     functionalModuleId: functionalModule.id,
     scriptId: script.id,
     scriptRevisionId: script.currentRevision.id,
+    scenarioId: scenario.id,
     scenarioRevisionId: scenario.currentRevision.id,
   };
 }

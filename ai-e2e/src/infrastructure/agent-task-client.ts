@@ -73,6 +73,7 @@ export interface CreateAgentTaskInput {
       kind: 'create' | 'update' | 'delete' | 'auth_change';
       maxAffectedItems: number;
       reversibility: 'reversible' | 'compensatable' | 'irreversible';
+      usesFileUpload?: boolean;
     }>;
     grant?: { grantId: string; status: 'active'; approvedProjectionSha256: string };
   };

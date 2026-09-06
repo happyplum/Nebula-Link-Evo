@@ -2,7 +2,7 @@
 
 > 状态：`in-progress`。正式 Run 已交付确定性风险投影、policy evaluation、staging 审批/active grant、production 业务写拒绝及逐 effectId/数量/grant 跨服务门禁；Authoring 全流程统一投影与撤销传播仍未完成。
 > 更新时间：2026-08-12。
-> 本文定义 semantic v1 正式运行与 authoring verification 的环境风险矩阵、副作用投影、计划级审批和跨服务执行门禁。它不授权旧 TypeScript 执行链或人工调试工具访问生产数据。数据表与部分仓储存在不等于安全门禁已启用；ai-chat-service 的预授权步骤包装及 ai-e2e 的 evaluation 账本尚未串成 active grant 与参数级数量交集执行链。
+> 本文定义 semantic v1 正式运行与 authoring verification 的环境风险矩阵、副作用投影、计划级审批和跨服务执行门禁。它不授权旧 TypeScript 执行链或人工调试工具访问生产数据。逐调用执行门禁已贯通：ai-chat-service 预授权步骤包装在每次 dispatch 前校验 policy evaluation、风险投影 hash、active grant 与参数级数量交集并持久化操作记录（见 `service-api-event-contract.md` §4.1）。
 
 ## 1. 目标与边界
 
@@ -83,6 +83,8 @@ interface PlannedSideEffectV1 {
 
 最后一类不能仅靠审批放行：范围无法收敛时是无效计划；只有范围已经收敛、但因删除/批量/不可逆/上传而高风险时才进入 staging 审批。
 
+> 当前实现注记：`hasHighRisk` 已纳入文件上传维度（`usesFileUpload`，含 ai-chat-service wrapper 与 authoring 候选投影镜像）；`set_files` 本身仍因 proxy capability 未声明而在投影层 fail closed，上传步骤当前无法实际执行。
+
 ## 3. v1 环境矩阵
 
 | 环境 | 认证会话变化 | 单项、非不可逆 create/update | 删除、批量、不可逆、上传 | 未声明/无界副作用 |
@@ -133,6 +135,8 @@ interface SideEffectApprovalGrantV1 {
 
 grant 只对当前 run 或 authoring job 有效，不能复制到业务版本、复用于下一次运行、跨 deployment 使用或作为长期版本决定。上下文终态、用户撤销、deployment/policy 改变或安全相关投影扩大时立即失效。服务重启后从持久 grant 恢复，不要求重复点击审批。
 
+> 当前实现注记：grant 状态转换已交付——run 到达终态（completed/cancelled）按 `context_terminated` 过期，decision 拒绝按 `decision_rejected` 过期；`start/resume` 命令已重查 policy evaluation 投影 hash 与 active grant，漂移或 grant 非 active 时按 `projection_stale` 过期、转入 `paused(approval_required)` 并创建新一轮审批 decision（命令记 rejected + `side_effect_approval_stale/revoked`）。`revoked` 枚举值预留（当前无用户撤销 API）。
+
 ### 4.2 计划修订与重新审批
 
 每次 base plan 或 amendment 变化都重新计算风险投影：
@@ -140,7 +144,7 @@ grant 只对当前 run 或 authoring job 有效，不能复制到业务版本、
 - 只改变 locator、等待、证据采集或其他不影响副作用的字段，`projectionSha256` 不变，可继续使用原 grant。
 - 删除已批准高风险步骤或缩小数量可以继续使用原 grant，但投影和审计必须显示实际子集。
 - 新增副作用、扩大数量/资源/actor、增加上传、从可补偿变为不可逆或改变 deployment/policy 时，原 grant 变为 `expired`，运行在安全边界暂停并重新请求一次计划级审批。
-- 用户拒绝审批时，不派发任何未开始的浏览器写操作；formal run 取消并记录 `approval_denied`，authoring job 取消或以未验证结果结束。已经发生的副作用不自动回滚。
+- 用户拒绝审批时，不派发任何未开始的浏览器写操作；formal run 取消并记录终止原因 code `decision_rejected`，authoring job 取消或以未验证结果结束。已经发生的副作用不自动回滚。
 
 审批不是逐步骤确认。grant 有效期间，投影内各步骤按正常串行执行；每次派发仍校验当前 TODO、effectId、数量边界和 grant 状态。
 
@@ -178,9 +182,9 @@ v1 控制面是 loopback/local 单用户信任边界，但仍采用默认拒绝�
 
 ## 7. 状态、API、事件与证据
 
-- run 规划可走 `planning → paused(approval_required) → ready`；authoring job 使用 `waiting_decision`。恢复命令必须引用 applied 决策和 active grant。
-- API 错误至少区分 `side_effect_declaration_required`、`side_effect_bound_invalid`、`side_effect_policy_denied`、`side_effect_approval_required`、`side_effect_approval_stale` 和 `side_effect_approval_revoked`。
-- Run/Authoring 事件至少增加 `side_effect_policy.evaluated`、`side_effect_approval.requested/granted/revoked/expired`；事件只含脱敏投影摘要和 hash。
+- run 规划可走 `planning → paused(approval_required) → ready`（`planning` 为创建事务内瞬态、不独立落库，见 `run-state-decision-evidence-contract.md` §2.2 注记）；authoring job 使用 `waiting_decision`。恢复命令必须引用 applied 决策和 active grant（重查语义见 §4.1 注记）。
+- API 错误至少区分 `side_effect_declaration_required`、`side_effect_bound_invalid`、`side_effect_policy_denied`、`side_effect_approval_required`、`side_effect_approval_stale` 和 `side_effect_approval_revoked`。其中 5 个（declaration_required/bound_invalid/approval_required/approval_stale/approval_revoked）已在 ai-e2e 路由层作为 ApiProblem code 发射；`side_effect_policy_denied` 保持 run 终止原因 JSON code 语义（创建返回 201+cancelled）。
+- Run/Authoring 事件发射 `side_effect_policy.evaluated`；审批生命周期不使用独立 `side_effect_approval.*` token，而由 `category=side_effect_approval` 的 decision 承载（与 `service-api-event-contract.md` §6 的实际事件集一致：attempt 级决策发射 `decision.requested/applied`；run 创建时的审批请求由 snapshot bootstrap 与 `run.lifecycle_changed` 承载、不发射 `decision.requested`；authoring 侧仅发射 `decision.applied`）。事件只含脱敏投影摘要和 hash。
 - snapshot 展示当前环境、策略版本、风险汇总、审批状态、批准范围和投影是否 stale。
 - policy evaluation、决策、grant、每次使用的 TODO/effectId、最终副作用和证据 manifest 形成同一审计链。
 - approval/grant 不进入业务版本 copy；运行删除时保留脱敏审批墓碑的规则与其他决策一致。

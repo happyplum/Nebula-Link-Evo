@@ -189,7 +189,8 @@ export class SemanticRunControlRepository {
     createdBy: string;
   }): RunCommandResult {
     const requestSha256 = hashValue({ action: params.action, reason: params.reason ?? null });
-    return inImmediateTransaction(this.db, () => {
+    let policyError: Error | undefined;
+    const result = inImmediateTransaction(this.db, () => {
       const existing = this.db
         .prepare('SELECT * FROM run_commands WHERE id = ?')
         .get(params.commandId) as DbRow | undefined;
@@ -234,8 +235,33 @@ export class SemanticRunControlRepository {
       }
       const from = String(run.lifecycle);
       const to = commandTarget(from, params.action);
-      if (params.action === 'resume') this.assertRunCanResume(params.runId);
       const now = new Date().toISOString();
+      if (params.action === 'start' || params.action === 'resume') {
+        const policyCheck = this.assertRunPolicyCurrent(params.runId, now);
+        if (!policyCheck.ok) {
+          this.insertRejectedCommand(
+            params,
+            requestSha256,
+            Number(run.state_version),
+            policyCheck.code
+          );
+          this.appendRunEvent(
+            params.runId,
+            'run.command_rejected',
+            'run',
+            params.commandId,
+            { action: params.action, reason: policyCheck.code },
+            now
+          );
+          policyError = new Error(policyCheck.message);
+          const after = this.requireRun(params.runId);
+          return {
+            lifecycle: String(after.lifecycle),
+            stateVersion: Number(after.state_version),
+            replayed: false,
+          };
+        }
+      }
       const nextVersion = Number(run.state_version) + 1;
       this.db
         .prepare(
@@ -265,6 +291,7 @@ export class SemanticRunControlRepository {
             outcome: 'cancelled',
             reason: { code: 'cancelled_by_user', reason: params.reason ?? null },
           });
+          this.expireActiveGrant(params.runId, 'context_terminated', now);
         } else {
           this.updateRunLifecycle(run, 'cancelling', nextVersion, now, {
             reason: { code: 'cancel_requested', reason: params.reason ?? null },
@@ -273,7 +300,7 @@ export class SemanticRunControlRepository {
       } else {
         this.updateRunLifecycle(run, to, nextVersion, now);
       }
-      return {
+      const finalResult: RunCommandResult = {
         lifecycle:
           params.action === 'cancel' &&
           !this.db
@@ -284,7 +311,10 @@ export class SemanticRunControlRepository {
         stateVersion: nextVersion,
         replayed: false,
       };
+      return finalResult;
     });
+    if (policyError) throw policyError;
+    return result;
   }
 
   enqueueCloseBrowser(commandId: string, runId: string, createdBy: string): { created: boolean } {
@@ -631,6 +661,14 @@ export class SemanticRunControlRepository {
             .prepare('SELECT * FROM side_effect_policy_evaluations WHERE id = ?')
             .get(run.current_policy_evaluation_id) as DbRow | undefined;
           if (!evaluation) throw new Error('Side-effect policy evaluation not found');
+          if (
+            run.side_effect_projection_sha256 &&
+            String(run.side_effect_projection_sha256) !== String(evaluation.projection_sha256)
+          ) {
+            throw new Error(
+              'Side-effect approval is stale: risk projection changed; the run plan must be re-frozen before approval'
+            );
+          }
           const grantId = randomUUID();
           this.db
             .prepare(
@@ -732,6 +770,7 @@ export class SemanticRunControlRepository {
     const environment = String(deploymentPayload.environment ?? 'test');
     const payload = parseObject(scenario.payload_json);
     const calls = parseArray(payload.calls) as Array<Record<string, unknown>>;
+    if (calls.length === 0) throw new Error('Scenario has no calls to execute');
     const edges = parseArray(payload.edges) as Array<Record<string, unknown>>;
     const todos: RunTodoInput[] = [];
     const frozenCalls: Array<Record<string, unknown>> = [];
@@ -956,7 +995,8 @@ export class SemanticRunControlRepository {
       createdBy: string;
     },
     requestSha256: string,
-    actualStateVersion: number
+    actualStateVersion: number,
+    code: string = 'state_version_conflict'
   ): void {
     const now = new Date().toISOString();
     this.db
@@ -972,21 +1012,134 @@ export class SemanticRunControlRepository {
         params.action,
         params.expectedStateVersion,
         requestSha256,
-        stableStringify({ code: 'state_version_conflict', actualStateVersion }),
+        stableStringify({ code, actualStateVersion }),
         params.createdBy,
         now,
         now
       );
   }
 
-  private assertRunCanResume(runId: string): void {
+  private assertRunPolicyCurrent(
+    runId: string,
+    now: string
+  ): { ok: true } | { ok: false; code: string; message: string } {
     if (
       this.db
         .prepare("SELECT 1 FROM decision_requests WHERE run_id = ? AND status = 'open' LIMIT 1")
         .get(runId)
     ) {
-      throw new Error('Run has an open decision');
+      return {
+        ok: false,
+        code: 'side_effect_approval_required',
+        message: 'Run has an open decision and cannot start or resume',
+      };
     }
+    const run = this.requireRun(runId);
+    const evaluationId = run.current_policy_evaluation_id
+      ? String(run.current_policy_evaluation_id)
+      : null;
+    if (!evaluationId) return { ok: true };
+    const evaluation = this.db
+      .prepare('SELECT * FROM side_effect_policy_evaluations WHERE id = ?')
+      .get(evaluationId) as DbRow | undefined;
+    if (!evaluation) {
+      return {
+        ok: false,
+        code: 'side_effect_approval_stale',
+        message: 'Side-effect policy evaluation is missing for run',
+      };
+    }
+    const evaluationSha = String(evaluation.projection_sha256);
+    const projectionSha = run.side_effect_projection_sha256
+      ? String(run.side_effect_projection_sha256)
+      : null;
+    if (projectionSha && projectionSha !== evaluationSha) {
+      this.expireActiveGrant(runId, 'projection_stale', now);
+      this.pauseForReapproval(run, now, ['staging_high_risk_approval', 'projection_stale']);
+      return {
+        ok: false,
+        code: 'side_effect_approval_stale',
+        message: 'Side-effect approval is stale: risk projection changed',
+      };
+    }
+    const grantId = run.active_approval_grant_id ? String(run.active_approval_grant_id) : null;
+    if (grantId) {
+      const grant = this.db
+        .prepare(
+          'SELECT status, approved_projection_sha256 FROM side_effect_approval_grants WHERE id = ?'
+        )
+        .get(grantId) as { status: string; approved_projection_sha256: string } | undefined;
+      const stale =
+        !grant || grant.status !== 'active' || grant.approved_projection_sha256 !== evaluationSha;
+      if (stale) {
+        this.expireActiveGrant(runId, 'projection_stale', now);
+        this.pauseForReapproval(run, now, ['staging_high_risk_approval', 'projection_stale']);
+        const revoked = grant?.status === 'revoked';
+        return {
+          ok: false,
+          code: revoked ? 'side_effect_approval_revoked' : 'side_effect_approval_stale',
+          message: revoked
+            ? 'Side-effect approval grant was revoked'
+            : 'Side-effect approval grant is inactive or stale',
+        };
+      }
+    }
+    return { ok: true };
+  }
+
+  private expireActiveGrant(runId: string, reasonCode: string, now: string): void {
+    this.db
+      .prepare(
+        `UPDATE side_effect_approval_grants SET status = 'expired', expired_at = ?, reason_json = ?
+         WHERE context_type = 'run' AND context_id = ? AND status = 'active'`
+      )
+      .run(now, stableStringify({ code: reasonCode }), runId);
+  }
+
+  private pauseForReapproval(run: DbRow, now: string, reasonCodes: string[]): void {
+    if (
+      this.db
+        .prepare("SELECT 1 FROM decision_requests WHERE run_id = ? AND status = 'open' LIMIT 1")
+        .get(String(run.id))
+    ) {
+      return;
+    }
+    const decisionId = randomUUID();
+    this.db
+      .prepare(
+        `INSERT INTO decision_requests
+          (id, context_type, context_id, run_id, status, category, required_authority,
+           question, facts_json, options_json, recommendation_key, impact_json,
+           state_version, created_by, created_at)
+         VALUES (?, 'run', ?, ?, 'open', 'side_effect_approval', 'user', ?, ?, ?, 'approve', ?, 1, 'system', ?)`
+      )
+      .run(
+        decisionId,
+        String(run.id),
+        String(run.id),
+        '该运行的副作用审批已失效（风险投影变化），是否重新批准当前冻结计划？',
+        stableStringify({ reasonCodes }),
+        stableStringify([
+          { key: 'approve', label: '重新批准当前计划' },
+          { key: 'reject', label: '拒绝并取消运行' },
+        ]),
+        stableStringify({ reasonCodes }),
+        now
+      );
+    this.db
+      .prepare(
+        `UPDATE test_runs SET lifecycle = 'paused', state_version = state_version + 1,
+           pause_reason_json = ?, active_approval_grant_id = NULL WHERE id = ?`
+      )
+      .run(stableStringify({ code: 'approval_required', reasonCodes }), String(run.id));
+    this.appendRunEvent(
+      String(run.id),
+      'run.lifecycle_changed',
+      'run',
+      String(run.id),
+      { from: run.lifecycle, to: 'paused', reason: { code: 'approval_required', reasonCodes } },
+      now
+    );
   }
 
   private cancelRemainingTodos(runId: string, now: string): void {
@@ -1196,6 +1349,7 @@ export class SemanticRunControlRepository {
                state_version = state_version + 1, completed_at = ? WHERE id = ?`
           )
           .run(now, runId);
+        this.expireActiveGrant(runId, 'context_terminated', now);
         this.appendRunEvent(
           runId,
           'run.completed',
@@ -1234,6 +1388,7 @@ export class SemanticRunControlRepository {
            state_version = state_version + 1, completed_at = ? WHERE id = ?`
       )
       .run(outcome, now, runId);
+    this.expireActiveGrant(runId, 'context_terminated', now);
     this.appendRunEvent(
       runId,
       'run.completed',
@@ -1255,6 +1410,7 @@ export class SemanticRunControlRepository {
          WHERE id = ?`
       )
       .run(stableStringify({ code: 'decision_rejected', decisionId }), now, runId);
+    this.expireActiveGrant(runId, 'decision_rejected', now);
     if (run.browser_job_id) {
       this.db
         .prepare(
@@ -1367,6 +1523,7 @@ function evaluateSideEffectPolicy(
     (effect) =>
       effect.kind === 'delete' ||
       effect.reversibility === 'irreversible' ||
+      effect.usesFileUpload === true ||
       (typeof effect.maxAffectedItems === 'number' && effect.maxAffectedItems > 1)
   );
   if (environment === 'production' && hasBusinessWrite) {
