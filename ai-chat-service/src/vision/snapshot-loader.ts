@@ -8,6 +8,7 @@ import type {
 } from '@nebula-link-evo/shared';
 import type { HarnessMcpCaller } from '../harness/types.js';
 import { GATEWAY_MCP_SERVER_NAME } from '../config/service-config.js';
+import { readBrowserOperationResult } from '../tools/browser-operation-result.js';
 
 const MAX_DOM_ARTIFACT_BYTES = 16 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
@@ -36,7 +37,7 @@ export class VisionSnapshotLoader {
 
   async load(raw: unknown, signal?: AbortSignal): Promise<LoadedVisionSnapshot> {
     const binding = parseBinding(raw);
-    const operation = extractOperation(
+    const operation = readBrowserOperationResult(
       await this.options.mcpClient.callTool(
         GATEWAY_MCP_SERVER_NAME,
         'browser-control.operation_get',
@@ -44,6 +45,7 @@ export class VisionSnapshotLoader {
         signal ? { signal } : {}
       )
     );
+    if (!operation) throw new Error('Proxy returned an invalid operation record');
     validateOperation(operation, binding);
 
     const url = `${this.gatewayUrl}/api/v1/browser-execution/sessions/${encodeURIComponent(binding.sessionId)}/artifacts/${encodeURIComponent(binding.domArtifact.artifactId)}`;
@@ -190,11 +192,8 @@ function validateOperation(
   operation: BrowserOperationRecord,
   binding: VisionSnapshotBindingV1
 ): void {
-  const artifact = Array.isArray(operation.artifacts)
-    ? operation.artifacts.find((item) => item.id === binding.domArtifact.artifactId)
-    : undefined;
+  const artifact = operation.artifacts.find((item) => item.id === binding.domArtifact.artifactId);
   if (
-    operation.schema !== 'nebula.browser.operation-result/1.0' ||
     operation.operationId !== binding.operationId ||
     operation.requestHash !== binding.requestHash ||
     operation.sessionId !== binding.sessionId ||
@@ -207,7 +206,9 @@ function validateOperation(
     !artifact ||
     artifact.kind !== 'dom_snapshot' ||
     artifact.sha256 !== binding.domArtifact.sha256 ||
-    artifact.mimeType !== binding.domArtifact.mimeType
+    artifact.mimeType !== binding.domArtifact.mimeType ||
+    artifact.sizeBytes !== binding.domArtifact.sizeBytes ||
+    artifact.snapshotId !== binding.snapshotId
   ) {
     throw new Error('Vision snapshot binding does not match the durable proxy operation');
   }
@@ -232,32 +233,6 @@ function assertExactKeys(value: Record<string, unknown>, allowed: readonly strin
   if (Object.keys(value).some((key) => !allowed.includes(key))) {
     throw new Error('VisionSnapshotBindingV1 contains unknown fields');
   }
-}
-
-function extractOperation(value: unknown): BrowserOperationRecord {
-  if (!value || typeof value !== 'object') throw new Error('Proxy returned no operation record');
-  const record = value as Record<string, unknown>;
-  if (record.parsed && typeof record.parsed === 'object') {
-    return record.parsed as BrowserOperationRecord;
-  }
-  if (record.structuredContent && typeof record.structuredContent === 'object') {
-    return record.structuredContent as BrowserOperationRecord;
-  }
-  if (typeof record.text === 'string') return JSON.parse(record.text) as BrowserOperationRecord;
-  if (Array.isArray(record.content)) {
-    const text = record.content
-      .filter(
-        (item): item is { type: 'text'; text: string } =>
-          Boolean(item) &&
-          typeof item === 'object' &&
-          (item as { type?: unknown }).type === 'text' &&
-          typeof (item as { text?: unknown }).text === 'string'
-      )
-      .map((item) => item.text)
-      .join('\n');
-    if (text) return JSON.parse(text) as BrowserOperationRecord;
-  }
-  return record as unknown as BrowserOperationRecord;
 }
 
 function sha256(bytes: Uint8Array): string {

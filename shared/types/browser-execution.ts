@@ -41,16 +41,14 @@ export type BrowserOperationKind = 'observe' | 'act';
 export type BrowserLeaseMode = 'observe' | 'control';
 export type BrowserSessionStatus = 'opening' | 'active' | 'closed' | 'interrupted' | 'failed';
 export type BrowserLeaseStatus = 'active' | 'revoked' | 'expired';
-export type BrowserOperationStatus =
-  'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'outcome_unknown';
-
-export interface BrowserExecutionProblem {
-  code: string;
-  message: string;
-  retryable: boolean;
-  correlationId: string;
-  details?: Record<string, unknown>;
-}
+export type {
+  BrowserOperationStatus,
+  BrowserExecutionProblem,
+  ResolvedBrowserTarget,
+  BrowserArtifactRefV1,
+  BrowserOperationRecord,
+} from './browser-operation-result.js';
+import type { BrowserExecutionProblem } from './browser-operation-result.js';
 
 export interface BrowserSuccessEnvelope<T> {
   data: T;
@@ -126,7 +124,7 @@ export interface BrowserSessionView extends BrowserSessionRecord {
 }
 
 export type { BrowserLocatorCandidate, BrowserTargetRefV1 } from './browser-target.js';
-import type { BrowserLocatorCandidate, BrowserTargetRefV1 } from './browser-target.js';
+import type { BrowserTargetRefV1 } from './browser-target.js';
 
 export type BrowserKeyModifier = 'Alt' | 'Control' | 'Meta' | 'Shift';
 
@@ -204,43 +202,6 @@ export interface ExecuteBrowserOperationInput {
   leaseToken: string;
   tabId?: string;
   request: BrowserOperationRequestV1;
-}
-
-export interface ResolvedBrowserTarget {
-  semantic: string;
-  strategy: BrowserLocatorCandidate['strategy'];
-  candidateIndex: number;
-  matchedCount: number;
-}
-
-export interface BrowserArtifactRefV1 {
-  id: string;
-  kind: string;
-  sha256: string;
-  mimeType: string;
-  sizeBytes: number;
-  snapshotId?: string;
-}
-
-export interface BrowserOperationRecord {
-  schema: 'nebula.browser.operation-result/1.0';
-  operationId: string;
-  requestHash: string;
-  sessionId: string;
-  leaseId: string;
-  leaseSequence: number;
-  tabId?: string;
-  kind: BrowserOperationKind;
-  operation: BrowserOperationName;
-  status: BrowserOperationStatus;
-  queueSequence: number;
-  acceptedAt: string;
-  startedAt?: string;
-  completedAt?: string;
-  resolvedTarget?: ResolvedBrowserTarget;
-  actual?: unknown;
-  artifacts: BrowserArtifactRefV1[];
-  error?: BrowserExecutionProblem;
 }
 
 export interface BrowserSessionEventRecord {

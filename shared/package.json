@@ -47,6 +47,10 @@
     "./types/browser-target": {
       "types": "./dist/types/browser-target.d.ts",
       "import": "./dist/types/browser-target.js"
+    },
+    "./types/browser-operation-result": {
+      "types": "./dist/types/browser-operation-result.d.ts",
+      "import": "./dist/types/browser-operation-result.js"
     }
   },
   "scripts": {

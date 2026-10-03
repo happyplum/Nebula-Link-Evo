@@ -1,3 +1,4 @@
+import { BrowserOperationRecordSchema } from '@nebula-link-evo/shared/types/browser-operation-result';
 import { BrowserTargetRefV1Schema } from '@nebula-link-evo/shared/types/browser-target';
 import { EventEmitter } from 'node:events';
 import type { BrowserExecutionService } from '../../browser-execution/service.js';
@@ -66,7 +67,7 @@ const DEFINITIONS: ReadonlyArray<{
       },
       required: ['sessionId', 'leaseId', 'leaseToken', 'request'],
     },
-    outputSchema: operationRecordSchema(),
+    outputSchema: BrowserOperationRecordSchema,
   },
   {
     name: 'browser-control.operation_get',
@@ -80,7 +81,7 @@ const DEFINITIONS: ReadonlyArray<{
       },
       required: ['operationId'],
     },
-    outputSchema: operationRecordSchema(),
+    outputSchema: BrowserOperationRecordSchema,
   },
   {
     name: 'browser-control.operation_cancel',
@@ -96,7 +97,7 @@ const DEFINITIONS: ReadonlyArray<{
       },
       required: ['operationId', 'sessionId', 'leaseId', 'leaseToken'],
     },
-    outputSchema: operationRecordSchema(),
+    outputSchema: BrowserOperationRecordSchema,
   },
 ];
 
@@ -175,89 +176,6 @@ export class BrowserExecutionToolsProvider extends EventEmitter implements ToolP
         throw new Error(`Unknown browser execution tool: ${name}`);
     }
   }
-}
-
-function operationRecordSchema(): Record<string, unknown> {
-  return {
-    type: 'object',
-    additionalProperties: false,
-    properties: {
-      schema: { const: 'nebula.browser.operation-result/1.0' },
-      operationId: { type: 'string' },
-      requestHash: { type: 'string' },
-      sessionId: { type: 'string' },
-      leaseId: { type: 'string' },
-      leaseSequence: { type: 'integer' },
-      tabId: { type: 'string' },
-      kind: { type: 'string', enum: ['observe', 'act'] },
-      operation: { type: 'string' },
-      status: {
-        type: 'string',
-        enum: ['queued', 'running', 'succeeded', 'failed', 'cancelled', 'outcome_unknown'],
-      },
-      queueSequence: { type: 'integer' },
-      acceptedAt: { type: 'string' },
-      startedAt: { type: 'string' },
-      completedAt: { type: 'string' },
-      resolvedTarget: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          semantic: { type: 'string' },
-          strategy: {
-            type: 'string',
-            enum: ['role', 'test_id', 'label', 'placeholder', 'text', 'css', 'xpath'],
-          },
-          candidateIndex: { type: 'integer', minimum: 0 },
-          matchedCount: { type: 'integer', minimum: 0 },
-        },
-        required: ['semantic', 'strategy', 'candidateIndex', 'matchedCount'],
-      },
-      actual: {},
-      artifacts: {
-        type: 'array',
-        items: {
-          type: 'object',
-          additionalProperties: false,
-          properties: {
-            id: { type: 'string' },
-            kind: { type: 'string' },
-            sha256: { type: 'string', pattern: '^[a-f0-9]{64}$' },
-            mimeType: { type: 'string' },
-            sizeBytes: { type: 'integer', minimum: 1 },
-            snapshotId: { type: 'string', minLength: 1 },
-          },
-          required: ['id', 'kind', 'sha256', 'mimeType', 'sizeBytes'],
-        },
-      },
-      error: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          code: { type: 'string' },
-          message: { type: 'string' },
-          retryable: { type: 'boolean' },
-          correlationId: { type: 'string' },
-          details: { type: 'object' },
-        },
-        required: ['code', 'message', 'retryable', 'correlationId'],
-      },
-    },
-    required: [
-      'schema',
-      'operationId',
-      'requestHash',
-      'sessionId',
-      'leaseId',
-      'leaseSequence',
-      'kind',
-      'operation',
-      'status',
-      'queueSequence',
-      'acceptedAt',
-      'artifacts',
-    ],
-  };
 }
 
 function requireObject(value: unknown): Record<string, unknown> {
