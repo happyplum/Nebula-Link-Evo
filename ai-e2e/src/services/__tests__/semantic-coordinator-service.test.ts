@@ -560,6 +560,264 @@ describe('SemanticCoordinatorService', () => {
         "UPDATE side_effect_approval_grants SET status = 'revoked', revoked_at = ? WHERE context_id = ? AND status = 'active'"
       ).run(new Date().toISOString(), contextId);
     }
+
+    describe('Authoring 租约凭据丢失恢复', () => {
+      async function lostLeaseHarness(losses = 1) {
+        const h = harness();
+        const jobId = startAuthoring(h);
+        await untilOutbox(h.coordinator, 'authoring_browser_lease.create');
+        const original = db
+          .prepare(
+            "SELECT * FROM integration_outbox WHERE command_type = 'authoring_browser_lease.create'"
+          )
+          .get() as Record<string, unknown>;
+        let now = new Date();
+        const browser: SemanticBrowserClientPort = h.browser;
+        const create = browser.createLease.bind(browser);
+        const session = browser.getSession.bind(browser);
+        const leases = new Map<string, BrowserLeaseView>();
+        const createLease = vi
+          .spyOn(browser, 'createLease')
+          .mockImplementation(async (id, key, input) => {
+            const previous = leases.get(key);
+            if (previous) {
+              return {
+                lease: {
+                  ...previous,
+                  status: Date.parse(previous.expiresAt) > now.getTime() ? 'active' : 'expired',
+                },
+                tokenIssued: false,
+              };
+            }
+            expect(
+              [...leases.values()].some((lease) => Date.parse(lease.expiresAt) > now.getTime())
+            ).toBe(false);
+            const issued = await create(id, key, input);
+            issued.lease.sequence = leases.size + 1;
+            issued.lease.createdAt = now.toISOString();
+            issued.lease.expiresAt = new Date(now.getTime() + 300_000).toISOString();
+            leases.set(key, issued.lease);
+            if (leases.size <= losses) {
+              throw new IntegrationClientError(
+                'proxy-adapter',
+                'dependency_unavailable',
+                '签发后响应丢失',
+                true
+              );
+            }
+            return issued;
+          });
+        vi.spyOn(browser, 'getSession').mockImplementation(async (id) => {
+          const current = await session(id);
+          return {
+            ...current,
+            activeLeases: current.activeLeases.filter(
+              (lease) => Date.parse(lease.expiresAt) > now.getTime()
+            ),
+          };
+        });
+        const options = { ...h.options, now: () => now };
+        let coordinator = new SemanticCoordinatorService(options);
+        await coordinator.tick();
+        expect(leases.size).toBe(1);
+        expect(
+          h.secrets.has(`coordinator-secret://browser-lease/${leases.get(String(original.id))!.id}`)
+        ).toBe(false);
+        expect(h.agent.createdRequest).toBeUndefined();
+        // Simulate process recovery before local confirmation or secret persistence.
+        db.prepare("UPDATE integration_outbox SET status = 'dispatching' WHERE id = ?").run(
+          original.id
+        );
+        coordinator = new SemanticCoordinatorService(options);
+        return {
+          ...h,
+          jobId,
+          original,
+          leases,
+          createLease,
+          coordinator,
+          restart: () => new SemanticCoordinatorService(options),
+          expire: (key: string) => {
+            now = new Date(Date.parse(leases.get(key)!.expiresAt) + 1_000);
+          },
+        };
+      }
+
+      it('活动旧租约无 token 时等待过期，不创建第二份控制权或 Agent', async () => {
+        const h = await lostLeaseHarness();
+        await h.coordinator.tick();
+        const lease = h.leases.get(String(h.original.id))!;
+        expect(
+          db
+            .prepare('SELECT status, next_attempt_at FROM integration_outbox WHERE id = ?')
+            .get(h.original.id)
+        ).toEqual({
+          status: 'retryable_failed',
+          next_attempt_at: new Date(Date.parse(lease.expiresAt) + 1_000).toISOString(),
+        });
+        await h.coordinator.tick();
+        expect(h.leases.size).toBe(1);
+        expect(h.createLease).toHaveBeenCalledTimes(2);
+        expect(h.agent.createdRequest).toBeUndefined();
+        expect(db.prepare('SELECT id FROM authoring_attempts').get()).toBeUndefined();
+      });
+
+      it('旧租约失效后先持久新 key，再确认旧意图；重放不双建且 Agent 关联原 Authoring task', async () => {
+        const h = await lostLeaseHarness();
+        await h.coordinator.tick();
+        h.expire(String(h.original.id));
+        const settle = evidence.settleOutbox.bind(evidence);
+        const interrupted = new Error('租约恢复意图已持久化，确认前进程中断');
+        const settleSpy = vi
+          .spyOn(evidence, 'settleOutbox')
+          .mockImplementation((id, status, result) => {
+            if (id === h.original.id) {
+              if (status === 'confirmed') {
+                expect(
+                  db
+                    .prepare('SELECT status FROM integration_outbox WHERE id = ?')
+                    .get(`${id}:recovery:1`)
+                ).toEqual({ status: 'pending' });
+              }
+              // Stop both confirmation and failure handling before either can write local state.
+              throw interrupted;
+            }
+            return settle(id, status, result);
+          });
+        // Replay becomes due only after the active lease expires.
+        await expect(h.coordinator.tick()).rejects.toBe(interrupted);
+        const lease = h.leases.get(String(h.original.id))!;
+        const recoveryId = `${h.original.id}:recovery:${lease.sequence}`;
+        const recovery = db
+          .prepare('SELECT * FROM integration_outbox WHERE id = ?')
+          .get(recoveryId);
+        expect(recovery).toMatchObject({
+          context_type: 'authoring',
+          context_id: h.jobId,
+          authoring_task_id: h.original.authoring_task_id,
+          command_type: 'authoring_browser_lease.create',
+          endpoint_or_tool: h.original.endpoint_or_tool,
+          payload_json_redacted: h.original.payload_json_redacted,
+          request_sha256: h.original.request_sha256,
+          secret_binding_ref: null,
+          status: 'pending',
+        });
+        expect(
+          db
+            .prepare('SELECT status, result_ref FROM integration_outbox WHERE id = ?')
+            .get(h.original.id)
+        ).toEqual({ status: 'dispatching', result_ref: null });
+        expect(h.leases.size).toBe(1);
+        settleSpy.mockRestore();
+        const restarted = h.restart();
+        await restarted.tick();
+        expect(
+          db
+            .prepare('SELECT status, result_ref FROM integration_outbox WHERE id = ?')
+            .get(h.original.id)
+        ).toEqual({ status: 'confirmed', result_ref: lease.id });
+        expect(
+          db
+            .prepare(
+              "SELECT count(*) AS count FROM integration_outbox WHERE command_type = 'authoring_browser_lease.create'"
+            )
+            .get()
+        ).toEqual({ count: 2 });
+        await restarted.tick();
+        expect(h.leases.size).toBe(2);
+        expect(h.createLease.mock.calls.map((call) => call[1])).toEqual([
+          h.original.id,
+          h.original.id,
+          h.original.id,
+          h.original.id,
+          recoveryId,
+        ]);
+        await restarted.tick();
+        expect(h.agent.createdRequest?.correlation).toMatchObject({
+          authoringJobId: h.jobId,
+          authoringTaskId: h.original.authoring_task_id,
+        });
+        expect(h.agent.createdRequest?.browserBinding.browserLeaseId).toBe(
+          h.leases.get(recoveryId)!.id
+        );
+        await restarted.tick();
+        expect(db.prepare('SELECT task_id FROM authoring_attempts').all()).toEqual([
+          { task_id: h.original.authoring_task_id },
+        ]);
+        expect(
+          db
+            .prepare(
+              "SELECT authoring_task_id FROM external_task_links WHERE kind = 'browser_lease'"
+            )
+            .all()
+        ).toEqual([{ authoring_task_id: h.original.authoring_task_id }]);
+      });
+
+      it('连续签发丢响应时逐代恢复，仍只有一次 Authoring attempt 和 Agent create', async () => {
+        const h = await lostLeaseHarness(2);
+        h.expire(String(h.original.id));
+        await h.coordinator.tick();
+        const secondId = `${h.original.id}:recovery:1`;
+        await h.coordinator.tick();
+        expect(h.leases.size).toBe(2);
+        db.prepare("UPDATE integration_outbox SET status = 'dispatching' WHERE id = ?").run(
+          secondId
+        );
+        h.expire(secondId);
+        const restarted = h.restart();
+        await restarted.tick();
+        const thirdId = `${secondId}:recovery:2`;
+        expect(
+          db.prepare('SELECT status FROM integration_outbox WHERE id = ?').get(thirdId)
+        ).toEqual({ status: 'pending' });
+        await restarted.tick();
+        const createAgent = vi.spyOn(h.agent, 'createTask');
+        await restarted.tick();
+        expect(h.leases.size).toBe(3);
+        expect(createAgent).toHaveBeenCalledTimes(1);
+        await restarted.tick();
+        expect(db.prepare('SELECT count(*) AS count FROM authoring_attempts').get()).toEqual({
+          count: 1,
+        });
+      });
+
+      it.each(['cancel', 'revoke'] as const)(
+        '新恢复意图派发前 %s，不取得新租约或启动 Agent',
+        async (action) => {
+          const h = await lostLeaseHarness();
+          h.expire(String(h.original.id));
+          await h.coordinator.tick();
+          const recoveryId = `${h.original.id}:recovery:1`;
+          expect(
+            db.prepare('SELECT status FROM integration_outbox WHERE id = ?').get(recoveryId)
+          ).toEqual({ status: 'pending' });
+          if (action === 'revoke') revoke(h.jobId);
+          else {
+            const state = db
+              .prepare('SELECT state_version FROM authoring_jobs WHERE id = ?')
+              .get(h.jobId) as { state_version: number };
+            new SemanticAuthoringService(
+              workflows,
+              assets,
+              h.amendments,
+              new BusinessVersionRepository(db)
+            ).commandJob({
+              commandId: 'cancel-lease-recovery',
+              jobId: h.jobId,
+              action: 'cancel',
+              expectedStateVersion: state.state_version,
+              createdBy: 'operator',
+            });
+          }
+          await h.coordinator.tick();
+          expect(h.leases.size).toBe(1);
+          expect(h.agent.createdRequest).toBeUndefined();
+          expect(
+            db.prepare('SELECT status FROM integration_outbox WHERE id = ?').get(recoveryId)
+          ).toEqual({ status: 'cancelled' });
+        }
+      );
+    });
     it.each(['run', 'authoring', 'authoring_error', 'authoring_revoke_retry'] as const)(
       '%s lease 返回期间撤销授权，立即撤销本次控制权且不启动 Agent',
       async (context) => {

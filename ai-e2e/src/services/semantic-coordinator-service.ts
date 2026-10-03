@@ -755,12 +755,17 @@ export class SemanticCoordinatorService {
           { nextAttemptAt: new Date(Date.parse(active.expiresAt) + 1_000).toISOString() }
         );
       }
-      throw new IntegrationClientError(
-        'proxy-adapter',
-        'lease_token_unavailable',
-        'Authoring 租约已失效',
-        true
-      );
+      this.options.evidence.enqueueOutbox({
+        id: `${item.id}:recovery:${issued.lease.sequence}`,
+        context: { type: 'authoring', id: item.context_id },
+        authoringTaskId: taskId,
+        targetService: 'proxy_adapter',
+        commandType: 'authoring_browser_lease.create',
+        endpointOrTool: String(item.endpoint_or_tool),
+        payloadRedacted: payload,
+      });
+      this.options.evidence.settleOutbox(item.id, 'confirmed', { resultRef: issued.lease.id });
+      return;
     }
     this.secrets.put(secretRef, leaseToken);
     await this.revalidateIssuedLease(item, sessionId, issued.lease.id, leaseToken, secretRef);
