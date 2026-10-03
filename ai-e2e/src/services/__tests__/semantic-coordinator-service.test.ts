@@ -6,6 +6,9 @@ import type {
   CreateAgentTaskRequest,
 } from '@nebula-link-evo/shared/types/agent-task';
 import { DatabaseSync } from 'node:sqlite';
+import { createHash } from 'node:crypto';
+import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
+import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { up as up014 } from '../../database/migrations/014-semantic-asset-foundation.js';
 import { up as up015 } from '../../database/migrations/015-semantic-asset-governance.js';
@@ -36,6 +39,7 @@ import type {
   CreateBrowserLeaseRequest,
 } from '@nebula-link-evo/shared/types/browser-execution';
 import type { SemanticBrowserClientPort } from '../../infrastructure/semantic-browser-client.js';
+import { SemanticArtifactStore } from '../../infrastructure/semantic-artifact-store.js';
 import {
   desiredAgentCommand,
   SemanticCoordinatorService,
@@ -59,6 +63,7 @@ describe('SemanticCoordinatorService', () => {
   let workflows: SemanticWorkflowRepository;
   let evidence: SemanticEvidenceRepository;
   let runs: SemanticRunControlRepository;
+  let evidencePath: string | undefined;
 
   beforeEach(() => {
     db = new DatabaseSync(':memory:');
@@ -76,7 +81,332 @@ describe('SemanticCoordinatorService', () => {
     runs = new SemanticRunControlRepository(db, workflows, evidence);
   });
 
-  afterEach(() => db.close());
+  afterEach(async () => {
+    db.close();
+    if (evidencePath) await rm(evidencePath, { recursive: true, force: true });
+    evidencePath = undefined;
+  });
+
+  async function collectEvidence(
+    context: 'run' | 'authoring',
+    browser: FakeBrowserClient,
+    toolCalls: AgentTaskView['toolCalls'],
+    fixture = createFixture(db, assets),
+    agentTasks = new FakeAgentTaskClient(
+      { status: 'no_change', summary: '资产无需修改' },
+      { toolCalls },
+      { toolCalls }
+    )
+  ) {
+    let contextId: string;
+    if (context === 'run') {
+      const created = runs.createFormalRun({
+        projectId: 'project-1',
+        businessVersionId: fixture.versionId,
+        clientRunId: 'evidence-run',
+        scenarioRevisionId: fixture.scenarioRevisionId,
+        deploymentRevisionId: fixture.deploymentRevisionId,
+        inputs: {},
+      });
+      contextId = created.id;
+      runs.command({
+        commandId: 'start-evidence-run',
+        runId: contextId,
+        action: 'start',
+        expectedStateVersion: 2,
+        createdBy: 'operator',
+      });
+    } else {
+      const authoring = new SemanticAuthoringService(
+        workflows,
+        assets,
+        new AuthoringAmendmentRepository(db, assets),
+        new BusinessVersionRepository(db)
+      );
+      contextId = authoring.createJob({
+        businessVersionId: fixture.versionId,
+        mode: 'repair',
+        idempotencyKey: 'evidence-authoring',
+        targetType: 'functional_module',
+        targetId: fixture.moduleId,
+        currentUrl: 'https://test.example/account',
+        reason: '检查证据采集',
+        createdBy: 'operator',
+      }).id;
+    }
+    const temporaryRoot = path.resolve('..', '.tmp');
+    await mkdir(temporaryRoot, { recursive: true });
+    evidencePath ??= await mkdtemp(path.join(temporaryRoot, 't6-evidence-'));
+    const coordinator = new SemanticCoordinatorService({
+      repository: new SemanticCoordinatorRepository(db),
+      workflows,
+      evidence,
+      runs,
+      agentTasks,
+      browser,
+      secretStore: new MemoryCoordinatorSecretStore(),
+      artifactStore: new SemanticArtifactStore(evidencePath),
+      authoringCandidates: new SemanticAuthoringCandidateService(
+        new SemanticQueryRepository(db, new BusinessVersionRepository(db)),
+        assets,
+        new AuthoringAmendmentRepository(db, assets)
+      ),
+    });
+    for (let index = 0; index < 16; index += 1) await coordinator.tick();
+    return db
+      .prepare('SELECT * FROM evidence_manifests WHERE context_type = ? AND context_id = ?')
+      .get(context, contextId) as {
+      id: string;
+      context_id: string;
+      todo_id: string | null;
+      status: string;
+      completeness: string;
+      manifest_json: string;
+      manifest_sha256: string;
+    };
+  }
+
+  const evidenceCall = (
+    operationId: string,
+    stepId = operationId
+  ): AgentTaskView['toolCalls'][number] => ({
+    toolCallId: `call-${stepId}`,
+    toolName: 'browser-control.operation_execute',
+    status: 'succeeded',
+    stepId,
+    operationId,
+    operation: 'page_state',
+  });
+  const evidenceArtifact = (id: string) => {
+    const bytes = Buffer.from('shared evidence bytes');
+    return {
+      id,
+      kind: 'screenshot',
+      sha256: createHash('sha256').update(bytes).digest('hex'),
+      mimeType: 'image/png',
+      bytes,
+    };
+  };
+
+  describe.each(['run', 'authoring'] as const)('%s 浏览器证据', (context) => {
+    it.each(['queued', 'running', 'succeeded', 'failed', 'cancelled', 'outcome_unknown'] as const)(
+      '按操作真实 %s 状态封存完整性与外部终态，并保留可下载 artifact',
+      async (status) => {
+        const browser = new FakeBrowserClient();
+        browser.operationStatus = status;
+        browser.artifact = evidenceArtifact('artifact-state');
+        const manifest = await collectEvidence(context, browser, [evidenceCall('operation-state')]);
+        const terminal = !['queued', 'running'].includes(status);
+        expect(manifest).toMatchObject({
+          status: 'sealed',
+          completeness: terminal ? 'complete' : 'partial',
+        });
+        expect(hashValue(JSON.parse(manifest.manifest_json))).toBe(manifest.manifest_sha256);
+        const operationLink = db
+          .prepare(
+            "SELECT * FROM external_task_links WHERE kind = 'browser_operation' AND external_id = ?"
+          )
+          .get('operation-state') as Record<string, unknown>;
+        expect(operationLink).toMatchObject({
+          context_type: context,
+          context_id: manifest.context_id,
+          external_state: status,
+        });
+        expect(Boolean(operationLink.terminal_at)).toBe(terminal);
+        expect(
+          operationLink[context === 'run' ? 'page_task_id' : 'authoring_task_id']
+        ).toBeTruthy();
+        const operationItem = db
+          .prepare(
+            "SELECT inline_json, integrity_sha256 FROM evidence_items WHERE manifest_id = ? AND item_type = 'operation_result'"
+          )
+          .get(manifest.id) as { inline_json: string; integrity_sha256: string };
+        expect(hashValue(JSON.parse(operationItem.inline_json))).toBe(
+          operationItem.integrity_sha256
+        );
+        expect(operationLink.result_sha256).toBe(operationItem.integrity_sha256);
+        const artifact = db.prepare('SELECT * FROM artifact_objects').get() as Record<
+          string,
+          unknown
+        >;
+        expect(artifact).toMatchObject({
+          sha256: browser.artifact.sha256,
+          ref_count: 1,
+          sensitivity: 'restricted',
+          redaction_status: 'pending',
+        });
+        expect(await readFile(String(artifact.storage_key))).toEqual(browser.artifact.bytes);
+        expect(
+          db.prepare("SELECT result_ref FROM external_task_links WHERE kind = 'artifact'").get()
+        ).toEqual({ result_ref: artifact.id });
+        const audit = db
+          .prepare(
+            "SELECT metadata_json FROM evidence_items WHERE manifest_id = ? AND item_type = 'agent_audit'"
+          )
+          .get(manifest.id) as { metadata_json: string };
+        expect(
+          JSON.parse(audit.metadata_json)[context === 'run' ? 'pageTaskId' : 'authoringTaskId']
+        ).toBeTruthy();
+        expect(Boolean(manifest.todo_id)).toBe(context === 'run');
+        const attempt = db
+          .prepare(
+            context === 'run'
+              ? 'SELECT evidence_manifest_id FROM execution_attempts WHERE run_id = ?'
+              : 'SELECT evidence_manifest_id FROM authoring_attempts WHERE job_id = ?'
+          )
+          .get(manifest.context_id);
+        expect(attempt).toEqual({ evidence_manifest_id: manifest.id });
+      }
+    );
+
+    it('operation 查询失败时保留其他操作、原始对象和 Agent 审计', async () => {
+      const browser = new FakeBrowserClient();
+      browser.operationErrors.set('missing-operation', new Error('lookup failed'));
+      browser.artifact = evidenceArtifact('available-artifact');
+      const manifest = await collectEvidence(context, browser, [
+        evidenceCall('missing-operation'),
+        evidenceCall('available-operation'),
+      ]);
+      expect(manifest.completeness).toBe('partial');
+      expect(
+        db
+          .prepare('SELECT item_type FROM evidence_items WHERE manifest_id = ? ORDER BY item_type')
+          .all(manifest.id)
+      ).toEqual([
+        { item_type: 'agent_audit' },
+        { item_type: 'operation_result' },
+        { item_type: 'screenshot' },
+      ]);
+    });
+
+    it('单个 artifact 下载失败时继续保留同一操作的后续 artifact', async () => {
+      const browser = new FakeBrowserClient();
+      browser.artifacts = [
+        evidenceArtifact('unavailable-artifact'),
+        evidenceArtifact('available-artifact'),
+      ];
+      browser.artifactErrors.set('unavailable-artifact', new Error('download failed'));
+      const manifest = await collectEvidence(context, browser, [
+        evidenceCall('operation-artifacts'),
+      ]);
+      expect(manifest.completeness).toBe('partial');
+      expect(
+        db
+          .prepare(
+            "SELECT metadata_json FROM evidence_items WHERE manifest_id = ? AND item_type = 'screenshot'"
+          )
+          .all(manifest.id)
+      ).toEqual([
+        {
+          metadata_json: JSON.stringify({
+            captureKind: 'screenshot',
+            externalArtifactId: 'available-artifact',
+          }),
+        },
+      ]);
+    });
+
+    it('相同内容只登记一个对象，但保留各步骤及 operation 的引用', async () => {
+      const browser = new FakeBrowserClient();
+      browser.artifact = evidenceArtifact('repeated-artifact');
+      const manifest = await collectEvidence(context, browser, [
+        evidenceCall('operation-one', 'step-one'),
+        evidenceCall('operation-one', 'step-two'),
+        evidenceCall('operation-two', 'step-three'),
+      ]);
+      expect(manifest.completeness).toBe('complete');
+      expect(db.prepare('SELECT sha256, ref_count FROM artifact_objects').all()).toEqual([
+        { sha256: browser.artifact.sha256, ref_count: 3 },
+      ]);
+      expect(
+        db
+          .prepare(
+            "SELECT step_id, browser_operation_id FROM evidence_items WHERE manifest_id = ? AND item_type = 'screenshot' ORDER BY step_id"
+          )
+          .all(manifest.id)
+      ).toEqual([
+        { step_id: 'step-one', browser_operation_id: 'operation-one' },
+        { step_id: 'step-three', browser_operation_id: 'operation-two' },
+        { step_id: 'step-two', browser_operation_id: 'operation-one' },
+      ]);
+    });
+
+    it('拒绝哈希不符的原件并继续登记后续 DOM snapshot', async () => {
+      const browser = new FakeBrowserClient();
+      browser.artifacts = [
+        { ...evidenceArtifact('corrupt-artifact'), sha256: HASH_B },
+        { ...evidenceArtifact('dom-artifact'), kind: 'dom_snapshot', mimeType: 'application/json' },
+      ];
+      const manifest = await collectEvidence(context, browser, [
+        evidenceCall('operation-integrity'),
+      ]);
+      expect(manifest.completeness).toBe('partial');
+      expect(
+        db.prepare('SELECT sha256, media_type, ref_count FROM artifact_objects').all()
+      ).toEqual([
+        { sha256: browser.artifacts[1]!.sha256, media_type: 'application/json', ref_count: 1 },
+      ]);
+      expect(
+        db
+          .prepare('SELECT item_type FROM evidence_items WHERE artifact_object_id IS NOT NULL')
+          .all()
+      ).toEqual([{ item_type: 'dom_snapshot' }]);
+      expect(
+        db.prepare("SELECT external_id FROM external_task_links WHERE kind = 'artifact'").all()
+      ).toEqual([{ external_id: 'dom-artifact' }]);
+    });
+  });
+
+  it('Authoring 与 Run 的独立 manifest 复用同内容对象且保留各自引用', async () => {
+    const fixture = createFixture(db, assets);
+    const runCalls = [evidenceCall('run-shared-content')];
+    const authoringCalls = [evidenceCall('authoring-shared-content')];
+    const agent = new FakeAgentTaskClient(
+      { status: 'no_change', summary: '资产无需修改' },
+      { toolCalls: runCalls },
+      { toolCalls: authoringCalls }
+    );
+    const browser = new FakeBrowserClient();
+    browser.artifact = evidenceArtifact('authoring-artifact');
+    const authoringManifest = await collectEvidence(
+      'authoring',
+      browser,
+      authoringCalls,
+      fixture,
+      agent
+    );
+    browser.sessionId = '10000000-0000-4000-8000-000000000009';
+    browser.artifact = evidenceArtifact('run-artifact');
+    const runManifest = await collectEvidence('run', browser, runCalls, fixture, agent);
+    expect(authoringManifest.completeness).toBe('complete');
+    expect(runManifest.completeness).toBe('complete');
+    expect(db.prepare('SELECT sha256, ref_count FROM artifact_objects').all()).toEqual([
+      { sha256: browser.artifact.sha256, ref_count: 2 },
+    ]);
+    const items = db
+      .prepare(
+        'SELECT manifest_id, artifact_object_id FROM evidence_items WHERE artifact_object_id IS NOT NULL'
+      )
+      .all() as Array<{ manifest_id: string; artifact_object_id: string }>;
+    expect(items.map((item) => item.manifest_id)).toEqual(
+      expect.arrayContaining([authoringManifest.id, runManifest.id])
+    );
+    expect(new Set(items.map((item) => item.artifact_object_id)).size).toBe(1);
+    expect(
+      db
+        .prepare(
+          "SELECT context_type, context_id, external_id FROM external_task_links WHERE kind = 'artifact' ORDER BY context_type"
+        )
+        .all()
+    ).toEqual([
+      {
+        context_type: 'authoring',
+        context_id: authoringManifest.context_id,
+        external_id: 'authoring-artifact',
+      },
+      { context_type: 'run', context_id: runManifest.context_id, external_id: 'run-artifact' },
+    ]);
+  });
 
   it('通过 FIFO、租约、Agent task、证据和显式关闭收敛正式运行', async () => {
     const fixture = createFixture(db, assets);
@@ -1353,6 +1683,7 @@ class FakeAgentTaskClient implements AgentTaskClientPort {
 }
 
 class FakeBrowserClient implements SemanticBrowserClientPort {
+  sessionId = SESSION_ID;
   closed = false;
   closedWithLease = false;
   revoked = false;
@@ -1370,6 +1701,10 @@ class FakeBrowserClient implements SemanticBrowserClientPort {
   private activeLease?: BrowserLeaseView;
   private leaseCounter = 0;
   artifact?: { id: string; kind: string; sha256: string; mimeType: string; bytes: Buffer };
+  artifacts?: NonNullable<FakeBrowserClient['artifact']>[];
+  operationStatus: BrowserOperationRecord['status'] = 'succeeded';
+  operationErrors = new Map<string, Error>();
+  artifactErrors = new Map<string, Error>();
 
   async getCapabilities(): Promise<BrowserExecutionCapabilities> {
     this.capabilityCalls += 1;
@@ -1399,7 +1734,7 @@ class FakeBrowserClient implements SemanticBrowserClientPort {
     const leaseId = `10000000-0000-4000-8000-${String(this.leaseCounter).padStart(12, '0')}`;
     this.activeLease = {
       id: leaseId,
-      sessionId: SESSION_ID,
+      sessionId: this.sessionId,
       mode: input.mode,
       sequence: 1,
       processEpoch: 1,
@@ -1433,44 +1768,47 @@ class FakeBrowserClient implements SemanticBrowserClientPort {
   }
 
   async getOperation(operationId: string): Promise<BrowserOperationRecord> {
+    const error = this.operationErrors.get(operationId);
+    if (error) throw error;
     return {
       schema: 'nebula.browser.operation-result/1.0',
       operationId,
       requestHash: HASH_A,
       queueSequence: 1,
       acceptedAt: new Date().toISOString(),
-      sessionId: SESSION_ID,
+      sessionId: this.sessionId,
       leaseId: this.activeLease?.id ?? LEASE_ID,
       leaseSequence: 1,
       tabId: TAB_ID,
       kind: 'observe' as const,
       operation: 'page_state',
-      status: 'succeeded' as const,
+      status: this.operationStatus,
       actual: { url: 'https://test.example/account' },
-      artifacts: this.artifact
-        ? [
-            {
-              id: this.artifact.id,
-              kind: this.artifact.kind,
-              sha256: this.artifact.sha256,
-              mimeType: this.artifact.mimeType,
-              sizeBytes: this.artifact.bytes.byteLength,
-            },
-          ]
-        : [],
+      artifacts: (this.artifacts ?? (this.artifact ? [this.artifact] : [])).map((artifact) => ({
+        id: artifact.id,
+        kind: artifact.kind,
+        sha256: artifact.sha256,
+        mimeType: artifact.mimeType,
+        sizeBytes: artifact.bytes.byteLength,
+      })),
     };
   }
 
-  async downloadArtifact(): Promise<Buffer> {
-    if (!this.artifact) throw new Error('not used');
-    return this.artifact.bytes;
+  async downloadArtifact(_sessionId: string, artifactId: string): Promise<Buffer> {
+    const error = this.artifactErrors.get(artifactId);
+    if (error) throw error;
+    const artifact = (this.artifacts ?? (this.artifact ? [this.artifact] : [])).find(
+      (item) => item.id === artifactId
+    );
+    if (!artifact) throw new Error('not used');
+    return artifact.bytes;
   }
 
   private session(
     status: BrowserSessionView['status'] = this.closed ? 'closed' : 'active'
   ): BrowserSessionView {
     return {
-      id: SESSION_ID,
+      id: this.sessionId,
       status,
       processEpoch: 1,
       cdpPort: 9222,

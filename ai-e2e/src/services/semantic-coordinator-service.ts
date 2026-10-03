@@ -5,7 +5,10 @@ import type {
   ActivePageTask,
   CoordinatorAuthoringTask,
 } from '../database/repositories/semantic-coordinator-repository.js';
-import type { SemanticEvidenceRepository } from '../database/repositories/semantic-evidence-repository.js';
+import type {
+  LinkExternalTaskParams,
+  SemanticEvidenceRepository,
+} from '../database/repositories/semantic-evidence-repository.js';
 import { hashValue } from '../database/repositories/semantic-repository-utils.js';
 import type { SemanticRunControlRepository } from '../database/repositories/semantic-run-control-repository.js';
 import type {
@@ -1032,78 +1035,15 @@ export class SemanticCoordinatorService {
       integritySha256: hashValue(audit),
       metadata: { authoringTaskId: task.taskId },
     });
-    let partial = false;
-    for (const call of agentTask.toolCalls) {
-      if (!call.operationId) continue;
-      try {
-        const operation = await this.options.browser.getOperation(call.operationId);
-        const summary = operationSummary(operation);
-        this.options.evidence.linkExternalTask({
-          context: { type: 'authoring', id: task.jobId },
-          authoringTaskId: task.taskId,
-          service: 'proxy_adapter',
-          kind: 'browser_operation',
-          externalId: operation.operationId,
-          externalState: operation.status,
-          resultSha256: hashValue(summary),
-          terminal: true,
-        });
-        this.options.evidence.addItem({
-          manifestId: manifest.id,
-          itemType: 'operation_result',
-          inline: summary,
-          stepId: call.stepId,
-          browserOperationId: operation.operationId,
-          sourceService: 'proxy-adapter',
-          redactionStatus: 'not_required',
-          integritySha256: hashValue(summary),
-          metadata: { toolCallId: call.toolCallId },
-        });
-        for (const artifact of operation.artifacts) {
-          const bytes = await this.options.browser.downloadArtifact(
-            task.browserSessionId,
-            artifact.id
-          );
-          const persisted = await this.artifactStore.persist(artifact.sha256, bytes);
-          const registered = this.options.evidence.registerArtifact({
-            sha256: artifact.sha256,
-            sizeBytes: persisted.sizeBytes,
-            mediaType: artifact.mimeType,
-            storageBackend: 'local_file',
-            storageKey: persisted.storageKey,
-            sensitivity: 'restricted',
-            redactionStatus: 'pending',
-          });
-          this.options.evidence.linkExternalTask({
-            context: { type: 'authoring', id: task.jobId },
-            authoringTaskId: task.taskId,
-            service: 'proxy_adapter',
-            kind: 'artifact',
-            externalId: artifact.id,
-            resultSha256: artifact.sha256,
-            resultRef: registered.id,
-            terminal: true,
-          });
-          this.options.evidence.addItem({
-            manifestId: manifest.id,
-            itemType: artifact.kind === 'dom_snapshot' ? 'dom_snapshot' : 'screenshot',
-            artifactObjectId: registered.id,
-            stepId: call.stepId,
-            browserOperationId: operation.operationId,
-            sourceService: 'proxy-adapter',
-            redactionStatus: 'pending',
-            integritySha256: artifact.sha256,
-            metadata: { externalArtifactId: artifact.id, captureKind: artifact.kind },
-          });
-        }
-      } catch (error) {
-        partial = true;
-        this.options.logger?.warn(
-          { err: error, operationId: call.operationId },
-          'Authoring 浏览器证据收集不完整'
-        );
-      }
-    }
+    const partial = await this.captureBrowserEvidence({
+      manifestId: manifest.id,
+      browserSessionId: task.browserSessionId,
+      toolCalls: agentTask.toolCalls,
+      linkScope: {
+        context: { type: 'authoring', id: task.jobId },
+        authoringTaskId: task.taskId,
+      },
+    });
     this.options.evidence.sealManifest(manifest.id, partial ? 'partial' : 'complete', {
       agentTaskId: agentTask.taskId,
       taskStatus: agentTask.status,
@@ -1299,68 +1239,15 @@ export class SemanticCoordinatorService {
       schemaId: 'nebula.ai-e2e.evidence-manifest/1.0',
       retentionClass: task.status === 'completed' ? 'success_7d' : 'failure_30d',
     });
-    let partial = false;
-    for (const call of task.toolCalls) {
-      if (!call.operationId) continue;
-      try {
-        const operation = await this.options.browser.getOperation(call.operationId);
-        this.linkOperation(pageTask, operation);
-        this.options.evidence.addItem({
-          manifestId: manifest.id,
-          itemType: 'operation_result',
-          inline: operationSummary(operation),
-          stepId: call.stepId,
-          browserOperationId: operation.operationId,
-          sourceService: 'proxy-adapter',
-          redactionStatus: 'not_required',
-          integritySha256: hashValue(operationSummary(operation)),
-          metadata: { toolCallId: call.toolCallId },
-        });
-        for (const artifact of operation.artifacts) {
-          const bytes = await this.options.browser.downloadArtifact(
-            pageTask.browserSessionId,
-            artifact.id
-          );
-          const persisted = await this.artifactStore.persist(artifact.sha256, bytes);
-          const registered = this.options.evidence.registerArtifact({
-            sha256: artifact.sha256,
-            sizeBytes: persisted.sizeBytes,
-            mediaType: artifact.mimeType,
-            storageBackend: 'local_file',
-            storageKey: persisted.storageKey,
-            sensitivity: 'restricted',
-            redactionStatus: 'pending',
-          });
-          this.options.evidence.linkExternalTask({
-            context: { type: 'run', id: pageTask.runId },
-            pageTaskId: pageTask.pageTaskId,
-            service: 'proxy_adapter',
-            kind: 'artifact',
-            externalId: artifact.id,
-            resultSha256: artifact.sha256,
-            resultRef: registered.id,
-            terminal: true,
-          });
-          this.options.evidence.addItem({
-            manifestId: manifest.id,
-            itemType: artifact.kind === 'dom_snapshot' ? 'dom_snapshot' : 'screenshot',
-            artifactObjectId: registered.id,
-            stepId: call.stepId,
-            browserOperationId: operation.operationId,
-            sourceService: 'proxy-adapter',
-            redactionStatus: 'pending',
-            integritySha256: artifact.sha256,
-            metadata: { externalArtifactId: artifact.id, captureKind: artifact.kind },
-          });
-        }
-      } catch (error) {
-        partial = true;
-        this.options.logger?.warn(
-          { err: error, operationId: call.operationId },
-          '浏览器证据收集不完整'
-        );
-      }
-    }
+    const partial = await this.captureBrowserEvidence({
+      manifestId: manifest.id,
+      browserSessionId: pageTask.browserSessionId,
+      toolCalls: task.toolCalls,
+      linkScope: {
+        context: { type: 'run', id: pageTask.runId },
+        pageTaskId: pageTask.pageTaskId,
+      },
+    });
     const audit = {
       taskId: task.taskId,
       status: task.status,
@@ -1385,17 +1272,96 @@ export class SemanticCoordinatorService {
     return manifest.id;
   }
 
-  private linkOperation(pageTask: ActivePageTask, operation: BrowserOperationRecord): void {
-    this.options.evidence.linkExternalTask({
-      context: { type: 'run', id: pageTask.runId },
-      pageTaskId: pageTask.pageTaskId,
-      service: 'proxy_adapter',
-      kind: 'browser_operation',
-      externalId: operation.operationId,
-      externalState: operation.status,
-      resultSha256: hashValue(operationSummary(operation)),
-      terminal: ['succeeded', 'failed', 'cancelled', 'outcome_unknown'].includes(operation.status),
-    });
+  private async captureBrowserEvidence(params: {
+    manifestId: string;
+    browserSessionId: string;
+    toolCalls: AgentTaskView['toolCalls'];
+    linkScope: Pick<LinkExternalTaskParams, 'context' | 'pageTaskId' | 'authoringTaskId'>;
+  }): Promise<boolean> {
+    let partial = false;
+    for (const call of params.toolCalls) {
+      if (!call.operationId) continue;
+      try {
+        const operation = await this.options.browser.getOperation(call.operationId);
+        const summary = operationSummary(operation);
+        const summarySha256 = hashValue(summary);
+        const terminal = ['succeeded', 'failed', 'cancelled', 'outcome_unknown'].includes(
+          operation.status
+        );
+        if (!terminal) partial = true;
+        this.options.evidence.linkExternalTask({
+          ...params.linkScope,
+          service: 'proxy_adapter',
+          kind: 'browser_operation',
+          externalId: operation.operationId,
+          externalState: operation.status,
+          resultSha256: summarySha256,
+          terminal,
+        });
+        this.options.evidence.addItem({
+          manifestId: params.manifestId,
+          itemType: 'operation_result',
+          inline: summary,
+          stepId: call.stepId,
+          browserOperationId: operation.operationId,
+          sourceService: 'proxy-adapter',
+          redactionStatus: 'not_required',
+          integritySha256: summarySha256,
+          metadata: { toolCallId: call.toolCallId },
+        });
+        for (const artifact of operation.artifacts) {
+          try {
+            const bytes = await this.options.browser.downloadArtifact(
+              params.browserSessionId,
+              artifact.id
+            );
+            const persisted = await this.artifactStore.persist(artifact.sha256, bytes);
+            const registered = this.options.evidence.registerArtifact({
+              sha256: artifact.sha256,
+              sizeBytes: persisted.sizeBytes,
+              mediaType: artifact.mimeType,
+              storageBackend: 'local_file',
+              storageKey: persisted.storageKey,
+              sensitivity: 'restricted',
+              redactionStatus: 'pending',
+            });
+            this.options.evidence.linkExternalTask({
+              ...params.linkScope,
+              service: 'proxy_adapter',
+              kind: 'artifact',
+              externalId: artifact.id,
+              resultSha256: artifact.sha256,
+              resultRef: registered.id,
+              terminal: true,
+            });
+            this.options.evidence.addItem({
+              manifestId: params.manifestId,
+              itemType: artifact.kind === 'dom_snapshot' ? 'dom_snapshot' : 'screenshot',
+              artifactObjectId: registered.id,
+              stepId: call.stepId,
+              browserOperationId: operation.operationId,
+              sourceService: 'proxy-adapter',
+              redactionStatus: 'pending',
+              integritySha256: artifact.sha256,
+              metadata: { externalArtifactId: artifact.id, captureKind: artifact.kind },
+            });
+          } catch (error) {
+            partial = true;
+            this.options.logger?.warn(
+              { err: error, operationId: call.operationId, artifactId: artifact.id },
+              '浏览器 artifact 证据收集不完整'
+            );
+          }
+        }
+      } catch (error) {
+        partial = true;
+        this.options.logger?.warn(
+          { err: error, operationId: call.operationId },
+          '浏览器操作证据收集不完整'
+        );
+      }
+    }
+    return partial;
   }
 
   private async completeInterrupted(pageTask: ActivePageTask, reasonClass: string): Promise<void> {
