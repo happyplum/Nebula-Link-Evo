@@ -14,6 +14,7 @@
 - v1 仅接受 loopback proxy URL。
 - token 只驻留内存；普通输出、错误和诊断不得包含 token。
 - 操作必须串行；结果不确定时核查 ledger，不能证明终态则禁止重放。
+- `ai-e2e` 仅复用 `BrowserControlClient` HTTP 方法；其业务 FIFO、outbox、租约和操作生命周期不由受控会话控制器接管。
 
 - 浏览器 target/locator 公共类型由 `shared/types/browser-target.ts` 的 TypeBox schema + Static 唯一维护，`shared/types/browser-execution.ts` 保留既有 type 导出；proxy MCP 与 Agent Task 直接引用同一 target schema，wire 字段和消费者调用方式保持。
 
@@ -21,7 +22,7 @@
 
 | 模块           | 路径                                      | 状态    | 职责                                                                               |
 | -------------- | ----------------------------------------- | ------- | ---------------------------------------------------------------------------------- |
-| 线协议客户端   | `src/client.ts`、`src/mcp-tool-caller.ts` | shipped | HTTP capability/session/lease/operation/artifact；MCP execute/cancel；problem 映射 |
+| 线协议客户端   | `src/client.ts`、`src/mcp-tool-caller.ts` | shipped | HTTP capability/session/event-log/lease/operation/artifact；MCP execute/cancel；problem 映射 |
 | 受控会话       | `src/controlled-session.ts`               | shipped | 协议检查、显式 attach、活动 Tab、control lease、串行、轮换、ledger 恢复与清理      |
 | CLI            | `src/cli.ts`                              | shipped | JSON 低层命令、NDJSON run、交互 shell、act 门禁、稳定退出码                        |
 | 公共入口       | `src/index.ts`                            | shipped | 导出客户端、控制器、错误与公共配置类型                                             |
@@ -44,6 +45,7 @@
 | ---------------------------------------------- | ------- | ---------------------------------------------- |
 | capability major 与 loopback 校验              | shipped | `client.test.ts`、`controlled-session.test.ts` |
 | 幂等 header、problem/连接错误映射              | shipped | `client.test.ts`                               |
+| event-log 游标、可选关闭凭证、artifact 字节与错误元数据 | shipped | `client.test.ts`、E2E adapter/协调器测试 |
 | token 脱敏、act 门禁、JSON/NDJSON              | shipped | `cli.test.ts`                                  |
 | 租约轮换、串行、稳定 operationId、未知结果恢复 | shipped | `controlled-session.test.ts`                   |
 | kind/operation 判别参数请求                    | shipped | shared/client/proxy 类型检查 + 操作集成测试    |
@@ -51,6 +53,10 @@
 | CLI 真实 navigate/click/text 与失败关闭        | shipped | `controlled-consumers.e2e.test.ts`             |
 
 ## 5. 修改维护协议 [MUST-MAINTAIN]
+
+- HTTP `listSessionEvents(sessionId, afterSeq=0, limit=500, signal?)` 返回完整 shared event record；`closeSession(sessionId, idempotencyKey, credentials?, signal?)` 仅需 leaseId/token，活动会话由 proxy 要求 control 凭证，非活动会话可无证关闭。Controlled session/CLI 使用同一签名。
+- CLI session close 未选 lease 时不发送 token，由 proxy 裁决无证关闭；显式 `--lease-token-stdin` 缺 lease ID 在读取前拒绝，选 lease ID 时 token 必需。
+- HTTP 失败的 `BrowserControlError.statusCode` 保留响应状态，标准裸 Problem 的 code/message/retryable/correlationId/details 原样保留；非标准 HTTP 失败统一 `dependency_unavailable`（retryable 为 status≥500），非法成功响应、网络/超时/取消同码且可重试，存在底层异常时保留原始 cause。每次 HTTP 请求产生 `X-Correlation-ID`，不虚构成功 requestId。
 
 - 修改 proxy 路径、MCP 工具名、公共协议 major、CLI 命令/字段/退出码、token 流向、租约或 ledger 恢复语义时，必须同步本文件、README、根索引与 `docs/shipped/browser-control-cli.md`。
 - 修改公共线协议必须同步 `shared`、`proxy-adapter` 及所有消费者 PRODUCT-SPEC。

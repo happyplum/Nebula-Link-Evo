@@ -18,10 +18,13 @@ import type {
   CreateAgentTaskRequest,
 } from '@nebula-link-evo/shared/types/agent-task';
 import type { AgentTaskClientPort } from '../infrastructure/agent-task-client.js';
-import type {
-  SemanticBrowserClientPort,
-  BrowserOperationRecord,
-} from '../infrastructure/semantic-browser-client.js';
+import type { SemanticBrowserClientPort } from '../infrastructure/semantic-browser-client.js';
+import {
+  ACT_OPERATIONS,
+  OBSERVE_OPERATIONS,
+  type BrowserOperationName,
+  type BrowserOperationRecord,
+} from '@nebula-link-evo/shared/types/browser-execution';
 import { IntegrationClientError } from '../infrastructure/integration-client-error.js';
 import { SemanticArtifactStore } from '../infrastructure/semantic-artifact-store.js';
 import {
@@ -237,7 +240,7 @@ export class SemanticCoordinatorService {
   }
 
   private async reconcileBrowserSessionEvents(job: CoordinatorBrowserJob): Promise<void> {
-    if (!job.browserSessionId || !this.options.browser.listSessionEvents) return;
+    if (!job.browserSessionId) return;
     const link = this.options.repository.getBrowserSessionLink(job.contextType, job.contextId);
     const events = await this.options.browser.listSessionEvents(
       job.browserSessionId,
@@ -403,7 +406,7 @@ export class SemanticCoordinatorService {
     const runId = requiredString(payload.runId, 'runId');
     const todoId = requiredString(payload.todoId, 'todoId');
     const sessionId = requiredString(payload.browserSessionId, 'browserSessionId');
-    const operations = stringArray(payload.operations, 'operations');
+    const operations = browserOperationNames(payload.operations);
     const runSession = this.options.repository.getRunBrowserSession(runId);
     const readyTodo = runSession ? this.options.repository.getReadyTodo(runSession.jobId) : null;
     if (!readyTodo || readyTodo.todoId !== todoId) {
@@ -1493,7 +1496,7 @@ function operationSummary(operation: BrowserOperationRecord): Record<string, unk
 }
 
 function requireCapability(
-  value: Record<string, unknown>,
+  value: { schema?: unknown; service?: unknown; protocols?: unknown },
   service: string,
   protocol: string
 ): void {
@@ -1544,11 +1547,15 @@ function requiredInteger(value: unknown, label: string): number {
   return value as number;
 }
 
-function stringArray(value: unknown, label: string): string[] {
+function browserOperationNames(value: unknown): BrowserOperationName[] {
   if (!Array.isArray(value) || value.some((entry) => typeof entry !== 'string')) {
-    throw new Error(`${label} must be a string array`);
+    throw new Error('operations must be a string array');
   }
-  return value as string[];
+  const operations = new Set<string>([...OBSERVE_OPERATIONS, ...ACT_OPERATIONS]);
+  if (!value.every((entry: string): entry is BrowserOperationName => operations.has(entry))) {
+    throw new Error('operations must contain browser operation names');
+  }
+  return value;
 }
 
 function sha256(value: string): string {

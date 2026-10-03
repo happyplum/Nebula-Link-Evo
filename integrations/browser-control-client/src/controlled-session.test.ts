@@ -221,6 +221,12 @@ describe('ControlledBrowserSession', () => {
     await owned.start();
     await owned.close();
     expect(ownedClient.closeSession).toHaveBeenCalledOnce();
+    expect(ownedClient.closeSession).toHaveBeenCalledWith(
+      'session-1',
+      expect.any(String),
+      { sessionId: 'session-1', leaseId: 'lease-1', leaseToken: 'token-lease-1' },
+      undefined
+    );
     expect(ownedClient.revokeLease).not.toHaveBeenCalled();
 
     const attachedClient = fakeClient();

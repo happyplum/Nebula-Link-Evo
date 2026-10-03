@@ -32,7 +32,7 @@ Browser ←→ debug-ui (:5173 dev)
 
          ai-e2e (:3002) — semantic 自动化测试编排
    ├── AgentTaskClient → ai-chat-service (:3001) /api/v1/agent-tasks
-   └── SemanticBrowserClient → proxy-adapter (:3000) /api/v1/browser-execution/*
+   └── SemanticBrowserClient → browser-control-client HTTP → proxy-adapter (:3000) /api/v1/browser-execution/*
 
    nebula-browser / DeepSeek Harness plugin
    └── browser-control-client → proxy-adapter (:3000) HTTP + /mcp
@@ -53,11 +53,12 @@ shared  ←──  proxy-adapter
         ←──  deepseek-harness-plugin
 
 proxy-adapter  ←──  ai-chat-service（DSH MCP transport → /mcp）
-               ←──  ai-e2e（SemanticBrowserClient → /api/v1/browser-execution/*）
+               ←──  ai-e2e（SemanticBrowserClient → browser-control-client HTTP → /api/v1/browser-execution/*）
                ←──  debug-ui（REST + SSE + MJPEG）
                ←──  browser-control-client（HTTP browser-execution + /mcp operation）
 
 browser-control-client  ←──  deepseek-harness-plugin
+                        ←──  ai-e2e（仅 HTTP 方法，领域错误/Buffer 适配）
 
 ai-chat-service  ←──  debug-ui（Chat SSE）
                  ←──  ai-e2e（AgentTaskClient 消费 Agent task create/get/commands）
@@ -72,7 +73,7 @@ debug-ui  ←──  （仅被用户消费）
 - **shared** 是依赖图最底层，**不反向**依赖任何上层包。
 - **proxy-adapter** 不依赖任何上层包的代码（仅被消费）。
 - **ai-chat-service** 通过 MCP-over-HTTP 消费 `proxy-adapter`，不直连 Playwright。
-- **ai-e2e** 只通过 `AgentTaskClient` 与 `SemanticBrowserClient` 消费两个后端，零 `@ai-sdk/*` 依赖；不存在单次文本生成或 debug-browser facade。
+- **ai-e2e** 通过 `AgentTaskClient` 与 `SemanticBrowserClient` 消费两个后端；后者只依赖 `browser-control-client` 的 HTTP 方法和 shared browser-execution DTO，保留 E2E FIFO/outbox/lease/operation 生命周期，不使用 `ControlledBrowserSession` 或客户端 MCP execute/cancel。零 `@ai-sdk/*` 依赖；不存在单次文本生成或 debug-browser facade。
 - **debug-ui** 仅消费 `ai-chat-service` 与 `proxy-adapter` 的 HTTP/SSE。
 - **browser-control-client** 只消费 proxy 的 loopback HTTP 控制面与 `/mcp`，不直连 Playwright/CDP；**deepseek-harness-plugin** 只消费该客户端。
 - 跨包数据库**互不共享**：每个后端包维护独立 SQLite。
@@ -132,7 +133,7 @@ debug-ui  ←──  （仅被用户消费）
 - 模型可见产品工具由 `GatewayToolBridge` 在启动时一次性投影到 DSH ToolRuntime，并使用部署期稳定 DSH-safe name；运行期不热同步组合树，原始 `operation_execute/get/cancel` 不进入该工具表。调用 timeout/cancel、retry、token meter 与 compaction 由 Harness runtime 统一承载。
 - 视觉分析由 `ai-chat-service` 内部 `VisionAnalyzer` + `VisionToolProvider` 提供，仅注册 `vision.analyze_page` 与 `vision.resolve_target`。二者只接受通过 `VisionSnapshotBindingV1` 校验的 proxy-managed immutable bytes，不通过 MCP Server 暴露；所有环境均无 `vision.find_element`。
 - `browser-control.operation_execute/get/cancel` 是 proxy MCP 的唯一浏览器工具面。`ai-chat-service` 只在隔离 DSH transport 中持有它们；受限 Agent 模型只看见预授权 `stepId`，wrapper 注入冻结 target/args、session/Tab/lease/token/leaseSequence/operation ID，get/cancel 不暴露给模型。
-- `browser-control-client` 通过 HTTP 管理 capability/session/lease/artifact/ledger，只通过 `/mcp` 调用 execute/cancel；`nebula-browser` 和 DeepSeek 插件都复用该客户端。DeepSeek profile 不得同时向同一 proxy 挂载未包装的通用 MCP bridge。
+- `browser-control-client` 通过 HTTP 管理 capability/session/event-log/lease/artifact/ledger，只通过 `/mcp` 调用 execute/cancel；`nebula-browser` 和 DeepSeek 插件复用该客户端与受控会话，ai-e2e 只复用 HTTP 方法。event-log 支持 afterSeq/limit，session close 支持可选 leaseId/token（活动会话要求 control 凭证）；HTTP 错误保留 status/标准 Problem/cause，非标准错误统一 dependency_unavailable。DeepSeek profile 不得同时向同一 proxy 挂载未包装的通用 MCP bridge。
 - DeepSeek 插件只向模型暴露 `nebula_browser_observe` / `nebula_browser_act`；后者逐次要求 Harness `allowed-once`，所有 binding/凭证/operationId 隐藏注入。
 - wrapper 把模型调用限制为调用方冻结的 `stepId`，并对冻结 target/args、kind/operation/effectId、数量、policy evaluation/风险投影/active grant 与 lease Tab/operation 求交集；`proxy-adapter` 不解释 environment 或审批，只执行通用 operation 约束。
 - `vision.analyze_page`/`vision.resolve_target` 只读取一次不可变 snapshot，返回页面摘要或可序列化 locator candidates，不操作浏览器；最终定位重解析仍归 proxy。
@@ -144,7 +145,7 @@ debug-ui  ←──  （仅被用户消费）
 
 | 类型/模块                        | 路径                         | 消费方                                                                                  |
 | -------------------------------- | ---------------------------- | --------------------------------------------------------------------------------------- |
-| 浏览器执行线协议与操作常量       | `types/browser-execution.ts` | `proxy-adapter`、`ai-chat-service`、`browser-control-client`、`deepseek-harness-plugin` |
+| 浏览器执行线协议与操作常量       | `types/browser-execution.ts` | `proxy-adapter`、`ai-chat-service`、`ai-e2e`、`browser-control-client`、`deepseek-harness-plugin` |
 | Vision snapshot/artifact binding | `types/vision-snapshot.ts`   | `ai-chat-service`（消费）；proxy-adapter operation/artifact（权威生产语义）             |
 | Agent Stream v1                 | `types/agent-stream.ts`      | `ai-chat-service`、`debug-ui`、`ai-e2e`、`agent-activity-ui`                            |
 | Debug 事件                       | `types/debug-events.ts`      | `proxy-adapter`、`debug-ui`                                                             |
@@ -180,7 +181,7 @@ debug-ui  ←──  （仅被用户消费）
 
 - AI 调用：只通过 `AgentTaskClient` 到 `/api/v1/agent-tasks` create/get/commands；Authoring 可申请 `vision.analyze_page`/`vision.resolve_target`，不存在单次文本生成或聚合 facade。
 - Semantic 功能脚本 `nebula.ai-e2e.functional-script/1.0` 的入口页字段固定为 `pageScope.entryPageId`，运行时不读取旧根字段；三服务发布门禁以真实 HTTP/MCP/Chromium 验证候选激活、正式运行及未知结果禁止重放。
-- 浏览器调用：只通过 `SemanticBrowserClient` 到 `/api/v1/browser-execution/*`，不得调用 debug 路由或直连 Playwright/CDP。
+- 浏览器调用：`SemanticBrowserClient` 通过共享 browser-control-client HTTP 方法到 `/api/v1/browser-execution/*`，DTO 直接消费 shared；不得调用 debug 路由、客户端 MCP 操作或直连 Playwright/CDP。E2E 协调器继续持有 FIFO/outbox 与租约/操作生命周期。
 - 下游服务缺失或 capability 不兼容时，依赖其执行的请求返回可判定失败，不静默回退。
 - 脚本执行：只执行结构化 semantic 步骤，由 proxy-adapter 可视运行；不存在任意 TypeScript/JavaScript 执行路径。
 - 并发：Authoring 与正式 Run 共享一个 FIFO 浏览器控制槽；同一时刻只有活动执行者持有 control lease。

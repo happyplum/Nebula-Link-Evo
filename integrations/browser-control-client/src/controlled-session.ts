@@ -180,7 +180,7 @@ export class ControlledBrowserSession {
         if (!binding) return;
         const credentials = credentialsFrom(binding);
         if (binding.ownsSession) {
-          await this.client.closeSession(binding.sessionId, credentials, randomUUID(), signal);
+          await this.client.closeSession(binding.sessionId, randomUUID(), credentials, signal);
         } else {
           await this.client.revokeLease(credentials, randomUUID(), signal);
         }

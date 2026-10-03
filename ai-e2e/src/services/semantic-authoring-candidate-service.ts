@@ -1,4 +1,5 @@
 import type { SemanticAssetType } from '../contracts/semantic-control.js';
+import type { BrowserOperationName } from '@nebula-link-evo/shared/types/browser-execution';
 import type { AmendmentCategory, AmendmentRecord } from '../contracts/semantic-authoring.js';
 import { createHash } from 'node:crypto';
 import type { AuthoringAmendmentRepository } from '../database/repositories/authoring-amendment-repository.js';
@@ -171,7 +172,7 @@ export class SemanticAuthoringCandidateService {
 
   leaseRequirements(task: CoordinatorAuthoringTask): {
     mode: 'observe' | 'control';
-    operations: string[];
+    operations: BrowserOperationName[];
   } {
     const request = this.buildAgentRequest(task);
     const constraints = objectValue(
@@ -183,7 +184,7 @@ export class SemanticAuthoringCandidateService {
       mode,
       operations: [
         ...new Set(steps.map((step) => stringValue(step.operation)).filter(Boolean)),
-      ] as string[],
+      ] as BrowserOperationName[],
     };
   }
 
