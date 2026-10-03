@@ -118,6 +118,8 @@ export class SemanticAuthoringService {
     reason?: string;
     createdBy: string;
   }) {
+    if (input.action === 'resume')
+      this.workflows.assertAuthoringExecutionAllowed(input.jobId, undefined, true);
     const accepted = this.workflows.acceptAuthoringCommand({
       id: input.commandId,
       jobId: input.jobId,

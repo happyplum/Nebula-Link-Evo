@@ -13,7 +13,7 @@
 
 - 左侧展示 PRD/页面/模块/场景/TODO，中间浏览器持续挂载，右侧展示上下文、Diff、影响、决策和证据，Chat 常驻可折叠。
 - 模块切换只更新深链接上下文；只有“在浏览器中定位”才创建 navigation-only Authoring task。
-- 候选必须在当前模块、base revision 和审批范围仍匹配时才能排队应用。
+- 候选必须在当前模块、base revision、精确冻结计划和授权仍匹配时才能排队应用。既有决策 UI 按 category 区分范围扩展与副作用批准；展示真实环境、候选、风险摘要和 source plan/projection hash，不把 scope approval 当 grant。
 - 新建项目携带 `bootstrap=1` 和目标 URL 深链接，工作台只自动创建一次 bootstrap 任务。
 - 三栏支持指针/键盘调整、双击复位、宽度持久化、缩放/收起/专注、system/light/dark 和 reduced-motion。
 - 所有交互提供可见焦点、语义标签、键盘路径和足够点击热区。

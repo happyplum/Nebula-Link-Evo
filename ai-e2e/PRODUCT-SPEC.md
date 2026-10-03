@@ -14,7 +14,7 @@
 | Run                 | shipped | 冻结计划、TODO/DAG、page task/attempt、变量、决策、恢复/取消/依赖跳过、证据、权威控制面 SSE 与 compact 只读 Agent 活动流                                                                                                                           |
 | 跨服务执行          | shipped | ai-chat-service Agent task/event-log + Vision v2 + 逐 effect 授权；浏览器步骤遵循 shared kind/operation→args 判别映射；proxy session/lease/operation/artifact/event-log 及 TTL/hold 短期原始产物清理、ai-e2e 长期原始证据保留清理，均按持久事实恢复 |
 | 三服务 E2E 门禁     | shipped | 真实 HTTP/MCP/Chromium 覆盖候选生成、验证激活、正式运行、未验证拒绝与 `outcome_unknown` 禁止重放                                                                                                                                                    |
-| 副作用审批生命周期  | shipped | staging 高风险（含 `usesFileUpload` 上传维度）进入计划级审批；grant 在 run 终态/决策拒绝/投影漂移时自动过期（`context_terminated`/`decision_rejected`/`projection_stale`）；start/resume 重查 policy evaluation 投影 hash 与 active grant，漂移时转 `paused(approval_required)` 并创建新一轮审批；5 个 `side_effect_*` ApiProblem 错误码在路由层发射 |
+| 副作用审批生命周期 | shipped | Run/Authoring 共用纯 evaluator 与唯一 policy repository；exact context/deployment/source plan/projection/policy 授权与终态同事务失效。Run 失效转 paused 并重新审批；Authoring create 失效收束 failed job/candidate（需新候选），resume 失效保 paused 且可取消。queue/lease/dispatch/恢复均重验，五个 side_effect_* ApiProblem 保持 |
 | 场景 fail-closed   | shipped | `runWhen` 与 `repeat.for_each` 在场景写入（`createScenario`、`validateGraph` 与 test_scenario revision 创建）时显式拒绝，不静默退化；固定次数 repeat（1–100）正常展开 |
 | 浏览器中心 UI       | shipped | 项目首页、Authoring/Run 三栏工作台、轻量分层上下文树、深链接上下文、显式定位、Diff/审批/证据/Chat、布局与主题偏好；工作台采用低噪声冷蓝视觉体系、浮动面板和渐隐选中轨，突出持续挂载的浏览器主舞台；Playwright 使用真实生产 bundle/API 验证完整旅程  |
 
@@ -29,6 +29,7 @@
 | Query            | `semantic-query-*`                                      | workspace、revision、Authoring/Run snapshot/event 投影                                                                                                  |
 | Authoring        | `semantic-authoring-*`                                  | job/task、结构化候选、范围审批、验证与激活                                                                                                              |
 | Run              | `semantic-run-*`、`semantic-task-projection.ts`         | 正式运行、语义步骤投影与逐 effect 授权                                                                                                                  |
+| Policy           | `policy/`、`semantic-policy-repository.ts`                | 共享纯风险判定、精确冻结 evaluation/grant 唯一持久 owner                                                                                               |
 | Coordinator      | `semantic-coordinator-*`                                | FIFO、outbox、Agent/browser 派发、恢复和证据提升                                                                                                        |
 | Agent Activity   | `agent-activity-repository.ts`、`server/routes/agent-activity.ts` | additive 持久活动序列、独立外部 cursor、控制面事实投影、shared 纯回放、snapshot-first SSE 与 activity-log                                                       |
 | Evidence         | `semantic-evidence-*`、`semantic-artifact-store.ts`     | 不可变 manifest/item、受限原始对象、7/30 天保留清理与物理删除续跑                                                                                       |
@@ -58,12 +59,19 @@ UI 路由：`/`、`/semantic/:projectId`、`/semantic/:projectId/authoring/:vers
 - 功能脚本 v1 页面入口只读取 `pageScope.entryPageId`，不兼容旧根字段；正式运行必须冻结该页面的 current revision。
 - 候选浏览器验证成功后记录 executable revision verification；只有全部当前脚本/场景覆盖时版本才为 `valid`。
 - side-effect authorization 精确覆盖 effect-bearing step；staging 高风险必须 grant，production 业务写拒绝。
+- Run/Authoring 的环境/effect 矩阵唯一由 `src/policy/side-effect-policy.ts` 判定，migration 017 的 evaluation/grant 创建、查询、失效 SQL 唯一归 `SemanticPolicyRepository`；旧 Run evaluator、evidence policy 接口与 Authoring 假 grant 已退出。
+- Authoring 在 candidate 构建时冻结实际验证计划，脚本按 ID 去重、每个一次，不展开 scenario repeat；Run 的影响上限按声明乘固定 repeat。审批精确绑定 context/version/deployment/source plan/projection/policy，scope 批准不能替代副作用 grant；UI 按 category 展示精确风险和 hash，阻止应用的理由只按 open decision 区分范围、副作用、两者并存或通用待回答决策，已回答决策不计入。
+- queue、verification scheduling、start/resume、lease、Agent dispatch 与重启 outbox 重放均重验授权；lease 返回后的任何重验异常回收本次控制权，网络撤销失败保留 secret 和持久 retry outbox。失效 create 收束原 attempt/task，失效 resume 保持 paused，取消/清理仍可执行；业务终态同事务过期 grant。
+- 同 hash 重新审批产生新 decision/answer/grant 并保留 immutable evaluation，旧 answer 不复活 revoked/expired grant。没有新增 revoke API/TTL；`set_files`、非 single affectedItems、不同 effect 同资源全局聚合及跨 context/locator/缩小计划复用仍未交付。
+- Authoring 候选终态在生命周期事务内将本候选仍为 open 的范围/副作用决策置 withdrawn 并递增 state version，覆盖并列审批拒绝、hard deny、失败和上下文/base revision stale；保留已回答/已应用及 answer 审计，其他候选审批不受影响。base revision stale 与 grant 失效同事务回滚/提交。
+
 - 断线后从 snapshot + seq 恢复，不由本地百分比或 Chat 文本推断状态。
 - Project 与 semantic 工作台统一 JSON 请求入口；完整保留成功 data/meta、HTTP status 与 ApiProblem 的 code/message/retryable/correlationId/details（含未知嵌套内容），非 JSON 失败不展示服务端 HTML。
 - UI 基础组件唯一 owner 为 `ui/src/shared/components/`，公共入口仅导出产品使用的 Button、Input、Card、Modal；`ui/src/components/ui/` 仅保留 Sonner Toaster 适配，`components.json` 保留生成配置。无调用的 shadcn/Radix 替代组件、旧向导 Stepper 及专属测试、Table/Tree/CodeEditor 与索引导出已退出，对应 11 个 Radix 直接依赖和 class-variance-authority 已移除；保留产品样式、token 与 Modal 使用的 tailwindcss-animate。
 - Run/Authoring 业务拒绝由产生处的领域 kind/code 或 repository reason 决定，API 边界集中映射既有状态；文案、动态 callKey 不参与分类。五个 `side_effect_*` wire code 与状态保持不变。
 - Agent Activity snapshot 调用 shared 纯 replay 归并 turns/sections/seq；本包先投影业务事件并按 source seq 去重，再从 activity 聚合顶层 state（优先 running/queued、blocked、outcome_unknown、failed），不受外部 stream.state 覆盖；generatedAt 使用最后事件时间，空流使用当前时间。UI 继续通过公共 UI 包重导出的同一 shared 核心恢复 live；仓储不依赖 React。
 - Agent Task 创建／查询／命令／审计事件使用 shared TypeBox schema 派生类型；view 保留真实 modelRole、脱敏 request、usage 等服务字段，BrowserStep 保留 videoSegment（true 仍由服务 capability 政策拒绝）。
+- 失效 Authoring 的未开始 verification task 封存为 blocked、无伪造 attempt，job/candidate failed 后关闭 session 并释放 FIFO。持久关闭意图优先复用本意图控制凭据；active session 无 control lease 时可申请 30 秒、仅 `page_state` 的清理 lease，只用于关闭，不执行 operation、不传给 Agent。其他活动控制权无 token 时等待过期；清理 lease 过期/token 丢失用新恢复意图续跑，远端已关闭/404 重放仍清理关联 secret、完成 FIFO。inactive/interrupted session 不申请新 lease。
 - Browser session/lease/event/operation/capability 使用完整 shared browser-execution DTO，保留 schema、requestHash、queue/timestamps、resolvedTarget、artifact size/snapshot 与完整 error；E2E 不再维护 DTO 或 axios 浏览器传输副本。FIFO、outbox、租约与操作生命周期仍由协调器维护，不使用共享受控会话控制器或 MCP execute/cancel。
 - `tsconfig.json` references shared 与 browser-control-client；`tsc -b` 按 shared→browser-control-client→E2E 构建依赖，使服务构建和 start.bat 不依赖预先存在的客户端 dist。
 - 浏览器事件日志是必需 port，按持久 cursor 补洞；活动会话关闭携带 control 凭证。共享 HTTP 解析保留标准 Problem/status/details/correlationId 与网络 cause，artifact 404 不再因 arraybuffer 丢失 Problem。非标准 HTTP 错误有意统一为 `dependency_unavailable`，不再返回旧 `http_STATUS`；显式 baseUrl→PROXY_ADAPTER_URL→默认 3000 与 timeoutMs 默认 30 秒配置边界保持。

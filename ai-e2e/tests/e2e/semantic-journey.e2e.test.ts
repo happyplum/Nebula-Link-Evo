@@ -3,10 +3,11 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { buildApp as buildProxyApp } from '../../../proxy-adapter/src/server.js';
 import { DatabaseManager } from '../../src/database/db.js';
 import { hashValue } from '../../src/database/repositories/semantic-repository-utils.js';
+import { MemoryCoordinatorSecretStore } from '../../src/infrastructure/coordinator-secret-store.js';
 import { AgentTaskClient } from '../../src/infrastructure/agent-task-client.js';
 import { SemanticBrowserClient } from '../../src/infrastructure/semantic-browser-client.js';
 import { createServer } from '../../src/server/index.js';
@@ -304,6 +305,115 @@ describe('semantic product journey', () => {
     expect(await fetch(`${aiE2eUrl}/api/projects/${workspace.id}`)).toMatchObject({ status: 404 });
   });
 
+  it.each(['no_previous_lease', 'revoked_previous_lease'] as const)(
+    'closes the real Proxy session after Authoring failure with %s and releases FIFO',
+    async (phase) => {
+      for (let index = 0; index < 8; index += 1) await coordinator.tick();
+      const database = DatabaseManager.getInstance();
+      const db = database.getDatabase();
+      expect(database.getSemanticCoordinatorRepo().getActiveBrowserJob()).toBeNull();
+      const created = await request('POST', '/api/v1/projects', {
+        headers: { 'idempotency-key': `cleanup-project-${phase}` },
+        body: {
+          name: `Cleanup ${phase}`,
+          versionKey: 'v1',
+          versionName: 'Version 1',
+          targetOrigin: 'https://example.test',
+          environment: 'test',
+          prd: { format: 'markdown', content: '# Close failed verification' },
+          createdBy: 'e2e',
+        },
+      });
+      expect(created.status).toBe(201);
+      const workspace = created.data as { versionId: string };
+      const module = db
+        .prepare('SELECT id FROM semantic_functional_modules WHERE business_version_id = ?')
+        .get(workspace.versionId) as { id: string };
+      const createdJob = await request(
+        'POST',
+        `/api/v1/business-versions/${workspace.versionId}/authoring-jobs`,
+        {
+          headers: { 'idempotency-key': `cleanup-authoring-${phase}` },
+          body: {
+            schema: 'nebula.ai-e2e.create-authoring-job/1.0',
+            mode: 'repair',
+            targetType: 'functional_module',
+            targetId: module.id,
+            currentUrl: 'https://example.test/',
+            reason: 'Verify failure cleanup',
+            createdBy: 'e2e',
+          },
+        }
+      );
+      expect(createdJob.status).toBe(201);
+      const jobId = String((createdJob.data as { id: string }).id);
+      const browser = new SemanticBrowserClient({ baseUrl: proxyUrl, timeoutMs: 30_000 });
+      const agent = new AgentTaskClient({ baseUrl: aiChatUrl, timeoutMs: 30_000 });
+      const agentCreate = vi.spyOn(agent, 'createTask');
+      const leaseCreate = vi.spyOn(browser, 'createLease');
+      const secrets = new MemoryCoordinatorSecretStore();
+      const cleanupCoordinator = new SemanticCoordinatorService({
+        repository: database.getSemanticCoordinatorRepo(),
+        workflows: database.getSemanticWorkflowRepo(),
+        evidence: database.getSemanticEvidenceRepo(),
+        runs: database.getSemanticRunControlRepo(),
+        browser,
+        agentTasks: agent,
+        secretStore: secrets,
+      });
+      for (let index = 0; index < 4; index += 1) {
+        await cleanupCoordinator.tick();
+        if (database.getSemanticCoordinatorRepo().getActiveBrowserJob()?.browserSessionId) break;
+      }
+      const browserJob = database.getSemanticCoordinatorRepo().getActiveBrowserJob();
+      expect(browserJob?.contextId).toBe(jobId);
+      const sessionId = browserJob?.browserSessionId;
+      if (!sessionId) throw new Error('Real Proxy session was not acquired');
+      if (phase === 'revoked_previous_lease') {
+        const issued = await browser.createLease(sessionId, `prior-lease-${jobId}`, {
+          mode: 'control',
+          ttlSeconds: 30,
+          operations: ['page_state'],
+        });
+        if (!issued.token) throw new Error('Fresh test lease has no token');
+        await browser.revokeLease(
+          sessionId,
+          issued.lease.id,
+          issued.token,
+          `prior-revoke-${jobId}`
+        );
+      }
+      leaseCreate.mockClear();
+      database.getSemanticWorkflowRepo().settleAuthoringJob(jobId, 'failed', {
+        code: 'side_effect_approval_stale',
+      });
+      for (let index = 0; index < 5; index += 1) await cleanupCoordinator.tick();
+      expect((await browser.getSession(sessionId)).status).toBe('closed');
+      expect(database.getSemanticCoordinatorRepo().getActiveBrowserJob()).toBeNull();
+      expect(agentCreate).not.toHaveBeenCalled();
+      expect(leaseCreate).toHaveBeenCalledExactlyOnceWith(
+        sessionId,
+        expect.stringContaining(':cleanup'),
+        {
+          mode: 'control',
+          ttlSeconds: 30,
+          operations: ['page_state'],
+        }
+      );
+      const events = await browser.listSessionEvents(sessionId);
+      expect(events.some((event) => event.type.startsWith('operation.'))).toBe(false);
+      const links = db
+        .prepare(
+          `SELECT secret_ref, terminal_at FROM external_task_links
+        WHERE context_type = 'authoring' AND context_id = ? AND kind = 'browser_lease'`
+        )
+        .all(jobId) as Array<{ secret_ref: string; terminal_at: string }>;
+      expect(links).toHaveLength(1);
+      expect(links[0]?.terminal_at).toBeTruthy();
+      expect(secrets.get(links[0]?.secret_ref ?? '')).toBeUndefined();
+    }
+  );
+
   it('stops an unknown browser outcome for an operator decision without replaying it', async () => {
     const created = await request('POST', '/api/v1/projects', {
       headers: { 'idempotency-key': 'semantic-e2e-unknown-project' },
@@ -359,8 +469,7 @@ describe('semantic product journey', () => {
       const db = DatabaseManager.getInstance().getDatabase();
       await tickUntil(() => {
         const todo = db.prepare('SELECT state FROM run_todos WHERE run_id = ?').get(runView.id) as
-          | { state: string }
-          | undefined;
+          { state: string } | undefined;
         return todo?.state === 'waiting_decision';
       });
       const agentCount = (

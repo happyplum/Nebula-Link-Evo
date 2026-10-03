@@ -1,4 +1,7 @@
-import type { RunSnapshotV1 as RunSnapshot, SemanticWorkspaceV1 as SemanticWorkspace } from '../../../../src/contracts/semantic-control.js';
+import type {
+  RunSnapshotV1 as RunSnapshot,
+  SemanticWorkspaceV1 as SemanticWorkspace,
+} from '../../../../src/contracts/semantic-control.js';
 import type { AmendmentRecord as AuthoringAmendment } from '../../../../src/contracts/semantic-authoring.js';
 import {
   AlertTriangle,
@@ -391,8 +394,46 @@ function DiffPane({
               <div className="semantic-approval" key={text(decision.id)}>
                 <ShieldAlert aria-hidden="true" />
                 <div>
-                  <strong>{text(decision.question, '范围扩展需要人工审批')}</strong>
-                  <p>{pretty(decision.impact)}</p>
+                  <strong>
+                    {decision.category === 'side_effect_approval'
+                      ? '副作用验证审批'
+                      : '范围扩展审批'}
+                  </strong>
+                  <p>{text(decision.question)}</p>
+                  {decision.category === 'side_effect_approval' && (
+                    <div className="semantic-impact-grid">
+                      <Field label="环境" value={text(record(decision.facts).environment)} />
+                      <Field
+                        label="部署修订"
+                        value={text(record(decision.facts).deploymentRevisionId)}
+                      />
+                      <Field label="策略版本" value={text(record(decision.facts).policyVersion)} />
+                      <Field
+                        label="候选"
+                        value={amendment.changes
+                          .map((change) => text(change.candidateRevisionId))
+                          .join(', ')}
+                      />
+                      <Field
+                        label="风险投影 SHA-256"
+                        value={text(record(decision.facts).projectionSha256)}
+                      />
+                      <Field
+                        label="冻结计划 SHA-256"
+                        value={text(record(decision.facts).sourcePlanSha256)}
+                      />
+                    </div>
+                  )}
+                  <p>
+                    {decision.category === 'side_effect_approval'
+                      ? list(record(record(decision.facts).projection).effects)
+                          .map((value) => {
+                            const effect = record(value);
+                            return `${text(effect.kind)} · ${text(effect.resourceType)} ≤ ${String(effect.maxAffectedItems)} · ${text(effect.reversibility)}${effect.usesFileUpload === true ? ' · 文件上传' : ''} · ${text(effect.stepId)}`;
+                          })
+                          .join('；')
+                      : pretty(decision.impact)}
+                  </p>
                 </div>
                 <div className="semantic-button-row">
                   <button

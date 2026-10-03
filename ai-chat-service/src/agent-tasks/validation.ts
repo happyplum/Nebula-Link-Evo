@@ -170,9 +170,14 @@ function validateSideEffectAuthorization(
       effect.reversibility === 'irreversible' ||
       effect.usesFileUpload === true
   );
-  if (value.environment === 'staging' && highRisk) {
+  if (value.environment === 'staging' && (highRisk || value.policyResult === 'approval_required')) {
     const grant = value.grant;
-    if (!grant || grant.approvedProjectionSha256 !== value.projectionSha256)
+    if (
+      value.policyResult !== 'approval_required' ||
+      !grant ||
+      grant.status !== 'active' ||
+      grant.approvedProjectionSha256 !== value.projectionSha256
+    )
       fail('Staging high-risk grant is inactive or stale');
   } else if (value.policyResult !== 'auto_allowed') {
     fail('Non-high-risk task requires an auto_allowed policy evaluation');

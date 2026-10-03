@@ -29,7 +29,8 @@ export function hashValue(value: unknown): string {
 }
 
 export function requireSha256(value: string, label: string): void {
-  if (!/^[a-f0-9]{64}$/i.test(value)) throw new DomainError('validation_error', `${label} must be a SHA-256 hex digest`);
+  if (!/^[a-f0-9]{64}$/i.test(value))
+    throw new DomainError('validation_error', `${label} must be a SHA-256 hex digest`);
 }
 
 export function assertNoInlineSecrets(value: unknown): void {
@@ -81,6 +82,11 @@ function inspectSecrets(value: unknown, path: string): void {
     const isTokenMetric =
       typeof nested === 'number' &&
       /^(?:max|input|output|total)?tokens?(?:used|remaining|budget)?$/.test(normalized);
+    const isPolicyAuthorization =
+      key === 'sideEffectAuthorization' &&
+      nested !== null &&
+      typeof nested === 'object' &&
+      !Array.isArray(nested);
     const isSecretKey = /(password|passwd|secret|token|authorization|cookie|apikey|accesskey)/.test(
       normalized
     );
@@ -88,10 +94,14 @@ function inspectSecrets(value: unknown, path: string): void {
       isSecretKey &&
       !isReference &&
       !isTokenMetric &&
+      !isPolicyAuthorization &&
       nested !== null &&
       nested !== '[REDACTED]'
     ) {
-      throw new DomainError('validation_error', `Inline secret-like value is forbidden at ${path}.${key}`);
+      throw new DomainError(
+        'validation_error',
+        `Inline secret-like value is forbidden at ${path}.${key}`
+      );
     }
     inspectSecrets(nested, `${path}.${key}`);
   }

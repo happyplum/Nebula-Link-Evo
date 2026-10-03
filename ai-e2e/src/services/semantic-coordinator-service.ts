@@ -1,3 +1,4 @@
+import { DomainError } from './service-error.js';
 import { createHash, randomUUID } from 'node:crypto';
 import type {
   SemanticCoordinatorRepository,
@@ -112,9 +113,20 @@ export class SemanticCoordinatorService {
     this.ticking = true;
     try {
       this.initialize();
-      const verificationAmendmentId = this.options.repository.getVerificationAmendmentToSchedule();
-      if (verificationAmendmentId) {
-        this.options.workflows.ensureAuthoringVerification(verificationAmendmentId);
+      const verification = this.options.repository.getVerificationAmendmentToSchedule();
+      if (verification) {
+        try {
+          this.options.workflows.ensureAuthoringVerification(verification.amendmentId);
+        } catch (error) {
+          if (!(error instanceof DomainError) || !error.code.startsWith('side_effect_'))
+            throw error;
+          this.failUnstartedAuthoringAuthorization(
+            verification.browserJob,
+            error.code,
+            verification.amendmentId
+          );
+          return { action: 'authoring_verification.authorization_failed' };
+        }
         return { action: 'authoring_verification.scheduled' };
       }
       const capabilitySha256 = await this.preflight();
@@ -179,13 +191,27 @@ export class SemanticCoordinatorService {
             lifecycle &&
             ['waiting_decision', 'completed', 'cancelled', 'failed'].includes(lifecycle)
           ) {
+            if (
+              this.options.evidence.hasPendingPolicyLeaseRevocation({
+                type: 'authoring',
+                id: currentJob.contextId,
+              })
+            )
+              return { action: 'authoring_lease.revoke_pending' };
             this.enqueueSessionClose(currentJob, 'authoring_safe_boundary');
             return { action: 'browser_session.close_queued' };
           }
           if (lifecycle === 'paused') return { action: 'authoring.paused' };
           const task = this.options.repository.getAuthoringTask(currentJob.contextId, 'ready');
           if (task) {
-            this.enqueueAuthoringLeaseCreate(task);
+            try {
+              this.enqueueAuthoringLeaseCreate(task);
+            } catch (error) {
+              if (!(error instanceof DomainError) || !error.code.startsWith('side_effect_'))
+                throw error;
+              this.failUnstartedAuthoringAuthorization(currentJob, error.code);
+              return { action: 'authoring_verification.authorization_failed' };
+            }
             return { action: 'authoring_browser_lease.queued' };
           }
         }
@@ -298,6 +324,7 @@ export class SemanticCoordinatorService {
     todo: ReturnType<SemanticCoordinatorRepository['getReadyTodo']> & {}
   ): void {
     if (!todo) return;
+    this.options.runs.assertExecutionAllowed(todo.runId);
     const projection = buildRunTaskProjection(todo, `pending:${todo.todoId}`);
     this.options.evidence.enqueueOutbox({
       id: `browser-lease-create:${todo.todoId}:v${todo.todoStateVersion}`,
@@ -316,6 +343,10 @@ export class SemanticCoordinatorService {
   }
 
   private enqueueAuthoringLeaseCreate(task: CoordinatorAuthoringTask): void {
+    this.options.workflows.assertAuthoringExecutionAllowed(
+      task.jobId,
+      typeof task.input.amendmentId === 'string' ? task.input.amendmentId : undefined
+    );
     const candidates = this.options.authoringCandidates;
     if (!candidates) {
       throw new Error('Authoring candidate coordinator is not configured');
@@ -337,8 +368,150 @@ export class SemanticCoordinatorService {
     });
   }
 
+  private async revalidateIssuedLease(
+    item: OutboxItem,
+    sessionId: string,
+    leaseId: string,
+    token: string,
+    secretRef: string
+  ): Promise<void> {
+    try {
+      this.assertOutboxAuthorization(item);
+    } catch (error) {
+      const revokeId = `policy-revoke:${leaseId}`;
+      // Persist recovery before the network call: a failed revoke must retain its token and intent.
+      this.options.evidence.enqueueOutbox({
+        id: revokeId,
+        context: { type: item.context_type, id: item.context_id },
+        targetService: 'proxy_adapter',
+        commandType: 'browser_lease.revoke',
+        endpointOrTool: '/api/v1/browser-execution/sessions/:sessionId/leases/:leaseId',
+        payloadRedacted: { browserSessionId: sessionId, browserLeaseId: leaseId },
+        secretBindingRef: secretRef,
+      });
+      this.options.evidence.linkExternalTask({
+        context: { type: item.context_type, id: item.context_id },
+        service: 'proxy_adapter',
+        kind: 'browser_lease',
+        externalId: leaseId,
+        externalState: 'active',
+        secretRef,
+        tokenHash: sha256(token),
+      });
+      this.options.evidence.claimNextOutbox(this.isoNow(), revokeId);
+      try {
+        const revoked = await this.options.browser.revokeLease(sessionId, leaseId, token, revokeId);
+        this.secrets.delete(secretRef);
+        this.options.evidence.linkExternalTask({
+          context: { type: item.context_type, id: item.context_id },
+          service: 'proxy_adapter',
+          kind: 'browser_lease',
+          externalId: leaseId,
+          externalState: revoked.status,
+          terminal: true,
+        });
+        this.options.evidence.settleOutbox(revokeId, 'confirmed', { resultRef: leaseId });
+      } catch {
+        this.options.evidence.settleOutbox(revokeId, 'retryable_failed', {
+          error: { code: 'policy_revoke_pending', retryable: true },
+          nextAttemptAt: this.isoNow(),
+        });
+        this.options.logger?.warn(
+          { leaseId, revokeId },
+          '授权失效后的租约撤销已交给持久 outbox 恢复'
+        );
+      }
+      throw error;
+    }
+  }
+
+  private assertOutboxAuthorization(item: OutboxItem): void {
+    const payload = payloadObject(item);
+    const resume = item.command_type === 'agent_task.command' && payload.command === 'resume';
+    if (
+      !resume &&
+      ![
+        'browser_session.create',
+        'browser_lease.create',
+        'agent_task.create',
+        'authoring_browser_lease.create',
+        'authoring_agent_task.create',
+      ].includes(item.command_type)
+    )
+      return;
+    const frozenPayload = resume
+      ? this.options.evidence.getOutboxPayload(
+          item.context_type === 'run'
+            ? `agent-task-create:${item.page_task_id}`
+            : `authoring-agent-task-create:${item.authoring_task_id}`
+        )
+      : payload;
+    if (resume && !frozenPayload)
+      throw new DomainError(
+        'conflict',
+        'Resume task binding is missing',
+        'side_effect_approval_stale'
+      );
+    const request = objectValue(frozenPayload?.agentRequest);
+
+    if (item.context_type === 'run') {
+      this.options.runs.assertExecutionAllowed(item.context_id);
+      if (item.command_type === 'agent_task.create' || resume) {
+        const authorization = objectValue(request.sideEffectAuthorization);
+        const todo = item.page_task_id
+          ? this.options.repository.getTodoForPageTask(item.page_task_id)
+          : null;
+        if (!todo)
+          throw new DomainError(
+            'conflict',
+            'Dispatch TODO is missing',
+            'side_effect_approval_stale'
+          );
+        const current = buildRunTaskProjection(todo, String(item.page_task_id)).agentRequest
+          .sideEffectAuthorization;
+        if (hashValue(current ?? {}) !== hashValue(authorization))
+          throw new DomainError(
+            'conflict',
+            'Dispatch authorization differs from the current policy',
+            'side_effect_approval_stale'
+          );
+      }
+    } else {
+      const amendmentId = objectValue(request.correlation).amendmentId;
+      const task = this.options.repository.getAuthoringTask(
+        item.context_id,
+        item.command_type === 'authoring_agent_task.create' || resume ? 'running' : 'ready'
+      );
+      const boundAmendment =
+        typeof amendmentId === 'string'
+          ? amendmentId
+          : typeof task?.input.amendmentId === 'string'
+            ? task.input.amendmentId
+            : undefined;
+      this.options.workflows.assertAuthoringExecutionAllowed(item.context_id, boundAmendment);
+      if (item.command_type === 'authoring_agent_task.create' || resume) {
+        if (!task || task.taskId !== item.authoring_task_id)
+          throw new DomainError(
+            'conflict',
+            'Authoring dispatch task is stale',
+            'side_effect_approval_stale'
+          );
+        if (boundAmendment) {
+          const current =
+            this.options.workflows.policy.requireAuthoringAuthorization(boundAmendment);
+          if (hashValue(current ?? {}) !== hashValue(objectValue(request.sideEffectAuthorization)))
+            throw new DomainError(
+              'conflict',
+              'Authoring dispatch authorization differs',
+              'side_effect_approval_stale'
+            );
+        }
+      }
+    }
+  }
   private async dispatchOutbox(item: OutboxItem, capabilitySha256: string): Promise<void> {
     try {
+      this.assertOutboxAuthorization(item);
       switch (item.command_type) {
         case 'browser_session.create':
           await this.createBrowserSession(item, capabilitySha256);
@@ -373,6 +546,13 @@ export class SemanticCoordinatorService {
           );
       }
     } catch (error) {
+      if (error instanceof DomainError && error.code.startsWith('side_effect_')) {
+        await this.settlePolicyDispatchFailure(item, error);
+        this.options.evidence.settleOutbox(item.id, 'cancelled', {
+          error: { code: error.code, message: error.message, retryable: false },
+        });
+        return;
+      }
       await this.handleDispatchFailure(item, error);
     }
   }
@@ -419,6 +599,7 @@ export class SemanticCoordinatorService {
       return;
     }
     const session = await this.options.browser.getSession(sessionId);
+    this.assertOutboxAuthorization(item);
     const tab = session.tabs.find((candidate) => candidate.isActive) ?? session.tabs[0];
     if (!tab)
       throw new IntegrationClientError(
@@ -461,6 +642,7 @@ export class SemanticCoordinatorService {
     }
     const tokenHash = sha256(leaseToken);
     this.secrets.put(secretRef, leaseToken);
+    await this.revalidateIssuedLease(item, sessionId, issued.lease.id, leaseToken, secretRef);
     const todo = this.options.repository.getReadyTodo(runSession?.jobId ?? '');
     if (!todo || todo.todoId !== todoId) {
       await this.options.browser.revokeLease(
@@ -541,6 +723,7 @@ export class SemanticCoordinatorService {
       return;
     }
     const session = await this.options.browser.getSession(sessionId);
+    this.assertOutboxAuthorization(item);
     const tab = session.tabs.find((candidate) => candidate.isActive) ?? session.tabs[0];
     if (!tab)
       throw new IntegrationClientError(
@@ -549,6 +732,7 @@ export class SemanticCoordinatorService {
         '浏览器会话没有可用 Tab',
         true
       );
+    const request = candidates.buildAgentRequest(task);
     const requirements = candidates.leaseRequirements(task);
     const issued = await this.options.browser.createLease(sessionId, item.id, {
       mode: 'control',
@@ -579,6 +763,7 @@ export class SemanticCoordinatorService {
       );
     }
     this.secrets.put(secretRef, leaseToken);
+    await this.revalidateIssuedLease(item, sessionId, issued.lease.id, leaseToken, secretRef);
     this.options.workflows.startAuthoringTask(taskId);
     this.options.evidence.linkExternalTask({
       context: { type: 'authoring', id: task.jobId },
@@ -591,7 +776,6 @@ export class SemanticCoordinatorService {
       tokenHash: sha256(leaseToken),
       secretRef,
     });
-    const request = candidates.buildAgentRequest(task);
     this.options.evidence.enqueueOutbox({
       id: `authoring-agent-task-create:${taskId}`,
       context: { type: 'authoring', id: task.jobId },
@@ -1193,25 +1377,104 @@ export class SemanticCoordinatorService {
       if (error instanceof IntegrationClientError && error.statusCode === 404) return null;
       throw error;
     });
-    if (session && session.status !== 'closed') {
-      const leaseId = stringValue(payload.browserLeaseId);
-      const secretRef = item.secret_binding_ref ? String(item.secret_binding_ref) : undefined;
-      const leaseToken = secretRef ? this.secrets.get(secretRef) : undefined;
-      if (
-        !secretRef ||
-        !leaseId ||
-        !leaseToken ||
-        !session.activeLeases.some((lease) => lease.id === leaseId)
-      ) {
-        throw new IntegrationClientError(
-          'proxy-adapter',
-          'lease_conflict',
-          '关闭浏览器需要关联的活动控制租约',
-          false
-        );
+    const closeLeases = this.options.repository.getSessionCloseLeases(
+      item.context_type,
+      item.context_id,
+      String(item.request_sha256)
+    );
+    const originalSecretRef = item.secret_binding_ref ? String(item.secret_binding_ref) : undefined;
+    const originalLeaseId = stringValue(payload.browserLeaseId);
+    let credentials: { leaseId: string; leaseToken: string } | undefined;
+    if (session?.status === 'active') {
+      const activeControl = session.activeLeases.find((lease) => lease.mode === 'control');
+      if (activeControl) {
+        const ownedSecretRef =
+          activeControl.id === originalLeaseId
+            ? originalSecretRef
+            : closeLeases.find((lease) => lease.externalId === activeControl.id)?.secretRef;
+        const token = ownedSecretRef ? this.secrets.get(ownedSecretRef) : undefined;
+        if (!token) {
+          throw new IntegrationClientError(
+            'proxy-adapter',
+            'lease_token_unavailable',
+            '关闭意图等待现有控制租约过期，不接管其他控制权',
+            true,
+            undefined,
+            { nextAttemptAt: new Date(Date.parse(activeControl.expiresAt) + 1_000).toISOString() }
+          );
+        }
+        credentials = { leaseId: activeControl.id, leaseToken: token };
+      } else {
+        // This control lease exists only to close the persisted session; it never reaches an Agent.
+        const issued = await this.options.browser.createLease(sessionId, `${item.id}:cleanup`, {
+          mode: 'control',
+          ttlSeconds: 30,
+          operations: ['page_state'],
+        });
+        const secretRef = `coordinator-secret://browser-lease/${issued.lease.id}`;
+        const token = issued.token ?? this.secrets.get(secretRef);
+        this.options.evidence.linkExternalTask({
+          context: { type: item.context_type, id: item.context_id },
+          service: 'proxy_adapter',
+          kind: 'browser_lease',
+          externalId: issued.lease.id,
+          externalState: issued.lease.status,
+          requestSha256: String(item.request_sha256),
+          secretRef,
+          ...(token ? { tokenHash: sha256(token) } : {}),
+        });
+        closeLeases.push({
+          id: '',
+          service: 'proxy_adapter',
+          kind: 'browser_lease',
+          externalId: issued.lease.id,
+          secretRef,
+          terminal: false,
+        });
+        if (!token || issued.lease.status !== 'active') {
+          const current = await this.options.browser.getSession(sessionId);
+          const active = current.activeLeases.find((lease) => lease.id === issued.lease.id);
+          if (active) {
+            throw new IntegrationClientError(
+              'proxy-adapter',
+              'lease_token_unavailable',
+              '清理租约的一次性 token 已丢失，等待过期后恢复关闭意图',
+              true,
+              undefined,
+              { nextAttemptAt: new Date(Date.parse(active.expiresAt) + 1_000).toISOString() }
+            );
+          }
+          this.options.evidence.enqueueOutbox({
+            id: `${item.id}:recovery:${issued.lease.sequence}`,
+            context: { type: item.context_type, id: item.context_id },
+            targetService: 'proxy_adapter',
+            commandType: 'browser_session.close',
+            endpointOrTool: String(item.endpoint_or_tool),
+            payloadRedacted: payload,
+            ...(originalSecretRef ? { secretBindingRef: originalSecretRef } : {}),
+          });
+          this.options.evidence.settleOutbox(item.id, 'confirmed', { resultRef: issued.lease.id });
+          return;
+        }
+        this.secrets.put(secretRef, token);
+        credentials = { leaseId: issued.lease.id, leaseToken: token };
       }
-      await this.options.browser.closeSession(sessionId, item.id, { leaseId, leaseToken });
-      this.secrets.delete(secretRef);
+    }
+    if (session && session.status !== 'closed') {
+      await this.options.browser.closeSession(sessionId, item.id, credentials);
+    }
+    // Also executes after a remote close succeeded but its local confirmation was lost.
+    if (originalSecretRef) this.secrets.delete(originalSecretRef);
+    for (const lease of closeLeases) {
+      if (lease.secretRef) this.secrets.delete(lease.secretRef);
+      this.options.evidence.linkExternalTask({
+        context: { type: item.context_type, id: item.context_id },
+        service: 'proxy_adapter',
+        kind: 'browser_lease',
+        externalId: lease.externalId,
+        externalState: 'revoked',
+        terminal: true,
+      });
     }
     const job = this.options.repository.getActiveBrowserJob();
     if (job && job.contextType === item.context_type && job.contextId === item.context_id) {
@@ -1378,6 +1641,84 @@ export class SemanticCoordinatorService {
     this.enqueueLeaseRevoke(pageTask);
   }
 
+  private failUnstartedAuthoringAuthorization(
+    job: CoordinatorBrowserJob,
+    code: string,
+    unscheduledAmendmentId?: string
+  ): void {
+    const lifecycle = this.options.repository.getAuthoringJobLifecycle(job.contextId);
+    const verification = this.options.repository.getUnstartedAuthoringVerification(job.contextId);
+    if (lifecycle && !['completed', 'cancelled', 'failed', 'cancelling'].includes(lifecycle)) {
+      const amendmentId = verification?.amendmentId ?? unscheduledAmendmentId;
+      if (amendmentId) this.options.authoringCandidates?.failVerification(amendmentId, { code });
+      this.options.workflows.settleAuthoringJob(
+        job.contextId,
+        'failed',
+        {
+          code,
+          ...(verification
+            ? { amendmentId: verification.amendmentId, unstartedTaskId: verification.taskId }
+            : {}),
+        },
+        verification?.taskId
+      );
+    }
+    if (
+      this.options.evidence.hasPendingPolicyLeaseRevocation({
+        type: 'authoring',
+        id: job.contextId,
+      })
+    )
+      return;
+    if (job.browserSessionId) this.enqueueSessionClose(job, 'authoring_safe_boundary');
+    else if (job.state === 'acquiring' || job.state === 'queued')
+      this.options.workflows.transitionBrowserJob(
+        job.id,
+        job.state === 'queued' ? 'cancelled' : 'failed',
+        { error: { code } }
+      );
+  }
+
+  private async settlePolicyDispatchFailure(item: OutboxItem, error: DomainError): Promise<void> {
+    if (
+      item.context_type === 'authoring' &&
+      ['browser_session.create', 'authoring_browser_lease.create'].includes(item.command_type)
+    ) {
+      const job = this.options.repository.getActiveBrowserJob();
+      if (job?.contextType === 'authoring' && job.contextId === item.context_id)
+        this.failUnstartedAuthoringAuthorization(job, error.code);
+    } else if (item.command_type === 'agent_task.create') {
+      await this.interruptOrphanedPageTask(item, error.code);
+    } else if (item.command_type === 'authoring_agent_task.create') {
+      const task = this.options.repository.getAuthoringTask(item.context_id, 'running');
+      if (task && task.taskId === item.authoring_task_id) {
+        this.options.workflows.completeAuthoringAttempt({
+          taskId: task.taskId,
+          status: 'interrupted',
+          error: { code: error.code },
+          startedAt: task.startedAt ?? this.isoNow(),
+        });
+        if (typeof task.input.amendmentId === 'string')
+          this.options.authoringCandidates?.failVerification(task.input.amendmentId, {
+            code: error.code,
+          });
+        this.options.workflows.settleAuthoringJob(task.jobId, 'failed', { code: error.code });
+        this.enqueueAuthoringSessionClose(task);
+      }
+    } else if (
+      item.command_type === 'agent_task.command' &&
+      payloadObject(item).command === 'resume'
+    ) {
+      if (item.context_type === 'run')
+        this.options.repository.pauseRunForCoordinator(item.context_id, { code: error.code });
+      else {
+        const task = this.options.repository.getAuthoringTask(item.context_id, 'running');
+        if (task)
+          this.options.workflows.pauseAuthoringForCoordinator(task.jobId, { code: error.code });
+      }
+    }
+  }
+
   private async interruptOrphanedPageTask(item: OutboxItem, reasonClass: string): Promise<void> {
     if (!item.page_task_id) return;
     const job = this.options.repository.getActiveBrowserJob();
@@ -1409,6 +1750,14 @@ export class SemanticCoordinatorService {
       return;
     }
     this.options.evidence.settleOutbox(item.id, 'terminal_failed', { error: details });
+    if (
+      item.context_type === 'authoring' &&
+      item.command_type === 'authoring_browser_lease.create'
+    ) {
+      const job = this.options.repository.getActiveBrowserJob();
+      if (job?.contextType === 'authoring' && job.contextId === item.context_id)
+        this.failUnstartedAuthoringAuthorization(job, details.code);
+    }
     if (item.context_type === 'run') {
       this.options.repository.pauseRunForCoordinator(item.context_id, details);
     }

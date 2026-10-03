@@ -133,7 +133,11 @@ created → planning → running ↔ paused/waiting_decision → completing → 
 
 ### 4.8 Verification
 
-验证使用正常 semantic runner/页面子代理执行链，但创建 `purpose=authoring_verification` 的内部 run 并绑定 candidate revisions：
+当前验证由 authoring verification task 直接执行候选脚本与 scenario 引用脚本，按 script ID 去重、每个脚本一次；不展开 scenario repeat。candidate 构建时冻结实际步骤、部署和 source plan/projection hash，复用 Run 的纯 evaluator 与唯一 policy repository，staging 高风险使用独立 side_effect_approval decision/持久 grant。排队、调度、租约、派发与恢复前都重验 exact job/amendment/candidate 身份；scope approval 不替代副作用批准。
+
+候选进入 `activated/rejected/failed/stale` 时，同事务撤回该候选仍为 `open` 的所有范围/副作用决策（`withdrawn`），保留已回答/已应用状态与 answer 审计。拒绝任一并列审批即终结候选并撤回剩余审批；硬策略 deny 与上下文切换同样收束，不影响其他候选的审批。base revision 漂移导致的 stale 与精确 grant 失效原子提交。
+
+以下完整 verification run/required scenarios 编排为 pending 目标，不能视作当前交付：
 
 - 每个脚本先做职责内验证，再运行 required scenarios 验证跨脚本数据和最终验收。
 - 验证 run 只能由 authoring coordinator 创建，必须关联 authoring job、精确 deployment revision、Git/build、角色、locale、viewport、baseline、candidate revision 和其依赖闭包 hash；不得通过公开正式 Run API 绕过门禁。
@@ -227,7 +231,7 @@ revision 激活事务同步维护 `asset_revision_dependencies`，关系至少�
 - 已冻结 test run 可以继续引用旧 revision；authoring 激活新 current 不改写该 run。页面已显著漂移时主代理仍可按运行安全规则中断旧 run。
 - v1 由 `ai-e2e` 以持久 `browser_jobs.queue_seq` 维护 authoring verification/test run 的公平 FIFO，只把队首交给 proxy；重启不改变已排顺序。`proxy-adapter` 用通用独占门禁保证每进程全局最多一个活动 browser execution session，不解释两类业务 job。
 - formal run 在 preflight/失败后触发的 repair 是该 run 的嵌套 authoring job：关联 `parentRunId`，在原子操作安全边界复用父 run 已占用的 browser job/session 槽位，不排到自己后面，也不允许无关 authoring/run 插队。父 run 先暂停并释放 control lease，内部 verification run 才取得 control；repair 完成后释放子租约，再通过精确 revision 的 run plan amendment 恢复父 run。
-- run-triggered repair 只修改 locator/等待/证据且副作用投影不变时可沿用父 run grant；新增或扩大副作用、资源/actor/数量、上传、不可逆性或 deployment/policy 时，旧 grant 失效，父 run 在安全边界重新审批。production 业务写修复仍硬拒绝。
+- 父 Run grant 继承和 locator/缩小计划复用仍 pending。当前 repair candidate 精确绑定自己的 job/amendment/source plan/projection/deployment/policy；不能复用父 Run 或其他 candidate grant。production 业务写验证仍硬拒绝。
 - session 暂停且保留页面时仍占用全局浏览器；只有显式结束/关闭或主代理接受丢失 Context 的释放，下一 job 才可进入。
 - UI live view 是只读旁路；主代理视觉观测只能在原子操作安全边界使用 observe lease，不能与 child 写操作竞争 snapshot。
 - v1 新控制面只允许 loopback/local 单用户部署；非本机或多用户拓扑在统一身份、授权与租户隔离协议验收前拒绝 authoring/run。
@@ -271,9 +275,9 @@ revision 激活事务同步维护 `asset_revision_dependencies`，关系至少�
 10. copy 后 repair 只改变目标版本，来源版本 current/hash 保持不变。
 11. 同一资产在不同 deployment/build/角色/locale/viewport 下分别验证；任一范围的 pass 不会误授权其他范围。
 12. run-triggered repair 复用父 run 槽位且不形成自等待，无关 browser job 不能在中间取得 control。
-13. local/test 与 staging 低风险验证无需人工审批；staging 高风险验证在 browser job/control 前只审批一次，纯定位修复不会重复审批。
+13. local/test 与 staging 低风险验证无需人工审批；staging 高风险验证在 browser job/control 前只审批一次，精确相同 candidate 重启恢复同一 grant；新 candidate 不复用旧审批。
 14. production 写 candidate 只能保留为 static valid/unverified，不能取得 verified 或让对应 scope 变为可运行，也不存在审批绕过。
-15. repair 扩大副作用投影时父 grant 失效并暂停重新审批；缩小范围或不改变投影时审计可证明授权仍匹配。
+15. 当前 candidate 只接受 exact context/source plan/projection grant；父 grant 继承和缩小范围复用的未来编排需单独验收。
 
 ## 13. 关联文档
 

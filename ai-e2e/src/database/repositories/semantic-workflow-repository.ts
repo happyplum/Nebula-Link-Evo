@@ -1,3 +1,4 @@
+import { SemanticPolicyRepository } from './semantic-policy-repository.js';
 import type { RunLifecycle, SemanticRunResult } from '../../contracts/semantic-run.js';
 import type { AuthoringLifecycle, AuthoringJobResult } from '../../contracts/semantic-authoring.js';
 import { DomainError } from '../../services/service-error.js';
@@ -12,10 +13,6 @@ import {
   type SupportedDatabase,
 } from './semantic-repository-utils.js';
 
-
-
-
-
 export interface CreateAuthoringJobParams {
   id?: string;
   projectId: string;
@@ -29,8 +26,6 @@ export interface CreateAuthoringJobParams {
   createdBy: string;
   parentRunId?: string;
 }
-
-
 
 export interface AuthoringCommandParams {
   id: string;
@@ -131,8 +126,6 @@ export interface CreateSemanticRunParams {
   initialVariables?: readonly InitialRunVariableInput[];
 }
 
-
-
 export interface RunCommandParams {
   id: string;
   runId: string;
@@ -149,13 +142,7 @@ export interface CommandAcceptance {
 }
 
 export type BrowserJobState =
-  | 'queued'
-  | 'acquiring'
-  | 'active'
-  | 'releasing'
-  | 'completed'
-  | 'cancelled'
-  | 'failed';
+  'queued' | 'acquiring' | 'active' | 'releasing' | 'completed' | 'cancelled' | 'failed';
 
 const AUTHORING_TRANSITIONS: Record<AuthoringLifecycle, readonly AuthoringLifecycle[]> = {
   created: ['planning', 'paused', 'cancelling', 'cancelled', 'failed'],
@@ -184,11 +171,74 @@ const RUN_TRANSITIONS: Record<RunLifecycle, readonly RunLifecycle[]> = {
 
 export class SemanticWorkflowRepository {
   private readonly db: DatabaseLike;
+  readonly policy: SemanticPolicyRepository;
 
   constructor(db: SupportedDatabase) {
     this.db = db as unknown as DatabaseLike;
+    this.policy = new SemanticPolicyRepository(db);
   }
 
+  assertAuthoringExecutionAllowed(jobId: string, amendmentId?: string, allowPaused = false): void {
+    const job = this.db.prepare('SELECT lifecycle FROM authoring_jobs WHERE id = ?').get(jobId) as
+      Record<string, unknown> | undefined;
+    if (
+      !job ||
+      ['completed', 'cancelled', 'failed', 'cancelling', 'waiting_decision'].includes(
+        String(job.lifecycle)
+      ) ||
+      (!allowPaused && job.lifecycle === 'paused')
+    ) {
+      if (job && ['completed', 'cancelled', 'failed', 'cancelling'].includes(String(job.lifecycle)))
+        this.policy.invalidate({ type: 'authoring', id: jobId }, 'context_terminated');
+      throw new DomainError(
+        'conflict',
+        'Authoring context is not executable',
+        'side_effect_approval_stale'
+      );
+    }
+    const candidate = amendmentId
+      ? { id: amendmentId }
+      : (this.db
+          .prepare(
+            "SELECT a.id FROM authoring_amendments a WHERE a.job_id = ? AND a.state = 'verifying' ORDER BY a.rowid DESC LIMIT 1"
+          )
+          .get(jobId) as { id: string } | undefined);
+    if (candidate) {
+      const amendment = this.db
+        .prepare('SELECT job_id, state FROM authoring_amendments WHERE id = ?')
+        .get(candidate.id) as Record<string, unknown> | undefined;
+      if (!amendment || amendment.job_id !== jobId || amendment.state !== 'verifying')
+        throw new DomainError(
+          'conflict',
+          'Authoring verification candidate is not current',
+          'side_effect_approval_stale'
+        );
+      this.policy.requireAuthoringAuthorization(candidate.id);
+    }
+  }
+
+  pauseAuthoringForCoordinator(jobId: string, reason: Record<string, unknown>): void {
+    inImmediateTransaction(this.db, () => {
+      const job = this.db.prepare('SELECT * FROM authoring_jobs WHERE id = ?').get(jobId) as
+        Record<string, unknown> | undefined;
+      if (!job || job.lifecycle !== 'running') return;
+      const now = new Date().toISOString();
+      this.db
+        .prepare(
+          "UPDATE authoring_jobs SET lifecycle = 'paused', state_version = state_version + 1, result_json = ? WHERE id = ?"
+        )
+        .run(stableStringify(reason), jobId);
+      this.bumpAuthoringEvent(
+        jobId,
+        Number(job.next_event_seq),
+        'authoring.state_changed',
+        'authoring_job',
+        jobId,
+        { from: 'running', to: 'paused', reason },
+        now
+      );
+    });
+  }
   createAuthoringJob(params: CreateAuthoringJobParams): AuthoringJobResult {
     assertNoInlineSecrets(params.input);
     const requestSha256 = hashValue({
@@ -302,8 +352,7 @@ export class SemanticWorkflowRepository {
       const job = this.db
         .prepare('SELECT state_version, next_event_seq FROM authoring_jobs WHERE id = ?')
         .get(params.jobId) as
-        | { state_version: number | bigint; next_event_seq: number | bigint }
-        | undefined;
+        { state_version: number | bigint; next_event_seq: number | bigint } | undefined;
       if (!job) throw new DomainError('not_found', 'Authoring job not found');
       const stateVersion = Number(job.state_version);
       const accepted = stateVersion === params.expectedStateVersion;
@@ -364,8 +413,7 @@ export class SemanticWorkflowRepository {
       const job = this.db
         .prepare('SELECT lifecycle, next_event_seq FROM authoring_jobs WHERE id = ?')
         .get(params.jobId) as
-        | { lifecycle: AuthoringLifecycle; next_event_seq: number | bigint }
-        | undefined;
+        { lifecycle: AuthoringLifecycle; next_event_seq: number | bigint } | undefined;
       if (!job || ['completed', 'cancelled', 'failed'].includes(job.lifecycle)) {
         throw new DomainError('conflict', 'Authoring job is not writable');
       }
@@ -538,7 +586,8 @@ export class SemanticWorkflowRepository {
   settleAuthoringJob(
     jobId: string,
     lifecycle: 'paused' | 'waiting_decision' | 'completed' | 'failed',
-    result: unknown
+    result: unknown,
+    unstartedTaskId?: string
   ): { lifecycle: string; stateVersion: number } {
     assertNoInlineSecrets(result);
     return inImmediateTransaction(this.db, () => {
@@ -558,6 +607,13 @@ export class SemanticWorkflowRepository {
       if (runningTask) throw new Error('Running authoring task must finish before job settlement');
       const now = new Date().toISOString();
       const nextVersion = Number(job.state_version) + 1;
+      if (unstartedTaskId) {
+        this.db
+          .prepare(
+            "UPDATE authoring_tasks SET state = 'blocked', completed_at = ? WHERE id = ? AND job_id = ? AND state = 'ready'"
+          )
+          .run(now, unstartedTaskId, jobId);
+      }
       this.db
         .prepare(
           `UPDATE authoring_jobs SET lifecycle = ?, outcome = ?, result_json = ?,
@@ -573,6 +629,8 @@ export class SemanticWorkflowRepository {
           now,
           jobId
         );
+      if (['completed', 'failed'].includes(lifecycle))
+        this.policy.invalidate({ type: 'authoring', id: jobId }, 'context_terminated', now);
       this.bumpAuthoringEvent(
         jobId,
         Number(job.next_event_seq),
@@ -587,6 +645,7 @@ export class SemanticWorkflowRepository {
   }
 
   ensureAuthoringVerification(amendmentId: string): { taskId: string; browserJobId: string } {
+    this.policy.requireAuthoringAuthorization(amendmentId);
     const amendment = this.db
       .prepare(
         `SELECT amendments.job_id, amendments.state, jobs.browser_job_id
@@ -690,17 +749,28 @@ export class SemanticWorkflowRepository {
       const from = String(job.lifecycle) as AuthoringLifecycle;
       const stateVersion = Number(job.state_version);
       if (stateVersion !== Number(command.expected_state_version)) {
-        throw new DomainError('conflict', 'Authoring state version changed before command application');
+        throw new DomainError(
+          'conflict',
+          'Authoring state version changed before command application'
+        );
       }
       if (!AUTHORING_TRANSITIONS[from].includes(to)) {
         throw new DomainError(
-          from === 'waiting_decision' || to === 'waiting_decision' ? 'conflict' : 'validation_error',
+          from === 'waiting_decision' || to === 'waiting_decision'
+            ? 'conflict'
+            : 'validation_error',
           `Invalid authoring transition ${from} -> ${to}`
         );
       }
       const nextVersion = stateVersion + 1;
       const now = new Date().toISOString();
       const terminal = ['completed', 'cancelled', 'failed'].includes(to);
+      if (terminal)
+        this.policy.invalidate(
+          { type: 'authoring', id: String(job.id) },
+          'context_terminated',
+          now
+        );
       this.db
         .prepare(
           `UPDATE authoring_jobs
@@ -774,6 +844,7 @@ export class SemanticWorkflowRepository {
            WHERE id = ?`
         )
         .run(nextVersion, now, jobId);
+      this.policy.invalidate({ type: 'authoring', id: jobId }, 'context_terminated', now);
       this.insertAuthoringEvent(
         jobId,
         Number(job.next_event_seq),
@@ -969,8 +1040,7 @@ export class SemanticWorkflowRepository {
     const requestSha256 = hashValue({ type: params.type, payload: params.payload ?? null });
     return inImmediateTransaction(this.db, () => {
       const existing = this.db.prepare('SELECT * FROM run_commands WHERE id = ?').get(params.id) as
-        | Record<string, unknown>
-        | undefined;
+        Record<string, unknown> | undefined;
       if (existing) {
         if (
           existing.run_id !== params.runId ||
@@ -988,8 +1058,7 @@ export class SemanticWorkflowRepository {
       const run = this.db
         .prepare('SELECT state_version, next_event_seq FROM test_runs WHERE id = ?')
         .get(params.runId) as
-        | { state_version: number | bigint; next_event_seq: number | bigint }
-        | undefined;
+        { state_version: number | bigint; next_event_seq: number | bigint } | undefined;
       if (!run) throw new Error('Run not found');
       const stateVersion = Number(run.state_version);
       const accepted = stateVersion === params.expectedStateVersion;
@@ -1038,8 +1107,7 @@ export class SemanticWorkflowRepository {
 
   // Legacy transition helper: no production caller currently creates 'accepted' run commands
   // (command() in semantic-run-control-repository records completed/rejected only). If this is
-  // ever revived, terminal transitions must also expire the active approval grant — see
-  // SemanticRunControlRepository.expireActiveGrant.
+  // terminal transitions expire grants through SemanticPolicyRepository in the same transaction.
   applyRunTransition(
     commandId: string,
     to: RunLifecycle,
@@ -1049,12 +1117,10 @@ export class SemanticWorkflowRepository {
     if (result !== undefined) assertNoInlineSecrets(result);
     return inImmediateTransaction(this.db, () => {
       const command = this.db.prepare('SELECT * FROM run_commands WHERE id = ?').get(commandId) as
-        | Record<string, unknown>
-        | undefined;
+        Record<string, unknown> | undefined;
       if (!command || command.status !== 'accepted') throw new Error('Accepted command not found');
       const run = this.db.prepare('SELECT * FROM test_runs WHERE id = ?').get(command.run_id) as
-        | Record<string, unknown>
-        | undefined;
+        Record<string, unknown> | undefined;
       if (!run) throw new Error('Run not found');
       const from = String(run.lifecycle) as RunLifecycle;
       const stateVersion = Number(run.state_version);
@@ -1069,6 +1135,8 @@ export class SemanticWorkflowRepository {
       }
       const nextVersion = stateVersion + 1;
       const now = new Date().toISOString();
+      if (['completed', 'cancelled'].includes(to))
+        this.policy.invalidate({ type: 'run', id: String(run.id) }, 'context_terminated', now);
       this.db
         .prepare(
           `UPDATE test_runs
@@ -1178,8 +1246,7 @@ export class SemanticWorkflowRepository {
     };
     inImmediateTransaction(this.db, () => {
       const job = this.db.prepare('SELECT state FROM browser_jobs WHERE id = ?').get(id) as
-        | { state: BrowserJobState }
-        | undefined;
+        { state: BrowserJobState } | undefined;
       if (!job) throw new Error('Browser job not found');
       if (job.state === to) return;
       if (!allowed[job.state].includes(to)) {
@@ -1263,7 +1330,8 @@ export class SemanticWorkflowRepository {
         if (nextDegree === 0) ready.push(target);
       }
     }
-    if (visited !== todoKeys.size) throw new DomainError('validation_error', 'Run TODO dependency graph must be acyclic');
+    if (visited !== todoKeys.size)
+      throw new DomainError('validation_error', 'Run TODO dependency graph must be acyclic');
   }
 
   private requireRunTargets(params: CreateSemanticRunParams): void {
@@ -1273,14 +1341,16 @@ export class SemanticWorkflowRepository {
         `SELECT business_version_id, lifecycle FROM semantic_test_scenario_revisions WHERE id = ?`
       )
       .get(params.scenarioRevisionId) as
-      | { business_version_id: string; lifecycle: string }
-      | undefined;
+      { business_version_id: string; lifecycle: string } | undefined;
     if (
       !scenario ||
       scenario.business_version_id !== params.businessVersionId ||
       scenario.lifecycle !== 'current'
     ) {
-      throw new DomainError('validation_error', 'Run scenario revision is not current in the business version');
+      throw new DomainError(
+        'validation_error',
+        'Run scenario revision is not current in the business version'
+      );
     }
     const binding = this.db
       .prepare(
@@ -1288,10 +1358,17 @@ export class SemanticWorkflowRepository {
          WHERE business_version_id = ? AND deployment_revision_id = ?`
       )
       .get(params.businessVersionId, params.deploymentRevisionId);
-    if (!binding) throw new DomainError('validation_error', 'Run deployment revision is not bound to the business version');
+    if (!binding)
+      throw new DomainError(
+        'validation_error',
+        'Run deployment revision is not bound to the business version'
+      );
     if (params.purpose === 'formal') {
       if (!params.assetGraphSha256 || !params.verificationScopeSha256) {
-        throw new DomainError('validation_error', 'Formal runs require exact asset graph and verification scope hashes');
+        throw new DomainError(
+          'validation_error',
+          'Formal runs require exact asset graph and verification scope hashes'
+        );
       }
       const validation = this.db
         .prepare(
@@ -1372,8 +1449,7 @@ export class SemanticWorkflowRepository {
 
   private runStateVersion(runId: string): number {
     const row = this.db.prepare('SELECT state_version FROM test_runs WHERE id = ?').get(runId) as
-      | { state_version: number | bigint }
-      | undefined;
+      { state_version: number | bigint } | undefined;
     if (!row) throw new Error('Run not found');
     return Number(row.state_version);
   }

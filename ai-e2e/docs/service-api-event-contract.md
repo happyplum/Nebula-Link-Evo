@@ -393,7 +393,7 @@ interface RunEventV1 {
 
 ### 6.3 Authoring 事件
 
-`AuthoringEventV1` 使用 authoring-job-scoped `seq/stateVersion` 和同一通用因果字段。最低事件集（与实现一致）：`authoring.created/state_changed/settled/cancelled/context_bound/command_rejected/verification_scheduled`、`authoring_task.created/state_changed`、`authoring_attempt.completed`、`asset.candidate_created/failed/rejected/queued_at_safe_boundary/verification_started/activated`、`asset.revision_activated` 和 `decision.applied`。authoring 决策创建时不发射 `decision.requested`（创建事实由 snapshot bootstrap 承载），回答/应用发射 `decision.applied`；暂停不发射 `authoring.paused`，由 `authoring.state_changed`（to=`paused`）承载；终态收敛 token 是 `authoring.settled`（非 `completed`）；阶段推进事实由 `authoring.state_changed` 与 amendment/candidate 事件承载，不发射独立的 `authoring.stage_changed`/`coverage.changed`。
+`AuthoringEventV1` 使用 authoring-job-scoped `seq/stateVersion` 和同一通用因果字段。最低事件集（与实现一致）：`authoring.created/state_changed/settled/cancelled/context_bound/command_rejected/verification_scheduled`、`authoring_task.created/state_changed`、`authoring_attempt.completed`、`asset.candidate_created/failed/rejected/queued_at_safe_boundary/verification_started/activated`、`asset.revision_activated` 、`side_effect_policy.evaluated` 和 `decision.applied`。authoring 决策创建时不发射 `decision.requested`（创建事实由 snapshot bootstrap 承载），回答/应用发射 `decision.applied`；暂停不发射 `authoring.paused`，由 `authoring.state_changed`（to=`paused`）承载；终态收敛 token 是 `authoring.settled`（非 `completed`）；阶段推进事实由 `authoring.state_changed` 与 amendment/candidate 事件承载，不发射独立的 `authoring.stage_changed`/`coverage.changed`。
 
 ### 6.4 SSE 重连
 
@@ -435,6 +435,9 @@ ai-e2e 持久化 intent/outbox
 6. 控制租约失效后由主代理重新签发；子代理不能自行扩大授权。
 
 当前实现通过 500ms 确定性协调循环执行上述核对：启动时把遗留 `dispatching` outbox 恢复为可重放状态，外部 create/command 使用稳定幂等键，session/lease/Agent/operation/artifact 只保存 opaque ref 与哈希；一次性 lease token 仅保存在本机 AES-GCM secret store。若 token 或 Agent 创建确认事实不可恢复，则显式落 `interrupted/failed`，不盲目生成第二个副作用任务。
+
+Run/Authoring 共用纯风险 evaluator，evaluation/grant SQL 唯一归 `SemanticPolicyRepository`，复用 017 表。Authoring amendment decisions 保留 `category`，同一回答 API 分派 `authoring_scope_expansion` 与 `side_effect_approval`，UI 分别展示精确候选、环境、风险上限及 source plan/projection hash。staging 整体计划 `approval_required` 的低风险 task 子集也需 active same-hash grant；Chat 仍逐 effect/数量/参数与冻结任务求交，不重新签发审批。create 与 resume outbox 重放前核对 exact context/deployment/source plan/projection/policy 与原持久 task 绑定，pause/cancel/close/revoke 不受执行授权阻拦。lease 返回后重验失败时回收本次控制权，撤销失败保留持久意图与 secret 供恢复；Agent 创建前失效收束原 attempt/task，Run 为 recoverable_interruption，Authoring 为 interrupted attempt/blocked task/failed job 与 candidate。失效 resume 保持 paused，用户仍可取消清理。 已持久化的 session 关闭意图优先复用本意图的有效控制凭据；活动 session 没有 control lease 时可申请 30 秒、仅 `page_state` 的清理控制 lease，仅用于关闭，不发起 operation 或传给 Agent。其他活动控制权无本地 token 时等到 `expiresAt`；清理 lease 过期或 token 丢失后使用新恢复关闭意图，不无限重放旧 lease。inactive/interrupted session 直接按 Proxy 契约关闭；远端已关闭/404 的重放仍清理本意图明确关联的 secret、完成 browser job 并释放 FIFO。没有新 endpoint、TTL 或公共风险字段。
+
 
 ## 8. 核心服务运行边界
 

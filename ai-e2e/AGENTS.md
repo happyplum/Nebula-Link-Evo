@@ -34,6 +34,8 @@
 - 正式 Run 只接受 exact valid business version/deployment 和 verified scenario/script；运行计划、TODO、变量、决策、attempt、事件与证据均持久化。
 - 全服务共享一个 FIFO 浏览器控制槽；live UI 只读，不持有控制租约。
 - local/test 的已声明有界副作用可自动放行；staging 高风险副作用需要有效 grant；production 仅允许认证状态变化，不允许业务写。
+- Run/Authoring 的风险判定只使用 `src/policy/side-effect-policy.ts`；evaluation/grant 创建、查询与失效 SQL 唯一归 `SemanticPolicyRepository`，业务生命周期 owner 保持原位，同事务失效不得开启嵌套 BEGIN。
+- 授权必须精确匹配 context、deployment、source plan、projection 与 policy version；candidate freeze 使用实际去重验证脚本，不继承父 Run grant或 scope approval。queue/start/resume/lease/dispatch 与 outbox 重放都要重验，pause/cancel/close/revoke 清理不受执行授权阻拦。
 - Agent task 的 side-effect authorization 必须逐 `stepId/effectId/数量` 覆盖冻结步骤；模型、网页和工具不得扩大授权。
 - Authoring 分析允许 `browser-control.operation_execute`、`vision.analyze_page`、`vision.resolve_target`；Vision 只解释不可变 snapshot，最终定位与执行仍归 proxy。
 

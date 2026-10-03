@@ -1,3 +1,4 @@
+import { SemanticPolicyRepository } from '../semantic-policy-repository.js';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { up as up014 } from '../../migrations/014-semantic-asset-foundation.js';
@@ -460,7 +461,7 @@ describe('semantic v1 data foundation repositories', () => {
       db.prepare('SELECT ref_count FROM artifact_objects WHERE id = ?').get(artifact.id)
     ).toEqual({ ref_count: 1 });
 
-    const policy = evidence.recordPolicyEvaluation({
+    const policy = new SemanticPolicyRepository(db).recordPolicyEvaluation({
       context: { type: 'authoring', id: authoring.id },
       businessVersionId: fixture.versionId,
       deploymentRevisionId: 'deployment-revision',
@@ -471,7 +472,7 @@ describe('semantic v1 data foundation repositories', () => {
       reasonCodes: ['test_environment'],
     });
     expect(
-      evidence.recordPolicyEvaluation({
+      new SemanticPolicyRepository(db).recordPolicyEvaluation({
         context: { type: 'authoring', id: authoring.id },
         businessVersionId: fixture.versionId,
         deploymentRevisionId: 'deployment-revision',
@@ -551,6 +552,53 @@ describe('semantic v1 data foundation repositories', () => {
         commandType: 'agent.start',
         endpointOrTool: '/agent-tasks',
         payloadRedacted: { apiToken: 'raw-token' },
+      })
+    ).toThrow('Inline secret-like value');
+    const policyPayload = {
+      agentRequest: {
+        sideEffectAuthorization: {
+          contextType: 'authoring',
+          contextId: authoring.id,
+          effects: [],
+          grant: { grantId: 'grant', approvedProjectionSha256: HASH_A, status: 'active' },
+        },
+      },
+    };
+    expect(
+      evidence.enqueueOutbox({
+        id: 'outbox-structured-policy',
+        context: { type: 'authoring', id: authoring.id },
+        targetService: 'ai_chat_service',
+        commandType: 'agent.start',
+        endpointOrTool: '/agent-tasks',
+        payloadRedacted: policyPayload,
+      })
+    ).toEqual({ created: true });
+    for (const value of [
+      'credential',
+      [],
+      { token: 'credential' },
+      { nested: { authorization: 'credential' } },
+    ]) {
+      expect(() =>
+        evidence.enqueueOutbox({
+          id: 'outbox-reject-policy-secret',
+          context: { type: 'authoring', id: authoring.id },
+          targetService: 'ai_chat_service',
+          commandType: 'agent.start',
+          endpointOrTool: '/agent-tasks',
+          payloadRedacted: { sideEffectAuthorization: value },
+        })
+      ).toThrow('Inline secret-like value');
+    }
+    expect(() =>
+      evidence.enqueueOutbox({
+        id: 'outbox-header-secret',
+        context: { type: 'authoring', id: authoring.id },
+        targetService: 'ai_chat_service',
+        commandType: 'agent.start',
+        endpointOrTool: '/agent-tasks',
+        payloadRedacted: { authorization: { bearer: 'credential' } },
       })
     ).toThrow('Inline secret-like value');
   });

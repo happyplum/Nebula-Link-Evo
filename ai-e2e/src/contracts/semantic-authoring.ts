@@ -31,7 +31,9 @@ export interface AmendmentRecord {
   validationPlan: Record<string, unknown>;
   decisionIds: string[];
   changes: Array<Record<string, unknown>>;
-  decisions: Array<Record<string, unknown>>;
+  decisions: Array<
+    Record<string, unknown> & { category: 'authoring_scope_expansion' | 'side_effect_approval' }
+  >;
   createdBy: string;
   createdAt: string;
   updatedAt: string;

@@ -408,6 +408,555 @@ describe('SemanticCoordinatorService', () => {
     ]);
   });
 
+  describe('精确授权的派发竞态与恢复', () => {
+    function harness() {
+      const fixture = createFixture(db, assets, true);
+      const browser = new FakeBrowserClient();
+      const agent = new FakeAgentTaskClient(undefined, {
+        status: 'paused',
+        completedAt: undefined,
+      });
+      const secrets = new MemoryCoordinatorSecretStore();
+      const amendments = new AuthoringAmendmentRepository(db, assets);
+      const options = {
+        repository: new SemanticCoordinatorRepository(db),
+        workflows,
+        evidence,
+        runs,
+        agentTasks: agent,
+        browser,
+        secretStore: secrets,
+        authoringCandidates: new SemanticAuthoringCandidateService(
+          new SemanticQueryRepository(db, new BusinessVersionRepository(db)),
+          assets,
+          amendments
+        ),
+        artifactStore: { persist: async () => ({ storageKey: 'unused', sizeBytes: 0 }) } as never,
+      };
+      return {
+        fixture,
+        browser,
+        agent,
+        secrets,
+        amendments,
+        options,
+        coordinator: new SemanticCoordinatorService(options),
+      };
+    }
+    function startRun(fixture: ReturnType<typeof createFixture>) {
+      const run = runs.createFormalRun({
+        projectId: 'project-1',
+        businessVersionId: fixture.versionId,
+        clientRunId: 'policy-race',
+        scenarioRevisionId: fixture.scenarioRevisionId,
+        deploymentRevisionId: fixture.deploymentRevisionId,
+        inputs: {},
+      });
+      runs.answerDecision({
+        runId: run.id,
+        decisionId: run.decisionId!,
+        answerKey: 'approve',
+        reason: '批准精确计划',
+        answeredBy: 'operator',
+      });
+      runs.command({
+        commandId: 'start-policy-race',
+        runId: run.id,
+        action: 'start',
+        expectedStateVersion: 3,
+        createdBy: 'operator',
+      });
+      return run.id;
+    }
+    function startAuthoring(h: ReturnType<typeof harness>) {
+      const job = workflows.createAuthoringJob({
+        projectId: 'project-1',
+        businessVersionId: h.fixture.versionId,
+        mode: 'repair',
+        idempotencyKey: 'policy-authoring',
+        stage: 'verify',
+        strategyVersion: 'test/1.0',
+        sourceFingerprint: HASH_A,
+        input: {},
+        createdBy: 'operator',
+      });
+      const contextId = String(job.id);
+      const thread = h.amendments.createContextThread({
+        jobId: contextId,
+        businessVersionId: h.fixture.versionId,
+        scope: {
+          currentUrl: '/account',
+          currentPageDefinitionId: h.fixture.pageId,
+          currentFunctionalModuleId: h.fixture.moduleId,
+          baseRevisionSha256: hashValue(h.fixture.modulePayload),
+          visibleScenarioIds: [],
+        },
+        createdBy: 'operator',
+      });
+      const revision = assets.createRevision({
+        assetType: 'functional_script',
+        assetId: h.fixture.scriptId,
+        businessVersionId: h.fixture.versionId,
+        schemaId: 'nebula.ai-e2e.functional-script/1.0',
+        payload: h.fixture.scriptPayload,
+        validationStatus: 'valid',
+        changeReason: '验证候选',
+        createdByType: 'child_agent',
+        supersedesRevisionId: h.fixture.scriptRevisionId,
+        primaryPageRevisionId: h.fixture.pageRevisionId,
+      });
+      const candidate = h.amendments.createAmendment({
+        jobId: contextId,
+        threadId: thread.id,
+        idempotencyKey: 'policy-candidate',
+        reason: '验证候选',
+        category: 'script',
+        changes: [
+          {
+            assetType: 'functional_script',
+            assetId: h.fixture.scriptId,
+            baseRevisionId: h.fixture.scriptRevisionId,
+            baseRevisionSha256: hashValue(h.fixture.scriptPayload),
+            candidateRevisionId: revision.id,
+            targetPageDefinitionId: h.fixture.pageId,
+            targetFunctionalModuleId: h.fixture.moduleId,
+            targetUrl: '/account',
+            category: 'script',
+            diff: {},
+          },
+        ],
+        validationPlan: { checks: ['browser'] },
+        createdBy: 'operator',
+      }).amendment;
+      h.amendments.answerDecision({
+        amendmentId: candidate.id,
+        decisionId: candidate.decisionIds[0]!,
+        answer: 'approve',
+        reason: '批准精确候选',
+        answeredBy: 'operator',
+      });
+      h.amendments.queueAtSafeBoundary(candidate.id);
+
+      return contextId;
+    }
+    async function untilOutbox(coordinator: SemanticCoordinatorService, command: string) {
+      for (let index = 0; index < 12; index += 1) {
+        if (
+          db
+            .prepare(
+              "SELECT id FROM integration_outbox WHERE command_type = ? AND status = 'pending'"
+            )
+            .get(command)
+        )
+          return;
+        await coordinator.tick();
+      }
+      throw new Error(
+        `Missing pending ${command}: ${JSON.stringify(db.prepare('SELECT command_type,status,last_error_json FROM integration_outbox').all())}`
+      );
+    }
+    function revoke(contextId: string) {
+      db.prepare(
+        "UPDATE side_effect_approval_grants SET status = 'revoked', revoked_at = ? WHERE context_id = ? AND status = 'active'"
+      ).run(new Date().toISOString(), contextId);
+    }
+    it.each(['run', 'authoring', 'authoring_error', 'authoring_revoke_retry'] as const)(
+      '%s lease 返回期间撤销授权，立即撤销本次控制权且不启动 Agent',
+      async (context) => {
+        const h = harness();
+        let contextId: string;
+        if (context === 'run') contextId = startRun(h.fixture);
+        else {
+          contextId = startAuthoring(h);
+        }
+        const command =
+          context === 'run' ? 'browser_lease.create' : 'authoring_browser_lease.create';
+        await untilOutbox(h.coordinator, command);
+        const original = h.browser.createLease.bind(h.browser);
+        let entered!: () => void;
+        let release!: () => void;
+        const enteredPromise = new Promise<void>((resolve) => {
+          entered = resolve;
+        });
+        const gate = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        vi.spyOn(h.browser, 'createLease').mockImplementationOnce(async (...args) => {
+          entered();
+          await gate;
+          return original(...args);
+        });
+        if (context === 'authoring_revoke_retry')
+          vi.spyOn(h.browser, 'revokeLease').mockRejectedValueOnce(
+            new Error('revoke transport failed')
+          );
+        const dispatch = h.coordinator.tick();
+        await enteredPromise;
+        if (context === 'authoring_error')
+          vi.spyOn(workflows.policy, 'requireAuthoringAuthorization').mockImplementationOnce(() => {
+            throw new Error('unsupported changed verification plan');
+          });
+        else revoke(contextId);
+        release();
+        await dispatch;
+        if (context === 'authoring_revoke_retry') {
+          expect(
+            h.secrets.has('coordinator-secret://browser-lease/10000000-0000-4000-8000-000000000001')
+          ).toBe(true);
+          expect(
+            db
+              .prepare("SELECT status FROM integration_outbox WHERE id LIKE 'policy-revoke:%'")
+              .get()
+          ).toEqual({ status: 'retryable_failed' });
+          expect((await h.browser.getSession()).activeLeases).toHaveLength(1);
+          const restarted = new SemanticCoordinatorService(h.options);
+          await restarted.tick();
+        }
+        if (context !== 'run') {
+          expect(
+            db.prepare('SELECT lifecycle FROM authoring_jobs WHERE id = ?').get(contextId)
+          ).toEqual({ lifecycle: 'failed' });
+          expect(
+            db.prepare('SELECT state FROM authoring_amendments WHERE job_id = ?').get(contextId)
+          ).toEqual({ state: 'failed' });
+          expect(
+            db.prepare('SELECT state FROM authoring_tasks WHERE job_id = ?').get(contextId)
+          ).toEqual({ state: 'blocked' });
+          expect(
+            db.prepare('SELECT id FROM authoring_attempts WHERE job_id = ?').get(contextId)
+          ).toBeUndefined();
+          for (let index = 0; index < 3; index += 1) await h.coordinator.tick();
+          expect(
+            h.browser.closed,
+            JSON.stringify(
+              db
+                .prepare('SELECT command_type, status,last_error_json FROM integration_outbox')
+                .all()
+            )
+          ).toBe(true);
+          expect(
+            db.prepare('SELECT state FROM browser_jobs WHERE root_context_id = ?').get(contextId)
+          ).toEqual({ state: 'completed' });
+        }
+        expect(h.agent.createdRequest).toBeUndefined();
+        expect(h.browser.revoked).toBe(true);
+        expect((await h.browser.getSession()).activeLeases).toEqual([]);
+        expect(
+          h.secrets.has('coordinator-secret://browser-lease/10000000-0000-4000-8000-000000000001')
+        ).toBe(false);
+        expect(
+          db.prepare('SELECT status FROM integration_outbox WHERE command_type = ?').get(command)
+        ).toEqual({ status: context === 'authoring_error' ? 'terminal_failed' : 'cancelled' });
+        expect(
+          db.prepare("SELECT status FROM integration_outbox WHERE id LIKE 'policy-revoke:%'").get()
+        ).toEqual({ status: 'confirmed' });
+        expect(
+          db
+            .prepare(
+              context === 'run'
+                ? 'SELECT id FROM page_tasks'
+                : "SELECT id FROM authoring_tasks WHERE state = 'running'"
+            )
+            .get()
+        ).toBeUndefined();
+      }
+    );
+    it('候选审批后、调度前失效不创建 session 或 lease，并记录明确失败', async () => {
+      const h = harness();
+      const jobId = startAuthoring(h);
+      revoke(jobId);
+      expect((await h.coordinator.tick()).action).toBe(
+        'authoring_verification.authorization_failed'
+      );
+      expect(
+        db.prepare('SELECT lifecycle, result_json FROM authoring_jobs WHERE id = ?').get(jobId)
+      ).toEqual({
+        lifecycle: 'failed',
+        result_json: expect.stringContaining('side_effect_approval_required'),
+      });
+      expect(
+        db.prepare('SELECT state FROM authoring_amendments WHERE job_id = ?').get(jobId)
+      ).toEqual({ state: 'failed' });
+      expect(db.prepare('SELECT id FROM integration_outbox').get()).toBeUndefined();
+      expect(h.agent.createdRequest).toBeUndefined();
+      expect(h.browser.capabilityCalls).toBe(0);
+    });
+    it.each(['revoked', 'expired', 'projection_changed', 'terminal'] as const)(
+      '恢复 dispatching create 在 %s 后拒绝旧 payload 并收束任务',
+      async (loss) => {
+        const h = harness();
+        const runId = startRun(h.fixture);
+        await untilOutbox(h.coordinator, 'agent_task.create');
+        db.prepare(
+          "UPDATE integration_outbox SET status = 'dispatching' WHERE command_type = 'agent_task.create'"
+        ).run();
+        if (loss === 'projection_changed')
+          db.prepare('UPDATE test_runs SET side_effect_projection_sha256 = ? WHERE id = ?').run(
+            HASH_B,
+            runId
+          );
+        else if (loss === 'terminal')
+          db.prepare("UPDATE test_runs SET lifecycle = 'cancelled' WHERE id = ?").run(runId);
+        else
+          db.prepare(
+            `UPDATE side_effect_approval_grants SET status = ?, ${loss === 'revoked' ? 'revoked_at' : 'expired_at'} = ? WHERE context_id = ?`
+          ).run(loss, new Date().toISOString(), runId);
+        const restarted = new SemanticCoordinatorService(h.options);
+        expect(restarted.initialize().recoveredOutbox).toBe(1);
+        await restarted.tick();
+        expect(h.agent.createdRequest).toBeUndefined();
+        expect(
+          db
+            .prepare(
+              "SELECT status FROM integration_outbox WHERE command_type = 'agent_task.create'"
+            )
+            .get()
+        ).toEqual({ status: 'cancelled' });
+        expect(db.prepare('SELECT state FROM page_tasks WHERE run_id = ?').get(runId)).toEqual({
+          state: 'interrupted',
+        });
+        await restarted.tick();
+        expect((await h.browser.getSession()).activeLeases).toEqual([]);
+      }
+    );
+    it.each(['session_dispatch', 'lease_enqueue', 'lease_dispatch'] as const)(
+      'Authoring %s 前授权失效，封存未开始task并释放FIFO',
+      async (phase) => {
+        const h = harness();
+        const jobId = startAuthoring(h);
+        if (phase === 'session_dispatch')
+          await untilOutbox(h.coordinator, 'browser_session.create');
+        else {
+          await untilOutbox(h.coordinator, 'browser_session.create');
+          await h.coordinator.tick();
+          if (phase === 'lease_dispatch')
+            await untilOutbox(h.coordinator, 'authoring_browser_lease.create');
+        }
+        const createSession = vi.spyOn(h.browser, 'createSession');
+        const createLease = vi.spyOn(h.browser, 'createLease');
+        revoke(jobId);
+        await h.coordinator.tick();
+        expect(createSession).not.toHaveBeenCalled();
+        expect(createLease).not.toHaveBeenCalled();
+        expect(db.prepare('SELECT lifecycle FROM authoring_jobs WHERE id = ?').get(jobId)).toEqual({
+          lifecycle: 'failed',
+        });
+        expect(
+          db.prepare('SELECT state FROM authoring_amendments WHERE job_id = ?').get(jobId)
+        ).toEqual({ state: 'failed' });
+        expect(db.prepare('SELECT state FROM authoring_tasks WHERE job_id = ?').get(jobId)).toEqual(
+          { state: 'blocked' }
+        );
+        expect(
+          db.prepare('SELECT id FROM authoring_attempts WHERE job_id = ?').get(jobId)
+        ).toBeUndefined();
+        for (let index = 0; index < 3; index += 1) await h.coordinator.tick();
+        expect(new SemanticCoordinatorRepository(db).getActiveBrowserJob()).toBeNull();
+        if (phase !== 'session_dispatch') expect(h.browser.closed).toBe(true);
+        expect(h.agent.createdRequest).toBeUndefined();
+      }
+    );
+    it('恢复命令重新验证持久 task 授权；失效 resume 不派发，cancel 仍能清理', async () => {
+      const h = harness();
+      const runId = startRun(h.fixture);
+      await untilOutbox(h.coordinator, 'agent_task.create');
+      await h.coordinator.tick();
+      const pageTask = db.prepare('SELECT id FROM page_tasks WHERE run_id = ?').get(runId) as {
+        id: string;
+      };
+      evidence.enqueueOutbox({
+        id: 'old-resume',
+        context: { type: 'run', id: runId },
+        pageTaskId: pageTask.id,
+        targetService: 'ai_chat_service',
+        commandType: 'agent_task.command',
+        endpointOrTool: '/api/v1/agent-tasks/:taskId/commands',
+        payloadRedacted: { taskId: 'agent-task-1', command: 'resume', expectedStateVersion: 2 },
+      });
+      db.prepare(
+        "UPDATE integration_outbox SET status = 'dispatching' WHERE id = 'old-resume'"
+      ).run();
+      revoke(runId);
+      const restarted = new SemanticCoordinatorService(h.options);
+      restarted.initialize();
+      // First reconcile may enqueue the same desired resume; the recovered command is still checked.
+      for (let index = 0; index < 6; index += 1) {
+        if (
+          (
+            db.prepare("SELECT status FROM integration_outbox WHERE id = 'old-resume'").get() as {
+              status: string;
+            }
+          ).status === 'cancelled'
+        )
+          break;
+        await restarted.tick();
+      }
+      expect(h.agent.commands).not.toContain('resume');
+      expect(
+        db.prepare("SELECT status FROM integration_outbox WHERE id = 'old-resume'").get()
+      ).toEqual({ status: 'cancelled' });
+      expect(db.prepare('SELECT lifecycle FROM test_runs WHERE id = ?').get(runId)).toEqual({
+        lifecycle: 'paused',
+      });
+      evidence.enqueueOutbox({
+        id: 'cleanup-cancel',
+        context: { type: 'run', id: runId },
+        pageTaskId: pageTask.id,
+        targetService: 'ai_chat_service',
+        commandType: 'agent_task.command',
+        endpointOrTool: '/api/v1/agent-tasks/:taskId/commands',
+        payloadRedacted: { taskId: 'agent-task-1', command: 'cancel', expectedStateVersion: 2 },
+      });
+      for (let index = 0; index < 3; index += 1) await restarted.tick();
+      expect(h.agent.commands).toContain('cancel');
+    });
+    it('Authoring create 失效后收束 attempt、终结 job 并关闭持有租约的 session', async () => {
+      const h = harness();
+      const jobId = startAuthoring(h);
+      await untilOutbox(h.coordinator, 'authoring_agent_task.create');
+      db.prepare(
+        "UPDATE integration_outbox SET status = 'dispatching' WHERE command_type = 'authoring_agent_task.create'"
+      ).run();
+      revoke(jobId);
+      const restarted = new SemanticCoordinatorService(h.options);
+      restarted.initialize();
+      await restarted.tick();
+      expect(h.agent.createdRequest).toBeUndefined();
+      expect(db.prepare('SELECT state FROM authoring_tasks WHERE job_id = ?').get(jobId)).toEqual({
+        state: 'blocked',
+      });
+      expect(
+        db.prepare('SELECT lifecycle, result_json FROM authoring_jobs WHERE id = ?').get(jobId)
+      ).toEqual({
+        lifecycle: 'failed',
+        result_json: expect.stringContaining('side_effect_approval_required'),
+      });
+      expect(
+        db.prepare('SELECT status, error_json FROM authoring_attempts WHERE job_id = ?').get(jobId)
+      ).toEqual({
+        status: 'interrupted',
+        error_json: expect.stringContaining('side_effect_approval_required'),
+      });
+      await restarted.tick();
+      expect(h.browser.closed).toBe(true);
+      expect(h.browser.closedWithLease).toBe(true);
+      expect((await h.browser.getSession()).activeLeases).toEqual([]);
+      expect(
+        h.secrets.has('coordinator-secret://browser-lease/10000000-0000-4000-8000-000000000001')
+      ).toBe(false);
+    });
+    it('Authoring resume 重放校验原候选授权，失效时保留 paused 状态并允许 cancel 清理', async () => {
+      const h = harness();
+      const jobId = startAuthoring(h);
+      await untilOutbox(h.coordinator, 'authoring_agent_task.create');
+      const original = h.agent.createTask.bind(h.agent);
+      vi.spyOn(h.agent, 'createTask').mockImplementationOnce(async (...args) => {
+        const task = await original(...args);
+        task.status = 'paused';
+        task.completedAt = undefined;
+        return task;
+      });
+      await h.coordinator.tick();
+      const task = db.prepare('SELECT id FROM authoring_tasks WHERE job_id = ?').get(jobId) as {
+        id: string;
+      };
+      evidence.enqueueOutbox({
+        id: 'authoring-old-resume',
+        context: { type: 'authoring', id: jobId },
+        authoringTaskId: task.id,
+        targetService: 'ai_chat_service',
+        commandType: 'agent_task.command',
+        endpointOrTool: '/api/v1/agent-tasks/:taskId/commands',
+        payloadRedacted: { taskId: 'agent-task-1', command: 'resume', expectedStateVersion: 2 },
+      });
+      db.prepare(
+        "UPDATE integration_outbox SET status = 'dispatching' WHERE id = 'authoring-old-resume'"
+      ).run();
+      revoke(jobId);
+      const restarted = new SemanticCoordinatorService(h.options);
+      restarted.initialize();
+      for (let index = 0; index < 4; index += 1) await restarted.tick();
+      expect(h.agent.commands).not.toContain('resume');
+      expect(
+        db.prepare("SELECT status FROM integration_outbox WHERE id = 'authoring-old-resume'").get()
+      ).toEqual({ status: 'cancelled' });
+      expect(db.prepare('SELECT lifecycle FROM authoring_jobs WHERE id = ?').get(jobId)).toEqual({
+        lifecycle: 'paused',
+      });
+      expect(
+        db
+          .prepare(
+            "SELECT payload_json FROM authoring_events WHERE job_id = ? AND type = 'authoring.state_changed' ORDER BY seq DESC LIMIT 1"
+          )
+          .get(jobId)
+      ).toEqual({ payload_json: expect.stringContaining('"to":"paused"') });
+      const paused = db
+        .prepare('SELECT state_version FROM authoring_jobs WHERE id = ?')
+        .get(jobId) as { state_version: number };
+      new SemanticAuthoringService(
+        workflows,
+        assets,
+        h.amendments,
+        new BusinessVersionRepository(db)
+      ).commandJob({
+        commandId: 'authoring-cleanup-cancel',
+        jobId,
+        action: 'cancel',
+        expectedStateVersion: paused.state_version,
+        createdBy: 'operator',
+      });
+      for (let index = 0; index < 10; index += 1) await restarted.tick();
+      expect(h.agent.commands).toContain('cancel');
+      expect(h.browser.closed).toBe(true);
+    });
+    it('Agent create 前撤销授权，收束已开始的 attempt 与租约，重新审批可重新调度', async () => {
+      const h = harness();
+      const runId = startRun(h.fixture);
+      await untilOutbox(h.coordinator, 'agent_task.create');
+      revoke(runId);
+      await h.coordinator.tick();
+      expect(h.agent.createdRequest).toBeUndefined();
+      expect(db.prepare('SELECT state FROM run_todos WHERE run_id = ?').get(runId)).toEqual({
+        state: 'interrupted',
+      });
+      expect(db.prepare('SELECT state FROM page_tasks WHERE run_id = ?').get(runId)).toEqual({
+        state: 'interrupted',
+      });
+      await h.coordinator.tick();
+      expect((await h.browser.getSession()).activeLeases).toEqual([]);
+      expect(h.browser.revoked).toBe(true);
+      const decision = db
+        .prepare(
+          "SELECT id FROM decision_requests WHERE context_id = ? AND status = 'open' AND category = 'side_effect_approval'"
+        )
+        .get(runId) as { id: string };
+      runs.answerDecision({
+        runId,
+        decisionId: decision.id,
+        answerKey: 'approve',
+        reason: '重新批准原精确计划',
+        answeredBy: 'operator',
+      });
+      const state = db.prepare('SELECT state_version FROM test_runs WHERE id = ?').get(runId) as {
+        state_version: number;
+      };
+      runs.command({
+        runId,
+        commandId: 'restart-approved',
+        action: 'start',
+        expectedStateVersion: state.state_version,
+        createdBy: 'operator',
+      });
+      const todo = db.prepare('SELECT id FROM run_todos WHERE run_id = ?').get(runId) as {
+        id: string;
+      };
+      runs.resumeInterruptedTodo(runId, todo.id);
+      await untilOutbox(h.coordinator, 'agent_task.create');
+      await h.coordinator.tick();
+      expect(h.agent.createdRequest?.sideEffectAuthorization?.grant?.status).toBe('active');
+    });
+  });
+
   it('通过 FIFO、租约、Agent task、证据和显式关闭收敛正式运行', async () => {
     const fixture = createFixture(db, assets);
     const created = runs.createFormalRun({
@@ -1435,6 +1984,213 @@ describe('SemanticCoordinatorService', () => {
     }
   );
 
+  describe('持久关闭意图的清理租约恢复', () => {
+    function closingHarness() {
+      const fixture = createFixture(db, assets);
+      const run = runs.createFormalRun({
+        projectId: 'project-1',
+        businessVersionId: fixture.versionId,
+        clientRunId: 'cleanup-run',
+        scenarioRevisionId: fixture.scenarioRevisionId,
+        deploymentRevisionId: fixture.deploymentRevisionId,
+        inputs: {},
+      });
+      if (!run.browserJobId) throw new Error('Run browser job missing');
+      workflows.transitionBrowserJob(run.browserJobId, 'acquiring');
+      workflows.transitionBrowserJob(run.browserJobId, 'active', { browserSessionId: SESSION_ID });
+      const browser = new FakeBrowserClient();
+      const secrets = new MemoryCoordinatorSecretStore();
+      const options = {
+        repository: new SemanticCoordinatorRepository(db),
+        workflows,
+        evidence,
+        runs,
+        browser,
+        agentTasks: new FakeAgentTaskClient(),
+        secretStore: secrets,
+      };
+      function enqueue(credentials?: { leaseId: string; secretRef: string }) {
+        evidence.enqueueOutbox({
+          id: 'cleanup-close',
+          context: { type: 'run', id: run.id },
+          targetService: 'proxy_adapter',
+          commandType: 'browser_session.close',
+          endpointOrTool: '/api/v1/browser-execution/sessions/:sessionId',
+          payloadRedacted: {
+            browserSessionId: SESSION_ID,
+            ...(credentials ? { browserLeaseId: credentials.leaseId } : {}),
+          },
+          ...(credentials ? { secretBindingRef: credentials.secretRef } : {}),
+        });
+      }
+      function retryNow() {
+        db.prepare(
+          "UPDATE integration_outbox SET next_attempt_at = NULL WHERE status = 'retryable_failed'"
+        ).run();
+      }
+      return {
+        options,
+        browser,
+        secrets,
+        enqueue,
+        retryNow,
+        coordinator: new SemanticCoordinatorService(options),
+      };
+    }
+
+    it('无本意图token的活动控制权等到expiresAt，超过8次仍保留关闭意图', async () => {
+      const h = closingHarness();
+      const issued = await h.browser.createLease(SESSION_ID, 'foreign-control', {
+        mode: 'control',
+        ttlSeconds: 300,
+      });
+      h.secrets.put('unrelated-secret', 'unrelated-value');
+      h.enqueue();
+      db.prepare('UPDATE integration_outbox SET attempt_count = 9 WHERE id = ?').run(
+        'cleanup-close'
+      );
+      const createLease = vi.spyOn(h.browser, 'createLease');
+      await h.coordinator.tick();
+      expect(
+        db
+          .prepare(
+            'SELECT status, next_attempt_at, last_error_json FROM integration_outbox WHERE id = ?'
+          )
+          .get('cleanup-close')
+      ).toMatchObject({
+        status: 'retryable_failed',
+        next_attempt_at: new Date(Date.parse(issued.lease.expiresAt) + 1000).toISOString(),
+        last_error_json: expect.stringContaining('lease_token_unavailable'),
+      });
+      expect(createLease).not.toHaveBeenCalled();
+      expect(h.browser.closed).toBe(false);
+      expect(h.secrets.get('unrelated-secret')).toBe('unrelated-value');
+    });
+
+    it.each(['cleanup', 'original', 'cleanup_404'] as const)(
+      '远端关闭成功但确认丢失，重启清理%s凭据并释放FIFO',
+      async (kind) => {
+        const h = closingHarness();
+        let secretRef: string | undefined;
+        if (kind === 'original') {
+          const issued = await h.browser.createLease(SESSION_ID, 'original', {
+            mode: 'control',
+            ttlSeconds: 300,
+          });
+          secretRef = `coordinator-secret://browser-lease/${issued.lease.id}`;
+          h.secrets.put(secretRef, issued.token);
+          h.enqueue({ leaseId: issued.lease.id, secretRef });
+        } else h.enqueue();
+        h.secrets.put('unrelated-secret', 'preserve');
+        const originalClose = h.browser.closeSession.bind(h.browser);
+        vi.spyOn(h.browser, 'closeSession').mockImplementationOnce(async (...args) => {
+          await originalClose(...args);
+          throw new IntegrationClientError(
+            'proxy-adapter',
+            'network_error',
+            'confirmation lost',
+            true
+          );
+        });
+        const createLease = vi.spyOn(h.browser, 'createLease');
+        await h.coordinator.tick();
+        secretRef ??= String(
+          (
+            db
+              .prepare("SELECT secret_ref FROM external_task_links WHERE kind = 'browser_lease'")
+              .get() as { secret_ref: string }
+          ).secret_ref
+        );
+        expect(h.secrets.get(secretRef)).toBeTruthy();
+        h.retryNow();
+        if (kind === 'cleanup_404') {
+          vi.spyOn(h.browser, 'getSession').mockRejectedValueOnce(
+            new IntegrationClientError(
+              'proxy-adapter',
+              'session_not_found',
+              'Closed session no longer available',
+              false,
+              404
+            )
+          );
+        }
+        await new SemanticCoordinatorService(h.options).tick();
+        expect(h.secrets.get(secretRef)).toBeUndefined();
+        expect(h.secrets.get('unrelated-secret')).toBe('preserve');
+        expect(h.options.repository.getActiveBrowserJob()).toBeNull();
+        expect(createLease).toHaveBeenCalledTimes(kind === 'original' ? 0 : 1);
+        expect(
+          db.prepare('SELECT status FROM integration_outbox WHERE id = ?').get('cleanup-close')
+        ).toEqual({ status: 'confirmed' });
+      }
+    );
+
+    it.each(['lost_token', 'retained_token'] as const)(
+      '清理租约过期后以新恢复意图关闭（%s），不永远重放旧租约',
+      async (tokenState) => {
+        const h = closingHarness();
+        h.enqueue();
+        const createLease = vi.spyOn(h.browser, 'createLease');
+        vi.spyOn(h.browser, 'closeSession').mockRejectedValueOnce(
+          new IntegrationClientError('proxy-adapter', 'network_error', 'close unavailable', true)
+        );
+        await h.coordinator.tick();
+        const firstIssue = createLease.mock.results[0];
+        if (!firstIssue) throw new Error('Cleanup lease was not issued');
+        const issued = await firstIssue.value;
+        const secretRef = `coordinator-secret://browser-lease/${issued.lease.id}`;
+        if (tokenState === 'lost_token') {
+          h.secrets.delete(secretRef);
+          h.retryNow();
+          await new SemanticCoordinatorService(h.options).tick();
+          expect(createLease).toHaveBeenCalledTimes(1);
+          expect(
+            db.prepare('SELECT status FROM integration_outbox WHERE id = ?').get('cleanup-close')
+          ).toEqual({ status: 'retryable_failed' });
+        }
+        await h.browser.revokeLease();
+        h.retryNow();
+        createLease.mockResolvedValueOnce({
+          lease: { ...issued.lease, status: 'expired' },
+          tokenIssued: false,
+        } as never);
+        const restarted = new SemanticCoordinatorService(h.options);
+        await restarted.tick();
+        expect(
+          db.prepare('SELECT status FROM integration_outbox WHERE id = ?').get('cleanup-close')
+        ).toEqual({ status: 'confirmed' });
+        expect(h.options.repository.getActiveBrowserJob()).not.toBeNull();
+        await restarted.tick();
+        expect(h.browser.closed).toBe(true);
+        expect(h.options.repository.getActiveBrowserJob()).toBeNull();
+        expect(createLease.mock.calls[2]?.[1]).toBe('cleanup-close:recovery:1:cleanup');
+        const recoveredIssue = createLease.mock.results[2];
+        if (!recoveredIssue) throw new Error('Recovery lease missing');
+        expect(
+          h.secrets.get(
+            `coordinator-secret://browser-lease/${(await recoveredIssue.value).lease.id}`
+          )
+        ).toBeUndefined();
+        expect(h.secrets.get(secretRef)).toBeUndefined();
+      }
+    );
+
+    it('interrupted session直接关闭，不申请清理lease', async () => {
+      const h = closingHarness();
+      h.enqueue();
+      const session = await h.browser.getSession();
+      vi.spyOn(h.browser, 'getSession').mockResolvedValue({ ...session, status: 'interrupted' });
+      const createLease = vi.spyOn(h.browser, 'createLease');
+      const close = vi
+        .spyOn(h.browser, 'closeSession')
+        .mockResolvedValue({ ...session, status: 'closed' });
+      await h.coordinator.tick();
+      expect(createLease).not.toHaveBeenCalled();
+      expect(close).toHaveBeenCalledExactlyOnceWith(SESSION_ID, 'cleanup-close', undefined);
+      expect(h.options.repository.getActiveBrowserJob()).toBeNull();
+    });
+  });
+
   it('在浏览器作业安全边界按运行与 Authoring 生命周期派发控制命令', async () => {
     let currentJob = {
       id: 'job-1',
@@ -1463,6 +2219,7 @@ describe('SemanticCoordinatorService', () => {
       },
     } as unknown as SemanticWorkflowRepository;
     const evidencePort = {
+      hasPendingPolicyLeaseRevocation: () => false,
       recoverDispatchingOutbox: () => 0,
       claimNextOutbox: () => null,
       enqueueOutbox: (command: unknown) => enqueued.push(command),
@@ -1762,6 +2519,14 @@ class FakeBrowserClient implements SemanticBrowserClientPort {
       credentials?.leaseId === this.activeLease?.id &&
       credentials?.leaseToken === 'opaque-lease-token'
     );
+    if (!this.closedWithLease)
+      throw new IntegrationClientError(
+        'proxy-adapter',
+        'permission_denied',
+        'active session requires control credentials',
+        false,
+        403
+      );
     this.activeLease = undefined;
     this.closed = true;
     return this.session('closed');
@@ -1821,7 +2586,7 @@ class FakeBrowserClient implements SemanticBrowserClientPort {
   }
 }
 
-function createFixture(db: DatabaseSync, assets: SemanticAssetRepository) {
+function createFixture(db: DatabaseSync, assets: SemanticAssetRepository, highRisk = false) {
   const versions = new BusinessVersionRepository(db);
   const now = new Date().toISOString();
   db.prepare(
@@ -1837,7 +2602,7 @@ function createFixture(db: DatabaseSync, assets: SemanticAssetRepository) {
   ).run(
     JSON.stringify({
       schema: 'nebula.ai-e2e.deployment-profile/1.0',
-      environment: 'test',
+      environment: highRisk ? 'staging' : 'test',
       origin: 'https://test.example',
       allowedOrigins: ['https://test.example'],
     }),
@@ -1903,6 +2668,7 @@ function createFixture(db: DatabaseSync, assets: SemanticAssetRepository) {
       name: '查看账号',
       moduleId: module.id,
       pageId: page.id,
+      ...(highRisk ? deleteEffectScript() : {}),
     }),
     createdBy: 'system',
     readinessStatus: 'verified',
@@ -1968,8 +2734,56 @@ function createFixture(db: DatabaseSync, assets: SemanticAssetRepository) {
     moduleId: module.id,
     businessModuleId: businessModule.id,
     scriptId: script.id,
+    scriptRevisionId: script.currentRevision.id,
+    scriptPayload: script.currentRevision.payload,
+    scriptRevisionSha256: script.currentRevision.contentSha256,
+    pageRevisionId: page.currentRevision.id,
     scenarioId: scenario.id,
     moduleRevisionId: module.currentRevision.id,
     modulePayload: module.currentRevision.payload,
+  };
+}
+
+function deleteEffectScript() {
+  return {
+    steps: [
+      {
+        id: 'step_effect',
+        name: '受控删除',
+        intent: '执行已声明删除',
+        action: {
+          type: 'click',
+          target: {
+            semantic: '删除',
+            candidates: [
+              { strategy: 'role', role: 'button', name: { kind: 'literal', value: '删除' } },
+            ],
+            expected: { cardinality: 'exactly_one' },
+          },
+        },
+        sideEffectId: 'effect',
+        postconditions: [],
+      },
+    ],
+    sideEffects: [
+      {
+        id: 'effect',
+        kind: 'delete',
+        resourceType: 'fixture',
+        identityFrom: { kind: 'literal', value: 'fixture' },
+        affectedItems: { kind: 'single' },
+        reversibility: 'compensatable',
+        retryPolicy: 'verify_before_retry',
+        verifyApplied: [
+          {
+            id: 'applied',
+            kind: 'page.url',
+            expected: { kind: 'literal', value: '/' },
+            comparator: 'contains',
+            message: '确认已应用',
+          },
+        ],
+      },
+    ],
   };
 }

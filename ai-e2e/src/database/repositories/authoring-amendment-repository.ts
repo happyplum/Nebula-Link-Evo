@@ -1,6 +1,11 @@
+import { SemanticPolicyRepository } from './semantic-policy-repository.js';
 import type { SemanticAssetType } from '../../contracts/semantic-control.js';
 import { DomainError } from '../../services/service-error.js';
-import type { AmendmentState, AmendmentCategory, AmendmentRecord } from '../../contracts/semantic-authoring.js';
+import type {
+  AmendmentState,
+  AmendmentCategory,
+  AmendmentRecord,
+} from '../../contracts/semantic-authoring.js';
 import { randomUUID } from 'node:crypto';
 import type {
   ActivateSemanticRevisionParams,
@@ -63,7 +68,6 @@ export interface CreateAuthoringAmendmentParams {
   createdBy: string;
 }
 
-
 interface RevisionSpec {
   table: string;
   assetColumn: string;
@@ -104,7 +108,8 @@ export class AuthoringAmendmentRepository {
 
   constructor(
     database: SupportedDatabase,
-    private readonly assets: SemanticAssetRepository
+    private readonly assets: SemanticAssetRepository,
+    readonly policy: SemanticPolicyRepository = new SemanticPolicyRepository(database)
   ) {
     this.db = database as unknown as DatabaseLike;
   }
@@ -196,7 +201,8 @@ export class AuthoringAmendmentRepository {
     amendment: AmendmentRecord;
     created: boolean;
   } {
-    if (params.changes.length === 0) throw new DomainError('validation_error', 'At least one amendment change is required');
+    if (params.changes.length === 0)
+      throw new DomainError('validation_error', 'At least one amendment change is required');
     assertNoInlineSecrets(params.validationPlan);
     assertNoInlineSecrets(params.potentialSideEffects ?? {});
     for (const change of params.changes) {
@@ -224,8 +230,7 @@ export class AuthoringAmendmentRepository {
            WHERE job_id = ? AND idempotency_key = ?`
         )
         .get(params.jobId, params.idempotencyKey) as
-        | { id: string; request_sha256: string }
-        | undefined;
+        { id: string; request_sha256: string } | undefined;
       if (existing) {
         if (existing.request_sha256 !== requestSha256) {
           throw new Error('Amendment idempotency key was reused with different input');
@@ -339,13 +344,58 @@ export class AuthoringAmendmentRepository {
           )
           .run(id, decisionId, scopeKind);
       });
+      const evaluation = this.policy.freezeAuthoring(id);
+      if (evaluation.result === 'approval_required') {
+        const decisionId = randomUUID();
+        decisionIds.push(decisionId);
+        this.db
+          .prepare(
+            `INSERT INTO decision_requests (id, context_type, context_id, authoring_job_id, status, category, required_authority, question, facts_json, options_json, recommendation_key, impact_json, state_version, created_by, created_at) VALUES (?, 'authoring', ?, ?, 'open', 'side_effect_approval', 'user', ?, ?, ?, 'approve', ?, 1, ?, ?)`
+          )
+          .run(
+            decisionId,
+            params.jobId,
+            params.jobId,
+            '该候选验证包含 staging 高风险副作用，是否批准精确冻结计划？',
+            stableStringify({ ...this.policy.decisionFacts(evaluation), amendmentId: id }),
+            stableStringify([
+              { key: 'approve', label: '批准副作用验证' },
+              { key: 'reject', label: '拒绝候选验证' },
+            ]),
+            stableStringify(this.policy.decisionFacts(evaluation)),
+            params.createdBy,
+            now
+          );
+        this.db
+          .prepare(
+            "UPDATE authoring_amendments SET state = 'waiting_decision', decision_ids_json = ? WHERE id = ?"
+          )
+          .run(stableStringify(decisionIds), id);
+      } else if (evaluation.result === 'denied') {
+        this.updateAmendmentState(id, state, 'failed', now, {
+          failure: { code: 'side_effect_policy_denied' },
+        });
+      }
       this.appendEvent(
         params.jobId,
         Number(job.next_event_seq),
         'asset.candidate_created',
         'authoring_amendment',
         id,
-        { state, decisionIds, changeCount: params.changes.length },
+        { state: this.requireAmendment(id).state, decisionIds, changeCount: params.changes.length },
+        now
+      );
+      this.appendEvent(
+        params.jobId,
+        this.nextEventSeq(params.jobId),
+        'side_effect_policy.evaluated',
+        'authoring_amendment',
+        id,
+        {
+          evaluationId: evaluation.id,
+          result: evaluation.result,
+          projectionSha256: evaluation.projection_sha256,
+        },
         now
       );
       return { amendment: this.requireAmendment(id), created: true };
@@ -404,17 +454,14 @@ export class AuthoringAmendmentRepository {
   }): AmendmentRecord {
     return inImmediateTransaction(this.db, () => {
       const amendment = this.requireAmendment(params.amendmentId);
-      if (amendment.state !== 'waiting_decision') {
-        throw new DomainError('conflict', 'Amendment is not waiting for a decision');
-      }
       const decision = this.db
         .prepare(
           `SELECT requests.* FROM decision_requests AS requests
-           JOIN authoring_amendment_decisions AS links ON links.decision_id = requests.id
-           WHERE links.amendment_id = ? AND requests.id = ?`
+           WHERE requests.id IN (SELECT value FROM json_each((SELECT decision_ids_json FROM authoring_amendments WHERE id = ?))) AND requests.id = ?`
         )
         .get(params.amendmentId, params.decisionId) as DbRow | undefined;
-      if (!decision) throw new DomainError('not_found', 'Decision does not belong to the amendment');
+      if (!decision)
+        throw new DomainError('not_found', 'Decision does not belong to the amendment');
       const existingAnswer = this.db
         .prepare('SELECT answer_key FROM decision_answers WHERE decision_request_id = ?')
         .get(params.decisionId) as { answer_key: string } | undefined;
@@ -424,8 +471,13 @@ export class AuthoringAmendmentRepository {
         }
         return this.requireAmendment(params.amendmentId);
       }
+      if (amendment.state !== 'waiting_decision')
+        throw new DomainError('conflict', 'Amendment is not waiting for a decision');
+      if (decision.category === 'side_effect_approval' && params.answer === 'approve')
+        this.policy.assertAuthoringApprovalCurrent(params.amendmentId);
       if (decision.status !== 'open') throw new DomainError('conflict', 'Decision is not open');
       const now = new Date().toISOString();
+      const answerId = params.answerId ?? randomUUID();
       this.db
         .prepare(
           `INSERT INTO decision_answers
@@ -433,14 +485,7 @@ export class AuthoringAmendmentRepository {
              answered_by_id, created_at)
            VALUES (?, ?, ?, ?, 'user', ?, ?)`
         )
-        .run(
-          params.answerId ?? randomUUID(),
-          params.decisionId,
-          params.answer,
-          params.reason,
-          params.answeredBy,
-          now
-        );
+        .run(answerId, params.decisionId, params.answer, params.reason, params.answeredBy, now);
       this.db
         .prepare(
           `UPDATE decision_requests
@@ -453,16 +498,39 @@ export class AuthoringAmendmentRepository {
           params.answer === 'approve' ? now : null,
           params.decisionId
         );
+      if (decision.category === 'side_effect_approval' && params.answer === 'approve') {
+        const evaluation = this.policy.getExactAuthoringEvaluation(
+          this.policy.buildAuthoringPlan(params.amendmentId)
+        );
+        if (!evaluation)
+          throw new DomainError(
+            'conflict',
+            'Authoring policy evaluation is stale',
+            'side_effect_approval_stale'
+          );
+        this.policy.approve(
+          evaluation,
+          params.decisionId,
+          answerId,
+          params.answeredBy,
+          params.reason,
+          now
+        );
+      }
       if (params.answer === 'reject') {
         this.updateAmendmentState(params.amendmentId, 'waiting_decision', 'rejected', now, {
-          failure: { code: 'scope_expansion_rejected', decisionId: params.decisionId },
+          failure: {
+            code:
+              decision.category === 'side_effect_approval'
+                ? 'side_effect_policy_denied'
+                : 'scope_expansion_rejected',
+            decisionId: params.decisionId,
+          },
         });
       } else {
         const open = this.db
           .prepare(
-            `SELECT 1 FROM authoring_amendment_decisions AS links
-             JOIN decision_requests AS requests ON requests.id = links.decision_id
-             WHERE links.amendment_id = ? AND requests.status != 'applied' LIMIT 1`
+            `SELECT 1 FROM decision_requests WHERE id IN (SELECT value FROM json_each((SELECT decision_ids_json FROM authoring_amendments WHERE id = ?))) AND status != 'applied' LIMIT 1`
           )
           .get(params.amendmentId);
         if (!open) {
@@ -488,6 +556,7 @@ export class AuthoringAmendmentRepository {
       throw new DomainError('conflict', 'Only a ready candidate can be applied');
     }
     this.assertCandidateFresh(candidate);
+    this.policy.requireAuthoringAuthorization(amendmentId);
     return inImmediateTransaction(this.db, () => {
       const amendment = this.requireAmendment(amendmentId);
       if (amendment.state !== 'candidate_ready') {
@@ -520,6 +589,7 @@ export class AuthoringAmendmentRepository {
       throw new Error('Amendment is not queued at a safe boundary');
     }
     this.assertCandidateFresh(candidate);
+    this.policy.requireAuthoringAuthorization(amendmentId);
     return inImmediateTransaction(this.db, () => {
       const amendment = this.requireAmendment(amendmentId);
       if (amendment.state !== 'queued_at_safe_boundary') {
@@ -598,6 +668,7 @@ export class AuthoringAmendmentRepository {
     if (amendment.state !== 'verifying') {
       throw new Error('Only a verifying amendment can be activated');
     }
+    this.policy.requireAuthoringAuthorization(amendmentId);
     if (!this.areAllCandidatesCurrent(amendment)) {
       this.assertCandidateFresh(amendment);
       const activations = amendment.changes.map((change) =>
@@ -675,6 +746,22 @@ export class AuthoringAmendmentRepository {
       )
       .get(jobId, nextScopeKey) as { id: string } | undefined;
     if (!active) return;
+    const staleCandidates = this.db
+      .prepare(
+        "SELECT id FROM authoring_amendments WHERE thread_id = ? AND state NOT IN ('activated','rejected','failed','stale')"
+      )
+      .all(active.id) as DbRow[];
+    for (const candidate of staleCandidates) {
+      this.withdrawOpenDecisions(String(candidate.id));
+      const evaluation = this.policy.getAuthoringEvaluation(String(candidate.id));
+      if (evaluation)
+        this.policy.invalidate(
+          { type: 'authoring', id: jobId },
+          'context_stale',
+          now,
+          String(evaluation.id)
+        );
+    }
     const reason = stableStringify({ code: 'context_changed', nextScopeKey });
     this.db
       .prepare(
@@ -695,8 +782,7 @@ export class AuthoringAmendmentRepository {
 
   private requireWritableJob(jobId: string, versionId?: string): DbRow {
     const job = this.db.prepare('SELECT * FROM authoring_jobs WHERE id = ?').get(jobId) as
-      | DbRow
-      | undefined;
+      DbRow | undefined;
     if (!job || (versionId && job.business_version_id !== versionId)) {
       throw new DomainError('not_found', 'Authoring job not found for the business version');
     }
@@ -711,7 +797,8 @@ export class AuthoringAmendmentRepository {
       .prepare('SELECT * FROM authoring_context_threads WHERE id = ? AND job_id = ?')
       .get(threadId, jobId) as DbRow | undefined;
     if (!thread) throw new DomainError('not_found', 'Authoring context thread not found');
-    if (thread.state !== 'active') throw new DomainError('conflict', 'Authoring context thread is stale');
+    if (thread.state !== 'active')
+      throw new DomainError('conflict', 'Authoring context thread is stale');
     return thread;
   }
 
@@ -761,14 +848,18 @@ export class AuthoringAmendmentRepository {
         candidate.validation_status !== 'valid' ||
         candidate.supersedes_revision_id !== null
       ) {
-        throw new DomainError('validation_error', 'Created candidate must be the first valid draft revision of the asset');
+        throw new DomainError(
+          'validation_error',
+          'Created candidate must be the first valid draft revision of the asset'
+        );
       }
       const current = this.db
         .prepare(
           `SELECT 1 FROM ${spec.table} WHERE ${spec.assetColumn} = ? AND lifecycle = 'current'`
         )
         .get(change.assetId);
-      if (current) throw new DomainError('conflict', 'Created candidate asset already has a current revision');
+      if (current)
+        throw new DomainError('conflict', 'Created candidate asset already has a current revision');
     } else {
       if (
         !base ||
@@ -777,7 +868,10 @@ export class AuthoringAmendmentRepository {
         base.lifecycle !== 'current' ||
         base.content_sha256 !== change.baseRevisionSha256
       ) {
-        throw new DomainError('conflict', 'Amendment base revision is stale or belongs to another asset');
+        throw new DomainError(
+          'conflict',
+          'Amendment base revision is stale or belongs to another asset'
+        );
       }
       if (
         !candidate ||
@@ -787,7 +881,10 @@ export class AuthoringAmendmentRepository {
         candidate.validation_status !== 'valid' ||
         candidate.supersedes_revision_id !== change.baseRevisionId
       ) {
-        throw new DomainError('validation_error', 'Candidate must be a valid draft that supersedes the exact base revision');
+        throw new DomainError(
+          'validation_error',
+          'Candidate must be a valid draft that supersedes the exact base revision'
+        );
       }
     }
     const ownership = this.resolveChangeOwnership(change, base, versionId);
@@ -856,8 +953,7 @@ export class AuthoringAmendmentRepository {
            WHERE scripts.id = ? AND scripts.business_version_id = ?`
         )
         .get(change.assetId, versionId) as
-        | { functional_module_id: string; primary_page_definition_id: string }
-        | undefined;
+        { functional_module_id: string; primary_page_definition_id: string } | undefined;
       if (!script) throw new Error('Functional script ownership is unavailable');
       const basePayload = parseObject(base.payload_json);
       const pageScope = parseObject(basePayload.pageScope);
@@ -890,10 +986,10 @@ export class AuthoringAmendmentRepository {
         .prepare(
           `SELECT requests.*, links.scope_kind, answers.answer_key, answers.reason AS answer_reason,
                   answers.answered_by_id, answers.created_at AS answer_created_at
-           FROM authoring_amendment_decisions AS links
-           JOIN decision_requests AS requests ON requests.id = links.decision_id
+           FROM decision_requests AS requests
+           LEFT JOIN authoring_amendment_decisions AS links ON links.decision_id = requests.id
            LEFT JOIN decision_answers AS answers ON answers.decision_request_id = requests.id
-           WHERE links.amendment_id = ? ORDER BY requests.created_at`
+           WHERE requests.id IN (SELECT value FROM json_each((SELECT decision_ids_json FROM authoring_amendments WHERE id = ?))) ORDER BY requests.created_at`
         )
         .all(amendmentId) as DbRow[]
     ).map(mapRow);
@@ -908,7 +1004,7 @@ export class AuthoringAmendmentRepository {
       validationPlan: parseObject(row.validation_plan_json),
       decisionIds: parseArray(row.decision_ids_json).map(String),
       changes,
-      decisions,
+      decisions: decisions as AmendmentRecord['decisions'],
       createdBy: String(row.created_by),
       createdAt: String(row.created_at),
       updatedAt: String(row.updated_at),
@@ -983,22 +1079,42 @@ export class AuthoringAmendmentRepository {
   }
 
   private markStale(amendmentId: string, reason: Record<string, unknown>): void {
-    const now = new Date().toISOString();
+    inImmediateTransaction(this.db, () => {
+      const now = new Date().toISOString();
+      const evaluation = this.policy.getAuthoringEvaluation(amendmentId);
+      if (evaluation)
+        this.policy.invalidate(
+          { type: 'authoring', id: String(evaluation.context_id) },
+          'candidate_stale',
+          now,
+          String(evaluation.id)
+        );
+      this.db
+        .prepare(
+          `UPDATE authoring_amendments
+           SET state = 'stale', stale_reason_json = ?, completed_at = ?, updated_at = ?
+           WHERE id = ? AND state NOT IN ('activated','rejected','failed','stale')`
+        )
+        .run(stableStringify(reason), now, now, amendmentId);
+      this.withdrawOpenDecisions(amendmentId);
+    });
+  }
+
+  private withdrawOpenDecisions(amendmentId: string): void {
     this.db
       .prepare(
-        `UPDATE authoring_amendments
-         SET state = 'stale', stale_reason_json = ?, completed_at = ?, updated_at = ?
-         WHERE id = ? AND state NOT IN ('activated','rejected','failed','stale')`
+        `UPDATE decision_requests SET status = 'withdrawn', state_version = state_version + 1
+         WHERE status = 'open' AND id IN (
+           SELECT value FROM json_each((SELECT decision_ids_json FROM authoring_amendments WHERE id = ?))
+         )`
       )
-      .run(stableStringify(reason), now, now, amendmentId);
+      .run(amendmentId);
   }
 
   private assertDecisionsApplied(amendmentId: string): void {
     const pending = this.db
       .prepare(
-        `SELECT 1 FROM authoring_amendment_decisions AS links
-         JOIN decision_requests AS requests ON requests.id = links.decision_id
-         WHERE links.amendment_id = ? AND requests.status != 'applied' LIMIT 1`
+        `SELECT 1 FROM decision_requests WHERE id IN (SELECT value FROM json_each((SELECT decision_ids_json FROM authoring_amendments WHERE id = ?))) AND status != 'applied' LIMIT 1`
       )
       .get(amendmentId);
     if (pending) throw new DomainError('conflict', 'Required impact decision has not been applied');
@@ -1044,6 +1160,17 @@ export class AuthoringAmendmentRepository {
     now: string,
     options: { failure?: Record<string, unknown> } = {}
   ): void {
+    if (['activated', 'rejected', 'failed', 'stale'].includes(to)) {
+      this.withdrawOpenDecisions(amendmentId);
+      const evaluation = this.policy.getAuthoringEvaluation(amendmentId);
+      if (evaluation)
+        this.policy.invalidate(
+          { type: 'authoring', id: String(evaluation.context_id) },
+          'candidate_terminated',
+          now,
+          String(evaluation.id)
+        );
+    }
     const result = this.db
       .prepare(
         `UPDATE authoring_amendments
@@ -1066,7 +1193,8 @@ export class AuthoringAmendmentRepository {
         amendmentId,
         from
       );
-    if (Number(result.changes) !== 1) throw new DomainError('conflict', 'Amendment state changed concurrently');
+    if (Number(result.changes) !== 1)
+      throw new DomainError('conflict', 'Amendment state changed concurrently');
   }
 
   private nextEventSeq(jobId: string): number {
@@ -1089,11 +1217,11 @@ export class AuthoringAmendmentRepository {
     const job = this.db
       .prepare('SELECT state_version, next_event_seq FROM authoring_jobs WHERE id = ?')
       .get(jobId) as
-      | { state_version: number | bigint; next_event_seq: number | bigint }
-      | undefined;
+      { state_version: number | bigint; next_event_seq: number | bigint } | undefined;
     if (!job || Number(job.next_event_seq) !== seq) {
       throw new Error('Authoring event sequence changed concurrently');
     }
+
     this.db
       .prepare('UPDATE authoring_jobs SET next_event_seq = next_event_seq + 1 WHERE id = ?')
       .run(jobId);

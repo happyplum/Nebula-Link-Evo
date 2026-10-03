@@ -474,7 +474,7 @@ function createFixture(db: DatabaseSync, versions: BusinessVersionRepository) {
     `INSERT INTO deployment_profile_revisions
       (id, deployment_profile_id, revision_no, lifecycle, schema_id, payload_json,
        content_sha256, validation_status, change_reason, created_by_type, created_at)
-     VALUES ('deployment-revision', 'deployment', 1, 'current', 'deployment/1', '{}', ?,
+     VALUES ('deployment-revision', 'deployment', 1, 'current', 'deployment/1', '{"environment":"test"}', ?,
        'valid', 'fixture', 'system', ?)`
   ).run(HASH_A, now);
   const version = versions.create({
