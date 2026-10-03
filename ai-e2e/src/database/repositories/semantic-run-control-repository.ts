@@ -1,3 +1,5 @@
+import type { FormalRunCreationResult, RunCommandResult } from '../../contracts/semantic-run.js';
+import { DomainError } from '../../services/service-error.js';
 import { randomUUID } from 'node:crypto';
 import type { SemanticEvidenceRepository } from './semantic-evidence-repository.js';
 import {
@@ -13,7 +15,6 @@ import type {
   InitialRunVariableInput,
   RunTodoDependencyInput,
   RunTodoInput,
-  SemanticRunResult,
   SemanticWorkflowRepository,
 } from './semantic-workflow-repository.js';
 
@@ -28,10 +29,7 @@ export interface CreateFormalRunInput {
   evidencePolicy?: 'default' | 'extended' | 'minimal';
 }
 
-export interface FormalRunCreationResult extends SemanticRunResult {
-  admission: 'ready' | 'approval_required' | 'denied';
-  decisionId?: string;
-}
+
 
 export interface StartTodoInput {
   pageTaskId?: string;
@@ -85,15 +83,7 @@ export interface CompleteTodoAttemptInput {
   };
 }
 
-export interface RunCommandResult {
-  lifecycle: string;
-  stateVersion: number;
-  replayed: boolean;
-  conflict?: {
-    expectedStateVersion: number;
-    actualStateVersion: number;
-  };
-}
+
 
 type DbRow = Record<string, unknown>;
 
@@ -200,7 +190,7 @@ export class SemanticRunControlRepository {
           existing.request_sha256 !== requestSha256 ||
           Number(existing.expected_state_version) !== params.expectedStateVersion
         ) {
-          throw new Error('Run command id was reused with different input');
+          throw new DomainError('conflict', 'Run command id was reused with different input');
         }
         const run = this.requireRun(params.runId);
         return {
@@ -253,7 +243,7 @@ export class SemanticRunControlRepository {
             { action: params.action, reason: policyCheck.code },
             now
           );
-          policyError = new Error(policyCheck.message);
+          policyError = new DomainError('conflict', policyCheck.message, policyCheck.code);
           const after = this.requireRun(params.runId);
           return {
             lifecycle: String(after.lifecycle),
@@ -339,11 +329,11 @@ export class SemanticRunControlRepository {
     return inImmediateTransaction(this.db, () => {
       const todo = this.requireTodo(input.todoId);
       if (todo.run_id !== input.runId) {
-        throw new Error('Run TODO does not belong to the requested run');
+        throw new DomainError('not_found', 'Run TODO does not belong to the requested run');
       }
-      if (todo.state !== 'ready') throw new Error('Run TODO is not ready');
+      if (todo.state !== 'ready') throw new DomainError('conflict', 'Run TODO is not ready');
       const run = this.requireRun(String(todo.run_id));
-      if (run.lifecycle !== 'running') throw new Error('Run is not running');
+      if (run.lifecycle !== 'running') throw new DomainError('conflict', 'Run is not running');
       if (
         this.db
           .prepare(
@@ -352,7 +342,7 @@ export class SemanticRunControlRepository {
           )
           .get(todo.run_id)
       ) {
-        throw new Error('Run already has an active page task');
+        throw new DomainError('conflict', 'Run already has an active page task');
       }
       const next = this.db
         .prepare('SELECT COALESCE(MAX(task_no), 0) + 1 AS task_no FROM page_tasks WHERE run_id = ?')
@@ -437,9 +427,9 @@ export class SemanticRunControlRepository {
     return inImmediateTransaction(this.db, () => {
       const todo = this.requireTodo(input.todoId);
       if (todo.run_id !== input.runId) {
-        throw new Error('Run TODO does not belong to the requested run');
+        throw new DomainError('not_found', 'Run TODO does not belong to the requested run');
       }
-      if (todo.state !== 'running') throw new Error('Run TODO is not running');
+      if (todo.state !== 'running') throw new DomainError('conflict', 'Run TODO is not running');
       const pageTask = this.db
         .prepare('SELECT * FROM page_tasks WHERE id = ?')
         .get(input.pageTaskId) as DbRow | undefined;
@@ -449,7 +439,7 @@ export class SemanticRunControlRepository {
         pageTask.state !== 'running' ||
         !parseArray(pageTask.todo_ids_json).includes(input.todoId)
       ) {
-        throw new Error('Page task does not own the running TODO');
+        throw new DomainError('conflict', 'Page task does not own the running TODO');
       }
       const next = this.db
         .prepare(
@@ -576,7 +566,7 @@ export class SemanticRunControlRepository {
     return inImmediateTransaction(this.db, () => {
       const todo = this.requireTodo(todoId);
       if (todo.run_id !== runId) {
-        throw new Error('Run TODO does not belong to the requested run');
+        throw new DomainError('not_found', 'Run TODO does not belong to the requested run');
       }
       if (todo.state !== 'interrupted') throw new Error('Run TODO is not interrupted');
       const latest = this.db
@@ -586,7 +576,7 @@ export class SemanticRunControlRepository {
         )
         .get(todoId) as { result: string } | undefined;
       if (!latest || latest.result !== 'recoverable_interruption') {
-        throw new Error('Outcome-unknown TODO requires a decision before recovery');
+        throw new DomainError('conflict', 'Outcome-unknown TODO requires a decision before recovery');
       }
       const now = new Date().toISOString();
       this.db
@@ -618,13 +608,13 @@ export class SemanticRunControlRepository {
       const decision = this.db
         .prepare('SELECT * FROM decision_requests WHERE id = ? AND run_id = ?')
         .get(params.decisionId, params.runId) as DbRow | undefined;
-      if (!decision) throw new Error('Run decision not found');
+      if (!decision) throw new DomainError('not_found', 'Run decision not found');
       const existing = this.db
         .prepare('SELECT answer_key FROM decision_answers WHERE decision_request_id = ?')
         .get(params.decisionId) as { answer_key: string } | undefined;
       if (existing) {
         if (existing.answer_key !== params.answerKey) {
-          throw new Error('Run decision was already answered differently');
+          throw new DomainError('conflict', 'Run decision was already answered differently');
         }
         const todo = decision.todo_id ? this.requireTodo(String(decision.todo_id)) : undefined;
         return {
@@ -632,10 +622,10 @@ export class SemanticRunControlRepository {
           ...(todo ? { todoState: String(todo.state) } : {}),
         };
       }
-      if (decision.status !== 'open') throw new Error('Run decision is not open');
+      if (decision.status !== 'open') throw new DomainError('conflict', 'Run decision is not open');
       const options = parseArray(decision.options_json) as Array<Record<string, unknown>>;
       if (!options.some((option) => option.key === params.answerKey)) {
-        throw new Error('Run decision answer is not one of the allowed options');
+        throw new DomainError('conflict', 'Run decision answer is not one of the allowed options');
       }
       const now = new Date().toISOString();
       const answerId = randomUUID();
@@ -660,13 +650,15 @@ export class SemanticRunControlRepository {
           const evaluation = this.db
             .prepare('SELECT * FROM side_effect_policy_evaluations WHERE id = ?')
             .get(run.current_policy_evaluation_id) as DbRow | undefined;
-          if (!evaluation) throw new Error('Side-effect policy evaluation not found');
+          if (!evaluation) throw new DomainError('not_found', 'Side-effect policy evaluation not found');
           if (
             run.side_effect_projection_sha256 &&
             String(run.side_effect_projection_sha256) !== String(evaluation.projection_sha256)
           ) {
-            throw new Error(
-              'Side-effect approval is stale: risk projection changed; the run plan must be re-frozen before approval'
+            throw new DomainError(
+              'conflict',
+              'Side-effect approval is stale: risk projection changed; the run plan must be re-frozen before approval',
+              'side_effect_approval_stale'
             );
           }
           const grantId = randomUUID();
@@ -742,7 +734,7 @@ export class SemanticRunControlRepository {
            AND status = 'valid' AND is_current = 1`
       )
       .get(input.businessVersionId, input.deploymentRevisionId) as DbRow | undefined;
-    if (!validation) throw new Error('Business version has no valid verification scope');
+    if (!validation) throw new DomainError('validation_error', 'Business version has no valid verification scope');
     const scenario = this.db
       .prepare(
         `SELECT revisions.*, scenarios.id AS scenario_id
@@ -753,7 +745,7 @@ export class SemanticRunControlRepository {
            AND revisions.readiness_status = 'verified'`
       )
       .get(input.scenarioRevisionId, input.businessVersionId) as DbRow | undefined;
-    if (!scenario) throw new Error('Scenario revision is not current and verified');
+    if (!scenario) throw new DomainError('validation_error', 'Scenario revision is not current and verified');
     this.requireExecutableVerification(
       input.businessVersionId,
       'test_scenario',
@@ -765,7 +757,7 @@ export class SemanticRunControlRepository {
     const deployment = this.db
       .prepare('SELECT payload_json FROM deployment_profile_revisions WHERE id = ?')
       .get(input.deploymentRevisionId) as { payload_json: string } | undefined;
-    if (!deployment) throw new Error('Deployment revision not found');
+    if (!deployment) throw new DomainError('not_found', 'Deployment revision not found');
     const deploymentPayload = parseObject(deployment.payload_json);
     const environment = String(deploymentPayload.environment ?? 'test');
     const payload = parseObject(scenario.payload_json);
@@ -788,7 +780,7 @@ export class SemanticRunControlRepository {
              AND revisions.readiness_status = 'verified'`
         )
         .get(scriptId, input.businessVersionId) as DbRow | undefined;
-      if (!script) throw new Error(`Functional script '${scriptId}' is not current and verified`);
+      if (!script) throw new DomainError('validation_error', `Functional script '${scriptId}' is not current and verified`);
       this.requireExecutableVerification(
         input.businessVersionId,
         'functional_script',
@@ -893,7 +885,7 @@ export class SemanticRunControlRepository {
         deploymentRevisionId,
         verificationScopeSha256
       );
-    if (!verification) throw new Error(`No verified scope for ${assetType} '${assetId}'`);
+    if (!verification) throw new DomainError('validation_error', `No verified scope for ${assetType} '${assetId}'`);
   }
 
   private insertSideEffectDecision(
@@ -1425,7 +1417,7 @@ export class SemanticRunControlRepository {
     const run = this.db.prepare('SELECT * FROM test_runs WHERE id = ?').get(runId) as
       | DbRow
       | undefined;
-    if (!run) throw new Error('Run not found');
+    if (!run) throw new DomainError('not_found', 'Run not found');
     return run;
   }
 
@@ -1433,7 +1425,7 @@ export class SemanticRunControlRepository {
     const todo = this.db.prepare('SELECT * FROM run_todos WHERE id = ?').get(todoId) as
       | DbRow
       | undefined;
-    if (!todo) throw new Error('Run TODO not found');
+    if (!todo) throw new DomainError('not_found', 'Run TODO not found');
     return todo;
   }
 
@@ -1450,7 +1442,7 @@ export class SemanticRunControlRepository {
       .get(runId) as
       | { next_event_seq: number | bigint; state_version: number | bigint }
       | undefined;
-    if (!run) throw new Error('Run not found');
+    if (!run) throw new DomainError('not_found', 'Run not found');
     const seq = Number(run.next_event_seq);
     this.db
       .prepare('UPDATE test_runs SET next_event_seq = next_event_seq + 1 WHERE id = ?')
@@ -1482,7 +1474,10 @@ function commandTarget(from: string, action: 'start' | 'pause' | 'resume' | 'can
   if (action === 'pause' && ['ready', 'running'].includes(from)) return 'paused';
   if (action === 'resume' && from === 'paused') return 'running';
   if (action === 'cancel' && !['completed', 'cancelled'].includes(from)) return 'cancelling';
-  throw new Error(`Invalid run command ${action} from ${from}`);
+  throw new DomainError(
+    action === 'resume' || ['ready', 'running', 'paused'].includes(from) ? 'conflict' : 'validation_error',
+    `Invalid run command ${action} from ${from}`
+  );
 }
 
 function todoStateForResult(result: CompleteTodoAttemptInput['result']): string {
@@ -1508,7 +1503,7 @@ function decisionTodoState(answerKey: string): string {
   if (answerKey === 'resume') return 'ready';
   if (answerKey === 'fail') return 'failed';
   if (answerKey === 'cancel') return 'cancelled';
-  throw new Error(`Unsupported TODO decision answer '${answerKey}'`);
+  throw new DomainError('conflict', `Unsupported TODO decision answer '${answerKey}'`);
 }
 
 function evaluateSideEffectPolicy(
@@ -1550,7 +1545,7 @@ function collectSideEffects(
     const effectId = typeof step.sideEffectId === 'string' ? step.sideEffectId : undefined;
     if (!effectId) return [];
     const effect = declarations.get(effectId);
-    if (!effect) throw new Error(`Side-effect '${effectId}' is not declared`);
+    if (!effect) throw new DomainError('validation_error', `Side-effect '${effectId}' is not declared`, 'side_effect_declaration_required');
     const affectedItems = isObject(effect.affectedItems) ? effect.affectedItems : undefined;
     const perInvocation =
       affectedItems?.kind === 'single'
@@ -1559,7 +1554,7 @@ function collectSideEffects(
           ? affectedItems.maxItems
           : undefined;
     if (!perInvocation || !Number.isInteger(perInvocation) || perInvocation < 1) {
-      throw new Error(`Side-effect '${effectId}' has no finite affectedItems bound`);
+      throw new DomainError('validation_error', `Side-effect '${effectId}' has no finite affectedItems bound`, 'side_effect_bound_invalid');
     }
     return [
       {
@@ -1620,7 +1615,7 @@ function normalizeRepeatCount(value: unknown): number {
 }
 
 function requireText(value: unknown, label: string): string {
-  if (typeof value !== 'string' || !value) throw new Error(`${label} is required`);
+  if (typeof value !== 'string' || !value) throw new DomainError('validation_error', `${label} is required`);
   return value;
 }
 

@@ -3,7 +3,7 @@ import {
   SemanticProjectRepositoryError,
   type CreateSemanticProjectWorkspaceInput,
 } from '../database/repositories/semantic-project-repository.js';
-import { ServiceError } from './service-error.js';
+import { DomainError, ServiceError } from './service-error.js';
 
 export class SemanticProjectService {
   constructor(private readonly repository: SemanticProjectRepository) {}
@@ -28,6 +28,8 @@ export class SemanticProjectService {
 }
 
 function mapError(error: unknown): Error {
+  // Preserve this service's existing handling of shared precondition failures.
+  if (error instanceof DomainError) return ServiceError.internal(error.message);
   if (!(error instanceof SemanticProjectRepositoryError)) {
     return error instanceof Error ? error : ServiceError.internal('Project operation failed');
   }

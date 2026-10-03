@@ -14,7 +14,7 @@ import type {
   GitMetadata,
   PageAsset,
   ScenarioAsset,
-} from '../../types/business-version.js';
+} from '../../contracts/business-version.js';
 import { collectArtifactObjectIds } from './semantic-repository-utils.js';
 import { validateFunctionalScriptV1 } from '../../validation/functional-script-validator.js';
 
@@ -62,11 +62,19 @@ interface RevisionRow {
 
 export type BusinessVersionRepositoryErrorCode = 'not_found' | 'conflict' | 'validation_failed';
 
+export type BusinessVersionRejectionReason =
+  | 'scenario_payload_invalid'
+  | 'scenario_calls_invalid'
+  | 'scenario_call_invalid'
+  | 'scenario_condition_unsupported'
+  | 'scenario_repeat_unsupported';
+
 export class BusinessVersionRepositoryError extends Error {
   constructor(
     readonly code: BusinessVersionRepositoryErrorCode,
     message: string,
-    options?: ErrorOptions
+    options?: ErrorOptions,
+    readonly reason?: BusinessVersionRejectionReason
   ) {
     super(message, options);
     this.name = 'BusinessVersionRepositoryError';
@@ -1778,33 +1786,43 @@ export function assertScenarioCallSupport(payload: unknown): void {
   if (!isObject(payload)) {
     throw new BusinessVersionRepositoryError(
       'validation_failed',
-      'Scenario payload must be an object'
+      'Scenario payload must be an object',
+      undefined,
+      'scenario_payload_invalid'
     );
   }
   const calls = payload.calls;
   if (!Array.isArray(calls)) {
     throw new BusinessVersionRepositoryError(
       'validation_failed',
-      'Scenario payload must contain a calls array'
+      'Scenario payload must contain a calls array',
+      undefined,
+      'scenario_calls_invalid'
     );
   }
   for (const raw of calls) {
     if (!isObject(raw) || typeof raw.callKey !== 'string' || typeof raw.functionalScriptId !== 'string') {
       throw new BusinessVersionRepositoryError(
         'validation_failed',
-        'Scenario call is invalid'
+        'Scenario call is invalid',
+        undefined,
+        'scenario_call_invalid'
       );
     }
     if (raw.runWhen !== undefined) {
       throw new BusinessVersionRepositoryError(
         'validation_failed',
-        `Scenario call ${String(raw.callKey)} uses runWhen; conditional branches are rejected until implemented`
+        `Scenario call ${String(raw.callKey)} uses runWhen; conditional branches are rejected until implemented`,
+        undefined,
+        'scenario_condition_unsupported'
       );
     }
     if (!isSupportedRepeat(raw.repeat)) {
       throw new BusinessVersionRepositoryError(
         'validation_failed',
-        `Scenario call ${String(raw.callKey)} has an unsupported repeat; only a 1-100 count (number or {kind:'count',count}) is allowed and for_each is rejected until implemented`
+        `Scenario call ${String(raw.callKey)} has an unsupported repeat; only a 1-100 count (number or {kind:'count',count}) is allowed and for_each is rejected until implemented`,
+        undefined,
+        'scenario_repeat_unsupported'
       );
     }
   }

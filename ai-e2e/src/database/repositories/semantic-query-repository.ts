@@ -10,7 +10,7 @@ import type {
   SemanticWorkspaceV1,
   WorkspacePrdDocumentV1,
   WorkspaceValidationV1,
-} from '../../types/semantic-control.js';
+} from '../../contracts/semantic-control.js';
 
 interface StatementLike {
   get(...params: unknown[]): unknown;

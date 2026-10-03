@@ -8,7 +8,7 @@ import type {
   SemanticRevisionV1,
   SemanticWorkspaceV1,
   ServiceCapabilitiesV1,
-} from '../types/semantic-control.js';
+} from '../contracts/semantic-control.js';
 import { ServiceError } from './service-error.js';
 
 const MAX_EVENT_LOG_LIMIT = 500;

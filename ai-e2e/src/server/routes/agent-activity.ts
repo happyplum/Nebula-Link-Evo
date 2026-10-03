@@ -2,7 +2,7 @@ import type { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import { Type, type Static } from '@sinclair/typebox';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { AgentStreamEventV1 } from '@nebula-link-evo/shared/types/agent-stream';
-import type { ApiSuccess } from '../../types/semantic-control.js';
+import type { ApiSuccess } from '../../contracts/semantic-control.js';
 import type {
   ActivityContext,
   AgentActivityRepository,

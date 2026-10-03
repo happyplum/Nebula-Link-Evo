@@ -1,7 +1,8 @@
+import type { CreateProjectInput } from '../../../../../src/contracts/semantic-project.js';
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Input, Modal } from '@/shared/components';
-import type { CreateProjectInput } from '@/types/project.js';
+
 import { useCreateProject } from '../store/projectApi.js';
 
 interface CreateProjectDialogProps {

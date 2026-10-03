@@ -1,14 +1,15 @@
+import { CreateJobBodySchema, DecisionAnswerBodySchema, AmendmentCommandBodySchema, AuthoringCommandBodySchema } from '../../contracts/semantic-authoring.js';
 import type { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import { Type, type Static } from '@sinclair/typebox';
 import type { FastifyRequest } from 'fastify';
 import type { SemanticAuthoringService } from '../../services/semantic-authoring-service.js';
 import { ServiceError } from '../../services/service-error.js';
-import type { ApiSuccess } from '../../types/semantic-control.js';
+import type { ApiSuccess } from '../../contracts/semantic-control.js';
 import {
   ApiProblemSchema,
   SemanticAssetTypeSchema,
   apiSuccessSchema,
-} from '../../types/semantic-api.js';
+} from '../../contracts/semantic-api.js';
 import fp from '../plugins/fastify-plugin.js';
 import type { AgentActivityRepository } from '../../database/repositories/agent-activity-repository.js';
 import { AGENT_STREAM_EVENT_SCHEMA } from '@nebula-link-evo/shared/types/agent-stream';
@@ -30,22 +31,6 @@ const DecisionParamsSchema = Type.Object(
   { additionalProperties: false }
 );
 
-const CreateJobBodySchema = Type.Object(
-  {
-    schema: Type.Literal('nebula.ai-e2e.create-authoring-job/1.0'),
-    mode: Type.Union([Type.Literal('bootstrap'), Type.Literal('recheck'), Type.Literal('repair')]),
-    intent: Type.Optional(
-      Type.Union([Type.Literal('author_assets'), Type.Literal('locate_in_browser')])
-    ),
-    targetType: Type.Optional(Type.String({ maxLength: 100 })),
-    targetId: Type.Optional(IdSchema),
-    currentUrl: Type.Optional(Type.String({ maxLength: 2_000 })),
-    parentRunId: Type.Optional(IdSchema),
-    reason: Type.Optional(Type.String({ maxLength: 2_000 })),
-    createdBy: Type.String({ minLength: 1, maxLength: 200 }),
-  },
-  { additionalProperties: false }
-);
 
 const CreateThreadBodySchema = Type.Object(
   {
@@ -125,38 +110,14 @@ const CreateAmendmentBodySchema = Type.Object(
   { additionalProperties: false }
 );
 
-const DecisionAnswerBodySchema = Type.Object(
-  {
-    schema: Type.Literal('nebula.ai-e2e.impact-decision-answer/1.0'),
-    answer: Type.Union([Type.Literal('approve'), Type.Literal('reject')]),
-    reason: Type.String({ minLength: 1, maxLength: 2_000 }),
-    answeredBy: Type.String({ minLength: 1, maxLength: 200 }),
-  },
-  { additionalProperties: false }
-);
 
-const AmendmentCommandBodySchema = Type.Union([
-  Type.Object({ action: Type.Literal('queue_at_safe_boundary') }, { additionalProperties: false }),
-  Type.Object(
-    { action: Type.Literal('reject'), reason: Type.String({ minLength: 1, maxLength: 2_000 }) },
-    { additionalProperties: false }
-  ),
-]);
+
 const AuthoringCommandHeaderSchema = Type.Object(
   {
     'idempotency-key': Type.String({ minLength: 1, maxLength: 200 }),
     'if-match': Type.String({ pattern: '^[1-9][0-9]*$' }),
   },
   { additionalProperties: true }
-);
-const AuthoringCommandBodySchema = Type.Object(
-  {
-    schema: Type.Literal('nebula.ai-e2e.authoring-command/1.0'),
-    action: Type.Union([Type.Literal('pause'), Type.Literal('resume'), Type.Literal('cancel')]),
-    reason: Type.Optional(Type.String({ minLength: 1, maxLength: 2_000 })),
-    createdBy: Type.String({ minLength: 1, maxLength: 200 }),
-  },
-  { additionalProperties: false }
 );
 
 const UnknownSuccessSchema = apiSuccessSchema(Type.Unknown());

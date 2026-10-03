@@ -1,73 +1,13 @@
+import { ProjectSummarySchema, ProjectWorkspaceSchema, CreateProjectBodySchema } from '../../contracts/semantic-project.js';
 import type { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import { Type, type Static } from '@sinclair/typebox';
 import type { FastifyRequest } from 'fastify';
 import type { SemanticProjectService } from '../../services/semantic-project-service.js';
 import { ServiceError } from '../../services/service-error.js';
-import type { ApiSuccess } from '../../types/semantic-control.js';
-import { ApiProblemSchema, apiSuccessSchema } from '../../types/semantic-api.js';
+import type { ApiSuccess } from '../../contracts/semantic-control.js';
+import { ApiProblemSchema, apiSuccessSchema } from '../../contracts/semantic-api.js';
 import fp from '../plugins/fastify-plugin.js';
 
-const ValidationStatusSchema = Type.Union([
-  Type.Literal('draft'),
-  Type.Literal('validating'),
-  Type.Literal('needs_recheck'),
-  Type.Literal('valid'),
-  Type.Literal('invalid'),
-  Type.Literal('archived'),
-]);
-const VersionSummarySchema = Type.Object(
-  {
-    id: Type.String(),
-    versionKey: Type.String(),
-    name: Type.String(),
-    validationStatus: ValidationStatusSchema,
-  },
-  { additionalProperties: false }
-);
-const ProjectSummarySchema = Type.Object(
-  {
-    id: Type.String(),
-    name: Type.String(),
-    description: Type.Optional(Type.String()),
-    createdBy: Type.String(),
-    createdAt: Type.String(),
-    updatedAt: Type.String(),
-    latestVersion: Type.Optional(VersionSummarySchema),
-  },
-  { additionalProperties: false }
-);
-const ProjectWorkspaceSchema = Type.Object(
-  {
-    ...ProjectSummarySchema.properties,
-    versionId: Type.String(),
-    deploymentRevisionId: Type.String(),
-  },
-  { additionalProperties: false }
-);
-const CreateProjectBodySchema = Type.Object(
-  {
-    name: Type.String({ minLength: 1, maxLength: 200 }),
-    description: Type.Optional(Type.String({ maxLength: 2_000 })),
-    versionKey: Type.String({ pattern: '^[a-z0-9][a-z0-9._-]{0,127}$' }),
-    versionName: Type.String({ minLength: 1, maxLength: 200 }),
-    targetOrigin: Type.String({ minLength: 1, maxLength: 2_000 }),
-    environment: Type.Union([
-      Type.Literal('local'),
-      Type.Literal('test'),
-      Type.Literal('staging'),
-      Type.Literal('production'),
-    ]),
-    prd: Type.Object(
-      {
-        format: Type.Union([Type.Literal('markdown'), Type.Literal('plain_text')]),
-        content: Type.String({ minLength: 1, maxLength: 1_000_000 }),
-      },
-      { additionalProperties: false }
-    ),
-    createdBy: Type.String({ minLength: 1, maxLength: 200 }),
-  },
-  { additionalProperties: false }
-);
 const ProjectParamsSchema = Type.Object(
   { projectId: Type.String({ minLength: 1, maxLength: 128 }) },
   { additionalProperties: false }

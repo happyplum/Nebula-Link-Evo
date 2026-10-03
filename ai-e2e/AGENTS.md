@@ -48,7 +48,8 @@
 ## 实现约束
 
 - Fastify 路由以 plugin options 注入服务；所有 schema 使用 TypeBox 并默认拒绝未知字段。
-- v1 成功响应为 `{ data, meta }`，错误为可判定 `ApiProblem`。
+- v1 成功响应为 `{ data, meta }`，错误为可判定 `ApiProblem`。公开 DTO 与后端/UI 共同消费的纯 TypeBox schema 由 `src/contracts/` 唯一维护；仓储私有 row 和后端专属参数留在实现层。
+- Run/Authoring 公共业务拒绝在产生处声明 `DomainError` 或稳定 repository reason；HTTP status/code 在 API error handler 映射，禁止依据 `Error.message` 分类。内部不变量及协调器持久失败不能一概改成 HTTP 业务错误。
 - 本地 TypeScript import 保留 `.js`。
 - 不等待外部网络调用时持有 SQLite 写事务；外部 create/command 必须使用稳定幂等键和 outbox 收敛。
 - 不把 token、secret、完整 DOM/base64 或不可信网页内容写入模型指令、普通事件或日志。

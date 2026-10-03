@@ -2,13 +2,13 @@ import type {
   BusinessVersion,
   BusinessVersionDetail,
   GitMetadata,
-} from '../types/business-version.js';
+} from '../contracts/business-version.js';
 import {
   BusinessVersionRepository,
   BusinessVersionRepositoryError,
   type BusinessVersionCopyResult,
 } from '../database/repositories/business-version-repository.js';
-import { ServiceError } from './service-error.js';
+import { DomainError, ServiceError } from './service-error.js';
 
 export interface CreateBusinessVersionInput {
   projectId: string;
@@ -98,6 +98,8 @@ export class BusinessVersionService {
 }
 
 function mapRepositoryError(error: unknown): Error {
+  // Preserve this service's existing handling of shared precondition failures.
+  if (error instanceof DomainError) return ServiceError.internal(error.message);
   if (!(error instanceof BusinessVersionRepositoryError)) {
     return error instanceof Error
       ? error

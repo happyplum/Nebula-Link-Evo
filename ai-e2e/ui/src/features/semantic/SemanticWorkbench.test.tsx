@@ -1,14 +1,18 @@
+import type {
+  AssetRevision,
+  AssetReadinessStatus,
+} from '../../../../src/contracts/business-version.js';
+import type {
+  AuthoringSnapshotV1 as AuthoringSnapshot,
+  RunSnapshotV1 as RunSnapshot,
+  SemanticWorkspaceV1 as SemanticWorkspace,
+} from '../../../../src/contracts/semantic-control.js';
+import type { AmendmentRecord as AuthoringAmendment } from '../../../../src/contracts/semantic-authoring.js';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SemanticWorkbench } from './SemanticWorkbench.js';
-import type {
-  AuthoringAmendment,
-  AuthoringSnapshot,
-  RunSnapshot,
-  SemanticWorkspace,
-} from './types.js';
 
 const api = vi.hoisted(() => ({
   getWorkspace: vi.fn(),
@@ -42,10 +46,13 @@ vi.mock('./useSemanticEventStream.js', async (importOriginal) => {
   return { ...actual, useSemanticEventStream: stream.useSemanticEventStream };
 });
 
-const revision = (id: string, payload: Record<string, unknown>, readinessStatus?: string) => ({
+const revision = (
+  id: string,
+  payload: Record<string, unknown>,
+  readinessStatus?: AssetReadinessStatus
+): AssetRevision => ({
   id,
   revisionNo: 3,
-  lifecycle: 'current',
   schemaId: String(payload.schema),
   contentSha256: `${id}-sha`,
   validationStatus: 'valid',
@@ -62,6 +69,15 @@ const workspace: SemanticWorkspace = {
     name: '结算 v1',
     validationStatus: 'valid',
     schemaVersion: 1,
+    createdBy: 'fixture-user',
+    assets: {
+      pages: 2,
+      businessModules: 0,
+      functionalModules: 3,
+      functionalScripts: 1,
+      scenarios: 1,
+      staleExecutableAssets: 0,
+    },
     deploymentBindings: [{ bindingKey: 'default', deploymentRevisionId: 'dep1', isDefault: true }],
     createdAt: '2026-08-24T00:00:00Z',
     updatedAt: '2026-08-24T00:00:00Z',
@@ -70,6 +86,8 @@ const workspace: SemanticWorkspace = {
     {
       id: 'prd1',
       documentKey: 'checkout-prd',
+      format: 'markdown',
+      createdAt: '2026-08-24T00:00:00Z',
       rawContent: '# 结算\n确认订单和地址。',
       contentSha256: 'prd-sha',
     },
@@ -163,6 +181,9 @@ const workspace: SemanticWorkspace = {
       deploymentRevisionId: 'dep1',
       status: 'valid',
       verificationScope: { environment: 'staging' },
+      assetGraphSha256: 'fixture-graph-sha',
+      verificationScopeSha256: 'fixture-scope-sha',
+      createdAt: '2026-08-24T00:00:00Z',
     },
   ],
 };
@@ -186,6 +207,7 @@ const amendment: AuthoringAmendment = {
   state: 'candidate_ready',
   reason: '更新订单摘要断言',
   category: 'repair',
+  createdBy: 'fixture-user',
   impact: { affectedUrls: ['/checkout/cart_8A21'] },
   validationPlan: { strategy: 'browser' },
   decisionIds: [],

@@ -1,14 +1,13 @@
+import type { SemanticAssetType } from '../contracts/semantic-control.js';
+import type { AmendmentCategory, AmendmentRecord } from '../contracts/semantic-authoring.js';
 import { createHash } from 'node:crypto';
 import type {
   AuthoringAmendmentRepository,
-  AmendmentCategory,
-  AmendmentRecord,
 } from '../database/repositories/authoring-amendment-repository.js';
 import type { CoordinatorAuthoringTask } from '../database/repositories/semantic-coordinator-repository.js';
 import type {
   CreateSemanticAssetIdentityParams,
   SemanticAssetRepository,
-  SemanticAssetType,
 } from '../database/repositories/semantic-asset-repository.js';
 import type { SemanticQueryRepository } from '../database/repositories/semantic-query-repository.js';
 import { hashValue } from '../database/repositories/semantic-repository-utils.js';
@@ -17,7 +16,7 @@ import type {
   AgentTaskView,
   CreateAgentTaskInput,
 } from '../infrastructure/agent-task-client.js';
-import type { SemanticWorkspaceV1 } from '../types/semantic-control.js';
+import type { SemanticWorkspaceV1 } from '../contracts/semantic-control.js';
 import {
   buildSemanticBrowserSteps,
   semanticExecutionResultSchema,

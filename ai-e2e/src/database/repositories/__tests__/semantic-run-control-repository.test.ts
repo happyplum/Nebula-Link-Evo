@@ -11,6 +11,10 @@ import { hashValue } from '../semantic-repository-utils.js';
 import { SemanticRunControlRepository } from '../semantic-run-control-repository.js';
 import { SemanticWorkflowRepository } from '../semantic-workflow-repository.js';
 import { functionalScriptFixture } from '../../../test-support/functional-script-fixture.js';
+import Fastify from 'fastify';
+import { SemanticRunService } from '../../../services/semantic-run-service.js';
+import errorHandlerPlugin from '../../../server/plugins/error-handler.js';
+import semanticRunRoutes from '../../../server/routes/semantic-runs.js';
 
 const HASH_A = 'a'.repeat(64);
 const HASH_B = 'b'.repeat(64);
@@ -36,6 +40,55 @@ describe('semantic run control repository', () => {
   });
 
   afterEach(() => db.close());
+
+  it.each([
+    [null, 400, 'validation_error'],
+    [{}, 400, 'validation_error'],
+    [{ calls: [{}] }, 400, 'validation_error'],
+    [{ calls: [{ callKey: 'ordinary', functionalScriptId: 'script', runWhen: {} }] }, 500, 'internal_error'],
+    [{ calls: [{ callKey: 'state-required-not found', functionalScriptId: 'script', runWhen: {} }] }, 500, 'internal_error'],
+    [{ calls: [{ callKey: 'ordinary', functionalScriptId: 'script', repeat: { kind: 'for_each' } }] }, 409, 'conflict'],
+    [{ calls: [{ callKey: 'not found', functionalScriptId: 'script', repeat: { kind: 'for_each' } }] }, 409, 'conflict'],
+  ])('uses a stable reason for authoring scenario refusal %#', async (payload, status, code) => {
+    const app = Fastify();
+    app.register(errorHandlerPlugin);
+    app.post('/test-revision', () => assets.createRevision({
+      assetType: 'test_scenario', assetId: 'scenario', businessVersionId: 'version',
+      schemaId: 'nebula.ai-e2e.test-scenario/1.0', payload,
+      changeReason: 'test', createdByType: 'user',
+    }));
+    try {
+      const response = await app.inject({ method: 'POST', url: '/test-revision' });
+      expect(response.statusCode).toBe(status);
+      expect(response.json()).toMatchObject({ code, retryable: status === 500 });
+      expect(db.prepare('SELECT COUNT(*) AS count FROM semantic_test_scenario_revisions').get()).toEqual({ count: 0 });
+    } finally { await app.close(); }
+  });
+
+  it('preserves typed refusals through the real repository and API boundary', async () => {
+    const app = Fastify();
+    app.register(errorHandlerPlugin);
+    app.register(semanticRunRoutes, { prefix: '/api/v1', service: new SemanticRunService(runs) });
+    try {
+      const missing = await app.inject({
+        method: 'POST', url: '/api/v1/runs/missing/todos/missing/resume',
+        headers: { 'x-correlation-id': 'real-repo-refusal' },
+      });
+      expect(missing.statusCode).toBe(404);
+      expect(missing.json()).toMatchObject({ code: 'not_found', message: 'Run TODO not found', retryable: false, correlationId: 'real-repo-refusal' });
+
+      const fixture = createFixture(db, assets, 'test');
+      const created = runs.createFormalRun(runInput(fixture, 'real-route'));
+      const todo = getTodo(db, created.id, 'first');
+      const refused = await app.inject({
+        method: 'POST', url: `/api/v1/runs/${created.id}/todos/${todo.id}/start`,
+        payload: { browserSessionId: 'session', tabId: 'tab', browserLeaseRefHash: HASH_A, toolPolicyHash: HASH_A, taskPayloadSha256: HASH_A, requiredAuthContext: {}, sideEffectAuthorization: {}, budget: {} },
+      });
+      expect(refused.statusCode).toBe(409);
+      expect(refused.json()).toMatchObject({ code: 'conflict', message: 'Run is not running', retryable: false });
+      expect(db.prepare('SELECT COUNT(*) AS count FROM page_tasks').get()).toEqual({ count: 0 });
+    } finally { await app.close(); }
+  });
 
   it('freezes verified scenario calls and unlocks dependent TODOs after success', () => {
     const fixture = createFixture(db, assets, 'test');

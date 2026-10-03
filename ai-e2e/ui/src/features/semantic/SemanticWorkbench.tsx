@@ -1,3 +1,5 @@
+import type { AuthoringSnapshotV1 as AuthoringSnapshot, RunSnapshotV1 as RunSnapshot, SemanticWorkspaceV1 as SemanticWorkspace } from '../../../../src/contracts/semantic-control.js';
+import type { AmendmentRecord as AuthoringAmendment } from '../../../../src/contracts/semantic-authoring.js';
 import {
   useEffect,
   useMemo,
@@ -33,13 +35,7 @@ import { BrowserStage } from './BrowserStage.js';
 import { AgentActivityPanel } from './AgentActivityPanel.js';
 import { ContextTree } from './ContextTree.js';
 import { InspectorPanel, type ContextPreview, type InspectorTab } from './InspectorPanel.js';
-import type {
-  AuthoringAmendment,
-  AuthoringSnapshot,
-  LayoutPreferences,
-  RunSnapshot,
-  SemanticWorkspace,
-} from './types.js';
+import type { LayoutPreferences } from './types.js';
 import { record, text } from './types.js';
 import { useSemanticEventStream } from './useSemanticEventStream.js';
 import { useAgentActivityStream } from './useAgentActivityStream.js';

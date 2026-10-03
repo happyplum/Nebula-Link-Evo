@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { DeploymentEnvironment, SemanticProjectSummary, SemanticProjectWorkspace } from '../../types/semantic-project.js';
+import type { CreateProjectInput, SemanticProjectSummary, SemanticProjectWorkspace } from '../../contracts/semantic-project.js';
 import {
   assertNoInlineSecrets,
   hashValue,
@@ -19,15 +19,7 @@ export class SemanticProjectRepositoryError extends Error {
   }
 }
 
-export interface CreateSemanticProjectWorkspaceInput {
-  name: string;
-  description?: string;
-  versionKey: string;
-  versionName: string;
-  targetOrigin: string;
-  environment: DeploymentEnvironment;
-  prd: { format: 'markdown' | 'plain_text'; content: string };
-  createdBy: string;
+export interface CreateSemanticProjectWorkspaceInput extends CreateProjectInput {
   idempotencyKey: string;
 }
 

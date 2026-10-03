@@ -50,6 +50,8 @@ interface ApiProblem {
 
 错误码至少区分：`validation_failed`、`not_found`、`state_conflict`、`idempotency_conflict`、`permission_denied`、`browser_busy`、`lease_expired`、`budget_exceeded`、`dependency_unavailable`、`outcome_unknown`、`side_effect_declaration_required`、`side_effect_bound_invalid`、`side_effect_policy_denied`、`side_effect_approval_required`、`side_effect_approval_stale`、`side_effect_approval_revoked` 和 `internal_error`。其中 5 个 `side_effect_*` code 已在 ai-e2e 路由层发射（declaration_required/bound_invalid 于创建、approval_required/stale/revoked 于 start/resume 命令）；`side_effect_policy_denied` 保持 run 终止原因 JSON code 语义。响应不得包含 secret、控制租约 token、完整 DOM 或模型原始机密输入。
 
+ai-e2e 包内公开 wire DTO 与共同消费的纯 schema 由 `src/contracts/` 唯一维护，嵌套 UI 只按类型导入。UI JSON 请求统一保留成功信封的 data/meta、错误 HTTP status 与 ApiProblem 全字段；未知 details 内容不丢弃，非 JSON 错误仅显示含 HTTP status 的通用文本。Run/Authoring 的 HTTP 业务错误由产生处的 typed kind/code 或稳定 repository reason 经统一 API error handler 映射；message 与动态 callKey 不决定分类。现行常规码是 `validation_error/not_found/conflict/internal_error`，保留既有线行为，不将上面的目标码全集视为当前已发射全集。场景 revision 非法结构、未支持 runWhen、未支持 repeat 的既有结果为 400/500/409，状态不一致的后续裁决见包规格第 7 节。
+
 ### 2.3 请求头与并发控制
 
 | 请求头             | 规则                                                                                                                   |

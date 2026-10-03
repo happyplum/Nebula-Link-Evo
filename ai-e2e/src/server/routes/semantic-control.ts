@@ -3,14 +3,14 @@ import { Type, type Static } from '@sinclair/typebox';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { SemanticQueryService } from '../../services/semantic-query-service.js';
 import { ServiceError } from '../../services/service-error.js';
-import type { ApiSuccess, SemanticEventV1 } from '../../types/semantic-control.js';
+import type { ApiSuccess, SemanticEventV1 } from '../../contracts/semantic-control.js';
 import {
   ApiProblemSchema,
   SemanticAssetTypeSchema,
   SemanticEventSchema,
   ServiceCapabilitiesSchema,
   apiSuccessSchema,
-} from '../../types/semantic-api.js';
+} from '../../contracts/semantic-api.js';
 import fp from '../plugins/fastify-plugin.js';
 
 const IdSchema = Type.String({ minLength: 1, maxLength: 200 });

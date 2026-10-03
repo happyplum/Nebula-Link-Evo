@@ -1,3 +1,6 @@
+import type { RunLifecycle, SemanticRunResult } from '../../contracts/semantic-run.js';
+import type { AuthoringLifecycle, AuthoringJobResult } from '../../contracts/semantic-authoring.js';
+import { DomainError } from '../../services/service-error.js';
 import { randomUUID } from 'node:crypto';
 import {
   assertNoInlineSecrets,
@@ -9,28 +12,9 @@ import {
   type SupportedDatabase,
 } from './semantic-repository-utils.js';
 
-export type AuthoringLifecycle =
-  | 'created'
-  | 'planning'
-  | 'running'
-  | 'paused'
-  | 'waiting_decision'
-  | 'completing'
-  | 'completed'
-  | 'cancelling'
-  | 'cancelled'
-  | 'failed';
 
-export type RunLifecycle =
-  | 'created'
-  | 'planning'
-  | 'ready'
-  | 'running'
-  | 'paused'
-  | 'completing'
-  | 'completed'
-  | 'cancelling'
-  | 'cancelled';
+
+
 
 export interface CreateAuthoringJobParams {
   id?: string;
@@ -46,13 +30,7 @@ export interface CreateAuthoringJobParams {
   parentRunId?: string;
 }
 
-export interface AuthoringJobResult {
-  id: string;
-  browserJobId: string;
-  lifecycle: AuthoringLifecycle;
-  stateVersion: number;
-  created: boolean;
-}
+
 
 export interface AuthoringCommandParams {
   id: string;
@@ -153,13 +131,7 @@ export interface CreateSemanticRunParams {
   initialVariables?: readonly InitialRunVariableInput[];
 }
 
-export interface SemanticRunResult {
-  id: string;
-  browserJobId: string;
-  lifecycle: RunLifecycle;
-  stateVersion: number;
-  created: boolean;
-}
+
 
 export interface RunCommandParams {
   id: string;
@@ -332,7 +304,7 @@ export class SemanticWorkflowRepository {
         .get(params.jobId) as
         | { state_version: number | bigint; next_event_seq: number | bigint }
         | undefined;
-      if (!job) throw new Error('Authoring job not found');
+      if (!job) throw new DomainError('not_found', 'Authoring job not found');
       const stateVersion = Number(job.state_version);
       const accepted = stateVersion === params.expectedStateVersion;
       const now = new Date().toISOString();
@@ -395,7 +367,7 @@ export class SemanticWorkflowRepository {
         | { lifecycle: AuthoringLifecycle; next_event_seq: number | bigint }
         | undefined;
       if (!job || ['completed', 'cancelled', 'failed'].includes(job.lifecycle)) {
-        throw new Error('Authoring job is not writable');
+        throw new DomainError('conflict', 'Authoring job is not writable');
       }
       const dependencies = params.dependencies ?? [];
       for (const dependencyKey of dependencies) {
@@ -457,7 +429,7 @@ export class SemanticWorkflowRepository {
         .get(taskId) as Record<string, unknown> | undefined;
       if (!task || task.state !== 'ready') throw new Error('Authoring task is not ready');
       if (['completed', 'cancelled', 'failed'].includes(String(task.job_lifecycle))) {
-        throw new Error('Authoring job is not writable');
+        throw new DomainError('conflict', 'Authoring job is not writable');
       }
       const now = new Date().toISOString();
       this.db
@@ -573,7 +545,7 @@ export class SemanticWorkflowRepository {
       const job = this.db
         .prepare('SELECT lifecycle, state_version, next_event_seq FROM authoring_jobs WHERE id = ?')
         .get(jobId) as Record<string, unknown> | undefined;
-      if (!job) throw new Error('Authoring job not found');
+      if (!job) throw new DomainError('not_found', 'Authoring job not found');
       if (['completed', 'cancelled', 'failed'].includes(String(job.lifecycle))) {
         if (job.lifecycle === lifecycle) {
           return { lifecycle, stateVersion: Number(job.state_version) };
@@ -649,7 +621,7 @@ export class SemanticWorkflowRepository {
         )
         .get(amendment.job_id) as Record<string, unknown> | undefined;
       if (!job || ['completed', 'cancelled', 'failed'].includes(String(job.lifecycle))) {
-        throw new Error('Authoring job is not writable');
+        throw new DomainError('conflict', 'Authoring job is not writable');
       }
       const now = new Date().toISOString();
       if (job.lifecycle !== 'running') {
@@ -708,7 +680,7 @@ export class SemanticWorkflowRepository {
       const job = this.db
         .prepare('SELECT * FROM authoring_jobs WHERE id = ?')
         .get(command.job_id) as Record<string, unknown> | undefined;
-      if (!job) throw new Error('Authoring job not found');
+      if (!job) throw new DomainError('not_found', 'Authoring job not found');
       if (command.status === 'completed') {
         return {
           lifecycle: String(job.lifecycle) as AuthoringLifecycle,
@@ -718,10 +690,13 @@ export class SemanticWorkflowRepository {
       const from = String(job.lifecycle) as AuthoringLifecycle;
       const stateVersion = Number(job.state_version);
       if (stateVersion !== Number(command.expected_state_version)) {
-        throw new Error('Authoring state version changed before command application');
+        throw new DomainError('conflict', 'Authoring state version changed before command application');
       }
       if (!AUTHORING_TRANSITIONS[from].includes(to)) {
-        throw new Error(`Invalid authoring transition ${from} -> ${to}`);
+        throw new DomainError(
+          from === 'waiting_decision' || to === 'waiting_decision' ? 'conflict' : 'validation_error',
+          `Invalid authoring transition ${from} -> ${to}`
+        );
       }
       const nextVersion = stateVersion + 1;
       const now = new Date().toISOString();
@@ -781,7 +756,7 @@ export class SemanticWorkflowRepository {
       const job = this.db
         .prepare('SELECT lifecycle, state_version, next_event_seq FROM authoring_jobs WHERE id = ?')
         .get(jobId) as Record<string, unknown> | undefined;
-      if (!job) throw new Error('Authoring job not found');
+      if (!job) throw new DomainError('not_found', 'Authoring job not found');
       if (job.lifecycle === 'cancelled') {
         return { lifecycle: 'cancelled', stateVersion: Number(job.state_version) };
       }
@@ -835,7 +810,7 @@ export class SemanticWorkflowRepository {
         | undefined;
       if (existing) {
         if (existing.request_sha256 !== requestSha256) {
-          throw new Error('clientRunId was reused with different input');
+          throw new DomainError('conflict', 'clientRunId was reused with different input');
         }
         return {
           id: existing.id,
@@ -952,7 +927,8 @@ export class SemanticWorkflowRepository {
           isSecret !== Boolean(variable.secretRef) ||
           (isSecret && variable.value !== undefined)
         ) {
-          throw new Error(
+          throw new DomainError(
+            'validation_error',
             'Secret run variables require secretRef and cannot contain inline values'
           );
         }
@@ -1287,7 +1263,7 @@ export class SemanticWorkflowRepository {
         if (nextDegree === 0) ready.push(target);
       }
     }
-    if (visited !== todoKeys.size) throw new Error('Run TODO dependency graph must be acyclic');
+    if (visited !== todoKeys.size) throw new DomainError('validation_error', 'Run TODO dependency graph must be acyclic');
   }
 
   private requireRunTargets(params: CreateSemanticRunParams): void {
@@ -1304,7 +1280,7 @@ export class SemanticWorkflowRepository {
       scenario.business_version_id !== params.businessVersionId ||
       scenario.lifecycle !== 'current'
     ) {
-      throw new Error('Run scenario revision is not current in the business version');
+      throw new DomainError('validation_error', 'Run scenario revision is not current in the business version');
     }
     const binding = this.db
       .prepare(
@@ -1312,10 +1288,10 @@ export class SemanticWorkflowRepository {
          WHERE business_version_id = ? AND deployment_revision_id = ?`
       )
       .get(params.businessVersionId, params.deploymentRevisionId);
-    if (!binding) throw new Error('Run deployment revision is not bound to the business version');
+    if (!binding) throw new DomainError('validation_error', 'Run deployment revision is not bound to the business version');
     if (params.purpose === 'formal') {
       if (!params.assetGraphSha256 || !params.verificationScopeSha256) {
-        throw new Error('Formal runs require exact asset graph and verification scope hashes');
+        throw new DomainError('validation_error', 'Formal runs require exact asset graph and verification scope hashes');
       }
       const validation = this.db
         .prepare(
@@ -1338,7 +1314,7 @@ export class SemanticWorkflowRepository {
         .prepare('SELECT business_version_id FROM authoring_jobs WHERE id = ?')
         .get(params.authoringJobId) as { business_version_id: string } | undefined;
       if (!job || job.business_version_id !== params.businessVersionId) {
-        throw new Error('Authoring job does not belong to the business version');
+        throw new DomainError('not_found', 'Authoring job does not belong to the business version');
       }
     }
   }
@@ -1348,7 +1324,7 @@ export class SemanticWorkflowRepository {
       .prepare('SELECT project_id, archived_at FROM business_versions WHERE id = ?')
       .get(versionId) as { project_id: string; archived_at: string | null } | undefined;
     if (!version || version.project_id !== projectId) {
-      throw new Error('Business version does not belong to the project');
+      throw new DomainError('not_found', 'Business version does not belong to the project');
     }
     if (version.archived_at) throw new Error('Archived business versions are read-only');
   }
@@ -1358,7 +1334,7 @@ export class SemanticWorkflowRepository {
       .prepare('SELECT business_version_id, browser_job_id FROM test_runs WHERE id = ?')
       .get(parentRunId) as { business_version_id: string; browser_job_id: string } | undefined;
     if (!run || run.business_version_id !== versionId) {
-      throw new Error('Parent run does not belong to the business version');
+      throw new DomainError('not_found', 'Parent run does not belong to the business version');
     }
     return run.browser_job_id;
   }
@@ -1368,7 +1344,7 @@ export class SemanticWorkflowRepository {
       .prepare('SELECT business_version_id, browser_job_id FROM authoring_jobs WHERE id = ?')
       .get(authoringJobId) as { business_version_id: string; browser_job_id: string } | undefined;
     if (!job || job.business_version_id !== versionId) {
-      throw new Error('Authoring job does not belong to the business version');
+      throw new DomainError('not_found', 'Authoring job does not belong to the business version');
     }
     return job.browser_job_id;
   }
@@ -1406,7 +1382,7 @@ export class SemanticWorkflowRepository {
     const row = this.db
       .prepare('SELECT state_version FROM authoring_jobs WHERE id = ?')
       .get(jobId) as { state_version: number | bigint } | undefined;
-    if (!row) throw new Error('Authoring job not found');
+    if (!row) throw new DomainError('not_found', 'Authoring job not found');
     return Number(row.state_version);
   }
 

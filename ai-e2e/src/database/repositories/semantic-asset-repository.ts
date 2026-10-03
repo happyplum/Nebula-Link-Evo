@@ -1,3 +1,5 @@
+import type { SemanticAssetType } from '../../contracts/semantic-control.js';
+import { DomainError } from '../../services/service-error.js';
 import { randomUUID } from 'node:crypto';
 import {
   assertNoInlineSecrets,
@@ -12,14 +14,6 @@ import {
 import { validateFunctionalScriptV1 } from '../../validation/functional-script-validator.js';
 import { assertScenarioCallSupport } from './business-version-repository.js';
 
-export type SemanticAssetType =
-  | 'page_definition'
-  | 'business_module'
-  | 'functional_module'
-  | 'functional_script'
-  | 'test_scenario'
-  | 'page_baseline'
-  | 'module_requirement';
 
 export type SemanticActorType = 'user' | 'main_agent' | 'child_agent' | 'system' | 'migration';
 
@@ -328,7 +322,7 @@ export class SemanticAssetRepository {
       .prepare(`SELECT business_version_id FROM ${table} WHERE id = ?`)
       .get(assetId) as { business_version_id: string } | undefined;
     if (!row || row.business_version_id !== businessVersionId) {
-      throw new Error(`${label} does not belong to the business version`);
+      throw new DomainError('not_found', `${label} does not belong to the business version`);
     }
   }
 
@@ -342,7 +336,7 @@ export class SemanticAssetRepository {
     }
     if (params.validationErrors !== undefined) assertNoInlineSecrets(params.validationErrors);
     if (params.assetType === 'page_definition') {
-      if (!params.pageSignatureSha256) throw new Error('pageSignatureSha256 is required');
+      if (!params.pageSignatureSha256) throw new DomainError('validation_error', 'pageSignatureSha256 is required');
       requireSha256(params.pageSignatureSha256, 'pageSignatureSha256');
     }
     const spec = REVISION_SPECS[params.assetType];
@@ -352,7 +346,7 @@ export class SemanticAssetRepository {
         .prepare(`SELECT business_version_id FROM ${spec.assetTable} WHERE id = ?`)
         .get(params.assetId) as { business_version_id: string } | undefined;
       if (!asset || asset.business_version_id !== params.businessVersionId) {
-        throw new Error(`${params.assetType} does not belong to the business version`);
+        throw new DomainError('not_found', `${params.assetType} does not belong to the business version`);
       }
       const payloadJson = stableStringify(params.payload);
       const contentSha256 = sha256(payloadJson);
@@ -389,7 +383,7 @@ export class SemanticAssetRepository {
           .prepare(`SELECT ${spec.assetColumn} AS asset_id FROM ${spec.table} WHERE id = ?`)
           .get(params.supersedesRevisionId) as { asset_id: string } | undefined;
         if (!superseded || superseded.asset_id !== params.assetId) {
-          throw new Error('supersedesRevisionId does not belong to the asset');
+          throw new DomainError('not_found', 'supersedesRevisionId does not belong to the asset');
         }
       }
       const next = this.db
@@ -800,7 +794,7 @@ export class SemanticAssetRepository {
     const version = this.db
       .prepare('SELECT archived_at FROM business_versions WHERE id = ?')
       .get(versionId) as { archived_at: string | null } | undefined;
-    if (!version) throw new Error('Business version not found');
+    if (!version) throw new DomainError('not_found', 'Business version not found');
     if (version.archived_at) throw new Error('Archived business versions are read-only');
   }
 
@@ -832,7 +826,7 @@ export class SemanticAssetRepository {
          WHERE id = ? AND business_version_id = ?`
       )
       .get(jobId, businessVersionId) as { next_event_seq: number | bigint } | undefined;
-    if (!job) throw new Error('Authoring job does not belong to the business version');
+    if (!job) throw new DomainError('not_found', 'Authoring job does not belong to the business version');
     const seq = Number(job.next_event_seq);
     this.db
       .prepare('UPDATE authoring_jobs SET next_event_seq = next_event_seq + 1 WHERE id = ?')
