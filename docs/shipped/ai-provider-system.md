@@ -17,7 +17,7 @@
 - [shipped] 双模型角色配置：`defaults.decision` 是分析/决策模型，负责理解需求与浏览器证据并规划动作；`defaults.vision` 是视觉模型，为无原生视觉能力的分析模型提供视觉/DOM 定位证据。provider/model 名仅是角色实现配置。
 - [shipped] 主代理与子代理均可调用视觉模型；视觉模型只处理单次、完整且经 proxy binding 校验的不可变 snapshot，不持有连续任务状态、不调度脚本、不调用 MCP、不操作浏览器。
 - [shipped] 内部视觉工具仅为 `vision.analyze_page` 与 `vision.resolve_target`：输入 `VisionSnapshotBindingV1`，输出页面/DOM 摘要或可序列化 locator candidates；所有环境均无旧视觉定位工具。
-- [shipped] MCP transport、启动期一次性 ToolRegistry product projection 与 DSH ToolRuntime 位于 ai-chat-service；Chat/Agent Task 共用唯一 DSH Agent Loop，raw proxy operation 仅存在于模型不可见 child scope，运行期不热同步组合树。
+- [shipped] MCP transport、启动期一次性 ToolRegistry product projection 与 DSH ToolRuntime 位于 ai-chat-service；产品工具通过 `src/harness/gateway-tool-bridge.ts` 使用原始 JSON Schema，Chat/Agent Task 共用唯一 DSH Agent Loop，raw proxy operation 仅存在于模型不可见 child scope，运行期不热同步组合树。未使用的 `src/tools/adapters/{vercel-ai,json-schema-to-zod,index}.ts` 及其导出已退出；`ai` 仍用于 Vision/provider 连通性和错误分类，`zod` 保留为 AI SDK 必需 peer。
 - [shipped] ai-chat-service 已提供通用受限 Agent 任务核心，按任务约束精确工具白名单、预算和不透明关联信息，并以 decision model 返回调用方 Schema 校验后的结构化结果；与 Chat 共用 loop、分离 session/tool scope 与公开控制面。
 - [shipped] `POST/GET /api/v1/agent-tasks*`、乐观 commands、安全 checkpoint、snapshot-first events/event-log 和 `GET /api/v1/capabilities` 已实现；browser binding 对模型、普通日志、持久请求和 HTTP 响应不可见。完整契约见 `ai-e2e/docs/service-api-event-contract.md`。
 - [shipped] Agent task 是一次有界执行，不是 ai-e2e 的持久主代理；authoring 阶段、candidate、coverage、decision、actor/认证状态和激活留在 ai-e2e。browser binding 区分 `observe/control`（ai-e2e 协调器已按主代理 observe / 执行型页面子代理 control 派发），ai-chat-service 不切换 BrowserContext/storage state，也不授权子代理自行登录。
