@@ -1,40 +1,29 @@
+import { requestJson } from '../../../shared/api/request.js';
+import type {
+  CreateProjectInput,
+  SemanticProjectWorkspace as CreatedProjectWorkspace,
+  SemanticProjectSummary as Project,
+} from '../../../../../src/contracts/semantic-project.js';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { CreateProjectInput, CreatedProjectWorkspace, Project } from '@/types/project.js';
 
 const API_BASE = '/api/v1/projects';
 
-interface ApiSuccess<T> {
-  data: T;
-}
-
-async function read<T>(response: Response): Promise<T> {
-  const body = (await response.json()) as ApiSuccess<T> | { message?: string; code?: string };
-  if (!response.ok) {
-    throw new Error('message' in body && body.message ? body.message : `请求失败 (${response.status})`);
-  }
-  return (body as ApiSuccess<T>).data;
-}
-
 export async function fetchProjects(): Promise<Project[]> {
-  const data = await read<{ projects: Project[] }>(await fetch(API_BASE));
-  return data.projects;
+  return (await requestJson<{ projects: Project[] }>(API_BASE)).data.projects;
 }
 
 export async function fetchProject(id: string): Promise<Project> {
-  return read<Project>(await fetch(`${API_BASE}/${encodeURIComponent(id)}`));
+  return (await requestJson<Project>(`${API_BASE}/${encodeURIComponent(id)}`)).data;
 }
 
 export async function createProject(input: CreateProjectInput): Promise<CreatedProjectWorkspace> {
-  return read<CreatedProjectWorkspace>(
-    await fetch(API_BASE, {
+  return (
+    await requestJson<CreatedProjectWorkspace>(API_BASE, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Idempotency-Key': crypto.randomUUID(),
-      },
+      headers: { 'Idempotency-Key': crypto.randomUUID() },
       body: JSON.stringify(input),
     })
-  );
+  ).data;
 }
 
 export const projectKeys = {

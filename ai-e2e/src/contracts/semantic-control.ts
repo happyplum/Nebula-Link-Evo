@@ -1,3 +1,11 @@
+import type { Static } from '@sinclair/typebox';
+import type {
+  ApiMetaSchema,
+  ApiProblemSchema,
+  ServiceCapabilitiesSchema,
+  SemanticAssetTypeSchema,
+  SemanticEventSchema,
+} from './semantic-api.js';
 import type {
   BusinessModuleAsset,
   BusinessVersionDetail,
@@ -9,30 +17,12 @@ import type {
 
 export interface ApiSuccess<T> {
   data: T;
-  meta: {
-    requestId: string;
-    correlationId?: string;
-    stateVersion?: number;
-  };
+  meta: Static<typeof ApiMetaSchema>;
 }
 
-export interface ApiProblem {
-  code: string;
-  message: string;
-  retryable: boolean;
-  correlationId: string;
-  details?: Record<string, unknown>;
-}
+export type ApiProblem = Static<typeof ApiProblemSchema>;
 
-export interface ServiceCapabilitiesV1 {
-  schema: 'nebula.service-capabilities/1.0';
-  service: 'ai-e2e';
-  serviceVersion: string;
-  protocols: Record<string, { major: number; minor: number }>;
-  features: Record<string, boolean | string | number>;
-  limits: Record<string, number>;
-  generatedAt: string;
-}
+export type ServiceCapabilitiesV1 = Static<typeof ServiceCapabilitiesSchema>;
 
 export interface WorkspacePrdDocumentV1 {
   id: string;
@@ -69,14 +59,7 @@ export interface SemanticWorkspaceV1 {
   validations: WorkspaceValidationV1[];
 }
 
-export type SemanticAssetType =
-  | 'page_definition'
-  | 'business_module'
-  | 'functional_module'
-  | 'functional_script'
-  | 'test_scenario'
-  | 'module_requirement'
-  | 'page_baseline';
+export type SemanticAssetType = Static<typeof SemanticAssetTypeSchema>;
 
 export interface SemanticRevisionV1 {
   id: string;
@@ -110,19 +93,7 @@ export interface SemanticRevisionHistoryV1 {
   revisions: SemanticRevisionV1[];
 }
 
-export interface SemanticEventV1 {
-  id: string;
-  seq: number;
-  schemaVersion: 1;
-  type: string;
-  entityType: string;
-  entityId: string;
-  stateVersion?: number;
-  correlationId?: string;
-  causationId?: string;
-  payload: Record<string, unknown>;
-  occurredAt: string;
-}
+export type SemanticEventV1 = Static<typeof SemanticEventSchema>;
 
 export interface AuthoringSnapshotV1 {
   schema: 'nebula.ai-e2e.authoring-snapshot/1.0';

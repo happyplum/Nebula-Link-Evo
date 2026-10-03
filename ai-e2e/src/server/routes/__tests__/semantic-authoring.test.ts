@@ -21,6 +21,7 @@ describe('semantic authoring routes', () => {
   let db: DatabaseSync;
   let app: FastifyInstance;
   let assets: SemanticAssetRepository;
+  let service: SemanticAuthoringService;
   let fixture: ReturnType<typeof createFixture>;
 
   beforeEach(async () => {
@@ -36,7 +37,7 @@ describe('semantic authoring routes', () => {
     const versions = new BusinessVersionRepository(db);
     assets = new SemanticAssetRepository(db);
     fixture = createFixture(db, versions);
-    const service = new SemanticAuthoringService(
+    service = new SemanticAuthoringService(
       new SemanticWorkflowRepository(db),
       assets,
       new AuthoringAmendmentRepository(db, assets),
@@ -52,6 +53,69 @@ describe('semantic authoring routes', () => {
     await app.close();
     db.close();
   });
+
+  it.each(['terminal outcome', 'conditional update miss'])(
+    'keeps amendment %s as a typed service conflict and preserves the current HTTP validation gap',
+    async (condition) => {
+      const jobId = await createJob(app, fixture);
+      const threadId = await createThread(app, fixture, jobId);
+      const candidate = createModuleCandidate(
+        assets,
+        fixture,
+        fixture.module1Id,
+        fixture.module1RevisionId
+      );
+      const created = await app.inject({
+        method: 'POST',
+        url: `/api/v1/authoring-jobs/${jobId}/amendments`,
+        headers: { 'idempotency-key': 'candidate-conflict' },
+        payload: amendmentPayload(fixture, threadId, candidate.id, {
+          moduleId: fixture.module1Id,
+          baseRevisionId: fixture.module1RevisionId,
+          baseRevisionSha256: fixture.module1RevisionSha256,
+        }),
+      });
+      expect(created.statusCode).toBe(201);
+      const amendmentId = created.json().data.id as string;
+      if (condition === 'terminal outcome') {
+        new AuthoringAmendmentRepository(db, assets).fail(amendmentId, { code: 'fixture_failure' });
+      } else {
+        // Exercise a real SQLite conditional-update miss without mocking the repository.
+        db.exec(`CREATE TEMP TRIGGER fixture_amendment_update_miss
+        BEFORE UPDATE OF state ON authoring_amendments WHEN NEW.state = 'rejected'
+        BEGIN SELECT RAISE(IGNORE); END`);
+      }
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/v1/authoring-amendments/${amendmentId}/commands`,
+        headers: { 'x-correlation-id': 'amendment-conflict' },
+        payload: { action: 'reject', reason: 'fixture rejection' },
+      });
+      // Default Ajv removes reason while checking the first anyOf branch, so the
+      // current production route rejects before reaching the service.
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toMatchObject({
+        code: 'fst_err_validation',
+        retryable: false,
+        correlationId: 'amendment-conflict',
+      });
+      expect(() =>
+        service.command(amendmentId, { action: 'reject', reason: 'fixture rejection' })
+      ).toThrowError(
+        expect.objectContaining({
+          kind: 'conflict',
+          code: 'conflict',
+          message:
+            condition === 'terminal outcome'
+              ? 'Terminal amendment cannot change outcome'
+              : 'Amendment state changed concurrently',
+        })
+      );
+      expect(
+        db.prepare('SELECT state FROM authoring_amendments WHERE id = ?').get(amendmentId)
+      ).toEqual({ state: condition === 'terminal outcome' ? 'failed' : 'candidate_ready' });
+    }
+  );
 
   it('creates a repair job and candidate task immediately with idempotent replay', async () => {
     const request = {

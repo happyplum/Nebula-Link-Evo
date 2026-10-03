@@ -5,6 +5,8 @@
 - UI 只提供 semantic 项目首页、业务版本入口、Authoring 工作台和 Run 工作台。
 - 禁止恢复旧四步向导、旧项目 API、旧 Agent 浮窗或开发 fixtures 路由。
 - 权威状态来自 v1 workspace/snapshot、持久 event-log 与 snapshot-first SSE；Chat 文本本身不是状态。
+- 公开 wire DTO 直接 `import type` 自 `../../src/contracts/` 的对应模块，不维护 UI DTO 副本，也不导入后端服务/仓储实现。`features/semantic/types.ts` 只保留 UI 布局和展示 helper。
+- JSON 请求统一使用 `shared/api/request.ts`；成功保留 `{ data, meta }`，错误保留 HTTP status 及 ApiProblem 的 code/message/retryable/correlationId/details，非 JSON 错误使用安全通用文案。
 
 ## 工作台规则
 

@@ -1,3 +1,4 @@
+import { DomainError } from '../../services/service-error.js';
 import { createHash } from 'node:crypto';
 import type Database from 'better-sqlite3';
 import type { DatabaseSync } from 'node:sqlite';
@@ -28,7 +29,7 @@ export function hashValue(value: unknown): string {
 }
 
 export function requireSha256(value: string, label: string): void {
-  if (!/^[a-f0-9]{64}$/i.test(value)) throw new Error(`${label} must be a SHA-256 hex digest`);
+  if (!/^[a-f0-9]{64}$/i.test(value)) throw new DomainError('validation_error', `${label} must be a SHA-256 hex digest`);
 }
 
 export function assertNoInlineSecrets(value: unknown): void {
@@ -90,7 +91,7 @@ function inspectSecrets(value: unknown, path: string): void {
       nested !== null &&
       nested !== '[REDACTED]'
     ) {
-      throw new Error(`Inline secret-like value is forbidden at ${path}.${key}`);
+      throw new DomainError('validation_error', `Inline secret-like value is forbidden at ${path}.${key}`);
     }
     inspectSecrets(nested, `${path}.${key}`);
   }

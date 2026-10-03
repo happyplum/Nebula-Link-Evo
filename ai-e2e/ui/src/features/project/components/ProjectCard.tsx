@@ -1,7 +1,8 @@
+import type { SemanticProjectSummary as Project } from '../../../../../src/contracts/semantic-project.js';
 import { ArrowRight, GitBranch, MonitorUp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '@/shared/components';
-import type { Project } from '@/types/project.js';
+
 
 export function ProjectCard({ project }: { project: Project }) {
   const navigate = useNavigate();

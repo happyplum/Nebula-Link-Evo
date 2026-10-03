@@ -25,6 +25,7 @@
 | Server/DI        | `src/server/index.ts`                                   | 本进程唯一 dotenv owner（工作目录 `.env.local` → 父目录 `.env` → 默认回退工作目录 `.env`，既有进程变量优先）、Fastify、TypeBox、路由、静态 UI、协调循环 |
 | Project          | `semantic-project-*`                                    | 纯 semantic 项目与起始工作区初始化                                                                                                                      |
 | Business Version | `business-version-*`                                    | 版本、资产图、不可变 revision 与 copy                                                                                                                   |
+| Contracts        | `src/contracts/` | 公开 Project/BusinessVersion/workspace/revision/Authoring/Run DTO 与共同消费的纯 TypeBox schema 单源；UI 仅按类型消费，不引入后端实现 |
 | Query            | `semantic-query-*`                                      | workspace、revision、Authoring/Run snapshot/event 投影                                                                                                  |
 | Authoring        | `semantic-authoring-*`                                  | job/task、结构化候选、范围审批、验证与激活                                                                                                              |
 | Run              | `semantic-run-*`、`semantic-task-projection.ts`         | 正式运行、语义步骤投影与逐 effect 授权                                                                                                                  |
@@ -58,6 +59,8 @@ UI 路由：`/`、`/semantic/:projectId`、`/semantic/:projectId/authoring/:vers
 - 候选浏览器验证成功后记录 executable revision verification；只有全部当前脚本/场景覆盖时版本才为 `valid`。
 - side-effect authorization 精确覆盖 effect-bearing step；staging 高风险必须 grant，production 业务写拒绝。
 - 断线后从 snapshot + seq 恢复，不由本地百分比或 Chat 文本推断状态。
+- Project 与 semantic 工作台统一 JSON 请求入口；完整保留成功 data/meta、HTTP status 与 ApiProblem 的 code/message/retryable/correlationId/details（含未知嵌套内容），非 JSON 失败不展示服务端 HTML。
+- Run/Authoring 业务拒绝由产生处的领域 kind/code 或 repository reason 决定，API 边界集中映射既有状态；文案、动态 callKey 不参与分类。五个 `side_effect_*` wire code 与状态保持不变。
 - Agent Task activity-log 使用独立 activity cursor 聚合；不得复用控制面 external event cursor。Authoring/Run 本地活动 seq 单调、可重启恢复、按业务上下文隔离且不重复。
 - Authoring 用户意见、候选、Skill、Tool、浏览器验证、审批与激活在同一 compact 活动流呈现；结构化 amendment/decision 仍是业务事实。Run 活动流只读，资产修改必须返回 Authoring。
 - 1440px 与 1920px 下浏览器始终是最强视觉与空间锚点；左侧页面/模块/场景使用树线、状态点、细强调轨和渐隐背景表达层级，不使用父子嵌套的大面积选中卡片；右侧检查器与 Agent 活动使用独立浮动表面，明暗主题保持等价层级与可见焦点。
@@ -88,3 +91,7 @@ UI 路由：`/`、`/semantic/:projectId`、`/semantic/:projectId/authoring/:vers
 ## 7. 已知缺口与技术债
 
 当前无与本次 PRD 多资产 bootstrap 交付直接相关的已知缺口。跨文档登记的 pending/in-progress 项见 `docs/PRODUCT-SPEC-INDEX.md` §3.9（页面锚点运行匹配与基线采集、页面任务上下文续接、生产 UI 恢复、DOM 变化局部修复）、`ai-e2e/docs/service-api-event-contract.md` §3（版本作用域写路由、validate、通用资产 revision 写与 activation、deployment-profiles 管理路由）及 `ai-e2e/docs/target-data-model.md` §16（通用自动脱敏与 UI 证据时间线）。
+
+- Amendment `reject` 命令入口存在既有校验缺口：默认 Ajv 在 `AmendmentCommandBodySchema` 的第一个 `anyOf` 分支剥离 `reason`，第二个 reject 分支因此缺必填字段；合法形状 `{ action: 'reject', reason }` 当前返回 `400 fst_err_validation`，尚未到达业务服务。真实 HTTP 测试锁住此事实，仓储→服务测试独立验证终态/CAS 拒绝仍为 typed conflict；修复入口须另行裁决校验策略，本轮不改变 schema 或全局 Ajv。
+
+- 已知错误状态不一致（保留既有 wire，待独立裁决）：Authoring job/command/task/amendment 幂等参数漂移与 semantic revision ID 内容漂移、归档版本只读拒绝、功能脚本中文 Schema validator 失败仍为 `500 internal_error`；场景 revision 的非法 payload/calls/call 为 `400 validation_error`，未支持 `runWhen` 为 `500 internal_error`，未支持 repeat 为 `409 conflict`。这些拒绝均可沿真实仓储调用重现，API reason 回归用例锁住场景三类结果；不能因为文案或 callKey 含 `state/required/not found` 而改变结果。正常 Run/Authoring 的共享摘要/内联机密校验为 400；Project/BusinessVersion 的既有 mapper 语义保留，本轮 stub 测试不宣称 Project 合法 wire 可触发共享拒绝。

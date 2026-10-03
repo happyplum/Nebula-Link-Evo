@@ -1,8 +1,10 @@
+import type { SemanticAssetType } from '../../contracts/semantic-control.js';
+import { DomainError } from '../../services/service-error.js';
+import type { AmendmentState, AmendmentCategory, AmendmentRecord } from '../../contracts/semantic-authoring.js';
 import { randomUUID } from 'node:crypto';
 import type {
   ActivateSemanticRevisionParams,
   SemanticAssetRepository,
-  SemanticAssetType,
   SemanticDependencyEdge,
 } from './semantic-asset-repository.js';
 import {
@@ -14,27 +16,6 @@ import {
   type DatabaseLike,
   type SupportedDatabase,
 } from './semantic-repository-utils.js';
-
-export type AmendmentState =
-  | 'draft'
-  | 'candidate_ready'
-  | 'waiting_decision'
-  | 'queued_at_safe_boundary'
-  | 'verifying'
-  | 'activated'
-  | 'rejected'
-  | 'failed'
-  | 'stale';
-
-export type AmendmentCategory =
-  | 'requirement'
-  | 'script'
-  | 'acceptance'
-  | 'scenario_add'
-  | 'scenario_remove'
-  | 'scenario_reorder'
-  | 'module_call'
-  | 'repair';
 
 export interface AuthoringContextScope {
   currentUrl: string;
@@ -82,24 +63,6 @@ export interface CreateAuthoringAmendmentParams {
   createdBy: string;
 }
 
-export interface AmendmentRecord {
-  id: string;
-  jobId: string;
-  threadId: string;
-  state: AmendmentState;
-  reason: string;
-  category: AmendmentCategory;
-  impact: Record<string, unknown>;
-  validationPlan: Record<string, unknown>;
-  decisionIds: string[];
-  changes: Array<Record<string, unknown>>;
-  decisions: Array<Record<string, unknown>>;
-  createdBy: string;
-  createdAt: string;
-  updatedAt: string;
-  failure?: Record<string, unknown>;
-  staleReason?: Record<string, unknown>;
-}
 
 interface RevisionSpec {
   table: string;
@@ -233,7 +196,7 @@ export class AuthoringAmendmentRepository {
     amendment: AmendmentRecord;
     created: boolean;
   } {
-    if (params.changes.length === 0) throw new Error('At least one amendment change is required');
+    if (params.changes.length === 0) throw new DomainError('validation_error', 'At least one amendment change is required');
     assertNoInlineSecrets(params.validationPlan);
     assertNoInlineSecrets(params.potentialSideEffects ?? {});
     for (const change of params.changes) {
@@ -402,7 +365,7 @@ export class AuthoringAmendmentRepository {
       const thread = this.db
         .prepare('SELECT job_id FROM authoring_context_threads WHERE id = ?')
         .get(params.threadId) as { job_id: string } | undefined;
-      if (!thread) throw new Error('Authoring context thread not found');
+      if (!thread) throw new DomainError('not_found', 'Authoring context thread not found');
       if (params.amendmentId) {
         const amendment = this.db
           .prepare('SELECT thread_id FROM authoring_amendments WHERE id = ?')
@@ -442,7 +405,7 @@ export class AuthoringAmendmentRepository {
     return inImmediateTransaction(this.db, () => {
       const amendment = this.requireAmendment(params.amendmentId);
       if (amendment.state !== 'waiting_decision') {
-        throw new Error('Amendment is not waiting for a decision');
+        throw new DomainError('conflict', 'Amendment is not waiting for a decision');
       }
       const decision = this.db
         .prepare(
@@ -451,17 +414,17 @@ export class AuthoringAmendmentRepository {
            WHERE links.amendment_id = ? AND requests.id = ?`
         )
         .get(params.amendmentId, params.decisionId) as DbRow | undefined;
-      if (!decision) throw new Error('Decision does not belong to the amendment');
+      if (!decision) throw new DomainError('not_found', 'Decision does not belong to the amendment');
       const existingAnswer = this.db
         .prepare('SELECT answer_key FROM decision_answers WHERE decision_request_id = ?')
         .get(params.decisionId) as { answer_key: string } | undefined;
       if (existingAnswer) {
         if (existingAnswer.answer_key !== params.answer) {
-          throw new Error('Decision was already answered differently');
+          throw new DomainError('conflict', 'Decision was already answered differently');
         }
         return this.requireAmendment(params.amendmentId);
       }
-      if (decision.status !== 'open') throw new Error('Decision is not open');
+      if (decision.status !== 'open') throw new DomainError('conflict', 'Decision is not open');
       const now = new Date().toISOString();
       this.db
         .prepare(
@@ -522,13 +485,13 @@ export class AuthoringAmendmentRepository {
   queueAtSafeBoundary(amendmentId: string): AmendmentRecord {
     const candidate = this.requireAmendment(amendmentId);
     if (candidate.state !== 'candidate_ready') {
-      throw new Error('Only a ready candidate can be applied');
+      throw new DomainError('conflict', 'Only a ready candidate can be applied');
     }
     this.assertCandidateFresh(candidate);
     return inImmediateTransaction(this.db, () => {
       const amendment = this.requireAmendment(amendmentId);
       if (amendment.state !== 'candidate_ready') {
-        throw new Error('Only a ready candidate can be applied');
+        throw new DomainError('conflict', 'Only a ready candidate can be applied');
       }
       this.assertDecisionsApplied(amendmentId);
       const now = new Date().toISOString();
@@ -687,7 +650,7 @@ export class AuthoringAmendmentRepository {
       const amendment = this.requireAmendment(amendmentId);
       if (['activated', 'rejected', 'failed', 'stale'].includes(amendment.state)) {
         if (amendment.state === state) return amendment;
-        throw new Error('Terminal amendment cannot change outcome');
+        throw new DomainError('conflict', 'Terminal amendment cannot change outcome');
       }
       const now = new Date().toISOString();
       this.updateAmendmentState(amendmentId, amendment.state, state, now, { failure });
@@ -735,10 +698,10 @@ export class AuthoringAmendmentRepository {
       | DbRow
       | undefined;
     if (!job || (versionId && job.business_version_id !== versionId)) {
-      throw new Error('Authoring job not found for the business version');
+      throw new DomainError('not_found', 'Authoring job not found for the business version');
     }
     if (['completed', 'cancelled', 'failed'].includes(String(job.lifecycle))) {
-      throw new Error('Authoring job is not writable');
+      throw new DomainError('conflict', 'Authoring job is not writable');
     }
     return job;
   }
@@ -747,8 +710,8 @@ export class AuthoringAmendmentRepository {
     const thread = this.db
       .prepare('SELECT * FROM authoring_context_threads WHERE id = ? AND job_id = ?')
       .get(threadId, jobId) as DbRow | undefined;
-    if (!thread) throw new Error('Authoring context thread not found');
-    if (thread.state !== 'active') throw new Error('Authoring context thread is stale');
+    if (!thread) throw new DomainError('not_found', 'Authoring context thread not found');
+    if (thread.state !== 'active') throw new DomainError('conflict', 'Authoring context thread is stale');
     return thread;
   }
 
@@ -762,7 +725,7 @@ export class AuthoringAmendmentRepository {
       .prepare(`SELECT business_version_id FROM ${table} WHERE id = ?`)
       .get(assetId) as { business_version_id: string } | undefined;
     if (!asset || asset.business_version_id !== versionId) {
-      throw new Error(`${label} does not belong to the business version`);
+      throw new DomainError('not_found', `${label} does not belong to the business version`);
     }
   }
 
@@ -798,14 +761,14 @@ export class AuthoringAmendmentRepository {
         candidate.validation_status !== 'valid' ||
         candidate.supersedes_revision_id !== null
       ) {
-        throw new Error('Created candidate must be the first valid draft revision of the asset');
+        throw new DomainError('validation_error', 'Created candidate must be the first valid draft revision of the asset');
       }
       const current = this.db
         .prepare(
           `SELECT 1 FROM ${spec.table} WHERE ${spec.assetColumn} = ? AND lifecycle = 'current'`
         )
         .get(change.assetId);
-      if (current) throw new Error('Created candidate asset already has a current revision');
+      if (current) throw new DomainError('conflict', 'Created candidate asset already has a current revision');
     } else {
       if (
         !base ||
@@ -814,7 +777,7 @@ export class AuthoringAmendmentRepository {
         base.lifecycle !== 'current' ||
         base.content_sha256 !== change.baseRevisionSha256
       ) {
-        throw new Error('Amendment base revision is stale or belongs to another asset');
+        throw new DomainError('conflict', 'Amendment base revision is stale or belongs to another asset');
       }
       if (
         !candidate ||
@@ -824,7 +787,7 @@ export class AuthoringAmendmentRepository {
         candidate.validation_status !== 'valid' ||
         candidate.supersedes_revision_id !== change.baseRevisionId
       ) {
-        throw new Error('Candidate must be a valid draft that supersedes the exact base revision');
+        throw new DomainError('validation_error', 'Candidate must be a valid draft that supersedes the exact base revision');
       }
     }
     const ownership = this.resolveChangeOwnership(change, base, versionId);
@@ -848,7 +811,7 @@ export class AuthoringAmendmentRepository {
         change.assetId
       )
     ) {
-      throw new Error('Scenario is not visible in the current URL scope');
+      throw new DomainError('conflict', 'Scenario is not visible in the current URL scope');
     }
     this.requireOwnedAsset(
       'page_definitions',
@@ -913,7 +876,7 @@ export class AuthoringAmendmentRepository {
     const row = this.db
       .prepare('SELECT * FROM authoring_amendments WHERE id = ?')
       .get(amendmentId) as DbRow | undefined;
-    if (!row) throw new Error('Authoring amendment not found');
+    if (!row) throw new DomainError('not_found', 'Authoring amendment not found');
     const changes = (
       this.db
         .prepare(
@@ -960,7 +923,7 @@ export class AuthoringAmendmentRepository {
       .get(amendment.threadId) as { state: string } | undefined;
     if (!thread || thread.state !== 'active') {
       this.markStale(amendment.id, { code: 'context_stale' });
-      throw new Error('Amendment context is stale');
+      throw new DomainError('conflict', 'Amendment context is stale');
     }
     for (const raw of amendment.changes) {
       const change = raw as unknown as {
@@ -1038,7 +1001,7 @@ export class AuthoringAmendmentRepository {
          WHERE links.amendment_id = ? AND requests.status != 'applied' LIMIT 1`
       )
       .get(amendmentId);
-    if (pending) throw new Error('Required impact decision has not been applied');
+    if (pending) throw new DomainError('conflict', 'Required impact decision has not been applied');
   }
 
   private hasUnsafeBrowserOperation(jobId: string): boolean {
@@ -1103,7 +1066,7 @@ export class AuthoringAmendmentRepository {
         amendmentId,
         from
       );
-    if (Number(result.changes) !== 1) throw new Error('Amendment state changed concurrently');
+    if (Number(result.changes) !== 1) throw new DomainError('conflict', 'Amendment state changed concurrently');
   }
 
   private nextEventSeq(jobId: string): number {

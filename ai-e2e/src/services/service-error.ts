@@ -1,3 +1,18 @@
+export type DomainErrorKind = 'not_found' | 'conflict' | 'validation_error';
+
+/** Business rejection declared at its source; HTTP mapping belongs to the API boundary. */
+export class DomainError extends Error {
+  constructor(
+    readonly kind: DomainErrorKind,
+    message: string,
+    readonly code: string = kind,
+    readonly details?: Record<string, unknown>
+  ) {
+    super(message);
+    this.name = 'DomainError';
+  }
+}
+
 /**
  * ServiceError - Base error class for service-layer errors with HTTP status code mapping.
  *

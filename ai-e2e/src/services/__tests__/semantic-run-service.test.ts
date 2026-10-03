@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { SemanticRunControlRepository } from '../../database/repositories/semantic-run-control-repository.js';
 import { SemanticRunService } from '../semantic-run-service.js';
-import { ServiceError } from '../service-error.js';
+import { DomainError, ServiceError } from '../service-error.js';
 
 function createRepository() {
   return {
@@ -16,6 +16,13 @@ function createRepository() {
 }
 
 describe('SemanticRunService', () => {
+  it('does not classify an unexpected error by business-looking message text', () => {
+    const repository = createRepository();
+    const error = new Error('unexpected internal state conflict');
+    repository.createFormalRun.mockImplementation(() => { throw error; });
+    const service = new SemanticRunService(repository as unknown as SemanticRunControlRepository);
+    expect(() => service.create({} as never)).toThrow(error);
+  });
   it('delegates every formal Run control operation without rewriting its durable result', () => {
     const repository = createRepository();
     const service = new SemanticRunService(
@@ -102,61 +109,22 @@ describe('SemanticRunService', () => {
         expectedStateVersion: 2,
         createdBy: 'tester',
       })
-    ).toThrowError(expect.objectContaining({ statusCode: 409, code: 'CONFLICT' }));
+    ).toThrowError(expect.objectContaining({ kind: 'conflict', code: 'conflict' }));
   });
 
   it.each([
-    ['run not found', 404, 'NOT_FOUND'],
-    ['invalid verification hash', 400, 'VALIDATION_ERROR'],
-    ['run lifecycle transition rejected', 409, 'CONFLICT'],
-    ['database unavailable', 500, 'INTERNAL_ERROR'],
-  ])('maps repository error "%s" to the stable service contract', (message, statusCode, code) => {
+    ['not_found', 'not_found'],
+    ['validation_error', 'side_effect_declaration_required'],
+    ['validation_error', 'side_effect_bound_invalid'],
+    ['conflict', 'side_effect_approval_revoked'],
+    ['conflict', 'side_effect_approval_stale'],
+    ['conflict', 'side_effect_approval_required'],
+  ] as const)('preserves typed %s rejection %s regardless of wording', (kind, code) => {
     const repository = createRepository();
-    repository.createFormalRun.mockImplementation(() => {
-      throw new Error(message);
-    });
-    const service = new SemanticRunService(
-      repository as unknown as SemanticRunControlRepository
-    );
-
-    expect(() => service.create({} as never)).toThrowError(
-      expect.objectContaining({ statusCode, code, message })
-    );
-  });
-
-  it.each([
-    ["Side-effect 'effect-1' is not declared", 400, 'side_effect_declaration_required'],
-    [
-      "Side-effect 'effect-1' has no finite affectedItems bound",
-      400,
-      'side_effect_bound_invalid',
-    ],
-    ['Side-effect approval grant was revoked', 409, 'side_effect_approval_revoked'],
-    ['Side-effect approval grant is inactive or stale', 409, 'side_effect_approval_stale'],
-    ['Side-effect approval is stale: risk projection changed', 409, 'side_effect_approval_stale'],
-    [
-      'Run has an open decision and cannot start or resume',
-      409,
-      'side_effect_approval_required',
-    ],
-  ])('maps side-effect error "%s" to its dedicated ApiProblem code', (message, statusCode, code) => {
-    const repository = createRepository();
-    repository.command.mockImplementation(() => {
-      throw new Error(message);
-    });
-    const service = new SemanticRunService(
-      repository as unknown as SemanticRunControlRepository
-    );
-
-    expect(() =>
-      service.command({
-        commandId: 'command-side-effect',
-        runId: 'run-1',
-        action: 'start',
-        expectedStateVersion: 2,
-        createdBy: 'tester',
-      })
-    ).toThrowError(expect.objectContaining({ statusCode, code, message }));
+    const error = new DomainError(kind, '新的中文文案不包含分类关键字', code);
+    repository.command.mockImplementation(() => { throw error; });
+    const service = new SemanticRunService(repository as unknown as SemanticRunControlRepository);
+    expect(() => service.command({} as never)).toThrow(error);
   });
 
   it('preserves an existing ServiceError without changing its status or details', () => {
