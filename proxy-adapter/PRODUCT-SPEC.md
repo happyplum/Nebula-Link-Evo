@@ -48,6 +48,8 @@
 
 - 浏览器 target/locator 公共类型由 `shared/types/browser-target.ts` 的 TypeBox schema + Static 唯一维护，`shared/types/browser-execution.ts` 保留既有 type 导出；proxy MCP 与 Agent Task 直接引用同一 target schema，wire 字段和消费者调用方式保持。
 
+- 三个 `browser-control.operation_*` 的 outputSchema 直接引用 `shared/types/browser-operation-result.ts` 的 `BrowserOperationRecordSchema`；原 provider `operationRecordSchema()` 已删除。operation 仅接受既有 observe/act 词表，JSON Schema→Zod 与 MCP SDK 共同验证嵌套 artifact/target/problem；required/optional 与既有整数、SHA-256、size、snapshotId 约束保持，HTTP/DB/wire major 不变。
+
 ## 2. 模块清单
 
 | 模块             | 路径                                                                                                                                                                                                                 | 状态    | 职责                                                                                                                                                      | 边界/契约                                                                                                                                                                                      |

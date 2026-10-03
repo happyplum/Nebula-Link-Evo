@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { createServer } from 'node:http';
+import { randomInt } from 'node:crypto';
 import { LlmAdapter } from '@deepseek-ai/dsh-llm';
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm';
 import { SessionId } from '@deepseek-ai/dsh-session';
@@ -53,6 +55,89 @@ async function options(adapter: TextAdapter, root?: string): Promise<HarnessRunt
 }
 
 describe('createHarnessRuntime', () => {
+  it('returns generic canonical MCP results and propagates MCP errors', async () => {
+    const canonical = {
+      content: [{ type: 'text', text: 'presentation' }],
+      structuredContent: { arbitrary: 'generic data' },
+    };
+    const server = createServer(async (request, response) => {
+      if (request.method !== 'POST') {
+        response.writeHead(405).end();
+        return;
+      }
+      const chunks: Buffer[] = [];
+      for await (const chunk of request) chunks.push(Buffer.from(chunk));
+      const rpc = JSON.parse(Buffer.concat(chunks).toString('utf8')) as {
+        id?: number;
+        method: string;
+        params?: { name?: string; arguments?: { fail?: boolean } };
+      };
+      if (rpc.id === undefined) {
+        response.writeHead(202).end();
+        return;
+      }
+      const result =
+        rpc.method === 'initialize'
+          ? {
+              protocolVersion: '2025-03-26',
+              capabilities: { tools: {} },
+              serverInfo: { name: 'fixture', version: '1.0' },
+            }
+          : rpc.method === 'tools/list'
+            ? {
+                tools: [
+                  {
+                    name: 'generic',
+                    description: 'Generic MCP result',
+                    inputSchema: { type: 'object', properties: { fail: { type: 'boolean' } } },
+                  },
+                ],
+              }
+            : rpc.params?.arguments?.fail
+              ? { content: [{ type: 'text', text: 'generic rejected' }], isError: true }
+              : canonical;
+      response
+        .writeHead(200, { 'content-type': 'application/json' })
+        .end(JSON.stringify({ jsonrpc: '2.0', id: rpc.id, result }));
+    });
+    // Windows may allocate fetch-blocked ports (e.g. 6000) for port 0.
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(randomInt(49152, 65536), '127.0.0.1', () => {
+        server.off('error', reject);
+        resolve();
+      });
+    });
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('Expected a TCP test server');
+    let runtime: Awaited<ReturnType<typeof createHarnessRuntime>> | undefined;
+    try {
+      runtime = await createHarnessRuntime({
+        ...(await options(new TextAdapter('unused'))),
+        mcp: [
+          {
+            transport: 'streamable-http',
+            serverName: 'fixture',
+            url: `http://127.0.0.1:${address.port}/mcp`,
+            headers: {},
+            toolCallTimeoutMs: 5_000,
+            failOnStartupError: true,
+          },
+        ],
+      });
+      await expect(runtime.callTool('fixture', 'generic')).resolves.toEqual(canonical);
+      await expect(runtime.callTool('fixture', 'generic', { fail: true })).rejects.toThrow(
+        'generic rejected'
+      );
+      await expect(runtime.callTool('fixture', 'missing')).rejects.toThrow();
+    } finally {
+      await runtime?.dispose();
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve()))
+      );
+    }
+  }, 20_000);
+
   it('isolates Cordis roots between service instances', async () => {
     const firstAdapter = new TextAdapter('first');
     const secondAdapter = new TextAdapter('second');

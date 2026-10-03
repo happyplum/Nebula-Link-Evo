@@ -3,7 +3,7 @@ import type { AgentHandle, AgentSetup } from '@deepseek-ai/dsh-agent';
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm';
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session';
 import type { Config as PiAiConfig } from '@deepseek-ai/dsh-llm-pi-ai';
-import type { Config as DshMcpConfig } from '@deepseek-ai/dsh-mcp-client';
+import type { Config as DshMcpConfig, McpResult } from '@deepseek-ai/dsh-mcp-client';
 import type { SessionPersistenceRevision } from '@deepseek-ai/dsh-session-persistence';
 import type { NebulaGlmAdapterOptions } from './glm-adapter.js';
 
@@ -67,7 +67,7 @@ export interface HarnessRuntime {
     toolName: string,
     args?: Record<string, unknown>,
     options?: { signal?: AbortSignal; timeoutMs?: number }
-  ): Promise<unknown>;
+  ): Promise<McpResult>;
   transportToolNames(): readonly string[];
   dispose(): Promise<void>;
 }

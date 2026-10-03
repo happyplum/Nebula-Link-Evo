@@ -1,4 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { BrowserOperationRecordSchema } from '@nebula-link-evo/shared/types/browser-operation-result';
+import {
+  ACT_OPERATIONS,
+  OBSERVE_OPERATIONS,
+} from '@nebula-link-evo/shared/types/browser-execution';
 import { BrowserExecutionError } from '../browser-execution/errors.js';
 import type { BrowserExecutionService } from '../browser-execution/service.js';
 import { BrowserClient } from '../browser-client.js';
@@ -6,6 +14,7 @@ import { BrowserExecutionToolsProvider } from '../tools/providers/browser-execut
 import type { GatewayTool } from '../tools/types.js';
 import { BrowserTargetRefV1Schema } from '@nebula-link-evo/shared/types/browser-target';
 import { jsonPropertyToZod } from '../tools/adapters/json-schema-to-zod.js';
+import { registerGatewayToolsToMcpServer } from '../tools/adapters/mcp-server.js';
 
 function requireTool(provider: BrowserExecutionToolsProvider, suffix: string): GatewayTool {
   const tool = provider.getTools().find((candidate) => candidate.name.endsWith(suffix));
@@ -14,6 +23,126 @@ function requireTool(provider: BrowserExecutionToolsProvider, suffix: string): G
 }
 
 describe('BrowserExecutionToolsProvider', () => {
+  it('shares the output schema and validates nested results through the real MCP SDK', async () => {
+    const valid = {
+      schema: 'nebula.browser.operation-result/1.0',
+      operationId: 'op-1',
+      requestHash: 'hash-1',
+      sessionId: 'session-1',
+      leaseId: 'lease-1',
+      leaseSequence: -1,
+      kind: 'observe',
+      operation: 'dom_snapshot',
+      status: 'succeeded',
+      queueSequence: -1,
+      acceptedAt: 'accepted',
+      startedAt: 'started',
+      completedAt: 'completed',
+      tabId: 'tab-1',
+      resolvedTarget: { semantic: '', strategy: 'role', candidateIndex: 0, matchedCount: 0 },
+      actual: { free: [false, null, 1] },
+      artifacts: [
+        {
+          id: 'artifact-1',
+          kind: 'dom_snapshot',
+          sha256: 'a'.repeat(64),
+          mimeType: 'application/json',
+          sizeBytes: 1,
+          snapshotId: 'snapshot-1',
+        },
+      ],
+      error: {
+        code: 'error',
+        message: 'message',
+        retryable: false,
+        correlationId: 'c-1',
+        details: { free: true },
+      },
+    };
+    let operation: unknown = valid;
+    const service = { getOperation: vi.fn(() => operation) } as unknown as BrowserExecutionService;
+    const provider = new BrowserExecutionToolsProvider(service);
+    await provider.initialize();
+    for (const tool of provider.getTools())
+      expect(tool.outputSchema).toBe(BrowserOperationRecordSchema);
+
+    const output = jsonPropertyToZod(requireTool(provider, 'operation_get').outputSchema);
+    for (const [kind, operations] of [
+      ['observe', OBSERVE_OPERATIONS],
+      ['act', ACT_OPERATIONS],
+    ] as const) {
+      for (const name of operations) {
+        for (const status of [
+          'queued',
+          'running',
+          'succeeded',
+          'failed',
+          'cancelled',
+          'outcome_unknown',
+        ]) {
+          expect(output.safeParse({ ...valid, kind, operation: name, status }).success).toBe(true);
+        }
+      }
+    }
+
+    const server = new McpServer({ name: 'operation-contract-test', version: '1.0.0' });
+    const client = new Client({ name: 'operation-contract-test-client', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    registerGatewayToolsToMcpServer(server, provider.getTools());
+    try {
+      await server.connect(serverTransport);
+      await client.connect(clientTransport);
+      expect((await client.listTools()).tools).toHaveLength(3);
+      const args = { name: 'browser-control.operation_get', arguments: { operationId: 'op-1' } };
+      expect(await client.callTool(args)).toMatchObject({ structuredContent: valid });
+      for (const invalid of [
+        { ...valid, status: 'done' },
+        { ...valid, acceptedAt: undefined },
+        { ...valid, operation: 'unsupported' },
+        { ...valid, unexpected: true },
+        { ...valid, artifacts: [{ ...valid.artifacts[0], sizeBytes: 0 }] },
+        { ...valid, artifacts: [{ ...valid.artifacts[0], sha256: 'invalid' }] },
+        { ...valid, artifacts: [{ ...valid.artifacts[0], snapshotId: '' }] },
+        { ...valid, artifacts: [{ ...valid.artifacts[0], unexpected: true }] },
+        { ...valid, resolvedTarget: { ...valid.resolvedTarget, candidateIndex: -1 } },
+        { ...valid, resolvedTarget: { ...valid.resolvedTarget, strategy: 'coordinates' } },
+        { ...valid, resolvedTarget: { ...valid.resolvedTarget, unexpected: true } },
+        { ...valid, error: { code: 'error', message: 'message', retryable: false } },
+        { ...valid, error: { ...valid.error, unexpected: true } },
+      ]) {
+        operation = invalid;
+        const result = await client.callTool(args);
+        expect(result.isError).toBe(true);
+        expect(result).not.toHaveProperty('structuredContent');
+      }
+    } finally {
+      await client.close();
+      await server.close();
+      await provider.shutdown();
+    }
+  });
+
+  it('rejects unknown operation names in the MCP output contract', async () => {
+    const provider = new BrowserExecutionToolsProvider({} as BrowserExecutionService);
+    await provider.initialize();
+    const output = jsonPropertyToZod(requireTool(provider, 'operation_get').outputSchema);
+    const record = {
+      schema: 'nebula.browser.operation-result/1.0',
+      operationId: 'op-1',
+      requestHash: 'hash-1',
+      sessionId: 'session-1',
+      leaseId: 'lease-1',
+      leaseSequence: 1,
+      kind: 'observe',
+      operation: 'unsupported',
+      status: 'succeeded',
+      queueSequence: 1,
+      acceptedAt: 'accepted',
+      artifacts: [],
+    };
+    expect(output.safeParse(record).success).toBe(false);
+  });
+
   it('compiles the shared target schema for every supported locator strategy', async () => {
     const provider = new BrowserExecutionToolsProvider({} as BrowserExecutionService);
     await provider.initialize();

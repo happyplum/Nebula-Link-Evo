@@ -18,6 +18,8 @@
 | 场景 fail-closed   | shipped | `runWhen` 与 `repeat.for_each` 在场景写入（`createScenario`、`validateGraph` 与 test_scenario revision 创建）时显式拒绝，不静默退化；固定次数 repeat（1–100）正常展开 |
 | 浏览器中心 UI       | shipped | 项目首页、Authoring/Run 三栏工作台、轻量分层上下文树、深链接上下文、显式定位、Diff/审批/证据/Chat、布局与主题偏好；工作台采用低噪声冷蓝视觉体系、浮动面板和渐隐选中轨，突出持续挂载的浏览器主舞台；Playwright 使用真实生产 bundle/API 验证完整旅程  |
 
+- 浏览器 operation record/status、artifact、resolved target 与 problem 由 `shared/types/browser-operation-result.ts` 的 TypeBox schema 唯一派生，既有 `browser-execution` type 入口保持。E2E 通过共享 HTTP 客户端消费相同 DTO，不新增 HTTP 响应校验或迁移数据库。
+
 ## 2. 服务与模块
 
 | 模块             | 位置                                                    | 职责                                                                                                                                                    |

@@ -1,7 +1,10 @@
+import type { BrowserOperationRecord } from '@nebula-link-evo/shared/types/browser-operation-result';
+import type { VisionSnapshotBindingV1 } from '@nebula-link-evo/shared/types/vision-snapshot';
 import { createHash } from 'node:crypto';
 import type { HarnessMcpCaller } from '../harness/types.js';
 import { GATEWAY_MCP_SERVER_NAME } from '../config/service-config.js';
 import type { GatewayTool } from '../tools/types.js';
+import { readBrowserOperationResult } from '../tools/browser-operation-result.js';
 import { AgentTaskError } from './errors.js';
 import type {
   AgentTaskBrowserBinding,
@@ -14,39 +17,10 @@ const EXECUTE_TOOL = 'browser-control.operation_execute';
 const GET_TOOL = 'browser-control.operation_get';
 const CANCEL_TOOL = 'browser-control.operation_cancel';
 const TERMINAL_STATUSES = new Set(['succeeded', 'failed', 'cancelled', 'outcome_unknown']);
-const OPERATION_STATUSES = new Set([
-  'queued',
-  'running',
-  'succeeded',
-  'failed',
-  'cancelled',
-  'outcome_unknown',
-]);
 
-interface BrowserOperationRecord {
-  schema: 'nebula.browser.operation-result/1.0';
-  operationId: string;
-  requestHash: string;
-  sessionId: string;
-  leaseId: string;
-  leaseSequence: number;
-  tabId?: string;
-  kind: string;
-  status: string;
-  operation: string;
-  artifacts: Array<{
-    id: string;
-    kind: string;
-    sha256: string;
-    mimeType: string;
-    sizeBytes: number;
-    snapshotId?: string;
-  }>;
-  visionSnapshotBinding?: import('@nebula-link-evo/shared').VisionSnapshotBindingV1;
-  actual?: unknown;
-  resolvedTarget?: unknown;
-  error?: { code?: string; message?: string; retryable?: boolean };
-}
+type BrowserToolOperationRecord = BrowserOperationRecord & {
+  visionSnapshotBinding?: VisionSnapshotBindingV1;
+};
 
 export interface BrowserToolWrapperOptions {
   taskId: string;
@@ -109,7 +83,7 @@ export class BrowserToolWrapper {
     rawInput: unknown,
     toolCallId: string,
     signal?: AbortSignal
-  ): Promise<BrowserOperationRecord> {
+  ): Promise<BrowserToolOperationRecord> {
     this.options.beforeToolCall?.();
     this.consumeBudget();
     const input = requireObject(rawInput, 'Browser tool input');
@@ -242,7 +216,7 @@ export class BrowserToolWrapper {
     }
   }
 
-  async cancel(operationId: string): Promise<BrowserOperationRecord> {
+  async cancel(operationId: string): Promise<BrowserToolOperationRecord> {
     return this.callOperation(
       CANCEL_TOOL,
       {
@@ -265,7 +239,7 @@ export class BrowserToolWrapper {
     operationId: string,
     operationName: string,
     executeError: unknown
-  ): Promise<BrowserOperationRecord> {
+  ): Promise<BrowserToolOperationRecord> {
     const deterministic = toDeterministicProxyError(executeError);
     if (deterministic) throw deterministic;
     try {
@@ -304,13 +278,14 @@ export class BrowserToolWrapper {
     signal?: AbortSignal,
     expectedOperationId?: string,
     expectedOperation?: string
-  ): Promise<BrowserOperationRecord> {
+  ): Promise<BrowserToolOperationRecord> {
     const raw = signal
       ? await this.options.mcpClient.callTool(GATEWAY_MCP_SERVER_NAME, toolName, args, { signal })
       : await this.options.mcpClient.callTool(GATEWAY_MCP_SERVER_NAME, toolName, args);
-    const parsed = extractParsedResult(raw);
+    const parsed = readBrowserOperationResult(raw);
     if (
-      !isValidOperationRecord(parsed, this.options.binding, expectedOperationId, expectedOperation)
+      !parsed ||
+      !matchesOperationBinding(parsed, this.options.binding, expectedOperationId, expectedOperation)
     ) {
       throw new AgentTaskError(
         'dependency_unavailable',
@@ -318,7 +293,7 @@ export class BrowserToolWrapper {
         true
       );
     }
-    return parsed as unknown as BrowserOperationRecord;
+    return parsed;
   }
 
   private consumeBudget(): void {
@@ -333,69 +308,24 @@ export class BrowserToolWrapper {
   }
 }
 
-function extractParsedResult(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== 'object') return null;
-  const record = value as Record<string, unknown>;
-  if (record.parsed && typeof record.parsed === 'object' && !Array.isArray(record.parsed)) {
-    return record.parsed as Record<string, unknown>;
-  }
-  if (
-    record.structuredContent &&
-    typeof record.structuredContent === 'object' &&
-    !Array.isArray(record.structuredContent)
-  ) {
-    return record.structuredContent as Record<string, unknown>;
-  }
-  if (Array.isArray(record.content)) {
-    const text = record.content
-      .filter(
-        (item): item is { type: 'text'; text: string } =>
-          Boolean(item) &&
-          typeof item === 'object' &&
-          (item as { type?: unknown }).type === 'text' &&
-          typeof (item as { text?: unknown }).text === 'string'
-      )
-      .map((item) => item.text)
-      .join('\n');
-    try {
-      const parsed = JSON.parse(text) as unknown;
-      return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-        ? (parsed as Record<string, unknown>)
-        : null;
-    } catch {
-      return null;
-    }
-  }
-  return record;
-}
-
-function isValidOperationRecord(
-  value: Record<string, unknown> | null,
+function matchesOperationBinding(
+  value: BrowserOperationRecord,
   binding: AgentTaskBrowserBinding,
   expectedOperationId?: string,
   expectedOperation?: string
 ): boolean {
-  if (!value) return false;
   return (
-    value.schema === 'nebula.browser.operation-result/1.0' &&
-    typeof value.operationId === 'string' &&
     (expectedOperationId === undefined || value.operationId === expectedOperationId) &&
-    typeof value.requestHash === 'string' &&
     value.requestHash.length > 0 &&
     value.sessionId === binding.browserSessionId &&
     value.leaseId === binding.browserLeaseId &&
     value.leaseSequence === binding.browserLeaseSequence &&
     value.tabId === binding.tabId &&
-    (value.kind === 'observe' || value.kind === 'act') &&
-    typeof value.operation === 'string' &&
-    (expectedOperation === undefined || value.operation === expectedOperation) &&
-    typeof value.status === 'string' &&
-    OPERATION_STATUSES.has(value.status) &&
-    Array.isArray(value.artifacts)
+    (expectedOperation === undefined || value.operation === expectedOperation)
   );
 }
 
-function withVisionSnapshotBinding(operation: BrowserOperationRecord): BrowserOperationRecord {
+function withVisionSnapshotBinding(operation: BrowserOperationRecord): BrowserToolOperationRecord {
   if (
     operation.status !== 'succeeded' ||
     operation.kind !== 'observe' ||

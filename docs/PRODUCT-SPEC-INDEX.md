@@ -145,6 +145,7 @@ debug-ui  ←──  （仅被用户消费）
 
 | 类型/模块                        | 路径                         | 消费方                                                                                  |
 | -------------------------------- | ---------------------------- | --------------------------------------------------------------------------------------- |
+| 浏览器操作结果 schema/派生类型 | `types/browser-operation-result.ts` | `proxy-adapter`、`ai-chat-service`、`ai-e2e`、`browser-control-client`、`deepseek-harness-plugin` |
 | 浏览器执行线协议与操作常量       | `types/browser-execution.ts` | `proxy-adapter`、`ai-chat-service`、`ai-e2e`、`browser-control-client`、`deepseek-harness-plugin` |
 | Vision snapshot/artifact binding | `types/vision-snapshot.ts`   | `ai-chat-service`（消费）；proxy-adapter operation/artifact（权威生产语义）             |
 | Agent Stream v1                 | `types/agent-stream.ts`      | `ai-chat-service`、`debug-ui`、`ai-e2e`、`agent-activity-ui`                            |
@@ -172,6 +173,7 @@ debug-ui  ←──  （仅被用户消费）
 
 ### 3.6 浏览器目标定位与视觉标记契约（`proxy-adapter` 内部）
 
+- **浏览器操作结果单源（shipped）**：`shared/types/browser-operation-result.ts` 经显式 `./types/browser-operation-result` 唯一声明 operation record/status、artifact、resolved target 与 problem schema，Static 派生类型由旧 browser-execution type-only 重导出；root 不构造 schema。proxy 三个 MCP 工具直接引用同一 outputSchema，operation 使用既有 observe/act 词表，locator strategy 复用 browser-target；chat wrapper 只追加本地 Vision binding 类型，原完整接口与 provider 本地 schema 已退出。required/optional、SHA/size/snapshotId/target 整数边界保持，HTTP/DB/MCP 集合与 wire major 保持。
 - 浏览器操作只接受 `shared/types/browser-execution.ts` 的 operation 白名单和严格 target/args Schema；`BrowserOperationRequestV1` 以 kind/operation 判别到精确 args 映射，proxy 执行分支直接获得收窄参数；已删除旧跨包 `Action` 联合及其映射层。
 - 7 级目标链：nebula-id → role → testid → aria → text → css → xpath。
 - DOM 快照 v2.0：含 `data-nebula-id` 属性；element 归一化字段 `id` + `locator_bundle`。

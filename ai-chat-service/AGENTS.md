@@ -48,6 +48,7 @@ pnpm type-check   # tsc --noEmit
 
 - `.js` extension for local TS imports (repo-wide convention).
 - `@nebula-link-evo/shared` via `workspace:*`.
+- `HarnessRuntime.callTool` returns the upstream `McpResult` envelope. Browser wrapper and VisionSnapshotLoader must consume `src/tools/browser-operation-result.ts#readBrowserOperationResult`: only `structuredContent` is authoritative, validated once with the shared record schema; callers retain binding/authorization semantics and must not parse text or legacy result fallbacks.
 - Browser operation kind/observe/act vocabulary comes from `@nebula-link-evo/shared/types/browser-execution`; do not fork a second constant list.
 - Localhost-only bind (`127.0.0.1`) by default.
 - Chat 与 Agent Task 工具必须进入 DSH `ToolRuntime`；部署期产品工具由 `GatewayToolBridge` 启动时一次性投影并使用 DSH-safe name。原始 `operation_execute/get/cancel` 只能存在于模型不可见的 transport child scope，不得直接注册到模型工具表。

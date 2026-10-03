@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
 import { describe, expect, it, vi } from 'vitest';
+import type { McpResult } from '@deepseek-ai/dsh-mcp-client';
 import { VisionSnapshotLoader } from './snapshot-loader.js';
 
 function fixture() {
@@ -57,6 +58,8 @@ function fixture() {
         kind: 'dom_snapshot',
         sha256: hash,
         mimeType: 'application/json',
+        sizeBytes: bytes.byteLength,
+        snapshotId: binding.snapshotId,
       },
     ],
   };
@@ -88,7 +91,7 @@ function buildLoader(
   return {
     loader: new VisionSnapshotLoader({
       gatewayUrl: 'http://127.0.0.1:3000',
-      mcpClient: { callTool: vi.fn(async () => ({ parsed: operation })) },
+      mcpClient: { callTool: vi.fn(async () => ({ content: [], structuredContent: operation })) },
       attachments: { saveImage, readImage } as never,
       fetch: fetchImpl,
     }),
@@ -98,6 +101,34 @@ function buildLoader(
 }
 
 describe('VisionSnapshotLoader', () => {
+  it.each(['parsed', 'text', 'content', 'raw', 'malformed structuredContent'])(
+    'rejects %s results before downloading immutable bytes',
+    async (source) => {
+      const { operation, binding } = fixture();
+      const text = JSON.stringify(operation);
+      const content = [{ type: 'text', text }];
+      const result =
+        source === 'parsed'
+          ? { parsed: operation }
+          : source === 'text'
+            ? { text }
+            : source === 'content'
+              ? { content }
+              : source === 'raw'
+                ? operation
+                : { content, structuredContent: { ...operation, queueSequence: 'invalid' } };
+      const fetchImpl = vi.fn();
+      const loader = new VisionSnapshotLoader({
+        gatewayUrl: 'http://127.0.0.1:3000',
+        mcpClient: { callTool: vi.fn(async () => result as unknown as McpResult) },
+        attachments: {} as never,
+        fetch: fetchImpl,
+      });
+      await expect(loader.load(binding)).rejects.toThrow(/operation record/u);
+      expect(fetchImpl).not.toHaveBeenCalled();
+    }
+  );
+
   it('checks operation identity and bytes before saving through the DSH attachment seam', async () => {
     const { image, bytes, binding, operation } = fixture();
     const saveImage = vi.fn(async () => ({
@@ -110,7 +141,7 @@ describe('VisionSnapshotLoader', () => {
     const readImage = vi.fn(async (ref) => ({ ref, data: image }));
     const loader = new VisionSnapshotLoader({
       gatewayUrl: 'http://127.0.0.1:3000/mcp',
-      mcpClient: { callTool: vi.fn(async () => ({ parsed: operation })) },
+      mcpClient: { callTool: vi.fn(async () => ({ content: [], structuredContent: operation })) },
       attachments: { saveImage, readImage } as never,
       fetch: vi.fn(
         async () =>
@@ -136,7 +167,7 @@ describe('VisionSnapshotLoader', () => {
     const saveImage = vi.fn();
     const loader = new VisionSnapshotLoader({
       gatewayUrl: 'http://127.0.0.1:3000',
-      mcpClient: { callTool: vi.fn(async () => ({ parsed: operation })) },
+      mcpClient: { callTool: vi.fn(async () => ({ content: [], structuredContent: operation })) },
       attachments: { saveImage } as never,
       fetch: vi.fn(
         async () => new Response('tampered', { headers: { 'content-type': 'application/json' } })
@@ -211,6 +242,19 @@ describe('VisionSnapshotLoader', () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
+  it.each(['sizeBytes', 'snapshotId'] as const)(
+    'rejects durable DOM artifact %s drift before download',
+    async (field) => {
+      const { binding, operation, bytes } = fixture();
+      const artifact = operation.artifacts[0];
+      if (field === 'sizeBytes') artifact.sizeBytes += 1;
+      else artifact.snapshotId = 'other-snapshot' as typeof artifact.snapshotId;
+      const { loader, fetchImpl } = buildLoader(binding, operation, bytes);
+      await expect(loader.load(binding)).rejects.toThrow(/does not match/u);
+      expect(fetchImpl).not.toHaveBeenCalled();
+    }
+  );
+
   it.each([
     [
       'snapshot version',
@@ -248,7 +292,7 @@ describe('VisionSnapshotLoader', () => {
     };
     const operation = {
       ...base.operation,
-      artifacts: [{ ...base.operation.artifacts[0], sha256: hash }],
+      artifacts: [{ ...base.operation.artifacts[0], sha256: hash, sizeBytes: bytes.byteLength }],
     };
     const { loader, saveImage } = buildLoader(binding, operation, bytes);
     await expect(loader.load(binding)).rejects.toThrow();
@@ -265,7 +309,9 @@ describe('VisionSnapshotLoader', () => {
     ) as typeof fetch;
     const loader = new VisionSnapshotLoader({
       gatewayUrl: 'http://127.0.0.1:3000',
-      mcpClient: { callTool: vi.fn(async () => ({ parsed: base.operation })) },
+      mcpClient: {
+        callTool: vi.fn(async () => ({ content: [], structuredContent: base.operation })),
+      },
       attachments: {} as never,
       fetch: wrongMimeFetch,
     });
@@ -281,7 +327,7 @@ describe('VisionSnapshotLoader', () => {
     };
     const operation = {
       ...base.operation,
-      artifacts: [{ ...base.operation.artifacts[0], sha256: hash }],
+      artifacts: [{ ...base.operation.artifacts[0], sha256: hash, sizeBytes: bytes.byteLength }],
     };
     const { loader: invalidImageLoader } = buildLoader(binding, operation, bytes);
     await expect(invalidImageLoader.load(binding)).rejects.toThrow(/unsupported image/u);

@@ -195,7 +195,8 @@ export async function createHarnessRuntime(
       if (result.isError) {
         throw new Error(result.error.message);
       }
-      return result.value;
+      // The MCP bridge and ToolRuntime have validated this canonical protocol result.
+      return result.value as mcpClient.McpResult;
     },
     transportToolNames() {
       assertOpen();

@@ -18,6 +18,8 @@
 
 - 浏览器 target/locator 公共类型由 `shared/types/browser-target.ts` 的 TypeBox schema + Static 唯一维护，`shared/types/browser-execution.ts` 保留既有 type 导出；proxy MCP 与 Agent Task 直接引用同一 target schema，wire 字段和消费者调用方式保持。
 
+- operation record/status、artifact、resolved target 与 problem 类型由 `shared/types/browser-operation-result.ts` 的 canonical TypeBox schema 派生，原 `browser-execution` type-only 导出保持兼容；三个 MCP 操作输出直接使用该 schema，客户端 HTTP/MCP 调用与错误映射保持。
+
 ## 2. 模块清单
 
 | 模块           | 路径                                      | 状态    | 职责                                                                               |
