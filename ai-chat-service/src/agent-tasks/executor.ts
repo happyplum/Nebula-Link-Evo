@@ -9,6 +9,7 @@ import {
 import type { Context } from '@deepseek-ai/cordis';
 import type { ResolvedConfig } from '../config/schema.js';
 import type { HarnessMcpCaller, HarnessRuntime } from '../harness/types.js';
+import { modelToolName } from '../harness/model-tool-name.js';
 import type { GatewayTool } from '../tools/types.js';
 import type { ToolRegistry } from '../tools/registry.js';
 import { AgentTaskError, toAgentTaskError } from './errors.js';
@@ -189,7 +190,7 @@ export class AgentTaskModelExecutor {
 
     const mappedNames = new Map<string, string>();
     for (const tool of tools) {
-      const safeName = dshSafeToolName(tool.name);
+      const safeName = modelToolName(tool.name);
       if ([...mappedNames.values()].includes(safeName)) {
         throw new AgentTaskError('dependency_unavailable', `Tool name collision for ${tool.name}`);
       }
@@ -545,10 +546,6 @@ function contentText(content: readonly import('@deepseek-ai/dsh-llm').ContentBlo
 function lastTurnReason(events: readonly SessionEvent[]): string {
   const end = [...events].reverse().find((event) => event.type === 'turn/end');
   return end?.type === 'turn/end' ? end.data.reason.kind : 'completed';
-}
-
-function dshSafeToolName(productName: string): string {
-  return `nebula__${productName.replace(/[^A-Za-z0-9_-]+/gu, '__').replace(/-+/gu, '_')}`;
 }
 
 function stableStringify(value: unknown): string {

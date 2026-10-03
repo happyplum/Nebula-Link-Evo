@@ -1,8 +1,8 @@
-import { createHash } from 'node:crypto';
 import type { Context } from '@deepseek-ai/cordis';
 import { assertObjectJsonSchema, type ToolDefinition } from '@deepseek-ai/dsh-tools';
 import type { ToolRegistry } from '../tools/registry.js';
 import type { GatewayTool } from '../tools/types.js';
+import { modelToolName } from './model-tool-name.js';
 
 const RAW_PROXY_OPERATIONS = new Set([
   'browser-control.operation_execute',
@@ -47,7 +47,7 @@ function prepareGeneration(tools: readonly GatewayTool[]): {
   const safeNames = new Set<string>();
   for (const tool of tools) {
     if (RAW_PROXY_OPERATIONS.has(tool.name)) continue;
-    const safeName = dshSafeToolName(tool.name);
+    const safeName = modelToolName(tool.name);
     if (safeNames.has(safeName))
       throw new Error(`Product tool safe-name collision for ${tool.name}`);
     try {
@@ -75,11 +75,4 @@ function toDshTool(tool: GatewayTool, name: string): ToolDefinition {
     execute: (args, exec) =>
       tool.execute(args, { toolCallId: String(exec.callId), abortSignal: exec.signal }),
   };
-}
-
-function dshSafeToolName(productName: string): string {
-  const normalized = `nebula__${productName.replace(/[^A-Za-z0-9_-]+/gu, '__').replace(/-+/gu, '_')}`;
-  if (normalized.length <= 64) return normalized;
-  const hash = createHash('sha256').update(productName).digest('hex').slice(0, 12);
-  return `${normalized.slice(0, 51)}_${hash}`;
 }

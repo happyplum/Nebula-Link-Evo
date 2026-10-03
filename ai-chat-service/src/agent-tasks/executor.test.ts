@@ -1,15 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { CallId, LlmAdapter } from '@deepseek-ai/dsh-llm';
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm';
 import { ToolRegistry } from '../tools/registry.js';
 import { createHarnessRuntime } from '../harness/runtime.js';
+import { installGatewayToolBridge } from '../harness/gateway-tool-bridge.js';
 import type { HarnessRuntime } from '../harness/types.js';
 import { validateCreateAgentTaskRequest } from './validation.js';
 import * as validation from './validation.js';
 import { AgentTaskModelExecutor } from './executor.js';
+import type { AgentTaskError } from './errors.js';
+import type { GatewayTool } from '../tools/types.js';
 import type { CreateAgentTaskRequest } from '@nebula-link-evo/shared/types/agent-task';
 import type { AgentTaskExecutionContext } from './types.js';
 
@@ -31,20 +34,29 @@ const config = {
 class SubmitAdapter extends LlmAdapter {
   readonly requests: GenerateOptions[] = [];
 
+  constructor(private readonly callProductTool = false) {
+    super();
+  }
+
   override providerInfo(provider: string) {
     return { id: provider, name: provider };
   }
 
   async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
     this.requests.push(options);
-    const id = CallId('submit-call-1');
-    const args = JSON.stringify({ result: { status: 'ok' } });
+    const productCall = this.callProductTool && this.requests.length === 1;
+    const name = productCall
+      ? options.tools?.find((tool) => tool.name !== 'submit_result')?.name
+      : 'submit_result';
+    if (!name) throw new Error('Expected a model-visible product tool');
+    const id = CallId(productCall ? 'product-call-1' : 'submit-call-1');
+    const args = JSON.stringify(productCall ? {} : { result: { status: 'ok' } });
     yield { type: 'block-start', index: 0, blockType: 'tool-call' };
-    yield { type: 'tool-call-delta', index: 0, id, name: 'submit_result', argumentsDelta: args };
+    yield { type: 'tool-call-delta', index: 0, id, name, argumentsDelta: args };
     yield {
       type: 'block-end',
       index: 0,
-      block: { type: 'tool-call', id, name: 'submit_result', arguments: args },
+      block: { type: 'tool-call', id, name, arguments: args },
     };
     yield { type: 'usage', usage: { inputTokens: 10, outputTokens: 5 } };
     yield { type: 'finish', reason: { kind: 'tool-calls' } };
@@ -76,6 +88,86 @@ function request(): CreateAgentTaskRequest {
 }
 
 describe('AgentTaskModelExecutor', () => {
+  it.each(['vision.analyze_page', 'vision..analyze---page/$', `vision.${'long_name_'.repeat(10)}`])(
+    'matches the bridge model name for %s while authorizing and auditing the product name',
+    async (name) => {
+      const fixture = await runtimeFixture(true);
+      const execute = vi.fn(async () => '{"ok":true}');
+      const registry = productRegistry([name, 'vision.not_allowed'], execute);
+      const bridge = installGatewayToolBridge(fixture.runtime.context, registry);
+      const safeName = bridge.mappings().get(name);
+      if (!safeName) throw new Error('Expected a bridge mapping for the product tool');
+      const taskRequest = request();
+      taskRequest.toolPolicy.allow = [name];
+      taskRequest.budgets.maxToolCalls = 1;
+      const context = executionContext(taskRequest);
+      const executor = new AgentTaskModelExecutor({
+        config: config as never,
+        harness: fixture.runtime,
+        toolRegistry: registry,
+      });
+      try {
+        const result = await executor.execute(context);
+        expect(safeName).toMatch(/^[A-Za-z0-9_]+$/);
+        expect(safeName.length).toBeLessThanOrEqual(64);
+        expect(fixture.adapter.requests[0]?.tools?.map((tool) => tool.name)).toEqual([
+          safeName,
+          'submit_result',
+        ]);
+        expect(fixture.adapter.requests[0]?.system).toContain(
+          `产品工具 ${name} 映射为 ${safeName}。`
+        );
+        expect(execute).toHaveBeenCalledExactlyOnceWith(
+          {},
+          {
+            toolCallId: 'product-call-1',
+            abortSignal: expect.any(AbortSignal),
+          }
+        );
+        expect(result.toolCalls).toEqual([
+          { toolCallId: 'product-call-1', toolName: name, status: 'succeeded' },
+        ]);
+        expect(context.beforeToolCall).toHaveBeenCalledOnce();
+        expect(context.emitEvent).toHaveBeenCalledWith('agent_task.tool_call', {
+          toolCallId: 'product-call-1',
+          toolName: name,
+        });
+        expect(context.emitEvent).toHaveBeenCalledWith('agent_task.tool_result', {
+          toolCallId: 'product-call-1',
+          toolName: name,
+          status: 'succeeded',
+        });
+      } finally {
+        bridge.dispose();
+        await fixture.runtime.dispose();
+      }
+    },
+    20_000
+  );
+
+  it('preserves the AgentTaskError classification for normalized tool-name collisions', async () => {
+    const fixture = await runtimeFixture();
+    const names = ['vision.a-b', 'vision.a_b'];
+    const taskRequest = request();
+    taskRequest.toolPolicy.allow = names;
+    const executor = new AgentTaskModelExecutor({
+      config: config as never,
+      harness: fixture.runtime,
+      toolRegistry: productRegistry(names),
+    });
+    try {
+      await expect(executor.execute(executionContext(taskRequest))).rejects.toMatchObject({
+        name: 'AgentTaskError',
+        code: 'dependency_unavailable',
+        message: 'Tool name collision for vision.a_b',
+        retryable: false,
+      } satisfies Partial<AgentTaskError>);
+      expect(fixture.adapter.requests).toHaveLength(0);
+    } finally {
+      await fixture.runtime.dispose();
+    }
+  }, 20_000);
+
   it('uses the shared DSH loop and commits only a durable submit_result', async () => {
     const fixture = await runtimeFixture();
     const persisted = vi.fn();
@@ -220,13 +312,41 @@ function executionContext(
   };
 }
 
-async function runtimeFixture(): Promise<{
+function productRegistry(
+  names: string[],
+  execute: GatewayTool['execute'] = async () => '{"ok":true}'
+): ToolRegistry {
+  const registry = new ToolRegistry();
+  registry.registerProvider({
+    id: 'fixture',
+    status: 'ready',
+    initialize: async () => {},
+    shutdown: async () => {},
+    on: () => {},
+    removeListener: () => {},
+    getTools: () =>
+      names.map((name) => ({
+        id: name,
+        name,
+        description: 'test product tool',
+        inputSchema: { type: 'object', additionalProperties: false, properties: {} },
+        providerId: 'fixture',
+        isAvailable: true,
+        execute,
+      })),
+  });
+  return registry;
+}
+
+async function runtimeFixture(callProductTool = false): Promise<{
   runtime: HarnessRuntime;
   adapter: SubmitAdapter;
 }> {
-  const root = await mkdtemp(join(tmpdir(), 'nebula-task-executor-'));
+  const temporaryRoot = fileURLToPath(new URL('../../../.tmp/', import.meta.url));
+  await mkdir(temporaryRoot, { recursive: true });
+  const root = await mkdtemp(join(temporaryRoot, 'nebula-task-executor-'));
   roots.push(root);
-  const adapter = new SubmitAdapter();
+  const adapter = new SubmitAdapter(callProductTool);
   const runtime = await createHarnessRuntime({
     sessionRoot: join(root, 'sessions'),
     attachmentRoot: join(root, 'attachments'),
