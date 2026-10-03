@@ -122,12 +122,14 @@ describe('useChatStream', () => {
     expect(useChatStore.getState().activityBySession['session-1']?.turns).toEqual([]);
   });
 
-  it('连接成功后清除错误，disconnect 会关闭连接并清理待处理 frame', () => {
+  it('snapshot 后才连接成功，disconnect 丢弃待处理 frame 并保留已有内容', () => {
     const { result } = renderHook(() => useChatStream({ sessionId: 'session-1' }));
     const source = MockEventSource.instances[0];
 
     act(() => source?.onopen?.());
-    expect(result.current.isConnected).toBe(true);
+    expect(result.current.status).toBe('connecting');
+    act(() => source?.emit('agent_stream.snapshot', emptySnapshot));
+    expect(result.current.status).toBe('live');
     act(() => {
       source?.emit('agent_stream.event', {
         schema: AGENT_STREAM_EVENT_SCHEMA,
@@ -144,14 +146,15 @@ describe('useChatStream', () => {
 
     expect(source?.close).toHaveBeenCalled();
     expect(cancelAnimationFrame).toHaveBeenCalledWith(1);
-    expect(useChatStore.getState().activityBySession['session-1']?.seq).toBe(1);
-    expect(result.current).toMatchObject({ isConnected: false, error: null });
+    expect(useChatStore.getState().activityBySession['session-1']?.seq).toBe(0);
+    expect(result.current).toMatchObject({ status: 'disconnected' });
   });
 
-  it('错误时指数退避重连，连续六次失败后暴露错误状态', () => {
+  it('持续重连且传输失败不改变业务活动状态', () => {
     vi.useFakeTimers();
     useChatStore.getState().setActiveSession('session-1');
     const { result } = renderHook(() => useChatStream({ sessionId: 'session-1' }));
+    act(() => MockEventSource.instances[0]?.emit('agent_stream.snapshot', emptySnapshot));
 
     for (let attempt = 0; attempt < 6; attempt += 1) {
       const source = MockEventSource.instances.at(-1);
@@ -162,11 +165,13 @@ describe('useChatStream', () => {
     }
 
     expect(MockEventSource.instances).toHaveLength(6);
-    expect(result.current.error).toBe('活动流连接失败，请手动重试。');
-    expect(useChatStore.getState().activityBySession['session-1']?.state).toBe('failed');
+    expect(result.current.status).toBe('reconnecting');
+    expect(useChatStore.getState().activityBySession['session-1']?.state).toBe('streaming');
+    act(() => vi.runOnlyPendingTimers());
+    expect(MockEventSource.instances).toHaveLength(7);
 
     act(() => result.current.reconnect());
-    expect(MockEventSource.instances).toHaveLength(7);
+    expect(MockEventSource.instances).toHaveLength(8);
     vi.useRealTimers();
   });
 

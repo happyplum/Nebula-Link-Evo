@@ -10,6 +10,7 @@ class MockEventSource {
   static instances: MockEventSource[] = [];
   private readonly listeners = new Map<string, Set<(event: MessageEvent) => void>>();
   readonly close = vi.fn();
+  onerror: (() => void) | null = null;
 
   constructor(readonly url: string) {
     MockEventSource.instances.push(this);
@@ -49,7 +50,11 @@ describe('useAgentActivityStream', () => {
 
   it('从 snapshot 恢复并批量归并增量', () => {
     const { result } = renderHook(() =>
-      useAgentActivityStream({ endpoint: '/api/v1/runs/run-1/activity', enabled: true })
+      useAgentActivityStream({
+        endpoint: '/api/v1/runs/run-1/activity',
+        streamId: 'run-1',
+        enabled: true,
+      })
     );
     const source = MockEventSource.instances[0];
     act(() => {
@@ -81,9 +86,9 @@ describe('useAgentActivityStream', () => {
       });
     });
 
-    expect(result.current?.seq).toBe(0);
+    expect(result.current.snapshot?.seq).toBe(0);
     act(() => scheduledFrame?.(0));
-    expect(result.current).toMatchObject({
+    expect(result.current.snapshot).toMatchObject({
       seq: 1,
       turns: [{ sections: [{ type: 'activity', title: '读取页面' }] }],
     });
@@ -91,12 +96,84 @@ describe('useAgentActivityStream', () => {
 
   it('禁用时不连接，损坏事件不会破坏已有 snapshot', () => {
     const { result, rerender } = renderHook(
-      ({ enabled }) => useAgentActivityStream({ endpoint: '/api/v1/runs/run-1/activity', enabled }),
+      ({ enabled }) =>
+        useAgentActivityStream({
+          endpoint: '/api/v1/runs/run-1/activity',
+          streamId: 'run-1',
+          enabled,
+        }),
       { initialProps: { enabled: false } }
     );
     expect(MockEventSource.instances).toHaveLength(0);
     rerender({ enabled: true });
     act(() => MockEventSource.instances[0]?.emit('agent_stream.event', '{bad-json'));
-    expect(result.current).toBeNull();
+    expect(result.current.snapshot).toBeNull();
+  });
+
+  it('断线和手动恢复保留当前 snapshot，旧上下文切换前的 render 立即隐藏内容', () => {
+    const renders: Array<number | null> = [];
+    const { result, rerender } = renderHook(
+      ({ endpoint, streamId }) => {
+        const activity = useAgentActivityStream({ endpoint, streamId, enabled: true });
+        renders.push(activity.snapshot?.seq ?? null);
+        return activity;
+      },
+      { initialProps: { endpoint: '/api/v1/runs/run-1/activity', streamId: 'run-1' } }
+    );
+    const source = MockEventSource.instances[0];
+    act(() =>
+      source?.emit('agent_stream.snapshot', {
+        schema: AGENT_STREAM_SNAPSHOT_SCHEMA,
+        streamId: 'run-1',
+        seq: 7,
+        state: 'completed',
+        generatedAt: occurredAt,
+        turns: [],
+      })
+    );
+    act(() => source?.onerror?.());
+    expect(result.current.snapshot?.seq).toBe(7);
+    expect(result.current.status).toBe('reconnecting');
+    act(() => result.current.reconnect());
+    expect(result.current.snapshot?.seq).toBe(7);
+    renders.length = 0;
+    rerender({ endpoint: '/api/v1/authoring-jobs/job-1/activity', streamId: 'job-1' });
+    expect(renders.every((seq) => seq === null)).toBe(true);
+    act(() =>
+      source?.emit('agent_stream.snapshot', {
+        schema: AGENT_STREAM_SNAPSHOT_SCHEMA,
+        streamId: 'run-1',
+        seq: 8,
+        state: 'completed',
+        generatedAt: occurredAt,
+        turns: [],
+      })
+    );
+    expect(result.current.snapshot).toBeNull();
+  });
+
+  it('相同 streamId 更换 endpoint 也不会在 effect 前显示旧快照', () => {
+    const renders: Array<number | null> = [];
+    const { rerender } = renderHook(
+      ({ endpoint }) => {
+        const activity = useAgentActivityStream({ endpoint, streamId: 'run-1', enabled: true });
+        renders.push(activity.snapshot?.seq ?? null);
+        return activity;
+      },
+      { initialProps: { endpoint: '/one' } }
+    );
+    act(() =>
+      MockEventSource.instances[0]?.emit('agent_stream.snapshot', {
+        schema: AGENT_STREAM_SNAPSHOT_SCHEMA,
+        streamId: 'run-1',
+        seq: 9,
+        state: 'completed',
+        generatedAt: occurredAt,
+        turns: [],
+      })
+    );
+    renders.length = 0;
+    rerender({ endpoint: '/two' });
+    expect(renders.every((seq) => seq === null)).toBe(true);
   });
 });

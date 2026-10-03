@@ -8,7 +8,7 @@ Chat UI owns session selection, optimistic sends, Agent Stream snapshot/bootstra
 
 | Area        | Path                     | Notes                                                          |
 | ----------- | ------------------------ | -------------------------------------------------------------- |
-| Stream hook | `hooks/useChatStream.ts` | `EventSource`, strict Agent Stream guards, RAF batching          |
+| Stream hook | `hooks/useChatStream.ts` | 公共 agent-stream-client 接线，store snapshot/event 交付          |
 | Store       | `store/chat.store.ts`    | Session-scoped snapshots and optimistic reconciliation           |
 | Components  | `components/`            | Composer and shared `AgentStreamRenderer` host                    |
 | Types       | `types/`                 | Frontend-local session and control state                          |
@@ -17,7 +17,7 @@ Chat UI owns session selection, optimistic sends, Agent Stream snapshot/bootstra
 
 - Treat `agent_stream.snapshot` as the authoritative bootstrap and accept only the shared v1 schema.
 - Apply `agent_stream.event` through the shared reducer; do not create frontend compatibility adapters.
-- Keep live updates batched with `requestAnimationFrame`; per-token state writes regress rendering.
+- Keep live updates batched by the shared `agent-stream-client` hook; per-token state writes regress rendering.
 - Reconcile server user turns against optimistic turns instead of showing both.
 - Render content, reasoning, Skill, Tool and Agent activity only through `@nebula-link-evo/agent-activity-ui`.
 

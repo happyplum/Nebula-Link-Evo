@@ -7,6 +7,7 @@
 
 - 消费 `@nebula-link-evo/shared` 的 Agent Stream v1，只负责呈现，并直接重导出 shared 确定性回放函数。
 - 提供 `compact` / `comfortable` 密度、CSS 变量主题、Markdown/决策/证据插槽、可见键盘焦点、44px 热区和 reduced-motion。
+- 两宿主的传输统一由 `@nebula-link-evo/agent-stream-client` 持有；本库 renderer、slots、主题、导出与 Gallery 无本次能力变更。
 - 不拥有 API、SSE、持久化、store、router、业务权限或控制面状态；调用方负责连接、鉴权和操作。
 - 不提供旧 Thinking、Tool 卡片或 Chat 消息结构的适配入口。
 

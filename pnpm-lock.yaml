@@ -134,6 +134,40 @@ importers:
         specifier: 'catalog:'
         version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@22.20.1)(@vitest/coverage-v8@4.1.11)(jsdom@28.1.0(supports-color@7.2.0))(vite@8.2.2(@types/node@22.20.1)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.46.0)(tsx@4.23.12)(yaml@2.9.0))
 
+  agent-stream-client:
+    dependencies:
+      '@nebula-link-evo/shared':
+        specifier: workspace:*
+        version: link:../shared
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+    devDependencies:
+      '@testing-library/jest-dom':
+        specifier: ^6.9.1
+        version: 6.9.1
+      '@testing-library/react':
+        specifier: ^16.3.3
+        version: 16.3.3(@testing-library/dom@10.4.1)(@types/react-dom@19.2.5(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.20.1
+      '@types/react':
+        specifier: ^19.2.18
+        version: 19.2.18
+      '@vitest/coverage-v8':
+        specifier: 'catalog:'
+        version: 4.1.11(vitest@4.1.11)
+      jsdom:
+        specifier: ^28.1.0
+        version: 28.1.0(supports-color@7.2.0)
+      typescript:
+        specifier: 'catalog:'
+        version: '@typescript/typescript6@6.0.2'
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@22.20.1)(@vitest/coverage-v8@4.1.11)(jsdom@28.1.0(supports-color@7.2.0))(vite@8.2.2(@types/node@22.20.1)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.46.0)(tsx@4.23.12)(yaml@2.9.0))
+
   ai-chat-service:
     dependencies:
       '@ai-sdk/openai-compatible':
@@ -372,6 +406,9 @@ importers:
       '@nebula-link-evo/agent-activity-ui':
         specifier: workspace:*
         version: link:../../agent-activity-ui
+      '@nebula-link-evo/agent-stream-client':
+        specifier: workspace:*
+        version: link:../../agent-stream-client
       '@nebula-link-evo/shared':
         specifier: workspace:*
         version: link:../../shared
@@ -454,6 +491,9 @@ importers:
       '@nebula-link-evo/agent-activity-ui':
         specifier: workspace:*
         version: link:../agent-activity-ui
+      '@nebula-link-evo/agent-stream-client':
+        specifier: workspace:*
+        version: link:../agent-stream-client
       '@nebula-link-evo/shared':
         specifier: workspace:*
         version: link:../shared

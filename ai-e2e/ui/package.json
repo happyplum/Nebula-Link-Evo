@@ -4,10 +4,10 @@
   "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {
-    "dev": "vite --host --port 5174",
-    "build": "vite build",
+    "dev": "pnpm --filter @nebula-link-evo/agent-activity-ui... --filter @nebula-link-evo/agent-stream-client... build && vite --host --port 5174",
+    "build": "pnpm --filter @nebula-link-evo/agent-activity-ui... --filter @nebula-link-evo/agent-stream-client... build && vite build",
     "preview": "vite preview --host --port 4174",
-    "type-check": "tsc --noEmit",
+    "type-check": "tsc -p tsconfig.app.json --noEmit",
     "test": "vitest run",
     "test:e2e": "tsc -p tsconfig.playwright.json --noEmit && pnpm --dir ../../proxy-adapter build && pnpm --dir ../../ai-chat-service build && pnpm build && node scripts/run-e2e.mjs",
     "test:coverage": "vitest run --coverage",
@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@nebula-link-evo/agent-activity-ui": "workspace:*",
+    "@nebula-link-evo/agent-stream-client": "workspace:*",
     "@nebula-link-evo/shared": "workspace:*",
     "@tanstack/react-query": "^5.102.8",
     "clsx": "^2.1.1",

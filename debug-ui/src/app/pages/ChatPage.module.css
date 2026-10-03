@@ -16,9 +16,10 @@
   background: var(--bg-card);
   backdrop-filter: var(--blur-md);
   border-bottom: 1px solid var(--border-color);
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
   align-items: center;
-  justify-content: space-between;
   box-shadow: var(--shadow-sm);
 }
 
@@ -97,6 +98,30 @@
 
 .iconBtn:active {
   transform: translateY(0);
+}
+
+.reconnectBtn {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.connectionBar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.reconnectBtn:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reconnectBtn {
+    transition: none;
+  }
 }
 
 /* Control Bar — legacy: .flex.gap-2.p-2.border-b.bg-tertiary */

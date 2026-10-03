@@ -25,6 +25,8 @@
 - [shipped] `GET /api/v1/authoring-jobs/:jobId/{activity,activity-log}` 与 `GET /api/v1/runs/:runId/{activity,activity-log}` 提供 snapshot-first SSE 和持久呈现日志；跨 context 数据不可见，刷新与服务重启后按 seq 恢复且不重复。
 - [shipped] Authoring 使用 compact 公共 renderer 和 repair Composer 串联用户意见、候选、Skill/Tool、审批、验证与激活；Run 使用同一 compact 只读流，资产修改必须返回 Authoring。结构化 amendment/decision 始终是业务事实。
 - [shipped] 公开 authoring context message 查询/提交路径已移除；内部消息审计记录保留并作为活动投影来源，不清理历史数据库。
+- [shipped] `BrowserStage` 的 zoom 仅在实际图像可用时作用于画面；空态/图像错误后的“重试实时画面”不缩放，默认 90% zoom 下仍有 44px 热区。组件错误/重试回归与真实生产 UI 的 image error/transform/boundingBox 验收锁住边界。
+- [shipped] Authoring/Run 活动传输统一到 `@nebula-link-evo/agent-stream-client`；wrapper 局部 snapshot 按 endpoint/真实 context id 隔离，首 render 不闪旧内容。连接状态和立即重连共用 Button touch 44px（owner 类型/实现/测试同步），header toggle 样式收窄；Run 重连只恢复观察、无业务 command、无 composer。独立 semantic event invalidation 不变，renderer/Gallery/wire 不变。
 - [shipped] 工作台三栏支持指针/键盘调宽、边界约束、双击复位、持久化、缩放/收起/专注、system/light/dark 与 reduced-motion。
 - [shipped] 浏览器中心工作台完成低噪声冷蓝视觉重构：三栏改为有留白的浮动工作区表面，中间浏览器以独立深色画布和工具条成为主舞台；左侧上下文树以树线、状态点、细强调轨和渐隐背景表达页面/模块/场景层级，消除父子嵌套的大面积选中卡片；右侧检查器、Diff 与 Agent 活动形成清晰上下层级。浅色/深色、1440/1920、44px 热区和键盘 `focus-visible` 均纳入真实生产 UI E2E 门禁。
 - [shipped] 冷启动性能基线固定于 [`docs/performance/ui-performance-baseline.md`](../performance/ui-performance-baseline.md)：Fast 3G + CPU 4× 条件下首屏 LCP 为 2,529 ms、JS/CSS 传输为 143,334 B；对话框交互的 40.2 ms second-rAF 仅作为实验室代理值，不冒充 INP。

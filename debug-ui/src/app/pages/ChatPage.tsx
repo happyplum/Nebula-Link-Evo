@@ -23,6 +23,7 @@ import {
 import type { ChatSession } from '@/features/chat/types/index.js';
 import { testIds } from '@/shared/testing/testids.js';
 import styles from './ChatPage.module.css';
+import { StatusIndicator } from '@/shared/ui/StatusIndicator.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -97,7 +98,7 @@ export default function ChatPage() {
     typeof EventSource !== 'undefined' &&
     typeof useChatStore.getState === 'function';
 
-  useChatStream({
+  const activityConnection = useChatStream({
     sessionId: activeSessionId,
     enabled: sseEnabled,
   });
@@ -237,6 +238,36 @@ export default function ChatPage() {
           >
             ➕
           </button>
+        </div>
+        <div className={styles.connectionBar}>
+          <div role="status" aria-label="活动连接状态">
+            <StatusIndicator
+              status={
+                activityConnection.status === 'live'
+                  ? 'online'
+                  : activityConnection.status === 'disconnected'
+                    ? 'offline'
+                    : 'loading'
+              }
+              label={
+                {
+                  live: '活动已连接',
+                  connecting: '正在连接活动',
+                  reconnecting: '正在恢复活动',
+                  disconnected: '活动未连接',
+                }[activityConnection.status]
+              }
+            />
+          </div>
+          {activeSessionId && (
+            <button
+              type="button"
+              className={`${styles.iconBtn} ${styles.reconnectBtn}`}
+              onClick={activityConnection.reconnect}
+            >
+              立即重连
+            </button>
+          )}
         </div>
       </div>
 

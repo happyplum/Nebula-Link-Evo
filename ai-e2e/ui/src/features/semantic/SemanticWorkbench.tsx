@@ -249,7 +249,8 @@ export function SemanticWorkbench({
   });
 
   const activityContextId = mode === 'run' ? runId : authoringJobId;
-  const activitySnapshot = useAgentActivityStream({
+  const activityConnection = useAgentActivityStream({
+    streamId: activityContextId,
     enabled: eventStreams && Boolean(activityContextId),
     endpoint:
       mode === 'run'
@@ -978,7 +979,9 @@ export function SemanticWorkbench({
                 : '—',
               revision: currentModule?.currentRevision.contentSha256 ?? '',
             }}
-            snapshot={activitySnapshot}
+            snapshot={activityConnection.snapshot}
+            connectionStatus={activityConnection.status}
+            onReconnect={activityConnection.reconnect}
             onToggle={() =>
               setLayout((current) => ({ ...current, chatCollapsed: !current.chatCollapsed }))
             }

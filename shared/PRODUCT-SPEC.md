@@ -78,6 +78,8 @@
 
 - Agent Task 公共协议契约测试：`types/agent-task.test.ts` 验证创建与脱敏请求独立、未知字段、关联键长度、安全整数、command/status 和 videoSegment 字段；浏览器 target 由同一 schema 供 Agent Task 和 proxy MCP 消费。
 
+- `agent-stream-client` 直接消费既有 `types/agent-stream` 守卫；shared reducer 仍唯一拥有 seq 去重与回放。本次未改 shared 公共导出、wire 或 renderer 契约。
+
 ## 4. 修改维护协议 [MUST-MAINTAIN]
 
 > **强制约束**：以下任何变更必须同步本文件，禁止漂移：
