@@ -5,10 +5,11 @@ export class IntegrationClientError extends Error {
     message: string,
     readonly retryable: boolean,
     readonly statusCode?: number,
-    readonly details?: Record<string, unknown>
+    readonly details?: Record<string, unknown>,
+    readonly correlationId?: string,
+    options?: ErrorOptions
   ) {
-    super(message);
+    super(message, options);
     this.name = 'IntegrationClientError';
   }
 }
-

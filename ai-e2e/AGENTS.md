@@ -6,7 +6,7 @@
 
 - Agent Task DTO、状态、命令、审计事件和真实浏览器步骤直接消费 `@nebula-link-evo/shared/types/agent-task`；客户端不声明第二份协议。
 - `AgentTaskClient` 消费 `ai-chat-service /api/v1/agent-tasks`，使用统一 DSH Agent Loop、Vision v2 和逐浏览器步骤副作用授权。
-- `SemanticBrowserClient` 消费 `proxy-adapter /api/v1/browser-execution/*`，所有动作必须可见且受 session/lease/operation 控制。
+- `SemanticBrowserClient` 通过 `@nebula-link-evo/browser-control-client` 复用 `proxy-adapter /api/v1/browser-execution/*` HTTP 方法，只保留 `IntegrationClientError` 映射和 Uint8Array→Buffer 边界；browser-execution DTO 直接引用 shared，事件日志接口必需。E2E 保有 FIFO/outbox/lease/operation 生命周期，不使用 `ControlledBrowserSession` 或客户端 MCP 操作；所有动作必须可见且受 session/lease/operation 控制。
 
 禁止恢复旧四步向导、`/api/projects/*`、单次文本生成 facade、debug browser 路由、TypeScript 脚本或 `npx tsx` 子进程执行器。仓库不提供旧数据库导入或向后兼容。
 

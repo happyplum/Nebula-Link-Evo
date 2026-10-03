@@ -37,6 +37,12 @@ operation execute|get|cancel
 
 ## 受控会话语义
 
+TypeScript HTTP 消费方可调用 `listSessionEvents(sessionId, afterSeq=0, limit=500, signal?)` 与 `closeSession(sessionId, idempotencyKey, credentials?, signal?)`。关闭活动会话须传 `{ leaseId, leaseToken }`；非活动会话可省略凭证。ai-e2e 仅复用这些 HTTP 方法，保留自身 FIFO/outbox 与控制生命周期。
+
+CLI `session close <id> --idempotency-key <key>` 可不带凭证，由 proxy 裁决当前会话是否允许关闭。传 `--lease-id` 时须提供 token；显式 `--lease-token-stdin` 也须有 lease ID，未选 lease 时不发送环境 token。
+
+HTTP 错误保留 `BrowserControlError.statusCode` 和标准 Problem 的完整字段；非标准错误统一为 `dependency_unavailable`，HTTP retryable 由 status≥500 决定，网络/超时/取消及非法成功响应可重试，存在底层异常时保留 cause。诊断使用每次请求的 `X-Correlation-ID`。
+
 - 首次调用校验 browser execution/operation 协议 major 1，创建可视 session、选择活动 Tab 并签发最长 5 分钟 control lease。
 - 默认不接管已有 session；只有显式 `attachSessionId` / `--attach-session` 才附着。
 - 所有操作串行；租约只在操作安全边界临期轮换。

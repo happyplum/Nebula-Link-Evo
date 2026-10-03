@@ -6,7 +6,7 @@ import type {
   CreateAgentTaskRequest,
 } from '@nebula-link-evo/shared/types/agent-task';
 import { DatabaseSync } from 'node:sqlite';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { up as up014 } from '../../database/migrations/014-semantic-asset-foundation.js';
 import { up as up015 } from '../../database/migrations/015-semantic-asset-governance.js';
 import { up as up016 } from '../../database/migrations/016-semantic-workflow-foundation.js';
@@ -28,10 +28,14 @@ import type { AgentTaskClientPort } from '../../infrastructure/agent-task-client
 import { MemoryCoordinatorSecretStore } from '../../infrastructure/coordinator-secret-store.js';
 import { IntegrationClientError } from '../../infrastructure/integration-client-error.js';
 import type {
+  BrowserExecutionCapabilities,
   BrowserLeaseView,
+  BrowserOperationRecord,
+  BrowserSessionEventRecord,
   BrowserSessionView,
-  SemanticBrowserClientPort,
-} from '../../infrastructure/semantic-browser-client.js';
+  CreateBrowserLeaseRequest,
+} from '@nebula-link-evo/shared/types/browser-execution';
+import type { SemanticBrowserClientPort } from '../../infrastructure/semantic-browser-client.js';
 import {
   desiredAgentCommand,
   SemanticCoordinatorService,
@@ -807,7 +811,7 @@ describe('SemanticCoordinatorService', () => {
       const agent = new FakeAgentTaskClient();
       const browser = new FakeBrowserClient();
       if (agentOverride) agent.capabilities = agentOverride;
-      if (browserOverride) browser.capabilities = { ...browser.capabilities, ...browserOverride };
+      if (browserOverride) Object.assign(browser.capabilities, browserOverride);
       if (kind === 'agent loopback') {
         agent.capabilities = {
           ...agent.capabilities,
@@ -1054,6 +1058,53 @@ describe('SemanticCoordinatorService', () => {
     });
   });
 
+  it.each([null, [42], ['unsupported_operation']])(
+    '拒绝损坏的 outbox 浏览器操作集合 %j，且不签发租约',
+    async (operations) => {
+      const fixture = createFixture(db, assets);
+      const created = runs.createFormalRun({
+        projectId: 'project-1',
+        businessVersionId: fixture.versionId,
+        clientRunId: 'corrupt-lease-outbox-run',
+        scenarioRevisionId: fixture.scenarioRevisionId,
+        deploymentRevisionId: fixture.deploymentRevisionId,
+        inputs: {},
+      });
+      evidence.enqueueOutbox({
+        id: 'corrupt-lease-outbox',
+        context: { type: 'run', id: created.id },
+        targetService: 'proxy_adapter',
+        commandType: 'browser_lease.create',
+        endpointOrTool: '/api/v1/browser-execution/sessions/:sessionId/leases',
+        payloadRedacted: {
+          runId: created.id,
+          todoId: 'todo-1',
+          browserSessionId: SESSION_ID,
+          operations,
+        },
+      });
+      const browser = new FakeBrowserClient();
+      const createLease = vi.spyOn(browser, 'createLease');
+      const coordinator = new SemanticCoordinatorService({
+        repository: new SemanticCoordinatorRepository(db),
+        workflows,
+        evidence,
+        runs,
+        agentTasks: new FakeAgentTaskClient(),
+        browser,
+        secretStore: new MemoryCoordinatorSecretStore(),
+      });
+      await expect(coordinator.tick()).resolves.toEqual({ action: 'outbox:browser_lease.create' });
+      expect(createLease).not.toHaveBeenCalled();
+      expect(
+        db.prepare('SELECT status FROM integration_outbox WHERE id = ?').get('corrupt-lease-outbox')
+      ).toEqual({ status: 'terminal_failed' });
+      expect(db.prepare('SELECT lifecycle FROM test_runs WHERE id = ?').get(created.id)).toEqual({
+        lifecycle: 'paused',
+      });
+    }
+  );
+
   it('在浏览器作业安全边界按运行与 Authoring 生命周期派发控制命令', async () => {
     let currentJob = {
       id: 'job-1',
@@ -1068,6 +1119,7 @@ describe('SemanticCoordinatorService', () => {
     const repository = {
       getVerificationAmendmentToSchedule: () => null,
       getActiveBrowserJob: () => currentJob,
+      getBrowserSessionLink: () => null,
       getActivePageTask: () => null,
       getRunLifecycle: () => lifecycle,
       getReadyTodo: () => null,
@@ -1306,9 +1358,11 @@ class FakeBrowserClient implements SemanticBrowserClientPort {
   revoked = false;
   capabilityCalls = 0;
   createSessionError?: Error;
-  capabilities: Record<string, unknown> = {
+  capabilities: BrowserExecutionCapabilities = {
     schema: 'nebula.service-capabilities/1.0',
     service: 'proxy-adapter',
+    serviceVersion: '2.0.0',
+    generatedAt: '2026-10-03T00:00:00.000Z',
     protocols: { browserExecution: { major: 1, minor: 0 } },
     features: { localControlPlane: true },
     limits: { maxActiveBrowserSessions: 1, maxBrowserContextsPerSession: 1 },
@@ -1317,7 +1371,7 @@ class FakeBrowserClient implements SemanticBrowserClientPort {
   private leaseCounter = 0;
   artifact?: { id: string; kind: string; sha256: string; mimeType: string; bytes: Buffer };
 
-  async getCapabilities(): Promise<Record<string, unknown>> {
+  async getCapabilities(): Promise<BrowserExecutionCapabilities> {
     this.capabilityCalls += 1;
     return this.capabilities;
   }
@@ -1332,15 +1386,14 @@ class FakeBrowserClient implements SemanticBrowserClientPort {
     return this.session();
   }
 
+  async listSessionEvents(): Promise<BrowserSessionEventRecord[]> {
+    return [];
+  }
+
   async createLease(
     _sessionId: string,
     _idempotencyKey: string,
-    input: {
-      mode: 'observe' | 'control';
-      ttlSeconds?: number;
-      tabIds?: string[];
-      operations?: string[];
-    }
+    input: CreateBrowserLeaseRequest
   ): Promise<{ lease: BrowserLeaseView; token: string; tokenIssued: true }> {
     this.leaseCounter += 1;
     const leaseId = `10000000-0000-4000-8000-${String(this.leaseCounter).padStart(12, '0')}`;
@@ -1349,6 +1402,7 @@ class FakeBrowserClient implements SemanticBrowserClientPort {
       sessionId: SESSION_ID,
       mode: input.mode,
       sequence: 1,
+      processEpoch: 1,
       status: 'active',
       policy: { tabIds: input.tabIds ?? [TAB_ID], operations: input.operations ?? ['page_state'] },
       expiresAt: new Date(Date.now() + 300_000).toISOString(),
@@ -1371,16 +1425,20 @@ class FakeBrowserClient implements SemanticBrowserClientPort {
   ): Promise<BrowserSessionView> {
     this.closedWithLease = Boolean(
       credentials?.leaseId === this.activeLease?.id &&
-      credentials.leaseToken === 'opaque-lease-token'
+      credentials?.leaseToken === 'opaque-lease-token'
     );
     this.activeLease = undefined;
     this.closed = true;
     return this.session('closed');
   }
 
-  async getOperation(operationId: string) {
+  async getOperation(operationId: string): Promise<BrowserOperationRecord> {
     return {
+      schema: 'nebula.browser.operation-result/1.0',
       operationId,
+      requestHash: HASH_A,
+      queueSequence: 1,
+      acceptedAt: new Date().toISOString(),
       sessionId: SESSION_ID,
       leaseId: this.activeLease?.id ?? LEASE_ID,
       leaseSequence: 1,
@@ -1396,6 +1454,7 @@ class FakeBrowserClient implements SemanticBrowserClientPort {
               kind: this.artifact.kind,
               sha256: this.artifact.sha256,
               mimeType: this.artifact.mimeType,
+              sizeBytes: this.artifact.bytes.byteLength,
             },
           ]
         : [],
@@ -1413,6 +1472,8 @@ class FakeBrowserClient implements SemanticBrowserClientPort {
     return {
       id: SESSION_ID,
       status,
+      processEpoch: 1,
+      cdpPort: 9222,
       tabs: [{ id: TAB_ID, url: 'https://test.example/account', title: 'Account', isActive: true }],
       activeLeases: this.activeLease ? [this.activeLease] : [],
       liveView: { available: true, controlAllowed: false },

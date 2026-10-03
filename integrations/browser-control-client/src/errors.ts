@@ -7,7 +7,8 @@ export class BrowserControlError extends Error {
     readonly retryable = false,
     readonly correlationId?: string,
     readonly details?: Record<string, unknown>,
-    options?: ErrorOptions
+    options?: ErrorOptions,
+    readonly statusCode?: number
   ) {
     super(message, options);
     this.name = 'BrowserControlError';
@@ -15,7 +16,8 @@ export class BrowserControlError extends Error {
 
   static fromProblem(
     problem: BrowserExecutionProblem,
-    options?: ErrorOptions
+    options?: ErrorOptions,
+    statusCode?: number
   ): BrowserControlError {
     return new BrowserControlError(
       problem.code,
@@ -23,7 +25,8 @@ export class BrowserControlError extends Error {
       problem.retryable,
       problem.correlationId,
       problem.details,
-      options
+      options,
+      statusCode
     );
   }
 }

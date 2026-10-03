@@ -107,8 +107,12 @@ async function runSessionCommand(
   const sessionId = requirePositional(positionals, 0, 'sessionId');
   if (action === 'get') return client.getSession(sessionId);
   if (action === 'close') {
-    const credentials = await credentialsFromOptions(sessionId, values, io);
-    return client.closeSession(sessionId, credentials, requireOption(values, 'idempotency-key'));
+    if (values['lease-token-stdin'] === true) requireOption(values, 'lease-id');
+    const credentials =
+      values['lease-id'] !== undefined
+        ? await credentialsFromOptions(sessionId, values, io)
+        : undefined;
+    return client.closeSession(sessionId, requireOption(values, 'idempotency-key'), credentials);
   }
   throw usageError(`Unknown session command: ${action ?? ''}`);
 }

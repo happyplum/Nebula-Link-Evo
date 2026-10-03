@@ -39,6 +39,8 @@
 
 ## 4. 功能清单
 
+插件继续消费 `ControlledBrowserSession` 的自动租约与清理；其底层调用共享 `closeSession(sessionId, idempotencyKey, credentials?, signal?)`，自建活动会话携带 control 凭证。E2E 对 HTTP 客户端的复用不改变插件审批、owner 或 MCP 操作语义。
+
 | 功能                                    | 状态    | 验收面                                  |
 | --------------------------------------- | ------- | --------------------------------------- |
 | 两工具注册与 observe 直通               | shipped | `index.test.ts`                         |

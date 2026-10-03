@@ -4,6 +4,7 @@
 
 - `browser-control-client/` 只消费 `proxy-adapter` 的 loopback HTTP 控制面与 `/mcp`，不得导入 Playwright/CDP 或新增代理路由。
 - `deepseek-harness-plugin/` 只通过 `@nebula-link-evo/browser-control-client` 取得浏览器能力，不复制会话、租约或操作账本实现。
+- `ai-e2e` 复用该客户端的 HTTP 控制面；E2E 适配器只映射领域错误、转换 artifact Buffer，直接消费 shared browser-execution DTO，不复制传输或协议。E2E 自有 FIFO/outbox/lease/operation 生命周期不移入 `ControlledBrowserSession`。
 - 新增或修改公共行为时同步对应 `PRODUCT-SPEC.md`、根 `docs/PRODUCT-SPEC-INDEX.md` 与 `docs/shipped/` 单元清单。
 
 ## 安全边界

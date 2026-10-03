@@ -1,10 +1,13 @@
+import { randomUUID } from 'node:crypto';
 import type {
   BrowserExecutionCapabilities,
   BrowserExecutionCredentials,
   BrowserExecutionProblem,
+  BrowserLeaseView,
   BrowserOperationRecord,
   BrowserOperationRequestV1,
   BrowserSessionOptions,
+  BrowserSessionEventRecord,
   BrowserSessionView,
   BrowserSuccessEnvelope,
   CreateBrowserLeaseRequest,
@@ -64,8 +67,8 @@ export class BrowserControlClient {
 
   async closeSession(
     sessionId: string,
-    credentials: BrowserExecutionCredentials,
     idempotencyKey: string,
+    credentials?: Pick<BrowserExecutionCredentials, 'leaseId' | 'leaseToken'>,
     signal?: AbortSignal
   ): Promise<BrowserSessionView> {
     return this.requestEnvelope(
@@ -76,6 +79,19 @@ export class BrowserControlClient {
         idempotencyKey,
         signal,
       }
+    );
+  }
+
+  async listSessionEvents(
+    sessionId: string,
+    afterSeq = 0,
+    limit = 500,
+    signal?: AbortSignal
+  ): Promise<BrowserSessionEventRecord[]> {
+    const query = new URLSearchParams({ afterSeq: String(afterSeq), limit: String(limit) });
+    return this.requestEnvelope(
+      `/api/v1/browser-execution/sessions/${encodeURIComponent(sessionId)}/event-log?${query}`,
+      { signal }
     );
   }
 
@@ -95,7 +111,7 @@ export class BrowserControlClient {
     credentials: BrowserExecutionCredentials,
     idempotencyKey: string,
     signal?: AbortSignal
-  ): Promise<unknown> {
+  ): Promise<BrowserLeaseView> {
     return this.requestEnvelope(
       `/api/v1/browser-execution/sessions/${encodeURIComponent(credentials.sessionId)}/leases/${encodeURIComponent(credentials.leaseId)}`,
       { method: 'DELETE', credentials, idempotencyKey, signal }
@@ -203,7 +219,7 @@ export class BrowserControlClient {
   }
 
   private async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-    const headers = new Headers({ Accept: 'application/json' });
+    const headers = new Headers({ Accept: 'application/json', 'X-Correlation-ID': randomUUID() });
     if (options.body !== undefined) headers.set('Content-Type', 'application/json');
     if (options.idempotencyKey) headers.set('Idempotency-Key', options.idempotencyKey);
     if (options.credentials) {
@@ -238,17 +254,32 @@ export class BrowserControlClient {
     if (!response.ok) {
       const problem = await readProblem(response);
       throw problem
-        ? BrowserControlError.fromProblem(problem)
+        ? BrowserControlError.fromProblem(problem, undefined, response.status)
         : new BrowserControlError(
             'dependency_unavailable',
             `proxy-adapter returned HTTP ${response.status} for ${path}`,
-            response.status >= 500
+            response.status >= 500,
+            undefined,
+            undefined,
+            undefined,
+            response.status
           );
     }
-    if (options.responseType === 'bytes') {
-      return new Uint8Array(await response.arrayBuffer()) as T;
+    try {
+      if (options.responseType === 'bytes') {
+        return new Uint8Array(await response.arrayBuffer()) as T;
+      }
+      return (await response.json()) as T;
+    } catch (error) {
+      throw new BrowserControlError(
+        'dependency_unavailable',
+        `proxy-adapter returned an unreadable response for ${path}`,
+        true,
+        undefined,
+        undefined,
+        { cause: error }
+      );
     }
-    return (await response.json()) as T;
   }
 }
 
@@ -267,7 +298,7 @@ interface RequestOptions {
   method?: 'GET' | 'POST' | 'DELETE';
   body?: unknown;
   idempotencyKey?: string;
-  credentials?: BrowserExecutionCredentials;
+  credentials?: Pick<BrowserExecutionCredentials, 'leaseId' | 'leaseToken'>;
   signal?: AbortSignal;
   responseType?: 'json' | 'bytes';
 }

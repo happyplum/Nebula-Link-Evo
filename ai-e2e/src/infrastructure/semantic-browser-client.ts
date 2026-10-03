@@ -1,69 +1,25 @@
-import axios, { isAxiosError, type AxiosInstance } from 'axios';
-import { randomUUID } from 'node:crypto';
+import { BrowserControlClient, BrowserControlError } from '@nebula-link-evo/browser-control-client';
+import type {
+  BrowserExecutionCapabilities,
+  BrowserExecutionCredentials,
+  BrowserLeaseView,
+  BrowserOperationRecord,
+  BrowserSessionEventRecord,
+  BrowserSessionOptions,
+  BrowserSessionView,
+  CreateBrowserLeaseRequest,
+  IssuedBrowserLease,
+} from '@nebula-link-evo/shared/types/browser-execution';
 import { IntegrationClientError } from './integration-client-error.js';
 
-export interface BrowserLeaseView {
-  id: string;
-  sessionId: string;
-  mode: 'observe' | 'control';
-  sequence: number;
-  status: 'active' | 'revoked' | 'expired';
-  policy: { tabIds: string[]; operations: string[] };
-  expiresAt: string;
-  createdAt: string;
-}
-
-export interface BrowserSessionView {
-  id: string;
-  status: 'opening' | 'active' | 'closed' | 'interrupted' | 'failed';
-  tabs: Array<{ id: string; url: string; title: string; isActive: boolean }>;
-  activeLeases: BrowserLeaseView[];
-  liveView: { available: boolean; controlAllowed: false };
-  viewport: { width: number; height: number };
-  createdAt: string;
-}
-
-export interface IssuedBrowserLease {
-  lease: BrowserLeaseView;
-  token?: string;
-  tokenIssued: boolean;
-}
-
-export interface BrowserOperationRecord {
-  operationId: string;
-  sessionId: string;
-  leaseId: string;
-  leaseSequence: number;
-  tabId?: string;
-  kind: 'observe' | 'act';
-  operation: string;
-  status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'outcome_unknown';
-  actual?: unknown;
-  artifacts: Array<{ id: string; kind: string; sha256: string; mimeType: string }>;
-  error?: { code: string; message: string; retryable: boolean; details?: Record<string, unknown> };
-}
-
-export interface BrowserSessionEventRecord {
-  id: string;
-  sessionId: string;
-  seq: number;
-  type: string;
-  entityType: 'session' | 'lease' | 'operation' | 'capture' | 'artifact';
-  entityId: string;
-  stateVersion?: number;
-  payload: Record<string, unknown>;
-  occurredAt: string;
-  createdAt: string;
-}
-
 export interface SemanticBrowserClientPort {
-  getCapabilities(): Promise<Record<string, unknown>>;
+  getCapabilities(): Promise<BrowserExecutionCapabilities>;
   createSession(
     idempotencyKey: string,
-    options?: { headless?: false; viewport?: { width: number; height: number } }
+    options?: BrowserSessionOptions
   ): Promise<BrowserSessionView>;
   getSession(sessionId: string): Promise<BrowserSessionView>;
-  listSessionEvents?(
+  listSessionEvents(
     sessionId: string,
     afterSeq?: number,
     limit?: number
@@ -71,7 +27,7 @@ export interface SemanticBrowserClientPort {
   createLease(
     sessionId: string,
     idempotencyKey: string,
-    input: { mode: 'observe' | 'control'; ttlSeconds?: number; tabIds?: string[]; operations?: string[] }
+    input: CreateBrowserLeaseRequest
   ): Promise<IssuedBrowserLease>;
   revokeLease(
     sessionId: string,
@@ -82,7 +38,7 @@ export interface SemanticBrowserClientPort {
   closeSession(
     sessionId: string,
     idempotencyKey: string,
-    credentials?: { leaseId: string; leaseToken: string }
+    credentials?: Pick<BrowserExecutionCredentials, 'leaseId' | 'leaseToken'>
   ): Promise<BrowserSessionView>;
   getOperation(operationId: string): Promise<BrowserOperationRecord>;
   downloadArtifact(sessionId: string, artifactId: string): Promise<Buffer>;
@@ -94,11 +50,9 @@ export interface SemanticBrowserClientConfig {
 }
 
 const DEFAULT_BASE_URL = 'http://127.0.0.1:3000';
-const PREFIX = '/api/v1/browser-execution';
 
 export class SemanticBrowserClient implements SemanticBrowserClientPort {
-  private readonly client: AxiosInstance;
-  private readonly timeoutMs: number;
+  private readonly client: BrowserControlClient;
 
   constructor(config: SemanticBrowserClientConfig = {}) {
     const configured = config.baseUrl ?? process.env.PROXY_ADAPTER_URL ?? DEFAULT_BASE_URL;
@@ -110,37 +64,29 @@ export class SemanticBrowserClient implements SemanticBrowserClientPort {
         true
       );
     }
-    this.timeoutMs = config.timeoutMs ?? 30_000;
-    this.client = axios.create({
-      baseURL: configured.replace(/\/$/, ''),
-    });
+    try {
+      this.client = new BrowserControlClient({
+        baseUrl: configured,
+        requestTimeoutMs: config.timeoutMs ?? 30_000,
+      });
+    } catch (error) {
+      throw mapError(error);
+    }
   }
 
-  async getCapabilities(): Promise<Record<string, unknown>> {
-    return this.requestDirect(() =>
-      this.client.get('/api/v1/capabilities', { timeout: this.timeoutMs, headers: headers() })
-    );
+  async getCapabilities(): Promise<BrowserExecutionCapabilities> {
+    return this.request(() => this.client.getCapabilities());
   }
 
   async createSession(
     idempotencyKey: string,
-    options: { headless?: false; viewport?: { width: number; height: number } } = {}
+    options: BrowserSessionOptions = {}
   ): Promise<BrowserSessionView> {
-    return this.request(() =>
-      this.client.post(`${PREFIX}/sessions`, options, {
-        timeout: this.timeoutMs,
-        headers: headers({ 'Idempotency-Key': idempotencyKey }),
-      })
-    );
+    return this.request(() => this.client.createSession(options, idempotencyKey));
   }
 
   async getSession(sessionId: string): Promise<BrowserSessionView> {
-    return this.request(() =>
-      this.client.get(`${PREFIX}/sessions/${encodeURIComponent(sessionId)}`, {
-        timeout: this.timeoutMs,
-        headers: headers(),
-      })
-    );
+    return this.request(() => this.client.getSession(sessionId));
   }
 
   async listSessionEvents(
@@ -148,26 +94,15 @@ export class SemanticBrowserClient implements SemanticBrowserClientPort {
     afterSeq = 0,
     limit = 500
   ): Promise<BrowserSessionEventRecord[]> {
-    return this.request(() =>
-      this.client.get(`${PREFIX}/sessions/${encodeURIComponent(sessionId)}/event-log`, {
-        timeout: this.timeoutMs,
-        headers: headers(),
-        params: { afterSeq, limit },
-      })
-    );
+    return this.request(() => this.client.listSessionEvents(sessionId, afterSeq, limit));
   }
 
   async createLease(
     sessionId: string,
     idempotencyKey: string,
-    input: { mode: 'observe' | 'control'; ttlSeconds?: number; tabIds?: string[]; operations?: string[] }
+    input: CreateBrowserLeaseRequest
   ): Promise<IssuedBrowserLease> {
-    return this.request(() =>
-      this.client.post(`${PREFIX}/sessions/${encodeURIComponent(sessionId)}/leases`, input, {
-        timeout: this.timeoutMs,
-        headers: headers({ 'Idempotency-Key': idempotencyKey }),
-      })
-    );
+    return this.request(() => this.client.createLease(sessionId, input, idempotencyKey));
   }
 
   async revokeLease(
@@ -177,103 +112,59 @@ export class SemanticBrowserClient implements SemanticBrowserClientPort {
     idempotencyKey: string
   ): Promise<BrowserLeaseView> {
     return this.request(() =>
-      this.client.delete(
-        `${PREFIX}/sessions/${encodeURIComponent(sessionId)}/leases/${encodeURIComponent(leaseId)}`,
-        {
-          timeout: this.timeoutMs,
-          headers: headers({
-            'Idempotency-Key': idempotencyKey,
-            'X-Browser-Lease-ID': leaseId,
-            Authorization: `Bearer ${leaseToken}`,
-          }),
-        }
-      )
+      this.client.revokeLease({ sessionId, leaseId, leaseToken }, idempotencyKey)
     );
   }
 
   async closeSession(
     sessionId: string,
     idempotencyKey: string,
-    credentials?: { leaseId: string; leaseToken: string }
+    credentials?: Pick<BrowserExecutionCredentials, 'leaseId' | 'leaseToken'>
   ): Promise<BrowserSessionView> {
-    return this.request(() =>
-      this.client.delete(`${PREFIX}/sessions/${encodeURIComponent(sessionId)}`, {
-        timeout: this.timeoutMs,
-        headers: headers({
-          'Idempotency-Key': idempotencyKey,
-          ...(credentials
-            ? {
-                'X-Browser-Lease-ID': credentials.leaseId,
-                Authorization: `Bearer ${credentials.leaseToken}`,
-              }
-            : {}),
-        }),
-      })
-    );
+    return this.request(() => this.client.closeSession(sessionId, idempotencyKey, credentials));
   }
 
   async getOperation(operationId: string): Promise<BrowserOperationRecord> {
-    return this.request(() =>
-      this.client.get(`${PREFIX}/operations/${encodeURIComponent(operationId)}`, {
-        timeout: this.timeoutMs,
-        headers: headers(),
-      })
-    );
+    return this.request(() => this.client.getOperation(operationId));
   }
 
   async downloadArtifact(sessionId: string, artifactId: string): Promise<Buffer> {
+    return this.request(async () =>
+      Buffer.from(await this.client.downloadArtifact(sessionId, artifactId))
+    );
+  }
+
+  private async request<T>(work: () => Promise<T>): Promise<T> {
     try {
-      const response = await this.client.get<ArrayBuffer>(
-        `${PREFIX}/sessions/${encodeURIComponent(sessionId)}/artifacts/${encodeURIComponent(artifactId)}`,
-        { timeout: this.timeoutMs, headers: headers(), responseType: 'arraybuffer' }
-      );
-      return Buffer.from(response.data);
+      return await work();
     } catch (error) {
       throw mapError(error);
     }
   }
-
-  private async request<T>(work: () => Promise<{ data: { data: T } }>): Promise<T> {
-    try {
-      return (await work()).data.data;
-    } catch (error) {
-      throw mapError(error);
-    }
-  }
-
-  private async requestDirect<T>(work: () => Promise<{ data: T }>): Promise<T> {
-    try {
-      return (await work()).data;
-    } catch (error) {
-      throw mapError(error);
-    }
-  }
-}
-
-function headers(extra: Record<string, string> = {}): Record<string, string> {
-  return { 'X-Request-ID': randomUUID(), 'X-Correlation-ID': randomUUID(), ...extra };
 }
 
 function mapError(error: unknown): IntegrationClientError {
   if (error instanceof IntegrationClientError) return error;
-  if (!isAxiosError(error)) {
+  if (error instanceof BrowserControlError) {
     return new IntegrationClientError(
       'proxy-adapter',
-      'dependency_unavailable',
-      error instanceof Error ? error.message : 'proxy-adapter 请求失败',
-      true
+      error.code,
+      error.message,
+      error.retryable,
+      error.statusCode,
+      error.details,
+      error.correlationId,
+      error.cause === undefined ? undefined : { cause: error.cause }
     );
   }
-  const status = error.response?.status;
-  const problem = error.response?.data as
-    | { code?: string; message?: string; retryable?: boolean; details?: Record<string, unknown> }
-    | undefined;
   return new IntegrationClientError(
     'proxy-adapter',
-    problem?.code ?? (status ? `http_${status}` : 'dependency_unavailable'),
-    problem?.message ?? error.message,
-    problem?.retryable ?? (!status || status >= 500),
-    status,
-    problem?.details
+    'dependency_unavailable',
+    error instanceof Error ? error.message : 'proxy-adapter 请求失败',
+    true,
+    undefined,
+    undefined,
+    undefined,
+    { cause: error }
   );
 }

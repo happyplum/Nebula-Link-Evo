@@ -18,6 +18,53 @@ function testIo(stdin = '') {
 }
 
 describe('nebula-browser CLI', () => {
+  it('allows inactive session close without credentials and leaves active-session authority to proxy', async () => {
+    const closeSession = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'session-1', status: 'closed' })
+      .mockRejectedValueOnce(
+        new BrowserControlError('permission_denied', 'control lease required')
+      );
+    const client = { closeSession, close: vi.fn(async () => undefined) };
+    const args = ['session', 'close', 'session-1', '--idempotency-key', 'close-inactive'];
+    const first = testIo();
+    expect(await runCli(args, first.io, { createClient: () => client as never })).toBe(0);
+    expect(closeSession).toHaveBeenCalledWith('session-1', 'close-inactive', undefined);
+    const second = testIo();
+    expect(await runCli(args, second.io, { createClient: () => client as never })).toBe(4);
+    expect(second.stdout).toEqual([]);
+    expect(second.stderr.join('\n')).toContain('permission_denied');
+  });
+
+  it('rejects explicit credential input without a lease ID', async () => {
+    const { io } = testIo('test-token');
+    const closeSession = vi.fn();
+    expect(
+      await runCli(
+        ['session', 'close', 's', '--lease-token-stdin', '--idempotency-key', 'close-1'],
+        io,
+        { createClient: () => ({ closeSession, close: vi.fn(async () => undefined) }) as never }
+      )
+    ).toBe(2);
+    expect(closeSession).not.toHaveBeenCalled();
+  });
+  it('passes the session close idempotency key before hidden lease credentials', async () => {
+    const { io, stdout } = testIo();
+    const closeSession = vi.fn(async () => ({ id: 'session-1', status: 'closed' }));
+    const client = { closeSession, close: vi.fn(async () => undefined) };
+    const code = await runCli(
+      ['session', 'close', 'session-1', '--lease-id', 'lease-1', '--idempotency-key', 'close-1'],
+      { ...io, env: { NEBULA_BROWSER_LEASE_TOKEN: 'test-hidden-token' } },
+      { createClient: () => client as never }
+    );
+    expect(code).toBe(0);
+    expect(closeSession).toHaveBeenCalledWith('session-1', 'close-1', {
+      sessionId: 'session-1',
+      leaseId: 'lease-1',
+      leaseToken: 'test-hidden-token',
+    });
+    expect(stdout.join('\n')).not.toContain('test-hidden-token');
+  });
   it('prints structured capability output', async () => {
     const { io, stdout } = testIo();
     const client = {

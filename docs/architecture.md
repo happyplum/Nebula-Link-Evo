@@ -15,7 +15,7 @@ Browser ←→ Debug UI (:5173 dev)
     (GLM, OpenAI, Anthropic, Kimi, NVIDIA)
 
          AI E2E (:3002) — semantic E2E 编排
-      AgentTaskClient(:3001) + SemanticBrowserClient(:3000)
+      AgentTaskClient(:3001) + SemanticBrowserClient → browser-control-client HTTP(:3000)
 ```
 
 ### 核心产品分层
@@ -118,7 +118,7 @@ AI Providers                            Chromium
 - ai-chat-service 通过 MCP-over-HTTP 从 proxy-adapter 获取浏览器控制能力；视觉分析由 ai-chat-service 内部 VisionAnalyzer 提供
 - proxy-adapter 内进程运行 Playwright 引擎，不再依赖外部 playwright-server 进程
 - debug-ui 分别连接两个服务：chat SSE → ai-chat-service (:3001)，browser/debug → proxy-adapter (:3000)
-- ai-e2e 通过 AgentTaskClient(:3001) 和 SemanticBrowserClient(:3000) 消费
+- ai-e2e 通过 AgentTaskClient(:3001) 和 SemanticBrowserClient → browser-control-client HTTP(:3000) 消费；共享客户端不接管 E2E 的 FIFO/outbox/lease/operation 生命周期。
 
 ## 数据持久化
 

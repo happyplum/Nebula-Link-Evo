@@ -326,6 +326,9 @@ importers:
       '@fastify/type-provider-typebox':
         specifier: 'catalog:'
         version: 5.2.0(@sinclair/typebox@0.32.37)(fastify@5.12.1)
+      '@nebula-link-evo/browser-control-client':
+        specifier: workspace:*
+        version: link:../integrations/browser-control-client
       '@nebula-link-evo/shared':
         specifier: workspace:*
         version: link:../shared
