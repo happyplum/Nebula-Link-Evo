@@ -45,7 +45,7 @@ docs/               Architecture docs, API references, shipped manifests (not a 
 ```bash
 pnpm dev            # predev starts LiveKit → shared build → parallel dev for shared/debug-ui/proxy-adapter/ai-chat-service
 pnpm build          # shared → agent-activity-ui → integrations → debug-ui → proxy-adapter → ai-chat-service → ai-e2e
-pnpm test           # pnpm -r test (vitest everywhere)
+pnpm test           # Node launcher lifecycle tests → pnpm -r test (vitest everywhere)
 pnpm lint           # eslint across debug-ui / ai-e2e/ui / proxy-adapter / ai-chat-service / shared / integrations / agent-activity-ui
 pnpm format         # prettier --write debug-ui/src proxy-adapter/src ai-chat-service/src
 ```

@@ -274,6 +274,7 @@ debug-ui  ←──  （仅被用户消费）
 - 根 `pnpm test` 运行工作区测试；Windows 发布门使用串行工作区执行以避免资源竞争。
 - 根 `pnpm test:coverage` 串行运行所有声明覆盖率脚本的工作区，并由各包 `vitest.config.ts` 提供当前防回退阈值；关键状态机、授权、SSE、Vision、投影/协调器和 browser execution 仍须以 lines ≥80%、branches ≥70% 作为完整验收目标。
 - `pnpm test:e2e` 串行执行 proxy canonical control plane、ai-chat Agent browser loop、ai-e2e 三服务 semantic 旅程、CLI/Harness 真实消费者、Debug UI Chat/SSE Playwright 与 ai-e2e UI 项目/bootstrap Playwright；只允许真实公开入口、真实 transport 和真实 Chromium，Fastify `inject`、fake client 或直接 executor 调用只能归入单元/集成测试。
+- 两个 UI E2E runner 与 Debug AI 子 launcher 共用 `tools/e2e-process-lifecycle.mjs`；每轮在本工作区 `.tmp` 下创建唯一 runroot，所有测试数据库、配置和产物归其所有。成功、启动失败、非零退出与中断均精确停止并等待本轮 PID 树退出后删除目录，不复用开发服务、不写默认数据；Windows 按已登记 PID 与创建身份确认进程，目录验证绝对路径与 reparse 边界，失败清理报告错误。`pnpm test:launchers` 的 Node 内置生命周期回归纳入根 `pnpm test`。
 - 全工作区 build/type-check 使用 TypeScript 7 原生 `tsc`；`typescript` npm alias 指向 `@typescript/typescript6`，仅作为 `typescript-eslint` 等编译器 API 消费方的兼容层，依赖门禁必须同时验证两个 CLI 版本和 peer 完整性。
 - CI 的 Node 版本必须满足根 `engines`，并执行 frozen install、lockfile dedupe、生产依赖 audit、Harness BOM、metadata/source format、build、全工作区 type-check、lint、串行 test、coverage 与完整根 E2E；Linux 使用 `xvfb-run` 承载所有 headed Chromium 验收。
 

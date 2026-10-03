@@ -1,46 +1,46 @@
-import { spawn } from 'node:child_process';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { withE2EResources } from '../../tools/e2e-process-lifecycle.mjs';
 
-const gatewayUrl = requireEnvironment('PROXY_ADAPTER_URL');
-const port = requireEnvironment('AI_CHAT_E2E_PORT');
-const root = await mkdtemp(join(tmpdir(), 'nebula-debug-ui-ai-chat-e2e-'));
-const configPath = join(root, 'config.json');
-const trustedPluginLockPath = join(root, 'trusted-harness-plugins.lock.json');
-await writeFile(configPath, JSON.stringify(testConfig()), 'utf8');
-await writeFile(trustedPluginLockPath, JSON.stringify(testPluginLock(gatewayUrl)), 'utf8');
-
-const fixture = fileURLToPath(
-  new URL('../../ai-chat-service/tests/e2e/ai-chat-service-process.mjs', import.meta.url)
-);
-const child = spawn(process.execPath, [fixture], {
-  env: {
-    ...process.env,
-    AI_CHAT_E2E_CONFIG_PATH: configPath,
-    AI_CHAT_E2E_DATA_DIR: join(root, 'data'),
-    AI_CHAT_E2E_PLUGIN_LOCK_PATH: trustedPluginLockPath,
-    AI_CHAT_E2E_PORT: port,
-    PROXY_ADAPTER_URL: gatewayUrl,
-    E2E_TEST_API_KEY: 'deterministic-test-key',
-    TEST_MODE: 'true',
-    LOG_LEVEL: 'error',
+process.exitCode = await withE2EResources(
+  {
+    workspaceRoot: fileURLToPath(new URL('../..', import.meta.url)),
+    parentRoot: requireEnvironment('NEBULA_E2E_RUN_ROOT'),
+    name: 'ai-chat',
   },
-  stdio: 'inherit',
-  windowsHide: true,
-});
+  async (scope) => {
+    const gatewayUrl = requireEnvironment('PROXY_ADAPTER_URL');
+    const port = requireEnvironment('AI_CHAT_E2E_PORT');
+    const root = scope.root;
+    const configPath = join(root, 'config.json');
+    const trustedPluginLockPath = join(root, 'trusted-harness-plugins.lock.json');
+    await writeFile(configPath, JSON.stringify(testConfig()), 'utf8');
+    await writeFile(trustedPluginLockPath, JSON.stringify(testPluginLock(gatewayUrl)), 'utf8');
 
-for (const signal of ['SIGINT', 'SIGTERM']) {
-  process.once(signal, () => child.kill(signal));
-}
+    const fixture = fileURLToPath(
+      new URL('../../ai-chat-service/tests/e2e/ai-chat-service-process.mjs', import.meta.url)
+    );
+    const child = scope.spawn(process.execPath, [fixture], {
+      cwd: root,
+      env: {
+        ...process.env,
+        AI_CHAT_E2E_CONFIG_PATH: configPath,
+        AI_CHAT_E2E_DATA_DIR: join(root, 'data'),
+        AI_CHAT_E2E_PLUGIN_LOCK_PATH: trustedPluginLockPath,
+        AI_CHAT_E2E_PORT: port,
+        PROXY_ADAPTER_URL: gatewayUrl,
+        E2E_TEST_API_KEY: 'deterministic-test-key',
+        TEST_MODE: 'true',
+        LOG_LEVEL: 'error',
+      },
+      stdio: 'inherit',
+      windowsHide: true,
+    });
 
-const exitCode = await new Promise((resolve, reject) => {
-  child.once('error', reject);
-  child.once('exit', (code, signal) => resolve(signal ? 0 : (code ?? 1)));
-});
-await rm(root, { recursive: true, force: true });
-process.exitCode = exitCode;
+    return await scope.waitForExit(child);
+  }
+);
 
 function requireEnvironment(name) {
   const value = process.env[name];

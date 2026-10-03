@@ -1,5 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
+import { join, resolve } from 'node:path';
 
+const runRoot = resolve(requireEnvironment('NEBULA_E2E_RUN_ROOT'));
+const debugDirectory = resolve(requireEnvironment('DEBUG_UI_E2E_PACKAGE_DIR'));
 const proxyPort = requiredPort('DEBUG_UI_E2E_PROXY_PORT');
 const aiPort = requiredPort('DEBUG_UI_E2E_AI_PORT');
 const uiPort = requiredPort('DEBUG_UI_E2E_UI_PORT');
@@ -10,13 +13,13 @@ const uiURL = `http://127.0.0.1:${uiPort}`;
 /**
  * Playwright E2E Configuration for Debug UI
  *
- * - Auto-starts workspace dev services
- * - Tests run against http://localhost:5173/debug
+ * - Starts isolated services with dynamically assigned loopback ports
  * - Screenshots, traces, and videos on failure
  * - Reporters: line, html, junit
  */
 export default defineConfig({
   testDir: './e2e/specs',
+  outputDir: join(runRoot, 'test-results'),
 
   timeout: 30 * 1000,
   expect: {
@@ -28,8 +31,8 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: [
     ['line'],
-    ['html', { outputFolder: 'playwright-report/html' }],
-    ['junit', { outputFile: 'playwright-report/junit/results.xml' }],
+    ['html', { outputFolder: join(runRoot, 'playwright-report/html'), open: 'never' }],
+    ['junit', { outputFile: join(runRoot, 'playwright-report/junit/results.xml') }],
   ],
   use: {
     baseURL: `${uiURL}/debug/`,
@@ -49,7 +52,8 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: 'node ../proxy-adapter/node_modules/tsx/dist/cli.mjs ../proxy-adapter/src/server.ts',
+      command: `"${process.execPath}" "${resolve(debugDirectory, '../proxy-adapter/dist/server.js')}"`,
+      cwd: runRoot,
       url: `${proxyURL}/api/v1/health`,
       reuseExistingServer: false,
       timeout: 60 * 1000,
@@ -62,6 +66,7 @@ export default defineConfig({
     },
     {
       command: 'node scripts/start-ai-chat-e2e.mjs',
+      cwd: debugDirectory,
       url: `${aiURL}/api/v1/config`,
       reuseExistingServer: false,
       timeout: 60 * 1000,
@@ -72,6 +77,7 @@ export default defineConfig({
     },
     {
       command: `node node_modules/vite/bin/vite.js --host 127.0.0.1 --port ${uiPort}`,
+      cwd: debugDirectory,
       url: `${uiURL}/debug/`,
       reuseExistingServer: false,
       timeout: 60 * 1000,
@@ -82,6 +88,12 @@ export default defineConfig({
     },
   ],
 });
+
+function requireEnvironment(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} must be set by the isolated E2E launcher`);
+  return value;
+}
 
 function requiredPort(name: string): number {
   const port = Number(process.env[name]);

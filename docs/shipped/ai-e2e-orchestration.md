@@ -21,6 +21,7 @@
 - [shipped] additive migration 020 新增 Authoring/Run Agent 活动事件与独立外部 activity cursor；保留既有 semantic 数据库和历史记录，不复用控制面 `last_external_seq`，不执行破坏性迁移。
 - [shipped] ai-e2e 从 Agent Task `activity-log` 聚合多页面 Agent 活动，并将 authoring/run 生命周期、候选、审批、浏览器验证、激活、失败、依赖跳过和未知结果投影到各业务上下文的本地单调活动序列。
 - [shipped] `AgentActivityRepository.snapshot` 直接调用 shared 唯一纯 replay，本地 applyEvent 已退出；先保留控制面/消息投影和 source seq 去重，再从 activity 聚合顶层 state，不受外部 stream.state 覆盖；generatedAt 使用最后事件/空流当前时间。UI 通过公共 UI 入口重导出同一核心，后端不依赖 React。
+- [shipped] 三服务 E2E 旅程夹具将证据与加密 secret store 显式注入仓库 `.tmp` 唯一运行目录；与 coverage 共用该夹具，实际 artifact storage key 和密钥路径均有回归，退出后随本轮目录清理，不写默认 data。
 - [shipped] `GET /api/v1/authoring-jobs/:jobId/{activity,activity-log}` 与 `GET /api/v1/runs/:runId/{activity,activity-log}` 提供 snapshot-first SSE 和持久呈现日志；跨 context 数据不可见，刷新与服务重启后按 seq 恢复且不重复。
 - [shipped] Authoring 使用 compact 公共 renderer 和 repair Composer 串联用户意见、候选、Skill/Tool、审批、验证与激活；Run 使用同一 compact 只读流，资产修改必须返回 Authoring。结构化 amendment/decision 始终是业务事实。
 - [shipped] 公开 authoring context message 查询/提交路径已移除；内部消息审计记录保留并作为活动投影来源，不清理历史数据库。
@@ -33,7 +34,7 @@
 - [shipped] 三服务 semantic 产品旅程 E2E 使用真实 proxy、ai-chat Agent Task HTTP、ai-e2e HTTP 与 Chromium 覆盖结构化候选、浏览器验证、原子激活、正式运行和证据封存；同时断言未验证版本拒绝运行、`outcome_unknown` 进入 open decision 且不重放。
 - [shipped] 功能脚本 v1 只使用 canonical `pageScope.entryPageId`；协调器为 authoring 生命周期持有隐藏 control lease，但向 Agent 注入的 `browserBinding.access` 仍按冻结步骤收窄，并在终态用该租约关闭自有 session。
 - [shipped] ai-e2e 后端覆盖率门禁合并单元/集成与真实三服务 E2E，并对协调器、语义任务投影和 amendment 激活仓储设置文件级阈值；UI 继续独立提供覆盖率门禁。
-- [shipped] ai-e2e UI Playwright 使用动态端口、临时数据、真实 proxy、确定性 ai-chat DSH Harness、ai-e2e 服务及生产 UI bundle，覆盖首次 bootstrap 一次性、candidate 浏览器验证/激活、正式 Run、证据与 reload 恢复；该套件已纳入根 `test:e2e` 与 CI。
+- [shipped] ai-e2e UI Playwright 使用动态端口、仓库 `.tmp` 下唯一 runroot、真实 proxy、确定性 ai-chat DSH Harness、ai-e2e 服务及生产 UI bundle，覆盖首次 bootstrap 一次性、candidate 浏览器验证/激活、正式 Run、证据与 reload 恢复；该套件已纳入根 `test:e2e` 与 CI。数据库、配置、计划、报告和测试产物归本轮目录；三个 UI/AI launcher 共用 `tools/e2e-process-lifecycle.mjs`，整个服务启动过程均在同一清理边界内，启动失败、非零退出及 SIGINT/SIGTERM 也精确收回本轮 PID 树、等待退出后删除目录，重复清理幂等且保留原始错误，不复用开发服务或默认数据。
 - [shipped] executable amendment 先把精确 candidate revision verification 与 scope/dependency hash 持久化，再原子激活修订，最后按激活后的完整资产图写业务版本 validation；未验证候选保持 fail closed。
 - [shipped] 协调器直接消费 ai-chat-service Agent task 与 proxy-adapter browser session 的持久 event-log，使用 `external_task_links.last_external_seq` 单调游标补洞；权威快照查询继续用于获得完整终态，重启不从未知增量重建状态。
 - [shipped] `nebula.ai-e2e.functional-script/1.0` 提供可导出的 TypeBox JSON Schema 与独立静态 validator；valid/current 创建及 AI candidate 标记为 valid 前统一拒绝旧 `functionalModuleId`、未知字段、空步骤、非法动作/断言、悬空 step/effect/input 引用和无最终断言脚本。

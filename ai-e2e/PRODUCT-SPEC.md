@@ -86,8 +86,8 @@ UI 路由：`/`、`/semantic/:projectId`、`/semantic/:projectId/authoring/:vers
 - 正式 Run 创建后保持 `ready` 且不得提前占用浏览器 FIFO；只有显式 start 进入 `running` 后才具备领取会话资格。
 - 旧 `/api/projects/*` 返回 404，生产/开发构建均不包含旧向导与 fixtures。
 - `pnpm --filter ai-e2e test:e2e` 必须通过真实 proxy、ai-chat Agent Task HTTP 与 Chromium；未知结果停在 open decision，不能自动创建第二个 Agent task。
-- `pnpm --filter ai-e2e-ui test:e2e` 必须以动态端口和临时数据库启动真实 proxy、ai-chat Harness、ai-e2e 服务与生产 UI bundle，验证项目创建、自动 bootstrap、candidate 浏览器验证/激活、正式 Run、证据及 reload 恢复，不复用已有服务。
-- 覆盖率门禁合并单元/集成与真实三服务 E2E；`semantic-coordinator-service.ts`、`semantic-task-projection.ts` 和 amendment 激活仓储分别设置关键文件防回退阈值。
+- `pnpm --filter ai-e2e-ui test:e2e` 必须以动态端口和仓库 `.tmp` 下每轮唯一 runroot 启动真实 proxy、ai-chat Harness、ai-e2e 服务与生产 UI bundle，验证项目创建、自动 bootstrap、candidate 浏览器验证/激活、正式 Run、证据及 reload 恢复，不复用已有服务。数据库、配置、计划与测试产物全部归本轮目录；启动失败、非零退出和 SIGINT/SIGTERM 与正常结束共用 `tools/e2e-process-lifecycle.mjs`，精确回收本轮 PID 树并等待退出后清理目录，清理失败保留原错误并报告。
+- 覆盖率门禁合并单元/集成与真实三服务 E2E；`semantic-coordinator-service.ts`、`semantic-task-projection.ts` 和 amendment 激活仓储分别设置关键文件防回退阈值。三服务旅程夹具的证据与加密 secret store 显式注入仓库 `.tmp` 唯一运行目录，随服务退出统一清理；回归核对实际 artifact storage key 与本轮密钥路径，禁止落入默认 data。
 
 ## 5. 维护协议 [MUST-MAINTAIN]
 

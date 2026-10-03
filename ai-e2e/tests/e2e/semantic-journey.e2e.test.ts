@@ -1,13 +1,16 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { buildApp as buildProxyApp } from '../../../proxy-adapter/src/server.js';
 import { DatabaseManager } from '../../src/database/db.js';
 import { hashValue } from '../../src/database/repositories/semantic-repository-utils.js';
-import { MemoryCoordinatorSecretStore } from '../../src/infrastructure/coordinator-secret-store.js';
+import {
+  EncryptedCoordinatorSecretStore,
+  MemoryCoordinatorSecretStore,
+} from '../../src/infrastructure/coordinator-secret-store.js';
+import { SemanticArtifactStore } from '../../src/infrastructure/semantic-artifact-store.js';
 import { AgentTaskClient } from '../../src/infrastructure/agent-task-client.js';
 import { SemanticBrowserClient } from '../../src/infrastructure/semantic-browser-client.js';
 import { createServer } from '../../src/server/index.js';
@@ -32,12 +35,16 @@ describe('semantic product journey', () => {
   let aiE2eApp: ReturnType<typeof createServer>;
   let aiE2eUrl: string;
   let coordinator: SemanticCoordinatorService;
+  let artifactStore: SemanticArtifactStore;
   let journeyPlanPath: string;
 
   beforeAll(async () => {
     delete process.env.LIVEKIT_API_KEY;
     delete process.env.LIVEKIT_API_SECRET;
-    root = await mkdtemp(join(tmpdir(), 'nebula-semantic-journey-'));
+    const scratchRoot = fileURLToPath(new URL('../../../.tmp/', import.meta.url));
+    await mkdir(scratchRoot, { recursive: true });
+    root = await mkdtemp(join(scratchRoot, 'nebula-semantic-journey-'));
+    artifactStore = new SemanticArtifactStore(join(root, 'evidence'));
     proxyApp = await buildProxyApp({ dataDir: join(root, 'proxy'), skipBackups: true });
     proxyUrl = await proxyApp.listen({ host: '127.0.0.1', port: 0 });
 
@@ -74,6 +81,8 @@ describe('semantic product journey', () => {
       repository: database.getSemanticCoordinatorRepo(),
       workflows,
       evidence: database.getSemanticEvidenceRepo(),
+      artifactStore,
+      secretStore: new EncryptedCoordinatorSecretStore(join(root, 'secrets')),
       runs,
       agentTasks: new AgentTaskClient({ baseUrl: aiChatUrl, timeoutMs: 30_000 }),
       browser: new SemanticBrowserClient({ baseUrl: proxyUrl, timeoutMs: 30_000 }),
@@ -105,6 +114,7 @@ describe('semantic product journey', () => {
   });
 
   it('creates, repairs, verifies, activates and executes a formal run over the three services', async () => {
+    await expect(access(join(root, 'secrets', '.master-key'))).resolves.toBeUndefined();
     const created = await request('POST', '/api/v1/projects', {
       headers: { 'idempotency-key': 'semantic-e2e-project' },
       body: {
@@ -276,6 +286,17 @@ describe('semantic product journey', () => {
         )
         .get(runView.id)
     ).toEqual({ count: 1 });
+    const artifacts = db
+      .prepare('SELECT sha256, storage_key FROM artifact_objects')
+      .all() as Array<{
+      sha256: string;
+      storage_key: string;
+    }>;
+    expect(artifacts.length).toBeGreaterThan(0);
+    for (const artifact of artifacts) {
+      expect(artifact.storage_key).toBe(join(root, 'evidence', artifact.sha256));
+      await expect(access(artifact.storage_key)).resolves.toBeUndefined();
+    }
     const formalTaskId = String(
       (
         db
@@ -356,6 +377,7 @@ describe('semantic product journey', () => {
         repository: database.getSemanticCoordinatorRepo(),
         workflows: database.getSemanticWorkflowRepo(),
         evidence: database.getSemanticEvidenceRepo(),
+        artifactStore,
         runs: database.getSemanticRunControlRepo(),
         browser,
         agentTasks: agent,

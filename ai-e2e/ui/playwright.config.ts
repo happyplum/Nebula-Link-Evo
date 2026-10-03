@@ -1,10 +1,14 @@
 import { defineConfig, devices } from '@playwright/test';
+import { join, resolve } from 'node:path';
 
+const runRoot = resolve(requireEnvironment('NEBULA_E2E_RUN_ROOT'));
+const uiDirectory = resolve(requireEnvironment('AI_E2E_UI_PACKAGE_DIR'));
 const port = requiredPort('AI_E2E_UI_TEST_PORT');
 const baseURL = `http://127.0.0.1:${port}/ai-e2e/`;
 
 export default defineConfig({
   testDir: './e2e',
+  outputDir: join(runRoot, 'test-results'),
   timeout: 30_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,
@@ -21,6 +25,7 @@ export default defineConfig({
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
     command: 'node ../node_modules/tsx/dist/cli.mjs ../src/server.ts',
+    cwd: uiDirectory,
     url: baseURL,
     reuseExistingServer: false,
     timeout: 60_000,
@@ -28,6 +33,8 @@ export default defineConfig({
     env: {
       AI_E2E_PORT: String(port),
       AI_E2E_DB_PATH: requireEnvironment('AI_E2E_UI_TEST_DB_PATH'),
+      AI_E2E_EVIDENCE_PATH: join(runRoot, 'semantic-evidence'),
+      AI_E2E_SECRET_STORE_PATH: join(runRoot, 'semantic-secrets'),
       AI_E2E_COORDINATOR_ENABLED: process.env.AI_E2E_UI_COORDINATOR_ENABLED ?? 'false',
       ...(process.env.AI_CHAT_SERVICE_URL
         ? { AI_CHAT_SERVICE_URL: process.env.AI_CHAT_SERVICE_URL }
