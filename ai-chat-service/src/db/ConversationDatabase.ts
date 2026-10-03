@@ -14,7 +14,6 @@ import type {
   ControlCommandType,
   CreateOperationParams,
   Session,
-  SessionStatus,
   TracedOperation,
   UpdateSessionParams,
   UpdateOperationParams,
@@ -26,10 +25,9 @@ import { up as applyHarnessSchedulerMigration } from '../conversation/migrations
 
 const DEFAULT_DB_PATH = join(process.cwd(), 'data', 'ai-chat-service', 'conversations.sqlite');
 
-// allow: SIZE_OK — T6 mirrors the existing proxy DatabaseManager API surface so T7 can move call sites without rewriting behavior.
+// allow: SIZE_OK — ConversationDatabase owns the canonical SQLite schema, messages and control/event storage.
 
 export class ConversationDatabase {
-  private static instance: ConversationDatabase | null = null;
   private db: DatabaseSync | null = null;
   private isInitialized = false;
   private sessionStateDAO: SessionStateDAO | null = null;
@@ -37,24 +35,6 @@ export class ConversationDatabase {
   private sessionEventsCleanup: SessionEventsCleanup | null = null;
 
   constructor() {}
-
-  static getInstance(): ConversationDatabase {
-    if (!ConversationDatabase.instance) {
-      ConversationDatabase.instance = new ConversationDatabase();
-    }
-    return ConversationDatabase.instance;
-  }
-
-  static resetInstance(): void {
-    if (!ConversationDatabase.instance) {
-      return;
-    }
-    try {
-      ConversationDatabase.instance.closeSync();
-    } finally {
-      ConversationDatabase.instance = null;
-    }
-  }
 
   initialize(dbPath: string = DEFAULT_DB_PATH): void {
     if (this.isInitialized && this.db) {
@@ -263,35 +243,6 @@ export class ConversationDatabase {
     const stmt = db.prepare('SELECT * FROM messages WHERE idempotency_key = ?');
     const row = stmt.get(key) as MessageRow | undefined;
     return row ? this.rowToMessage(row) : null;
-  }
-
-  updateSessionStatus(sessionId: string, status: SessionStatus): void {
-    const db = this.getDb();
-    const now = new Date().toISOString();
-    const stmt = db.prepare(
-      `UPDATE sessions_state
-       SET status = ?, last_active_at = ?, version = version + 1, updated_at = ?
-       WHERE session_id = ?`
-    );
-    stmt.run(status, now, now, sessionId);
-  }
-
-  activateSession(sessionId: string): void {
-    this.updateSessionStatus(sessionId, 'running');
-  }
-
-  recoverRunningSessions(): Array<{ readonly id: string; readonly status: string }> {
-    const db = this.getDb();
-    const stmt = db.prepare('SELECT session_id AS id, status FROM sessions_state WHERE status = ?');
-    const rows = stmt.all('running') as Array<{ readonly id: string; readonly status: string }>;
-    const recoveredSessions: Array<{ readonly id: string; readonly status: string }> = [];
-
-    for (const row of rows) {
-      this.updateSessionStatus(row.id, 'blocked');
-      recoveredSessions.push({ id: row.id, status: 'blocked' });
-    }
-
-    return recoveredSessions;
   }
 
   private enableWalMode(): void {
@@ -509,25 +460,6 @@ export class ConversationDatabase {
     this.sessionEventsCleanup = null;
   }
 
-  private closeSync(): void {
-    if (!this.db) {
-      return;
-    }
-    if (this.sessionEventsCleanup) {
-      this.sessionEventsCleanup.stop();
-    }
-    if (this.sessionEventsDAO) {
-      this.sessionEventsDAO.dispose();
-      this.sessionEventsDAO.flushSync();
-    }
-    this.db.close();
-    this.db = null;
-    this.isInitialized = false;
-    this.sessionStateDAO = null;
-    this.sessionEventsDAO = null;
-    this.sessionEventsCleanup = null;
-  }
-
   private getDb(): DatabaseSync {
     if (!this.db) {
       throw new Error('Conversation database not initialized');
@@ -603,5 +535,3 @@ interface OperationLogRow {
   readonly status: string;
   readonly error: string | null;
 }
-
-export const conversationDatabase = ConversationDatabase.getInstance();

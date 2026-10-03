@@ -191,8 +191,8 @@ export class SessionEventsDAO {
 
   /** Advance the in-process allocator after another transaction committed a public event. */
   observeCommittedSeq(sessionId: string, seq: number): void {
-    const current = this.sessionSeqCounters.get(sessionId) ?? this.getLastSeq(sessionId) ?? 0;
-    if (seq > current) this.sessionSeqCounters.set(sessionId, seq);
+    const next = this.sessionSeqCounters.get(sessionId) ?? (this.getLastSeq(sessionId) ?? 0) + 1;
+    this.sessionSeqCounters.set(sessionId, Math.max(next, seq + 1));
   }
 
   async cleanupExpired(): Promise<number> {

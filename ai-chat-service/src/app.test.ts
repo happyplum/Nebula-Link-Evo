@@ -116,6 +116,41 @@ describe('buildApp', () => {
       });
       expect(first.conversationManager.getSession('first-only')).not.toBeNull();
       expect(second.conversationManager.getSession('first-only')).toBeNull();
+      for (const app of [first, second]) {
+        app.conversationManager.createSession({
+          id: 'same-id',
+          title: 'isolated',
+          provider: 'nvidia',
+          model: 'test',
+        });
+      }
+      await first.chatSessionController.beginRun('same-id', 'first-run');
+      await second.chatSessionController.beginRun('same-id', 'second-run');
+      const firstAbort = await first.chatSessionController.createAbortController(
+        'same-id',
+        'first-run'
+      );
+      const secondAbort = await second.chatSessionController.createAbortController(
+        'same-id',
+        'second-run'
+      );
+      await first.chatSessionController.cancel('same-id');
+      expect(firstAbort.signal.aborted).toBe(true);
+      expect(secondAbort.signal.aborted).toBe(false);
+      const firstStatus = await first.inject({
+        method: 'GET',
+        url: '/api/v1/chat/sessions/same-id/status',
+      });
+      const secondStatus = await second.inject({
+        method: 'GET',
+        url: '/api/v1/chat/sessions/same-id/status',
+      });
+      expect(firstStatus.json()).toMatchObject({ status: 'cancelled', jobId: 'first-run' });
+      expect(secondStatus.json()).toMatchObject({ status: 'running', jobId: 'second-run' });
+      expect(await second.chatSessionController.getStatus('same-id')).toMatchObject({
+        status: 'running',
+        jobId: 'second-run',
+      });
       await expect(first.inject({ method: 'GET', url: '/health' })).resolves.toMatchObject({
         statusCode: 200,
       });

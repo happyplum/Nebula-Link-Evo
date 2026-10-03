@@ -1,8 +1,4 @@
 import { Type } from '@sinclair/typebox';
-import type { ConversationManager } from '../../../../conversation/manager.js';
-import type { AgentState, SessionState, SessionStatus } from '../../../../conversation/types.js';
-import { ChatSessionController } from '../../../../services/chat-session-controller.js';
-import type { SessionStatusResponse } from '../../../../services/chat-session-controller.js';
 
 export const SessionStatusSchema = Type.Union([
   Type.Literal('idle'),
@@ -45,51 +41,3 @@ export const AgentStateSchema = Type.Object({
   lastError: Type.Optional(Type.String()),
   retryAfterMs: Type.Optional(Type.Number({ minimum: 0 })),
 });
-
-export interface RuntimeSessionState {
-  status: SessionStatus;
-  jobId?: string;
-  currentJobId?: string;
-  lastActivity: string;
-  agentState?: AgentState;
-}
-
-function resolveRuntimeStatus(
-  controllerStatus: SessionStatusResponse,
-  sessionState: SessionState | null
-): SessionStatus {
-  if (controllerStatus.status !== 'idle') {
-    return controllerStatus.status;
-  }
-
-  return sessionState?.status ?? 'idle';
-}
-
-export function mergeRuntimeSessionState(options: {
-  controllerStatus: SessionStatusResponse;
-  sessionState: SessionState | null;
-}): RuntimeSessionState {
-  const { controllerStatus, sessionState } = options;
-
-  return {
-    status: resolveRuntimeStatus(controllerStatus, sessionState),
-    jobId: sessionState?.jobId ?? controllerStatus.currentJobId,
-    currentJobId: controllerStatus.currentJobId ?? sessionState?.jobId,
-    lastActivity: sessionState?.lastActiveAt ?? controllerStatus.lastActivity,
-    agentState: sessionState?.agentState,
-  };
-}
-
-export async function getRuntimeSessionState(
-  conversationManager: ConversationManager,
-  sessionId: string,
-  controller: ChatSessionController = ChatSessionController.getInstance()
-): Promise<RuntimeSessionState> {
-  const controllerStatus = controller.getStatus(sessionId);
-  const sessionState = await conversationManager.getSessionState(sessionId);
-
-  return mergeRuntimeSessionState({
-    controllerStatus,
-    sessionState,
-  });
-}

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ResolvedConfig } from '../config/schema.js';
 import type { HarnessRuntime, HarnessSessionHandle } from '../harness/index.js';
+import type { HarnessRunScheduler } from '../harness/run-scheduler.js';
 import type { HarnessProjectionStore } from '../harness/projection-store.js';
 import type { ChatSessionController } from '../services/chat-session-controller.js';
 import { ChatHandler } from './chat-handler.js';
@@ -18,11 +19,15 @@ describe('ChatHandler', () => {
     fixture.harness.revision.mockResolvedValueOnce(undefined).mockResolvedValue('revision-1');
     fixture.controller.shouldPause.mockReturnValue(true);
 
-    await fixture.handler.handleChatSend('test', {
-      sessionId: 'session-1',
-      message: '  hello  ',
-      messageId: 'message-1',
-    });
+    await fixture.handler.handleChatSend(
+      'test',
+      {
+        sessionId: 'session-1',
+        message: '  hello  ',
+        messageId: 'message-1',
+      },
+      { runId: 'run-1', statusOwner: 'chat-handler' }
+    );
 
     expect(fixture.harness.openSession).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -45,9 +50,9 @@ describe('ChatHandler', () => {
       'session-1',
       expect.objectContaining({ type: 'stream.state', streamId: 'session-1' })
     );
-    expect(fixture.controller.markAsPaused).toHaveBeenCalledWith('session-1');
+    expect(fixture.controller.markAsPaused).toHaveBeenCalledWith('session-1', 'run-1');
     expect(fixture.handle.dispose).toHaveBeenCalledOnce();
-    expect(fixture.controller.cleanup).toHaveBeenCalledWith('session-1');
+    expect(fixture.controller.cleanup).toHaveBeenCalledWith('session-1', 'run-1');
 
     const setup = fixture.harness.openSession.mock.calls[0]?.[0].setup;
     const restrict = vi.fn();
@@ -102,19 +107,31 @@ describe('ChatHandler', () => {
   it('rejects invalid or deleted sessions before opening Harness state', async () => {
     const fixture = createFixture();
     await expect(
-      fixture.handler.handleChatSend('test', {
-        sessionId: 'session-1',
-        message: 'hello',
-        screenshot: 'raw-bytes',
-      })
+      fixture.handler.handleChatSend(
+        'test',
+        {
+          sessionId: 'session-1',
+          message: 'hello',
+          screenshot: 'raw-bytes',
+        },
+        { runId: 'run-1', statusOwner: 'chat-handler' }
+      )
     ).rejects.toThrow('Raw chat screenshots are not accepted');
     await expect(
-      fixture.handler.handleChatSend('test', { sessionId: 'session-1', message: '   ' })
+      fixture.handler.handleChatSend(
+        'test',
+        { sessionId: 'session-1', message: '   ' },
+        { runId: 'run-1', statusOwner: 'chat-handler' }
+      )
     ).rejects.toThrow('Message content is required');
 
     fixture.manager.getSession.mockReturnValue(null);
     await expect(
-      fixture.handler.handleChatSend('test', { sessionId: 'missing', message: 'hello' })
+      fixture.handler.handleChatSend(
+        'test',
+        { sessionId: 'missing', message: 'hello' },
+        { runId: 'run-1', statusOwner: 'chat-handler' }
+      )
     ).rejects.toThrow('Session missing not found');
 
     fixture.manager.getSession.mockReturnValue(session());
@@ -124,7 +141,11 @@ describe('ChatHandler', () => {
       deleted: true,
     });
     await expect(
-      fixture.handler.handleChatSend('test', { sessionId: 'session-1', message: 'hello' })
+      fixture.handler.handleChatSend(
+        'test',
+        { sessionId: 'session-1', message: 'hello' },
+        { runId: 'run-1', statusOwner: 'chat-handler' }
+      )
     ).rejects.toThrow('is being deleted');
     expect(fixture.harness.openSession).not.toHaveBeenCalled();
   });
@@ -180,16 +201,20 @@ describe('ChatHandler', () => {
     fixture.handle.flush.mockRejectedValue(new Error('projection unavailable'));
     fixture.controller.cancel.mockRejectedValue(new Error('already settled'));
 
-    const run = fixture.handler.handleChatSend('test', {
-      sessionId: 'session-1',
-      message: 'hello',
-    });
+    const run = fixture.handler.handleChatSend(
+      'test',
+      {
+        sessionId: 'session-1',
+        message: 'hello',
+      },
+      { runId: 'run-1', statusOwner: 'chat-handler' }
+    );
     await vi.waitFor(() => expect(fixture.handle.followup).toHaveBeenCalledOnce());
     await fixture.handler.cancelAndDrain('session-1');
     await expect(run).rejects.toThrow('cancelled');
     expect(fixture.handle.cancel).toHaveBeenCalledWith('user');
     expect(fixture.controller.cancel).toHaveBeenCalledWith('session-1');
-    expect(fixture.controller.cleanup).toHaveBeenCalledWith('session-1');
+    expect(fixture.controller.cleanup).toHaveBeenCalledWith('session-1', 'run-1');
     await expect(fixture.handler.cancelAndDrain('missing')).resolves.toBeUndefined();
     await expect(fixture.handler.close()).resolves.toBeUndefined();
   });
@@ -203,6 +228,7 @@ function createFixture(
 ) {
   const durableEvents = [{ seq: 0, type: 'user/message', time: 1, data: {} }] as never[];
   const handle = {
+    events: vi.fn(() => []),
     followup: vi.fn(options.followup ?? (async () => {})),
     cancel: vi.fn(),
     flush: vi.fn(async () => 1),
@@ -250,11 +276,18 @@ function createFixture(
     publish: ReturnType<typeof vi.fn>;
   };
   const controller = {
+    getStatus: vi.fn(async () => ({ status: 'idle' })),
+    beginRun: vi.fn(async () => {}),
+    isRunning: vi.fn(() => true),
+    complete: vi.fn(),
+    block: vi.fn(),
+    markInterrupted: vi.fn(),
     createAbortController: vi.fn(() => options.abortController ?? new AbortController()),
     cleanup: vi.fn(),
     shouldPause: vi.fn(() => false),
     markAsPaused: vi.fn(),
     cancel: vi.fn(async () => {}),
+    interrupt: vi.fn(async () => {}),
   } as unknown as ChatSessionController & {
     createAbortController: ReturnType<typeof vi.fn>;
     cleanup: ReturnType<typeof vi.fn>;
@@ -272,7 +305,13 @@ function createFixture(
     projection,
     {} as SessionEventsDAO,
     eventHub,
-    controller
+    controller,
+    {
+      enqueue: vi.fn(),
+      wait: vi.fn(async () => {}),
+      complete: vi.fn(),
+    } as unknown as HarnessRunScheduler,
+    vi.fn()
   );
   return { handler, handle, harness, manager, projection, eventHub, controller, durableEvents };
 }

@@ -175,7 +175,6 @@ export class HarnessProjectionStore {
       ];
     }
     if (event.type === 'turn/start') {
-      this.updateStatus(sessionId, 'running');
       const turnId = runId(sessionId, event.data.turn);
       return [
         turnUpsert(
@@ -282,7 +281,6 @@ export class HarnessProjectionStore {
       occurredAt
     );
     if (reason.kind === 'error') {
-      this.updateStatus(sessionId, 'blocked');
       return [
         reasoning,
         sectionUpsert(
@@ -305,7 +303,6 @@ export class HarnessProjectionStore {
     }
     const cancelled = reason.kind === 'aborted' || reason.kind === 'interrupted';
     const paused = reason.kind === 'blocked';
-    this.updateStatus(sessionId, paused ? 'paused' : cancelled ? 'interrupted' : 'completed');
     return [
       reasoning,
       turnCompleted(turnId, cancelled ? 'cancelled' : 'completed', occurredAt),
@@ -371,17 +368,6 @@ export class HarnessProjectionStore {
     this.db
       .prepare('UPDATE sessions SET message_count = message_count + 1, updated_at = ? WHERE id = ?')
       .run(new Date().toISOString(), sessionId);
-  }
-
-  private updateStatus(sessionId: string, status: string): void {
-    const now = new Date().toISOString();
-    this.db
-      .prepare(
-        `UPDATE sessions_state
-         SET status = ?, last_active_at = ?, updated_at = ?, version = version + 1
-         WHERE session_id = ?`
-      )
-      .run(status, now, now, sessionId);
   }
 }
 

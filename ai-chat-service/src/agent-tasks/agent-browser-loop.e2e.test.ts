@@ -546,14 +546,25 @@ it('pauses and resumes Chat at a durable checkpoint through canonical HTTP and f
     currentUrl = restarted.url;
     sessionUrl = sessionUrl.replace(started.url, currentUrl);
     await waitForChatStatus(sessionUrl, 'paused');
+    const beforeResume = await getJson<{ jobId: string }>(`${sessionUrl}/status`);
 
     await postJson(`${sessionUrl}/resume`, {}, 200);
-    await waitForChatStatus(sessionUrl, 'idle');
+    await waitForChatStatus(sessionUrl, 'completed');
+    const afterResume = await getJson<{ status: string; jobId: string; agentState?: unknown }>(
+      `${sessionUrl}/status`
+    );
+    expect(afterResume).toMatchObject({ status: 'completed' });
+    expect(afterResume.jobId).not.toBe(beforeResume.jobId);
+    expect(afterResume.agentState).toBeUndefined();
+    expect(await getJson(sessionUrl)).toMatchObject({
+      status: 'completed',
+      jobId: afterResume.jobId,
+    });
     const resumed = await readFirstSse(`${sessionUrl}/stream`);
     expect(resumed).toMatchObject({
       event: 'agent_stream.snapshot',
       data: {
-        state: 'idle',
+        state: 'completed',
         turns: expect.arrayContaining([
           expect.objectContaining({
             role: 'assistant',
@@ -567,21 +578,83 @@ it('pauses and resumes Chat at a durable checkpoint through canonical HTTP and f
     let expectedChatStarts = 2;
     for (const command of ['interrupt', 'cancel'] as const) {
       const controlledUrl = await createChatSession(currentUrl, `Chat ${command} E2E`);
-      await postJson(`${controlledUrl}/messages`, { content: `${command} this response` }, 202);
+      const enqueued = await postJson<{ jobId: string }>(
+        `${controlledUrl}/messages`,
+        { content: `${command} this response` },
+        202
+      );
       await waitForChatStatus(controlledUrl, 'running');
       expectedChatStarts += 1;
       await waitForChatStarts(chatStartedPath, expectedChatStarts);
       await postJson(`${controlledUrl}/${command}`, {}, 200);
-      await waitForChatStatus(controlledUrl, 'completed');
+      const expectedStatus = command === 'interrupt' ? 'interrupted' : 'cancelled';
+      await waitForChatStatus(controlledUrl, expectedStatus);
       const operations = await getJson<Array<{ operation: string; status: string }>>(
         `${controlledUrl}/operations`
       );
       expect(operations).toEqual(
         expect.arrayContaining([expect.objectContaining({ operation: command, status: 'success' })])
       );
-      const snapshot = await readFirstSse(`${controlledUrl}/stream`);
+      // Queue completion follows handle disposal and controller cleanup.
+      // Waiting for its durable activity also proves late cleanup preserves the control state.
+      const snapshot = await vi.waitFor(
+        async () => {
+          const current = await readFirstSse(`${controlledUrl}/stream`);
+          expect(current.data.turns).toEqual(
+            expect.arrayContaining([
+              expect.objectContaining({
+                sections: expect.arrayContaining([
+                  expect.objectContaining({
+                    sectionId: `job:${enqueued.jobId}`,
+                    state: 'completed',
+                  }),
+                ]),
+              }),
+            ])
+          );
+          return current;
+        },
+        { timeout: 10_000 }
+      );
+      expect(await getJson(`${controlledUrl}/status`)).toMatchObject({
+        status: expectedStatus,
+        jobId: enqueued.jobId,
+        currentJobId: enqueued.jobId,
+      });
+      expect(await getJson(controlledUrl)).toMatchObject({
+        status: expectedStatus,
+        jobId: enqueued.jobId,
+      });
+      expect(snapshot.data.state).toBe(command === 'interrupt' ? 'recovering' : 'idle');
       const turns = snapshot.data.turns as Array<Record<string, unknown>>;
       expect(turns).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            role: 'assistant',
+            sections: expect.arrayContaining([
+              expect.objectContaining({ type: 'content', markdown: 'E2E assistant response' }),
+            ]),
+          }),
+        ])
+      );
+      const next = await postJson<{ jobId: string }>(
+        `${controlledUrl}/messages`,
+        { content: 'Complete the next response' },
+        202
+      );
+      expect(next.jobId).not.toBe(enqueued.jobId);
+      await waitForChatStatus(controlledUrl, 'running');
+      expectedChatStarts += 1;
+      await waitForChatStarts(chatStartedPath, expectedChatStarts);
+      await waitForChatStatus(controlledUrl, 'completed');
+      expect(await getJson(`${controlledUrl}/status`)).toMatchObject({
+        status: 'completed',
+        jobId: next.jobId,
+        currentJobId: next.jobId,
+      });
+      const nextSnapshot = await readFirstSse(`${controlledUrl}/stream`);
+      expect(nextSnapshot.data.state).toBe('completed');
+      expect(nextSnapshot.data.turns).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
             role: 'assistant',

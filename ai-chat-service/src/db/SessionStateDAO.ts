@@ -33,7 +33,7 @@ export class SessionStateDAO {
     this.initialized = true;
   }
 
-  async create(params: CreateSessionStateParams): Promise<void> {
+  create(params: CreateSessionStateParams): void {
     this.assertInitialized();
 
     const now = new Date().toISOString();
@@ -60,7 +60,7 @@ export class SessionStateDAO {
 
   async update(
     sessionId: string,
-    params: UpdateSessionStateParams,
+    params: Pick<UpdateSessionStateParams, 'agentState' | 'lastActiveAt'>,
     expectedVersion?: number
   ): Promise<void> {
     this.assertInitialized();
@@ -68,17 +68,9 @@ export class SessionStateDAO {
     const updates: string[] = [];
     const values: unknown[] = [];
 
-    if (params.status !== undefined) {
-      updates.push('status = ?');
-      values.push(params.status);
-    }
     if (params.agentState !== undefined) {
       updates.push('agent_state = ?');
       values.push(params.agentState ? JSON.stringify(params.agentState) : null);
-    }
-    if (params.jobId !== undefined) {
-      updates.push('job_id = ?');
-      values.push(params.jobId || null);
     }
     if (params.lastActiveAt !== undefined) {
       updates.push('last_active_at = ?');
@@ -124,7 +116,7 @@ export class SessionStateDAO {
     stmt.run(...(values as SQLInputValue[]));
   }
 
-  async get(sessionId: string): Promise<SessionState | null> {
+  get(sessionId: string): SessionState {
     this.assertInitialized();
 
     const db = this.getDb();
@@ -132,55 +124,40 @@ export class SessionStateDAO {
     const row = stmt.get(sessionId) as SessionStateRow | undefined;
 
     if (!row) {
-      await this.create({ sessionId, status: 'idle' });
+      this.create({ sessionId, status: 'idle' });
       return this.get(sessionId);
     }
 
     return this.rowToState(row);
   }
 
-  async getStatus(sessionId: string): Promise<string | null> {
-    this.assertInitialized();
-
-    const db = this.getDb();
-    const stmt = db.prepare('SELECT status FROM sessions_state WHERE session_id = ?');
-    const row = stmt.get(sessionId) as { readonly status: string } | undefined;
-
-    return row?.status || null;
-  }
-
-  async updateStatus(
+  /** Atomically reject callbacks from a superseded run or a settled lifecycle. */
+  transition(
     sessionId: string,
-    status: SessionStatus,
-    agentState?: SessionState['agentState']
-  ): Promise<void> {
+    params: UpdateSessionStateParams & { status: SessionStatus },
+    expectedRunId: string | undefined,
+    allowedFrom: readonly SessionStatus[]
+  ): boolean {
     this.assertInitialized();
-
     const now = new Date().toISOString();
-    const agentStateJson = agentState ? JSON.stringify(agentState) : null;
-
-    const db = this.getDb();
-    const stmt = db.prepare(
-      `UPDATE sessions_state
-       SET status = ?, agent_state = ?, last_active_at = ?, version = version + 1, updated_at = ?
-       WHERE session_id = ?`
-    );
-
-    stmt.run(status, agentStateJson, now, now, sessionId);
-  }
-
-  async getActiveSessions(): Promise<SessionState[]> {
-    this.assertInitialized();
-
-    const db = this.getDb();
-    const stmt = db.prepare(
-      `SELECT * FROM sessions_state
-       WHERE status IN ('running', 'paused', 'blocked')
-       ORDER BY last_active_at DESC`
-    );
-    const rows = stmt.all() as unknown as SessionStateRow[];
-
-    return rows.map((row) => this.rowToState(row));
+    const updates = ['status = ?', 'last_active_at = ?', 'updated_at = ?', 'version = version + 1'];
+    const values: SQLInputValue[] = [params.status, now, now];
+    if (params.agentState !== undefined) {
+      updates.push('agent_state = ?');
+      values.push(params.agentState === null ? null : JSON.stringify(params.agentState));
+    }
+    if (params.jobId !== undefined) {
+      updates.push('job_id = ?');
+      values.push(params.jobId);
+    }
+    values.push(sessionId, expectedRunId ?? null, ...allowedFrom);
+    const result = this.getDb()
+      .prepare(
+        `UPDATE sessions_state SET ${updates.join(', ')}
+       WHERE session_id = ? AND job_id IS ? AND status IN (${allowedFrom.map(() => '?').join(', ')})`
+      )
+      .run(...values);
+    return result.changes === 1;
   }
 
   async getSessionsByStatus(status: SessionStatus): Promise<SessionState[]> {

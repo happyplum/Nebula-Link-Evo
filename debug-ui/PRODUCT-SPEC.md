@@ -36,6 +36,7 @@
 - **不**使用 plain DOM 或 `window.*` 全局模式（用 React idioms）。
 - **`/#/chat` 必须以 Agent Stream SSE 作为唯一历史与 live 源**；公开消息历史 GET 已移除。
 - **每次 Chat SSE 连接必须先接收 `agent_stream.snapshot`，随后只接收 `agent_stream.event`**；事件必须通过 shared 运行时守卫和 shared 唯一纯 reducer（由公共 UI 包直接重导出），不接收其他 wire discriminant。
+- Chat 生命周期由后端 `sessions_state` 唯一持有，由后端每应用实例的 `ChatSessionController` 转换；正常完成保留 `completed`，cleanup 不覆盖 `paused/interrupted/cancelled/completed/blocked`。UI 消费 fresh snapshot 的既有顶层映射：`completed` → `completed`、`interrupted` → `recovering`、`cancelled` → `idle`，继续复用公共 renderer。
 - 本地 TS import 保留 `.js` 后缀；`@/` alias 指向 `src/`。
 
 ---

@@ -4,8 +4,13 @@ export interface MessageMetadata {
   [key: string]: unknown;
 }
 
-export type SessionStatus =
-  'idle' | 'running' | 'paused' | 'blocked' | 'interrupted' | 'cancelled' | 'completed';
+export type {
+  SessionStatus,
+  AgentState,
+  SessionState,
+  CreateSessionStateParams,
+  UpdateSessionStateParams,
+} from '../db/types.js';
 
 export interface Session {
   id: string;
@@ -86,50 +91,4 @@ export interface UpdateOperationParams {
   endTime?: number;
   status?: OperationStatus;
   error?: string;
-}
-
-export interface AgentState {
-  schema_version: 1;
-  currentTask?: {
-    description: string;
-    startedAt: string;
-    estimatedSteps?: number;
-    completedSteps: number;
-  };
-  blockReason?:
-    | 'waiting_for_user_input'
-    | 'api_error'
-    | 'rate_limit'
-    | 'validation_failed'
-    | 'timeout'
-    | 'job_error';
-  waitingFor?: 'user_message' | 'api_retry' | 'external_confirmation';
-  retryCount?: number;
-  lastError?: string;
-  retryAfterMs?: number;
-}
-
-export interface SessionState {
-  sessionId: string;
-  status: SessionStatus;
-  lastActiveAt: string;
-  agentState?: AgentState;
-  jobId?: string;
-  version: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface CreateSessionStateParams {
-  sessionId: string;
-  status?: SessionStatus;
-  agentState?: AgentState;
-  jobId?: string;
-}
-
-export interface UpdateSessionStateParams {
-  status?: SessionStatus;
-  agentState?: AgentState;
-  jobId?: string;
-  lastActiveAt?: string;
 }

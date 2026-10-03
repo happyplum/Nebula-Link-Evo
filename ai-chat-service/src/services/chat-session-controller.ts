@@ -1,12 +1,12 @@
-import { DatabaseManager } from '../conversation/db.js';
-import type { TracedOperation, ControlCommandType, SessionStatus } from '../conversation/types.js';
+import type { ConversationDatabase } from '../db/ConversationDatabase.js';
+import type {
+  AgentState,
+  SessionStatus,
+  TracedOperation,
+  ControlCommandType,
+} from '../db/types.js';
 import type { Logger } from 'pino';
 import { createWorkerLogger } from './logger.js';
-
-export interface OperationTrace {
-  traceId: string;
-  sessionId: string;
-}
 
 export class SessionNotFoundError extends Error {
   constructor(public sessionId: string) {
@@ -18,327 +18,242 @@ export class SessionNotFoundError extends Error {
 export interface SessionStatusResponse {
   sessionId: string;
   status: SessionStatus;
-  currentJobId?: string;
-  lastActivity: string; // ISO timestamp
-}
-
-export interface SessionMetadata {
+  jobId?: string;
   currentJobId?: string;
   lastActivity: string;
+  agentState?: AgentState;
+}
+
+interface ControlFlags {
+  runId: string;
   pauseRequested?: boolean;
   pauseAfterGeneration?: boolean;
   pauseAfterExecution?: boolean;
 }
 
-interface CreateAbortControllerOptions {
-  activateSession?: boolean;
-}
-
+/** sessions_state owns lifecycle and run identity; memory owns only live execution resources. */
 export class ChatSessionController {
-  private static instance: ChatSessionController;
-  private abortControllers = new Map<string, AbortController>();
-  private sessionStatuses = new Map<string, SessionStatus>();
-  private sessionMetadata = new Map<string, SessionMetadata>();
-  private logger: Logger;
+  private readonly abortControllers = new Map<
+    string,
+    { runId: string; controller: AbortController }
+  >();
+  private readonly controlFlags = new Map<string, ControlFlags>();
+  private readonly logger: Logger;
 
   constructor(
-    private readonly db: DatabaseManager = DatabaseManager.getInstance(),
+    private readonly db: ConversationDatabase,
     logger?: Logger
   ) {
     this.logger = logger ?? createWorkerLogger('ChatSessionController');
   }
 
-  static getInstance(): ChatSessionController {
-    if (!ChatSessionController.instance) {
-      ChatSessionController.instance = new ChatSessionController();
-    }
-    return ChatSessionController.instance;
-  }
-
-  /**
-   * Get current status of a session
-   */
-  getStatus(sessionId: string): SessionStatusResponse {
-    const status = this.sessionStatuses.get(sessionId) || 'idle';
-    const metadata = this.sessionMetadata.get(sessionId) || {
-      lastActivity: new Date().toISOString(),
-    };
-
+  async getStatus(sessionId: string): Promise<SessionStatusResponse> {
+    const state = this.getState(sessionId);
     return {
       sessionId,
-      status,
-      currentJobId: metadata.currentJobId,
-      lastActivity: metadata.lastActivity,
+      status: state.status,
+      jobId: state.jobId,
+      currentJobId: state.jobId,
+      lastActivity: state.lastActiveAt,
+      agentState: state.agentState,
     };
   }
 
-  /**
-   * Set current job ID for a session
-   */
-  setCurrentJobId(sessionId: string, jobId: string): void {
-    const traceId = this.logOperation(sessionId, 'set_current_job');
-    const metadata = this.sessionMetadata.get(sessionId) || {
-      lastActivity: new Date().toISOString(),
-    };
-    metadata.currentJobId = jobId;
-    metadata.lastActivity = new Date().toISOString();
-    this.sessionMetadata.set(sessionId, metadata);
-    this.log(sessionId, `Set current job ID: ${jobId}`, traceId);
-  }
-
-  /**
-   * Update session metadata
-   */
-  updateMetadata(sessionId: string, updates: Partial<SessionMetadata>): void {
-    const traceId = this.logOperation(sessionId, 'update_metadata');
-    const metadata = this.sessionMetadata.get(sessionId) || {
-      lastActivity: new Date().toISOString(),
-    };
-    const updated = { ...metadata, ...updates, lastActivity: new Date().toISOString() };
-    this.sessionMetadata.set(sessionId, updated);
-    this.log(sessionId, `Updated metadata: ${JSON.stringify(updates)}`, traceId);
-  }
-
-  /**
-   * Create a new AbortController for a session and set its status to running
-   */
-  createAbortController(
-    sessionId: string,
-    options: CreateAbortControllerOptions = {}
-  ): AbortController {
-    const { activateSession = true } = options;
-    const controller = new AbortController();
-    this.abortControllers.set(sessionId, controller);
-    this.sessionStatuses.set(sessionId, 'running');
-
-    if (activateSession) {
-      this.db.activateSession(sessionId);
+  async beginRun(sessionId: string, runId: string, resume = false): Promise<void> {
+    const state = this.getState(sessionId);
+    const allowedFrom: SessionStatus[] = resume
+      ? ['paused', 'blocked']
+      : ['idle', 'paused', 'blocked', 'interrupted', 'cancelled', 'completed'];
+    if (
+      !this.db
+        .getSessionStateDAO()
+        .transition(
+          sessionId,
+          { status: 'running', jobId: runId, agentState: null },
+          state.jobId,
+          allowedFrom
+        )
+    ) {
+      throw new Error(`Cannot ${resume ? 'resume' : 'start'} session with status: ${state.status}`);
     }
+    this.controlFlags.set(sessionId, {
+      ...this.controlFlags.get(sessionId),
+      runId,
+      pauseRequested: false,
+    });
+    this.logOperation(sessionId, resume ? 'resume' : 'create');
+  }
 
-    const traceId = this.logOperation(sessionId, 'create');
-    this.log(
-      sessionId,
-      `Created AbortController, status: running${activateSession ? '' : ' (activation skipped)'}`,
-      traceId
-    );
+  isRunning(sessionId: string, runId: string): boolean {
+    const state = this.getState(sessionId);
+    return state.jobId === runId && state.status === 'running';
+  }
+
+  async createAbortController(sessionId: string, runId: string): Promise<AbortController> {
+    if (!this.isRunning(sessionId, runId)) throw new Error('Chat run is no longer running');
+    const controller = new AbortController();
+    this.abortControllers.set(sessionId, { runId, controller });
     return controller;
   }
 
-  /**
-   * Request to pause a running session (wait-to-complete semantics)
-   */
+  complete(sessionId: string, runId: string): boolean {
+    return this.transition(sessionId, runId, 'completed', ['running'], null);
+  }
+
+  block(sessionId: string, runId: string, agentState: AgentState): boolean {
+    return this.transition(sessionId, runId, 'blocked', ['running'], agentState);
+  }
+
+  recordRetry(sessionId: string, runId: string, agentState: AgentState): boolean {
+    return this.transition(sessionId, runId, 'running', ['running'], agentState);
+  }
+
   async pause(sessionId: string): Promise<void> {
-    const statusData = this.getStatus(sessionId);
-    const status = statusData.status;
-
-    if (status !== 'running') {
-      const traceId = this.logOperation(sessionId, 'pause');
-      this.log(sessionId, `Cannot pause, current status: ${status}`, traceId);
-      throw new Error(`Cannot pause session with status: ${status}`);
+    const state = this.getState(sessionId);
+    if (state.status !== 'running' || !state.jobId) {
+      throw new Error(`Cannot pause session with status: ${state.status}`);
     }
-
-    const traceId = this.logOperation(sessionId, 'pause');
-    this.updateMetadata(sessionId, { pauseRequested: true });
-    this.log(sessionId, 'Pause requested (wait-to-complete)', traceId);
-  }
-
-  /**
-   * Mark session as actually paused (called from checkpoints)
-   */
-  markAsPaused(sessionId: string): void {
-    const traceId = this.logOperation(sessionId, 'mark_as_paused');
-    this.sessionStatuses.set(sessionId, 'paused');
-    this.updateMetadata(sessionId, { pauseRequested: false });
-    this.db.updateSessionStatus(sessionId, 'paused');
-    this.log(sessionId, 'Session is now paused', traceId);
-  }
-
-  /**
-   * Resume a paused session
-   */
-  resume(sessionId: string, fallbackStatus?: SessionStatus): void {
-    const status = this.sessionStatuses.get(sessionId) ?? fallbackStatus ?? 'idle';
-
-    if (status !== 'paused' && status !== 'blocked') {
-      const traceId = this.logOperation(sessionId, 'resume');
-      this.log(sessionId, `Cannot resume, current status: ${status}`, traceId);
-      throw new Error(`Cannot resume session with status: ${status}`);
-    }
-
-    const traceId = this.logOperation(sessionId, 'resume');
-    this.sessionStatuses.set(sessionId, 'running');
-    const metadata = this.sessionMetadata.get(sessionId) || {
-      lastActivity: new Date().toISOString(),
-    };
-    this.sessionMetadata.set(sessionId, {
-      ...metadata,
-      pauseRequested: false,
-      lastActivity: new Date().toISOString(),
+    this.controlFlags.set(sessionId, {
+      ...this.controlFlags.get(sessionId),
+      runId: state.jobId,
+      pauseRequested: true,
     });
-    this.db.updateSessionStatus(sessionId, 'running');
-    this.log(sessionId, 'Session resumed', traceId);
+    this.logOperation(sessionId, 'pause');
   }
 
-  /**
-   * Set pause flags
-   */
+  markAsPaused(sessionId: string, runId: string): boolean {
+    const changed = this.transition(sessionId, runId, 'paused', ['running']);
+    const flags = this.controlFlags.get(sessionId);
+    if (changed && flags?.runId === runId) flags.pauseRequested = false;
+    if (changed) this.logOperation(sessionId, 'mark_as_paused');
+    return changed;
+  }
+
   setPauseFlags(
     sessionId: string,
     flags: { pauseAfterGeneration?: boolean; pauseAfterExecution?: boolean }
   ): void {
-    const traceId = this.logOperation(sessionId, 'set_pause_flags');
-    this.updateMetadata(sessionId, flags);
-    this.log(sessionId, `Pause flags updated: ${JSON.stringify(flags)}`, traceId);
+    const current = this.controlFlags.get(sessionId);
+    if (!current) throw new Error('Chat run has not started');
+    this.controlFlags.set(sessionId, { ...current, ...flags });
+    this.logOperation(sessionId, 'set_pause_flags');
   }
 
-  /**
-   * Check if session should pause
-   */
-  shouldPause(sessionId: string, point: 'afterGeneration' | 'afterExecution'): boolean {
-    const metadata = this.sessionMetadata.get(sessionId);
-    if (!metadata) return false;
-
-    if (metadata.pauseRequested) return true;
-    if (point === 'afterGeneration' && metadata.pauseAfterGeneration) return true;
-    if (point === 'afterExecution' && metadata.pauseAfterExecution) return true;
-
-    return false;
+  shouldPause(
+    sessionId: string,
+    runId: string,
+    point: 'afterGeneration' | 'afterExecution'
+  ): boolean {
+    const flags = this.controlFlags.get(sessionId);
+    return (
+      flags?.runId === runId &&
+      Boolean(
+        flags.pauseRequested ||
+        (point === 'afterGeneration' ? flags.pauseAfterGeneration : flags.pauseAfterExecution)
+      )
+    );
   }
 
-  /**
-   * Interrupt a running session
-   */
   async interrupt(sessionId: string): Promise<void> {
-    const statusData = this.getStatus(sessionId);
-    const status = statusData.status;
-
-    if (status !== 'running') {
-      const traceId = this.logOperation(sessionId, 'interrupt');
-      this.log(sessionId, `Cannot interrupt, current status: ${status}`, traceId);
-      throw new Error(`Cannot interrupt session with status: ${status}`);
+    const state = this.getState(sessionId);
+    if (!state.jobId || !this.transition(sessionId, state.jobId, 'interrupted', ['running'])) {
+      throw new Error(`Cannot interrupt session with status: ${state.status}`);
     }
-
-    const traceId = this.logOperation(sessionId, 'interrupt');
-    const controller = this.abortControllers.get(sessionId);
-    if (controller) {
-      controller.abort('interrupted');
-      this.sessionStatuses.set(sessionId, 'interrupted');
-      this.db.updateSessionStatus(sessionId, 'interrupted');
-      this.log(sessionId, 'Interrupted', traceId);
-    }
+    this.abort(sessionId, state.jobId, 'interrupted');
+    this.logOperation(sessionId, 'interrupt');
   }
 
-  /**
-   * Cancel a running or interrupted session
-   */
   async cancel(sessionId: string): Promise<void> {
-    const statusData = this.getStatus(sessionId);
-    const status = statusData.status;
-
-    if (status === 'idle' || status === 'cancelled') {
-      const traceId = this.logOperation(sessionId, 'cancel');
-      this.log(sessionId, `Cannot cancel, current status: ${status}`, traceId);
-      throw new Error(`Cannot cancel session with status: ${status}`);
+    const state = this.getState(sessionId);
+    if (
+      !state.jobId ||
+      !this.transition(sessionId, state.jobId, 'cancelled', [
+        'running',
+        'paused',
+        'blocked',
+        'interrupted',
+        'completed',
+      ])
+    ) {
+      throw new Error(`Cannot cancel session with status: ${state.status}`);
     }
+    this.abort(sessionId, state.jobId, 'cancelled');
+    this.logOperation(sessionId, 'cancel');
+  }
 
-    const traceId = this.logOperation(sessionId, 'cancel');
-    const controller = this.abortControllers.get(sessionId);
-    if (controller) {
-      controller.abort('cancelled');
+  markInterrupted(sessionId: string, runId: string): boolean {
+    return this.transition(sessionId, runId, 'interrupted', ['running']);
+  }
+
+  async cleanup(sessionId: string, runId: string): Promise<void> {
+    if (this.abortControllers.get(sessionId)?.runId === runId) {
+      this.abortControllers.delete(sessionId);
     }
-
-    this.sessionStatuses.set(sessionId, 'cancelled');
-    this.db.updateSessionStatus(sessionId, 'cancelled');
-    this.log(sessionId, 'Cancelled', traceId);
-  }
-
-  /**
-   * Clean up a session, resetting its status to idle
-   */
-  cleanup(sessionId: string): void {
-    const status = this.sessionStatuses.get(sessionId);
-    if (status === 'paused') {
-      const traceId = this.logOperation(sessionId, 'cleanup');
-      this.log(sessionId, 'Skipping cleanup, session is paused', traceId);
-      return;
+    const state = this.db.getSession(sessionId)
+      ? this.db.getSessionStateDAO().get(sessionId)
+      : null;
+    if (
+      this.controlFlags.get(sessionId)?.runId === runId &&
+      (state?.jobId !== runId || (state.status !== 'running' && state.status !== 'paused'))
+    ) {
+      this.controlFlags.delete(sessionId);
     }
-    const traceId = this.logOperation(sessionId, 'cleanup');
-    this.abortControllers.delete(sessionId);
-    this.sessionStatuses.set(sessionId, 'idle');
-    this.db.updateSessionStatus(sessionId, 'idle');
-    this.log(sessionId, 'Cleaned up, status: idle', traceId);
   }
 
-  /**
-   * Helper for operation logging with simplified TraceID
-   */
-  private log(sessionId: string, message: string, traceId?: string): void {
-    const displayTraceId = traceId || sessionId.substring(0, 8);
-    this.logger.info({ sessionId, traceId: displayTraceId }, message);
-  }
-
-  /**
-   * Log an operation asynchronously
-   * Returns the traceId for tracking
-   */
-  private logOperation(sessionId: string, operationType: ControlCommandType): string {
-    const tracedOperation = this.db.createOperation({ sessionId, operation: operationType });
-
-    const traceId = tracedOperation.traceId;
-    Promise.resolve().then(() => {
-      try {
-        this.db.updateOperation(traceId, { status: 'success', endTime: Date.now() });
-      } catch (err) {
-        this.logger.error({ err, traceId }, 'Failed to update operation trace');
-      }
-    });
-
-    return traceId;
-  }
-
-  /**
-   * Get operation history for a session
-   */
   getOperations(sessionId: string): TracedOperation[] {
     return this.db.getOperationsBySession(sessionId);
   }
 
-  /**
-   * Recover running sessions on startup
-   * Changes status from 'running' to 'blocked' with reason 'process_restart'
-   */
-  recoverRunningSessions(): string[] {
-    const recoveredSessions = this.db.recoverRunningSessions();
-
-    const recoveredSessionIds: string[] = [];
-    for (const session of recoveredSessions) {
-      recoveredSessionIds.push(session.id);
-      this.logger.info({ sessionId: session.id }, 'Session marked as blocked (process restart)');
-
-      // Update in-memory state
-      this.sessionStatuses.set(session.id, 'blocked');
-      const metadata = this.sessionMetadata.get(session.id) || {
-        lastActivity: new Date().toISOString(),
-      };
-      this.sessionMetadata.set(session.id, { ...metadata, lastActivity: new Date().toISOString() });
-    }
-
-    return recoveredSessionIds;
+  async recoverRunningSessions(): Promise<string[]> {
+    const sessions = await this.db.getSessionStateDAO().getSessionsByStatus('running');
+    return sessions
+      .filter((state) =>
+        this.db
+          .getSessionStateDAO()
+          .transition(state.sessionId, { status: 'blocked' }, state.jobId, ['running'])
+      )
+      .map((state) => state.sessionId);
   }
 
-  /**
-   * Initialize the controller and recover running sessions
-   * Call this on application startup
-   */
-  initialize(): void {
-    this.logger.info('Initializing');
-    const recoveredIds = this.recoverRunningSessions();
+  async initialize(): Promise<void> {
+    const ids = await this.recoverRunningSessions();
+    this.logger.info({ count: ids.length }, 'Recovered running Chat sessions as blocked');
+  }
 
-    if (recoveredIds.length > 0) {
-      this.logger.info({ count: recoveredIds.length }, 'Recovered sessions from crash');
-      this.logger.debug({ ids: recoveredIds }, 'Recovered sessions from crash (full IDs)');
-    } else {
-      this.logger.info('No crashed sessions to recover');
+  private getState(sessionId: string) {
+    if (!this.db.getSession(sessionId)) throw new SessionNotFoundError(sessionId);
+    const state = this.db.getSessionStateDAO().get(sessionId);
+    return state;
+  }
+
+  private transition(
+    sessionId: string,
+    runId: string,
+    status: SessionStatus,
+    allowedFrom: readonly SessionStatus[],
+    agentState?: AgentState | null
+  ): boolean {
+    const changed = this.db
+      .getSessionStateDAO()
+      .transition(sessionId, { status, agentState }, runId, allowedFrom);
+    if (
+      changed &&
+      status !== 'running' &&
+      status !== 'paused' &&
+      this.controlFlags.get(sessionId)?.runId === runId
+    ) {
+      this.controlFlags.delete(sessionId);
     }
+    return changed;
+  }
+
+  private abort(sessionId: string, runId: string, reason: string): void {
+    const active = this.abortControllers.get(sessionId);
+    if (active?.runId === runId) active.controller.abort(reason);
+  }
+
+  private logOperation(sessionId: string, operation: ControlCommandType): void {
+    const { traceId } = this.db.createOperation({ sessionId, operation });
+    this.db.updateOperation(traceId, { status: 'success', endTime: Date.now() });
   }
 }

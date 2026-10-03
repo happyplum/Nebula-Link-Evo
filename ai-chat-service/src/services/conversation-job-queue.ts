@@ -1,78 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { Mutex } from 'async-mutex';
 import { ServiceUnavailableError } from '../errors/http-errors.js';
-import { DatabaseManager } from '../conversation/db.js';
-import type { AgentState } from '../conversation/types.js';
-import { StreamPersistWorker } from './stream-persist-worker.js';
+import type { ChatSessionController } from './chat-session-controller.js';
+import { chatFailureState } from './chat-failure-state.js';
 import type { SessionEventHub } from '../conversation/session-event-hub.js';
-import { ProviderError, PROVIDER_ERRORS } from './provider/errors.js';
 import { createWorkerLogger } from './logger.js';
 import type { HarnessRunScheduler } from '../harness/run-scheduler.js';
 
 const logger = createWorkerLogger('ConversationJobQueue');
 
-type BlockReason = NonNullable<AgentState['blockReason']>;
-type WaitingFor = NonNullable<AgentState['waitingFor']>;
-
 const MAX_RETRIES = 3;
-
-const ALLOWED_BLOCK_REASONS: ReadonlySet<string> = new Set([
-  'waiting_for_user_input',
-  'api_error',
-  'rate_limit',
-  'validation_failed',
-  'timeout',
-]);
-
-const ALLOWED_WAITING_FOR: ReadonlySet<string> = new Set([
-  'user_message',
-  'api_retry',
-  'external_confirmation',
-]);
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function extractBlockedAgentState(
-  error: unknown
-): Pick<AgentState, 'blockReason' | 'waitingFor'> | null {
-  if (!isRecord(error)) {
-    return null;
-  }
-
-  const blockReason = error.blockReason;
-  if (typeof blockReason !== 'string') {
-    return null;
-  }
-
-  // Treat job_error as an internal failure reason, not a "blocked" signal.
-  if (blockReason === 'job_error') {
-    return null;
-  }
-
-  if (!ALLOWED_BLOCK_REASONS.has(blockReason)) {
-    return null;
-  }
-
-  const waitingFor = error.waitingFor;
-  const result: Pick<AgentState, 'blockReason' | 'waitingFor'> = {
-    blockReason: blockReason as BlockReason,
-  };
-
-  if (typeof waitingFor === 'string' && ALLOWED_WAITING_FOR.has(waitingFor)) {
-    result.waitingFor = waitingFor as WaitingFor;
-  }
-
-  return result;
-}
-
-function toErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return String(error);
-}
 
 export interface Job {
   id: string;
@@ -85,6 +22,7 @@ export interface Job {
 }
 
 export interface JobContext {
+  jobId: string;
   maxToolLoops: number;
 }
 
@@ -112,61 +50,17 @@ export class ConversationJobQueue {
   private maxIdleTime = 10 * 60 * 1000; // 10 minutes
   private maxToolLoops = 10;
   private maxQueueSize = 1000;
-  private persistWorker: StreamPersistWorker;
   private eventHub?: SessionEventHub;
-  private readonly db: DatabaseManager;
   private readonly runs = new Set<Promise<void>>();
   private accepting = true;
 
   constructor(
-    persistWorker: StreamPersistWorker,
-    eventHub?: SessionEventHub,
-    db: DatabaseManager = DatabaseManager.getInstance(),
-    private readonly runScheduler?: HarnessRunScheduler,
-    private readonly admitNewRun?: () => void
+    private readonly sessionController: ChatSessionController,
+    eventHub: SessionEventHub | undefined,
+    private readonly runScheduler: HarnessRunScheduler,
+    private readonly admitNewRun: () => void
   ) {
-    this.persistWorker = persistWorker;
     this.eventHub = eventHub;
-    this.db = db;
-  }
-
-  private getSessionStateDAO() {
-    try {
-      return this.db.getSessionStateDAO();
-    } catch {
-      return null;
-    }
-  }
-
-  private async syncSessionState(
-    sessionId: string,
-    params: {
-      status: 'running' | 'completed' | 'blocked';
-      jobId?: string;
-      agentState?: AgentState;
-    }
-  ): Promise<void> {
-    const dao = this.getSessionStateDAO();
-    if (!dao) {
-      return;
-    }
-
-    // Ensure the row exists; SessionStateDAO.get() auto-creates.
-    await dao.get(sessionId);
-
-    const now = new Date().toISOString();
-    await dao.update(sessionId, {
-      status: params.status,
-      jobId: params.jobId,
-      agentState: params.agentState,
-      lastActiveAt: now,
-    });
-  }
-
-  private async syncCompletedUnlessPaused(sessionId: string, jobId: string): Promise<void> {
-    const current = await this.getSessionStateDAO()?.get(sessionId);
-    if (current?.status === 'paused') return;
-    await this.syncSessionState(sessionId, { status: 'completed', jobId });
   }
 
   async enqueue(payload: JobPayload): Promise<string> {
@@ -176,10 +70,10 @@ export class ConversationJobQueue {
     if (this.jobs.size >= this.maxQueueSize) {
       throw new ServiceUnavailableError('Job queue is full');
     }
-    this.admitNewRun?.();
+    this.admitNewRun();
 
     const id = randomUUID();
-    this.runScheduler?.enqueue({
+    this.runScheduler.enqueue({
       runId: id,
       ownerType: 'chat',
       ownerId: payload.sessionId,
@@ -194,92 +88,36 @@ export class ConversationJobQueue {
       status: 'queued',
       createdAt: new Date(),
       execute: async (context) => {
-        await this.syncSessionState(payload.sessionId, {
-          status: 'running',
-          jobId: id,
-        });
-
+        await this.sessionController.beginRun(payload.sessionId, id);
         let attempts = 0;
         while (attempts < MAX_RETRIES) {
+          if (
+            this.jobs.get(job.id)?.status === 'cancelled' ||
+            !this.sessionController.isRunning(payload.sessionId, id)
+          )
+            return;
           try {
             await originalExecute(context);
-            await this.syncCompletedUnlessPaused(payload.sessionId, id);
+            this.sessionController.complete(payload.sessionId, id);
             return;
           } catch (error) {
-            // Rate-limit errors — block with rate_limit reason (no retry)
-            if (error instanceof ProviderError && error.code === PROVIDER_ERRORS.RATE_LIMITED) {
-              const retryAfterMs = (error.details as { retryAfterMs?: number } | undefined)
-                ?.retryAfterMs;
-              await this.syncSessionState(payload.sessionId, {
-                status: 'blocked',
-                jobId: id,
-                agentState: {
-                  schema_version: 1,
-                  blockReason: 'rate_limit',
-                  waitingFor: 'api_retry',
-                  lastError: toErrorMessage(error),
-                  ...(retryAfterMs != null ? { retryAfterMs } : {}),
-                },
-              });
+            if (
+              this.jobs.get(job.id)?.status === 'cancelled' ||
+              !this.sessionController.isRunning(payload.sessionId, id)
+            )
               return;
-            }
-
-            // Other provider errors are non-retryable — block immediately
-            if (error instanceof ProviderError) {
-              await this.syncSessionState(payload.sessionId, {
-                status: 'blocked',
-                jobId: id,
-                agentState: {
-                  schema_version: 1,
-                  blockReason: 'api_error',
-                  lastError: `Provider '${error.provider}' error: ${toErrorMessage(error)}`,
-                },
-              });
-              return;
-            }
-
-            const blocked = extractBlockedAgentState(error);
-            if (blocked) {
-              await this.syncSessionState(payload.sessionId, {
-                status: 'blocked',
-                jobId: id,
-                agentState: {
-                  schema_version: 1,
-                  ...blocked,
-                },
-              });
-              return;
-            }
-
             attempts++;
-
+            const failure = chatFailureState(error, attempts);
+            if (!failure.retryable) {
+              this.sessionController.block(payload.sessionId, id, failure.agentState);
+              return;
+            }
             if (attempts < MAX_RETRIES) {
-              await this.syncSessionState(payload.sessionId, {
-                status: 'running',
-                jobId: id,
-                agentState: {
-                  schema_version: 1,
-                  blockReason: 'job_error',
-                  waitingFor: 'api_retry',
-                  retryCount: attempts,
-                  lastError: toErrorMessage(error),
-                },
-              });
+              if (!this.sessionController.recordRetry(payload.sessionId, id, failure.agentState))
+                return;
               continue;
             }
-
-            await this.syncSessionState(payload.sessionId, {
-              status: 'blocked',
-              jobId: id,
-              agentState: {
-                schema_version: 1,
-                blockReason: 'job_error',
-                waitingFor: 'api_retry',
-                retryCount: attempts,
-                lastError: toErrorMessage(error),
-              },
-            });
-
+            this.sessionController.block(payload.sessionId, id, failure.agentState);
             throw error;
           }
         }
@@ -318,11 +156,12 @@ export class ConversationJobQueue {
 
     await lock
       .runExclusive(async () => {
-        if (job.status === 'cancelled') {
+        if (this.jobs.get(job.id)?.status === 'cancelled') {
           return;
         }
 
-        await this.runScheduler?.wait(job.id);
+        await this.runScheduler.wait(job.id);
+        if (this.jobs.get(job.id)?.status === 'cancelled') return;
 
         job.status = 'running';
         job.startedAt = new Date();
@@ -333,8 +172,9 @@ export class ConversationJobQueue {
           this.eventHub.emitJobStarted(job.sessionId, job.id);
         }
 
-        await job.execute({ maxToolLoops: this.maxToolLoops });
+        await job.execute({ maxToolLoops: this.maxToolLoops, jobId: job.id });
 
+        if (this.jobs.get(job.id)?.status === 'cancelled') return;
         job.status = 'completed';
         job.completedAt = new Date();
 
@@ -344,11 +184,12 @@ export class ConversationJobQueue {
         }
       })
       .catch((error) => {
+        if (this.jobs.get(job.id)?.status === 'cancelled') return;
         job.status = 'failed';
         job.completedAt = new Date();
         job.error = error instanceof Error ? error.message : String(error);
       })
-      .finally(() => this.runScheduler?.complete(job.id));
+      .finally(() => this.runScheduler.complete(job.id));
 
     this.sessionLastActive.set(job.sessionId, Date.now());
   }
@@ -395,7 +236,11 @@ export class ConversationJobQueue {
       return false;
     }
 
-    if (job.status === 'cancelled' || job.status === 'completed' || job.status === 'failed') {
+    if (
+      this.jobs.get(job.id)?.status === 'cancelled' ||
+      job.status === 'completed' ||
+      job.status === 'failed'
+    ) {
       return false;
     }
 
@@ -408,7 +253,7 @@ export class ConversationJobQueue {
     if (job.status === 'queued') {
       job.status = 'cancelled';
       job.completedAt = new Date();
-      this.runScheduler?.cancel(jobId);
+      this.runScheduler.cancel(jobId);
 
       if (this.eventHub) {
         this.eventHub.emitJobCancelled(job.sessionId, jobId);
@@ -427,7 +272,7 @@ export class ConversationJobQueue {
     if (job && (job.status === 'queued' || job.status === 'running')) {
       job.status = 'cancelled';
       job.completedAt = new Date();
-      this.runScheduler?.cancel(jobId);
+      this.runScheduler.cancel(jobId);
 
       // Emit job.cancelled event
       if (this.eventHub) {
@@ -463,7 +308,9 @@ export class ConversationJobQueue {
     // Cleanup old completed/failed/cancelled jobs (older than maxIdleTime)
     for (const [jobId, job] of this.jobs.entries()) {
       if (
-        (job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') &&
+        (job.status === 'completed' ||
+          job.status === 'failed' ||
+          this.jobs.get(job.id)?.status === 'cancelled') &&
         job.completedAt &&
         now - job.completedAt.getTime() > this.maxIdleTime
       ) {
