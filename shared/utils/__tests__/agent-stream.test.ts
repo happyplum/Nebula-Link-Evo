@@ -2,9 +2,9 @@ import {
   AGENT_STREAM_EVENT_SCHEMA,
   type AgentStreamEventV1,
   type AgentStreamSectionV1,
-} from '@nebula-link-evo/shared';
+} from '../../types/agent-stream.js';
 import { describe, expect, it } from 'vitest';
-import { createEmptyAgentStream, reduceAgentStream, replayAgentStream } from './reducer.js';
+import { createEmptyAgentStream, reduceAgentStream, replayAgentStream } from '../agent-stream.js';
 
 const occurredAt = '2026-08-27T00:00:00.000Z';
 
@@ -28,6 +28,16 @@ function event(
 }
 
 describe('Agent Stream reducer', () => {
+  it('creates an idle stream with a deterministic timestamp', () => {
+    expect(createEmptyAgentStream('stream-1')).toMatchObject({
+      streamId: 'stream-1',
+      seq: 0,
+      state: 'idle',
+      generatedAt: '1970-01-01T00:00:00.000Z',
+      turns: [],
+    });
+  });
+
   it('deterministically replays every event prefix', () => {
     const events = [
       event(1, { type: 'stream.state', state: 'streaming' }),
@@ -128,5 +138,64 @@ describe('Agent Stream reducer', () => {
       event(1, { type: 'stream.state', state: 'recovering' })
     );
     expect(updated).toMatchObject({ state: 'recovering', turns: [] });
+  });
+
+  it('appends content, replaces a different section type with the same id, and accepts seq gaps', () => {
+    const older = '2026-08-26T00:00:00.000Z';
+    const activity: AgentStreamSectionV1 = {
+      type: 'activity',
+      sectionId: 'content-1',
+      createdAt: older,
+      updatedAt: older,
+      kind: 'tool',
+      state: 'running',
+      title: 'Tool',
+    };
+    const snapshot = replayAgentStream(createEmptyAgentStream('stream-1'), [
+      event(1, { type: 'section.upsert', section: activity }),
+      event(3, { type: 'content.delta', delta: 'hello' }),
+      event(4, { type: 'content.delta', delta: ' world' }),
+    ]);
+    expect(snapshot.seq).toBe(4);
+    expect(snapshot.turns[0].sections).toEqual([
+      {
+        type: 'content',
+        sectionId: 'content-1',
+        createdAt: occurredAt,
+        updatedAt: occurredAt,
+        markdown: 'hello world',
+        streaming: true,
+      },
+    ]);
+    expect(reduceAgentStream(snapshot, event(2, { type: 'content.delta', delta: 'old' }))).toBe(
+      snapshot
+    );
+  });
+
+  it('does not mutate frozen snapshots or events and preserves unrelated references', () => {
+    const freeze = <T>(value: T): T => {
+      if (value && typeof value === 'object') {
+        Object.values(value).forEach(freeze);
+        Object.freeze(value);
+      }
+      return value;
+    };
+    const initial = replayAgentStream(createEmptyAgentStream('stream-1'), [
+      event(1, { type: 'content.delta', delta: 'first' }),
+      event(2, { type: 'content.delta', turnId: 'turn-2', sectionId: 'other', delta: 'untouched' }),
+    ]);
+    const frozen = freeze(initial);
+    const delta = freeze(event(3, { type: 'content.delta', delta: ' next' }));
+    const result = reduceAgentStream(frozen, delta);
+    expect(frozen.turns[0].sections[0]).toMatchObject({ markdown: 'first' });
+    expect(result.turns[0].sections[0]).toMatchObject({ markdown: 'first next' });
+    expect(result.turns[1]).toBe(frozen.turns[1]);
+    expect(result.turns[0]).not.toBe(frozen.turns[0]);
+    expect(replayAgentStream(frozen, [])).toBe(frozen);
+    const state = reduceAgentStream(
+      frozen,
+      freeze(event(3, { type: 'stream.state', state: 'paused' }))
+    );
+    expect(state.turns).toBe(frozen.turns);
   });
 });

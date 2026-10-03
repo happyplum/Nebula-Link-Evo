@@ -12,7 +12,7 @@ Workspace package published as `@nebula-link-evo/shared`. Shared runtime-safe ty
 | Build scope     | `tsconfig.json` | Builds `types/`, `utils/`, `index.ts`; excludes `test-utils/`      |
 | Public entry    | `index.ts`      | Re-exports shared types, SSE helpers, utils                        |
 | Runtime types   | `types/`        | Browser-execution/vision bindings, SSE/debug events, vision marker |
-| Runtime utils   | `utils/`        | UUID, selector generation                                          |
+| Runtime utils   | `utils/`        | Frame counter, pure Agent Stream replay core                                          |
 | Test helpers    | `test-utils/`   | Source-level mocks and service lifecycle (not in build output)     |
 
 ## Export Rules
@@ -32,4 +32,5 @@ Workspace package published as `@nebula-link-evo/shared`. Shared runtime-safe ty
 - No backend-only business logic.
 - Browser execution exports stay wire-only; no persistence, token-hash, engine or service implementation assumptions.
 - No hidden side effects in utils.
+- `utils/agent-stream.ts` is the single pure replay core for both backends and UI consumers; keep business state/time policies in their owners and do not fork event-update branches.
 - No reliance on `dist/` files — edit source tree.

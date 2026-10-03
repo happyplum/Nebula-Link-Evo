@@ -8,7 +8,7 @@ AI-assisted browser automation platform. `proxy-adapter` is the browser capabili
 
 ```text
 shared/             Shared types and utilities (no src/ dir — source at package root)
-agent-activity-ui/  Stateless Agent-activity reducer + React renderer library shared by debug-ui and ai-e2e/ui (build-only, no port, not in pnpm dev)
+agent-activity-ui/  Stateless React renderer + shared Agent Stream replay exports shared by debug-ui and ai-e2e/ui (build-only, no port, not in pnpm dev)
 proxy-adapter/      Browser MCP gateway — MCP Server, Playwright control, debug streams (:3000)
   src/mcp-server/   MCP Server transport (StreamableHTTP)
   src/tools/        ToolRegistry + providers + MCP Server adapter

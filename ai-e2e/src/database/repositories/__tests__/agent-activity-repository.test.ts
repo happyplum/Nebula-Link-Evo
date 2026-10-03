@@ -4,7 +4,7 @@ import {
   AGENT_STREAM_EVENT_SCHEMA,
   type AgentStreamEventV1,
 } from '@nebula-link-evo/shared/types/agent-stream';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { up as migrateAgentActivity } from '../../migrations/020-agent-activity.js';
 import { AgentActivityRepository } from '../agent-activity-repository.js';
 import errorHandlerPlugin from '../../../server/plugins/error-handler.js';
@@ -62,7 +62,7 @@ function setupDatabase() {
 function activityEvent(
   streamId: string,
   seq: number,
-  state: 'running' | 'completed' | 'outcome_unknown' = 'running'
+  state: 'running' | 'completed' | 'outcome_unknown' | 'queued' | 'blocked' | 'failed' = 'running'
 ): AgentStreamEventV1 {
   return {
     schema: AGENT_STREAM_EVENT_SCHEMA,
@@ -85,6 +85,7 @@ function activityEvent(
 }
 
 afterEach(async () => {
+  vi.useRealTimers();
   for (const app of apps.splice(0)) await app.close();
   for (const db of databases.splice(0)) db.close();
 });
@@ -125,6 +126,89 @@ describe('AgentActivityRepository', () => {
       state: 'recovering',
     });
     expect(snapshot.turns).toHaveLength(2);
+  });
+
+  it.each([
+    ['running', 'streaming'],
+    ['queued', 'streaming'],
+    ['blocked', 'paused'],
+    ['outcome_unknown', 'recovering'],
+    ['failed', 'failed'],
+    ['completed', 'completed'],
+  ] as const)('聚合 %s activity 状态而不被外部 stream.state 覆盖', (activityState, state) => {
+    const { repository } = setupDatabase();
+    const context = { type: 'run' as const, id: 'run-1' };
+    const activity = activityEvent('external-a', 4, activityState);
+    repository.append(context, 'external-a', activity);
+    repository.append(context, 'external-a', {
+      ...activity,
+      seq: 5,
+      type: 'stream.state',
+      state: 'cancelled',
+    });
+    expect(repository.snapshot(context)).toMatchObject({ state, seq: 2, generatedAt: occurredAt });
+  });
+
+  it('重放本地序列中的替换、delta、删除及终态，保留不重复 source seq', () => {
+    const { repository } = setupDatabase();
+    const context = { type: 'run' as const, id: 'run-1' };
+    const activity = activityEvent('external-a', 4);
+    const sourceEvents: AgentStreamEventV1[] = [
+      activity,
+      { ...activity, seq: 6, type: 'content.delta', delta: 'first' },
+      { ...activity, seq: 7, type: 'content.delta', delta: ' next' },
+      {
+        ...activity,
+        seq: 8,
+        type: 'section.upsert',
+        sectionId: 'remove-me',
+        section: {
+          type: 'notice',
+          sectionId: 'remove-me',
+          createdAt: occurredAt,
+          updatedAt: occurredAt,
+          tone: 'info',
+          title: 'remove',
+        },
+      },
+      { ...activity, seq: 9, type: 'section.remove', sectionId: 'remove-me' },
+      { ...activity, seq: 10, type: 'turn.completed', state: 'completed' },
+    ];
+    for (const source of sourceEvents) repository.append(context, 'external-a', source);
+    expect(repository.append(context, 'external-a', sourceEvents[1])).toBeNull();
+    const snapshot = repository.snapshot(context);
+    expect(snapshot).toMatchObject({ state: 'completed', seq: 6, generatedAt: occurredAt });
+    expect(snapshot.turns).toEqual([
+      {
+        turnId: activity.turnId,
+        role: 'assistant',
+        state: 'completed',
+        createdAt: occurredAt,
+        updatedAt: occurredAt,
+        sections: [
+          {
+            type: 'content',
+            sectionId: activity.sectionId,
+            createdAt: occurredAt,
+            updatedAt: occurredAt,
+            markdown: 'first next',
+            streaming: true,
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('空业务上下文仍使用当前时间和 idle 状态', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-03T00:00:00.000Z'));
+    const { repository } = setupDatabase();
+    expect(repository.snapshot({ type: 'run', id: 'run-1' })).toMatchObject({
+      state: 'idle',
+      seq: 0,
+      turns: [],
+      generatedAt: '2026-10-03T00:00:00.000Z',
+    });
   });
 
   it('把审批、验证、激活与 TODO 控制面事实投影到同一持久活动流', () => {
