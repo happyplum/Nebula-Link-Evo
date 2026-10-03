@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import type Database from 'better-sqlite3';
 import type { DatabaseSync } from 'node:sqlite';
 import type {
@@ -15,7 +15,12 @@ import type {
   PageAsset,
   ScenarioAsset,
 } from '../../contracts/business-version.js';
-import { collectArtifactObjectIds } from './semantic-repository-utils.js';
+import {
+  collectArtifactObjectIds,
+  hashValue,
+  sha256,
+  stableStringify,
+} from './semantic-repository-utils.js';
 import { validateFunctionalScriptV1 } from '../../validation/functional-script-validator.js';
 
 interface StatementLike {
@@ -1911,29 +1916,6 @@ function assertNoInlineSecrets(value: unknown, path: string): void {
     }
     assertNoInlineSecrets(child, `${path}.${key}`);
   }
-}
-
-function stableStringify(value: unknown): string {
-  return JSON.stringify(canonicalize(value));
-}
-
-function canonicalize(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(canonicalize);
-  if (!isObject(value)) return value;
-  return Object.fromEntries(
-    Object.entries(value)
-      .filter(([, child]) => child !== undefined)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, child]) => [key, canonicalize(child)])
-  );
-}
-
-function hashValue(value: unknown): string {
-  return sha256(stableStringify(value));
-}
-
-function sha256(value: string): string {
-  return createHash('sha256').update(value).digest('hex');
 }
 
 function requireMapped(map: ReadonlyMap<string, string>, id: string): string {

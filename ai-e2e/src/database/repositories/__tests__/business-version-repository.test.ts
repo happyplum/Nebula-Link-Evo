@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { up as up014 } from '../../migrations/014-semantic-asset-foundation.js';
@@ -48,6 +49,14 @@ describe('BusinessVersionRepository', () => {
 
     expect(first.created).toBe(true);
     expect(replay).toMatchObject({ created: false, version: { id: first.version.id } });
+    expect(
+      db
+        .prepare('SELECT git_metadata_json, request_hash FROM business_versions WHERE id = ?')
+        .get(first.version.id)
+    ).toEqual({
+      git_metadata_json: '{"commit":"abc123","ref":"main"}',
+      request_hash: '8abf8633115b0d23d1bd3e2b8a3c379d5f93228158c56cd45bf241be9aa1a0f4',
+    });
     expect(() =>
       repository.create({
         projectId: 'project-1',
@@ -67,6 +76,41 @@ describe('BusinessVersionRepository', () => {
         git: { repository: 'https://user:token@example.test/repository.git' },
       })
     ).toThrow(BusinessVersionRepositoryError);
+  });
+
+  it('persists nested page payload bytes and hashes without reordering arrays', () => {
+    const version = repository.create({
+      projectId: 'project-1',
+      versionKey: 'nested',
+      name: 'Nested',
+      createdBy: 'user-1',
+      requestId: 'create-nested',
+    }).version;
+    const page = repository.createPage({
+      businessVersionId: version.id,
+      pageKey: 'nested',
+      payload: {
+        schema: 'nebula.ai-e2e.page-definition/1.0',
+        runtimeParams: { z: [{ z: 2, a: true }, undefined, 'tail'], omitted: undefined, a: null },
+        routeTemplate: '/nested',
+        routeMode: 'path',
+        name: 'Nested page',
+        identityQuery: {},
+        ignoredQueryKeys: ['z', 'a'],
+        authRequirement: { kind: 'anonymous' },
+      },
+      createdBy: 'system',
+    });
+
+    expect(
+      db
+        .prepare('SELECT payload_json, content_sha256 FROM page_definition_revisions WHERE id = ?')
+        .get(page.currentRevision.id)
+    ).toEqual({
+      payload_json:
+        '{"authRequirement":{"kind":"anonymous"},"identityQuery":{},"ignoredQueryKeys":["z","a"],"name":"Nested page","routeMode":"path","routeTemplate":"/nested","runtimeParams":{"a":null,"z":[{"a":true,"z":2},null,"tail"]},"schema":"nebula.ai-e2e.page-definition/1.0"}',
+      content_sha256: 'd1caa9316a7ae12163a4ceb7e24b789895123004bc041d1e83d58facf69aeee6',
+    });
   });
 
   it('deep copies current assets with remapped references and stale executable assets', () => {
@@ -239,8 +283,13 @@ describe('BusinessVersionRepository', () => {
       source.id,
       functionalModule.id,
       JSON.stringify({
-        functionalModuleId: functionalModule.id,
         sourceDecisionId: 'decision-source',
+        functionalModuleId: functionalModule.id,
+        references: [
+          { sourceDecisionId: 'decision-source', pageDefinitionId: page.id },
+          functionalModule.id,
+          'unchanged',
+        ],
       }),
       now,
       now
@@ -329,13 +378,14 @@ describe('BusinessVersionRepository', () => {
     };
     const copiedRequirement = db
       .prepare(
-        `SELECT id, functional_module_id, payload_json FROM module_requirement_revisions
+        `SELECT id, functional_module_id, payload_json, content_sha256 FROM module_requirement_revisions
          WHERE business_version_id = ? AND lifecycle = 'current'`
       )
       .get(copied.version.id) as {
       id: string;
       functional_module_id: string;
       payload_json: string;
+      content_sha256: string;
     };
     const copiedCoverage = db
       .prepare(
@@ -388,10 +438,19 @@ describe('BusinessVersionRepository', () => {
       screenshotArtifactId: 'blob-1',
     });
     expect(copiedRequirement.functional_module_id).toBe(graph.functionalModules[0]!.id);
-    expect(JSON.parse(copiedRequirement.payload_json)).toEqual({
+    const expectedRequirementJson = JSON.stringify({
       functionalModuleId: graph.functionalModules[0]!.id,
+      references: [
+        { pageDefinitionId: graph.pages[0]!.id, sourceDecisionId: copiedDecision.id },
+        graph.functionalModules[0]!.id,
+        'unchanged',
+      ],
       sourceDecisionId: copiedDecision.id,
     });
+    expect(copiedRequirement.payload_json).toBe(expectedRequirementJson);
+    expect(copiedRequirement.content_sha256).toBe(
+      createHash('sha256').update(expectedRequirementJson).digest('hex')
+    );
     expect(copiedCoverage).toMatchObject({
       functional_module_id: graph.functionalModules[0]!.id,
       module_requirement_revision_id: copiedRequirement.id,

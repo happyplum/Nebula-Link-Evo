@@ -51,6 +51,7 @@ UI 路由：`/`、`/semantic/:projectId`、`/semantic/:projectId/authoring/:vers
 
 ## 4. 核心验收
 
+- BusinessVersion 仓储直接复用 `semantic-repository-utils.ts` 的 `stableStringify/hashValue/sha256`；私有序列化与哈希 helper 已退出。对象键递归按 `localeCompare` 排序、数组保留原序，创建幂等请求与 copy 引用改写后的持久 JSON 字节和哈希保持既有行为。
 - 新项目首次进入工作台自动且仅自动一次创建 bootstrap job；版本未验证前不能创建正式 Run。
 - 项目输入可包含入口 pathname；部署只保存无凭据 origin 与 `basePath`，工作台深链接和起始页面不得把 `/debug/` 等入口路径折叠成 `/`。
 - 模块/场景切换不导航浏览器；显式定位使用冻结 URL 的 navigation-only task。
