@@ -12,6 +12,7 @@
 - [shipped] 正式 Run：exact valid version/deployment/scenario 冻结 plan/TODO/DAG/变量，支持 start/pause/resume/cancel、依赖跳过、可恢复中断、结果未知决策和 close-browser。
 - [shipped] 正式 Run 只有显式 start 进入 `running` 后才可被浏览器 FIFO 领取；创建后的 `ready` Run 不提前抢占 session 或改变状态版本，并发启动按持久 queue sequence 串行执行。
 - [shipped] 可视语义执行：结构化脚本确定性投影为 proxy `operation_execute` 白名单步骤，关联截图/DOM/artifact/evidence，外部调用使用 outbox 与稳定幂等键收敛。
+- [shipped] Authoring/Run 证据采集共用协调器私有 `captureBrowserEvidence`：operation 查询、原件下载、SHA-256 验证、内容寻址对象登记和证据 item 创建只维护一套实现；manifest 创建、TODO/attempt 关联、Agent audit 与 seal 仍由各工作流负责。`queued/running` 保持非终态并封存 `partial`，可取原件照常保存；`succeeded/failed/cancelled/outcome_unknown` 按真实状态登记终态，证据齐全可封存 `complete`（操作失败不等于证据不完整）。查询/单个原件失败为 `partial` 且继续采集其他证据；相同内容复用对象并为每个 step/operation/manifest 保留 item 和引用计数，不改变外部 ID 的上下文隔离、FIFO/outbox/租约生命周期及受限原件政策。
 - [shipped] ai-e2e 长期原始证据按成功/失败默认 7/30 天保留；清理 worker 仅在所有引用窗口到期且没有 open/pinned/custom manifest 或对象 pin 后逻辑删除，物理文件回收以持久 receipt 在重启后续跑，并保护共享 storage key。manifest/item/哈希与测试结果继续保留，未按项目规则脱敏的截图/DOM 登记为 `restricted/pending`。v1 不承诺通用自动脱敏；证据外发、共享、远程/多用户访问或项目级隐私策略启用前，必须先定义并实现脱敏、原件保留与访问权限规则。
 - [shipped] 全局 FIFO 与恢复：单 active browser session/context/control actor，Authoring 与 Run 共享安全边界，重启恢复 dispatching outbox，未知副作用不盲目重放。
 - [shipped] 生产浏览器中心 UI：左上下文/TODO、中间持续挂载浏览器、右侧 PRD/模块/场景/Diff/影响/决策/证据和常驻 Chat；模块切换不导航，显式定位才创建 navigation-only task。

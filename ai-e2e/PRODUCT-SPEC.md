@@ -71,6 +71,7 @@ UI 路由：`/`、`/semantic/:projectId`、`/semantic/:projectId/authoring/:vers
 - 1440px 与 1920px 下浏览器始终是最强视觉与空间锚点；左侧页面/模块/场景使用树线、状态点、细强调轨和渐隐背景表达层级，不使用父子嵌套的大面积选中卡片；右侧检查器与 Agent 活动使用独立浮动表面，明暗主题保持等价层级与可见焦点。
 - 公开 Authoring message 查询/提交路由不存在；历史内部消息审计只作为活动投影来源，不删除数据库记录。
 - 长期原始证据仅在所有 manifest 引用到期且没有 open/pinned/custom 保留或对象 pin 后删除；成功/失败默认 7/30 天，逻辑删除先于物理回收，重启可续跑，manifest/item/哈希不删除。
+- Authoring/Run 在协调器内共享 operation 查询、artifact 下载、哈希验证和内容寻址对象登记、证据 item 创建；各工作流仍分别拥有 manifest、TODO/attempt 关联、Agent 审计和封存。`queued/running` operation 的外部关联保持非终态、manifest 为 `partial`，已可下载的原件仍保存；`succeeded/failed/cancelled/outcome_unknown` 按真实状态登记终态，证据齐全即可 `complete`，操作失败不等同于证据缺失。查询或单个原件采集失败只使 manifest 部分完整，不丢弃其他成功证据；相同内容复用对象，但保留每个步骤、operation 和 manifest 的引用及引用计数，外部 ID 的上下文隔离规则不变。
 - Authoring 暂停/恢复/取消使用 `If-Match` 与幂等键；运行中的 Agent 在原子操作安全边界接收对应命令，取消完成后关闭自有浏览器会话。
 - 正式 Run 创建后保持 `ready` 且不得提前占用浏览器 FIFO；只有显式 start 进入 `running` 后才具备领取会话资格。
 - 旧 `/api/projects/*` 返回 404，生产/开发构建均不包含旧向导与 fixtures。
