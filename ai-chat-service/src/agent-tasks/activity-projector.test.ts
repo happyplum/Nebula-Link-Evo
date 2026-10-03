@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentTaskEventRecord } from './repository.js';
+import type { AgentTaskEventRecord, AgentTaskView } from '@nebula-link-evo/shared/types/agent-task';
+
 import { buildAgentTaskActivitySnapshot, projectAgentTaskEvent } from './activity-projector.js';
-import type { AgentTaskView } from './types.js';
 
 const occurredAt = '2026-08-27T08:00:00.000Z';
 

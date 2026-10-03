@@ -1,3 +1,10 @@
+import type {
+  PersistedAgentTaskRequest,
+  AgentTaskCommandRequest,
+  AgentTaskCommandResult,
+  AgentTaskView,
+  CreateAgentTaskRequest,
+} from '@nebula-link-evo/shared/types/agent-task';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { up as up014 } from '../../database/migrations/014-semantic-asset-foundation.js';
@@ -16,11 +23,8 @@ import { SemanticRunControlRepository } from '../../database/repositories/semant
 import { SemanticQueryRepository } from '../../database/repositories/semantic-query-repository.js';
 import { SemanticWorkflowRepository } from '../../database/repositories/semantic-workflow-repository.js';
 import { functionalScriptFixture } from '../../test-support/functional-script-fixture.js';
-import type {
-  AgentTaskClientPort,
-  AgentTaskView,
-  CreateAgentTaskInput,
-} from '../../infrastructure/agent-task-client.js';
+
+import type { AgentTaskClientPort } from '../../infrastructure/agent-task-client.js';
 import { MemoryCoordinatorSecretStore } from '../../infrastructure/coordinator-secret-store.js';
 import { IntegrationClientError } from '../../infrastructure/integration-client-error.js';
 import type {
@@ -1136,7 +1140,7 @@ describe('SemanticCoordinatorService', () => {
 });
 
 class FakeAgentTaskClient implements AgentTaskClientPort {
-  createdRequest?: CreateAgentTaskInput;
+  createdRequest?: CreateAgentTaskRequest;
   commands: Array<'pause' | 'resume' | 'interrupt' | 'cancel'> = [];
   capabilityCalls = 0;
   capabilityGate?: Promise<void>;
@@ -1164,11 +1168,22 @@ class FakeAgentTaskClient implements AgentTaskClientPort {
     return this.capabilities;
   }
 
-  async createTask(input: CreateAgentTaskInput): Promise<AgentTaskView> {
+  async createTask(input: CreateAgentTaskRequest): Promise<AgentTaskView> {
     this.createdRequest = input;
     const taskId = `agent-task-${this.tasks.size + 1}`;
     const verifying = input.clientTaskId.startsWith('authoring-verification:');
+    const { browserBinding, ...requestWithoutBinding } = input;
+    let safeBinding: PersistedAgentTaskRequest['browserBinding'];
+    if (browserBinding) {
+      const { browserLeaseToken: _token, ...safe } = browserBinding;
+      safeBinding = safe;
+    }
     const task: AgentTaskView = {
+      modelRole: 'decision',
+      request: {
+        ...requestWithoutBinding,
+        ...(safeBinding ? { browserBinding: safeBinding } : {}),
+      },
       schema: 'nebula.ai.agent-task/1.0',
       taskId,
       clientTaskId: input.clientTaskId,
@@ -1258,8 +1273,8 @@ class FakeAgentTaskClient implements AgentTaskClientPort {
 
   async commandTask(
     taskId: string,
-    input: { type: 'pause' | 'resume' | 'interrupt' | 'cancel' }
-  ): Promise<{ task: AgentTaskView }> {
+    input: AgentTaskCommandRequest
+  ): Promise<AgentTaskCommandResult> {
     const task = await this.getTask(taskId);
     this.commands.push(input.type);
     task.status =
@@ -1268,7 +1283,20 @@ class FakeAgentTaskClient implements AgentTaskClientPort {
     task.eventSeq += 1;
     task.updatedAt = new Date().toISOString();
     if (task.status === 'cancelled') task.completedAt = task.updatedAt;
-    return { task };
+    return {
+      task,
+      command: {
+        id: input.commandId,
+        taskId,
+        type: input.type,
+        expectedStateVersion: input.expectedStateVersion,
+        requestHash: 'a'.repeat(64),
+        status: 'completed',
+        createdBy: input.createdBy ?? 'test',
+        createdAt: task.updatedAt,
+        completedAt: task.updatedAt,
+      },
+    };
   }
 }
 

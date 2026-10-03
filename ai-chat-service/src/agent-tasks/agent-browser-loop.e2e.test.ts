@@ -1,3 +1,7 @@
+import type {
+  AgentTaskView,
+  CreateAgentTaskRequest,
+} from '@nebula-link-evo/shared/types/agent-task';
 import Fastify from 'fastify';
 import { expect, it, vi } from 'vitest';
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -7,10 +11,7 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import {
-  AgentTaskClient,
-  type AgentTaskView,
-} from '../../../ai-e2e/src/infrastructure/agent-task-client.js';
+import { AgentTaskClient } from '../../../ai-e2e/src/infrastructure/agent-task-client.js';
 import { SemanticBrowserClient } from '../../../ai-e2e/src/infrastructure/semantic-browser-client.js';
 import { AgentTaskRepository } from './repository.js';
 import { BrowserControlClient } from '../../../integrations/browser-control-client/src/client.js';
@@ -22,16 +23,6 @@ const TERMINAL_TASK_STATUSES = new Set([
   'cancelled',
   'blocked',
 ]);
-
-interface FullAgentTaskView extends AgentTaskView {
-  usage?: {
-    inputTokens: number;
-    outputTokens: number;
-    totalTokens: number;
-    modelTurns: number;
-    toolCalls: number;
-  };
-}
 
 it('drives real proxy Chromium through the complete ai-chat-service HTTP Harness lifecycle', async () => {
   const root = await mkdtemp(join(tmpdir(), 'nebula-agent-browser-process-e2e-'));
@@ -146,7 +137,7 @@ it('drives real proxy Chromium through the complete ai-chat-service HTTP Harness
     });
     const tab = requireValue(session.tabs[0], 'Browser session must expose its initial tab');
     const leaseToken = requireValue(issued.token, 'Control lease must include its token');
-    const request = {
+    const request: CreateAgentTaskRequest = {
       schema: 'nebula.ai.agent-task/1.0' as const,
       clientTaskId: 'process-agent-browser-loop',
       modelRole: 'decision' as const,
@@ -740,10 +731,10 @@ async function waitForReady(
   });
 }
 
-async function waitForTask(client: AgentTaskClient, taskId: string): Promise<FullAgentTaskView> {
+async function waitForTask(client: AgentTaskClient, taskId: string): Promise<AgentTaskView> {
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
-    const task = (await client.getTask(taskId)) as FullAgentTaskView;
+    const task = (await client.getTask(taskId)) as AgentTaskView;
     if (TERMINAL_TASK_STATUSES.has(task.status)) return task;
     await new Promise((resolve) => setTimeout(resolve, 50));
   }

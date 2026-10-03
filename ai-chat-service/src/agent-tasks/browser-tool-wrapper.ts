@@ -6,9 +6,9 @@ import { AgentTaskError } from './errors.js';
 import type {
   AgentTaskBrowserBinding,
   AgentTaskBrowserStep,
-  AgentTaskOperationReservation,
   AgentTaskToolCallSummary,
-} from './types.js';
+} from '@nebula-link-evo/shared/types/agent-task';
+import type { AgentTaskOperationReservation } from './types.js';
 
 const EXECUTE_TOOL = 'browser-control.operation_execute';
 const GET_TOOL = 'browser-control.operation_get';

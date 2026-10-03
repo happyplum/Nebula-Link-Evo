@@ -4,6 +4,7 @@ proxy-adapter 通过 MCP Server (StreamableHTTP) 只对外暴露受控 `browser-
 
 - [shipped] MCP Server 传输层：`proxy-adapter/src/mcp-server/`（index / transport），`POST /mcp` 提供无状态 JSON StreamableHTTP；可选 `GET /mcp` SSE 通道返回 405，使标准客户端回退到 POST 响应而不触发重连。
 - [shipped] ToolRegistry + browser-execution provider：`proxy-adapter/src/tools/`（registry / types / providers/browser-execution-tools-provider / adapters/mcp-server / adapters/json-schema-to-zod）。JSON Schema 编译为 strict validator，不支持的 schema 拒绝注册。
+- [shipped] MCP target/locator Schema 直接引用 `shared/types/browser-target.ts` canonical TypeBox schema，原 provider `targetSchema/valueCandidate` 退出；七种 locator strategy、字段、长度与 strict 拒绝语义保持，与 Agent Task 使用同一结构源。
 - [shipped] MCP 工具集仅 3 个受控原子工具 `browser-control.operation_execute/get/cancel`；旧 15 个 browser-control 工具、BrowserToolsProvider、ToolConsumer/exposeTo、action executor 和参数/结果适配层已物理删除。
 - [shipped] proxy `server.ts` 显式注册 canonical HTTP/MCP/debug surfaces；无调用方的 CORS/Swagger/error/autoload 插件栈、barrel 与对应 Swagger 依赖已物理删除。
 - [shipped] 结构化语义步骤可通过 application-level session/稳定 Tab/短期 lease 进入 FIFO 原子操作链；网关只处理通用浏览器约束，不解释场景或脚本业务语义。

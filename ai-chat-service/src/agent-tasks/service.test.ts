@@ -1,3 +1,4 @@
+import type { CreateAgentTaskRequest } from '@nebula-link-evo/shared/types/agent-task';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AgentTaskError } from './errors.js';
 import { AgentTaskRepository } from './repository.js';
@@ -8,7 +9,7 @@ import { SkillRuntime } from '../skills/runtime.js';
 
 const services: AgentTaskService[] = [];
 
-function request() {
+function request(): CreateAgentTaskRequest {
   return {
     schema: 'nebula.ai.agent-task/1.0',
     clientTaskId: 'client-1',
@@ -119,7 +120,34 @@ describe('AgentTaskService', () => {
       { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
     );
     services.push(service);
-    const created = service.create(request());
+    const taskRequest: CreateAgentTaskRequest = {
+      ...request(),
+      browserBinding: {
+        browserSessionId: 'session-1',
+        tabId: 'tab-1',
+        browserLeaseId: 'lease-1',
+        browserLeaseToken: 'test-token',
+        browserLeaseSequence: 1,
+        access: 'observe',
+      },
+      toolPolicy: {
+        allow: ['browser-control.operation_execute'],
+        constraints: {
+          'browser-control.operation_execute': {
+            steps: [
+              {
+                stepId: 'state',
+                kind: 'observe',
+                operation: 'page_state',
+                capture: { domSnapshot: true, videoSegment: false },
+              },
+            ],
+          },
+        },
+      },
+    };
+    const created = service.create(taskRequest);
+    expect(JSON.stringify(created.task.request)).not.toContain('test-token');
     await vi.waitFor(() => expect(service.get(created.task.taskId).status).toBe('running'));
 
     const running = service.get(created.task.taskId);
@@ -144,6 +172,14 @@ describe('AgentTaskService', () => {
     });
     await vi.waitFor(() => expect(service.get(created.task.taskId).status).toBe('completed'));
     expect(execute).toHaveBeenCalledTimes(2);
+    const firstContext = execute.mock.calls[0][0];
+    const resumedContext = execute.mock.calls[1][0];
+    expect(firstContext.browserSteps.get('state')).toMatchObject({
+      stepId: 'state',
+      capture: { domSnapshot: true, videoSegment: false },
+    });
+    expect(resumedContext.browserSteps).toBe(firstContext.browserSteps);
+    expect(resumedContext.request).toBe(firstContext.request);
 
     const replay = await service.command(created.task.taskId, {
       commandId: 'resume-1',

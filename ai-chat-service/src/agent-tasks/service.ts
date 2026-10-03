@@ -1,19 +1,22 @@
+import type {
+  CreateAgentTaskRequest,
+  AgentTaskCommandRequest,
+  AgentTaskCommandResult,
+  AgentTaskBrowserStep,
+  AgentTaskStatus,
+  AgentTaskView,
+  AgentTaskCommandRecord,
+  AgentTaskEventRecord,
+} from '@nebula-link-evo/shared/types/agent-task';
 import { createHash, randomUUID } from 'node:crypto';
 import type { Logger } from 'pino';
 import { AgentTaskError, toAgentTaskError } from './errors.js';
-import type {
-  AgentTaskExecutor,
-  AgentTaskSkillExecution,
-  AgentTaskStatus,
-  AgentTaskView,
-} from './types.js';
+
+import type { AgentTaskExecutor, AgentTaskSkillExecution } from './types.js';
 import { validateCreateAgentTaskRequest } from './validation.js';
 import type { AgentTaskRepository } from './repository.js';
-import type {
-  AgentTaskCommandRecord,
-  AgentTaskEventRecord,
-  AgentTaskCheckpointRecord,
-} from './repository.js';
+
+import type { AgentTaskCheckpointRecord } from './repository.js';
 import type { SkillRuntime } from '../skills/runtime.js';
 import type { HarnessRuntime } from '../harness/types.js';
 import { recoverDurableHarnessResult } from './executor.js';
@@ -33,24 +36,12 @@ export interface CreateAgentTaskResult {
   created: boolean;
 }
 
-export interface AgentTaskCommandRequest {
-  commandId: string;
-  type: AgentTaskCommandRecord['type'];
-  expectedStateVersion: number;
-  reason?: string;
-  createdBy?: string;
-}
-
-export interface AgentTaskCommandResult {
-  command: AgentTaskCommandRecord;
-  task: AgentTaskView;
-}
-
 export class AgentTaskService {
   private readonly activeRequests = new Map<
     string,
     {
-      request: ReturnType<typeof validateCreateAgentTaskRequest>['request'];
+      request: CreateAgentTaskRequest;
+      browserSteps: ReadonlyMap<string, AgentTaskBrowserStep>;
       skill?: AgentTaskSkillExecution;
       idempotencyKey?: string;
     }
@@ -91,22 +82,16 @@ export class AgentTaskService {
     return reconciled;
   }
 
-  create(rawRequest: unknown, options: CreateAgentTaskOptions = {}): CreateAgentTaskResult {
+  create(
+    rawRequest: CreateAgentTaskRequest,
+    options: CreateAgentTaskOptions = {}
+  ): CreateAgentTaskResult {
     if (this.closing)
       throw new AgentTaskError(
         'dependency_unavailable',
         'Agent task service is shutting down',
         true
       );
-    if (
-      options.idempotencyKey !== undefined &&
-      (options.idempotencyKey.length < 1 || options.idempotencyKey.length > 200)
-    ) {
-      throw new AgentTaskError(
-        'validation_failed',
-        'Idempotency-Key must contain between 1 and 200 characters'
-      );
-    }
     const validated = validateCreateAgentTaskRequest(rawRequest);
     const existing = this.repository.findExisting(
       validated.request.clientTaskId,
@@ -160,6 +145,7 @@ export class AgentTaskService {
     if (stored.created) {
       this.activeRequests.set(taskId, {
         request: validated.request,
+        browserSteps: validated.browserSteps,
         ...(preparedSkill ? { skill: preparedSkill.execution } : {}),
         ...(options.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : {}),
       });
@@ -243,8 +229,7 @@ export class AgentTaskService {
     return this.repository.subscribeEvents(taskId, listener);
   }
 
-  command(taskId: string, raw: unknown): Promise<AgentTaskCommandResult> {
-    const request = validateCommandRequest(raw);
+  command(taskId: string, request: AgentTaskCommandRequest): Promise<AgentTaskCommandResult> {
     const requestHash = hashCommandRequest(taskId, request);
     const inFlight = this.commandRuns.get(request.commandId);
     if (inFlight) {
@@ -288,7 +273,7 @@ export class AgentTaskService {
   private async run(taskId: string): Promise<void> {
     const activeRequest = this.activeRequests.get(taskId);
     if (!activeRequest) return;
-    const { request, skill } = activeRequest;
+    const { request, skill, browserSteps } = activeRequest;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), request.budgets.maxDurationMs);
     timeout.unref();
@@ -302,6 +287,7 @@ export class AgentTaskService {
       const result = await this.executor.execute({
         taskId,
         request,
+        browserSteps,
         deadlineAt: Date.now() + request.budgets.maxDurationMs,
         signal: controller.signal,
         ...(skill ? { skill } : {}),
@@ -536,43 +522,6 @@ export class AgentTaskService {
     this.activeRequests.delete(taskId);
     this.toolCallsStarted.delete(taskId);
   }
-}
-
-function validateCommandRequest(raw: unknown): AgentTaskCommandRequest {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    throw new AgentTaskError('validation_failed', 'Agent command body must be an object');
-  }
-  const value = raw as Record<string, unknown>;
-  const unknown = Object.keys(value).filter(
-    (key) => !['commandId', 'type', 'expectedStateVersion', 'reason', 'createdBy'].includes(key)
-  );
-  if (unknown.length > 0) {
-    throw new AgentTaskError('validation_failed', 'Agent command contains unknown fields', false, {
-      unknownFields: unknown,
-    });
-  }
-  if (
-    typeof value.commandId !== 'string' ||
-    value.commandId.length < 1 ||
-    value.commandId.length > 128
-  ) {
-    throw new AgentTaskError('validation_failed', 'commandId is invalid');
-  }
-  if (!['pause', 'resume', 'interrupt', 'cancel'].includes(String(value.type))) {
-    throw new AgentTaskError('validation_failed', 'Agent command type is invalid');
-  }
-  if (
-    !Number.isSafeInteger(value.expectedStateVersion) ||
-    (value.expectedStateVersion as number) < 1
-  ) {
-    throw new AgentTaskError('validation_failed', 'expectedStateVersion must be positive');
-  }
-  for (const key of ['reason', 'createdBy'] as const) {
-    if (value[key] !== undefined && (typeof value[key] !== 'string' || value[key].length > 1000)) {
-      throw new AgentTaskError('validation_failed', `${key} is invalid`);
-    }
-  }
-  return value as unknown as AgentTaskCommandRequest;
 }
 
 function hashCommandRequest(taskId: string, request: AgentTaskCommandRequest): string {

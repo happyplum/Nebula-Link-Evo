@@ -1,4 +1,4 @@
-import type { AgentTaskView } from '../infrastructure/agent-task-client.js';
+import type { AgentTaskView } from '@nebula-link-evo/shared/types/agent-task';
 
 const TERMINAL_AGENT_STATES = new Set([
   'completed',

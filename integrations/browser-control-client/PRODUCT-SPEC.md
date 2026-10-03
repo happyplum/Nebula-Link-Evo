@@ -15,6 +15,8 @@
 - token 只驻留内存；普通输出、错误和诊断不得包含 token。
 - 操作必须串行；结果不确定时核查 ledger，不能证明终态则禁止重放。
 
+- 浏览器 target/locator 公共类型由 `shared/types/browser-target.ts` 的 TypeBox schema + Static 唯一维护，`shared/types/browser-execution.ts` 保留既有 type 导出；proxy MCP 与 Agent Task 直接引用同一 target schema，wire 字段和消费者调用方式保持。
+
 ## 2. 模块清单
 
 | 模块           | 路径                                      | 状态    | 职责                                                                               |

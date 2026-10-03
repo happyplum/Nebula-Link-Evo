@@ -16,7 +16,7 @@
 
 | Owns                                                                                                      | Consumes         | Does NOT own                                  |
 | --------------------------------------------------------------------------------------------------------- | ---------------- | --------------------------------------------- |
-| 运行时类型（browser-execution / vision-snapshot / agent-stream / vision-marker / debug-events / constants） | 无外部运行时依赖 | 业务逻辑、浏览器引擎、AI provider、数据库访问 |
+| 运行时类型（browser-execution / browser-target / agent-task / vision-snapshot / agent-stream / vision-marker / debug-events / constants） | TypeBox（现有 catalog 版本） | 业务逻辑、浏览器引擎、AI provider、数据库访问 |
 | 运行时工具（frame-counter、agent-stream）                                                                            |                  | 任何 `dist/` 产物（直接编辑源码）             |
 | 源码级测试辅助（test-utils/，含 mocks、service-lifecycle）                                                |                  |                                               |
 
@@ -33,7 +33,9 @@
 | 模块        | 路径               | 状态    | 职责                                                                                          | 边界/契约                                                                                           |
 | ----------- | ------------------ | ------- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | 公共入口    | `index.ts`         | shipped | 聚合 re-export 运行时类型与工具                                                               | 仅 re-export，不放新逻辑                                                                            |
-| 运行时类型  | `types/`           | shipped | browser-execution、vision-snapshot、agent-stream、vision-marker、debug-events、constants、index | 框架中立；Agent Stream 是脱敏呈现契约，不承载控制面状态；新增类型需同时更新公共入口 |
+| 运行时类型  | `types/`           | shipped | browser-execution、browser-target、agent-task、vision-snapshot、agent-stream、vision-marker、debug-events、constants、index | 框架中立；Agent Stream 是脱敏呈现契约，不承载控制面状态；新增类型经公共入口或显式子路径导出 |
+| Agent Task 协议 | `types/agent-task.ts` | shipped | TypeBox schema + Static 派生创建、脱敏持久请求、视图、状态、命令、审计事件、真实浏览器步骤 | 仅 `./types/agent-task`；领域政策和 Harness 上下文留服务 |
+| 浏览器目标协议 | `types/browser-target.ts` | shipped | canonical target/locator schema + Static | 仅 `./types/browser-target` 运行时导出；browser-execution 保留既有 type 入口 |
 | 运行时工具  | `utils/`           | shipped | frame-counter、agent-stream、index 纯函数                                                                 | 必须纯函数，无副作用                                                                                |
 | 测试辅助    | `test-utils/`      | shipped | mocks（BrowserContext、debug-event）、service-lifecycle、index                               | **不进 `tsc -b` 构建产物**；消费方按源码相对路径引用                                                |
 | Vitest 配置 | `vitest.config.ts` | shipped | shared 包测试与覆盖率防回退门禁                                                               | 仅统计运行时入口、类型与工具；`test-utils/` 不计入生产覆盖率                                        |
@@ -70,6 +72,8 @@
 | 测试 mock 工厂          | `test-utils/mocks/`          | shipped | `test-utils/__tests__/mocks.test.ts`                 | test-utils/                                                                                                         |
 
 ---
+
+- Agent Task 公共协议契约测试：`types/agent-task.test.ts` 验证创建与脱敏请求独立、未知字段、关联键长度、安全整数、command/status 和 videoSegment 字段；浏览器 target 由同一 schema 供 Agent Task 和 proxy MCP 消费。
 
 ## 4. 修改维护协议 [MUST-MAINTAIN]
 

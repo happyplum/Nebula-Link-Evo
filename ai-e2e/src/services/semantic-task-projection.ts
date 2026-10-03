@@ -1,7 +1,8 @@
 import type {
   AgentTaskBrowserStep,
-  CreateAgentTaskInput,
-} from '../infrastructure/agent-task-client.js';
+  CreateAgentTaskRequest,
+} from '@nebula-link-evo/shared/types/agent-task';
+
 import type { CoordinatorTodo } from '../database/repositories/semantic-coordinator-repository.js';
 import { hashValue } from '../database/repositories/semantic-repository-utils.js';
 
@@ -35,12 +36,12 @@ const OBSERVE_OPERATIONS = new Set([
 ]);
 
 export interface RunTaskProjection {
-  agentRequest: Omit<CreateAgentTaskInput, 'browserBinding'>;
+  agentRequest: Omit<CreateAgentTaskRequest, 'browserBinding'>;
   steps: AgentTaskBrowserStep[];
   operations: string[];
   taskPayloadSha256: string;
   toolPolicyHash: string;
-  budget: CreateAgentTaskInput['budgets'];
+  budget: CreateAgentTaskRequest['budgets'];
 }
 
 export function buildRunTaskProjection(
@@ -84,7 +85,7 @@ export function buildRunTaskProjection(
     },
   };
   const sideEffectAuthorization = buildSideEffectAuthorization(todo, steps);
-  const agentRequest: Omit<CreateAgentTaskInput, 'browserBinding'> = {
+  const agentRequest: Omit<CreateAgentTaskRequest, 'browserBinding'> = {
     schema: 'nebula.ai.agent-task/1.0',
     clientTaskId: pageTaskId,
     modelRole: 'decision',
@@ -114,7 +115,7 @@ export function buildRunTaskProjection(
 function buildSideEffectAuthorization(
   todo: CoordinatorTodo,
   steps: AgentTaskBrowserStep[]
-): NonNullable<CreateAgentTaskInput['sideEffectAuthorization']> | undefined {
+): NonNullable<CreateAgentTaskRequest['sideEffectAuthorization']> | undefined {
   const effectSteps = steps.filter((step) => step.effectId);
   if (effectSteps.length === 0) return undefined;
   if (

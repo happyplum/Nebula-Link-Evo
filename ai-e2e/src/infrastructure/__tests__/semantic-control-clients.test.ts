@@ -1,6 +1,7 @@
 import axios, { isAxiosError } from 'axios';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { AgentTaskClient, type CreateAgentTaskInput } from '../agent-task-client.js';
+import { type CreateAgentTaskRequest } from '@nebula-link-evo/shared/types/agent-task';
+import { AgentTaskClient } from '../agent-task-client.js';
 import { SemanticBrowserClient } from '../semantic-browser-client.js';
 
 vi.mock('axios');
@@ -14,8 +15,8 @@ function axiosInstance() {
 describe('semantic control HTTP clients', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(isAxiosError).mockImplementation(
-      (error): error is never => Boolean((error as { isAxiosError?: boolean })?.isAxiosError)
+    vi.mocked(isAxiosError).mockImplementation((error): error is never =>
+      Boolean((error as { isAxiosError?: boolean })?.isAxiosError)
     );
   });
 
@@ -125,7 +126,9 @@ describe('semantic control HTTP clients', () => {
       service: 'proxy-adapter',
       protocols: { browserExecution: { major: 1, minor: 0 } },
     });
-    await expect(client.createSession('session-create')).resolves.toMatchObject({ id: 'session-1' });
+    await expect(client.createSession('session-create')).resolves.toMatchObject({
+      id: 'session-1',
+    });
     await expect(
       client.createLease('session-1', 'lease-create', {
         mode: 'control',
@@ -147,7 +150,7 @@ describe('semantic control HTTP clients', () => {
   });
 });
 
-function taskRequest(): CreateAgentTaskInput {
+function taskRequest(): CreateAgentTaskRequest {
   return {
     schema: 'nebula.ai.agent-task/1.0',
     clientTaskId: 'client-task-1',

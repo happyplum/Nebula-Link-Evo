@@ -14,10 +14,10 @@ import type {
 } from '../database/repositories/agent-activity-repository.js';
 import type { SemanticWorkflowRepository } from '../database/repositories/semantic-workflow-repository.js';
 import type {
-  AgentTaskClientPort,
   AgentTaskView,
-  CreateAgentTaskInput,
-} from '../infrastructure/agent-task-client.js';
+  CreateAgentTaskRequest,
+} from '@nebula-link-evo/shared/types/agent-task';
+import type { AgentTaskClientPort } from '../infrastructure/agent-task-client.js';
 import type {
   SemanticBrowserClientPort,
   BrowserOperationRecord,
@@ -611,7 +611,7 @@ export class SemanticCoordinatorService {
   private async createAuthoringAgentTask(item: OutboxItem): Promise<void> {
     const payload = payloadObject(item);
     const request = objectValue(payload.agentRequest) as unknown as Omit<
-      CreateAgentTaskInput,
+      CreateAgentTaskRequest,
       'browserBinding'
     >;
     const binding = objectValue(payload.browserBinding);
@@ -639,7 +639,7 @@ export class SemanticCoordinatorService {
       });
       return;
     }
-    const fullRequest: CreateAgentTaskInput = {
+    const fullRequest: CreateAgentTaskRequest = {
       ...request,
       browserBinding: {
         browserSessionId: requiredString(binding.browserSessionId, 'browserSessionId'),
@@ -669,7 +669,7 @@ export class SemanticCoordinatorService {
   private async createAgentTask(item: OutboxItem): Promise<void> {
     const payload = payloadObject(item);
     const request = objectValue(payload.agentRequest) as unknown as Omit<
-      CreateAgentTaskInput,
+      CreateAgentTaskRequest,
       'browserBinding'
     >;
     const binding = objectValue(payload.browserBinding);
@@ -686,7 +686,7 @@ export class SemanticCoordinatorService {
       });
       return;
     }
-    const fullRequest: CreateAgentTaskInput = {
+    const fullRequest: CreateAgentTaskRequest = {
       ...request,
       browserBinding: {
         browserSessionId: requiredString(binding.browserSessionId, 'browserSessionId'),

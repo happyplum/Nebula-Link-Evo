@@ -8,8 +8,7 @@ import type {
   AgentTaskBrowserStep,
   CreateAgentTaskRequest,
   PersistedAgentTaskRequest,
-} from './types.js';
-import { AGENT_TASK_SCHEMA } from './types.js';
+} from '@nebula-link-evo/shared/types/agent-task';
 
 const CONTROLLED_EXECUTE_TOOL = 'browser-control.operation_execute';
 const CONTROLLED_INTERNAL_TOOLS = new Set([
@@ -61,49 +60,23 @@ export interface ValidatedAgentTaskRequest {
   requestHash: string;
 }
 
-export function validateCreateAgentTaskRequest(value: unknown): ValidatedAgentTaskRequest {
-  const request = requireObject(value, 'Agent task request') as unknown as CreateAgentTaskRequest;
-  assertAllowedKeys(
-    request as unknown as Record<string, unknown>,
-    [
-      'schema',
-      'clientTaskId',
-      'modelRole',
-      'input',
-      'responseSchema',
-      'toolPolicy',
-      'skillPolicy',
-      'budgets',
-      'browserBinding',
-      'sideEffectAuthorization',
-      'correlation',
-    ],
-    'Agent task request'
-  );
+export function validateCreateAgentTaskRequest(
+  request: CreateAgentTaskRequest
+): ValidatedAgentTaskRequest {
   if (Buffer.byteLength(JSON.stringify(request), 'utf8') > AGENT_TASK_LIMITS.requestBytes) {
     fail('Agent task request exceeds the size limit');
   }
-  if (request.schema !== AGENT_TASK_SCHEMA) fail('Agent task schema is unsupported');
-  requireBoundedString(request.clientTaskId, 'clientTaskId', 1, 128);
-  if (request.modelRole !== 'decision') fail('modelRole must be decision');
-  request.input = requireObject(request.input, 'input');
   validateNoInlineSecrets(request.input, 'input');
   const responseSchema = validateResponseSchema(request.responseSchema);
   validateBudgets(request.budgets);
   const skillAllow = validateSkillPolicy(request.skillPolicy);
-  validateCorrelation(request.correlation);
+  if (request.correlation && Object.keys(request.correlation).length > 20)
+    fail('correlation contains too many entries');
 
-  const toolPolicy = requireObject(request.toolPolicy, 'toolPolicy');
-  assertAllowedKeys(toolPolicy, ['allow', 'constraints'], 'toolPolicy');
-  if (
-    !Array.isArray(request.toolPolicy.allow) ||
-    request.toolPolicy.allow.length > AGENT_TASK_LIMITS.maxAllowedTools
-  ) {
+  if (request.toolPolicy.allow.length > AGENT_TASK_LIMITS.maxAllowedTools) {
     fail(`toolPolicy.allow must contain at most ${AGENT_TASK_LIMITS.maxAllowedTools} tools`);
   }
-  const allow = request.toolPolicy.allow.map((tool, index) =>
-    requireBoundedString(tool, `toolPolicy.allow[${index}]`, 1, 200)
-  );
+  const allow = request.toolPolicy.allow;
   if (new Set(allow).size !== allow.length) fail('toolPolicy.allow must not contain duplicates');
   if (allow.some((tool) => tool.includes('*'))) fail('toolPolicy.allow does not support wildcards');
   if (allow.some((tool) => CONTROLLED_INTERNAL_TOOLS.has(tool))) {
@@ -115,7 +88,7 @@ export function validateCreateAgentTaskRequest(value: unknown): ValidatedAgentTa
     fail('Unsupported browser-control tools are not available to Agent tasks');
   }
 
-  const browserBinding = validateBrowserBinding(request.browserBinding);
+  const browserBinding = request.browserBinding;
   const browserSteps = validateBrowserSteps(
     request.toolPolicy.constraints,
     allow,
@@ -164,65 +137,19 @@ function validateSideEffectAuthorization(
     if (raw !== undefined) fail('sideEffectAuthorization is only allowed for effect-bearing steps');
     return;
   }
-  const value = requireObject(raw, 'sideEffectAuthorization') as unknown as NonNullable<typeof raw>;
-  assertAllowedKeys(
-    value as unknown as Record<string, unknown>,
-    [
-      'contextType',
-      'contextId',
-      'environment',
-      'policyVersion',
-      'policyEvaluationId',
-      'policyResult',
-      'projectionSha256',
-      'effects',
-      'grant',
-    ],
-    'sideEffectAuthorization'
-  );
-  if (!['run', 'authoring'].includes(value.contextType))
-    fail('sideEffectAuthorization.contextType is invalid');
-  requireBoundedString(value.contextId, 'sideEffectAuthorization.contextId', 1, 128);
+  if (!raw) fail('sideEffectAuthorization is required for effect-bearing steps');
+  const value = raw;
   if (value.contextType === 'run' && correlation?.runId !== value.contextId) {
     fail('sideEffectAuthorization context does not match correlation.runId');
   }
-  if (!['local', 'test', 'staging', 'production'].includes(value.environment))
-    fail('sideEffectAuthorization.environment is invalid');
-  requireBoundedString(value.policyVersion, 'sideEffectAuthorization.policyVersion', 1, 128);
-  requireBoundedString(
-    value.policyEvaluationId,
-    'sideEffectAuthorization.policyEvaluationId',
-    1,
-    128
-  );
-  if (!['auto_allowed', 'approval_required'].includes(value.policyResult))
-    fail('sideEffectAuthorization.policyResult is invalid');
-  if (!/^[a-f0-9]{64}$/i.test(value.projectionSha256))
-    fail('sideEffectAuthorization.projectionSha256 must be SHA-256');
-  if (!Array.isArray(value.effects) || value.effects.length !== effectSteps.length)
+  if (value.effects.length !== effectSteps.length)
     fail('sideEffectAuthorization.effects must exactly cover authorized effect steps');
   const byStep = new Map<string, (typeof value.effects)[number]>();
   for (const effect of value.effects) {
-    const record = requireObject(
-      effect,
-      'sideEffectAuthorization effect'
-    ) as unknown as (typeof value.effects)[number];
-    assertAllowedKeys(
-      record as unknown as Record<string, unknown>,
-      ['stepId', 'effectId', 'kind', 'maxAffectedItems', 'reversibility', 'usesFileUpload'],
-      'sideEffectAuthorization effect'
-    );
+    const record = effect;
     if (byStep.has(record.stepId)) fail(`Duplicate side-effect authorization for ${record.stepId}`);
-    if (!['create', 'update', 'delete', 'auth_change'].includes(record.kind))
-      fail(`Side-effect kind for ${record.stepId} is invalid`);
-    if (!['reversible', 'compensatable', 'irreversible'].includes(record.reversibility))
-      fail(`Side-effect reversibility for ${record.stepId} is invalid`);
-    requireIntegerRange(
-      record.maxAffectedItems,
-      `Side-effect ${record.stepId}.maxAffectedItems`,
-      1,
-      1_000
-    );
+    if (record.maxAffectedItems > 1_000)
+      fail(`Side-effect ${record.stepId}.maxAffectedItems must be at most 1000`);
     byStep.set(record.stepId, record);
   }
   for (const step of effectSteps) {
@@ -244,16 +171,8 @@ function validateSideEffectAuthorization(
       effect.usesFileUpload === true
   );
   if (value.environment === 'staging' && highRisk) {
-    const grant = requireObject(
-      value.grant,
-      'sideEffectAuthorization.grant'
-    ) as unknown as NonNullable<typeof value.grant>;
-    assertAllowedKeys(
-      grant as unknown as Record<string, unknown>,
-      ['grantId', 'status', 'approvedProjectionSha256'],
-      'sideEffectAuthorization.grant'
-    );
-    if (grant.status !== 'active' || grant.approvedProjectionSha256 !== value.projectionSha256)
+    const grant = value.grant;
+    if (!grant || grant.approvedProjectionSha256 !== value.projectionSha256)
       fail('Staging high-risk grant is inactive or stale');
   } else if (value.policyResult !== 'auto_allowed') {
     fail('Non-high-risk task requires an auto_allowed policy evaluation');
@@ -319,11 +238,10 @@ export function validateResponseValue(
 }
 
 export function validateBoundedObjectSchema(value: unknown): Record<string, unknown> {
-  return validateResponseSchema(structuredClone(value));
+  return validateResponseSchema(structuredClone(requireObject(value, 'responseSchema')));
 }
 
-function validateResponseSchema(value: unknown): Record<string, unknown> {
-  const schema = requireObject(value, 'responseSchema');
+function validateResponseSchema(schema: Record<string, unknown>): Record<string, unknown> {
   if (Buffer.byteLength(JSON.stringify(schema), 'utf8') > AGENT_TASK_LIMITS.responseSchemaBytes) {
     fail('responseSchema exceeds the size limit');
   }
@@ -396,175 +314,52 @@ function validateSchemaNode(schema: Record<string, unknown>, path: string, depth
   }
 }
 
-function validateBudgets(value: unknown): void {
-  const budgets = requireObject(value, 'budgets');
-  assertAllowedKeys(
-    budgets,
-    ['maxDurationMs', 'maxModelTurns', 'maxToolCalls', 'maxTokens'],
-    'budgets'
-  );
-  requireIntegerRange(
-    budgets.maxDurationMs,
-    'budgets.maxDurationMs',
-    1_000,
-    AGENT_TASK_LIMITS.maxDurationMs
-  );
-  requireIntegerRange(
-    budgets.maxModelTurns,
-    'budgets.maxModelTurns',
-    1,
-    AGENT_TASK_LIMITS.maxModelTurns
-  );
-  requireIntegerRange(
-    budgets.maxToolCalls,
-    'budgets.maxToolCalls',
-    0,
-    AGENT_TASK_LIMITS.maxToolCalls
-  );
-  if (budgets.maxTokens !== undefined)
-    requireIntegerRange(budgets.maxTokens, 'budgets.maxTokens', 1, AGENT_TASK_LIMITS.maxTokens);
+function validateBudgets(budgets: CreateAgentTaskRequest['budgets']): void {
+  for (const [key, min] of [
+    ['maxDurationMs', 1_000],
+    ['maxModelTurns', 1],
+    ['maxToolCalls', 0],
+    ['maxTokens', 1],
+  ] as const) {
+    const value = budgets[key];
+    if (value !== undefined && (value < min || value > AGENT_TASK_LIMITS[key]))
+      fail(`budgets.${key} must be an integer between ${min} and ${AGENT_TASK_LIMITS[key]}`);
+  }
 }
 
-function validateSkillPolicy(value: unknown): CreateAgentTaskRequest['skillPolicy']['allow'] {
-  const policy = requireObject(value, 'skillPolicy');
-  assertAllowedKeys(policy, ['allow'], 'skillPolicy');
-  if (!Array.isArray(policy.allow)) fail('skillPolicy.allow must be an array');
-  if (policy.allow.length > AGENT_TASK_LIMITS.maxSkillsPerTask) {
+function validateSkillPolicy(
+  policy: CreateAgentTaskRequest['skillPolicy']
+): CreateAgentTaskRequest['skillPolicy']['allow'] {
+  if (policy.allow.length > AGENT_TASK_LIMITS.maxSkillsPerTask)
     fail(`skillPolicy.allow supports at most ${AGENT_TASK_LIMITS.maxSkillsPerTask} Skill`);
-  }
-  const pins = policy.allow.map((rawPin, index) => {
-    const pin = requireObject(rawPin, `skillPolicy.allow[${index}]`);
-    assertAllowedKeys(pin, ['skillId', 'version', 'contentHash'], `skillPolicy.allow[${index}]`);
-    const skillId = requireBoundedString(
-      pin.skillId,
-      `skillPolicy.allow[${index}].skillId`,
-      1,
-      128
-    );
-    if (!/^[a-z0-9][a-z0-9._-]*$/.test(skillId))
-      fail(`skillPolicy.allow[${index}].skillId is invalid`);
-    const version = requireBoundedString(
-      pin.version,
-      `skillPolicy.allow[${index}].version`,
-      1,
-      100
-    );
-    if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) {
-      fail(`skillPolicy.allow[${index}].version must use semantic versioning`);
-    }
-    const contentHash = requireBoundedString(
-      pin.contentHash,
-      `skillPolicy.allow[${index}].contentHash`,
-      64,
-      64
-    );
-    if (!/^[a-f0-9]{64}$/.test(contentHash)) {
-      fail(`skillPolicy.allow[${index}].contentHash must be lowercase SHA-256`);
-    }
-    return { skillId, version, contentHash };
-  });
-  if (new Set(pins.map((pin) => pin.skillId)).size !== pins.length) {
+  if (new Set(policy.allow.map((pin) => pin.skillId)).size !== policy.allow.length)
     fail('skillPolicy.allow must not contain duplicate Skill ids');
-  }
-  return pins;
-}
-
-function validateCorrelation(value: unknown): void {
-  if (value === undefined) return;
-  const correlation = requireObject(value, 'correlation');
-  if (Object.keys(correlation).length > 20) fail('correlation contains too many entries');
-  for (const [key, entry] of Object.entries(correlation)) {
-    requireBoundedString(key, 'correlation key', 1, 64);
-    requireBoundedString(entry, `correlation.${key}`, 1, 256);
-  }
-}
-
-function validateBrowserBinding(value: unknown): CreateAgentTaskRequest['browserBinding'] {
-  if (value === undefined) return undefined;
-  const binding = requireObject(value, 'browserBinding');
-  assertAllowedKeys(
-    binding,
-    [
-      'browserSessionId',
-      'tabId',
-      'browserLeaseId',
-      'browserLeaseToken',
-      'browserLeaseSequence',
-      'access',
-    ],
-    'browserBinding'
-  );
-  const access = binding.access;
-  if (access !== 'observe' && access !== 'control') fail('browserBinding.access is invalid');
-  return {
-    browserSessionId: requireBoundedString(
-      binding.browserSessionId,
-      'browserBinding.browserSessionId',
-      1,
-      128
-    ),
-    tabId: requireBoundedString(binding.tabId, 'browserBinding.tabId', 1, 128),
-    browserLeaseId: requireBoundedString(
-      binding.browserLeaseId,
-      'browserBinding.browserLeaseId',
-      1,
-      128
-    ),
-    browserLeaseToken: requireBoundedString(
-      binding.browserLeaseToken,
-      'browserBinding.browserLeaseToken',
-      1,
-      4096
-    ),
-    browserLeaseSequence: requireIntegerRange(
-      binding.browserLeaseSequence,
-      'browserBinding.browserLeaseSequence',
-      1,
-      Number.MAX_SAFE_INTEGER
-    ),
-    access,
-  };
+  return policy.allow;
 }
 
 function validateBrowserSteps(
-  rawConstraints: unknown,
+  rawConstraints: CreateAgentTaskRequest['toolPolicy']['constraints'],
   allow: readonly string[],
   access: 'observe' | 'control' | undefined
 ): ReadonlyMap<string, AgentTaskBrowserStep> {
   const executeAllowed = allow.includes(CONTROLLED_EXECUTE_TOOL);
   if (!executeAllowed) {
-    if (
-      rawConstraints !== undefined &&
-      Object.keys(requireObject(rawConstraints, 'toolPolicy.constraints')).length > 0
-    ) {
+    if (rawConstraints !== undefined && Object.keys(rawConstraints).length > 0) {
       fail('Tool constraints are only implemented for browser-control.operation_execute');
     }
     return new Map();
   }
   if (!access) fail('browserBinding is required when operation_execute is allowed');
-  const constraints = requireObject(rawConstraints, 'toolPolicy.constraints');
-  assertAllowedKeys(constraints, [CONTROLLED_EXECUTE_TOOL], 'toolPolicy.constraints');
-  const executeConstraints = requireObject(
-    constraints[CONTROLLED_EXECUTE_TOOL],
-    `${CONTROLLED_EXECUTE_TOOL} constraints`
-  );
-  assertAllowedKeys(executeConstraints, ['steps'], `${CONTROLLED_EXECUTE_TOOL} constraints`);
+  const executeConstraints = rawConstraints?.[CONTROLLED_EXECUTE_TOOL];
   if (
-    !Array.isArray(executeConstraints.steps) ||
+    !executeConstraints ||
     executeConstraints.steps.length === 0 ||
     executeConstraints.steps.length > AGENT_TASK_LIMITS.maxBrowserSteps
   ) {
     fail(`Browser steps must contain between 1 and ${AGENT_TASK_LIMITS.maxBrowserSteps} entries`);
   }
   const result = new Map<string, AgentTaskBrowserStep>();
-  for (const [index, rawStep] of executeConstraints.steps.entries()) {
-    const step = requireObject(rawStep, `Browser step ${index}`) as unknown as AgentTaskBrowserStep;
-    assertAllowedKeys(
-      step as unknown as Record<string, unknown>,
-      ['stepId', 'kind', 'operation', 'target', 'args', 'effectId', 'maxAffectedItems', 'capture'],
-      `Browser step ${index}`
-    );
-    requireBoundedString(step.stepId, `Browser step ${index}.stepId`, 1, 128);
+  for (const step of executeConstraints.steps) {
     if (result.has(step.stepId)) fail(`Duplicate browser stepId: ${step.stepId}`);
     const operations =
       step.kind === 'observe'
@@ -576,33 +371,13 @@ function validateBrowserSteps(
       fail(`Browser step ${step.stepId} kind and operation do not match`);
     if (access === 'observe' && step.kind === 'act')
       fail(`Observe binding cannot authorize act step ${step.stepId}`);
-    if (step.target !== undefined) requireObject(step.target, `Browser step ${step.stepId}.target`);
-    if (step.args !== undefined) requireObject(step.args, `Browser step ${step.stepId}.args`);
-    if (step.effectId !== undefined)
-      requireBoundedString(step.effectId, `Browser step ${step.stepId}.effectId`, 1, 128);
-    if (step.maxAffectedItems !== undefined)
-      requireIntegerRange(
-        step.maxAffectedItems,
-        `Browser step ${step.stepId}.maxAffectedItems`,
-        1,
-        1
-      );
-    if (step.capture !== undefined) validateCapture(step.capture, step.stepId);
+    if (step.maxAffectedItems !== undefined && step.maxAffectedItems > 1)
+      fail(`Browser step ${step.stepId}.maxAffectedItems must be an integer between 1 and 1`);
+    if (step.capture?.videoSegment === true)
+      fail('Browser operation video capture is not available');
     result.set(step.stepId, step);
   }
   return result;
-}
-
-function validateCapture(value: unknown, stepId: string): void {
-  const capture = requireObject(value, `Browser step ${stepId}.capture`);
-  assertAllowedKeys(
-    capture,
-    ['beforeScreenshot', 'afterScreenshot', 'domSnapshot', 'videoSegment'],
-    `Browser step ${stepId}.capture`
-  );
-  if (Object.values(capture).some((entry) => typeof entry !== 'boolean'))
-    fail(`Browser step ${stepId}.capture values must be boolean`);
-  if (capture.videoSegment === true) fail('Browser operation video capture is not available');
 }
 
 function validateNoInlineSecrets(value: unknown, path: string, depth = 0): void {
@@ -628,25 +403,10 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-function assertAllowedKeys(
-  value: Record<string, unknown>,
-  allowed: readonly string[],
-  label: string
-): void {
-  const unknown = Object.keys(value).filter((key) => !allowed.includes(key));
-  if (unknown.length) fail(`${label} contains unknown fields`, { unknownFields: unknown });
-}
-
 function requireBoundedString(value: unknown, label: string, min: number, max: number): string {
   if (typeof value !== 'string' || value.length < min || value.length > max)
     fail(`${label} must be a string between ${min} and ${max} characters`);
   return value;
-}
-
-function requireIntegerRange(value: unknown, label: string, min: number, max: number): number {
-  if (!Number.isSafeInteger(value) || (value as number) < min || (value as number) > max)
-    fail(`${label} must be an integer between ${min} and ${max}`);
-  return value as number;
 }
 
 function validateRange(value: number, rawMin: unknown, rawMax: unknown, label: string): void {
