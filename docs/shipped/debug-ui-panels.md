@@ -17,4 +17,5 @@ debug-ui 的监控工作台：Monitor（监控）、Control（控制）、AI（�
 - [shipped] 冷启动性能基线固定于 [`docs/performance/ui-performance-baseline.md`](../performance/ui-performance-baseline.md)：Fast 3G + CPU 4× 条件下，LiveKit 按需加载后首屏 LCP 为 3,133 ms、JS/CSS 传输为 172,078 B，且控制交互 EventTiming 保持 184 ms。
 - [pending] History / Interactions 活动视图未实现（UI 不可达）；[shipped] DOM Elements 与配置为 DebugPage 右面板标签，已随监控工作台交付。
 - [shipped] 验收面：单元测试 + parity 测试（`picker-liveview-integration.parity.test.tsx` 等）。
+- [shipped] Debug UI E2E runner 与 AI 子 launcher 共用 `tools/e2e-process-lifecycle.mjs`：每轮在仓库 `.tmp` 创建唯一 runroot，proxy 使用该 cwd 与绝对构建入口，AI 配置/数据在子目录，Playwright 报告与产物归本轮目录。UI/AI launcher 的包 cwd 明确；正常、启动失败、非零退出与 SIGINT/SIGTERM 均登记并精确停止自有 PID 树、等待退出后删除本轮目录（失败产物也随目录清理），不接触默认数据与开发服务。Node 内置回归通过根 `test:launchers`/`test` 验证生命周期、重复清理与 junction 边界。
 - [shipped] `pnpm --filter debug-ui test:coverage` 统计 UI 生产源码并设置防回退阈值；测试 setup 固定结构测试使用 MJPEG、模拟 Canvas context，组件网络调用由用例显式 stub，避免 LiveKit、jsdom Canvas 和真实网络噪声。
