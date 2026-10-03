@@ -17,10 +17,7 @@ import type {
 } from '@nebula-link-evo/shared/types/agent-task';
 
 import type { SemanticWorkspaceV1 } from '../contracts/semantic-control.js';
-import {
-  buildSemanticBrowserSteps,
-  semanticExecutionResultSchema,
-} from './semantic-task-projection.js';
+import { semanticExecutionResultSchema } from './semantic-task-projection.js';
 
 const AMENDMENT_CATEGORIES = new Set<AmendmentCategory>([
   'requirement',
@@ -61,6 +58,10 @@ export class SemanticAuthoringCandidateService {
     private readonly assets: SemanticAssetRepository,
     private readonly amendments: AuthoringAmendmentRepository
   ) {}
+
+  failVerification(amendmentId: string, failure: Record<string, unknown>): void {
+    this.amendments.fail(amendmentId, failure);
+  }
 
   buildAgentRequest(
     task: CoordinatorAuthoringTask
@@ -513,27 +514,13 @@ export class SemanticAuthoringCandidateService {
     if (!amendment || amendment.jobId !== task.jobId || amendment.state !== 'verifying') {
       throw new Error('Authoring amendment is not verifying');
     }
-    const workspace = this.requireWorkspace(task.businessVersionId);
-    const candidates = amendment.changes.map((change) => {
-      const assetType = requiredString(change.assetType, 'change.assetType') as SemanticAssetType;
-      const assetId = requiredString(change.assetId, 'change.assetId');
-      const revisionId = requiredString(change.candidateRevisionId, 'change.candidateRevisionId');
-      const revision = this.queries.getRevision(assetType, assetId, revisionId);
-      if (!revision) throw new Error('候选 revision 不存在');
-      return { assetType, assetId, revisionId, payload: revision.payload };
-    });
-    const steps = buildVerificationSteps(candidates, workspace);
+    const { candidates, steps } = this.amendments.policy.buildAuthoringPlan(amendmentId);
     const toolPolicy = {
       allow: ['browser-control.operation_execute'],
       constraints: { 'browser-control.operation_execute': { steps } },
     };
-    const sideEffectAuthorization = this.buildAuthoringSideEffectAuthorization(
-      task,
-      amendment,
-      candidates,
-      workspace,
-      steps
-    );
+    const sideEffectAuthorization =
+      this.amendments.policy.requireAuthoringAuthorization(amendmentId);
     return {
       schema: 'nebula.ai.agent-task/1.0',
       clientTaskId: `authoring-verification:${task.taskId}`,
@@ -566,111 +553,6 @@ export class SemanticAuthoringCandidateService {
         amendmentId,
         businessVersionId: task.businessVersionId,
       },
-    };
-  }
-
-  private buildAuthoringSideEffectAuthorization(
-    task: CoordinatorAuthoringTask,
-    amendment: AmendmentRecord,
-    candidates: VerificationCandidate[],
-    workspace: SemanticWorkspaceV1,
-    steps: AgentTaskBrowserStep[]
-  ): NonNullable<CreateAgentTaskRequest['sideEffectAuthorization']> | undefined {
-    const effectSteps = steps.filter((step) => step.effectId);
-    if (effectSteps.length === 0) return undefined;
-    const deployment = this.queries.getDefaultDeployment(task.businessVersionId);
-    if (!deployment) throw new Error('Authoring 副作用验证缺少默认部署修订');
-    const candidateScriptIds = new Set(
-      candidates
-        .filter((candidate) => candidate.assetType === 'functional_script')
-        .map((candidate) => candidate.assetId)
-    );
-    const scriptPayloads = [
-      ...candidates
-        .filter((candidate) => candidate.assetType === 'functional_script')
-        .map((candidate) => candidate.payload),
-      ...workspace.functionalScripts
-        .filter((script) => !candidateScriptIds.has(script.id))
-        .map((script) => script.currentRevision.payload),
-    ];
-    const declarations = scriptPayloads.flatMap((payload) =>
-      Array.isArray(payload.sideEffects) ? payload.sideEffects.filter(isObject) : []
-    );
-    const declarationsById = new Map<string, Record<string, unknown>>();
-    for (const declaration of declarations) {
-      const effectId = stringValue(declaration.id);
-      if (!effectId) continue;
-      const previous = declarationsById.get(effectId);
-      if (previous && hashValue(previous) !== hashValue(declaration)) {
-        throw new Error(`Authoring 副作用 '${effectId}' 存在冲突声明`);
-      }
-      declarationsById.set(effectId, declaration);
-    }
-    const effects = effectSteps.map((step) => {
-      const declaration = declarationsById.get(String(step.effectId));
-      if (!declaration) throw new Error(`Authoring 副作用 '${step.effectId}' 缺少候选声明`);
-      const kind = stringValue(declaration.kind);
-      const reversibility = stringValue(declaration.reversibility);
-      if (!kind || !['create', 'update', 'delete', 'auth_change'].includes(kind)) {
-        throw new Error(`Authoring 副作用 '${step.effectId}' kind 无效`);
-      }
-      if (
-        !reversibility ||
-        !['reversible', 'compensatable', 'irreversible'].includes(reversibility)
-      ) {
-        throw new Error(`Authoring 副作用 '${step.effectId}' reversibility 无效`);
-      }
-      return {
-        stepId: step.stepId,
-        effectId: String(step.effectId),
-        kind: kind as 'create' | 'update' | 'delete' | 'auth_change',
-        maxAffectedItems: step.maxAffectedItems ?? 1,
-        reversibility: reversibility as 'reversible' | 'compensatable' | 'irreversible',
-        ...(step.operation === 'set_files' ? { usesFileUpload: true } : {}),
-      };
-    });
-    const projectionSha256 = hashValue({
-      contextType: 'authoring',
-      contextId: task.jobId,
-      deploymentRevisionId: deployment.revisionId,
-      environment: deployment.environment,
-      effects,
-    });
-    if (
-      deployment.environment === 'production' &&
-      effects.some((effect) => effect.kind !== 'auth_change')
-    ) {
-      throw new Error('production 环境禁止 Authoring 候选执行业务写操作');
-    }
-    const highRisk = effects.some(
-      (effect) =>
-        effect.kind === 'delete' ||
-        effect.maxAffectedItems > 1 ||
-        effect.reversibility === 'irreversible' ||
-        effect.usesFileUpload === true
-    );
-    const needsApproval = deployment.environment === 'staging' && highRisk;
-    if (needsApproval && amendment.decisions.some((decision) => decision.state !== 'approved')) {
-      throw new Error('staging Authoring 副作用尚未全部审批');
-    }
-    return {
-      contextType: 'authoring',
-      contextId: task.jobId,
-      environment: deployment.environment,
-      policyVersion: 'semantic-authoring-side-effects/1.0',
-      policyEvaluationId: stableUuid(task.jobId, 'authoring-policy', projectionSha256),
-      policyResult: needsApproval ? 'approval_required' : 'auto_allowed',
-      projectionSha256,
-      effects,
-      ...(needsApproval
-        ? {
-            grant: {
-              grantId: stableUuid(amendment.id, 'authoring-side-effect-grant'),
-              status: 'active' as const,
-              approvedProjectionSha256: projectionSha256,
-            },
-          }
-        : {}),
     };
   }
 
@@ -766,13 +648,6 @@ interface ValidatedProposal {
   targetPageDefinitionId: string;
   targetFunctionalModuleId?: string;
   identity?: CreateSemanticAssetIdentityParams;
-}
-
-interface VerificationCandidate {
-  assetType: SemanticAssetType;
-  assetId: string;
-  revisionId: string;
-  payload: Record<string, unknown>;
 }
 
 function resolveContext(
@@ -1021,58 +896,6 @@ function compactWorkspace(
 
 function isVerificationTask(task: CoordinatorAuthoringTask): boolean {
   return task.targetType === 'authoring_amendment' && typeof task.input.amendmentId === 'string';
-}
-
-function buildVerificationSteps(
-  candidates: VerificationCandidate[],
-  workspace: SemanticWorkspaceV1
-): AgentTaskBrowserStep[] {
-  const candidateScripts = new Map(
-    candidates
-      .filter((candidate) => candidate.assetType === 'functional_script')
-      .map((candidate) => [candidate.assetId, candidate.payload] as const)
-  );
-  const scripts: Array<{ key: string; payload: Record<string, unknown> }> = candidates
-    .filter((candidate) => candidate.assetType === 'functional_script')
-    .map((candidate) => ({ key: candidate.assetId, payload: candidate.payload }));
-  const scheduledScriptIds = new Set(candidateScripts.keys());
-  for (const scenario of candidates.filter(
-    (candidate) => candidate.assetType === 'test_scenario'
-  )) {
-    const calls = Array.isArray(scenario.payload.calls) ? scenario.payload.calls : [];
-    for (const [index, call] of calls.entries()) {
-      if (!isObject(call)) continue;
-      const scriptId = stringValue(call.functionalScriptId);
-      if (!scriptId) continue;
-      if (scheduledScriptIds.has(scriptId)) continue;
-      const payload =
-        candidateScripts.get(scriptId) ??
-        workspace.functionalScripts.find((script) => script.id === scriptId)?.currentRevision
-          .payload;
-      if (payload) {
-        scripts.push({ key: `${scenario.assetId}-${index + 1}-${scriptId}`, payload });
-        scheduledScriptIds.add(scriptId);
-      }
-    }
-  }
-  if (scripts.length === 0) {
-    return [
-      {
-        stepId: 'verify-current-page',
-        kind: 'observe',
-        operation: 'page_state',
-        capture: { domSnapshot: true, afterScreenshot: true },
-      },
-    ];
-  }
-  const steps = scripts.flatMap((script, scriptIndex) =>
-    buildSemanticBrowserSteps(script.payload).map((step, stepIndex) => ({
-      ...step,
-      stepId: `verify-${scriptIndex + 1}-${stepIndex + 1}-${step.stepId}`.slice(0, 120),
-    }))
-  );
-  if (steps.length > 100) throw new Error('候选验证展开后超过 Agent task 的 100 步上限');
-  return steps;
 }
 
 function changedFields(before: Record<string, unknown>, after: Record<string, unknown>): string[] {

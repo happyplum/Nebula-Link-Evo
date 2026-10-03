@@ -1,7 +1,7 @@
 # AI E2E 环境与副作用策略契约
 
-> 状态：`in-progress`。正式 Run 已交付确定性风险投影、policy evaluation、staging 审批/active grant、production 业务写拒绝及逐 effectId/数量/grant 跨服务门禁；Authoring 全流程统一投影与撤销传播仍未完成。
-> 更新时间：2026-08-12。
+> 状态：`in-progress`。Run/Authoring 已共用纯策略 evaluator 与唯一 policy repository，交付精确冻结、持久审批/grant、派发与恢复重验及终态失效；跨上下文复用、公共撤销 API、集合/上传执行与完整 repair 编排仍 pending。
+> 更新时间：2026-10-03。
 > 本文定义 semantic v1 正式运行与 authoring verification 的环境风险矩阵、副作用投影、计划级审批和跨服务执行门禁。它不授权旧 TypeScript 执行链或人工调试工具访问生产数据。逐调用执行门禁已贯通：ai-chat-service 预授权步骤包装在每次 dispatch 前校验 policy evaluation、风险投影 hash、active grant 与参数级数量交集并持久化操作记录（见 `service-api-event-contract.md` §4.1）。
 
 ## 1. 目标与边界
@@ -14,7 +14,7 @@
 - 审批只授权一个精确 run 或 authoring job 的安全相关计划投影，不是版本、账号或环境的永久通行证。
 - 浏览器仍按原子操作推进、保留幂等与 `outcome_unknown` 检查；审批不能替代断言、副作用验证或重试约束。
 
-本策略约束 `semantic_v1` 的 formal run、bootstrap/recheck/repair 中的真实浏览器验证及其嵌套 run。
+本策略约束 `semantic_v1` 的 formal run、bootstrap/recheck/repair 中的真实浏览器验证；嵌套 verification run 的完整编排仍为目标。
 
 ## 2. 副作用与风险投影
 
@@ -41,49 +41,15 @@
 
 ### 2.2 计划级风险投影
 
-运行计划冻结后，`ai-e2e` 从精确脚本修订、展开 TODO、重复次数、输入约束、actor 和计划修订确定性生成 `SideEffectRiskProjectionV1`：
+Run 与 Authoring 复用 `src/policy/side-effect-policy.ts` 的纯 evaluator；上下文各自按实际执行计划构建投影：
 
-```ts
-interface SideEffectRiskProjectionV1 {
-  schema: 'nebula.ai-e2e.side-effect-risk-projection/1.0';
-  contextType: 'run' | 'authoring';
-  contextId: string;
-  businessVersionId: string;
-  deploymentRevisionId: string;
-  environment: 'local' | 'test' | 'staging' | 'production';
-  policyVersion: 'side-effect-policy/1.0';
-  effects: PlannedSideEffectV1[];
-  containsFileUpload: boolean;
-  projectionSha256: string;
-}
+- Run 从冻结脚本修订与展开调用生成 effect，`affectedItems.single` 为 1，其他声明使用有限 `maxItems`，再乘固定 scenario repeat。每个 effect 保留 callKey、scriptRevisionId、stepId、effectId、kind、resourceType、maxAffectedItems、reversibility、usesFileUpload。
+- Authoring 在 candidate 创建时冻结当前 amendment、candidate revision、实际验证 steps 与 deployment 的 hash。候选脚本与候选 scenario 引用的脚本按 script ID 去重，各执行一次，不展开 scenario repeat；声明只与实际脚本关联，不读取无关 workspace effect。
+- 投影按规范 JSON 计算 hash；持久投影仅含脱敏风险字段和身份/hash，实际步骤参数仅参与 source plan hash，不复制 secret 或敏感原始参数到风险投影。
 
-interface PlannedSideEffectV1 {
-  todoKey: string;
-  scriptRevisionId: string;
-  stepId: string;
-  effectId: string;
-  kind: 'create' | 'update' | 'delete' | 'auth_change';
-  resourceType: string;
-  actorKey?: string;
-  maxAffectedItems: number;
-  reversibility: 'reversible' | 'compensatable' | 'irreversible';
-  usesFileUpload: boolean;
-}
-```
+高风险为任一 effect 的 `delete`、`maxAffectedItems > 1`、`irreversible` 或 `usesFileUpload=true`。缺声明、数量非正整数或无有限上限时 fail closed。当前没有按相同资源汇总多个不同 effect 的全局聚合规则；该聚合属于 pending 目标。
 
-投影按规范 JSON 计算 hash，不包含 secret 值、真实密码、Token、完整上传内容或敏感资源标识。重复/`for_each` 展开后按最坏有界数量聚合；`maxAffectedItems > 1`、集合型动作或同一计划对同类资源执行多个写入时均视为批量。数量无法给出有限上限时，所有环境都拒绝计划。
-
-高风险副作用是任一：
-
-- `delete`；
-- 批量写入；
-- `irreversible`；
-- `set_files`/文件上传；
-- 计划或证据无法确认精确资源范围的写入。
-
-最后一类不能仅靠审批放行：范围无法收敛时是无效计划；只有范围已经收敛、但因删除/批量/不可逆/上传而高风险时才进入 staging 审批。
-
-> 当前实现注记：`hasHighRisk` 已纳入文件上传维度（`usesFileUpload`，含 ai-chat-service wrapper 与 authoring 候选投影镜像）；`set_files` 本身仍因 proxy capability 未声明而在投影层 fail closed，上传步骤当前无法实际执行。
+`set_files` 与非 `single` 的 affectedItems 仍由 browser step builder 拒绝，当前不能实际执行上传或集合动作。纯 evaluator 的矩阵可评估上传风险和有界数量，这不代表执行能力已经开放。`runWhen`、`repeat.for_each` 同样未开放。
 
 ## 3. v1 环境矩阵
 
@@ -105,13 +71,9 @@ interface PlannedSideEffectV1 {
 
 ### 4.1 审批对象
 
-当 staging 投影含高风险副作用时，系统在任何控制租约或写操作发出前创建一个 `category=side_effect_approval` 的用户决策请求。审批界面至少展示：
+当 staging 投影含高风险副作用时，系统在任何控制租约或写操作发出前创建一个 `category=side_effect_approval` 的用户决策请求。当前 Authoring 既有审批界面展示：环境、deployment revision、policy version、candidate revision、逐 effect 的 kind/resourceType/数量上限/可逆性/上传标记/stepId，以及 source plan/projection SHA-256。Run 继续展示其既有 decision 与脱敏 impact。
 
-- 业务版本、场景或 authoring job、精确 deployment/Git/build、actor 和策略版本。
-- 按资源类型聚合的 create/update/delete 数量上限。
-- 删除、不可逆、补偿能力、文件上传和清理脚本摘要。
-- 精确受影响 TODO/脚本/步骤以及拒绝后的结果。
-- 脱敏证据与 `projectionSha256`。
+按资源跨 effects 聚合的数量、完整 Git/build/actor/清理脚本与证据摘要是待交付展示目标；当前不据此宣称全局聚合或额外执行能力。
 
 用户批准后生成 `SideEffectApprovalGrantV1`：
 
@@ -133,20 +95,24 @@ interface SideEffectApprovalGrantV1 {
 }
 ```
 
-grant 只对当前 run 或 authoring job 有效，不能复制到业务版本、复用于下一次运行、跨 deployment 使用或作为长期版本决定。上下文终态、用户撤销、deployment/policy 改变或安全相关投影扩大时立即失效。服务重启后从持久 grant 恢复，不要求重复点击审批。
+grant 只对当前 run 或 authoring job 有效，不能复制到业务版本、复用于下一次运行、跨 deployment 使用或作为长期版本决定。上下文终态、grant 非 active、deployment/policy、source plan 或投影变化时拒绝执行并失效。Authoring grant 精确绑定 amendment/candidate，不能借 scope approval 或同 job 的其他 candidate 授权。服务重启后从持久 grant 恢复，不要求重复点击审批。
 
-> 当前实现注记：grant 状态转换已交付——run 到达终态（completed/cancelled）按 `context_terminated` 过期，decision 拒绝按 `decision_rejected` 过期；`start/resume` 命令已重查 policy evaluation 投影 hash 与 active grant，漂移或 grant 非 active 时按 `projection_stale` 过期、转入 `paused(approval_required)` 并创建新一轮审批 decision（命令记 rejected + `side_effect_approval_stale/revoked`）。`revoked` 枚举值预留（当前无用户撤销 API）。
+> 当前实现：`SemanticPolicyRepository` 唯一持有 evaluation/grant 的创建、查询与失效 SQL，复用 migration 017，无 schema 变化。业务生命周期 owner 在同一事务使终态 grant 过期；policy 调用显式复用调用方事务，不开启嵌套 BEGIN，也不在 SQLite 事务内等待网络。没有公共 revoke API 或 TTL；持久 `revoked/expired` 均不能执行。重启恢复同一精确 grant；同 hash 重新批准创建独立 decision/answer/grant，保留 immutable evaluation 与旧 audit，重复旧 answer 不复活失效 grant。
 
 ### 4.2 计划修订与重新审批
 
-每次 base plan 或 amendment 变化都重新计算风险投影：
+当前授权要求 exact context、business version、deployment、source plan、projection 与 policy version 全部一致：
 
-- 只改变 locator、等待、证据采集或其他不影响副作用的字段，`projectionSha256` 不变，可继续使用原 grant。
-- 删除已批准高风险步骤或缩小数量可以继续使用原 grant，但投影和审计必须显示实际子集。
-- 新增副作用、扩大数量/资源/actor、增加上传、从可补偿变为不可逆或改变 deployment/policy 时，原 grant 变为 `expired`，运行在安全边界暂停并重新请求一次计划级审批。
-- 用户拒绝审批时，不派发任何未开始的浏览器写操作；formal run 取消并记录终止原因 code `decision_rejected`，authoring job 取消或以未验证结果结束。已经发生的副作用不自动回滚。
+- locator、等待、证据步骤、数量缩小或删除步骤也可能改变 source plan；不复用旧候选 grant，不以投影子集或“任意已批准 decision”替代精确绑定。
+- 范围扩展批准仅授权 scope，不代表副作用批准；两个 category 在既有 amendment decision API 与 UI 中分别展示/回答。
+- Run grant 失效时暂停并创建新一轮精确审批；漂移到不同冻结身份的计划不能批准旧 decision。Authoring 调度/派发失效封存明确 failure，新的 candidate 使用独立冻结审批。
+- 用户拒绝可以关闭已经漂移的旧审批；拒绝或取消不受执行授权检查阻拦，已发生副作用不自动回滚。
+- Authoring 候选拒绝、失败（含硬策略 deny）、stale 或激活时，在生命周期事务内将该候选所有仍为 `open` 的决策置为 `withdrawn` 并递增 state version；保留已回答/已应用决策与 answer 审计，不关闭其他候选的审批。上下文切换逐候选收束，base revision 漂移的 stale 与 grant 失效同事务提交。
+- 旧 amendment 的迟到校验只失效对应 evaluation/grant，不撤销新 amendment 的有效授权。
 
-审批不是逐步骤确认。grant 有效期间，投影内各步骤按正常串行执行；每次派发仍校验当前 TODO、effectId、数量边界和 grant 状态。
+授权在 queue、verification scheduling、start/resume、lease 与 Agent dispatch 前重新验证；重启后的 create/resume outbox 同样重验持久 task 绑定。pause/cancel/revoke/close 清理继续执行。lease 已返回后任何重验异常均先持久化本次撤销意图并回收 token；撤销失败保留 secret 与 retryable outbox 供恢复。未派发 Agent 的已开始 attempt 由原工作流 owner 收束，不能留下永久 running 任务。
+
+跨 locator/缩小计划复用及跨 context 父 Run grant 继承均仍 pending，当前不授权这些目标。
 
 ## 5. 运行与 authoring 行为
 
@@ -157,16 +123,16 @@ grant 只对当前 run 或 authoring job 有效，不能复制到业务版本、
 3. 无效/production 禁止计划写入 denied evaluation，将 run 封存为 `cancelled(side_effect_policy_denied)`，不申请 browser job/control；该结果是策略拒绝，不是业务测试失败。
 4. staging 高风险计划进入 `paused(approval_required)`；批准后转 `ready`，拒绝后取消。
 5. local/test 或 staging 低风险计划直接转 `ready`。
-6. 每次 amendment 与写步骤派发前重新评估；grant 不匹配时停止在安全边界。
+6. start/resume、TODO/lease/Agent 派发及 outbox 重放前核对精确 evaluation/grant；不匹配时停止在安全边界。
 
-计划级审批发生在 TODO 执行前，不把某个 TODO 伪装成业务失败。中途新增高风险 amendment 时，受影响 TODO 使用 `waiting_decision`，run 进入 `paused`；独立分支也不继续写浏览器，直到全局安全投影收敛。
+计划级审批发生在 TODO 执行前，不把审批拒绝伪装成业务测试失败。Run plan amendment 的完整修复编排仍 pending。
 
 ### 5.2 Authoring verification
 
 - bootstrap/recheck/repair 的只读探索遵循各环境通用门禁，不点击无法判断副作用的控件。
 - local/test 可以自动真实验证已声明、有界副作用；staging 高风险 verification plan 先做一次 job 级审批。
 - production 只允许生成、静态校验和只读探索/断言。包含业务写入或上传的 candidate 可以保留为静态资产，但不能在 production scope 标记 `verified`，也不能让对应正式场景在该 scope 变为可运行。
-- run-triggered repair 若只修改定位且风险投影不变，沿用父 run grant；改变副作用契约或扩大影响面时暂停父 run 并重新审批。
+- run-triggered repair 的父 grant 复用为 pending；当前 Authoring 使用自己的 exact job/amendment/source plan 授权，不继承父 Run grant。
 
 ## 6. 跨服务执行门禁
 
@@ -174,7 +140,7 @@ grant 只对当前 run 或 authoring job 有效，不能复制到业务版本、
 
 1. 规划阶段拒绝未声明/无界/production 写计划。
 2. 页面任务包只投影当前已授权 TODO、语义步骤、effectId、风险摘要和 grant 引用；不包含凭据或审批者敏感信息。
-3. `ai-chat-service` 的 task/tool wrapper 每次调用前取 task allowlist、当前语义步骤、browser lease 和副作用授权的交集；模型不能新增步骤、替换 effectId 或把只读任务改成写任务。
+3. `ai-chat-service` 的 task/tool wrapper 每次调用前取 task allowlist、当前语义步骤、browser lease 和副作用授权的交集；staging 整体计划为 `approval_required` 时，即使当前 task 子集只含单项低风险动作，也必须携带 active 且 same-hash grant；当前子集高风险仍要求整体 `approval_required`。模型不能新增步骤、替换 effectId 或把只读任务改成写任务。
 4. `proxy-adapter` 不理解 environment、actor、场景或审批，只按 lease 的通用 operation/Tab/target/args 约束和幂等账本执行。
 5. `ai-e2e` 在写回 attempt 前核对 Agent tool summary、proxy operation ledger、脚本声明和 grant；不一致时结果失败或 `outcome_unknown`，不能发布输出。
 
@@ -193,7 +159,7 @@ v1 控制面是 loopback/local 单用户信任边界，但仍采用默认拒绝�
 
 1. local/test 的已声明、有界副作用无需人工点击即可执行；未声明或无界写入在浏览器动作前被拒绝。
 2. staging 的单项非不可逆 create/update 自动运行；删除、批量、不可逆或上传只出现一次计划级审批，不逐步骤重复询问。
-3. staging 计划增加高风险影响后旧 grant 失效；纯 locator 修复不触发重复审批。
+3. staging 精确 source plan/projection/context/deployment/policy 不一致时旧 grant 无法使用；新 candidate（包括 locator 修订）需要自己的精确审批。
 4. production 可以完成登录、导航、只读检查和断言，任何业务 create/update/delete 或文件上传都在 control lease/写操作前被硬拒绝，且不存在审批绕过。
 5. deployment revision、policy version、context 或 projection 不匹配的 grant 无法恢复或执行。
 6. 用户拒绝/撤销后没有新的写操作被派发；已开始原子操作按安全边界收敛，既有副作用不会被伪装回滚。

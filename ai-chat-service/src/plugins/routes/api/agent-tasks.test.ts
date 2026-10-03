@@ -62,6 +62,73 @@ afterEach(async () => {
 });
 
 describe('Agent task routes', () => {
+  it.each([true, false])(
+    'accepts a low-risk subset of an approved staging plan only with its grant: %s',
+    async (approved) => {
+      const app = await setup();
+      const request: CreateAgentTaskRequest = {
+        ...body(),
+        browserBinding: {
+          browserSessionId: 's',
+          tabId: 't',
+          browserLeaseId: 'l',
+          browserLeaseToken: 'test-token',
+          browserLeaseSequence: 1,
+          access: 'control',
+        },
+        toolPolicy: {
+          allow: ['browser-control.operation_execute'],
+          constraints: {
+            'browser-control.operation_execute': {
+              steps: [
+                {
+                  stepId: 'create',
+                  kind: 'act',
+                  operation: 'click',
+                  effectId: 'create',
+                  maxAffectedItems: 1,
+                },
+              ],
+            },
+          },
+        },
+        correlation: { runId: 'repeat-two-run' },
+        sideEffectAuthorization: {
+          contextType: 'run',
+          contextId: 'repeat-two-run',
+          environment: 'staging',
+          policyVersion: 'side-effect-policy/1.0',
+          policyEvaluationId: 'evaluation',
+          policyResult: 'approval_required',
+          projectionSha256: 'a'.repeat(64),
+          effects: [
+            {
+              stepId: 'create',
+              effectId: 'create',
+              kind: 'create',
+              maxAffectedItems: 1,
+              reversibility: 'compensatable',
+            },
+          ],
+          ...(approved
+            ? {
+                grant: {
+                  grantId: 'grant',
+                  status: 'active',
+                  approvedProjectionSha256: 'a'.repeat(64),
+                },
+              }
+            : {}),
+        },
+      };
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/agent-tasks',
+        payload: request,
+      });
+      expect(response.statusCode).toBe(approved ? 202 : 400);
+    }
+  );
   it.each([
     'browserBinding',
     'toolPolicy.constraints.browser-control.operation_execute',

@@ -1,5 +1,6 @@
+import { sideEffectPolicyCases } from '../../../test-support/side-effect-policy-cases.js';
 import { DatabaseSync } from 'node:sqlite';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { up as up014 } from '../../migrations/014-semantic-asset-foundation.js';
 import { up as up015 } from '../../migrations/015-semantic-asset-governance.js';
 import { up as up016 } from '../../migrations/016-semantic-workflow-foundation.js';
@@ -38,6 +39,415 @@ describe('authoring amendment repository', () => {
   });
 
   afterEach(() => db.close());
+
+  it.each(sideEffectPolicyCases)(
+    'Authoring matrix $environment $kind => $result',
+    ({ environment, kind, reversibility, result }) => {
+      bindEnvironment(db, fixture.versionId, environment);
+      const candidate = createEffectAmendment(
+        amendments,
+        assets,
+        fixture,
+        'matrix',
+        kind,
+        reversibility
+      );
+      const evaluation = amendments.policy.getAuthoringEvaluation(candidate.id)!;
+      expect(evaluation.result).toBe(result);
+      expect(candidate.state).toBe(
+        result === 'denied'
+          ? 'failed'
+          : result === 'approval_required'
+            ? 'waiting_decision'
+            : 'candidate_ready'
+      );
+      if (result !== 'auto_allowed')
+        expect(() => amendments.queueAtSafeBoundary(candidate.id)).toThrow();
+    }
+  );
+
+  it('persists an exact grant across restart; a replayed answer cannot revive revocation', () => {
+    bindEnvironment(db, fixture.versionId, 'staging');
+    const candidate = createEffectAmendment(amendments, assets, fixture, 'restart');
+    const decision = candidate.decisions.find(
+      (entry) => entry.category === 'side_effect_approval'
+    )!;
+    expect(decision).toMatchObject({ category: 'side_effect_approval', status: 'open' });
+    const answer = {
+      amendmentId: candidate.id,
+      decisionId: String(decision.id),
+      answer: 'approve' as const,
+      reason: '精确批准',
+      answeredBy: 'operator',
+    };
+    amendments.answerDecision(answer);
+    const grant = amendments.policy.getActiveGrant({ type: 'authoring', id: fixture.jobId })!;
+    amendments = new AuthoringAmendmentRepository(db, assets);
+    expect(amendments.policy.requireAuthoringAuthorization(candidate.id)?.grant?.grantId).toBe(
+      grant.id
+    );
+    expect(amendments.answerDecision(answer).state).toBe('candidate_ready');
+    expect(db.prepare('SELECT COUNT(*) AS count FROM side_effect_approval_grants').get()).toEqual({
+      count: 1,
+    });
+    db.prepare(
+      "UPDATE side_effect_approval_grants SET status = 'revoked', revoked_at = ? WHERE id = ?"
+    ).run(new Date().toISOString(), grant.id);
+    expect(amendments.answerDecision(answer).state).toBe('candidate_ready');
+    expect(() => amendments.queueAtSafeBoundary(candidate.id)).toThrow(/approval/);
+    expect(amendments.policy.getGrant(grant.id)?.status).toBe('revoked');
+  });
+
+  it('rejects expired, missing and deployment-drifted approvals before queueing', () => {
+    bindEnvironment(db, fixture.versionId, 'staging');
+    const candidate = createEffectAmendment(amendments, assets, fixture, 'drift');
+    amendments.answerDecision({
+      amendmentId: candidate.id,
+      decisionId: candidate.decisionIds[0],
+      answer: 'approve',
+      reason: '精确批准',
+      answeredBy: 'operator',
+    });
+    const grant = amendments.policy.getActiveGrant({ type: 'authoring', id: fixture.jobId })!;
+    bindEnvironment(db, fixture.versionId, 'test');
+    expect(() => amendments.queueAtSafeBoundary(candidate.id)).toThrow(/stale/);
+    expect(amendments.policy.getGrant(grant.id)?.status).toBe('expired');
+  });
+
+  it('classifies an unrebuildable frozen verification as stale and retains the original cause', () => {
+    bindEnvironment(db, fixture.versionId, 'staging');
+    const candidate = createEffectAmendment(amendments, assets, fixture, 'unsupported-drift');
+    amendments.answerDecision({
+      amendmentId: candidate.id,
+      decisionId: candidate.decisionIds[0],
+      answer: 'approve',
+      reason: '批准冻结计划',
+      answeredBy: 'operator',
+    });
+    const grant = amendments.policy.getActiveGrant({ type: 'authoring', id: fixture.jobId })!;
+    const cause = new Error('changed dependency has unsupported browser steps');
+    const rebuild = vi.spyOn(amendments.policy, 'buildAuthoringPlan').mockImplementationOnce(() => {
+      throw cause;
+    });
+    try {
+      expect(() => amendments.policy.requireAuthoringAuthorization(candidate.id)).toThrow(
+        expect.objectContaining({ code: 'side_effect_approval_stale', cause })
+      );
+      expect(amendments.policy.getGrant(grant.id)?.status).toBe('expired');
+    } finally {
+      rebuild.mockRestore();
+    }
+  });
+
+  it('an auto-allowed candidate does not inherit another amendment grant', () => {
+    bindEnvironment(db, fixture.versionId, 'staging');
+    const old = createEffectAmendment(amendments, assets, fixture, 'high-risk');
+    amendments.answerDecision({
+      amendmentId: old.id,
+      decisionId: old.decisionIds[0],
+      answer: 'approve',
+      reason: '只批准删除候选',
+      answeredBy: 'operator',
+    });
+    const grant = amendments.policy.getActiveGrant({ type: 'authoring', id: fixture.jobId })!;
+    const current = createEffectAmendment(amendments, assets, fixture, 'low-risk', 'create');
+    expect(amendments.policy.requireAuthoringAuthorization(current.id)).toMatchObject({
+      policyResult: 'auto_allowed',
+    });
+    expect(amendments.policy.requireAuthoringAuthorization(current.id)?.grant).toBeUndefined();
+    expect(amendments.policy.getGrant(grant.id)?.status).toBe('active');
+  });
+
+  it('allows rejecting an old side-effect decision after deployment drift', () => {
+    bindEnvironment(db, fixture.versionId, 'staging');
+    const candidate = createEffectAmendment(amendments, assets, fixture, 'reject-drift');
+    bindEnvironment(db, fixture.versionId, 'test');
+    expect(
+      amendments.answerDecision({
+        amendmentId: candidate.id,
+        decisionId: candidate.decisionIds[0],
+        answer: 'reject',
+        reason: '拒绝旧部署计划',
+        answeredBy: 'operator',
+      }).state
+    ).toBe('rejected');
+    expect(
+      amendments.policy.getActiveGrant({ type: 'authoring', id: fixture.jobId })
+    ).toBeUndefined();
+  });
+
+  it('a late old candidate check cannot invalidate a newer candidate grant', () => {
+    bindEnvironment(db, fixture.versionId, 'staging');
+    const old = createEffectAmendment(amendments, assets, fixture, 'old');
+    const current = createEffectAmendment(amendments, assets, fixture, 'current');
+    for (const candidate of [old, current])
+      amendments.answerDecision({
+        amendmentId: candidate.id,
+        decisionId: candidate.decisionIds[0],
+        answer: 'approve',
+        reason: '精确批准',
+        answeredBy: 'operator',
+      });
+    const grant = amendments.policy.getActiveGrant({ type: 'authoring', id: fixture.jobId })!;
+    expect(() => amendments.policy.requireAuthoringAuthorization(old.id)).toThrow(/binding/);
+    expect(amendments.policy.getGrant(grant.id)?.status).toBe('active');
+    expect(amendments.policy.requireAuthoringAuthorization(current.id)?.grant?.grantId).toBe(
+      grant.id
+    );
+  });
+
+  it('scope approval cannot authorize a side effect, and terminal context expires the grant atomically', () => {
+    bindEnvironment(db, fixture.versionId, 'staging');
+    const candidate = createEffectAmendment(
+      amendments,
+      assets,
+      fixture,
+      'scope',
+      'delete',
+      'compensatable',
+      true
+    );
+    const scope = candidate.decisions.find(
+      (entry) => entry.category === 'authoring_scope_expansion'
+    )!;
+    const effect = candidate.decisions.find((entry) => entry.category === 'side_effect_approval')!;
+    expect(
+      amendments.answerDecision({
+        amendmentId: candidate.id,
+        decisionId: String(scope.id),
+        answer: 'approve',
+        reason: '仅范围',
+        answeredBy: 'operator',
+      }).state
+    ).toBe('waiting_decision');
+    expect(
+      amendments.policy.getActiveGrant({ type: 'authoring', id: fixture.jobId })
+    ).toBeUndefined();
+    expect(() => amendments.queueAtSafeBoundary(candidate.id)).toThrow();
+    amendments.answerDecision({
+      amendmentId: candidate.id,
+      decisionId: String(effect.id),
+      answer: 'approve',
+      reason: '明确副作用',
+      answeredBy: 'operator',
+    });
+    new SemanticWorkflowRepository(db).settleAuthoringJob(fixture.jobId, 'completed', {
+      code: 'test_terminal',
+    });
+    expect(
+      amendments.policy.getActiveGrant({ type: 'authoring', id: fixture.jobId })
+    ).toBeUndefined();
+    expect(() => amendments.policy.requireAuthoringAuthorization(candidate.id)).toThrow(
+      /terminated/
+    );
+  });
+
+  it.each(['side_effect_approval', 'authoring_scope_expansion'])(
+    'withdraws sibling approvals when %s is rejected without changing another candidate',
+    (category) => {
+      bindEnvironment(db, fixture.versionId, 'staging');
+      const candidate = createEffectAmendment(
+        amendments,
+        assets,
+        fixture,
+        'reject-both',
+        'delete',
+        'compensatable',
+        true
+      );
+      const other = createEffectAmendment(
+        amendments,
+        assets,
+        fixture,
+        'other-open',
+        'delete',
+        'compensatable',
+        true
+      );
+      const decision = candidate.decisions.find((entry) => entry.category === category)!;
+      const answer = {
+        amendmentId: candidate.id,
+        decisionId: String(decision.id),
+        answer: 'reject' as const,
+        reason: '拒绝候选',
+        answeredBy: 'operator',
+      };
+      const rejected = amendments.answerDecision(answer);
+      expect(rejected.state).toBe('rejected');
+      expect(rejected.decisions.filter((entry) => entry.status === 'open')).toEqual([]);
+      expect(rejected.decisions.find((entry) => entry.id === decision.id)).toMatchObject({
+        status: 'answered',
+        stateVersion: 2,
+      });
+      expect(rejected.decisions.find((entry) => entry.id !== decision.id)).toMatchObject({
+        status: 'withdrawn',
+        stateVersion: 2,
+      });
+      expect(amendments.getAmendment(other.id)?.decisions).toEqual(other.decisions);
+      expect(amendments.answerDecision(answer)).toEqual(rejected);
+      expect(
+        db.prepare('SELECT decision_request_id, answer_key FROM decision_answers').all()
+      ).toEqual([{ decision_request_id: decision.id, answer_key: 'reject' }]);
+      expect(
+        amendments.policy.getActiveGrant({ type: 'authoring', id: fixture.jobId })
+      ).toBeUndefined();
+    }
+  );
+
+  it('withdraws scope approvals when the candidate is denied by production policy', () => {
+    bindEnvironment(db, fixture.versionId, 'production');
+    const candidate = createEffectAmendment(
+      amendments,
+      assets,
+      fixture,
+      'denied-scope',
+      'delete',
+      'compensatable',
+      true
+    );
+    expect(candidate.state).toBe('failed');
+    expect(candidate.decisions).toHaveLength(1);
+    expect(candidate.decisions[0]).toMatchObject({
+      category: 'authoring_scope_expansion',
+      status: 'withdrawn',
+      stateVersion: 2,
+    });
+    expect(db.prepare('SELECT * FROM decision_answers').all()).toEqual([]);
+  });
+
+  it.each(['fail', 'reject'] as const)(
+    'withdraws remaining scope decisions on %s while retaining approved effect audit',
+    (operation) => {
+      bindEnvironment(db, fixture.versionId, 'staging');
+      const candidate = createEffectAmendment(
+        amendments,
+        assets,
+        fixture,
+        'terminal-audit',
+        'delete',
+        'compensatable',
+        true
+      );
+      const effect = candidate.decisions.find(
+        (entry) => entry.category === 'side_effect_approval'
+      )!;
+      amendments.answerDecision({
+        amendmentId: candidate.id,
+        decisionId: String(effect.id),
+        answer: 'approve',
+        reason: '精确副作用',
+        answeredBy: 'operator',
+      });
+      const answers = db.prepare('SELECT * FROM decision_answers').all();
+      const approved = amendments
+        .getAmendment(candidate.id)!
+        .decisions.find((entry) => entry.id === effect.id);
+      const grant = amendments.policy.getActiveGrant({ type: 'authoring', id: fixture.jobId })!;
+      const terminal =
+        operation === 'fail'
+          ? amendments.fail(candidate.id, { code: 'verification_failed' })
+          : amendments.reject(candidate.id, '撤回候选');
+      expect(terminal.decisions.find((entry) => entry.id === effect.id)).toEqual(approved);
+      expect(terminal.decisions.find((entry) => entry.id !== effect.id)).toMatchObject({
+        status: 'withdrawn',
+      });
+      expect(db.prepare('SELECT * FROM decision_answers').all()).toEqual(answers);
+      expect(amendments.policy.getGrant(grant.id)?.status).toBe('expired');
+    }
+  );
+
+  it('withdraws open approvals on context switch and preserves answers and the new context', () => {
+    bindEnvironment(db, fixture.versionId, 'staging');
+    const candidate = createEffectAmendment(
+      amendments,
+      assets,
+      fixture,
+      'context-open',
+      'delete',
+      'compensatable',
+      true
+    );
+    const scope = candidate.decisions.find(
+      (entry) => entry.category === 'authoring_scope_expansion'
+    )!;
+    amendments.answerDecision({
+      amendmentId: candidate.id,
+      decisionId: String(scope.id),
+      answer: 'approve',
+      reason: '仅范围',
+      answeredBy: 'operator',
+    });
+    const answers = db.prepare('SELECT * FROM decision_answers').all();
+    const approved = amendments
+      .getAmendment(candidate.id)!
+      .decisions.find((entry) => entry.id === scope.id);
+    const next = amendments.createContextThread({
+      jobId: fixture.jobId,
+      businessVersionId: fixture.versionId,
+      scope: {
+        currentUrl: '/login',
+        currentPageDefinitionId: fixture.page1Id,
+        currentFunctionalModuleId: fixture.module2Id,
+        baseRevisionSha256: fixture.module2RevisionSha256,
+        visibleScenarioIds: [],
+      },
+      createdBy: 'operator',
+    });
+    const stale = amendments.getAmendment(candidate.id)!;
+    expect(stale.state).toBe('stale');
+    expect(stale.decisions.find((entry) => entry.id === scope.id)).toEqual(approved);
+    expect(stale.decisions.find((entry) => entry.id !== scope.id)).toMatchObject({
+      status: 'withdrawn',
+    });
+    expect(db.prepare('SELECT * FROM decision_answers').all()).toEqual(answers);
+    expect(
+      db.prepare('SELECT state FROM authoring_context_threads WHERE id = ?').get(next.id)
+    ).toEqual({ state: 'active' });
+  });
+
+  it('rolls back stale candidate and grant changes together when the stale write fails', () => {
+    bindEnvironment(db, fixture.versionId, 'staging');
+    const candidate = createEffectAmendment(
+      amendments,
+      assets,
+      fixture,
+      'stale-atomic',
+      'delete',
+      'compensatable',
+      true
+    );
+    for (const decisionId of candidate.decisionIds)
+      amendments.answerDecision({
+        amendmentId: candidate.id,
+        decisionId,
+        answer: 'approve',
+        reason: '批准精确计划',
+        answeredBy: 'operator',
+      });
+    const grant = amendments.policy.getActiveGrant({ type: 'authoring', id: fixture.jobId })!;
+    const replacement = createModuleCandidate(
+      assets,
+      fixture,
+      fixture.module2Id,
+      fixture.module2RevisionId,
+      '新的验收'
+    );
+    assets.activateRevisions([
+      { assetType: 'functional_module', revisionId: replacement.id, dependencies: [] },
+    ]);
+    db.exec(
+      "CREATE TRIGGER fail_stale_write BEFORE UPDATE OF state ON authoring_amendments WHEN NEW.state = 'stale' BEGIN SELECT RAISE(ABORT, 'stale write failed'); END;"
+    );
+    expect(() => amendments.queueAtSafeBoundary(candidate.id)).toThrow('stale write failed');
+    expect(amendments.getAmendment(candidate.id)?.state).toBe('candidate_ready');
+    expect(amendments.policy.getGrant(grant.id)?.status).toBe('active');
+    db.exec('DROP TRIGGER fail_stale_write');
+    expect(() => amendments.queueAtSafeBoundary(candidate.id)).toThrow(
+      'Amendment base revision changed'
+    );
+    expect(amendments.getAmendment(candidate.id)?.state).toBe('stale');
+    expect(amendments.policy.getGrant(grant.id)?.status).toBe('expired');
+  });
 
   it('allows current-module changes and activates the verified candidate at a safe boundary', () => {
     const candidate = createModuleCandidate(
@@ -501,7 +911,7 @@ function createFixture(db: DatabaseSync, versions: BusinessVersionRepository) {
     `INSERT INTO deployment_profile_revisions
       (id, deployment_profile_id, revision_no, lifecycle, schema_id, payload_json,
        content_sha256, validation_status, change_reason, created_by_type, created_at)
-     VALUES ('deployment-revision', 'deployment', 1, 'current', 'deployment/1', '{}', ?,
+     VALUES ('deployment-revision', 'deployment', 1, 'current', 'deployment/1', '{"environment":"test"}', ?,
        'valid', 'fixture', 'system', ?)`
   ).run(HASH_A, now);
   const version = versions.create({
@@ -620,4 +1030,143 @@ function createModule(
     },
     createdBy: 'system',
   });
+}
+
+function bindEnvironment(
+  db: DatabaseSync,
+  versionId: string,
+  environment: 'local' | 'test' | 'staging' | 'production'
+) {
+  const id = `deployment-${environment}`;
+  db.prepare(
+    `INSERT INTO deployment_profile_revisions (id, deployment_profile_id, revision_no, lifecycle, schema_id, payload_json, content_sha256, validation_status, change_reason, created_by_type, created_at) VALUES (?, 'deployment', ?, 'draft', 'deployment/1', ?, ?, 'valid', 'fixture', 'system', ?)`
+  ).run(
+    id,
+    ['local', 'test', 'staging', 'production'].indexOf(environment) + 2,
+    JSON.stringify({ environment }),
+    hashValue({ environment }),
+    new Date().toISOString()
+  );
+  db.prepare(
+    'UPDATE version_deployment_bindings SET deployment_revision_id = ? WHERE business_version_id = ? AND is_default = 1'
+  ).run(id, versionId);
+}
+
+function createEffectAmendment(
+  amendments: AuthoringAmendmentRepository,
+  assets: SemanticAssetRepository,
+  fixture: ReturnType<typeof createFixture>,
+  key: string,
+  kind: 'create' | 'delete' | 'auth_change' = 'delete',
+  reversibility = 'compensatable',
+  scope = false
+) {
+  const payload = functionalScriptFixture({
+    scriptKey: 'login.success',
+    name: key,
+    moduleId: fixture.module1Id,
+    pageId: fixture.page1Id,
+    steps: [
+      {
+        id: 'step_effect',
+        name: '受控动作',
+        intent: '执行已声明动作',
+        action: {
+          type: 'click',
+          target: {
+            semantic: '提交',
+            candidates: [
+              { strategy: 'role', role: 'button', name: { kind: 'literal', value: '提交' } },
+            ],
+            expected: { cardinality: 'exactly_one' },
+          },
+        },
+        sideEffectId: 'effect',
+        postconditions: [],
+      },
+    ],
+    sideEffects: [
+      {
+        id: 'effect',
+        kind,
+        resourceType: 'fixture',
+        identityFrom: { kind: 'literal', value: 'fixture' },
+        affectedItems: { kind: 'single' },
+        reversibility,
+        retryPolicy: 'verify_before_retry',
+        verifyApplied: [
+          {
+            id: 'applied',
+            kind: 'page.url',
+            expected: { kind: 'literal', value: '/' },
+            comparator: 'contains',
+            message: '确认已应用',
+          },
+        ],
+      },
+    ],
+  });
+  const revision = assets.createRevision({
+    assetType: 'functional_script',
+    assetId: fixture.scriptId,
+    businessVersionId: fixture.versionId,
+    schemaId: 'nebula.ai-e2e.functional-script/1.0',
+    payload,
+    validationStatus: 'valid',
+    changeReason: key,
+    createdByType: 'child_agent',
+    supersedesRevisionId: fixture.scriptRevisionId,
+    primaryPageRevisionId: fixture.page1RevisionId,
+  });
+  const changes = [
+    {
+      assetType: 'functional_script' as const,
+      assetId: fixture.scriptId,
+      baseRevisionId: fixture.scriptRevisionId,
+      baseRevisionSha256: fixture.scriptRevisionSha256,
+      candidateRevisionId: revision.id,
+      targetPageDefinitionId: fixture.page1Id,
+      targetFunctionalModuleId: fixture.module1Id,
+      targetUrl: '/login',
+      category: 'script',
+      diff: {},
+    },
+  ];
+  const scopeCandidate = scope
+    ? createModuleCandidate(
+        assets,
+        fixture,
+        fixture.module2Id,
+        fixture.module2RevisionId,
+        '范围扩展'
+      )
+    : undefined;
+  return amendments.createAmendment({
+    jobId: fixture.jobId,
+    threadId: createThread(amendments, fixture).id,
+    idempotencyKey: key,
+    reason: key,
+    category: 'script',
+    changes: [
+      ...changes,
+      ...(scopeCandidate
+        ? [
+            {
+              assetType: 'functional_module' as const,
+              assetId: fixture.module2Id,
+              baseRevisionId: fixture.module2RevisionId,
+              baseRevisionSha256: fixture.module2RevisionSha256,
+              candidateRevisionId: scopeCandidate.id,
+              targetPageDefinitionId: fixture.page1Id,
+              targetFunctionalModuleId: fixture.module2Id,
+              targetUrl: '/login',
+              category: 'acceptance',
+              diff: {},
+            },
+          ]
+        : []),
+    ],
+    validationPlan: { checks: ['real-browser'] },
+    createdBy: 'operator',
+  }).amendment;
 }

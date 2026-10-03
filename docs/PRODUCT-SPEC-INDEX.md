@@ -217,7 +217,7 @@ debug-ui  ←──  （仅被用户消费）
 - **主代理 / 页面子代理（shipped）**：持久 authoring/run 状态、计划/TODO/变量、browser FIFO 和确定性协调器已接通 Agent task、短期 lease、恢复、依赖跳过与验收；任一时刻只有一个执行型页面任务。
 - **上下文（pending）**：大多数派发使用干净子代理上下文；登出等可恢复中断可由主代理在页面状态和副作用检查后续接原上下文，否则从检查点与授权变量重建。
 - **串行调度与身份（shipped）**：ai-e2e 持久 `browser_jobs` FIFO、全库单 active 槽、proxy session/lease 派发、显式释放和重启收敛已接入；每个 browser session 固定单 Context/active actor。
-- **环境与副作用安全（formal run shipped）**：风险投影从脚本顶层声明与 step sideEffectId 确定性生成；policy evaluation/grant/decision、local/test 自动放行、staging 高风险审批（含文件上传维度 `usesFileUpload`）、production 业务写拒绝和逐 effectId/数量/grant 跨服务门禁已接通；grant 在 run 终态/决策拒绝/投影漂移时自动过期，start/resume 命令重查 policy evaluation 与 active grant，5 个 `side_effect_*` ApiProblem 错误码已在路由层发射。
+- **环境与副作用安全（Run/Authoring shipped）**：共用纯 evaluator，evaluation/grant SQL 唯一归 E2E policy repository，复用 017 表；candidate 构建时冻结实际去重验证计划，审批精确绑定 context/version/deployment/source plan/projection/policy。范围批准不替代副作用批准；queue/start/resume/lease/dispatch 和重启 create/resume outbox 重验，终态同事务失效。staging 整体 approval_required 的低风险 task 子集也必须 active same-hash grant，Chat 保留逐 effect/数量/参数交集。lease 后失败回收控制权，撤销失败持久恢复；无新 revoke endpoint/TTL，上传/集合执行、跨 context 或 locator/缩小计划复用及跨 effects 全局聚合仍 pending。
 - **编排与执行分属两层（shipped）**：页面任务图、模块范围与验收标准归 `ai-e2e`；模型调用、MCP 工具和 Skills 执行归 `ai-chat-service`。semantic v1 已接入 Agent task/Skill tool loop；核心服务仅保留 canonical v1 路由和工具面，不提供兼容别名或静默回退。
 - **页面任务与控制租约（shipped）**：主代理派发不可变页面任务包并持有共享浏览器生命周期；页面任务只取得指定 TODO、Tab、工具和输出槽的短期租约。跨服务只传稳定引用和非秘密约束，不传 Playwright 对象或凭据值。
 - **可视语义执行（shipped）**：结构化脚本确定性投影为受限 `operation_execute` 步骤，冻结 target/args 并关联 operation、截图/DOM 与 evidence manifest；结果不确定先进入决策/恢复。ai-e2e 以持久 seq 游标直接消费 browser session event-log，并以权威 session/operation 查询补全状态与证据。

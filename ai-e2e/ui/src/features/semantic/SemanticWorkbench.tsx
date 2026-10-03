@@ -1,4 +1,8 @@
-import type { AuthoringSnapshotV1 as AuthoringSnapshot, RunSnapshotV1 as RunSnapshot, SemanticWorkspaceV1 as SemanticWorkspace } from '../../../../src/contracts/semantic-control.js';
+import type {
+  AuthoringSnapshotV1 as AuthoringSnapshot,
+  RunSnapshotV1 as RunSnapshot,
+  SemanticWorkspaceV1 as SemanticWorkspace,
+} from '../../../../src/contracts/semantic-control.js';
 import type { AmendmentRecord as AuthoringAmendment } from '../../../../src/contracts/semantic-authoring.js';
 import {
   useEffect,
@@ -403,7 +407,11 @@ export function SemanticWorkbench({
       return semanticApi.answerAmendmentDecision(
         input.amendmentId,
         input.decisionId ?? '',
-        input.kind === 'approve' ? 'approve' : 'reject'
+        input.kind === 'approve' ? 'approve' : 'reject',
+        amendmentsQuery.data
+          ?.find((amendment) => amendment.id === input.amendmentId)
+          ?.decisions.find((decision) => decision.id === input.decisionId)?.category ??
+          'authoring_scope_expansion'
       );
     },
     onSuccess: () => {
@@ -500,13 +508,28 @@ export function SemanticWorkbench({
   };
 
   const applicable = (amendment: AuthoringAmendment) => {
-    if (amendment.state !== 'candidate_ready')
+    if (amendment.state === 'waiting_decision') {
+      const openCategories = amendment.decisions
+        .filter((decision) => decision.status === 'open')
+        .map((decision) => decision.category);
+      const scopePending = openCategories.includes('authoring_scope_expansion');
+      const sideEffectPending = openCategories.includes('side_effect_approval');
       return {
         allowed: false,
         reason:
-          amendment.state === 'waiting_decision'
-            ? '仍有范围扩展等待审批'
-            : `候选当前状态为 ${amendment.state}`,
+          scopePending && sideEffectPending
+            ? '仍有范围扩展与副作用验证等待审批'
+            : sideEffectPending
+              ? '仍有副作用验证等待审批'
+              : scopePending
+                ? '仍有范围扩展等待审批'
+                : '仍有决策等待回答',
+      };
+    }
+    if (amendment.state !== 'candidate_ready')
+      return {
+        allowed: false,
+        reason: `候选当前状态为 ${amendment.state}`,
       };
     for (const change of amendment.changes) {
       const targetModuleId = text(change.targetFunctionalModuleId, '');

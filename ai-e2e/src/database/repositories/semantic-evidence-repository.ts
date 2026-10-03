@@ -60,20 +60,6 @@ export interface AddEvidenceItemParams {
   metadata: unknown;
 }
 
-export interface RecordPolicyEvaluationParams {
-  id?: string;
-  context: SemanticContext;
-  businessVersionId: string;
-  deploymentRevisionId: string;
-  policyVersion: string;
-  sourcePlanSha256: string;
-  projectionRedacted: unknown;
-  result: 'auto_allowed' | 'approval_required' | 'denied';
-  reasonCodes?: readonly string[];
-  supersedesEvaluationId?: string;
-  decisionRequestId?: string;
-}
-
 export interface EnqueueOutboxParams {
   id: string;
   context: SemanticContext;
@@ -174,8 +160,7 @@ export class SemanticEvidenceRepository {
            WHERE sha256 = ? AND storage_backend = ? AND sensitivity = ?`
         )
         .get(params.sha256, params.storageBackend, params.sensitivity) as
-        | Record<string, unknown>
-        | undefined;
+        Record<string, unknown> | undefined;
       if (existing) {
         if (
           Number(existing.size_bytes) !== params.sizeBytes ||
@@ -353,70 +338,6 @@ export class SemanticEvidenceRepository {
     });
   }
 
-  recordPolicyEvaluation(params: RecordPolicyEvaluationParams): { id: string; created: boolean } {
-    assertNoInlineSecrets(params.projectionRedacted);
-    requireSha256(params.sourcePlanSha256, 'sourcePlanSha256');
-    const projectionJson = stableStringify(params.projectionRedacted);
-    const projectionSha256 = hashValue(params.projectionRedacted);
-    return inImmediateTransaction(this.db, () => {
-      this.requireContext(params.context);
-      const environment = this.requirePolicyScope(
-        params.context,
-        params.businessVersionId,
-        params.deploymentRevisionId
-      );
-      const existing = this.db
-        .prepare(
-          `SELECT id, result FROM side_effect_policy_evaluations
-           WHERE context_type = ? AND context_id = ? AND source_plan_sha256 = ?
-             AND projection_sha256 = ? AND policy_version = ?`
-        )
-        .get(
-          params.context.type,
-          params.context.id,
-          params.sourcePlanSha256,
-          projectionSha256,
-          params.policyVersion
-        ) as { id: string; result: string } | undefined;
-      if (existing) {
-        if (existing.result !== params.result) {
-          throw new Error('Policy evaluation replay changed the result');
-        }
-        return { id: existing.id, created: false };
-      }
-      const id = params.id ?? randomUUID();
-      this.db
-        .prepare(
-          `INSERT INTO side_effect_policy_evaluations
-            (id, context_type, context_id, run_id, authoring_job_id, business_version_id,
-             deployment_revision_id, environment, policy_version, source_plan_sha256,
-             projection_json_redacted, projection_sha256, result, reason_codes_json,
-             supersedes_evaluation_id, decision_request_id, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        )
-        .run(
-          id,
-          params.context.type,
-          params.context.id,
-          params.context.type === 'run' ? params.context.id : null,
-          params.context.type === 'authoring' ? params.context.id : null,
-          params.businessVersionId,
-          params.deploymentRevisionId,
-          environment,
-          params.policyVersion,
-          params.sourcePlanSha256,
-          projectionJson,
-          projectionSha256,
-          params.result,
-          stableStringify(params.reasonCodes ?? []),
-          params.supersedesEvaluationId ?? null,
-          params.decisionRequestId ?? null,
-          new Date().toISOString()
-        );
-      return { id, created: true };
-    });
-  }
-
   enqueueOutbox(params: EnqueueOutboxParams): { created: boolean } {
     assertNoInlineSecrets(params.payloadRedacted);
     const requestSha256 = hashValue({
@@ -475,16 +396,36 @@ export class SemanticEvidenceRepository {
     });
   }
 
-  claimNextOutbox(now = new Date().toISOString()): Record<string, unknown> | null {
+  hasPendingPolicyLeaseRevocation(context: SemanticContext): boolean {
+    return Boolean(
+      this.db
+        .prepare(
+          "SELECT 1 FROM integration_outbox WHERE context_type = ? AND context_id = ? AND id LIKE 'policy-revoke:%' AND status IN ('pending','dispatching','retryable_failed') LIMIT 1"
+        )
+        .get(context.type, context.id)
+    );
+  }
+
+  getOutboxPayload(id: string): Record<string, unknown> | null {
+    const row = this.db
+      .prepare('SELECT payload_json_redacted FROM integration_outbox WHERE id = ?')
+      .get(id) as { payload_json_redacted: string } | undefined;
+    return row ? (JSON.parse(row.payload_json_redacted) as Record<string, unknown>) : null;
+  }
+
+  claimNextOutbox(
+    now = new Date().toISOString(),
+    exactId?: string
+  ): Record<string, unknown> | null {
     return inImmediateTransaction(this.db, () => {
       const item = this.db
         .prepare(
           `SELECT * FROM integration_outbox
            WHERE status IN ('pending','retryable_failed')
-             AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
+             AND (next_attempt_at IS NULL OR next_attempt_at <= ?) AND (? IS NULL OR id = ?)
            ORDER BY created_at, id LIMIT 1`
         )
-        .get(now) as Record<string, unknown> | undefined;
+        .get(now, exactId ?? null, exactId ?? null) as Record<string, unknown> | undefined;
       if (!item) return null;
       this.db
         .prepare(
@@ -527,8 +468,7 @@ export class SemanticEvidenceRepository {
     if (options?.error !== undefined) assertNoInlineSecrets(options.error);
     inImmediateTransaction(this.db, () => {
       const item = this.db.prepare('SELECT status FROM integration_outbox WHERE id = ?').get(id) as
-        | { status: string }
-        | undefined;
+        { status: string } | undefined;
       if (!item) throw new Error('Outbox item not found');
       if (['confirmed', 'terminal_failed', 'cancelled'].includes(item.status)) {
         if (item.status === status) return;
@@ -767,59 +707,6 @@ export class SemanticEvidenceRepository {
     if (!this.db.prepare(`SELECT id FROM ${table} WHERE id = ?`).get(context.id)) {
       throw new Error(`${context.type} context not found`);
     }
-  }
-
-  private requirePolicyScope(
-    context: SemanticContext,
-    businessVersionId: string,
-    deploymentRevisionId: string
-  ): 'local' | 'test' | 'staging' | 'production' {
-    if (context.type === 'run') {
-      const run = this.db
-        .prepare('SELECT business_version_id, deployment_revision_id FROM test_runs WHERE id = ?')
-        .get(context.id) as
-        | { business_version_id: string; deployment_revision_id: string }
-        | undefined;
-      if (
-        !run ||
-        run.business_version_id !== businessVersionId ||
-        run.deployment_revision_id !== deploymentRevisionId
-      ) {
-        throw new Error('Policy scope does not match the run');
-      }
-      return this.readDeploymentEnvironment(deploymentRevisionId);
-    }
-    const job = this.db
-      .prepare('SELECT business_version_id FROM authoring_jobs WHERE id = ?')
-      .get(context.id) as { business_version_id: string } | undefined;
-    if (!job || job.business_version_id !== businessVersionId) {
-      throw new Error('Policy scope does not match the authoring job');
-    }
-    if (
-      !this.db
-        .prepare(
-          `SELECT 1 FROM version_deployment_bindings
-           WHERE business_version_id = ? AND deployment_revision_id = ?`
-        )
-        .get(businessVersionId, deploymentRevisionId)
-    ) {
-      throw new Error('Policy deployment revision is not bound to the business version');
-    }
-    return this.readDeploymentEnvironment(deploymentRevisionId);
-  }
-
-  private readDeploymentEnvironment(
-    deploymentRevisionId: string
-  ): 'local' | 'test' | 'staging' | 'production' {
-    const revision = this.db
-      .prepare('SELECT payload_json FROM deployment_profile_revisions WHERE id = ?')
-      .get(deploymentRevisionId) as { payload_json: string } | undefined;
-    if (!revision) throw new Error('Deployment revision not found');
-    const payload = JSON.parse(revision.payload_json) as { environment?: unknown };
-    if (!['local', 'test', 'staging', 'production'].includes(String(payload.environment))) {
-      throw new Error('Deployment revision has no valid immutable environment');
-    }
-    return payload.environment as 'local' | 'test' | 'staging' | 'production';
   }
 
   private requireScopedLinks(params: {

@@ -1,3 +1,4 @@
+import { SemanticPolicyRepository } from './semantic-policy-repository.js';
 import type { BusinessVersionRepository } from './business-version-repository.js';
 import type { SupportedDatabase } from './semantic-repository-utils.js';
 import type {
@@ -69,12 +70,14 @@ type DbRow = Record<string, unknown>;
 
 export class SemanticQueryRepository {
   private readonly db: DatabaseLike;
+  private readonly policy: SemanticPolicyRepository;
 
   constructor(
     database: SupportedDatabase,
     private readonly versions: BusinessVersionRepository
   ) {
     this.db = database as unknown as DatabaseLike;
+    this.policy = new SemanticPolicyRepository(database);
   }
 
   getWorkspace(versionId: string): SemanticWorkspaceV1 | null {
@@ -143,13 +146,15 @@ export class SemanticQueryRepository {
     environment: 'local' | 'test' | 'staging' | 'production';
     payload: Record<string, unknown>;
   } | null {
-    const row = this.db.prepare(
-      `SELECT r.id, r.payload_json
+    const row = this.db
+      .prepare(
+        `SELECT r.id, r.payload_json
        FROM version_deployment_bindings b
        JOIN deployment_profile_revisions r ON r.id = b.deployment_revision_id
        WHERE b.business_version_id = ? AND b.is_default = 1
        LIMIT 1`
-    ).get(versionId) as { id: string; payload_json: string } | undefined;
+      )
+      .get(versionId) as { id: string; payload_json: string } | undefined;
     if (!row) return null;
     const payload = parseObject(row.payload_json);
     const environment = String(payload.environment);
@@ -203,8 +208,7 @@ export class SemanticQueryRepository {
 
   getAuthoringSnapshot(jobId: string): AuthoringSnapshotV1 | null {
     const row = this.db.prepare('SELECT * FROM authoring_jobs WHERE id = ?').get(jobId) as
-      | DbRow
-      | undefined;
+      DbRow | undefined;
     if (!row) return null;
     const job = mapDatabaseRow(row);
     const tasks = this.selectRows(
@@ -250,12 +254,10 @@ export class SemanticQueryRepository {
 
   getRunSnapshot(runId: string): RunSnapshotV1 | null {
     const row = this.db.prepare('SELECT * FROM test_runs WHERE id = ?').get(runId) as
-      | DbRow
-      | undefined;
+      DbRow | undefined;
     if (!row) return null;
     const plan = this.db.prepare('SELECT * FROM run_plans WHERE run_id = ?').get(runId) as
-      | DbRow
-      | undefined;
+      DbRow | undefined;
     return {
       schema: 'nebula.ai-e2e.run-snapshot/1.0',
       run: mapDatabaseRow(row),
@@ -390,24 +392,14 @@ export class SemanticQueryRepository {
   ) {
     const browserJob = rootRow.browser_job_id
       ? (this.db.prepare('SELECT * FROM browser_jobs WHERE id = ?').get(rootRow.browser_job_id) as
-          | DbRow
-          | undefined)
+          DbRow | undefined)
       : undefined;
     const policyEvaluation = rootRow.current_policy_evaluation_id
-      ? (this.db
-          .prepare('SELECT * FROM side_effect_policy_evaluations WHERE id = ?')
-          .get(rootRow.current_policy_evaluation_id) as DbRow | undefined)
-      : (this.db
-          .prepare(
-            `SELECT * FROM side_effect_policy_evaluations
-             WHERE context_type = ? AND context_id = ? ORDER BY created_at DESC LIMIT 1`
-          )
-          .get(contextType, contextId) as DbRow | undefined);
+      ? this.policy.getEvaluation(rootRow.current_policy_evaluation_id)
+      : this.policy.getLatestEvaluation({ type: contextType, id: contextId });
     const activeApprovalGrant = rootRow.active_approval_grant_id
-      ? (this.db
-          .prepare('SELECT * FROM side_effect_approval_grants WHERE id = ?')
-          .get(rootRow.active_approval_grant_id) as DbRow | undefined)
-      : undefined;
+      ? this.policy.getGrant(rootRow.active_approval_grant_id)
+      : this.policy.getActiveGrant({ type: contextType, id: contextId });
     return {
       ...(browserJob ? { browserJob: mapDatabaseRow(browserJob) } : {}),
       ...(policyEvaluation ? { policyEvaluation: mapDatabaseRow(policyEvaluation) } : {}),

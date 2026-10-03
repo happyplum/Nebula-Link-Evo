@@ -401,6 +401,100 @@ describe('SemanticWorkbench', () => {
     await waitFor(() => expect(api.commandAuthoringJob).toHaveBeenCalledWith('job1', 2, 'pause'));
   });
 
+  it('区分副作用审批和范围扩展，展示精确风险并传递审批类别', async () => {
+    api.listAmendments.mockResolvedValue([
+      {
+        ...amendment,
+        state: 'waiting_decision',
+        decisionIds: ['effect-decision'],
+        decisions: [
+          {
+            id: 'effect-decision',
+            category: 'side_effect_approval',
+            status: 'open',
+            question: '批准精确候选验证？',
+            facts: {
+              environment: 'staging',
+              deploymentRevisionId: 'dep-exact',
+              policyVersion: 'side-effect-policy/1.0',
+              projectionSha256: 'a'.repeat(64),
+              sourcePlanSha256: 'b'.repeat(64),
+              projection: {
+                effects: [
+                  {
+                    kind: 'delete',
+                    resourceType: 'order',
+                    maxAffectedItems: 1,
+                    reversibility: 'irreversible',
+                    stepId: 'verify-1-1-step_delete',
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      },
+    ]);
+    api.answerAmendmentDecision.mockResolvedValue(amendment);
+    renderAuthoring(
+      '/semantic/p1/authoring/v1?job=job1&url=%2Fcheckout&page=page1&module=m1&scenario=sc1'
+    );
+    fireEvent.click(await screen.findByRole('tab', { name: /Diff/ }));
+    expect(await screen.findByText('副作用验证审批')).toBeInTheDocument();
+    expect(screen.getByText('dep-exact')).toBeInTheDocument();
+    expect(screen.getByText('a'.repeat(64))).toBeInTheDocument();
+    expect(screen.getByText(/delete · order ≤ 1 · irreversible/)).toBeInTheDocument();
+    expect(screen.getByText('仍有副作用验证等待审批')).toBeInTheDocument();
+    expect(screen.queryByText('仍有范围扩展等待审批')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /在安全边界应用/ })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: '批准' }));
+    await waitFor(() =>
+      expect(api.answerAmendmentDecision).toHaveBeenCalledWith(
+        'a1',
+        'effect-decision',
+        'approve',
+        'side_effect_approval'
+      )
+    );
+  });
+
+  it.each([
+    {
+      categories: ['authoring_scope_expansion'],
+      reason: '仍有范围扩展等待审批',
+    },
+    {
+      categories: ['authoring_scope_expansion', 'side_effect_approval'],
+      reason: '仍有范围扩展与副作用验证等待审批',
+    },
+    {
+      categories: ['side_effect_approval'],
+      reason: '仍有副作用验证等待审批',
+    },
+    { categories: [], reason: '仍有决策等待回答' },
+  ])('仅按未回答决策类别提示应用阻断：$reason', async ({ categories, reason }) => {
+    api.listAmendments.mockResolvedValue([
+      {
+        ...amendment,
+        state: 'waiting_decision',
+        decisions: [
+          { id: 'closed-scope', category: 'authoring_scope_expansion', status: 'answered' },
+          ...categories.map((category, index) => ({
+            id: `open-${index}`,
+            category,
+            status: 'open',
+          })),
+        ],
+      },
+    ]);
+    renderAuthoring(
+      '/semantic/p1/authoring/v1?job=job1&url=%2Fcheckout&page=page1&module=m1&scenario=sc1'
+    );
+    fireEvent.click(await screen.findByRole('tab', { name: /Diff/ }));
+    expect(await screen.findByText(reason)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /在安全边界应用/ })).toBeDisabled();
+  });
+
   it('模块切换后禁止把旧候选应用到错误模块', async () => {
     api.listAmendments.mockResolvedValue([amendment]);
     renderAuthoring(

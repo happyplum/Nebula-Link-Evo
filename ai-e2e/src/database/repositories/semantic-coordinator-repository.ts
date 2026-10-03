@@ -1,3 +1,4 @@
+import { SemanticPolicyRepository } from './semantic-policy-repository.js';
 import { randomUUID } from 'node:crypto';
 import {
   inImmediateTransaction,
@@ -6,6 +7,8 @@ import {
   type SupportedDatabase,
 } from './semantic-repository-utils.js';
 
+import type { BrowserJobState } from './semantic-workflow-repository.js';
+
 type DbRow = Record<string, unknown>;
 
 export interface CoordinatorBrowserJob {
@@ -13,7 +16,7 @@ export interface CoordinatorBrowserJob {
   queueSeq: number;
   contextType: 'run' | 'authoring';
   contextId: string;
-  state: 'acquiring' | 'active' | 'releasing';
+  state: BrowserJobState;
   browserSessionId?: string;
 }
 
@@ -88,9 +91,11 @@ export interface CoordinatorAuthoringTask {
 
 export class SemanticCoordinatorRepository {
   private readonly db: DatabaseLike;
+  private readonly policy: SemanticPolicyRepository;
 
   constructor(database: SupportedDatabase) {
     this.db = database as unknown as DatabaseLike;
+    this.policy = new SemanticPolicyRepository(database);
   }
 
   getActiveBrowserJob(): CoordinatorBrowserJob | null {
@@ -104,10 +109,13 @@ export class SemanticCoordinatorRepository {
     return row ? mapBrowserJob(row) : null;
   }
 
-  getVerificationAmendmentToSchedule(): string | null {
+  getVerificationAmendmentToSchedule(): {
+    amendmentId: string;
+    browserJob: CoordinatorBrowserJob;
+  } | null {
     const row = this.db
       .prepare(
-        `SELECT amendments.id
+        `SELECT browser.*, amendments.id AS amendment_id
          FROM authoring_amendments AS amendments
          JOIN authoring_jobs AS jobs ON jobs.id = amendments.job_id
          JOIN browser_jobs AS browser ON browser.id = jobs.browser_job_id
@@ -115,14 +123,24 @@ export class SemanticCoordinatorRepository {
            ON tasks.job_id = jobs.id AND tasks.task_key = 'verify-amendment:' || amendments.id
          WHERE amendments.state = 'verifying'
            AND jobs.lifecycle NOT IN ('completed','cancelled','failed')
+           AND NOT EXISTS (SELECT 1 FROM authoring_tasks active WHERE active.job_id = jobs.id AND active.state = 'running')
            AND (
              tasks.id IS NULL OR jobs.lifecycle IN ('paused','waiting_decision')
              OR browser.state IN ('completed','cancelled','failed')
            )
          ORDER BY amendments.created_at LIMIT 1`
       )
-      .get() as { id: string } | undefined;
-    return row?.id ?? null;
+      .get() as DbRow | undefined;
+    return row ? { amendmentId: String(row.amendment_id), browserJob: mapBrowserJob(row) } : null;
+  }
+
+  getUnstartedAuthoringVerification(jobId: string): { taskId: string; amendmentId: string } | null {
+    const row = this.db
+      .prepare(
+        "SELECT id, target_id FROM authoring_tasks WHERE job_id = ? AND state = 'ready' AND target_type = 'authoring_amendment' ORDER BY created_at LIMIT 1"
+      )
+      .get(jobId) as DbRow | undefined;
+    return row ? { taskId: String(row.id), amendmentId: String(row.target_id) } : null;
   }
 
   attachBrowserSession(job: CoordinatorBrowserJob, sessionId: string): void {
@@ -178,10 +196,6 @@ export class SemanticCoordinatorRepository {
                 runs.business_version_id, runs.deployment_revision_id,
                 runs.browser_job_id, runs.browser_session_id,
                 runs.current_policy_evaluation_id, runs.active_approval_grant_id,
-                evaluations.policy_version, evaluations.result AS policy_result,
-                evaluations.projection_sha256 AS policy_projection_sha256,
-                grants.status AS approval_grant_status,
-                grants.approved_projection_sha256,
                 todos.id AS todo_id, todos.state_version AS todo_state_version,
                 todos.todo_key, todos.input_json_redacted, todos.input_secret_refs_json,
                 todos.auth_context_json,
@@ -198,10 +212,6 @@ export class SemanticCoordinatorRepository {
            ON pages.id = todos.page_definition_revision_id
          JOIN deployment_profile_revisions AS deployments
            ON deployments.id = runs.deployment_revision_id
-         LEFT JOIN side_effect_policy_evaluations AS evaluations
-           ON evaluations.id = runs.current_policy_evaluation_id
-         LEFT JOIN side_effect_approval_grants AS grants
-           ON grants.id = runs.active_approval_grant_id
          WHERE runs.browser_job_id = ? AND runs.lifecycle = 'running'
            AND runs.browser_session_id IS NOT NULL AND todos.state = 'ready'
            AND NOT EXISTS (
@@ -211,7 +221,7 @@ export class SemanticCoordinatorRepository {
          ORDER BY todos.rowid LIMIT 1`
       )
       .get(jobId) as DbRow | undefined;
-    return row ? mapCoordinatorTodo(row) : null;
+    return row ? mapCoordinatorTodo({ ...row, ...this.policy.getRunPolicyColumns(row) }) : null;
   }
 
   getTodoForPageTask(pageTaskId: string): CoordinatorTodo | null {
@@ -222,10 +232,6 @@ export class SemanticCoordinatorRepository {
                 runs.business_version_id, runs.deployment_revision_id,
                 runs.browser_job_id, runs.browser_session_id,
                 runs.current_policy_evaluation_id, runs.active_approval_grant_id,
-                evaluations.policy_version, evaluations.result AS policy_result,
-                evaluations.projection_sha256 AS policy_projection_sha256,
-                grants.status AS approval_grant_status,
-                grants.approved_projection_sha256,
                 todos.id AS todo_id, todos.state_version AS todo_state_version,
                 todos.todo_key, todos.input_json_redacted, todos.input_secret_refs_json,
                 todos.auth_context_json,
@@ -243,14 +249,10 @@ export class SemanticCoordinatorRepository {
            ON pages.id = todos.page_definition_revision_id
          JOIN deployment_profile_revisions AS deployments
            ON deployments.id = runs.deployment_revision_id
-         LEFT JOIN side_effect_policy_evaluations AS evaluations
-           ON evaluations.id = runs.current_policy_evaluation_id
-         LEFT JOIN side_effect_approval_grants AS grants
-           ON grants.id = runs.active_approval_grant_id
          WHERE tasks.id = ?`
       )
       .get(pageTaskId) as DbRow | undefined;
-    return row ? mapCoordinatorTodo(row) : null;
+    return row ? mapCoordinatorTodo({ ...row, ...this.policy.getRunPolicyColumns(row) }) : null;
   }
 
   getActivePageTask(jobId: string): ActivePageTask | null {
@@ -330,8 +332,7 @@ export class SemanticCoordinatorRepository {
 
   getAuthoringJobLifecycle(jobId: string): string | null {
     const row = this.db.prepare('SELECT lifecycle FROM authoring_jobs WHERE id = ?').get(jobId) as
-      | { lifecycle: string }
-      | undefined;
+      { lifecycle: string } | undefined;
     return row?.lifecycle ?? null;
   }
 
@@ -345,6 +346,20 @@ export class SemanticCoordinatorRepository {
       )
       .get(contextType, contextId) as DbRow | undefined;
     return row ? mapExternalLink(row) : null;
+  }
+
+  getSessionCloseLeases(
+    contextType: 'run' | 'authoring',
+    contextId: string,
+    requestSha256: string
+  ): ExternalLink[] {
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM external_task_links WHERE context_type = ? AND context_id = ?
+       AND service = 'proxy_adapter' AND kind = 'browser_lease' AND request_sha256 = ?`
+      )
+      .all(contextType, contextId, requestSha256) as DbRow[];
+    return rows.map(mapExternalLink);
   }
 
   setPageTaskAgentTask(pageTaskId: string, agentTaskId: string): void {
@@ -390,8 +405,7 @@ export class SemanticCoordinatorRepository {
 
   getRunLifecycle(runId: string): string | null {
     const row = this.db.prepare('SELECT lifecycle FROM test_runs WHERE id = ?').get(runId) as
-      | { lifecycle: string }
-      | undefined;
+      { lifecycle: string } | undefined;
     return row?.lifecycle ?? null;
   }
 

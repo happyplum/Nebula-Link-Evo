@@ -111,7 +111,8 @@ export const semanticApi = {
   answerAmendmentDecision(
     amendmentId: string,
     decisionId: string,
-    answer: AmendmentDecisionAnswerRequest['answer']
+    answer: AmendmentDecisionAnswerRequest['answer'],
+    category: 'authoring_scope_expansion' | 'side_effect_approval'
   ) {
     return request<AuthoringAmendment>(
       `/api/v1/authoring-amendments/${encodeURIComponent(amendmentId)}/decisions/${encodeURIComponent(decisionId)}/answer`,
@@ -120,7 +121,7 @@ export const semanticApi = {
         body: JSON.stringify({
           schema: 'nebula.ai-e2e.impact-decision-answer/1.0',
           answer,
-          reason: answer === 'approve' ? '工作台人工批准范围扩展' : '工作台人工拒绝范围扩展',
+          reason: `工作台人工${answer === 'approve' ? '批准' : '拒绝'}${category === 'side_effect_approval' ? '精确副作用验证计划' : '范围扩展'}`,
           answeredBy: 'workspace-user',
         } satisfies AmendmentDecisionAnswerRequest),
       }

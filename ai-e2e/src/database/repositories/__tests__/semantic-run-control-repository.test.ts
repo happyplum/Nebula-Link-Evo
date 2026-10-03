@@ -1,3 +1,4 @@
+import { sideEffectPolicyCases } from '../../../test-support/side-effect-policy-cases.js';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { up as up014 } from '../../migrations/014-semantic-asset-foundation.js';
@@ -41,28 +42,224 @@ describe('semantic run control repository', () => {
 
   afterEach(() => db.close());
 
+  it('fails closed when an approved staging run loses its grant reference', () => {
+    const fixture = createFixture(db, assets, 'staging', {
+      kind: 'delete',
+      reversibility: 'irreversible',
+    });
+    const created = runs.createFormalRun(runInput(fixture, 'missing-grant'));
+    runs.answerDecision({
+      runId: created.id,
+      decisionId: created.decisionId!,
+      answerKey: 'approve',
+      reason: '批准精确计划',
+      answeredBy: 'operator',
+    });
+    db.prepare('UPDATE test_runs SET active_approval_grant_id = NULL WHERE id = ?').run(created.id);
+    expect(() =>
+      runs.command({
+        commandId: 'missing-grant-start',
+        runId: created.id,
+        action: 'start',
+        expectedStateVersion: 3,
+        createdBy: 'operator',
+      })
+    ).toThrow(/approval/i);
+    expect(workflows.claimNextBrowserJob()).toBeNull();
+  });
+
+  it.each(sideEffectPolicyCases)(
+    'Run matrix $environment $kind => $result',
+    ({ environment, kind, reversibility, result }) => {
+      const fixture = createFixture(db, assets, environment, { kind, reversibility });
+      const run = runs.createFormalRun(runInput(fixture, 'matrix-run'));
+      expect(run.admission).toBe(
+        result === 'auto_allowed'
+          ? 'ready'
+          : result === 'approval_required'
+            ? 'approval_required'
+            : 'denied'
+      );
+    }
+  );
+
+  it.each(['revoked', 'expired'] as const)(
+    're-approves the same frozen evaluation after %s without reviving the old answer',
+    (status) => {
+      const fixture = createFixture(db, assets, 'staging', {
+        kind: 'delete',
+        reversibility: 'compensatable',
+      });
+      const run = runs.createFormalRun(runInput(fixture, 'reapprove'));
+      const oldAnswer = {
+        runId: run.id,
+        decisionId: run.decisionId!,
+        answerKey: 'approve',
+        reason: '原计划审批',
+        answeredBy: 'operator',
+      };
+      runs.answerDecision(oldAnswer);
+      const oldGrant = db
+        .prepare('SELECT active_approval_grant_id AS id FROM test_runs WHERE id = ?')
+        .get(run.id) as { id: string };
+      db.prepare(
+        `UPDATE side_effect_approval_grants SET status = ?, ${status === 'revoked' ? 'revoked_at' : 'expired_at'} = ? WHERE id = ?`
+      ).run(status, new Date().toISOString(), oldGrant.id);
+      expect(() => runs.assertExecutionAllowed(run.id)).toThrow(/approval/);
+      const decision = db
+        .prepare("SELECT id FROM decision_requests WHERE context_id = ? AND status = 'open'")
+        .get(run.id) as { id: string };
+      // A recovered run may still retain the old pointer; approval verifies identity independently.
+      db.prepare('UPDATE test_runs SET active_approval_grant_id = ? WHERE id = ?').run(
+        oldGrant.id,
+        run.id
+      );
+      runs.answerDecision({ ...oldAnswer, decisionId: decision.id, reason: '再次精确批准' });
+      const newGrant = db
+        .prepare('SELECT active_approval_grant_id AS id FROM test_runs WHERE id = ?')
+        .get(run.id) as { id: string };
+      expect(newGrant.id).not.toBe(oldGrant.id);
+      expect(() => runs.assertExecutionAllowed(run.id)).not.toThrow();
+      runs.answerDecision(oldAnswer);
+      expect(
+        db.prepare('SELECT status FROM side_effect_approval_grants WHERE id = ?').get(oldGrant.id)
+      ).toEqual({ status });
+      expect(
+        db
+          .prepare(
+            'SELECT COUNT(*) AS count FROM side_effect_policy_evaluations WHERE context_id = ?'
+          )
+          .get(run.id)
+      ).toEqual({ count: 1 });
+      expect(
+        db
+          .prepare('SELECT COUNT(*) AS count FROM side_effect_approval_grants WHERE context_id = ?')
+          .get(run.id)
+      ).toEqual({ count: 2 });
+    }
+  );
+
+  it('a completed run with failed outcome expires authority without opening another decision', () => {
+    const fixture = createFixture(db, assets, 'staging', {
+      kind: 'delete',
+      reversibility: 'compensatable',
+    });
+    const run = runs.createFormalRun(runInput(fixture, 'failed-policy'));
+    runs.answerDecision({
+      runId: run.id,
+      decisionId: run.decisionId!,
+      answerKey: 'approve',
+      reason: '精确批准',
+      answeredBy: 'operator',
+    });
+    db.prepare("UPDATE test_runs SET lifecycle = 'completed', outcome = 'failed' WHERE id = ?").run(
+      run.id
+    );
+    expect(() => runs.assertExecutionAllowed(run.id)).toThrow(/terminated/);
+    expect(db.prepare('SELECT lifecycle FROM test_runs WHERE id = ?').get(run.id)).toEqual({
+      lifecycle: 'completed',
+    });
+    expect(
+      db
+        .prepare("SELECT id FROM decision_requests WHERE context_id = ? AND status = 'open'")
+        .get(run.id)
+    ).toBeUndefined();
+    expect(
+      db.prepare('SELECT status FROM side_effect_approval_grants WHERE context_id = ?').get(run.id)
+    ).toEqual({ status: 'expired' });
+  });
+
+  it('freezes repeated single writes as a high-risk Run plan', () => {
+    const fixture = createFixture(
+      db,
+      assets,
+      'staging',
+      { kind: 'create', reversibility: 'compensatable' },
+      2
+    );
+    const run = runs.createFormalRun(runInput(fixture, 'repeat-two'));
+    expect(run.admission).toBe('approval_required');
+    const evaluation = db
+      .prepare(
+        'SELECT projection_json_redacted FROM side_effect_policy_evaluations WHERE context_id = ?'
+      )
+      .get(run.id) as { projection_json_redacted: string };
+    expect(JSON.parse(evaluation.projection_json_redacted).effects[0].maxAffectedItems).toBe(2);
+    runs.answerDecision({
+      runId: run.id,
+      decisionId: run.decisionId!,
+      answerKey: 'approve',
+      reason: '批准重复两次',
+      answeredBy: 'operator',
+    });
+    runs.command({
+      runId: run.id,
+      commandId: 'repeat-start',
+      action: 'start',
+      expectedStateVersion: 3,
+      createdBy: 'operator',
+    });
+    expect(() => startTodo(runs, run.id, getTodo(db, run.id, 'first[0]').id)).not.toThrow();
+  });
+
   it.each([
     [null, 400, 'validation_error'],
     [{}, 400, 'validation_error'],
     [{ calls: [{}] }, 400, 'validation_error'],
-    [{ calls: [{ callKey: 'ordinary', functionalScriptId: 'script', runWhen: {} }] }, 500, 'internal_error'],
-    [{ calls: [{ callKey: 'state-required-not found', functionalScriptId: 'script', runWhen: {} }] }, 500, 'internal_error'],
-    [{ calls: [{ callKey: 'ordinary', functionalScriptId: 'script', repeat: { kind: 'for_each' } }] }, 409, 'conflict'],
-    [{ calls: [{ callKey: 'not found', functionalScriptId: 'script', repeat: { kind: 'for_each' } }] }, 409, 'conflict'],
+    [
+      { calls: [{ callKey: 'ordinary', functionalScriptId: 'script', runWhen: {} }] },
+      500,
+      'internal_error',
+    ],
+    [
+      {
+        calls: [{ callKey: 'state-required-not found', functionalScriptId: 'script', runWhen: {} }],
+      },
+      500,
+      'internal_error',
+    ],
+    [
+      {
+        calls: [
+          { callKey: 'ordinary', functionalScriptId: 'script', repeat: { kind: 'for_each' } },
+        ],
+      },
+      409,
+      'conflict',
+    ],
+    [
+      {
+        calls: [
+          { callKey: 'not found', functionalScriptId: 'script', repeat: { kind: 'for_each' } },
+        ],
+      },
+      409,
+      'conflict',
+    ],
   ])('uses a stable reason for authoring scenario refusal %#', async (payload, status, code) => {
     const app = Fastify();
     app.register(errorHandlerPlugin);
-    app.post('/test-revision', () => assets.createRevision({
-      assetType: 'test_scenario', assetId: 'scenario', businessVersionId: 'version',
-      schemaId: 'nebula.ai-e2e.test-scenario/1.0', payload,
-      changeReason: 'test', createdByType: 'user',
-    }));
+    app.post('/test-revision', () =>
+      assets.createRevision({
+        assetType: 'test_scenario',
+        assetId: 'scenario',
+        businessVersionId: 'version',
+        schemaId: 'nebula.ai-e2e.test-scenario/1.0',
+        payload,
+        changeReason: 'test',
+        createdByType: 'user',
+      })
+    );
     try {
       const response = await app.inject({ method: 'POST', url: '/test-revision' });
       expect(response.statusCode).toBe(status);
       expect(response.json()).toMatchObject({ code, retryable: status === 500 });
-      expect(db.prepare('SELECT COUNT(*) AS count FROM semantic_test_scenario_revisions').get()).toEqual({ count: 0 });
-    } finally { await app.close(); }
+      expect(
+        db.prepare('SELECT COUNT(*) AS count FROM semantic_test_scenario_revisions').get()
+      ).toEqual({ count: 0 });
+    } finally {
+      await app.close();
+    }
   });
 
   it('preserves typed refusals through the real repository and API boundary', async () => {
@@ -71,23 +268,45 @@ describe('semantic run control repository', () => {
     app.register(semanticRunRoutes, { prefix: '/api/v1', service: new SemanticRunService(runs) });
     try {
       const missing = await app.inject({
-        method: 'POST', url: '/api/v1/runs/missing/todos/missing/resume',
+        method: 'POST',
+        url: '/api/v1/runs/missing/todos/missing/resume',
         headers: { 'x-correlation-id': 'real-repo-refusal' },
       });
       expect(missing.statusCode).toBe(404);
-      expect(missing.json()).toMatchObject({ code: 'not_found', message: 'Run TODO not found', retryable: false, correlationId: 'real-repo-refusal' });
+      expect(missing.json()).toMatchObject({
+        code: 'not_found',
+        message: 'Run TODO not found',
+        retryable: false,
+        correlationId: 'real-repo-refusal',
+      });
 
       const fixture = createFixture(db, assets, 'test');
       const created = runs.createFormalRun(runInput(fixture, 'real-route'));
       const todo = getTodo(db, created.id, 'first');
       const refused = await app.inject({
-        method: 'POST', url: `/api/v1/runs/${created.id}/todos/${todo.id}/start`,
-        payload: { browserSessionId: 'session', tabId: 'tab', browserLeaseRefHash: HASH_A, toolPolicyHash: HASH_A, taskPayloadSha256: HASH_A, requiredAuthContext: {}, sideEffectAuthorization: {}, budget: {} },
+        method: 'POST',
+        url: `/api/v1/runs/${created.id}/todos/${todo.id}/start`,
+        payload: {
+          browserSessionId: 'session',
+          tabId: 'tab',
+          browserLeaseRefHash: HASH_A,
+          toolPolicyHash: HASH_A,
+          taskPayloadSha256: HASH_A,
+          requiredAuthContext: {},
+          sideEffectAuthorization: {},
+          budget: {},
+        },
       });
       expect(refused.statusCode).toBe(409);
-      expect(refused.json()).toMatchObject({ code: 'conflict', message: 'Run is not running', retryable: false });
+      expect(refused.json()).toMatchObject({
+        code: 'conflict',
+        message: 'Run is not running',
+        retryable: false,
+      });
       expect(db.prepare('SELECT COUNT(*) AS count FROM page_tasks').get()).toEqual({ count: 0 });
-    } finally { await app.close(); }
+    } finally {
+      await app.close();
+    }
   });
 
   it('freezes verified scenario calls and unlocks dependent TODOs after success', () => {
@@ -211,9 +430,11 @@ describe('semantic run control repository', () => {
       answeredBy: 'operator',
     });
     const readyVersion = Number(
-      (db.prepare('SELECT state_version AS v FROM test_runs WHERE id = ?').get(created.id) as {
-        v: number;
-      }).v
+      (
+        db.prepare('SELECT state_version AS v FROM test_runs WHERE id = ?').get(created.id) as {
+          v: number;
+        }
+      ).v
     );
     runs.command({
       commandId: 'start-cancel-grant',
@@ -231,9 +452,7 @@ describe('semantic run control repository', () => {
     });
     expect(
       db
-        .prepare(
-          'SELECT status, reason_json FROM side_effect_approval_grants WHERE context_id = ?'
-        )
+        .prepare('SELECT status, reason_json FROM side_effect_approval_grants WHERE context_id = ?')
         .get(created.id)
     ).toEqual({
       status: 'expired',
@@ -259,9 +478,11 @@ describe('semantic run control repository', () => {
       created.id
     );
     const readyVersion = Number(
-      (db.prepare('SELECT state_version AS v FROM test_runs WHERE id = ?').get(created.id) as {
-        v: number;
-      }).v
+      (
+        db.prepare('SELECT state_version AS v FROM test_runs WHERE id = ?').get(created.id) as {
+          v: number;
+        }
+      ).v
     );
     expect(() =>
       runs.command({
@@ -276,9 +497,9 @@ describe('semantic run control repository', () => {
       lifecycle: 'paused',
     });
     expect(
-      db.prepare('SELECT status FROM side_effect_approval_grants WHERE context_id = ?').get(
-        created.id
-      )
+      db
+        .prepare('SELECT status FROM side_effect_approval_grants WHERE context_id = ?')
+        .get(created.id)
     ).toEqual({ status: 'expired' });
     expect(
       db
@@ -323,9 +544,11 @@ describe('semantic run control repository', () => {
     });
     const created = runs.createFormalRun(runInput(fixture, 'run-open-decision'));
     const pausedVersion = Number(
-      (db.prepare('SELECT state_version AS v FROM test_runs WHERE id = ?').get(created.id) as {
-        v: number;
-      }).v
+      (
+        db.prepare('SELECT state_version AS v FROM test_runs WHERE id = ?').get(created.id) as {
+          v: number;
+        }
+      ).v
     );
     expect(() =>
       runs.command({
@@ -544,8 +767,9 @@ function getTodo(db: DatabaseSync, runId: string, todoKey: string) {
 function createFixture(
   db: DatabaseSync,
   assets: SemanticAssetRepository,
-  environment: 'test' | 'staging' | 'production',
-  effect?: Record<string, unknown>
+  environment: 'local' | 'test' | 'staging' | 'production',
+  effect?: Record<string, unknown>,
+  repeatCount = 1
 ) {
   const versions = new BusinessVersionRepository(db);
   const now = new Date().toISOString();
@@ -638,8 +862,7 @@ function createFixture(
               name: '执行账号操作',
               intent: '执行受控副作用',
               action: {
-                type:
-                  typeof effect.stepActionType === 'string' ? effect.stepActionType : 'click',
+                type: typeof effect.stepActionType === 'string' ? effect.stepActionType : 'click',
                 target: {
                   semantic: '账号操作按钮',
                   candidates: [
@@ -699,7 +922,11 @@ function createFixture(
       inputs: [],
       finalAcceptance: [],
       calls: [
-        { callKey: 'first', functionalScriptId: script.id },
+        {
+          callKey: 'first',
+          functionalScriptId: script.id,
+          ...(repeatCount > 1 ? { repeat: repeatCount } : {}),
+        },
         { callKey: 'second', functionalScriptId: script.id },
       ],
       edges: [
