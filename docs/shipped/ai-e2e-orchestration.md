@@ -16,6 +16,7 @@
 - [shipped] ai-e2e 长期原始证据按成功/失败默认 7/30 天保留；清理 worker 仅在所有引用窗口到期且没有 open/pinned/custom manifest 或对象 pin 后逻辑删除，物理文件回收以持久 receipt 在重启后续跑，并保护共享 storage key。manifest/item/哈希与测试结果继续保留，未按项目规则脱敏的截图/DOM 登记为 `restricted/pending`。v1 不承诺通用自动脱敏；证据外发、共享、远程/多用户访问或项目级隐私策略启用前，必须先定义并实现脱敏、原件保留与访问权限规则。
 - [shipped] 全局 FIFO 与恢复：单 active browser session/context/control actor，Authoring 与 Run 共享安全边界，重启恢复 dispatching outbox，未知副作用不盲目重放。
 - [shipped] 生产浏览器中心 UI：左上下文/TODO、中间持续挂载浏览器、右侧 PRD/模块/场景/Diff/影响/决策/证据和常驻 Chat；模块切换不导航，显式定位才创建 navigation-only task。
+- [shipped] UI 基础组件收敛为 `ui/src/shared/components/` 的 Button、Input、Card、Modal；`ui/src/components/ui/` 只保留 Sonner Toaster 适配，`components.json` 只作为生成配置保留。无调用的 18 个替代组件（含旧向导 Stepper）、Stepper 专属测试、Table/Tree/CodeEditor 与 3 项索引导出已删除，11 个 Radix 直接依赖与 class-variance-authority 已退出；产品组件、样式/token 与 Modal 动画依赖保持。
 - [shipped] additive migration 020 新增 Authoring/Run Agent 活动事件与独立外部 activity cursor；保留既有 semantic 数据库和历史记录，不复用控制面 `last_external_seq`，不执行破坏性迁移。
 - [shipped] ai-e2e 从 Agent Task `activity-log` 聚合多页面 Agent 活动，并将 authoring/run 生命周期、候选、审批、浏览器验证、激活、失败、依赖跳过和未知结果投影到各业务上下文的本地单调活动序列。
 - [shipped] `AgentActivityRepository.snapshot` 直接调用 shared 唯一纯 replay，本地 applyEvent 已退出；先保留控制面/消息投影和 source seq 去重，再从 activity 聚合顶层 state，不受外部 stream.state 覆盖；generatedAt 使用最后事件/空流当前时间。UI 通过公共 UI 入口重导出同一核心，后端不依赖 React。

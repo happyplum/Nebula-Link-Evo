@@ -60,6 +60,7 @@ UI 路由：`/`、`/semantic/:projectId`、`/semantic/:projectId/authoring/:vers
 - side-effect authorization 精确覆盖 effect-bearing step；staging 高风险必须 grant，production 业务写拒绝。
 - 断线后从 snapshot + seq 恢复，不由本地百分比或 Chat 文本推断状态。
 - Project 与 semantic 工作台统一 JSON 请求入口；完整保留成功 data/meta、HTTP status 与 ApiProblem 的 code/message/retryable/correlationId/details（含未知嵌套内容），非 JSON 失败不展示服务端 HTML。
+- UI 基础组件唯一 owner 为 `ui/src/shared/components/`，公共入口仅导出产品使用的 Button、Input、Card、Modal；`ui/src/components/ui/` 仅保留 Sonner Toaster 适配，`components.json` 保留生成配置。无调用的 shadcn/Radix 替代组件、旧向导 Stepper 及专属测试、Table/Tree/CodeEditor 与索引导出已退出，对应 11 个 Radix 直接依赖和 class-variance-authority 已移除；保留产品样式、token 与 Modal 使用的 tailwindcss-animate。
 - Run/Authoring 业务拒绝由产生处的领域 kind/code 或 repository reason 决定，API 边界集中映射既有状态；文案、动态 callKey 不参与分类。五个 `side_effect_*` wire code 与状态保持不变。
 - Agent Activity snapshot 调用 shared 纯 replay 归并 turns/sections/seq；本包先投影业务事件并按 source seq 去重，再从 activity 聚合顶层 state（优先 running/queued、blocked、outcome_unknown、failed），不受外部 stream.state 覆盖；generatedAt 使用最后事件时间，空流使用当前时间。UI 继续通过公共 UI 包重导出的同一 shared 核心恢复 live；仓储不依赖 React。
 - Agent Task 创建／查询／命令／审计事件使用 shared TypeBox schema 派生类型；view 保留真实 modelRole、脱敏 request、usage 等服务字段，BrowserStep 保留 videoSegment（true 仍由服务 capability 政策拒绝）。

@@ -1,6 +1,6 @@
 # AI E2E UI Architecture
 
-> Source: rewritten against the shipped semantic workbench and verified against `ai-e2e/ui` code reality on 2026-09-05.
+> Source: rewritten against the shipped semantic workbench; component ownership verified against `ai-e2e/ui` code reality on 2026-10-03.
 
 ## Purpose
 
@@ -13,7 +13,7 @@ This document preserves the durable UI architecture facts that should survive cl
 - React 19 + `react-router-dom` v7 (`HashRouter`)
 - TanStack Query for server-state caching (snapshot restores + polling fallback)
 - Tailwind CSS 4 via `@tailwindcss/vite`
-- shadcn/ui component conventions backed by Radix UI primitives (`components.json`)
+- Product base components owned by `src/shared/components/` (Button, Input, Card, Modal)
 - `@nebula-link-evo/agent-activity-ui` for Agent Stream rendering
 - `@nebula-link-evo/shared` for Agent Stream types/guards
 - `sonner` for toast notifications
@@ -115,14 +115,15 @@ The canonical token mapping lives in `src/app/globals.css`, including shadcn-com
 
 ## Component Organization
 
-- `src/components/ui/` contains shadcn/Radix-style primitives.
+- `src/shared/components/` is the sole owner of product base components; its index exports Button, Input, Card, and Modal for the project entry surfaces.
+- `src/components/ui/` contains only the Sonner Toaster adapter consumed by `App.tsx`. Unused shadcn/Radix alternatives, the old wizard Stepper and its dedicated test, and unused shared Table/Tree/CodeEditor exports have been removed along with their exclusive direct dependencies.
 - `src/features/project/` contains the home/project entry surfaces (project list, creation dialog, metrics).
 - `src/features/semantic/` contains the semantic workbench surfaces and stream hooks.
 - `src/app/` contains routing, layout, pages, and global styles.
 - `src/shared/api/queryClient.ts` owns the shared QueryClient (5min staleTime, mutation error toasts).
-- `components.json` is the shadcn configuration and points generated UI components at `@/components/ui`.
+- `components.json` retains the shadcn generator configuration pointing at `@/components/ui`; it does not define a second product component owner. Extend and reuse `src/shared/components/` for base capabilities with the same responsibility.
 
-Do not revive the old CSS Modules architecture for this UI. Current styling uses Tailwind utilities, Atlas tokens, and shadcn-compatible primitives.
+Do not revive the old CSS Modules architecture for this UI. Current styling uses Tailwind utilities, Atlas tokens, and the product base components. Keep the existing token mapping and `tailwindcss-animate` plugin used by Modal animations.
 
 ## Boundaries
 
