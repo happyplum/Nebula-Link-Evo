@@ -13,6 +13,7 @@
 - Chat 生命周期、诊断和当前运行身份以独立 SQLite `sessions_state` 为唯一权威，所有状态转换经本应用 `ChatSessionController` 的 run ID / 来源状态条件更新；队列重试保留同一个运行 ID，直接恢复重新竞争同一 scheduler/admission。JSONL 回放只重建消息与活动事件，不能覆盖生命周期。
 - 常规模型通过 `dsh-llm-pi-ai`/Pi profile 编排；GLM 通过保留 JWT 机制的 `NebulaGlmLlmAdapter` 接入；`/api/v1/ai/generate` 保持无 session、无 tool 的单次 DSH LLM stream。
 - 启动时先通过 `proxy-adapter /api/v1/capabilities` 校验 browser-execution/operation major 与必需 feature，再通过隔离的 transport child scope 连接唯一 required `gateway` MCP Server。原始 operation 工具不进入模型可见表；Vision 产品工具只在启动期一次性投影，运行期不热更新。
+- 产品工具经 `src/harness/gateway-tool-bridge.ts` 将原始 JSON Schema 投影到 DSH ToolRuntime；旧 Vercel 工具适配、chat 侧 JSON Schema→Zod 副本及对应 barrel 已移除。`ai` 继续用于 Vision/provider，`zod` 作为 AI SDK 必需 peer 保留。
 - 通过内部 `VisionAnalyzer` 提供 `vision.analyze_page` 与 `vision.resolve_target`；只接受 proxy 授权的不可变 `VisionSnapshotBindingV1`，不通过 MCP 暴露。
 - 从已提交的 DSH/控制面事实投影脱敏 Agent Stream；向 `debug-ui` 提供 snapshot-first Chat 活动流，并向 Agent Task 调用方提供独立活动查询与 SSE。
 - 提供 provider preflight、持久 FIFO/容量门、token reservation、loop guard、JSONL durable projection、删除 saga、配额/留存与可校验全量备份。
