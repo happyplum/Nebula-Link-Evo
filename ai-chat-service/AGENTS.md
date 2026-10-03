@@ -31,6 +31,8 @@ pnpm type-check   # tsc --noEmit
 - Independent SQLite DB — no cross-DB FK to proxy-adapter.
 - CORS enabled for debug-ui.
 
+- Public Agent Task DTO/status/command/event schemas are owned by `@nebula-link-evo/shared/types/agent-task`. HTTP create/command routes validate structure once with the route-local TypeBox compiler; service enforces domain policy and derives browserSteps, executor consumes that map. Credential-bearing create input and persisted/public request schemas are separate; restart never resumes from redacted storage.
+
 ## Capability Model
 
 - The **analysis/decision model** is the planner: it understands requirements and browser evidence, determines the next test action, and may consume MCP tools and structured vision results. Provider aliases are implementations, not model roles.

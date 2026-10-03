@@ -13,13 +13,10 @@ import type { GatewayTool } from '../tools/types.js';
 import type { ToolRegistry } from '../tools/registry.js';
 import { AgentTaskError, toAgentTaskError } from './errors.js';
 import { BrowserToolWrapper } from './browser-tool-wrapper.js';
-import type {
-  AgentTaskExecutionContext,
-  AgentTaskExecutionResult,
-  AgentTaskToolCallSummary,
-} from './types.js';
+import type { AgentTaskToolCallSummary } from '@nebula-link-evo/shared/types/agent-task';
+import type { AgentTaskExecutionContext, AgentTaskExecutionResult } from './types.js';
 import type { PendingHarnessResultRecord } from './repository.js';
-import { validateCreateAgentTaskRequest, validateResponseValue } from './validation.js';
+import { validateResponseValue } from './validation.js';
 
 const SUBMIT_RESULT_TOOL = 'submit_result';
 
@@ -41,8 +38,7 @@ export class AgentTaskModelExecutor {
   constructor(private readonly options: AgentTaskModelExecutorOptions) {}
 
   async execute(context: AgentTaskExecutionContext): Promise<AgentTaskExecutionResult> {
-    const validated = validateCreateAgentTaskRequest(context.request);
-    const request = validated.request;
+    const request = context.request;
     const budgets = context.skill?.effectiveBudgets ?? request.budgets;
     const allowedTools = context.skill?.effectiveToolAllow ?? request.toolPolicy.allow;
     const summaries: AgentTaskToolCallSummary[] = [];
@@ -58,7 +54,7 @@ export class AgentTaskModelExecutor {
       context,
       allowedTools,
       budgets.maxToolCalls,
-      validated.browserSteps,
+      context.browserSteps,
       summaries,
       consumeToolCall
     );
@@ -282,7 +278,10 @@ export class AgentTaskModelExecutor {
     context: AgentTaskExecutionContext,
     effectiveToolAllow: readonly string[],
     effectiveMaxToolCalls: number,
-    browserSteps: ReadonlyMap<string, import('./types.js').AgentTaskBrowserStep>,
+    browserSteps: ReadonlyMap<
+      string,
+      import('@nebula-link-evo/shared/types/agent-task').AgentTaskBrowserStep
+    >,
     summaries: AgentTaskToolCallSummary[],
     consumeToolCall: () => void
   ): GatewayTool[] {

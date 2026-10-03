@@ -1,7 +1,8 @@
+import type { CreateAgentTaskRequest } from '@nebula-link-evo/shared/types/agent-task';
 import { describe, expect, it } from 'vitest';
 import { validateCreateAgentTaskRequest, validateResponseValue } from './validation.js';
 
-function validRequest() {
+function validRequest(): CreateAgentTaskRequest {
   return {
     schema: 'nebula.ai.agent-task/1.0',
     clientTaskId: 'client-1',
@@ -20,6 +21,18 @@ function validRequest() {
 }
 
 describe('Agent task validation', () => {
+  it.each([
+    { maxDurationMs: 999 },
+    { maxDurationMs: 600001 },
+    { maxModelTurns: 21 },
+    { maxToolCalls: 51 },
+    { maxTokens: 64001 },
+  ])('retains service budget policy limits: %j', (patch) => {
+    const request = validRequest();
+    Object.assign(request.budgets, patch);
+    expect(() => validateCreateAgentTaskRequest(request)).toThrow('budgets.');
+  });
+
   it('normalizes a valid request and produces a stable hash', () => {
     const first = validateCreateAgentTaskRequest(validRequest());
     const second = validateCreateAgentTaskRequest(validRequest());
@@ -66,7 +79,7 @@ describe('Agent task validation', () => {
     const request = validRequest();
     request.toolPolicy = {
       allow: ['vision.resolve_target'],
-      constraints: { 'vision.resolve_target': { maxCalls: 1 } },
+      constraints: { 'browser-control.operation_execute': { steps: [] } },
     } as typeof request.toolPolicy;
 
     expect(() => validateCreateAgentTaskRequest(request)).toThrow(
@@ -75,7 +88,7 @@ describe('Agent task validation', () => {
   });
 
   it('accepts screenshot/DOM capture and rejects unsupported video capture', () => {
-    const request = {
+    const request: CreateAgentTaskRequest = {
       ...validRequest(),
       browserBinding: {
         browserSessionId: 'session-1',
@@ -105,14 +118,14 @@ describe('Agent task validation', () => {
     expect(
       validateCreateAgentTaskRequest(request).browserSteps.get('state')?.capture
     ).toMatchObject({ beforeScreenshot: true, afterScreenshot: true, domSnapshot: true });
-    request.toolPolicy.constraints['browser-control.operation_execute'].steps[0].capture = {
-      videoSegment: true,
-    };
+    const step = validateCreateAgentTaskRequest(request).browserSteps.get('state');
+    if (!step) throw new Error('Missing fixture browser step');
+    step.capture = { videoSegment: true };
     expect(() => validateCreateAgentTaskRequest(request)).toThrow('video capture is not available');
   });
 
   it('redacts the lease token and blocks actions on observe bindings', () => {
-    const request = {
+    const request: CreateAgentTaskRequest = {
       ...validRequest(),
       browserBinding: {
         browserSessionId: 'session-1',
@@ -135,6 +148,7 @@ describe('Agent task validation', () => {
     expect(() => validateCreateAgentTaskRequest(request)).toThrow(
       'Observe binding cannot authorize act step'
     );
+    if (!request.browserBinding) throw new Error('Missing fixture binding');
     request.browserBinding.access = 'control';
     const validated = validateCreateAgentTaskRequest(request);
     expect(JSON.stringify(validated.persistedRequest)).not.toContain('top-secret');
@@ -142,7 +156,7 @@ describe('Agent task validation', () => {
   });
 
   it('requires an exact policy/grant intersection for effect-bearing steps', () => {
-    const request = {
+    const request: CreateAgentTaskRequest = {
       ...validRequest(),
       correlation: { runId: 'run-1' },
       browserBinding: {

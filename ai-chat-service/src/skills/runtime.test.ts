@@ -1,3 +1,4 @@
+import type { CreateAgentTaskRequest } from '@nebula-link-evo/shared/types/agent-task';
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -70,7 +71,7 @@ function writePackage(root: string, record: SkillVersionRecord): string {
   return packageDirectory;
 }
 
-function taskRequest(record: SkillVersionRecord) {
+function taskRequest(record: SkillVersionRecord): CreateAgentTaskRequest {
   return {
     schema: 'nebula.ai.agent-task/1.0',
     clientTaskId: 'skill-task-1',

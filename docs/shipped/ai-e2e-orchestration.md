@@ -1,6 +1,7 @@
 # ai-e2e-orchestration `ai-e2e :3002 /ai-e2e/`
 
 - [shipped] 纯 semantic 项目初始化：`POST /api/v1/projects` 原子创建项目、不可变部署修订、业务版本、PRD 和待验证起始资产图；支持幂等重放并拒绝请求漂移。
+- [shipped] AgentTaskClient 与编排／投影直接消费 `@nebula-link-evo/shared/types/agent-task` schema-derived 创建/view/status/command/event/BrowserStep；原客户端 DTO 副本退出，完整 view 字段与 videoSegment 契约保持；命令 fixture 与真实协议返回同一 command/task 结构。
 - [shipped] 产品面仅包含独立 semantic 数据库、canonical `/api/v1/*`、受控 Agent/browser 客户端和结构化资产执行链。
 - [shipped] semantic SQLite runtime 使用 `better-sqlite3` 13 的 N-API 实现；既有 migration、repository、真实文件库及三服务启动契约保持不变。
 - [shipped] 业务版本与 semantic 资产图：页面→业务模块→功能模块→多个功能脚本→场景 DAG，稳定身份、不可变修订、copy 引用重建和验证失效。

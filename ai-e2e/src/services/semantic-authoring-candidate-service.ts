@@ -1,9 +1,7 @@
 import type { SemanticAssetType } from '../contracts/semantic-control.js';
 import type { AmendmentCategory, AmendmentRecord } from '../contracts/semantic-authoring.js';
 import { createHash } from 'node:crypto';
-import type {
-  AuthoringAmendmentRepository,
-} from '../database/repositories/authoring-amendment-repository.js';
+import type { AuthoringAmendmentRepository } from '../database/repositories/authoring-amendment-repository.js';
 import type { CoordinatorAuthoringTask } from '../database/repositories/semantic-coordinator-repository.js';
 import type {
   CreateSemanticAssetIdentityParams,
@@ -14,8 +12,9 @@ import { hashValue } from '../database/repositories/semantic-repository-utils.js
 import type {
   AgentTaskBrowserStep,
   AgentTaskView,
-  CreateAgentTaskInput,
-} from '../infrastructure/agent-task-client.js';
+  CreateAgentTaskRequest,
+} from '@nebula-link-evo/shared/types/agent-task';
+
 import type { SemanticWorkspaceV1 } from '../contracts/semantic-control.js';
 import {
   buildSemanticBrowserSteps,
@@ -62,7 +61,9 @@ export class SemanticAuthoringCandidateService {
     private readonly amendments: AuthoringAmendmentRepository
   ) {}
 
-  buildAgentRequest(task: CoordinatorAuthoringTask): Omit<CreateAgentTaskInput, 'browserBinding'> {
+  buildAgentRequest(
+    task: CoordinatorAuthoringTask
+  ): Omit<CreateAgentTaskRequest, 'browserBinding'> {
     if (isVerificationTask(task)) return this.buildVerificationAgentRequest(task);
     if (task.input.intent === 'locate_in_browser') return this.buildLocateAgentRequest(task);
     const workspace = this.requireWorkspace(task.businessVersionId);
@@ -211,9 +212,7 @@ export class SemanticAuthoringCandidateService {
     if (rawProposals.length === 0 || rawProposals.length > 20) {
       throw new Error('候选修改数量必须在 1 到 20 之间');
     }
-    const proposals = rawProposals.map((raw) =>
-      validateProposal(raw, task, context, this.queries)
-    );
+    const proposals = rawProposals.map((raw) => validateProposal(raw, task, context, this.queries));
     this.assets.createAssetIdentities(
       proposals
         .map((proposal) => proposal.identity)
@@ -412,8 +411,7 @@ export class SemanticAuthoringCandidateService {
     );
     for (const change of executableChanges) {
       const assetType = requiredString(change.assetType, 'change.assetType') as
-        | 'functional_script'
-        | 'test_scenario';
+        'functional_script' | 'test_scenario';
       const assetId = requiredString(change.assetId, 'change.assetId');
       const candidateRevisionId = requiredString(
         change.candidateRevisionId,
@@ -508,7 +506,7 @@ export class SemanticAuthoringCandidateService {
 
   private buildVerificationAgentRequest(
     task: CoordinatorAuthoringTask
-  ): Omit<CreateAgentTaskInput, 'browserBinding'> {
+  ): Omit<CreateAgentTaskRequest, 'browserBinding'> {
     const amendmentId = requiredString(task.input.amendmentId, 'amendmentId');
     const amendment = this.amendments.getAmendment(amendmentId);
     if (!amendment || amendment.jobId !== task.jobId || amendment.state !== 'verifying') {
@@ -576,7 +574,7 @@ export class SemanticAuthoringCandidateService {
     candidates: VerificationCandidate[],
     workspace: SemanticWorkspaceV1,
     steps: AgentTaskBrowserStep[]
-  ): NonNullable<CreateAgentTaskInput['sideEffectAuthorization']> | undefined {
+  ): NonNullable<CreateAgentTaskRequest['sideEffectAuthorization']> | undefined {
     const effectSteps = steps.filter((step) => step.effectId);
     if (effectSteps.length === 0) return undefined;
     const deployment = this.queries.getDefaultDeployment(task.businessVersionId);
@@ -677,7 +675,7 @@ export class SemanticAuthoringCandidateService {
 
   private buildLocateAgentRequest(
     task: CoordinatorAuthoringTask
-  ): Omit<CreateAgentTaskInput, 'browserBinding'> {
+  ): Omit<CreateAgentTaskRequest, 'browserBinding'> {
     const workspace = this.requireWorkspace(task.businessVersionId);
     const context = resolveContext(task, workspace);
     const steps: AgentTaskBrowserStep[] = [

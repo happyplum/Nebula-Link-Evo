@@ -5,10 +5,11 @@ import { AgentTaskRepository } from '../../../agent-tasks/repository.js';
 import { AgentTaskService } from '../../../agent-tasks/service.js';
 import type { AgentTaskExecutor } from '../../../agent-tasks/types.js';
 import agentTaskRoutes from './agent-tasks.js';
+import type { CreateAgentTaskRequest } from '@nebula-link-evo/shared/types/agent-task';
 
 const cleanups: Array<() => Promise<void>> = [];
 
-function body() {
+function body(): CreateAgentTaskRequest {
   return {
     schema: 'nebula.ai.agent-task/1.0',
     clientTaskId: 'client-1',
@@ -61,6 +62,141 @@ afterEach(async () => {
 });
 
 describe('Agent task routes', () => {
+  it.each([
+    'browserBinding',
+    'toolPolicy.constraints.browser-control.operation_execute',
+    'toolPolicy.constraints.browser-control.operation_execute.steps.0',
+    'toolPolicy.constraints.browser-control.operation_execute.steps.0.capture',
+    'toolPolicy.constraints.browser-control.operation_execute.steps.0.target',
+    'toolPolicy.constraints.browser-control.operation_execute.steps.0.target.expected',
+    'toolPolicy.constraints.browser-control.operation_execute.steps.0.target.candidates.0',
+    'sideEffectAuthorization',
+    'sideEffectAuthorization.effects.0',
+    'sideEffectAuthorization.grant',
+  ])('rejects nested unknown fields in %s before starting a task', async (path) => {
+    const execute = vi.fn(completedExecutor.execute);
+    const app = await setup(true, { execute });
+    const request: CreateAgentTaskRequest = {
+      ...body(),
+      browserBinding: {
+        browserSessionId: 'session-1',
+        tabId: 'tab-1',
+        browserLeaseId: 'lease-1',
+        browserLeaseToken: 'test-token',
+        browserLeaseSequence: 1,
+        access: 'control',
+      },
+      toolPolicy: {
+        allow: ['browser-control.operation_execute'],
+        constraints: {
+          'browser-control.operation_execute': {
+            steps: [
+              {
+                stepId: 'step-1',
+                kind: 'act',
+                operation: 'click',
+                effectId: 'effect-1',
+                maxAffectedItems: 1,
+                capture: { domSnapshot: true },
+                target: {
+                  semantic: 'Login',
+                  candidates: [{ strategy: 'role', role: 'button' }],
+                  expected: { cardinality: 'exactly_one' },
+                },
+              },
+            ],
+          },
+        },
+      },
+      sideEffectAuthorization: {
+        contextType: 'run',
+        contextId: 'run-1',
+        environment: 'staging',
+        policyVersion: '1',
+        policyEvaluationId: 'evaluation-1',
+        policyResult: 'approval_required',
+        projectionSha256: 'a'.repeat(64),
+        effects: [
+          {
+            stepId: 'step-1',
+            effectId: 'effect-1',
+            kind: 'delete',
+            maxAffectedItems: 1,
+            reversibility: 'irreversible',
+          },
+        ],
+        grant: { grantId: 'grant-1', status: 'active', approvedProjectionSha256: 'a'.repeat(64) },
+      },
+      correlation: { runId: 'run-1' },
+    };
+    let nested = request as unknown as Record<string, unknown>;
+    for (const key of path
+      .replace('browser-control.operation_execute', 'executeConstraint')
+      .split('.')) {
+      nested = nested[
+        key === 'executeConstraint' ? 'browser-control.operation_execute' : key
+      ] as Record<string, unknown>;
+    }
+    nested.unknown = true;
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/agent-tasks',
+      payload: request,
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ error: { code: 'validation_failed' } });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { unknown: true },
+    { expectedStateVersion: '1' },
+    { expectedStateVersion: Number.MAX_SAFE_INTEGER + 1 },
+    { type: 'restart' },
+  ])('rejects malformed commands through the shared schema: %j', async (patch) => {
+    const app = await setup();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/agent-tasks/missing/commands',
+      payload: { commandId: 'command-1', type: 'pause', expectedStateVersion: 1, ...patch },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ error: { code: 'validation_failed' } });
+  });
+
+  it('rejects an oversized idempotency header at the HTTP boundary', async () => {
+    const app = await setup();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/agent-tasks',
+      payload: body(),
+      headers: { 'idempotency-key': 'x'.repeat(201) },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ error: { code: 'validation_failed' } });
+  });
+
+  it.each([
+    { unknown: true },
+    { budgets: { maxDurationMs: 5000, maxModelTurns: 1, maxToolCalls: 0, unknown: true } },
+    { toolPolicy: { allow: [], unknown: true } },
+    { skillPolicy: { allow: [], unknown: true } },
+    { budgets: { maxDurationMs: '5000', maxModelTurns: 1, maxToolCalls: 0 } },
+    { correlation: { '': 'value' } },
+    { correlation: { ['x'.repeat(65)]: 'value' } },
+  ])('rejects unknown fields and scalar coercion at the HTTP boundary: %j', async (patch) => {
+    const app = await setup();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/agent-tasks',
+      payload: { ...body(), ...patch },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      error: { code: 'validation_failed', retryable: false },
+    });
+  });
+
   it('creates, gets and advertises the minimal implemented surface', async () => {
     const app = await setup();
     const create = await app.inject({
@@ -175,6 +311,20 @@ describe('Agent task routes', () => {
     expect(create.json().request.sideEffectAuthorization).toMatchObject({
       contextId: 'run-1',
       policyEvaluationId: 'evaluation-1',
+    });
+    expect(create.json().request.browserBinding).toEqual({
+      browserSessionId: 'session-1',
+      tabId: 'tab-1',
+      browserLeaseId: 'lease-1',
+      browserLeaseSequence: 1,
+      access: 'control',
+    });
+    expect(
+      create.json().request.toolPolicy.constraints['browser-control.operation_execute'].steps[0]
+    ).toMatchObject({
+      stepId: 'step-1',
+      args: { url: 'http://example.test/' },
+      effectId: 'effect-1',
     });
   });
 

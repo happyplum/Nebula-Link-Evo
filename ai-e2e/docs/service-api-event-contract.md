@@ -214,57 +214,14 @@ interface RunCommandRequestV1 {
 | GET    | `/api/v1/agent-tasks/:taskId/activity-log?afterSeq=N&limit=M` | shipped：读取脱敏活动事件；不返回 secret、Skill 指令、未授权 reasoning 或原始 Tool 结果。                                    |
 | GET    | `/api/v1/skills`                                           | shipped：读取当前已加载 Skill 的安全 catalog；不返回指令正文、sourceRef 或文件路径。                                           |
 
-当前控制语义：pause 只允许首个工具调用开始前，并与 `safe_pause` checkpoint 在同一事务落盘；工具已开始时 pause 返回结构化 conflict，调用方应选择 interrupt/cancel。interrupt/cancel 立即形成任务终态且不推断外部副作用回滚。服务重启将 created/running/paused 收敛为 interrupted，并将遗留 accepted command 收敛为 rejected；paused 只在同一进程仍保有安全运行上下文时允许 resume。capability 声明 `taskCommands=true/taskEvents=true`。
+当前控制语义：pause 在原子 operation 已结算或进入 unknown 后的安全 checkpoint 生效，不打断已开始操作；安全 checkpoint 与持久任务状态共同落盘。interrupt/cancel 立即形成任务终态且不推断外部副作用回滚。服务重启将 created/running/paused 收敛为 interrupted，并将遗留 accepted command 收敛为 rejected；paused 只在同一进程仍保有安全运行上下文时允许 resume。capability 声明 `taskCommands=true/taskEvents=true`。
 
 ```ts
-interface CreateAgentTaskRequestV1 {
-  schema: 'nebula.ai.agent-task/1.0';
-  clientTaskId: string;
-  modelRole: 'decision';
-  input: Record<string, unknown>;
-  responseSchema: Record<string, unknown>;
-  toolPolicy: {
-    allow: string[];
-    constraints?: Record<string, Record<string, unknown>>;
-  };
-  skillPolicy: {
-    allow: { skillId: string; version: string; contentHash: string }[];
-  };
-  budgets: {
-    maxDurationMs: number;
-    maxModelTurns: number;
-    maxToolCalls: number;
-    maxTokens?: number;
-  };
-  browserBinding?: {
-    browserSessionId: string;
-    tabId: string;
-    browserLeaseId: string;
-    browserLeaseToken: string;
-    browserLeaseSequence: number;
-    access: 'observe' | 'control';
-  };
-  sideEffectAuthorization?: {
-    contextType: 'run' | 'authoring';
-    contextId: string;
-    environment: 'local' | 'test' | 'staging' | 'production';
-    policyVersion: string;
-    policyEvaluationId: string;
-    policyResult: 'auto_allowed' | 'approval_required';
-    projectionSha256: string;
-    effects: Array<{
-      stepId: string;
-      effectId: string;
-      kind: 'create' | 'update' | 'delete' | 'auth_change';
-      maxAffectedItems: number;
-      reversibility: 'reversible' | 'compensatable' | 'irreversible';
-      usesFileUpload?: boolean;
-    }>;
-    grant?: { grantId: string; status: 'active'; approvedProjectionSha256: string };
-  };
-  correlation?: Record<string, string>;
-}
+import type { CreateAgentTaskRequest, AgentTaskView, AgentTaskCommandRequest, AgentTaskEventRecord }
+  from '@nebula-link-evo/shared/types/agent-task';
 ```
+
+公开字段与结构校验的唯一权威源是 `shared/types/agent-task.ts` 的 TypeBox schema；HTTP create/commands 使用局部 compiler 校验一次，服务保留领域政策并派生 browserSteps，executor/pause/resume 复用内存 map。创建绑定含租约 token；持久/public view 引用独立脱敏 request schema，不允许 token。
 
 约束：
 

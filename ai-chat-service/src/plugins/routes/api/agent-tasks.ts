@@ -1,137 +1,30 @@
-import type { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
+import {
+  TypeBoxValidatorCompiler,
+  type FastifyPluginAsyncTypebox,
+} from '@fastify/type-provider-typebox';
 import { Type } from '@sinclair/typebox';
+import type { FastifySchema, FastifySchemaCompiler } from 'fastify';
+import {
+  CreateAgentTaskRequestSchema,
+  AgentTaskProblemSchema,
+  AgentTaskViewSchema,
+  AgentTaskEventRecordSchema,
+  AgentTaskCommandResultSchema,
+  AgentTaskCommandRequestSchema,
+  type CreateAgentTaskRequest,
+  type AgentTaskCommandRequest,
+  type AgentTaskEventRecord,
+} from '@nebula-link-evo/shared/types/agent-task';
 import { AgentTaskError } from '../../../agent-tasks/errors.js';
 import type { AgentTaskService } from '../../../agent-tasks/service.js';
-import type { AgentTaskEventRecord } from '../../../agent-tasks/repository.js';
+
 import { buildAgentTaskCapabilities } from '../../../agent-tasks/capabilities.js';
 import type { SkillCatalogEntry } from '../../../skills/runtime.js';
 import { BoundedSseWriter } from '../../../services/sse-writer.js';
 import type { AgentStreamEventV1 } from '@nebula-link-evo/shared/types/agent-stream';
 
-const ProblemSchema = Type.Object(
-  {
-    code: Type.String(),
-    message: Type.String(),
-    retryable: Type.Boolean(),
-    details: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
-  },
-  { additionalProperties: false }
-);
+const ErrorSchema = Type.Object({ error: AgentTaskProblemSchema }, { additionalProperties: false });
 
-const ToolCallSchema = Type.Object(
-  {
-    toolCallId: Type.String(),
-    toolName: Type.String(),
-    status: Type.Union([
-      Type.Literal('succeeded'),
-      Type.Literal('failed'),
-      Type.Literal('outcome_unknown'),
-    ]),
-    stepId: Type.Optional(Type.String()),
-    operationId: Type.Optional(Type.String()),
-    operation: Type.Optional(Type.String()),
-    effectId: Type.Optional(Type.String()),
-    errorCode: Type.Optional(Type.String()),
-  },
-  { additionalProperties: false }
-);
-
-const TaskSchema = Type.Object(
-  {
-    schema: Type.Literal('nebula.ai.agent-task/1.0'),
-    taskId: Type.String(),
-    clientTaskId: Type.String(),
-    status: Type.Union([
-      Type.Literal('created'),
-      Type.Literal('running'),
-      Type.Literal('paused'),
-      Type.Literal('completed'),
-      Type.Literal('failed'),
-      Type.Literal('interrupted'),
-      Type.Literal('cancelled'),
-      Type.Literal('blocked'),
-    ]),
-    stateVersion: Type.Integer({ minimum: 1 }),
-    eventSeq: Type.Integer({ minimum: 0 }),
-    lastCheckpointId: Type.Optional(Type.String()),
-    modelRole: Type.Literal('decision'),
-    request: Type.Unknown(),
-    output: Type.Optional(Type.Unknown()),
-    error: Type.Optional(ProblemSchema),
-    terminationReason: Type.Optional(Type.String()),
-    usage: Type.Optional(
-      Type.Object(
-        {
-          inputTokens: Type.Number(),
-          outputTokens: Type.Number(),
-          totalTokens: Type.Number(),
-          modelTurns: Type.Number(),
-          toolCalls: Type.Number(),
-        },
-        { additionalProperties: false }
-      )
-    ),
-    toolCalls: Type.Array(ToolCallSchema),
-    createdAt: Type.String(),
-    updatedAt: Type.String(),
-    startedAt: Type.Optional(Type.String()),
-    completedAt: Type.Optional(Type.String()),
-  },
-  { additionalProperties: false }
-);
-
-const ErrorSchema = Type.Object({ error: ProblemSchema }, { additionalProperties: false });
-const CommandSchema = Type.Object(
-  {
-    id: Type.String(),
-    taskId: Type.String(),
-    type: Type.Union([
-      Type.Literal('pause'),
-      Type.Literal('resume'),
-      Type.Literal('interrupt'),
-      Type.Literal('cancel'),
-    ]),
-    expectedStateVersion: Type.Integer({ minimum: 1 }),
-    requestHash: Type.String(),
-    status: Type.Union([
-      Type.Literal('accepted'),
-      Type.Literal('completed'),
-      Type.Literal('rejected'),
-    ]),
-    result: Type.Optional(Type.Unknown()),
-    error: Type.Optional(ProblemSchema),
-    createdBy: Type.String(),
-    createdAt: Type.String(),
-    completedAt: Type.Optional(Type.String()),
-  },
-  { additionalProperties: false }
-);
-const EventSchema = Type.Object(
-  {
-    id: Type.String(),
-    taskId: Type.String(),
-    seq: Type.Integer({ minimum: 1 }),
-    type: Type.String(),
-    entityType: Type.Union([
-      Type.Literal('task'),
-      Type.Literal('command'),
-      Type.Literal('checkpoint'),
-      Type.Literal('skill'),
-    ]),
-    entityId: Type.String(),
-    stateVersion: Type.Integer({ minimum: 1 }),
-    correlationId: Type.Optional(Type.String()),
-    causationId: Type.Optional(Type.String()),
-    payload: Type.Record(Type.String(), Type.Unknown()),
-    occurredAt: Type.String(),
-    createdAt: Type.String(),
-  },
-  { additionalProperties: false }
-);
-const CommandResultSchema = Type.Object(
-  { command: CommandSchema, task: TaskSchema },
-  { additionalProperties: false }
-);
 const TaskIdParamsSchema = Type.Object(
   { taskId: Type.String({ minLength: 1, maxLength: 128 }) },
   { additionalProperties: false }
@@ -267,9 +160,10 @@ const agentTaskRoutes: FastifyPluginAsyncTypebox<AgentTaskRoutesOptions> = async
     async () => [...(options.skillCatalog ?? [])]
   );
 
-  fastify.post<{ Body: unknown; Headers: { 'idempotency-key'?: string } }>(
+  fastify.post<{ Body: CreateAgentTaskRequest; Headers: { 'idempotency-key'?: string } }>(
     '/agent-tasks',
     {
+      validatorCompiler: TypeBoxValidatorCompiler as FastifySchemaCompiler<FastifySchema>,
       preHandler: requireLocalControlPlane,
       schema: {
         description: 'Create one bounded decision-model Agent task',
@@ -280,25 +174,10 @@ const agentTaskRoutes: FastifyPluginAsyncTypebox<AgentTaskRoutesOptions> = async
           },
           { additionalProperties: true }
         ),
-        body: Type.Object(
-          {
-            schema: Type.Literal('nebula.ai.agent-task/1.0'),
-            clientTaskId: Type.String({ minLength: 1, maxLength: 128 }),
-            modelRole: Type.Literal('decision'),
-            input: Type.Record(Type.String(), Type.Unknown()),
-            responseSchema: Type.Record(Type.String(), Type.Unknown()),
-            toolPolicy: Type.Unknown(),
-            skillPolicy: Type.Unknown(),
-            budgets: Type.Unknown(),
-            browserBinding: Type.Optional(Type.Unknown()),
-            sideEffectAuthorization: Type.Optional(Type.Unknown()),
-            correlation: Type.Optional(Type.Record(Type.String(), Type.String())),
-          },
-          { additionalProperties: false }
-        ),
+        body: CreateAgentTaskRequestSchema,
         response: {
-          200: TaskSchema,
-          202: TaskSchema,
+          200: AgentTaskViewSchema,
+          202: AgentTaskViewSchema,
           400: ErrorSchema,
           403: ErrorSchema,
           404: ErrorSchema,
@@ -330,7 +209,7 @@ const agentTaskRoutes: FastifyPluginAsyncTypebox<AgentTaskRoutesOptions> = async
           { additionalProperties: false }
         ),
         response: {
-          200: TaskSchema,
+          200: AgentTaskViewSchema,
           400: ErrorSchema,
           403: ErrorSchema,
           404: ErrorSchema,
@@ -343,38 +222,19 @@ const agentTaskRoutes: FastifyPluginAsyncTypebox<AgentTaskRoutesOptions> = async
 
   fastify.post<{
     Params: { taskId: string };
-    Body: {
-      commandId: string;
-      type: 'pause' | 'resume' | 'interrupt' | 'cancel';
-      expectedStateVersion: number;
-      reason?: string;
-      createdBy?: string;
-    };
+    Body: AgentTaskCommandRequest;
   }>(
     '/agent-tasks/:taskId/commands',
     {
+      validatorCompiler: TypeBoxValidatorCompiler as FastifySchemaCompiler<FastifySchema>,
       preHandler: requireLocalControlPlane,
       schema: {
         description: 'Apply an idempotent optimistic command to an Agent task',
         tags: ['Agent Tasks'],
         params: TaskIdParamsSchema,
-        body: Type.Object(
-          {
-            commandId: Type.String({ minLength: 1, maxLength: 128 }),
-            type: Type.Union([
-              Type.Literal('pause'),
-              Type.Literal('resume'),
-              Type.Literal('interrupt'),
-              Type.Literal('cancel'),
-            ]),
-            expectedStateVersion: Type.Integer({ minimum: 1 }),
-            reason: Type.Optional(Type.String({ maxLength: 1000 })),
-            createdBy: Type.Optional(Type.String({ minLength: 1, maxLength: 200 })),
-          },
-          { additionalProperties: false }
-        ),
+        body: AgentTaskCommandRequestSchema,
         response: {
-          200: CommandResultSchema,
+          200: AgentTaskCommandResultSchema,
           400: ErrorSchema,
           403: ErrorSchema,
           404: ErrorSchema,
@@ -399,7 +259,7 @@ const agentTaskRoutes: FastifyPluginAsyncTypebox<AgentTaskRoutesOptions> = async
         params: TaskIdParamsSchema,
         querystring: EventLogQuerySchema,
         response: {
-          200: Type.Array(EventSchema),
+          200: Type.Array(AgentTaskEventRecordSchema),
           400: ErrorSchema,
           403: ErrorSchema,
           404: ErrorSchema,

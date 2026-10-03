@@ -62,6 +62,8 @@
 
 ---
 
+- Agent Task 公开结构由 `shared/types/agent-task.ts` 的 TypeBox schema 唯一维护，DTO/status/command/event 由 Static 派生；create/commands HTTP 路由局部使用 TypeBoxValidatorCompiler，拒绝顶层/嵌套未知字段和 body 类型强转，不改变其他路由的 AJV。服务仅做预算、secret、result schema、Skill、授权及派生步骤语义；执行器直接消费内存 browserSteps，暂停恢复复用，重启不从脱敏持久请求重新执行。创建 browserBinding 可携带必需租约 token，持久请求与公开 view 的独立 schema 不含 token。
+
 ## 2. 模块清单
 
 | 模块                | 路径                                                                                                                                      | 状态    | 职责                                                                                                                                                                                       | 边界/契约                                                                                                                                               |

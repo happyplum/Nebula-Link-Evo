@@ -32,7 +32,7 @@
 | Coordinator      | `semantic-coordinator-*`                                | FIFO、outbox、Agent/browser 派发、恢复和证据提升                                                                                                        |
 | Agent Activity   | `agent-activity-repository.ts`、`server/routes/agent-activity.ts` | additive 持久活动序列、独立外部 cursor、控制面事实投影、shared 纯回放、snapshot-first SSE 与 activity-log                                                       |
 | Evidence         | `semantic-evidence-*`、`semantic-artifact-store.ts`     | 不可变 manifest/item、受限原始对象、7/30 天保留清理与物理删除续跑                                                                                       |
-| Integrations     | `agent-task-client.ts`、`semantic-browser-client.ts`    | canonical v1 跨服务客户端                                                                                                                               |
+| Integrations     | `agent-task-client.ts`、`semantic-browser-client.ts`    | canonical v1 跨服务客户端；Agent Task DTO/status/command/event/BrowserStep 直接引用 `shared/types/agent-task.ts`，不维护客户端副本                                                                                                                               |
 | UI               | `ui/src/features/semantic/`、`ui/src/features/project/` | 浏览器中心工作台与项目入口；维护统一的浮动工作区表面、上下文树层级、浏览器主舞台和明暗主题视觉语义                                                      |
 
 ## 3. 路由
@@ -62,6 +62,7 @@ UI 路由：`/`、`/semantic/:projectId`、`/semantic/:projectId/authoring/:vers
 - Project 与 semantic 工作台统一 JSON 请求入口；完整保留成功 data/meta、HTTP status 与 ApiProblem 的 code/message/retryable/correlationId/details（含未知嵌套内容），非 JSON 失败不展示服务端 HTML。
 - Run/Authoring 业务拒绝由产生处的领域 kind/code 或 repository reason 决定，API 边界集中映射既有状态；文案、动态 callKey 不参与分类。五个 `side_effect_*` wire code 与状态保持不变。
 - Agent Activity snapshot 调用 shared 纯 replay 归并 turns/sections/seq；本包先投影业务事件并按 source seq 去重，再从 activity 聚合顶层 state（优先 running/queued、blocked、outcome_unknown、failed），不受外部 stream.state 覆盖；generatedAt 使用最后事件时间，空流使用当前时间。UI 继续通过公共 UI 包重导出的同一 shared 核心恢复 live；仓储不依赖 React。
+- Agent Task 创建／查询／命令／审计事件使用 shared TypeBox schema 派生类型；view 保留真实 modelRole、脱敏 request、usage 等服务字段，BrowserStep 保留 videoSegment（true 仍由服务 capability 政策拒绝）。
 - Agent Task activity-log 使用独立 activity cursor 聚合；不得复用控制面 external event cursor。Authoring/Run 本地活动 seq 单调、可重启恢复、按业务上下文隔离且不重复。
 - Authoring 用户意见、候选、Skill、Tool、浏览器验证、审批与激活在同一 compact 活动流呈现；结构化 amendment/decision 仍是业务事实。Run 活动流只读，资产修改必须返回 Authoring。
 - 1440px 与 1920px 下浏览器始终是最强视觉与空间锚点；左侧页面/模块/场景使用树线、状态点、细强调轨和渐隐背景表达层级，不使用父子嵌套的大面积选中卡片；右侧检查器与 Agent 活动使用独立浮动表面，明暗主题保持等价层级与可见焦点。

@@ -5,15 +5,17 @@ import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { AgentTaskError } from './errors.js';
 import type {
-  AgentTaskExecutionResult,
+  AgentTaskEventRecord,
+  AgentTaskCommandRecord,
   AgentTaskProblem,
   AgentTaskStatus,
   AgentTaskToolCallSummary,
   AgentTaskUsage,
   AgentTaskView,
-  AgentTaskOperationReservation,
   PersistedAgentTaskRequest,
-} from './types.js';
+} from '@nebula-link-evo/shared/types/agent-task';
+
+import type { AgentTaskExecutionResult, AgentTaskOperationReservation } from './types.js';
 import { AGENT_TASK_LIMITS, validateBoundedObjectSchema } from './validation.js';
 
 interface TaskRow {
@@ -134,35 +136,6 @@ export interface AgentTaskPersistenceState {
   stateVersion: number;
   nextEventSeq: number;
   lastCheckpointId?: string;
-}
-
-export interface AgentTaskEventRecord {
-  id: string;
-  taskId: string;
-  seq: number;
-  type: string;
-  entityType: 'task' | 'command' | 'checkpoint' | 'skill';
-  entityId: string;
-  stateVersion: number;
-  correlationId?: string;
-  causationId?: string;
-  payload: Record<string, unknown>;
-  occurredAt: string;
-  createdAt: string;
-}
-
-export interface AgentTaskCommandRecord {
-  id: string;
-  taskId: string;
-  type: 'pause' | 'resume' | 'interrupt' | 'cancel';
-  expectedStateVersion: number;
-  requestHash: string;
-  status: 'accepted' | 'completed' | 'rejected';
-  result?: unknown;
-  error?: AgentTaskProblem;
-  createdBy: string;
-  createdAt: string;
-  completedAt?: string;
 }
 
 export interface AgentTaskCheckpointRecord {

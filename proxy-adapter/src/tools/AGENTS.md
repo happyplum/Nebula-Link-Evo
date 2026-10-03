@@ -37,6 +37,7 @@ Provider.initialize()
 
 ## Working Rules
 
+- Browser MCP target schema directly consumes `@nebula-link-evo/shared/types/browser-target`; do not redeclare target/locator schemas in this provider.
 - All tool registration goes through `ToolRegistry.registerProvider()`.
 - `isAvailable` is a lazy callback — checked at call time, not registration time.
 - MCP Server caches tools at plugin init time (`mcp-server/index.ts`); tool list changes after init require restart.

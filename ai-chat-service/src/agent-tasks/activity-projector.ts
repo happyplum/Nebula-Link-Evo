@@ -6,8 +6,11 @@ import {
   type AgentStreamSnapshotV1,
   type AgentStreamState,
 } from '@nebula-link-evo/shared/types/agent-stream';
-import type { AgentTaskEventRecord } from './repository.js';
-import type { AgentTaskStatus, AgentTaskView } from './types.js';
+import type {
+  AgentTaskEventRecord,
+  AgentTaskStatus,
+  AgentTaskView,
+} from '@nebula-link-evo/shared/types/agent-task';
 
 const EVENTS_PER_SOURCE = 4;
 type AgentStreamEventBody = AgentStreamEventV1 extends infer Event

@@ -1,5 +1,6 @@
 # agent-tasks `ai-chat-service :3001`
 
+- [shipped] `shared/types/agent-task.ts` 唯一维护公开 TypeBox schema/Static DTO/status/command/event；HTTP create/commands 使用局部 TypeBoxValidatorCompiler 严格拒绝未知字段，不更改全局 AJV；service 只保留预算、secret、result schema、Skill、authorization 语义和一次 browserSteps 派生，executor 消费服务内存 map，pause/resume 复用，重启不从脱敏 DB 恢复执行。创建 browserBinding 含租约 token，持久 request/view 由独立无 token schema 约束。原服务结构 guard、执行器重复 parse、路由 DTO schema 和 E2E DTO 副本退出。
 - [shipped] `POST /api/v1/agent-tasks` 幂等创建并异步启动 `nebula.ai.agent-task/1.0` 决策模型任务；`GET /api/v1/agent-tasks/:taskId` 查询持久状态、脱敏请求、结构化输出、预算与工具摘要。
 - [shipped] `GET /api/v1/capabilities` 声明 agent-task/skill/browser-operation `1.0`、已实现功能和硬限制；`taskEvents/taskCommands/skillsRuntime=true`、`operationPresentationAnimation=false`，并返回 `maxSkillsPerTask=1` 与 loaded Skill version 数；ai-chat-service 在装配 Harness/数据库/控制路由前拒绝非 loopback bind host。
 - [shipped] `ai-chat-service/src/agent-tasks/` 独立于交互 Chat session：严格校验请求大小、预算、inline secret、response Schema 深度/关键字，使用 `data/ai-chat-service/agent-tasks.sqlite` 持久化；凭证 token 不明文持久化，服务重启把 created/running 收敛为 interrupted。

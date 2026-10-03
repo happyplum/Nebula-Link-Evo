@@ -1,3 +1,4 @@
+import { BrowserTargetRefV1Schema } from '@nebula-link-evo/shared/types/browser-target';
 import { EventEmitter } from 'node:events';
 import type { BrowserExecutionService } from '../../browser-execution/service.js';
 import {
@@ -38,7 +39,7 @@ const DEFINITIONS: ReadonlyArray<{
             deadlineAt: { type: 'string' },
             kind: { type: 'string', enum: ['observe', 'act'] },
             operation: { type: 'string' },
-            target: targetSchema(),
+            target: BrowserTargetRefV1Schema,
             args: { type: 'object' },
             capture: {
               type: 'object',
@@ -256,62 +257,6 @@ function operationRecordSchema(): Record<string, unknown> {
       'acceptedAt',
       'artifacts',
     ],
-  };
-}
-
-function targetSchema(): Record<string, unknown> {
-  const valueCandidate = (strategy: string, exact: boolean): Record<string, unknown> => ({
-    type: 'object',
-    additionalProperties: false,
-    properties: {
-      strategy: { const: strategy },
-      value: { type: 'string', minLength: 1, maxLength: 2_000 },
-      ...(exact ? { exact: { type: 'boolean' } } : {}),
-    },
-    required: ['strategy', 'value'],
-  });
-  return {
-    type: 'object',
-    additionalProperties: false,
-    properties: {
-      semantic: { type: 'string', minLength: 1, maxLength: 500 },
-      candidates: {
-        type: 'array',
-        items: {
-          oneOf: [
-            {
-              type: 'object',
-              additionalProperties: false,
-              properties: {
-                strategy: { const: 'role' },
-                role: { type: 'string', minLength: 1 },
-                name: { type: 'string' },
-                exact: { type: 'boolean' },
-              },
-              required: ['strategy', 'role'],
-            },
-            valueCandidate('test_id', false),
-            valueCandidate('label', true),
-            valueCandidate('placeholder', true),
-            valueCandidate('text', true),
-            valueCandidate('css', false),
-            valueCandidate('xpath', false),
-          ],
-        },
-      },
-      expected: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          cardinality: { type: 'string', enum: ['exactly_one', 'at_least_one', 'zero_or_one'] },
-          visible: { type: 'boolean' },
-          enabled: { type: 'boolean' },
-          editable: { type: 'boolean' },
-        },
-        required: ['cardinality'],
-      },
-    },
-    required: ['semantic', 'candidates', 'expected'],
   };
 }
 

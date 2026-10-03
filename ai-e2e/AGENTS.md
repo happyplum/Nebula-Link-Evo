@@ -4,6 +4,7 @@
 
 `ai-e2e` 是纯 semantic 的 PRD 驱动 E2E 编排服务。它只通过：
 
+- Agent Task DTO、状态、命令、审计事件和真实浏览器步骤直接消费 `@nebula-link-evo/shared/types/agent-task`；客户端不声明第二份协议。
 - `AgentTaskClient` 消费 `ai-chat-service /api/v1/agent-tasks`，使用统一 DSH Agent Loop、Vision v2 和逐浏览器步骤副作用授权。
 - `SemanticBrowserClient` 消费 `proxy-adapter /api/v1/browser-execution/*`，所有动作必须可见且受 session/lease/operation 控制。
 

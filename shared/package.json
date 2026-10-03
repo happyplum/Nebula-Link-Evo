@@ -39,6 +39,14 @@
     "./utils": {
       "types": "./dist/utils/index.d.ts",
       "import": "./dist/utils/index.js"
+    },
+    "./types/agent-task": {
+      "types": "./dist/types/agent-task.d.ts",
+      "import": "./dist/types/agent-task.js"
+    },
+    "./types/browser-target": {
+      "types": "./dist/types/browser-target.d.ts",
+      "import": "./dist/types/browser-target.js"
     }
   },
   "scripts": {
@@ -53,5 +61,8 @@
     "@vitest/coverage-v8": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "catalog:"
   }
 }

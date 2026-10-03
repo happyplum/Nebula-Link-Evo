@@ -8,7 +8,7 @@ Workspace package published as `@nebula-link-evo/shared`. Shared runtime-safe ty
 
 | Area            | Path            | Notes                                                              |
 | --------------- | --------------- | ------------------------------------------------------------------ |
-| Package exports | `package.json`  | Root + `./types`, `./types/agent-stream`, `./types/vision-marker`, `./types/debug-events`, `./types/browser-execution`, `./types/vision-snapshot`, `./utils` subpaths |
+| Package exports | `package.json`  | Root + `./types`, `./types/agent-stream`, `./types/vision-marker`, `./types/debug-events`, `./types/browser-execution`, `./types/browser-target`, `./types/agent-task`, `./types/vision-snapshot`, `./utils` subpaths |
 | Build scope     | `tsconfig.json` | Builds `types/`, `utils/`, `index.ts`; excludes `test-utils/`      |
 | Public entry    | `index.ts`      | Re-exports shared types, SSE helpers, utils                        |
 | Runtime types   | `types/`        | Browser-execution/vision bindings, SSE/debug events, vision marker |
@@ -24,7 +24,8 @@ Workspace package published as `@nebula-link-evo/shared`. Shared runtime-safe ty
 ## Conventions
 
 - Framework-neutral and service-neutral.
-- Pure functions and plain interfaces — no package-specific classes.
+- Pure functions and schema-derived wire types — no package-specific classes.
+- Agent Task schemas/DTOs live only at `./types/agent-task`; browser target schema/types at `./types/browser-target`, with existing browser-execution type exports preserved. TypeBox schemas stay on explicit subpaths so root frontend imports do not construct them.
 - No cross-package imports back into `proxy-adapter`.
 
 ## Anti-Patterns

@@ -42,12 +42,7 @@ export type BrowserLeaseMode = 'observe' | 'control';
 export type BrowserSessionStatus = 'opening' | 'active' | 'closed' | 'interrupted' | 'failed';
 export type BrowserLeaseStatus = 'active' | 'revoked' | 'expired';
 export type BrowserOperationStatus =
-  | 'queued'
-  | 'running'
-  | 'succeeded'
-  | 'failed'
-  | 'cancelled'
-  | 'outcome_unknown';
+  'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'outcome_unknown';
 
 export interface BrowserExecutionProblem {
   code: string;
@@ -130,25 +125,8 @@ export interface BrowserSessionView extends BrowserSessionRecord {
   };
 }
 
-export type BrowserLocatorCandidate =
-  | { strategy: 'role'; role: string; name?: string; exact?: boolean }
-  | { strategy: 'test_id'; value: string }
-  | { strategy: 'label'; value: string; exact?: boolean }
-  | { strategy: 'placeholder'; value: string; exact?: boolean }
-  | { strategy: 'text'; value: string; exact?: boolean }
-  | { strategy: 'css'; value: string }
-  | { strategy: 'xpath'; value: string };
-
-export interface BrowserTargetRefV1 {
-  semantic: string;
-  candidates: BrowserLocatorCandidate[];
-  expected: {
-    cardinality: 'exactly_one' | 'at_least_one' | 'zero_or_one';
-    visible?: boolean;
-    enabled?: boolean;
-    editable?: boolean;
-  };
-}
+export type { BrowserLocatorCandidate, BrowserTargetRefV1 } from './browser-target.js';
+import type { BrowserLocatorCandidate, BrowserTargetRefV1 } from './browser-target.js';
 
 export type BrowserKeyModifier = 'Alt' | 'Control' | 'Meta' | 'Shift';
 

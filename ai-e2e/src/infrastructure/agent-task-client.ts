@@ -1,127 +1,21 @@
 import axios, { isAxiosError, type AxiosInstance } from 'axios';
 import { randomUUID } from 'node:crypto';
 import { IntegrationClientError } from './integration-client-error.js';
-import type { BrowserTargetRefV1 } from '@nebula-link-evo/shared/types/browser-execution';
+import type {
+  CreateAgentTaskRequest,
+  AgentTaskView,
+  AgentTaskEventRecord,
+  AgentTaskCommandRequest,
+  AgentTaskCommandResult,
+} from '@nebula-link-evo/shared/types/agent-task';
 import {
   isAgentStreamEvent,
   type AgentStreamEventV1,
 } from '@nebula-link-evo/shared/types/agent-stream';
 
-export type AgentTaskStatus =
-  | 'created'
-  | 'running'
-  | 'paused'
-  | 'completed'
-  | 'failed'
-  | 'interrupted'
-  | 'cancelled'
-  | 'blocked';
-
-export interface AgentTaskBrowserStep {
-  stepId: string;
-  kind: 'observe' | 'act';
-  operation: string;
-  target?: BrowserTargetRefV1;
-  args?: Record<string, unknown>;
-  effectId?: string;
-  maxAffectedItems?: number;
-  capture?: {
-    beforeScreenshot?: boolean;
-    afterScreenshot?: boolean;
-    domSnapshot?: boolean;
-  };
-}
-
-export interface CreateAgentTaskInput {
-  schema: 'nebula.ai.agent-task/1.0';
-  clientTaskId: string;
-  modelRole: 'decision';
-  input: Record<string, unknown>;
-  responseSchema: Record<string, unknown>;
-  toolPolicy: {
-    allow: string[];
-    constraints?: Record<string, unknown>;
-  };
-  skillPolicy: {
-    allow: Array<{ skillId: string; version: string; contentHash: string }>;
-  };
-  budgets: {
-    maxDurationMs: number;
-    maxModelTurns: number;
-    maxToolCalls: number;
-    maxTokens?: number;
-  };
-  browserBinding?: {
-    browserSessionId: string;
-    tabId: string;
-    browserLeaseId: string;
-    browserLeaseToken: string;
-    browserLeaseSequence: number;
-    access: 'observe' | 'control';
-  };
-  sideEffectAuthorization?: {
-    contextType: 'run' | 'authoring';
-    contextId: string;
-    environment: 'local' | 'test' | 'staging' | 'production';
-    policyVersion: string;
-    policyEvaluationId: string;
-    policyResult: 'auto_allowed' | 'approval_required';
-    projectionSha256: string;
-    effects: Array<{
-      stepId: string;
-      effectId: string;
-      kind: 'create' | 'update' | 'delete' | 'auth_change';
-      maxAffectedItems: number;
-      reversibility: 'reversible' | 'compensatable' | 'irreversible';
-      usesFileUpload?: boolean;
-    }>;
-    grant?: { grantId: string; status: 'active'; approvedProjectionSha256: string };
-  };
-  correlation?: Record<string, string>;
-}
-
-export interface AgentTaskView {
-  schema: 'nebula.ai.agent-task/1.0';
-  taskId: string;
-  clientTaskId: string;
-  status: AgentTaskStatus;
-  stateVersion: number;
-  eventSeq: number;
-  output?: unknown;
-  error?: { code: string; message: string; retryable: boolean; details?: Record<string, unknown> };
-  terminationReason?: string;
-  toolCalls: Array<{
-    toolCallId: string;
-    toolName: string;
-    status: 'succeeded' | 'failed' | 'outcome_unknown';
-    stepId?: string;
-    operationId?: string;
-    operation?: string;
-    effectId?: string;
-    errorCode?: string;
-  }>;
-  createdAt: string;
-  updatedAt: string;
-  startedAt?: string;
-  completedAt?: string;
-}
-
-export interface AgentTaskEventRecord {
-  id: string;
-  taskId: string;
-  seq: number;
-  type: string;
-  entityType: 'task' | 'command' | 'checkpoint' | 'skill';
-  entityId: string;
-  stateVersion: number;
-  payload: Record<string, unknown>;
-  occurredAt: string;
-  createdAt: string;
-}
-
 export interface AgentTaskClientPort {
   getCapabilities(): Promise<Record<string, unknown>>;
-  createTask(input: CreateAgentTaskInput, idempotencyKey: string): Promise<AgentTaskView>;
+  createTask(input: CreateAgentTaskRequest, idempotencyKey: string): Promise<AgentTaskView>;
   getTask(taskId: string): Promise<AgentTaskView>;
   listTaskEvents?(
     taskId: string,
@@ -133,16 +27,7 @@ export interface AgentTaskClientPort {
     afterSeq?: number,
     limit?: number
   ): Promise<AgentStreamEventV1[]>;
-  commandTask(
-    taskId: string,
-    input: {
-      commandId: string;
-      type: 'pause' | 'resume' | 'interrupt' | 'cancel';
-      expectedStateVersion: number;
-      reason?: string;
-      createdBy?: string;
-    }
-  ): Promise<{ task: AgentTaskView }>;
+  commandTask(taskId: string, input: AgentTaskCommandRequest): Promise<AgentTaskCommandResult>;
 }
 
 export interface AgentTaskClientConfig {
@@ -179,7 +64,7 @@ export class AgentTaskClient implements AgentTaskClientPort {
     );
   }
 
-  async createTask(input: CreateAgentTaskInput, idempotencyKey: string): Promise<AgentTaskView> {
+  async createTask(input: CreateAgentTaskRequest, idempotencyKey: string): Promise<AgentTaskView> {
     return this.request(() =>
       this.client.post('/api/v1/agent-tasks', input, {
         timeout: this.timeoutMs,
@@ -228,14 +113,8 @@ export class AgentTaskClient implements AgentTaskClientPort {
 
   async commandTask(
     taskId: string,
-    input: {
-      commandId: string;
-      type: 'pause' | 'resume' | 'interrupt' | 'cancel';
-      expectedStateVersion: number;
-      reason?: string;
-      createdBy?: string;
-    }
-  ): Promise<{ task: AgentTaskView }> {
+    input: AgentTaskCommandRequest
+  ): Promise<AgentTaskCommandResult> {
     return this.request(() =>
       this.client.post(`/api/v1/agent-tasks/${encodeURIComponent(taskId)}/commands`, input, {
         timeout: this.timeoutMs,

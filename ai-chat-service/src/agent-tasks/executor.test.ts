@@ -7,8 +7,11 @@ import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm';
 import { ToolRegistry } from '../tools/registry.js';
 import { createHarnessRuntime } from '../harness/runtime.js';
 import type { HarnessRuntime } from '../harness/types.js';
+import { validateCreateAgentTaskRequest } from './validation.js';
+import * as validation from './validation.js';
 import { AgentTaskModelExecutor } from './executor.js';
-import type { AgentTaskExecutionContext, CreateAgentTaskRequest } from './types.js';
+import type { CreateAgentTaskRequest } from '@nebula-link-evo/shared/types/agent-task';
+import type { AgentTaskExecutionContext } from './types.js';
 
 const config = {
   version: '2.0',
@@ -82,7 +85,11 @@ describe('AgentTaskModelExecutor', () => {
       toolRegistry: new ToolRegistry(),
     });
     try {
-      const result = await executor.execute(executionContext(request(), persisted));
+      const context = executionContext(request(), persisted);
+      const normalize = vi.spyOn(validation, 'validateCreateAgentTaskRequest');
+      const result = await executor.execute(context);
+      expect(normalize).not.toHaveBeenCalled();
+      normalize.mockRestore();
       expect(result).toMatchObject({
         output: { status: 'ok' },
         usage: { inputTokens: 10, outputTokens: 5, modelTurns: 1, toolCalls: 0 },
@@ -203,6 +210,7 @@ function executionContext(
   return {
     taskId: 'task-1',
     request: taskRequest,
+    browserSteps: validateCreateAgentTaskRequest(taskRequest).browserSteps,
     deadlineAt: Date.now() + 10_000,
     signal: new AbortController().signal,
     harnessProjectedSeq: 0,

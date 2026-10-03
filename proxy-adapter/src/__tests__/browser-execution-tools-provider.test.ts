@@ -4,6 +4,8 @@ import type { BrowserExecutionService } from '../browser-execution/service.js';
 import { BrowserClient } from '../browser-client.js';
 import { BrowserExecutionToolsProvider } from '../tools/providers/browser-execution-tools-provider.js';
 import type { GatewayTool } from '../tools/types.js';
+import { BrowserTargetRefV1Schema } from '@nebula-link-evo/shared/types/browser-target';
+import { jsonPropertyToZod } from '../tools/adapters/json-schema-to-zod.js';
 
 function requireTool(provider: BrowserExecutionToolsProvider, suffix: string): GatewayTool {
   const tool = provider.getTools().find((candidate) => candidate.name.endsWith(suffix));
@@ -12,6 +14,38 @@ function requireTool(provider: BrowserExecutionToolsProvider, suffix: string): G
 }
 
 describe('BrowserExecutionToolsProvider', () => {
+  it('compiles the shared target schema for every supported locator strategy', async () => {
+    const provider = new BrowserExecutionToolsProvider({} as BrowserExecutionService);
+    await provider.initialize();
+    const tool = requireTool(provider, 'operation_execute');
+    const request = tool.inputSchema.properties?.request as { properties: { target: unknown } };
+    expect(request.properties.target).toBe(BrowserTargetRefV1Schema);
+    const target = jsonPropertyToZod(request.properties.target);
+    const base = { semantic: 'Login', expected: { cardinality: 'exactly_one' } };
+    for (const candidate of [
+      { strategy: 'role', role: 'button', name: 'Login', exact: true },
+      ...['test_id', 'label', 'placeholder', 'text', 'css', 'xpath'].map((strategy) => ({
+        strategy,
+        value: 'login',
+      })),
+    ]) {
+      expect(target.safeParse({ ...base, candidates: [candidate] }).success).toBe(true);
+    }
+    expect(
+      target.safeParse({
+        ...base,
+        candidates: [{ strategy: 'role', role: 'button', value: 'extra' }],
+      }).success
+    ).toBe(false);
+    expect(
+      target.safeParse({ ...base, candidates: [{ strategy: 'text', value: '' }] }).success
+    ).toBe(false);
+    expect(
+      target.safeParse({ ...base, candidates: [{ strategy: 'css', value: 'x'.repeat(2001) }] })
+        .success
+    ).toBe(false);
+  });
+
   it('exposes only the three controlled MCP tools', async () => {
     const service = {
       executeOperation: vi.fn(),

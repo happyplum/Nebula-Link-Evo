@@ -5,7 +5,8 @@ import {
   type AgentTaskRepository,
   type SkillVersionRecord,
 } from '../agent-tasks/repository.js';
-import type { AgentTaskSkillExecution, CreateAgentTaskRequest } from '../agent-tasks/types.js';
+import type { CreateAgentTaskRequest } from '@nebula-link-evo/shared/types/agent-task';
+import type { AgentTaskSkillExecution } from '../agent-tasks/types.js';
 import { validateBoundedObjectSchema, validateResponseValue } from '../agent-tasks/validation.js';
 import { loadSkillPackages } from './loader.js';
 

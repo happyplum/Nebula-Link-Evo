@@ -1,4 +1,8 @@
-import type { AgentTaskProblem, AgentTaskToolCallSummary, AgentTaskUsage } from './types.js';
+import type {
+  AgentTaskProblem,
+  AgentTaskToolCallSummary,
+  AgentTaskUsage,
+} from '@nebula-link-evo/shared/types/agent-task';
 
 export interface AgentTaskFailureTrace {
   toolCalls: AgentTaskToolCallSummary[];
