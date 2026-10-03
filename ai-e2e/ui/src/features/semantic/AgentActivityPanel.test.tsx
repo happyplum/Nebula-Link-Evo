@@ -27,6 +27,8 @@ describe('AgentActivityPanel', () => {
         busy={false}
         scope={scope}
         snapshot={snapshot}
+        connectionStatus="live"
+        onReconnect={vi.fn()}
         onToggle={vi.fn()}
         onSend={onSend}
       />
@@ -40,6 +42,29 @@ describe('AgentActivityPanel', () => {
     expect(onSend).toHaveBeenCalledWith('重新编排库存检查');
   });
 
+  it('恢复观察只调用重连并保留 Run 只读内容', () => {
+    const reconnect = vi.fn();
+    const onSend = vi.fn();
+    render(
+      <AgentActivityPanel
+        collapsed={false}
+        busy={false}
+        readOnly
+        scope={scope}
+        snapshot={snapshot}
+        connectionStatus="reconnecting"
+        onReconnect={reconnect}
+        onToggle={vi.fn()}
+        onSend={onSend}
+      />
+    );
+    expect(screen.getByRole('status', { name: '活动连接状态' })).toHaveTextContent('正在恢复活动');
+    fireEvent.click(screen.getByRole('button', { name: '立即重连' }));
+    expect(reconnect).toHaveBeenCalledTimes(1);
+    expect(onSend).not.toHaveBeenCalled();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
   it('Run 为只读活动流且保留作用域锁', () => {
     render(
       <AgentActivityPanel
@@ -48,6 +73,8 @@ describe('AgentActivityPanel', () => {
         readOnly
         scope={scope}
         snapshot={snapshot}
+        connectionStatus="live"
+        onReconnect={vi.fn()}
         onToggle={vi.fn()}
       />
     );

@@ -2,6 +2,8 @@ import { Bot, ChevronDown, ChevronUp, LockKeyhole, Send } from 'lucide-react';
 import { useState } from 'react';
 import { AgentStreamRenderer } from '@nebula-link-evo/agent-activity-ui';
 import type { AgentStreamSnapshotV1 } from '@nebula-link-evo/shared/types/agent-stream';
+import type { AgentStreamConnectionStatus } from '@nebula-link-evo/agent-stream-client';
+import { Button } from '@/shared/components/index.js';
 
 export function AgentActivityPanel({
   collapsed,
@@ -9,6 +11,8 @@ export function AgentActivityPanel({
   readOnly = false,
   scope,
   snapshot,
+  connectionStatus,
+  onReconnect,
   onToggle,
   onSend,
 }: {
@@ -17,6 +21,8 @@ export function AgentActivityPanel({
   readOnly?: boolean;
   scope: { version: string; url: string; module: string; revision: string };
   snapshot: AgentStreamSnapshotV1 | null;
+  connectionStatus: AgentStreamConnectionStatus;
+  onReconnect: () => void;
   onToggle: () => void;
   onSend?: (message: string) => void;
 }) {
@@ -41,7 +47,27 @@ export function AgentActivityPanel({
             <small>{busy ? '活动执行中…' : readOnly ? '只读活动流' : '作用域已锁定'}</small>
           </span>
         </div>
-        <button type="button" onClick={onToggle} aria-label={collapsed ? '展开活动' : '折叠活动'}>
+        <div className="semantic-activity-connection">
+          <span role="status" aria-label="活动连接状态">
+            {
+              {
+                live: '活动已连接',
+                connecting: '正在连接活动',
+                reconnecting: '正在恢复活动',
+                disconnected: '活动未连接',
+              }[connectionStatus]
+            }
+          </span>
+          <Button type="button" variant="secondary" size="touch" onClick={onReconnect}>
+            立即重连
+          </Button>
+        </div>
+        <button
+          type="button"
+          className="semantic-activity-toggle"
+          onClick={onToggle}
+          aria-label={collapsed ? '展开活动' : '折叠活动'}
+        >
           {collapsed ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
         </button>
       </header>

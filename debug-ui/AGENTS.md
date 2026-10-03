@@ -49,7 +49,7 @@ pnpm type-check   # tsc --noEmit
 - **Feature-based**: Each feature (layout, runtime, chat, etc.) has its own directory with components and hooks
 - **State Management**: Zustand stores for global state (layout, runtime, chat, playwright-control); config feature is TanStack Query only
 - **Data Fetching**: TanStack Query for REST API calls (sessions, messages, playwright, etc.)
-- **SSE**: Custom hooks for streaming (chat: `useChatStream`; runtime debug stream: `useDebugStream`)
+- **SSE**: Custom hooks for streaming (chat: `useChatStream` wraps `@nebula-link-evo/agent-stream-client`; runtime debug stream: `useDebugStream`)
 - **Liveview**: Imperative canvas island (LiveViewCanvas.tsx) for MJPEG stream and DOM overlay
 
 ## Conventions

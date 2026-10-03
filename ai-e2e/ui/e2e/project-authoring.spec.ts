@@ -1,12 +1,29 @@
 import { expect, test } from '@playwright/test';
+import { join } from 'node:path';
 
 test('persists the real candidate, run and evidence journey across reload', async ({ page }) => {
+  test.setTimeout(90_000);
   await page.setViewportSize({ width: 1440, height: 900 });
   let bootstrapRequests = 0;
+  let activityRequests = 0;
+  let failNextActivity = true;
+  let runCommands = 0;
+  await page.route('**/api/v1/authoring-jobs/*/activity', async (route) => {
+    activityRequests += 1;
+    if (failNextActivity) {
+      failNextActivity = false;
+      await route.abort();
+    } else await route.continue();
+  });
   page.on('request', (request) => {
     if (request.method() === 'POST' && /\/authoring-jobs$/u.test(new URL(request.url()).pathname)) {
       bootstrapRequests += 1;
     }
+    if (
+      request.method() === 'POST' &&
+      /\/runs\/[^/]+\/commands$/u.test(new URL(request.url()).pathname)
+    )
+      runCommands += 1;
   });
 
   await page.goto('./');
@@ -25,13 +42,33 @@ test('persists the real candidate, run and evidence journey across reload', asyn
   await expect(page.getByRole('heading', { name: '资产编排工作台' })).toBeVisible();
   await expect(page.getByText(/编排任务：/u)).toBeVisible();
   await expect.poll(() => bootstrapRequests).toBe(1);
+  const connectionStatus = page.getByRole('status', { name: '活动连接状态' });
+  const reconnect = page.getByRole('button', { name: '立即重连' });
+  await expect(connectionStatus).toHaveText('活动已连接');
+  expect(activityRequests).toBeGreaterThanOrEqual(2);
+  const liveImage = page.getByRole('img', { name: '当前受控浏览器实时画面' });
+  const retryImage = page.getByRole('button', { name: '重试实时画面' });
+  await expect(liveImage.or(retryImage).first()).toBeVisible();
+  if (await liveImage.count()) await liveImage.dispatchEvent('error');
+  await expect(retryImage).toBeVisible();
+  expect(
+    await page.evaluate(
+      "getComputedStyle(document.querySelector('.semantic-browser-canvas')).transform"
+    )
+  ).toBe('none');
+  const retryBox = await retryImage.boundingBox();
+  expect(retryBox?.height).toBeGreaterThanOrEqual(44);
+  expect(retryBox?.width).toBeGreaterThanOrEqual(44);
+  await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'dark' });
 
   const workbench = page.locator('.semantic-root');
   const theme = page.getByRole('button', { name: '主题：system' });
   await theme.click();
   await expect(workbench).toHaveAttribute('data-theme', 'dark');
+
   await page.getByRole('button', { name: '主题：dark' }).click();
   await expect(workbench).toHaveAttribute('data-theme', 'light');
+
   const visibleTargetSelector = ['button', 'a[href]', 'input', 'textarea', '[role="tab"]']
     .map((selector) => `${selector}:visible`)
     .join(', ');
@@ -61,6 +98,29 @@ test('persists the real candidate, run and evidence journey across reload', asyn
   await page.setViewportSize({ width: 1920, height: 1080 });
   const browserRegion = await page.getByRole('region', { name: '只读浏览器画面' }).boundingBox();
   expect(browserRegion?.width).toBeGreaterThanOrEqual(760);
+  await page.getByRole('button', { name: '主题：light' }).click();
+  await page.getByRole('button', { name: '主题：system' }).click();
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 1920, height: 1080 },
+  ]) {
+    await page.setViewportSize(viewport);
+    if (process.env.AGENT_STREAM_VISUAL_DIR)
+      await page.screenshot({
+        path: join(process.env.AGENT_STREAM_VISUAL_DIR, `e2e-dark-${viewport.width}-live.png`),
+      });
+  }
+  await page.getByRole('button', { name: '主题：dark' }).click();
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 1920, height: 1080 },
+  ]) {
+    await page.setViewportSize(viewport);
+    if (process.env.AGENT_STREAM_VISUAL_DIR)
+      await page.screenshot({
+        path: join(process.env.AGENT_STREAM_VISUAL_DIR, `e2e-light-${viewport.width}-live.png`),
+      });
+  }
 
   await page.getByRole('tab', { name: /Diff/u }).click();
   const applyCandidate = page.getByRole('button', { name: /在安全边界应用/u });
@@ -97,6 +157,29 @@ test('persists the real candidate, run and evidence journey across reload', asyn
     .toContain('completed');
   await expect(page.getByText('activated', { exact: true })).toBeVisible();
 
+  const activityText = '候选已验证并原子激活';
+  await expect(page.locator('.semantic-chat .nebula-agent-stream')).toContainText(activityText);
+  expect(activityText.length).toBeGreaterThan(0);
+  const requestsBeforeFailure = activityRequests;
+  failNextActivity = true;
+  await reconnect.focus();
+  expect(
+    await page.evaluate('Number.parseFloat(getComputedStyle(document.activeElement).outlineWidth)')
+  ).toBeGreaterThanOrEqual(2);
+  await page.keyboard.press('Enter');
+  await expect(connectionStatus).toHaveText('正在恢复活动');
+  await expect(page.locator('.semantic-chat .nebula-agent-stream')).toContainText(activityText);
+  if (process.env.AGENT_STREAM_VISUAL_DIR)
+    await page.screenshot({
+      path: join(process.env.AGENT_STREAM_VISUAL_DIR, 'e2e-light-1920-reconnecting.png'),
+    });
+  await expect(connectionStatus).toHaveText('活动已连接');
+  expect(activityRequests).toBeGreaterThanOrEqual(requestsBeforeFailure + 2);
+  const requestsBeforeManual = activityRequests;
+  await reconnect.press('Enter');
+  await expect.poll(() => activityRequests).toBe(requestsBeforeManual + 1);
+  await expect(connectionStatus).toHaveText('活动已连接');
+
   await page.reload();
   await expect(page.getByRole('heading', { name: '资产编排工作台' })).toBeVisible();
   await expect(page.getByText(/编排任务：/u)).toBeVisible();
@@ -109,6 +192,28 @@ test('persists the real candidate, run and evidence journey across reload', asyn
   await expect(page).toHaveURL(/\/semantic\/[^/]+\/runs\/[^/?]+/u);
   await page.getByRole('button', { name: '开始运行' }).click();
   await expect(page.getByText('运行状态：completed')).toBeVisible({ timeout: 20_000 });
+  await expect(connectionStatus).toHaveText('活动已连接');
+  let runActivityRequests = 0;
+  let failNextRunActivity = true;
+  await page.route('**/api/v1/runs/*/activity', async (route) => {
+    runActivityRequests += 1;
+    if (failNextRunActivity) {
+      failNextRunActivity = false;
+      await route.abort();
+    } else await route.continue();
+  });
+  const runActivity = page.locator('.semantic-chat .nebula-agent-stream');
+  const runText = '任务已完成';
+  await expect(runActivity).toContainText(runText);
+  const commandsBeforeReconnect = runCommands;
+  await reconnect.press('Enter');
+  await expect(connectionStatus).toHaveText('正在恢复活动');
+  await expect(runActivity).toContainText(runText);
+  await expect(connectionStatus).toHaveText('活动已连接');
+  expect(runActivityRequests).toBe(2);
+  expect(runCommands).toBe(commandsBeforeReconnect);
+  await expect(page.getByRole('textbox', { name: '向编排 Agent 发送修改要求' })).toHaveCount(0);
+  await expect(page.getByText('运行状态：completed')).toBeVisible();
 
   await page.reload();
   await expect(page.getByText('运行状态：completed')).toBeVisible();

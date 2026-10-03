@@ -76,7 +76,7 @@ export default defineConfig({
       },
     },
     {
-      command: `node node_modules/vite/bin/vite.js --host 127.0.0.1 --port ${uiPort}`,
+      command: `node node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port ${uiPort}`,
       cwd: debugDirectory,
       url: `${uiURL}/debug/`,
       reuseExistingServer: false,

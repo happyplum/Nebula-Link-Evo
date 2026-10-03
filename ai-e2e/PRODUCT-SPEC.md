@@ -70,6 +70,8 @@ UI 路由：`/`、`/semantic/:projectId`、`/semantic/:projectId/authoring/:vers
 
 - 断线后从 snapshot + seq 恢复，不由本地百分比或 Chat 文本推断状态。
 - Project 与 semantic 工作台统一 JSON 请求入口；完整保留成功 data/meta、HTTP status 与 ApiProblem 的 code/message/retryable/correlationId/details（含未知嵌套内容），非 JSON 失败不展示服务端 HTML。
+- `BrowserStage` 的 zoom 仅在实际图像可用时作用于画面；空态/图像错误后的“重试实时画面”不缩放，默认 90% zoom 下仍有 44px 热区。组件错误/重试回归与真实生产 UI 的 image error/transform/boundingBox 验收锁住边界。
+- UI Agent 活动使用 `@nebula-link-evo/agent-stream-client` 唯一传输；局部 snapshot 带 endpoint/真实 job/run id，切换首 render 即隐藏旧内容，独立 semantic invalidation 契约不变。断线保留内容、持续恢复、合法 snapshot 后 live；header 的立即重连只恢复观察，Run 不发命令/不解锁 composer。公共 Button 新增 touch=44px 尺寸，旧 header 样式仅指向 toggle；没有独立组件 Gallery，产品/test/真实主题尺寸浏览器为验收面。宿主独立 dev/build/test:e2e 准备公共依赖 dist。
 - UI 基础组件唯一 owner 为 `ui/src/shared/components/`，公共入口仅导出产品使用的 Button、Input、Card、Modal；`ui/src/components/ui/` 仅保留 Sonner Toaster 适配，`components.json` 保留生成配置。无调用的 shadcn/Radix 替代组件、旧向导 Stepper 及专属测试、Table/Tree/CodeEditor 与索引导出已退出，对应 11 个 Radix 直接依赖和 class-variance-authority 已移除；保留产品样式、token 与 Modal 使用的 tailwindcss-animate。
 - Run/Authoring 业务拒绝由产生处的领域 kind/code 或 repository reason 决定，API 边界集中映射既有状态；文案、动态 callKey 不参与分类。五个 `side_effect_*` wire code 与状态保持不变。
 - Agent Activity snapshot 调用 shared 纯 replay 归并 turns/sections/seq；本包先投影业务事件并按 source seq 去重，再从 activity 聚合顶层 state（优先 running/queued、blocked、outcome_unknown、failed），不受外部 stream.state 覆盖；generatedAt 使用最后事件时间，空流使用当前时间。UI 继续通过公共 UI 包重导出的同一 shared 核心恢复 live；仓储不依赖 React。

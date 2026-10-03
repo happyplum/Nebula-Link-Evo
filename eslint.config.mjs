@@ -120,6 +120,10 @@ export default tseslint.config(
     },
   },
   {
+    files: ['agent-stream-client/src/**/*.ts'],
+    languageOptions: { parserOptions: { projectService: false, project: ['./agent-stream-client/tsconfig.lint.json'], tsconfigRootDir: import.meta.dirname } },
+  },
+  {
     files: ['ai-e2e/ui/e2e/**/*.ts', 'ai-e2e/ui/playwright.config.ts'],
     languageOptions: {
       parserOptions: {

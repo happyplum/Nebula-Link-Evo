@@ -6,6 +6,7 @@ debug-ui 的监控工作台：Monitor（监控）、Control（控制）、AI（�
 - [shipped] Monitor 面板（MonitorSidebarShell + MonitorMainShell）：`debug-ui/src/features/runtime/`。数据源：proxy-adapter :3000（debug stream、MJPEG、DOM 快照）。
 - [shipped] Control 面板（BrowserBasicShell + PageInteractionShell + OperationLogsShell + DomElementsTable + SelectedElementCard）：`debug-ui/src/features/playwright-control/`。数据源：proxy-adapter :3000（playwright control、DOM elements）。
 - [shipped] 浏览器开闭与 URL 单源：`runtime.store` 唯一保存远端状态；SSE snapshot/status、health fallback、REST 状态确认共用 `applyPlaywrightStatus` 并原子更新 hydration；runtime 独立 status/open/URL setter 已退出，仅保留 health 探测所需 hydration setter。`refresh-browser-status.ts` 收敛初始化、打开/关闭/导航成功与重连确认；导航采用真实重定向后 URL，确认失败保留最后状态并提示错误。Control 只保留 viewport、DOM/selection、picker、action busy/error/log；reset 不重置 runtime，URL 草稿留组件。未提供 viewport 保留现值，显式 null 清空；4 秒 fallback / 5 秒 grace 不变。验收：`apply-playwright-status.test.ts`、`useBrowserStatus.test.ts`、`useDebugStream.test.ts`、`browser-runtime-state.test.tsx`。
+- [shipped] Chat 连接恢复状态/立即重连由公共 Agent Stream transport 接线；Debug E2E 构建 UI 后用 Vite preview 生产 bundle，动态端口和 T12 runroot/PID cleanup 归属不变。
 - [shipped] Chat 面板（ChatPage）：数据源 ai-chat-service :3001（Chat SSE、control）。详见 [chat-rendering.md](chat-rendering.md)。
 - [shipped] DOM 快照 v2 element 归一化：接受后端 `Record<string, ElementLocator>` 字段 `id` 和 `locator_bundle`，同时保留现有前端元素类型。入口：`debug-ui/src/features/playwright-control/lib/dom-elements.ts`。
 - [shipped] 元素选择器：鼠标悬停高亮显示页面元素，点击查看元素详情和可执行操作。

@@ -42,6 +42,11 @@ function setStreamState(state: 'streaming' | 'paused' | 'failed') {
 describe('ChatPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(useChatStream).mockReturnValue({
+      status: 'live',
+      reconnect: vi.fn(),
+      disconnect: vi.fn(),
+    });
     useChatStore.getState().reset();
     vi.mocked(useSessions).mockReturnValue({
       data: [{ id: 'session-1', title: '主会话', status: 'running' }],
@@ -70,6 +75,20 @@ describe('ChatPage', () => {
     expect(useChatStream).toHaveBeenLastCalledWith({ sessionId: 'session-1', enabled: true });
     expect(screen.getByText('会话选择器')).toBeInTheDocument();
     expect(screen.getByText('活动列表')).toBeInTheDocument();
+  });
+
+  it('呈现传输恢复状态且立即重连不发送业务命令', () => {
+    const reconnect = vi.fn();
+    vi.mocked(useChatStream).mockReturnValue({
+      status: 'reconnecting',
+      reconnect,
+      disconnect: vi.fn(),
+    });
+    render(<ChatPage />);
+    expect(screen.getByRole('status', { name: '活动连接状态' })).toHaveTextContent('正在恢复活动');
+    fireEvent.click(screen.getByRole('button', { name: '立即重连' }));
+    expect(reconnect).toHaveBeenCalledTimes(1);
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it('创建会话时使用决策模型配置并选中新会话', async () => {

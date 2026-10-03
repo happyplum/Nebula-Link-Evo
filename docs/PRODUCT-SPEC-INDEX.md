@@ -10,6 +10,7 @@
 | 包                                     | 端口            | 角色                                    | PRODUCT-SPEC                                                                                                      | 包级 AGENTS                                                 |
 | -------------------------------------- | --------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
 | `shared`                               | —（库）         | 共享类型与工具（依赖图最底层）          | [`shared/PRODUCT-SPEC.md`](../shared/PRODUCT-SPEC.md)                                                             | [`shared/AGENTS.md`](../shared/AGENTS.md)                   |
+| `agent-stream-client` | —（React 连接库） | Agent 活动 SSE 传输/持续恢复/RAF | [`agent-stream-client/PRODUCT-SPEC.md`](../agent-stream-client/PRODUCT-SPEC.md) | [`agent-stream-client/AGENTS.md`](../agent-stream-client/AGENTS.md) |
 | `agent-activity-ui`                    | —（UI 库）      | Agent 活动 React renderer 与 shared 回放重导出 | [`agent-activity-ui/PRODUCT-SPEC.md`](../agent-activity-ui/PRODUCT-SPEC.md)                                       | [`agent-activity-ui/AGENTS.md`](../agent-activity-ui/AGENTS.md)                             |
 | `proxy-adapter`                        | `:3000`         | 纯浏览器 MCP 网关                       | [`proxy-adapter/PRODUCT-SPEC.md`](../proxy-adapter/PRODUCT-SPEC.md)                                               | [`proxy-adapter/AGENTS.md`](../proxy-adapter/AGENTS.md)     |
 | `ai-chat-service`                      | `:3001`         | AI 对话服务（provider 编排 + Chat SSE） | [`ai-chat-service/PRODUCT-SPEC.md`](../ai-chat-service/PRODUCT-SPEC.md)                                           | [`ai-chat-service/AGENTS.md`](../ai-chat-service/AGENTS.md) |
@@ -51,6 +52,11 @@ shared  ←──  proxy-adapter
         ←──  debug-ui（间接，通过类型）
         ←──  browser-control-client
         ←──  deepseek-harness-plugin
+        ←──  agent-stream-client（React 传输）
+        ←──  agent-activity-ui（React renderer + 纯回放重导出）
+
+agent-stream-client  ←──  debug-ui / ai-e2e/ui
+agent-activity-ui    ←──  debug-ui / ai-e2e/ui
 
 proxy-adapter  ←──  ai-chat-service（DSH MCP transport → /mcp）
                ←──  ai-e2e（SemanticBrowserClient → browser-control-client HTTP → /api/v1/browser-execution/*）
@@ -168,6 +174,8 @@ debug-ui  ←──  （仅被用户消费）
 - `debug-ui` 使用 comfortable、ai-e2e Authoring/Run 使用 compact 公共 renderer；业务操作通过 slots 注入。公共 UI 包不拥有 API、SSE、store、router 或权限。
 - shared `utils/agent-stream.ts` 唯一持有 `createEmptyAgentStream/reduceAgentStream/replayAgentStream`，经 root/`./utils` 导出；copy-on-write 不修改输入，跨 stream 和非递增 seq 原样忽略，允许间隙，同 sectionId 异 type 后 content delta 替换旧 section，empty generatedAt 固定 epoch。UI 入口直接重导出保持既有 API，两个后端直接调用 shared，不依赖 React；
 - Chat 保留消息→turn 映射、持久 state 覆盖与当前 generatedAt；ai-e2e 保留业务事件投影、本地 seq 去重、activity 顶层 state 聚合和最后事件/空流当前时间。纯核心不含业务策略；
+- `@nebula-link-evo/agent-stream-client` 是 Chat、Authoring、Run 唯一 React 活动传输 owner（shared + React，build-only/no-port）：`useAgentStreamConnection({ endpoint, streamId, enabled, onSnapshot, onEvents }) → { status, reconnect, disconnect }`。仅合法匹配 snapshot 后 live/reset backoff；open 不算 live，快照前 delta 丢弃，新快照取代旧 batch。错误关闭 source，以 1/2/4/8/16/30 秒持续退避，无次数上限；手动只立即连接/清 timer。旧上下文/generation/RAF/timer 完全隔离，cleanup 丢 batch，宿主保留已显示内容；传输失败不修改业务 state。
+- Chat wrapper 保留 store 与 optimistic 协调，E2E wrapper 保留局部 snapshot/shared reducer，状态带 endpoint/真实 job/run id，切换首 render 隐藏旧内容；semantic invalidation 流独立，Run 恢复只读、不发送命令。宿主独立 dev/build/test:e2e 准备 shared/renderer/client dist；root build/dev 与 start.bat 的 ai-e2e UI build 遵循该依赖顺序。
 - shared reducer 负责 seq 去重、稳定 section 更新、snapshot/live 恢复；UI 连接层以 RAF 批处理 live 更新，乐观 user turn 必须与服务端 turn 去重。
 - ai-e2e 使用独立 activity cursor 消费 Agent Task activity-log，并以 additive 表保存 Authoring/Run 本地单调呈现序列；不得复用控制面游标或从活动文本推断业务状态。
 

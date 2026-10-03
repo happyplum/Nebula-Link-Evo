@@ -42,11 +42,12 @@ export const BrowserStage = memo(function BrowserStage({
         </span>
       </header>
       <div className="semantic-browser-viewport">
-        <div className="semantic-browser-canvas" style={{ transform: `scale(${zoom / 100})` }}>
+        <div className="semantic-browser-canvas">
           {browserActive && !streamFailed ? (
             <img
               src={`${proxyAdapterUrl}/debug/api/playwright/screenshot/stream`}
               alt="当前受控浏览器实时画面"
+              style={{ transform: `scale(${zoom / 100})` }}
               onError={() => setStreamFailed(true)}
             />
           ) : (

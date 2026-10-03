@@ -16,6 +16,7 @@
 - 产品工具经 `src/harness/gateway-tool-bridge.ts` 将原始 JSON Schema 投影到 DSH ToolRuntime；旧 Vercel 工具适配、chat 侧 JSON Schema→Zod 副本及对应 barrel 已移除。`ai` 继续用于 Vision/provider，`zod` 作为 AI SDK 必需 peer 保留。
 - 模型工具命名唯一实现为 `src/harness/model-tool-name.ts#modelToolName`，由产品工具桥与 Agent Task executor 共同调用：`nebula__` 前缀、连续非法字符替换为 `__`、连续横杠替换为 `_`；超过 64 字符时采用归一名前 51 字符、`_` 与原始产品名 SHA-256 前 12 位。白名单、授权及审计使用 canonical 产品名，调用方各自拒绝归一碰撞。
 - 通过内部 `VisionAnalyzer` 提供 `vision.analyze_page` 与 `vision.resolve_target`；只接受 proxy 授权的不可变 `VisionSnapshotBindingV1`，不通过 MCP 暴露。
+- 前端 Chat 连接统一由 `@nebula-link-evo/agent-stream-client` 持有，snapshot-first 服务 wire 与持久生命周期保持原契约；传输失败不会将 Chat 业务状态强制改成 failed。
 - 从已提交的 DSH/控制面事实投影脱敏 Agent Stream；向 `debug-ui` 提供 snapshot-first Chat 活动流，并向 Agent Task 调用方提供独立活动查询与 SSE。
 - 提供 provider preflight、持久 FIFO/容量门、token reservation、loop guard、JSONL durable projection、删除 saga、配额/留存与可校验全量备份。
 - 提供可复用 Skills Runtime：从 `AI_SKILLS_DIRS` 配置的本地只读目录加载固定 id/version/hash 的声明式指令包，完成 manifest/hash/Schema/目录边界校验、task 精确 pin、指令装载、预算与工具权限收缩及审计事件；不执行附带代码、不联网安装。

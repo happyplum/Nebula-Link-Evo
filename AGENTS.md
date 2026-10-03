@@ -9,6 +9,7 @@ AI-assisted browser automation platform. `proxy-adapter` is the browser capabili
 ```text
 shared/             Shared types and utilities (no src/ dir — source at package root)
 agent-activity-ui/  Stateless React renderer + shared Agent Stream replay exports shared by debug-ui and ai-e2e/ui (build-only, no port, not in pnpm dev)
+agent-stream-client/ Shared React Agent Stream transport (build-only, no port, not in pnpm dev)
 proxy-adapter/      Browser MCP gateway — MCP Server, Playwright control, debug streams (:3000)
   src/mcp-server/   MCP Server transport (StreamableHTTP)
   src/tools/        ToolRegistry + providers + MCP Server adapter
@@ -43,10 +44,10 @@ docs/               Architecture docs, API references, shipped manifests (not a 
 ## Commands
 
 ```bash
-pnpm dev            # predev starts LiveKit → shared build → parallel dev for shared/debug-ui/proxy-adapter/ai-chat-service
-pnpm build          # shared → agent-activity-ui → integrations → debug-ui → proxy-adapter → ai-chat-service → ai-e2e
+pnpm dev            # predev starts LiveKit → shared/renderer/client build → parallel dev for shared/debug-ui/proxy-adapter/ai-chat-service
+pnpm build          # shared → agent-activity-ui → agent-stream-client → integrations → debug-ui → proxy-adapter → ai-chat-service → ai-e2e
 pnpm test           # Node launcher lifecycle tests → pnpm -r test (vitest everywhere)
-pnpm lint           # eslint across debug-ui / ai-e2e/ui / proxy-adapter / ai-chat-service / shared / integrations / agent-activity-ui
+pnpm lint           # eslint across debug-ui / ai-e2e/ui / proxy-adapter / ai-chat-service / shared / integrations / agent-activity-ui / agent-stream-client
 pnpm format         # prettier --write debug-ui/src proxy-adapter/src ai-chat-service/src
 ```
 
@@ -58,9 +59,10 @@ pnpm format         # prettier --write debug-ui/src proxy-adapter/src ai-chat-se
 
 ## Hidden runtime order
 
-- Build order is strict: `shared` → `agent-activity-ui` → `browser-control-client` → `deepseek-harness-plugin` → `debug-ui` → `proxy-adapter` → `ai-chat-service` → `ai-e2e`.
+- Build order is strict: `shared` → `agent-activity-ui` → `agent-stream-client` → `browser-control-client` → `deepseek-harness-plugin` → `debug-ui` → `proxy-adapter` → `ai-chat-service` → `ai-e2e`.
 - `start.bat` is not a thin wrapper around `pnpm build`: it builds `shared`, starts LiveKit, verifies ports, then builds/starts `proxy-adapter`, `ai-chat-service` and `ai-e2e`.
 - `proxy-adapter` startup order matters: env load → DB backup init outside tests → browser-execution service init → tool provider registration (`ToolRegistry.registerProvider`) → HTTP routes → MCP/debug surfaces. `AppService` is only a tool/MCP inventory facade (`setToolRegistry`) and no longer owns browser lifecycle.
+- UI 独立 dev/build/test:e2e 通过 pnpm 依赖闭包构建 shared、agent-activity-ui 和 agent-stream-client；start.bat 的 ai-e2e build 同样准备这些 dist。
 - Chat reconnect always reboots from a fresh `agent_stream.snapshot` and then accepts only `agent_stream.event`; there is no parallel Chat wire contract.
 - `ai-chat-service` 配置加载器只按工作目录依次搜索 `config/config.json`、`../config/config.json`、`../../config/config.json`、`nebula-link-evo/config/config.json`（显式 `configPath` 优先）；不会自动搜索包内配置。`proxy-adapter` 不读取 AI provider 配置。
 - 环境文件按进程入口独立加载且入口是本进程唯一 owner：`proxy-adapter/src/server.ts` 与 `ai-chat-service/src/server.ts` 依次尝试工作目录 `.env`、父目录 `.env`；`ai-e2e/src/server/index.ts` 依次尝试工作目录 `.env.local`、父目录 `.env`，二者均不存在时由 dotenv 回退工作目录 `.env`。均以既有 `process.env` 为最高优先级。不得在 `shared` 或可复用 `buildApp()` 中增加 dotenv 副作用。
@@ -97,6 +99,7 @@ pnpm format         # prettier --write debug-ui/src proxy-adapter/src ai-chat-se
 Package-level entries (nested `AGENTS.md` under `debug-ui/src/**`, `debug-ui/e2e/`, `proxy-adapter/src/**` follow the nearest-doc principle and are not individually listed here):
 
 - `agent-activity-ui/AGENTS.md`
+- `agent-stream-client/AGENTS.md`
 - `debug-ui/AGENTS.md`
 - `proxy-adapter/AGENTS.md`
 - `ai-chat-service/AGENTS.md`
@@ -124,6 +127,7 @@ Package-level entries (nested `AGENTS.md` under `debug-ui/src/**`, `debug-ui/e2e
 - `docs/PRODUCT-SPEC-INDEX.md` — 根索引 + 跨包契约 + 全局修改维护协议
 - `shared/PRODUCT-SPEC.md`
 - `agent-activity-ui/PRODUCT-SPEC.md`
+- `agent-stream-client/PRODUCT-SPEC.md`
 - `proxy-adapter/PRODUCT-SPEC.md`
 - `ai-chat-service/PRODUCT-SPEC.md`
 - `debug-ui/PRODUCT-SPEC.md`
