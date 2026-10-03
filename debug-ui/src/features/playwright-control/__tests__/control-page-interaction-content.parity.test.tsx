@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { PageInteractionShell } from '../components/PageInteractionShell.js';
 import { testIds } from '@/shared/testing/testids.js';
 import { useControlStore } from '../store/control.store.js';
+import { useRuntimeStore } from '@/features/runtime/store/runtime.store.js';
 import * as controlAdapters from '../api/control.adapters.js';
 
 /**
@@ -28,10 +29,11 @@ describe('P3-19-V: Control Page Interaction - Content Parity', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     useControlStore.getState().reset();
+    useRuntimeStore.getState().reset();
   });
 
   const enableBrowser = () => {
-    useControlStore.getState().setBrowserOpen(true);
+    useRuntimeStore.getState().setPlaywrightState({ status: 'ready', isOpen: true, url: null });
   };
 
   const enableExecuting = () => {

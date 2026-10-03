@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { BrowserBasicShell } from '../BrowserBasicShell.js';
 import { testIds } from '@/shared/testing/testids.js';
 import { useControlStore } from '../../store/control.store.js';
+import { useRuntimeStore } from '@/features/runtime/store/runtime.store.js';
 import * as controlAdapters from '../../api/control.adapters.js';
 
 /**
@@ -29,6 +30,7 @@ describe('P3-18-V: Control Browser Basic Shell - Content Parity', () => {
     mockOnToggle.mockClear();
     // Reset Zustand store to initial state
     useControlStore.getState().reset();
+    useRuntimeStore.getState().reset();
   });
 
   it('renders status indicator showing disconnected state initially', () => {
@@ -294,6 +296,11 @@ describe('P3-18-V: Control Browser Basic Shell - Content Parity', () => {
     });
 
     // Navigate to new URL
+    mockFetchStatus.mockResolvedValue({
+      success: true,
+      isOpen: true,
+      url: 'https://nebula-link.com',
+    });
     const urlInput = screen.getByTestId(testIds.controlBrowserBasicUrlInput);
     const navigateBtn = screen.getByTestId(testIds.controlBrowserBasicNavigateBtn);
 
@@ -305,7 +312,7 @@ describe('P3-18-V: Control Browser Basic Shell - Content Parity', () => {
     });
 
     const currentUrl = screen.getByTestId(testIds.controlBrowserBasicCurrentUrl);
-    expect(currentUrl).toHaveTextContent('https://nebula-link.com');
+    await waitFor(() => expect(currentUrl).toHaveTextContent('https://nebula-link.com'));
   });
 
   it('updates status indicator to disconnected after closing browser successfully', async () => {
@@ -334,11 +341,13 @@ describe('P3-18-V: Control Browser Basic Shell - Content Parity', () => {
     expect(statusText).toHaveTextContent('已连接');
 
     // Close browser
+    mockFetchStatus.mockResolvedValue({ success: true, isOpen: false });
     const closeBtn = screen.getByTestId(testIds.controlBrowserBasicCloseBtn);
     fireEvent.click(closeBtn);
 
     await waitFor(() => {
       expect(mockCloseBrowser).toHaveBeenCalled();
+      expect(useRuntimeStore.getState().playwrightIsOpen).toBe(false);
     });
 
     // Verify disconnected state

@@ -52,8 +52,6 @@ interface PlaywrightControlState {
   isExecutingAction: boolean;
   lastActionError: string | null;
   viewport: Viewport | null;
-  browserOpen: boolean;
-  browserUrl: string;
   markerToggle: boolean;
   snapshotId: string | null;
   domElements: DomElement[];
@@ -68,8 +66,6 @@ interface PlaywrightControlState {
   setExecutingAction: (executing: boolean) => void;
   setActionError: (error: string | null) => void;
   setViewport: (viewport: Viewport | null) => void;
-  setBrowserOpen: (open: boolean) => void;
-  setBrowserUrl: (url: string) => void;
   setMarkerToggle: (v: boolean) => void;
   setSnapshotId: (id: string | null) => void;
   setDomElements: (els: DomElement[]) => void;
@@ -93,8 +89,6 @@ const initialState = {
   isExecutingAction: false,
   lastActionError: null as string | null,
   viewport: null as Viewport | null,
-  browserOpen: false,
-  browserUrl: '',
   markerToggle: persistedMarkerToggle,
   snapshotId: null as string | null,
   domElements: [] as DomElement[],
@@ -116,8 +110,6 @@ export const useControlStore = create<PlaywrightControlState>()((set) => ({
   setExecutingAction: (executing) => set({ isExecutingAction: executing }),
   setActionError: (error) => set({ lastActionError: error }),
   setViewport: (viewport) => set({ viewport }),
-  setBrowserOpen: (open) => set({ browserOpen: open }),
-  setBrowserUrl: (url) => set({ browserUrl: url }),
   setMarkerToggle: (v) => {
     try {
       localStorage.setItem('showMarkerNumbers', String(v));
@@ -140,8 +132,6 @@ export const selectConsoleMessages = (s: PlaywrightControlState) => s.consoleMes
 export const selectIsExecutingAction = (s: PlaywrightControlState) => s.isExecutingAction;
 export const selectLastActionError = (s: PlaywrightControlState) => s.lastActionError;
 export const selectViewport = (s: PlaywrightControlState) => s.viewport;
-export const selectBrowserOpen = (s: PlaywrightControlState) => s.browserOpen;
-export const selectBrowserUrl = (s: PlaywrightControlState) => s.browserUrl;
 export const selectMarkerToggle = (s: PlaywrightControlState) => s.markerToggle;
 export const selectSnapshotId = (s: PlaywrightControlState) => s.snapshotId;
 export const selectDomElements = (s: PlaywrightControlState) => s.domElements;

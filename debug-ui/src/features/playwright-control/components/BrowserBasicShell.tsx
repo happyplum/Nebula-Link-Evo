@@ -3,17 +3,17 @@ import type { ReactNode } from 'react';
 import { Accordion } from '@/shared/ui/Accordion.js';
 import { testIds } from '@/shared/testing/testids.js';
 import {
-  useControlStore,
-  selectBrowserOpen,
-  selectBrowserUrl,
-  selectIsExecutingAction,
-} from '../store/control.store.js';
+  useRuntimeStore,
+  selectPlaywrightIsOpen,
+  selectPlaywrightUrl,
+} from '@/features/runtime/store/runtime.store.js';
+import { refreshBrowserStatus } from '@/features/runtime/lib/refresh-browser-status.js';
+import { useControlStore, selectIsExecutingAction } from '../store/control.store.js';
 import {
   openBrowser,
   closeBrowser,
   navigateToUrl,
   takeScreenshot,
-  fetchBrowserStatus,
 } from '../api/control.adapters.js';
 import { appendConsoleMessage } from '../lib/index.js';
 import styles from './BrowserBasicShell.module.css';
@@ -40,13 +40,11 @@ function ensureUrl(raw: string): string {
  * Manages browser open/close, navigation, screenshot, and stream reconnect.
  */
 export function BrowserBasicShell({ open, onToggle, icon }: BrowserBasicShellProps) {
-  const browserOpen = useControlStore(selectBrowserOpen);
-  const browserUrl = useControlStore(selectBrowserUrl);
+  const browserOpen = useRuntimeStore(selectPlaywrightIsOpen);
+  const browserUrl = useRuntimeStore(selectPlaywrightUrl);
   const isExecuting = useControlStore(selectIsExecutingAction);
   const setExecutingAction = useControlStore((s) => s.setExecutingAction);
   const setActionError = useControlStore((s) => s.setActionError);
-  const setBrowserOpen = useControlStore((s) => s.setBrowserOpen);
-  const setBrowserUrl = useControlStore((s) => s.setBrowserUrl);
 
   const [urlInput, setUrlInput] = useState('');
 
@@ -56,9 +54,9 @@ export function BrowserBasicShell({ open, onToggle, icon }: BrowserBasicShellPro
     (async () => {
       try {
         appendConsoleMessage('info', 'Playwright 控制已初始化');
-        const status = await fetchBrowserStatus();
+        const status = await refreshBrowserStatus();
         if (cancelled) return;
-        if (status.success && status.isOpen) {
+        if (status.isOpen) {
           appendConsoleMessage('success', `浏览器已连接: ${status.url ?? ''}`);
         }
       } catch (err) {
@@ -83,12 +81,7 @@ export function BrowserBasicShell({ open, onToggle, icon }: BrowserBasicShellPro
       const res = await openBrowser();
       if (res.success) {
         appendConsoleMessage('success', '浏览器已打开');
-        setBrowserOpen(true);
-        const status = await fetchBrowserStatus();
-        if (status.success) {
-          setBrowserOpen(status.isOpen ?? true);
-          setBrowserUrl(status.url ?? '');
-        }
+        await refreshBrowserStatus();
       } else {
         appendConsoleMessage('error', res.error ?? '打开失败');
         setActionError(res.error ?? '打开失败');
@@ -99,7 +92,7 @@ export function BrowserBasicShell({ open, onToggle, icon }: BrowserBasicShellPro
     } finally {
       setExecutingAction(false);
     }
-  }, [setExecutingAction, setActionError, setBrowserOpen, setBrowserUrl]);
+  }, [setExecutingAction, setActionError]);
 
   const handleClose = useCallback(async () => {
     setExecutingAction(true);
@@ -109,8 +102,7 @@ export function BrowserBasicShell({ open, onToggle, icon }: BrowserBasicShellPro
       const res = await closeBrowser();
       if (res.success) {
         appendConsoleMessage('success', '浏览器已关闭');
-        setBrowserOpen(false);
-        setBrowserUrl('');
+        await refreshBrowserStatus();
       } else {
         appendConsoleMessage('error', res.error ?? '关闭失败');
         setActionError(res.error ?? '关闭失败');
@@ -121,7 +113,7 @@ export function BrowserBasicShell({ open, onToggle, icon }: BrowserBasicShellPro
     } finally {
       setExecutingAction(false);
     }
-  }, [setExecutingAction, setActionError, setBrowserOpen, setBrowserUrl]);
+  }, [setExecutingAction, setActionError]);
 
   const handleNavigate = useCallback(async () => {
     const fullUrl = ensureUrl(urlInput);
@@ -133,7 +125,7 @@ export function BrowserBasicShell({ open, onToggle, icon }: BrowserBasicShellPro
       const res = await navigateToUrl(fullUrl);
       if (res.success) {
         appendConsoleMessage('success', '导航成功');
-        setBrowserUrl(fullUrl);
+        await refreshBrowserStatus();
         setUrlInput('');
       } else {
         appendConsoleMessage('error', res.error ?? '导航失败');
@@ -145,7 +137,7 @@ export function BrowserBasicShell({ open, onToggle, icon }: BrowserBasicShellPro
     } finally {
       setExecutingAction(false);
     }
-  }, [urlInput, setExecutingAction, setActionError, setBrowserUrl]);
+  }, [urlInput, setExecutingAction, setActionError]);
 
   const handleScreenshot = useCallback(async () => {
     setExecutingAction(true);
@@ -166,19 +158,13 @@ export function BrowserBasicShell({ open, onToggle, icon }: BrowserBasicShellPro
     setExecutingAction(true);
     setActionError(null);
     try {
-      const res = await fetchBrowserStatus();
-      if (res.success) {
-        setBrowserOpen(res.isOpen ?? false);
-        setBrowserUrl(res.url ?? '');
-      } else {
-        setActionError(res.error ?? '重连失败');
-      }
+      await refreshBrowserStatus();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : '重连失败');
     } finally {
       setExecutingAction(false);
     }
-  }, [setExecutingAction, setActionError, setBrowserOpen, setBrowserUrl]);
+  }, [setExecutingAction, setActionError]);
 
   const handleUrlKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
