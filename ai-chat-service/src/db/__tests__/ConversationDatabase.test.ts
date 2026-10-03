@@ -5,14 +5,12 @@ describe('ConversationDatabase', () => {
   let db: ConversationDatabase;
 
   beforeEach(() => {
-    ConversationDatabase.resetInstance();
-    db = ConversationDatabase.getInstance();
+    db = new ConversationDatabase();
     db.initialize(':memory:');
   });
 
   afterEach(async () => {
     await db.close();
-    ConversationDatabase.resetInstance();
   });
 
   it('creates session, message, state, and event tables in the conversation DB', async () => {
@@ -58,9 +56,15 @@ describe('ConversationDatabase', () => {
 
     const session = db.createSession({ title: 'state', provider: 'test', model: 'test' });
     await db.getSessionStateDAO().get(session.id);
-    db.activateSession(session.id);
-    expect(await db.getSessionStateDAO().getStatus(session.id)).toBe('running');
-    expect(db.recoverRunningSessions()).toEqual([{ id: session.id, status: 'blocked' }]);
-    expect(await db.getSessionStateDAO().getStatus(session.id)).toBe('blocked');
+    db.getSessionStateDAO().transition(
+      session.id,
+      { status: 'running', jobId: 'run-1' },
+      undefined,
+      ['idle']
+    );
+    expect((await db.getSessionStateDAO().get(session.id))?.status).toBe('running');
+    const { ChatSessionController } = await import('../../services/chat-session-controller.js');
+    expect(await new ChatSessionController(db).recoverRunningSessions()).toEqual([session.id]);
+    expect((await db.getSessionStateDAO().get(session.id))?.status).toBe('blocked');
   });
 });

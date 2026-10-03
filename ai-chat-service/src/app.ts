@@ -169,7 +169,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     conversationManager = new ConversationManager(conversationsPath, database);
 
     const sessionController = new ChatSessionController(database);
-    sessionController.initialize();
+    await sessionController.initialize();
 
     toolRegistry = new ToolRegistry();
     const visionDefaults = providerConfig.defaults.vision;
@@ -280,7 +280,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       projection,
       database.getSessionEventsDAO(),
       sessionEventHub,
-      sessionController
+      sessionController,
+      runScheduler,
+      () => retention.admitNewRun()
     );
     const recoveredProjectionCount = await chatHandler.recoverDurableProjections();
     if (recoveredProjectionCount > 0) {
@@ -288,12 +290,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     }
 
     persistWorker = new StreamPersistWorker(conversationsPath);
-    jobQueue = new ConversationJobQueue(
-      persistWorker,
-      sessionEventHub,
-      database,
-      runScheduler,
-      () => retention.admitNewRun()
+    jobQueue = new ConversationJobQueue(sessionController, sessionEventHub, runScheduler, () =>
+      retention.admitNewRun()
     );
     deletionService = new HarnessDeletionService(database.connection(), chatHandler, harness);
     const resumedDeletionCount = await deletionService.resumePending();

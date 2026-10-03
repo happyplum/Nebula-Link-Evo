@@ -1,4 +1,4 @@
-export { ConversationDatabase, conversationDatabase } from './ConversationDatabase.js';
+export { ConversationDatabase } from './ConversationDatabase.js';
 export { SessionEventsCleanup } from './SessionEventsCleanup.js';
 export { SessionEventsDAO } from './SessionEventsDAO.js';
 export type { SessionEventsDAOMetrics } from './SessionEventsDAO.js';

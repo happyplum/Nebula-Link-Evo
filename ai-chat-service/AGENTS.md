@@ -52,6 +52,10 @@ pnpm type-check   # tsc --noEmit
 - Localhost-only bind (`127.0.0.1`) by default.
 - Chat 与 Agent Task 工具必须进入 DSH `ToolRuntime`；部署期产品工具由 `GatewayToolBridge` 启动时一次性投影并使用 DSH-safe name。原始 `operation_execute/get/cancel` 只能存在于模型不可见的 transport child scope，不得直接注册到模型工具表。
 - 每个 `buildApp()` 必须创建并销毁自己的 Cordis root、DSH session store 和应用状态；禁止模块级单例 Harness。
+- Chat 生命周期与当前运行身份只以 SQLite `sessions_state` 为权威，`ChatSessionController` 是唯一状态转换入口；每次转换必须原子检查 `job_id` 和允许的来源状态。队列在整个重试周期使用一个 job ID，`ChatHandler` 按显式 `statusOwner` 区分队列与直接恢复，不能提前替队列写失败终态或另起重试循环。
+- Chat controller/queue/handler、数据库和 scheduler/admission 都按应用实例显式注入；内存只保存活动 handle、AbortController 和控制 flags。清理只释放匹配运行资源，不把生命周期重置为 idle；Harness 历史投影只重建消息与活动事件，不写生命周期。
+- `AgentState` 是公开诊断投影，不是恢复输入；新运行和正常完成明确清空，同运行 pause/interrupt/cancel 以及 running→blocked 的重启恢复保留。DAO `update` 的 undefined 保留、null 清空、对象替换，生命周期必须经带运行条件的 `transition`。直接 resume 与队列使用同一个 scheduler/admission，取消或关闭等待许可的运行后不得再打开 Harness。
+
 - 同进程扩展只能来自 `trusted-harness-plugins.lock.json` 精确锁定的 direct dependency，加载失败必须阻断启动；运行期禁止安装、HMR 或修改组合树。
 
 ## Anti-Patterns

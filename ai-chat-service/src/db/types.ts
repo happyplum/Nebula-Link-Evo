@@ -92,7 +92,7 @@ export interface CreateSessionStateParams {
 
 export interface UpdateSessionStateParams {
   readonly status?: SessionStatus;
-  readonly agentState?: AgentState;
+  readonly agentState?: AgentState | null;
   readonly jobId?: string;
   readonly lastActiveAt?: string;
 }

@@ -11,7 +11,7 @@ import { ConversationJobQueue } from '../../../../services/conversation-job-queu
 import { ServiceUnavailableError } from '../../../../errors/http-errors.js';
 import { MAX_SCREENSHOT_SIZE_BYTES } from '@nebula-link-evo/shared';
 import { validateProviderModel } from '../../../../config/validator.js';
-import { AgentStateSchema, SessionStatusSchema, getRuntimeSessionState } from './runtime-state.js';
+import { AgentStateSchema, SessionStatusSchema } from './runtime-state.js';
 import type { HarnessDeletionService } from '../../../../harness/deletion-service.js';
 
 // Schemas
@@ -185,11 +185,7 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         const sessions = conversationManager.listSessions({ limit, offset });
         const enrichedSessions = await Promise.all(
           sessions.map(async (session) => {
-            const runtimeState = await getRuntimeSessionState(
-              conversationManager,
-              session.id,
-              fastify.chatSessionController
-            );
+            const runtimeState = await fastify.chatSessionController.getStatus(session.id);
             return {
               ...session,
               status: runtimeState.status,
@@ -235,11 +231,7 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           return { error: `Session ${sessionId} not found` };
         }
 
-        const runtimeState = await getRuntimeSessionState(
-          conversationManager,
-          sessionId,
-          fastify.chatSessionController
-        );
+        const runtimeState = await fastify.chatSessionController.getStatus(sessionId);
 
         return {
           ...session,
@@ -488,14 +480,18 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
             sessionId,
             messageId,
             contentPreview: content.trim().substring(0, 100),
-            execute: async (_context) => {
-              await chatHandler.handleChatSend('http', {
-                sessionId,
-                message: content.trim(),
-                messageId,
-                skipAddMessage: true,
-                screenshot,
-              });
+            execute: async (context) => {
+              await chatHandler.handleChatSend(
+                'http',
+                {
+                  sessionId,
+                  message: content.trim(),
+                  messageId,
+                  skipAddMessage: true,
+                  screenshot,
+                },
+                { runId: context.jobId, statusOwner: 'queue' }
+              );
             },
           });
         } catch (innerError) {

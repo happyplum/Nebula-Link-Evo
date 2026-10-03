@@ -8,6 +8,9 @@ import type { ChatSessionController } from '../services/chat-session-controller.
 import type { HarnessRuntime, HarnessSessionHandle } from '../harness/index.js';
 import type { HarnessProjectionStore } from '../harness/projection-store.js';
 import { createWorkerLogger } from '../services/logger.js';
+import { chatFailureState } from '../services/chat-failure-state.js';
+import type { HarnessRunScheduler } from '../harness/run-scheduler.js';
+import { ProviderError, PROVIDER_ERRORS } from '../services/provider/errors.js';
 
 interface ChatSendParams {
   sessionId: string;
@@ -17,7 +20,13 @@ interface ChatSendParams {
   skipAddMessage?: boolean;
 }
 
+export interface ChatExecution {
+  runId: string;
+  statusOwner: 'queue' | 'chat-handler';
+}
+
 interface ActiveChatRun {
+  runId: string;
   handle?: HarnessSessionHandle;
   completion: Promise<void>;
 }
@@ -34,7 +43,9 @@ export class ChatHandler {
     private readonly projection: HarnessProjectionStore,
     private readonly sessionEventsDAO: SessionEventsDAO,
     private readonly sessionEventHub: SessionEventHub,
-    private readonly sessionController: ChatSessionController
+    private readonly sessionController: ChatSessionController,
+    private readonly runScheduler: HarnessRunScheduler,
+    private readonly admitNewRun: () => void
   ) {}
 
   getSessionEventsDAO(): SessionEventsDAO {
@@ -45,7 +56,11 @@ export class ChatHandler {
     return this.sessionEventHub;
   }
 
-  async handleChatSend(_clientId: string, params: ChatSendParams): Promise<void> {
+  async handleChatSend(
+    _clientId: string,
+    params: ChatSendParams,
+    execution: ChatExecution
+  ): Promise<void> {
     if (params.screenshot) {
       throw new Error(
         'Raw chat screenshots are not accepted; use a proxy-managed VisionSnapshotBindingV1 attachment'
@@ -55,8 +70,13 @@ export class ChatHandler {
     if (!content) throw new Error('Message content is required');
     const session = this.requireSession(params.sessionId);
     const messageId = params.messageId ?? randomUUID();
-    await this.startRun(params.sessionId, async (abortSignal, setHandle) => {
+    await this.startRun(params.sessionId, execution, false, async (abortSignal, setHandle) => {
       const persisted = await this.harness.revision(SessionId(params.sessionId));
+      if (
+        abortSignal.aborted ||
+        !this.sessionController.isRunning(params.sessionId, execution.runId)
+      )
+        return;
       const handle = await this.harness.openSession({
         sessionId: SessionId(params.sessionId),
         route: {
@@ -70,11 +90,14 @@ export class ChatHandler {
         setup: restrictRawProxyOperations,
       });
       setHandle(handle);
-      try {
-        await this.followupAtCheckpoint(params.sessionId, handle, abortSignal, content, messageId);
-      } finally {
-        await handle.dispose();
-      }
+      await this.followupAtCheckpoint(
+        params.sessionId,
+        execution.runId,
+        handle,
+        abortSignal,
+        content,
+        messageId
+      );
     });
   }
 
@@ -83,7 +106,8 @@ export class ChatHandler {
     const revision = await this.harness.revision(SessionId(sessionId));
     if (!revision)
       throw new Error(`Cannot resume session ${sessionId}: durable Harness log not found`);
-    await this.startRun(sessionId, async (abortSignal, setHandle) => {
+    const execution: ChatExecution = { runId: randomUUID(), statusOwner: 'chat-handler' };
+    await this.startRun(sessionId, execution, true, async (abortSignal, setHandle) => {
       const handle = await this.harness.openSession({
         sessionId: SessionId(sessionId),
         route: {
@@ -97,17 +121,14 @@ export class ChatHandler {
         setup: restrictRawProxyOperations,
       });
       setHandle(handle);
-      try {
-        await this.followupAtCheckpoint(
-          sessionId,
-          handle,
-          abortSignal,
-          '请从上次已持久化的安全边界继续。',
-          randomUUID()
-        );
-      } finally {
-        await handle.dispose();
-      }
+      await this.followupAtCheckpoint(
+        sessionId,
+        execution.runId,
+        handle,
+        abortSignal,
+        '请从上次已持久化的安全边界继续。',
+        randomUUID()
+      );
     });
   }
 
@@ -152,7 +173,14 @@ export class ChatHandler {
 
   async cancelAndDrain(sessionId: string): Promise<void> {
     const run = this.active.get(sessionId);
-    if (!run) return;
+    if (!run) {
+      const state = await this.sessionController.getStatus(sessionId);
+      if (state.jobId && state.status !== 'idle' && state.status !== 'cancelled') {
+        await this.sessionController.cancel(sessionId);
+      }
+      if (state.jobId) await this.sessionController.cleanup(sessionId, state.jobId);
+      return;
+    }
     run.handle?.cancel('user');
     try {
       await this.sessionController.cancel(sessionId);
@@ -166,12 +194,20 @@ export class ChatHandler {
   }
 
   async close(): Promise<void> {
-    for (const run of this.active.values()) run.handle?.cancel('shutdown');
-    await Promise.allSettled([...this.active.values()].map((run) => run.completion));
+    const runs = [...this.active.entries()];
+    for (const [sessionId, run] of runs) {
+      run.handle?.cancel('shutdown');
+      if (this.sessionController.isRunning(sessionId, run.runId)) {
+        await this.sessionController.interrupt(sessionId);
+      }
+    }
+    await Promise.allSettled(runs.map(([, run]) => run.completion));
   }
 
   private async startRun(
     sessionId: string,
+    execution: ChatExecution,
+    resume: boolean,
     execute: (
       signal: AbortSignal,
       setHandle: (handle: HarnessSessionHandle) => void
@@ -179,25 +215,76 @@ export class ChatHandler {
   ): Promise<void> {
     if (this.active.has(sessionId))
       throw new Error(`Session ${sessionId} already has an active Harness run`);
-    const abortController = this.sessionController.createAbortController(sessionId);
+    const { runId, statusOwner } = execution;
     let resolveCompletion = (): void => {};
     const completion = new Promise<void>((resolve) => {
       resolveCompletion = resolve;
     });
-    const active: ActiveChatRun = { completion };
+    const active: ActiveChatRun = { runId, completion };
     this.active.set(sessionId, active);
+    let scheduled = false;
+    let succeeded = false;
+    let failure: { error: unknown } | undefined;
     try {
+      if (statusOwner === 'chat-handler') {
+        this.admitNewRun();
+        await this.sessionController.beginRun(sessionId, runId, resume);
+      }
+      const abortController = await this.sessionController.createAbortController(sessionId, runId);
+      if (statusOwner === 'chat-handler') {
+        this.runScheduler.enqueue({
+          runId,
+          ownerType: 'chat',
+          ownerId: sessionId,
+          messageId: runId,
+        });
+        scheduled = true;
+        await this.runScheduler.wait(runId, abortController.signal);
+      }
+      if (!this.sessionController.isRunning(sessionId, runId) || abortController.signal.aborted)
+        return;
       await execute(abortController.signal, (handle) => {
         active.handle = handle;
       });
+      succeeded = true;
     } catch (error) {
+      failure = { error };
       await this.catchUpAfterFailure(sessionId, active.handle);
-      throw error;
+      if (statusOwner === 'chat-handler') {
+        this.sessionController.block(sessionId, runId, chatFailureState(error).agentState);
+      }
     } finally {
-      resolveCompletion();
-      this.active.delete(sessionId);
-      this.sessionController.cleanup(sessionId);
+      try {
+        await active.handle?.dispose();
+        if (succeeded && statusOwner === 'chat-handler')
+          this.sessionController.complete(sessionId, runId);
+      } catch (disposeError) {
+        if (succeeded) {
+          if (statusOwner === 'chat-handler')
+            this.sessionController.block(
+              sessionId,
+              runId,
+              chatFailureState(disposeError).agentState
+            );
+          failure = { error: disposeError };
+        }
+        if (!succeeded) {
+          this.logger.error(
+            { err: disposeError, sessionId },
+            'Failed to release Harness handle after Chat failure'
+          );
+        }
+      } finally {
+        try {
+          if (scheduled) this.runScheduler.complete(runId);
+          await this.sessionController.cleanup(sessionId, runId);
+        } finally {
+          if (this.active.get(sessionId)?.runId === runId) this.active.delete(sessionId);
+          resolveCompletion();
+        }
+      }
     }
+    if (failure) throw failure.error;
   }
 
   private async catchUpAfterFailure(
@@ -236,14 +323,15 @@ export class ChatHandler {
     for (const event of events) this.sessionEventHub.publish(event.streamId, event);
   }
 
-  private applyPauseCheckpoint(sessionId: string): void {
-    if (this.sessionController.shouldPause(sessionId, 'afterGeneration')) {
-      this.sessionController.markAsPaused(sessionId);
+  private applyPauseCheckpoint(sessionId: string, runId: string): void {
+    if (this.sessionController.shouldPause(sessionId, runId, 'afterGeneration')) {
+      this.sessionController.markAsPaused(sessionId, runId);
     }
   }
 
   private async followupAtCheckpoint(
     sessionId: string,
+    runId: string,
     handle: HarnessSessionHandle,
     signal: AbortSignal,
     text: string,
@@ -253,9 +341,33 @@ export class ChatHandler {
     signal.addEventListener('abort', cancel, { once: true });
     if (signal.aborted) cancel();
     try {
+      if (signal.aborted || !this.sessionController.isRunning(sessionId, runId)) return;
+      const fromSeq = handle.events().length;
       await handle.followup(text, messageId);
       await this.flushAndProject(sessionId, handle);
-      this.applyPauseCheckpoint(sessionId);
+      // Only this invocation's freshly flushed suffix may settle its lifecycle.
+      const terminal = handle
+        .events(fromSeq)
+        .filter((event) => event.type === 'turn/end')
+        .at(-1);
+      if (terminal?.type === 'turn/end') {
+        const reason = terminal.data.reason;
+        if (reason.kind === 'error') {
+          if (reason.error.code === PROVIDER_ERRORS.RATE_LIMITED) {
+            throw new ProviderError(
+              PROVIDER_ERRORS.RATE_LIMITED,
+              this.requireSession(sessionId).provider,
+              undefined,
+              reason.error.message
+            );
+          }
+          throw Object.assign(new Error(reason.error.message), { code: reason.error.code });
+        }
+        if (reason.kind === 'blocked') this.sessionController.markAsPaused(sessionId, runId);
+        if (reason.kind === 'aborted' || reason.kind === 'interrupted')
+          this.sessionController.markInterrupted(sessionId, runId);
+      }
+      this.applyPauseCheckpoint(sessionId, runId);
     } finally {
       signal.removeEventListener('abort', cancel);
     }

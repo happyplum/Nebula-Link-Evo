@@ -1,15 +1,19 @@
-import { describe, expect, it, vi } from 'vitest';
-import type { DatabaseManager } from '../conversation/db.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ConversationDatabase } from '../db/ConversationDatabase.js';
+import { ChatSessionController } from './chat-session-controller.js';
 import type { SessionEventHub } from '../conversation/session-event-hub.js';
-import type { SessionState } from '../conversation/types.js';
 import type { HarnessRunScheduler } from '../harness/run-scheduler.js';
 import { ConversationJobQueue } from './conversation-job-queue.js';
 import { ProviderError, PROVIDER_ERRORS } from './provider/errors.js';
-import type { StreamPersistWorker } from './stream-persist-worker.js';
 
 vi.mock('./logger.js', () => ({
-  createWorkerLogger: () => ({ error: vi.fn() }),
+  createWorkerLogger: () => ({ error: vi.fn(), info: vi.fn() }),
 }));
+
+const databases: ConversationDatabase[] = [];
+afterEach(async () => {
+  await Promise.all(databases.splice(0).map((db) => db.close()));
+});
 
 describe('ConversationJobQueue', () => {
   it('runs jobs through the scheduler and never overwrites a durable paused state', async () => {
@@ -19,18 +23,13 @@ describe('ConversationJobQueue', () => {
       messageId: 'message-1',
       contentPreview: 'pause',
       idempotencyKey: 'idem-1',
-      execute: async () => {
-        const current = fixture.dao.states.get('paused-session');
-        if (!current) throw new Error('running session state was not persisted');
-        fixture.dao.states.set('paused-session', {
-          ...current,
-          status: 'paused',
-        });
+      execute: async (context) => {
+        fixture.controller.markAsPaused('paused-session', context.jobId);
       },
     });
     await waitForJob(fixture.queue, pausedJob, 'completed');
 
-    expect(fixture.dao.states.get('paused-session')).toMatchObject({
+    expect(await fixture.dao.get('paused-session')).toMatchObject({
       status: 'paused',
       jobId: pausedJob,
     });
@@ -58,7 +57,7 @@ describe('ConversationJobQueue', () => {
       execute: async () => {},
     });
     await waitForJob(fixture.queue, normalJob, 'completed');
-    expect(fixture.dao.states.get('normal-session')).toMatchObject({
+    expect(await fixture.dao.get('normal-session')).toMatchObject({
       status: 'completed',
       jobId: normalJob,
     });
@@ -82,7 +81,7 @@ describe('ConversationJobQueue', () => {
     });
     await waitForJob(fixture.queue, rateJob, 'completed');
     expect(rateLimited).toHaveBeenCalledOnce();
-    expect(fixture.dao.states.get('rate-session')).toMatchObject({
+    expect(await fixture.dao.get('rate-session')).toMatchObject({
       status: 'blocked',
       agentState: {
         blockReason: 'rate_limit',
@@ -98,7 +97,7 @@ describe('ConversationJobQueue', () => {
       },
     });
     await waitForJob(fixture.queue, providerJob, 'completed');
-    expect(fixture.dao.states.get('provider-session')).toMatchObject({
+    expect(await fixture.dao.get('provider-session')).toMatchObject({
       status: 'blocked',
       agentState: { blockReason: 'api_error' },
     });
@@ -110,7 +109,7 @@ describe('ConversationJobQueue', () => {
       },
     });
     await waitForJob(fixture.queue, blockedJob, 'completed');
-    expect(fixture.dao.states.get('blocked-session')).toMatchObject({
+    expect(await fixture.dao.get('blocked-session')).toMatchObject({
       status: 'blocked',
       agentState: {
         blockReason: 'waiting_for_user_input',
@@ -133,7 +132,7 @@ describe('ConversationJobQueue', () => {
       status: 'failed',
       error: 'transient failure',
     });
-    expect(fixture.dao.states.get('retry-session')).toMatchObject({
+    expect(await fixture.dao.get('retry-session')).toMatchObject({
       status: 'blocked',
       agentState: {
         blockReason: 'job_error',
@@ -145,26 +144,47 @@ describe('ConversationJobQueue', () => {
     await fixture.queue.close();
   });
 
-  it('fails closed when persistence is unavailable and rejects forged internal block reasons', async () => {
+  it('fails closed before execution when persistence is unavailable', async () => {
     const execute = vi.fn(async () => {
       throw { blockReason: 'job_error', waitingFor: 'api_retry' };
     });
-    const unavailableDb = {
-      getSessionStateDAO: () => {
-        throw new Error('database is not initialized');
-      },
-    } as unknown as DatabaseManager;
-    const queue = new ConversationJobQueue({} as StreamPersistWorker, undefined, unavailableDb);
+    const unavailableDb = new ConversationDatabase();
+    const queue = new ConversationJobQueue(
+      new ChatSessionController(unavailableDb),
+      undefined,
+      {
+        enqueue: vi.fn(),
+        wait: vi.fn(async () => {}),
+        complete: vi.fn(),
+      } as unknown as HarnessRunScheduler,
+      vi.fn()
+    );
 
     const jobId = await queue.enqueue({ sessionId: 'unavailable-session', execute });
     await waitForJob(queue, jobId, 'failed');
 
-    expect(execute).toHaveBeenCalledTimes(3);
+    expect(execute).not.toHaveBeenCalled();
     expect(queue.getStatus(jobId)).toMatchObject({
       status: 'failed',
-      error: '[object Object]',
+      error: 'Conversation database not initialized',
     });
     await queue.close();
+  });
+
+  it('does not trust an internal job_error as an explicit no-retry blocked outcome', async () => {
+    const f = createFixture();
+    const execute = vi.fn(async () => {
+      throw { blockReason: 'job_error', waitingFor: 'api_retry' };
+    });
+    const id = await f.queue.enqueue({ sessionId: 'retry-session', execute });
+    await waitForJob(f.queue, id, 'failed');
+    expect(execute).toHaveBeenCalledTimes(3);
+    expect((await f.controller.getStatus('retry-session')).agentState).toMatchObject({
+      blockReason: 'job_error',
+      retryCount: 3,
+      lastError: '[object Object]',
+    });
+    await f.queue.close();
   });
 
   it('cancels queued jobs and rejects new admission after shutdown or capacity exhaustion', async () => {
@@ -204,23 +224,78 @@ describe('ConversationJobQueue', () => {
     expect(full.admitNewRun).not.toHaveBeenCalled();
     await Promise.all([fixture.queue.close(), full.queue.close()]);
   });
+
+  it('does not replay a cancelled running job and cleans up settled jobs after retention', async () => {
+    const f = createFixture();
+    let settle = (): void => {};
+    const execute = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          settle = resolve;
+        })
+    );
+    const id = await f.queue.enqueue({ sessionId: 'normal-session', execute });
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledOnce());
+    expect(f.queue.cancelJob(id)).toBe(false);
+    await f.controller.cancel('normal-session');
+    f.queue.cancel(id);
+    f.queue.cancel(id);
+    f.queue.cancel('missing');
+    settle();
+    await f.queue.close();
+    expect(f.queue.getStatus(id)?.status).toBe('cancelled');
+    expect((await f.controller.getStatus('normal-session')).status).toBe('cancelled');
+    expect(execute).toHaveBeenCalledOnce();
+    expect(f.queue.cancelJob(id)).toBe(false);
+    const before = Date.now();
+    const now = vi.spyOn(Date, 'now').mockReturnValue(before + 11 * 60 * 1000);
+    try {
+      f.queue.cleanup();
+      expect(f.queue.getStatus(id)).toBeUndefined();
+      expect(f.queue.getPendingJobs('normal-session')).toEqual([]);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it('keeps cancelled status when a queued scheduler wait is rejected', async () => {
+    let rejectWait = (_error: Error): void => {};
+    const f = createFixture({
+      wait: () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectWait = reject;
+        }),
+    });
+    const execute = vi.fn(async () => {});
+    const id = await f.queue.enqueue({ sessionId: 'normal-session', execute });
+    await vi.waitFor(() => expect(f.scheduler.wait).toHaveBeenCalledOnce());
+    f.queue.cancel(id);
+    rejectWait(new Error('cancelled wait'));
+    await f.queue.close();
+    expect(f.queue.getStatus(id)?.status).toBe('cancelled');
+    expect(execute).not.toHaveBeenCalled();
+  });
 });
 
 function createFixture(options: { wait?: () => Promise<void> } = {}) {
-  const states = new Map<string, SessionState>();
-  const dao = {
-    states,
-    get: vi.fn(async (sessionId: string) => {
-      const current = states.get(sessionId) ?? state(sessionId, 'idle');
-      states.set(sessionId, current);
-      return current;
-    }),
-    update: vi.fn(async (sessionId: string, update: Partial<SessionState>) => {
-      const current = states.get(sessionId) ?? state(sessionId, 'idle');
-      states.set(sessionId, { ...current, ...update });
-    }),
-  };
-  const db = { getSessionStateDAO: () => dao } as unknown as DatabaseManager;
+  const db = new ConversationDatabase();
+  databases.push(db);
+  db.initialize(':memory:');
+  for (const id of [
+    'paused-session',
+    'normal-session',
+    'rate-session',
+    'provider-session',
+    'blocked-session',
+    'retry-session',
+    'queued-session',
+    'rejected',
+    'full',
+  ]) {
+    db.createSession({ id, title: id, provider: 'test', model: 'test' });
+  }
+  const dao = db.getSessionStateDAO();
+  const controller = new ChatSessionController(db);
   const eventHub = {
     emitJobQueued: vi.fn(),
     emitJobStarted: vi.fn(),
@@ -240,14 +315,8 @@ function createFixture(options: { wait?: () => Promise<void> } = {}) {
   } as unknown as HarnessRunScheduler &
     Record<'enqueue' | 'wait' | 'complete' | 'cancel', ReturnType<typeof vi.fn>>;
   const admitNewRun = vi.fn();
-  const queue = new ConversationJobQueue(
-    {} as StreamPersistWorker,
-    eventHub,
-    db,
-    scheduler,
-    admitNewRun
-  );
-  return { queue, dao, eventHub, scheduler, admitNewRun };
+  const queue = new ConversationJobQueue(controller, eventHub, scheduler, admitNewRun);
+  return { queue, dao, db, controller, eventHub, scheduler, admitNewRun };
 }
 
 async function waitForJob(
@@ -256,17 +325,4 @@ async function waitForJob(
   status: 'completed' | 'failed' | 'cancelled'
 ): Promise<void> {
   await vi.waitFor(() => expect(queue.getStatus(jobId)?.status).toBe(status));
-}
-
-function state(sessionId: string, status: SessionState['status']): SessionState {
-  const now = new Date(0).toISOString();
-  return {
-    sessionId,
-    status,
-    agentState: { schema_version: 1 },
-    createdAt: now,
-    updatedAt: now,
-    lastActiveAt: now,
-    version: 1,
-  };
 }

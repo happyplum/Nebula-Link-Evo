@@ -163,6 +163,7 @@ debug-ui  ←──  （仅被用户消费）
 - `ai-chat-service` 只从已持久 DSH/Task 事实投影活动，必须 persist-before-publish；默认 reasoning 仅为确定性阶段摘要，只有服务端显式 `visibility=public` 才传正文。
 - Tool/Skill 只公开脱敏名称、状态、摘要、版本/hash、预算与 artifact 引用；摘要最多 4 KiB，不嵌入原始 Skill 指令、secret、lease token 或超大 Tool 结果。
 - Chat SSE 与 Agent Task activity SSE 只发送 `agent_stream.snapshot` 和 `agent_stream.event`。Task `/events`/`event-log` 继续作为控制面审计，不能被 UI 呈现流替代。
+- Chat 生命周期以 `ai-chat-service` 的 `sessions_state` 为唯一权威，状态转换只经过本应用 `ChatSessionController`；正常完成保留 `completed`，cleanup 不覆盖 `paused/interrupted/cancelled/completed/blocked`。fresh snapshot 的顶层状态沿用既有映射：`completed` → `completed`、`interrupted` → `recovering`、`cancelled` → `idle`；公共 renderer 继续消费既有 Agent Stream 类型。
 - `debug-ui` 使用 comfortable、ai-e2e Authoring/Run 使用 compact 公共 renderer；业务操作通过 slots 注入。公共 UI 包不拥有 API、SSE、store、router 或权限。
 - shared `utils/agent-stream.ts` 唯一持有 `createEmptyAgentStream/reduceAgentStream/replayAgentStream`，经 root/`./utils` 导出；copy-on-write 不修改输入，跨 stream 和非递增 seq 原样忽略，允许间隙，同 sectionId 异 type 后 content delta 替换旧 section，empty generatedAt 固定 epoch。UI 入口直接重导出保持既有 API，两个后端直接调用 shared，不依赖 React；
 - Chat 保留消息→turn 映射、持久 state 覆盖与当前 generatedAt；ai-e2e 保留业务事件投影、本地 seq 去重、activity 顶层 state 聚合和最后事件/空流当前时间。纯核心不含业务策略；

@@ -11,7 +11,6 @@ import type { ConversationJobQueue } from '../../../../services/conversation-job
 import type { ChatSessionController } from '../../../../services/chat-session-controller.js';
 import { BoundedSseWriter } from '../../../../services/sse-writer.js';
 import { buildChatAgentStreamSnapshot } from '../../../../agent-stream/snapshot.js';
-import { getRuntimeSessionState } from './runtime-state.js';
 
 function writeSse(
   writer: BoundedSseWriter,
@@ -26,10 +25,10 @@ async function buildSnapshot(
   conversationManager: ConversationManager,
   sessionId: string,
   chatHandler: ChatHandler,
-  jobQueue?: ConversationJobQueue,
-  controller?: ChatSessionController
+  jobQueue: ConversationJobQueue | undefined,
+  controller: ChatSessionController
 ): Promise<AgentStreamSnapshotV1> {
-  const runtime = await getRuntimeSessionState(conversationManager, sessionId, controller);
+  const runtime = await controller.getStatus(sessionId);
   const pending = jobQueue?.getPendingJobs(sessionId) ?? [];
   const runtimeState = pending.some((job) => job.status === 'queued')
     ? 'streaming'

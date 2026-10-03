@@ -73,6 +73,7 @@ describe('HarnessProjectionStore', () => {
         ])
       );
       expect(JSON.stringify(first.publicEvents)).not.toContain('思考');
+      expect(db.getSessionStateDAO().get('chat-1').status).toBe('idle');
       expect(
         db.getMessagesBySession('chat-1').map((message) => [message.role, message.content])
       ).toEqual([
@@ -94,6 +95,72 @@ describe('HarnessProjectionStore', () => {
       await db.close();
     }
   }, 20_000);
+
+  it('appends queue completion after committed DSH projection without reusing its last sequence', async () => {
+    const db = new ConversationDatabase();
+    db.initialize(':memory:');
+    db.createSession({ id: 'chat-seq', title: 'chat', provider: 'test', model: 'test' });
+    const events = db.getSessionEventsDAO();
+    const projection = new HarnessProjectionStore(db.connection(), events);
+    try {
+      expect(
+        events.appendEventSync('chat-seq', 'agent_stream.event', {
+          type: 'stream.state',
+          state: 'streaming',
+        })
+      ).toBe(1);
+      const result = projection.catchUp('chat-seq', 2, [
+        { seq: 0, time: Date.now(), type: 'turn/start', data: { turn: 0 } },
+        {
+          seq: 1,
+          time: Date.now(),
+          type: 'turn/end',
+          data: { turn: 0, reason: { kind: 'completed' } },
+        },
+      ] as DshSessionEvent[]);
+      const lastSeq = Math.max(...result.publicEvents.map((event) => event.seq));
+      events.observeCommittedSeq('chat-seq', 1);
+      expect(
+        events.appendEventSync('chat-seq', 'agent_stream.event', {
+          type: 'stream.state',
+          state: 'completed',
+        })
+      ).toBe(lastSeq + 1);
+      expect(
+        events.appendEventSync('chat-seq', 'agent_stream.event', {
+          type: 'stream.state',
+          state: 'idle',
+        })
+      ).toBe(lastSeq + 2);
+    } finally {
+      await db.close();
+    }
+  });
+
+  it.each(['uninitialized', 'uninitialized-old', 'equal', 'ahead'] as const)(
+    'advances a %s public allocator beyond observed committed events',
+    async (mode) => {
+      const db = new ConversationDatabase();
+      db.initialize(':memory:');
+      db.createSession({ id: 'allocator', title: 'chat', provider: 'test', model: 'test' });
+      const events = db.getSessionEventsDAO();
+      try {
+        if (!mode.startsWith('uninitialized'))
+          events.appendEventSync('allocator', 'agent_stream.event', {});
+        const committed = mode === 'equal' ? 2 : 4;
+        db.connection()
+          .prepare(
+            "INSERT INTO session_events(session_id,seq,event_type,payload,created_at) VALUES (?,?,'agent_stream.event','{}',?)"
+          )
+          .run('allocator', committed, new Date().toISOString());
+        events.observeCommittedSeq('allocator', mode === 'uninitialized-old' ? 1 : committed);
+        events.observeCommittedSeq('allocator', 1);
+        expect(events.appendEventSync('allocator', 'agent_stream.event', {})).toBe(committed + 1);
+      } finally {
+        await db.close();
+      }
+    }
+  );
 
   it('refuses a projection watermark beyond the durable prefix', () => {
     const db = new ConversationDatabase();

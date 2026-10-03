@@ -4,9 +4,7 @@ import type {
   Message,
   CreateSessionParams,
   MessageRole,
-  SessionState,
   CreateSessionStateParams,
-  UpdateSessionStateParams,
   UpdateSessionParams,
 } from '../db/types.js';
 
@@ -36,10 +34,7 @@ class ConversationManager {
   private initialized = false;
   private activeToolCalls = new Map<string, ToolCall[]>();
 
-  constructor(
-    dbPath: string = ':memory:',
-    db: ConversationDatabase = ConversationDatabase.getInstance()
-  ) {
+  constructor(dbPath: string, db: ConversationDatabase) {
     this.db = db;
     this.initialize(dbPath);
   }
@@ -211,44 +206,8 @@ class ConversationManager {
     return forkedSession;
   }
 
-  getSessionStateDAO() {
-    return this.db.getSessionStateDAO();
-  }
-
   async createSessionState(params: CreateSessionStateParams): Promise<void> {
     return this.db.getSessionStateDAO().create(params);
-  }
-
-  async getSessionState(sessionId: string): Promise<SessionState | null> {
-    return this.db.getSessionStateDAO().get(sessionId);
-  }
-
-  async updateSessionState(
-    sessionId: string,
-    params: UpdateSessionStateParams,
-    expectedVersion?: number
-  ): Promise<void> {
-    return this.db.getSessionStateDAO().update(sessionId, params, expectedVersion);
-  }
-
-  async getSessionStatus(sessionId: string): Promise<string | null> {
-    return this.db.getSessionStateDAO().getStatus(sessionId);
-  }
-
-  async updateSessionStatus(
-    sessionId: string,
-    status: SessionState['status'],
-    agentState?: SessionState['agentState']
-  ): Promise<void> {
-    return this.db.getSessionStateDAO().updateStatus(sessionId, status, agentState);
-  }
-
-  async getActiveSessions(): Promise<SessionState[]> {
-    return this.db.getSessionStateDAO().getActiveSessions();
-  }
-
-  async getSessionsByStatus(status: SessionState['status']): Promise<SessionState[]> {
-    return this.db.getSessionStateDAO().getSessionsByStatus(status);
   }
 
   updateSessionTitle(id: string, title: string): Session | null {
