@@ -2,6 +2,7 @@ import type {
   PersistedAgentTaskRequest,
   AgentTaskCommandRequest,
   AgentTaskCommandResult,
+  AgentTaskEventRecord,
   AgentTaskView,
   CreateAgentTaskRequest,
 } from '@nebula-link-evo/shared/types/agent-task';
@@ -1696,6 +1697,193 @@ describe('SemanticCoordinatorService', () => {
       outcome: 'succeeded',
     });
   });
+
+  it.each(['run', 'authoring'] as const)(
+    '%s 对账保留游标、输出哈希和任务关联，幂等传播暂停、恢复与取消',
+    async (contextType) => {
+      const fixture = createFixture(db, assets);
+      const versions = new BusinessVersionRepository(db);
+      const amendments = new AuthoringAmendmentRepository(db, assets);
+      const authoring = new SemanticAuthoringService(workflows, assets, amendments, versions);
+      let contextId: string;
+      if (contextType === 'run') {
+        const run = runs.createFormalRun({
+          projectId: 'project-1',
+          businessVersionId: fixture.versionId,
+          clientRunId: 'reconcile-run',
+          scenarioRevisionId: fixture.scenarioRevisionId,
+          deploymentRevisionId: fixture.deploymentRevisionId,
+          inputs: {},
+        });
+        contextId = run.id;
+        runs.command({
+          commandId: 'start-reconcile-run',
+          runId: contextId,
+          action: 'start',
+          expectedStateVersion: 2,
+          createdBy: 'operator',
+        });
+      } else {
+        contextId = authoring.createJob({
+          businessVersionId: fixture.versionId,
+          mode: 'repair',
+          idempotencyKey: 'reconcile-authoring',
+          targetType: 'functional_module',
+          targetId: fixture.moduleId,
+          currentUrl: 'https://test.example/account',
+          reason: '验证任务对账',
+          createdBy: 'operator',
+        }).id;
+      }
+      const output = { summary: '任务中间输出' };
+      const override: Partial<AgentTaskView> = {
+        status: 'running',
+        output,
+        completedAt: undefined,
+      };
+      const agent = new FakeAgentTaskClient(undefined, override, override);
+      const listTaskEvents = vi.fn(async (taskId: string, afterSeq = 0) => {
+        const task = await agent.getTask(taskId);
+        const seq = task.stateVersion + 4;
+        if (seq <= afterSeq) return [];
+        return [
+          {
+            id: `event-${seq}`,
+            taskId,
+            seq,
+            type: 'task.state_changed',
+            entityType: 'task',
+            entityId: taskId,
+            stateVersion: task.stateVersion,
+            payload: { status: task.status },
+            occurredAt: task.updatedAt,
+            createdAt: task.updatedAt,
+          } satisfies AgentTaskEventRecord,
+        ];
+      });
+      const activity: Pick<AgentActivityRepository, 'cursor' | 'append'> = {
+        cursor: vi.fn(() => 0),
+        append: vi.fn((_context, _taskId, event) => event),
+      };
+      const listTaskActivity = vi.spyOn(agent, 'listTaskActivity');
+      const commandTask = vi.spyOn(agent, 'commandTask');
+      const coordinator = new SemanticCoordinatorService({
+        repository: new SemanticCoordinatorRepository(db),
+        workflows,
+        evidence,
+        runs,
+        agentTasks: Object.assign(agent, { listTaskEvents }),
+        browser: new FakeBrowserClient(),
+        activity: activity as AgentActivityRepository,
+        secretStore: new MemoryCoordinatorSecretStore(),
+        authoringCandidates: new SemanticAuthoringCandidateService(
+          new SemanticQueryRepository(db, versions),
+          assets,
+          amendments
+        ),
+      });
+      for (let index = 0; index < 8; index += 1) await coordinator.tick();
+      const context = { type: contextType, id: contextId };
+      const link = db
+        .prepare("SELECT * FROM external_task_links WHERE kind = 'agent_task'")
+        .get() as Record<string, unknown>;
+      const association =
+        contextType === 'run'
+          ? { pageTaskId: String(link.page_task_id) }
+          : { authoringTaskId: String(link.authoring_task_id) };
+      expect(link).toMatchObject({
+        context_type: contextType,
+        context_id: contextId,
+        external_state: 'running',
+        last_external_seq: 6,
+        result_sha256: hashValue(output),
+        terminal_at: null,
+      });
+      expect(link[contextType === 'run' ? 'page_task_id' : 'authoring_task_id']).toBeTruthy();
+      expect(link[contextType === 'run' ? 'authoring_task_id' : 'page_task_id']).toBeNull();
+      expect(listTaskEvents).toHaveBeenCalledWith('agent-task-1', 3, 500);
+      expect(listTaskEvents).toHaveBeenCalledWith('agent-task-1', 6, 500);
+      expect(listTaskActivity).toHaveBeenCalledWith('agent-task-1', 0, 500);
+      expect(activity.append).toHaveBeenCalledWith(
+        context,
+        'agent-task-1',
+        expect.any(Object),
+        contextType === 'run' ? { ...association, todoId: expect.any(String) } : association
+      );
+      const task = await agent.getTask('agent-task-1');
+      for (const [index, action] of ['pause', 'resume', 'cancel'].entries()) {
+        if (action === 'resume') task.eventSeq = 8;
+        const lifecycleTable = contextType === 'run' ? 'test_runs' : 'authoring_jobs';
+        const current = db
+          .prepare(`SELECT state_version FROM ${lifecycleTable} WHERE id = ?`)
+          .get(contextId) as { state_version: number };
+        const command = {
+          commandId: `reconcile-${action}`,
+          action: action as 'pause' | 'resume' | 'cancel',
+          expectedStateVersion: current.state_version,
+          createdBy: 'operator',
+        };
+        if (contextType === 'run') runs.command({ ...command, runId: contextId });
+        else authoring.commandJob({ ...command, jobId: contextId });
+        expect(await coordinator.tick()).toEqual({
+          action: `${contextType === 'run' ? 'agent_task' : 'authoring_agent_task'}.${action}_queued`,
+        });
+        const stateVersion = index + 2;
+        const id = `agent-task-command:agent-task-1:${action}:v${stateVersion}`;
+        const outbox = db
+          .prepare('SELECT * FROM integration_outbox WHERE id = ?')
+          .get(id) as Record<string, unknown>;
+        expect(outbox).toMatchObject({
+          context_type: contextType,
+          context_id: contextId,
+          page_task_id: link.page_task_id,
+          authoring_task_id: link.authoring_task_id,
+          command_type: 'agent_task.command',
+          endpoint_or_tool: '/api/v1/agent-tasks/:taskId/commands',
+        });
+        expect(evidence.getOutboxPayload(id)).toEqual({
+          taskId: 'agent-task-1',
+          command: action,
+          expectedStateVersion: stateVersion,
+        });
+        if (action === 'resume') {
+          expect(
+            db
+              .prepare('SELECT last_external_seq FROM external_task_links WHERE id = ?')
+              .get(link.id)
+          ).toEqual({ last_external_seq: 8 });
+        }
+        expect(await coordinator.tick()).toEqual({ action: 'outbox:agent_task.command' });
+        expect(
+          db
+            .prepare('SELECT COUNT(*) AS count, status FROM integration_outbox WHERE id = ?')
+            .get(id)
+        ).toEqual({ count: 1, status: 'confirmed' });
+        expect(commandTask).toHaveBeenLastCalledWith(
+          'agent-task-1',
+          expect.objectContaining({
+            commandId: id,
+            type: action,
+            expectedStateVersion: stateVersion,
+          })
+        );
+      }
+      await coordinator.tick();
+      expect(
+        db
+          .prepare(
+            'SELECT external_state, last_external_seq, result_sha256, terminal_at FROM external_task_links WHERE id = ?'
+          )
+          .get(link.id)
+      ).toMatchObject({
+        external_state: 'cancelled',
+        last_external_seq: 10,
+        result_sha256: hashValue(output),
+        terminal_at: expect.any(String),
+      });
+      expect(agent.commands).toEqual(['pause', 'resume', 'cancel']);
+    }
+  );
 
   it('在安全边界暂停运行中的 Authoring Agent，并在取消后收敛作业和会话', async () => {
     const fixture = createFixture(db, assets);

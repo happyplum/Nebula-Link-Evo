@@ -923,43 +923,16 @@ export class SemanticCoordinatorService {
       }
       return null;
     }
-    const eventSeq = await this.reconcileAgentTaskEvents(
-      { type: 'run', id: pageTask.runId },
-      link.externalId,
-      { pageTaskId: pageTask.pageTaskId, todoId: pageTask.todoId },
-      link.lastExternalSeq
-    );
-    const task = await this.options.agentTasks.getTask(link.externalId);
-    this.options.evidence.linkExternalTask({
+    const { task, queuedCommand } = await this.reconcileAgentTask({
       context: { type: 'run', id: pageTask.runId },
-      pageTaskId: pageTask.pageTaskId,
-      service: 'ai_chat_service',
-      kind: 'agent_task',
-      externalId: task.taskId,
-      externalState: task.status,
-      lastExternalSeq: Math.max(task.eventSeq, eventSeq),
-      terminal: TERMINAL_AGENT_STATES.has(task.status),
-      ...(task.output !== undefined ? { resultSha256: hashValue(task.output) } : {}),
+      externalId: link.externalId,
+      association: { pageTaskId: pageTask.pageTaskId },
+      afterSeq: link.lastExternalSeq,
+      lifecycle: pageTask.runLifecycle,
+      todoId: pageTask.todoId,
     });
     if (!TERMINAL_AGENT_STATES.has(task.status)) {
-      const desired = desiredAgentCommand(pageTask.runLifecycle, task.status);
-      if (desired) {
-        const queued = this.options.evidence.enqueueOutbox({
-          id: `agent-task-command:${task.taskId}:${desired}:v${task.stateVersion}`,
-          context: { type: 'run', id: pageTask.runId },
-          pageTaskId: pageTask.pageTaskId,
-          targetService: 'ai_chat_service',
-          commandType: 'agent_task.command',
-          endpointOrTool: '/api/v1/agent-tasks/:taskId/commands',
-          payloadRedacted: {
-            taskId: task.taskId,
-            command: desired,
-            expectedStateVersion: task.stateVersion,
-          },
-        });
-        return queued.created ? `agent_task.${desired}_queued` : null;
-      }
-      return null;
+      return queuedCommand ? `agent_task.${queuedCommand}_queued` : null;
     }
     const manifestId = await this.captureEvidence(pageTask, task);
     const completion = completionFromTask(task);
@@ -1033,43 +1006,15 @@ export class SemanticCoordinatorService {
       }
       return null;
     }
-    const eventSeq = await this.reconcileAgentTaskEvents(
-      { type: 'authoring', id: task.jobId },
-      link.externalId,
-      { authoringTaskId: task.taskId },
-      link.lastExternalSeq
-    );
-    const agentTask = await this.options.agentTasks.getTask(link.externalId);
-    this.options.evidence.linkExternalTask({
+    const { task: agentTask, queuedCommand } = await this.reconcileAgentTask({
       context: { type: 'authoring', id: task.jobId },
-      authoringTaskId: task.taskId,
-      service: 'ai_chat_service',
-      kind: 'agent_task',
-      externalId: agentTask.taskId,
-      externalState: agentTask.status,
-      lastExternalSeq: Math.max(agentTask.eventSeq, eventSeq),
-      terminal: TERMINAL_AGENT_STATES.has(agentTask.status),
-      ...(agentTask.output !== undefined ? { resultSha256: hashValue(agentTask.output) } : {}),
+      externalId: link.externalId,
+      association: { authoringTaskId: task.taskId },
+      afterSeq: link.lastExternalSeq,
+      lifecycle: task.jobLifecycle,
     });
     if (!TERMINAL_AGENT_STATES.has(agentTask.status)) {
-      const desired = desiredAgentCommand(task.jobLifecycle, agentTask.status);
-      if (desired) {
-        const queued = this.options.evidence.enqueueOutbox({
-          id: `agent-task-command:${agentTask.taskId}:${desired}:v${agentTask.stateVersion}`,
-          context: { type: 'authoring', id: task.jobId },
-          authoringTaskId: task.taskId,
-          targetService: 'ai_chat_service',
-          commandType: 'agent_task.command',
-          endpointOrTool: '/api/v1/agent-tasks/:taskId/commands',
-          payloadRedacted: {
-            taskId: agentTask.taskId,
-            command: desired,
-            expectedStateVersion: agentTask.stateVersion,
-          },
-        });
-        return queued.created ? `authoring_agent_task.${desired}_queued` : null;
-      }
-      return null;
+      return queuedCommand ? `authoring_agent_task.${queuedCommand}_queued` : null;
     }
     if (task.jobLifecycle === 'cancelling' || agentTask.status === 'cancelled') {
       this.options.workflows.completeAuthoringAttempt({
@@ -1238,6 +1183,51 @@ export class SemanticCoordinatorService {
       taskStatus: agentTask.status,
     });
     return manifest.id;
+  }
+
+  private async reconcileAgentTask(input: {
+    context: ActivityContext;
+    externalId: string;
+    association: { pageTaskId?: string; authoringTaskId?: string };
+    afterSeq?: number;
+    lifecycle: string;
+    todoId?: string;
+  }): Promise<{ task: AgentTaskView; queuedCommand: ReturnType<typeof desiredAgentCommand> }> {
+    const eventSeq = await this.reconcileAgentTaskEvents(
+      input.context,
+      input.externalId,
+      { ...input.association, ...(input.todoId ? { todoId: input.todoId } : {}) },
+      input.afterSeq
+    );
+    const task = await this.options.agentTasks.getTask(input.externalId);
+    const terminal = TERMINAL_AGENT_STATES.has(task.status);
+    this.options.evidence.linkExternalTask({
+      context: input.context,
+      ...input.association,
+      service: 'ai_chat_service',
+      kind: 'agent_task',
+      externalId: task.taskId,
+      externalState: task.status,
+      lastExternalSeq: Math.max(task.eventSeq, eventSeq),
+      terminal,
+      ...(task.output !== undefined ? { resultSha256: hashValue(task.output) } : {}),
+    });
+    const desired = terminal ? null : desiredAgentCommand(input.lifecycle, task.status);
+    if (!desired) return { task, queuedCommand: null };
+    const queued = this.options.evidence.enqueueOutbox({
+      id: `agent-task-command:${task.taskId}:${desired}:v${task.stateVersion}`,
+      context: input.context,
+      ...input.association,
+      targetService: 'ai_chat_service',
+      commandType: 'agent_task.command',
+      endpointOrTool: '/api/v1/agent-tasks/:taskId/commands',
+      payloadRedacted: {
+        taskId: task.taskId,
+        command: desired,
+        expectedStateVersion: task.stateVersion,
+      },
+    });
+    return { task, queuedCommand: queued.created ? desired : null };
   }
 
   private async reconcileAgentTaskEvents(
