@@ -80,6 +80,7 @@ UI 路由：`/`、`/semantic/:projectId`、`/semantic/:projectId/authoring/:vers
 - `tsconfig.json` references shared 与 browser-control-client；`tsc -b` 按 shared→browser-control-client→E2E 构建依赖，使服务构建和 start.bat 不依赖预先存在的客户端 dist。
 - 浏览器事件日志是必需 port，按持久 cursor 补洞；活动会话关闭携带 control 凭证。共享 HTTP 解析保留标准 Problem/status/details/correlationId 与网络 cause，artifact 404 不再因 arraybuffer 丢失 Problem。非标准 HTTP 错误有意统一为 `dependency_unavailable`，不再返回旧 `http_STATUS`；显式 baseUrl→PROXY_ADAPTER_URL→默认 3000 与 timeoutMs 默认 30 秒配置边界保持。
 - Agent Task activity-log 使用独立 activity cursor 聚合；不得复用控制面 external event cursor。Authoring/Run 本地活动 seq 单调、可重启恢复、按业务上下文隔离且不重复。
+- Run/Authoring Agent 对账共用协调器私有 `reconcileAgentTask`：先补事件再查询快照，以两者最大序号保存外部关联、终态及输出哈希，并按期望生命周期入队 `pause/resume/cancel`。命令 key 保持 `agent-task-command:${taskId}:${command}:v${stateVersion}` 与 `expectedStateVersion`；page task/authoring task 关联按上下文传入，Run 的 TODO 关联仅用于活动同步。旧两处重复投影和命令构造已退出；缺失关联、Run TODO/决定结算及 Authoring 取消/候选验证仍由各调用方维护。
 - Authoring 用户意见、候选、Skill、Tool、浏览器验证、审批与激活在同一 compact 活动流呈现；结构化 amendment/decision 仍是业务事实。Run 活动流只读，资产修改必须返回 Authoring。
 - 1440px 与 1920px 下浏览器始终是最强视觉与空间锚点；左侧页面/模块/场景使用树线、状态点、细强调轨和渐隐背景表达层级，不使用父子嵌套的大面积选中卡片；右侧检查器与 Agent 活动使用独立浮动表面，明暗主题保持等价层级与可见焦点。
 - 公开 Authoring message 查询/提交路由不存在；历史内部消息审计只作为活动投影来源，不删除数据库记录。
