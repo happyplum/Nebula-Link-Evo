@@ -52,6 +52,7 @@ pnpm type-check   # tsc --noEmit
 - Browser operation kind/observe/act vocabulary comes from `@nebula-link-evo/shared/types/browser-execution`; do not fork a second constant list.
 - Localhost-only bind (`127.0.0.1`) by default.
 - Chat 与 Agent Task 工具必须进入 DSH `ToolRuntime`；部署期产品工具由 `GatewayToolBridge` 启动时一次性投影并使用 DSH-safe name。原始 `operation_execute/get/cancel` 只能存在于模型不可见的 transport child scope，不得直接注册到模型工具表。
+- 模型工具安全名只由 `src/harness/model-tool-name.ts#modelToolName` 生成，`GatewayToolBridge` 与 Agent Task executor 共同消费；长名截断到 51 字符再追加 `_` 与原始产品名 SHA-256 前 12 位，最终不超过 64 字符。业务工具白名单、授权和审计继续使用原始产品名，各调用方保留碰撞拒绝。
 - 每个 `buildApp()` 必须创建并销毁自己的 Cordis root、DSH session store 和应用状态；禁止模块级单例 Harness。
 - Chat 生命周期与当前运行身份只以 SQLite `sessions_state` 为权威，`ChatSessionController` 是唯一状态转换入口；每次转换必须原子检查 `job_id` 和允许的来源状态。队列在整个重试周期使用一个 job ID，`ChatHandler` 按显式 `statusOwner` 区分队列与直接恢复，不能提前替队列写失败终态或另起重试循环。
 - Chat controller/queue/handler、数据库和 scheduler/admission 都按应用实例显式注入；内存只保存活动 handle、AbortController 和控制 flags。清理只释放匹配运行资源，不把生命周期重置为 idle；Harness 历史投影只重建消息与活动事件，不写生命周期。

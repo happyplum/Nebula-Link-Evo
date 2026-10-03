@@ -6,7 +6,7 @@ import { ToolRegistry } from '../tools/registry.js';
 import type { ToolProvider } from '../tools/types.js';
 import { installGatewayToolBridge } from './gateway-tool-bridge.js';
 
-function provider(): ToolProvider {
+function provider(names = ['vision.analyze_page']): ToolProvider {
   return {
     id: 'fixture',
     status: 'ready',
@@ -15,15 +15,15 @@ function provider(): ToolProvider {
     on: () => {},
     removeListener: () => {},
     getTools: () => [
-      {
-        id: 'safe',
-        name: 'vision.analyze_page',
+      ...names.map((name) => ({
+        id: name,
+        name,
         description: 'safe product tool',
         inputSchema: { type: 'object', additionalProperties: false, properties: {} },
         providerId: 'fixture',
         isAvailable: true,
         execute: async () => '{"ok":true}',
-      },
+      })),
       ...[
         'browser-control.operation_execute',
         'browser-control.operation_get',
@@ -42,6 +42,25 @@ function provider(): ToolProvider {
 }
 
 describe('Gateway Harness tool bridge', () => {
+  it('rejects normalized collisions before registering any product tool', async () => {
+    const context = new Context();
+    await context.plugin(SystemPrompt, {
+      includeHarnessIdentity: false,
+      includeRuntimeContext: false,
+    });
+    await context.plugin(ToolRuntime, { mode: 'native' });
+    const registry = new ToolRegistry();
+    registry.registerProvider(provider(['vision.a-b', 'vision.a_b']));
+    try {
+      expect(() => installGatewayToolBridge(context, registry)).toThrow(
+        'Product tool safe-name collision for vision.a_b'
+      );
+      expect(context.tools.schemas()).toEqual([]);
+    } finally {
+      await context.fiber.dispose();
+    }
+  });
+
   it('publishes product-safe mappings while keeping raw proxy operations invisible', async () => {
     const context = new Context();
     await context.plugin(SystemPrompt, {
