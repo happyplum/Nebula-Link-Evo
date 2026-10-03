@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, type FC } from 'react';
 import { Accordion } from '@/shared/ui/Accordion.js';
 import { testIds } from '@/shared/testing/testids.js';
+import { useRuntimeStore, selectPlaywrightIsOpen } from '@/features/runtime/store/runtime.store.js';
 import {
   useControlStore,
   selectCapturedCoordinates,
@@ -36,7 +37,7 @@ export const PageInteractionShell: FC<PageInteractionShellProps> = ({
   open = true,
   onToggle = () => {},
 }) => {
-  const browserOpen = useControlStore((s) => s.browserOpen);
+  const browserOpen = useRuntimeStore(selectPlaywrightIsOpen);
   const isExecutingAction = useControlStore((s) => s.isExecutingAction);
   const setExecutingAction = useControlStore((s) => s.setExecutingAction);
   const setActionError = useControlStore((s) => s.setActionError);

@@ -46,7 +46,7 @@
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
 | App Shell                  | `src/main.tsx`、`src/app/`（App、routes、layout）                                                                                                                                                                               | shipped | 入口、HashRouter、路由表                                                                            | 路由：`/` → DebugPage、`/chat` → ChatPage                                                |
 | Layout feature             | `src/features/layout/`（store/layout.store、index）                                                                                                                                                                             | shipped | 全局布局状态                                                                                        | Zustand store                                                                            |
-| Runtime feature            | `src/features/runtime/`（store/runtime.store、lib/{debug-stream-client,apply-playwright-status}、hooks/{useDebugStream,useBrowserStatus}、components/{MonitorSidebarShell,MonitorMainShell}）                                   | shipped | 运行时状态、debug stream 客户端、监控主面板                                                         | 监控面板                                                                                 |
+| Runtime feature            | `src/features/runtime/`（store/runtime.store、lib/{debug-stream-client,apply-playwright-status,refresh-browser-status}、hooks/{useDebugStream,useBrowserStatus}、components/{MonitorSidebarShell,MonitorMainShell}）                                   | shipped | 运行时状态、debug stream 客户端、监控主面板                                                         | 监控面板                                                                                 |
 | Chat feature               | `src/features/chat/`（store/chat.store、hooks/useChatStream、components/{MessageList,Composer,SessionSelector}、types）                                                                                                                         | shipped | 会话选择、optimistic user turn、Agent Stream 连接与控制操作                                           | comfortable 公共 renderer；无独立 Thinking/Tool/Message 卡片                             |
 | Agent activity UI          | `@nebula-link-evo/agent-activity-ui`                                                                                                                                                                                            | shipped | 公共 reducer、renderer、主题与业务 slots                                                              | 本包不维护协议 adapter                                                                    |
 | Playwright-control feature | `src/features/playwright-control/`（store/control.store、lib/{dom-elements,logger}、components/{BrowserBasicShell,PageInteractionShell,OperationLogsShell,DomElementsTable,SelectedElementCard}、api/{control.adapters,index}） | shipped | 浏览器控制 UI、操作日志、DOM 元素表                                                                 |                                                                                          |
@@ -94,6 +94,7 @@
 | 功能                                                     | 入口                                                       | 状态    | 验收面                                                               | 关联模块           |
 | -------------------------------------------------------- | ---------------------------------------------------------- | ------- | -------------------------------------------------------------------- | ------------------ |
 | 活动视图与右面板监控（Monitor/Control/AI + DOM Elements/配置） | features/{runtime,playwright-control,chat,layout,config}  | shipped | 单元 + parity 测试                                                   | 全部 features      |
+| 浏览器远端状态单源（开闭、URL、服务状态与 hydration）          | features/runtime、features/playwright-control            | shipped | `apply-playwright-status.test.ts`、`useBrowserStatus.test.ts`、`useDebugStream.test.ts`、`browser-runtime-state.test.tsx` | runtime、playwright-control |
 | Optimistic user turn 与服务端 turn 去重                  | features/chat/hooks/useChatStream + chat.store             | shipped | `chat.store.test.ts`                                                  | chat               |
 | Agent Stream snapshot/live 单源                          | features/chat                                              | shipped | `useChatStream.test.ts`                                               | chat、shared       |
 | RAF 批处理与跨 session 隔离                              | features/chat/hooks/useChatStream                          | shipped | `useChatStream.test.ts`                                               | chat               |
@@ -127,6 +128,13 @@
 > 9. 修改截图渲染容错（base64 与 gzip JPEG 都必须支持）
 > 10. 与 `proxy-adapter` / `ai-chat-service` 之间的契约变更
 
+### 浏览器状态维护契约
+
+- `runtime.store` 是远端浏览器开闭与 URL 的唯一可写事实源；Monitor、BrowserBasic 与 PageInteraction 共同订阅。SSE snapshot/status、health fallback 与 REST status 确认都经 `applyPlaywrightStatus` 使用 `setPlaywrightState` 原子更新状态及 hydration。
+- runtime 不再提供服务状态、开闭或 URL 的独立 setter；保留 hydration setter 供未返回浏览器状态的 health 探测使用。
+- REST 初始化、打开、关闭、导航成功与重连通过 `refreshBrowserStatus` 确认状态；导航展示 status 返回的真实重定向后 URL，确认失败保留最后确认值并提示错误。health 保持 4 秒轮询、SSE 断流 5 秒宽限。
+- `control.store` 仅保留 viewport、DOM/selection、picker、action busy/error/log；不保留开闭、URL 或对应 setter/selectors。显式 viewport 更新仍由 control 保存，未提供 viewport 时保留当前值、null 清空。control reset 不重置 runtime；URL 输入草稿留在组件，不被远端 URL 覆盖。
+
 ### 维护检查清单
 
 | 变更场景              | 必须更新                                                                    |
@@ -146,6 +154,7 @@
 | 缺口                                               | 类型      | 状态    | 备注                                                   |
 | -------------------------------------------------- | --------- | ------- | ------------------------------------------------------ |
 | History / Interactions 活动视图未实现              | tech-debt | planned | UI 上不可达；恢复时需同步路由登记、功能清单与 shipped/debug-ui-panels.md |
+| 1024px 及以下侧栏与右面板相互遮挡                  | bug | open | `max-width: 1024px` 下 sidebar 与 rightPanel 均为 fixed，left 均从 activitybar 起算，导致重叠；在基线 `83ffc3e` 已复现，布局另行处理 |
 
 ---
 

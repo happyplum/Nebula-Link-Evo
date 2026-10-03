@@ -92,6 +92,28 @@ describe('useBrowserStatus', () => {
     unmount();
   });
 
+  it('hydrates the canonical runtime browser state from health without a control mirror', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        services: {
+          playwright: { isOpen: true, url: 'https://fallback.example/', status: 'healthy' },
+        },
+      }),
+    } as Response);
+    const { unmount } = renderHook(() => useBrowserStatus());
+    await flushAsyncWork();
+    expect(useRuntimeStore.getState()).toMatchObject({
+      playwrightIsOpen: true,
+      playwrightUrl: 'https://fallback.example/',
+      playwrightStatus: 'ready',
+      playwrightStatusHydrated: true,
+    });
+    expect(useControlStore.getState()).not.toHaveProperty('browserOpen');
+    expect(useControlStore.getState()).not.toHaveProperty('browserUrl');
+    unmount();
+  });
+
   it('resumes 4s polling after the stream stays disconnected for 5s', async () => {
     const { rerender, unmount } = renderHook(() => useBrowserStatus());
 

@@ -6,7 +6,7 @@ export type LiveviewTransport = 'webrtc' | 'mjpeg';
 interface RuntimeState {
   playwrightStatus: ServiceStatus;
   playwrightIsOpen: boolean;
-  /** true once the first health poll completes — distinguishes "unprobed" from "confirmed closed". */
+  /** true once remote status is confirmed — distinguishes "unprobed" from "confirmed closed". */
   playwrightStatusHydrated: boolean;
   playwrightUrl: string | null;
   snapshotVersion: number;
@@ -14,10 +14,7 @@ interface RuntimeState {
   lastScreenshotDataUrl: string | null;
   liveviewTransport: LiveviewTransport;
 
-  setPlaywrightStatus: (status: ServiceStatus) => void;
-  setPlaywrightIsOpen: (isOpen: boolean) => void;
   setPlaywrightStatusHydrated: (hydrated: boolean) => void;
-  setPlaywrightUrl: (url: string | null) => void;
   setPlaywrightState: (state: {
     status: ServiceStatus;
     isOpen: boolean;
@@ -52,15 +49,13 @@ const initialState = {
 
 export const useRuntimeStore = create<RuntimeState>()((set) => ({
   ...initialState,
-  setPlaywrightStatus: (status) => set({ playwrightStatus: status }),
-  setPlaywrightIsOpen: (isOpen) => set({ playwrightIsOpen: isOpen }),
   setPlaywrightStatusHydrated: (hydrated) => set({ playwrightStatusHydrated: hydrated }),
-  setPlaywrightUrl: (url) => set({ playwrightUrl: url }),
   setPlaywrightState: (state) =>
     set({
       playwrightStatus: state.status,
       playwrightIsOpen: state.isOpen,
       playwrightUrl: state.url,
+      playwrightStatusHydrated: true,
     }),
   incrementSnapshotVersion: () => set((s) => ({ snapshotVersion: s.snapshotVersion + 1 })),
   incrementLiveviewRefreshKey: () => set((s) => ({ liveviewRefreshKey: s.liveviewRefreshKey + 1 })),

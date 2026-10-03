@@ -12,63 +12,51 @@ describe('runtime.store', () => {
       expect(s.playwrightStatus).toBe('unknown');
       expect(s.playwrightIsOpen).toBe(false);
       expect(s.playwrightUrl).toBeNull();
-    });
-  });
-
-  describe('setPlaywrightStatus', () => {
-    it.each(['unknown', 'ready', 'unhealthy'] as const)('sets status to %s', (status) => {
-      useRuntimeStore.getState().setPlaywrightStatus(status);
-      expect(useRuntimeStore.getState().playwrightStatus).toBe(status);
-    });
-  });
-
-  describe('setPlaywrightIsOpen', () => {
-    it('sets to open', () => {
-      useRuntimeStore.getState().setPlaywrightIsOpen(true);
-      expect(useRuntimeStore.getState().playwrightIsOpen).toBe(true);
-    });
-
-    it('sets to closed', () => {
-      useRuntimeStore.getState().setPlaywrightIsOpen(true);
-      useRuntimeStore.getState().setPlaywrightIsOpen(false);
-      expect(useRuntimeStore.getState().playwrightIsOpen).toBe(false);
-    });
-  });
-
-  describe('setPlaywrightUrl', () => {
-    it('sets a url', () => {
-      useRuntimeStore.getState().setPlaywrightUrl('http://localhost:3001');
-      expect(useRuntimeStore.getState().playwrightUrl).toBe('http://localhost:3001');
-    });
-
-    it('clears url with null', () => {
-      useRuntimeStore.getState().setPlaywrightUrl('http://localhost:3001');
-      useRuntimeStore.getState().setPlaywrightUrl(null);
-      expect(useRuntimeStore.getState().playwrightUrl).toBeNull();
+      expect(s.playwrightStatusHydrated).toBe(false);
+      expect(s).not.toHaveProperty('setPlaywrightStatus');
+      expect(s).not.toHaveProperty('setPlaywrightIsOpen');
+      expect(s).not.toHaveProperty('setPlaywrightUrl');
     });
   });
 
   describe('setPlaywrightState', () => {
-    it('updates status, open state, and url atomically', () => {
-      useRuntimeStore.getState().setPlaywrightState({
-        status: 'ready',
-        isOpen: true,
-        url: 'https://example.com',
-      });
+    it.each(['unknown', 'ready', 'unhealthy'] as const)(
+      'updates all confirmed fields with status %s',
+      (status) => {
+        useRuntimeStore.getState().setPlaywrightState({
+          status,
+          isOpen: true,
+          url: 'https://example.com',
+        });
 
+        const s = useRuntimeStore.getState();
+        expect(s.playwrightStatus).toBe(status);
+        expect(s.playwrightIsOpen).toBe(true);
+        expect(s.playwrightUrl).toBe('https://example.com');
+        expect(s.playwrightStatusHydrated).toBe(true);
+      }
+    );
+
+    it('confirms closed state and clears the previous URL together', () => {
+      useRuntimeStore
+        .getState()
+        .setPlaywrightState({ status: 'ready', isOpen: true, url: 'https://example.com' });
+      useRuntimeStore
+        .getState()
+        .setPlaywrightState({ status: 'unknown', isOpen: false, url: null });
       const s = useRuntimeStore.getState();
-      expect(s.playwrightStatus).toBe('ready');
-      expect(s.playwrightIsOpen).toBe(true);
-      expect(s.playwrightUrl).toBe('https://example.com');
+      expect(s.playwrightStatus).toBe('unknown');
+      expect(s.playwrightIsOpen).toBe(false);
+      expect(s.playwrightUrl).toBeNull();
+      expect(s.playwrightStatusHydrated).toBe(true);
     });
   });
 
   describe('reset', () => {
     it('returns all state to initial values', () => {
-      const store = useRuntimeStore.getState();
-      store.setPlaywrightStatus('ready');
-      store.setPlaywrightIsOpen(true);
-      store.setPlaywrightUrl('http://localhost:3001');
+      useRuntimeStore
+        .getState()
+        .setPlaywrightState({ status: 'ready', isOpen: true, url: 'https://example.com' });
 
       useRuntimeStore.getState().reset();
 
@@ -76,6 +64,7 @@ describe('runtime.store', () => {
       expect(s.playwrightStatus).toBe('unknown');
       expect(s.playwrightIsOpen).toBe(false);
       expect(s.playwrightUrl).toBeNull();
+      expect(s.playwrightStatusHydrated).toBe(false);
     });
   });
 });

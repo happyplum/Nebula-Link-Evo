@@ -117,7 +117,7 @@ describe('useDebugStream', () => {
     expect(MockEventSource.instances[0]?.close).toHaveBeenCalledTimes(1);
   });
 
-  it('applies debug.snapshot and debug.status payloads to runtime and control stores', async () => {
+  it('applies debug.snapshot and debug.status payloads to runtime with viewport owned by control', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { useRuntimeStore, useControlStore, useDebugStream } = await loadRuntimeModules();
 
@@ -137,6 +137,7 @@ describe('useDebugStream', () => {
           title: 'Snapshot',
           status: 'ready',
           reason: 'snapshot',
+          viewport: { width: 1280, height: 720 },
         },
       });
     });
@@ -145,8 +146,7 @@ describe('useDebugStream', () => {
     expect(useRuntimeStore.getState().playwrightIsOpen).toBe(true);
     expect(useRuntimeStore.getState().playwrightStatusHydrated).toBe(true);
     expect(useRuntimeStore.getState().playwrightUrl).toBe('https://snapshot.example');
-    expect(useControlStore.getState().browserOpen).toBe(true);
-    expect(useControlStore.getState().browserUrl).toBe('https://snapshot.example');
+    expect(useControlStore.getState().viewport).toEqual({ width: 1280, height: 720 });
 
     act(() => {
       es.emit('debug.status', {
@@ -159,6 +159,7 @@ describe('useDebugStream', () => {
           title: null,
           status: 'unknown',
           reason: 'close',
+          viewport: null,
         },
       });
     });
@@ -166,8 +167,7 @@ describe('useDebugStream', () => {
     expect(useRuntimeStore.getState().playwrightStatus).toBe('unknown');
     expect(useRuntimeStore.getState().playwrightIsOpen).toBe(false);
     expect(useRuntimeStore.getState().playwrightUrl).toBeNull();
-    expect(useControlStore.getState().browserOpen).toBe(false);
-    expect(useControlStore.getState().browserUrl).toBe('');
+    expect(useControlStore.getState().viewport).toBeNull();
   });
 
   it('invalidates health, MCP status, and MCP tools separately', async () => {

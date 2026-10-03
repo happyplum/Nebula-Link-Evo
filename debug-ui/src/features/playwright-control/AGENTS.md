@@ -2,13 +2,13 @@
 
 ## Overview
 
-Playwright-control owns browser state, DOM snapshot normalization, marker toggles, element picking, and manual action execution UI.
+Playwright-control owns viewport, DOM snapshot normalization, marker toggles, element picking, action busy/error/log state, and manual action execution UI. Remote browser status and URL belong only to runtime.
 
 ## Where To Look
 
 | Area        | Path                      | Notes                                                       |
 | ----------- | ------------------------- | ----------------------------------------------------------- |
-| Store       | `store/control.store.ts`  | Browser open/url, viewport, selected element, marker toggle |
+| Store       | `store/control.store.ts`  | Viewport, selected element, marker toggle, action busy/error/log      |
 | Adapters    | `api/control.adapters.ts` | Typed wrappers for control endpoints (re-exported via `api/index.ts`) |
 | DOM helpers | `lib/dom-elements.ts`     | Snapshot normalization and locator bundle handling          |
 | Components  | `components/`             | URL bar, element picker, action controls                    |
@@ -24,7 +24,8 @@ Playwright-control owns browser state, DOM snapshot normalization, marker toggle
 
 - Selected element state mixes DOM metadata with optional marker/bbox fields; null-check before rendering actions.
 - Picker state and highlighted element state are related but not identical.
-- Browser-open and URL state are also mirrored by runtime websocket updates; avoid dueling writes from components.
+- Browser-open and URL consumers select `runtime.store`; do not restore control mirrors or setters. REST initialization/open/close/navigation/reconnect use runtime's `refreshBrowserStatus`, while SSE and health use the shared `applyPlaywrightStatus` entry.
+- URL input is a component-local draft, independent of remote URL updates. `control.store.reset()` resets only local control state and never resets runtime browser state.
 
 ## Anti-Patterns
 

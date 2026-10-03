@@ -1,6 +1,6 @@
 import type { DebugPlaywrightState } from '@nebula-link-evo/shared/types/debug-events';
 
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useControlStore } from '@/features/playwright-control/store/control.store.js';
 import { useRuntimeStore } from '@/features/runtime/store/runtime.store.js';
@@ -13,7 +13,7 @@ describe('applyPlaywrightStatus', () => {
     useControlStore.getState().reset();
   });
 
-  it('hydrates runtime and control stores when url is null', () => {
+  it('hydrates runtime when url is null without duplicating browser state in control', () => {
     const state: DebugPlaywrightState = {
       isOpen: false,
       url: null,
@@ -29,11 +29,13 @@ describe('applyPlaywrightStatus', () => {
     expect(useRuntimeStore.getState().playwrightIsOpen).toBe(false);
     expect(useRuntimeStore.getState().playwrightStatusHydrated).toBe(true);
     expect(useRuntimeStore.getState().playwrightUrl).toBeNull();
-    expect(useControlStore.getState().browserOpen).toBe(false);
-    expect(useControlStore.getState().browserUrl).toBe('');
+    expect(useControlStore.getState()).not.toHaveProperty('browserOpen');
+    expect(useControlStore.getState()).not.toHaveProperty('browserUrl');
   });
 
-  it('sets all mirrored fields when the browser state is fully populated', () => {
+  it('publishes browser state and hydration in one runtime update, retaining control viewport', () => {
+    const updates = vi.fn();
+    const unsubscribe = useRuntimeStore.subscribe(updates);
     const state: DebugPlaywrightState = {
       isOpen: true,
       url: 'https://nebula.example/debug',
@@ -44,12 +46,28 @@ describe('applyPlaywrightStatus', () => {
     };
 
     applyPlaywrightStatus(state);
+    unsubscribe();
 
     expect(useRuntimeStore.getState().playwrightStatus).toBe('ready');
     expect(useRuntimeStore.getState().playwrightIsOpen).toBe(true);
     expect(useRuntimeStore.getState().playwrightStatusHydrated).toBe(true);
     expect(useRuntimeStore.getState().playwrightUrl).toBe('https://nebula.example/debug');
-    expect(useControlStore.getState().browserOpen).toBe(true);
-    expect(useControlStore.getState().browserUrl).toBe('https://nebula.example/debug');
+    expect(updates).toHaveBeenCalledTimes(1);
+    expect(updates.mock.calls[0]?.[0]).toMatchObject({
+      playwrightStatus: 'ready',
+      playwrightIsOpen: true,
+      playwrightStatusHydrated: true,
+      playwrightUrl: 'https://nebula.example/debug',
+    });
+    expect(useControlStore.getState().viewport).toEqual({ width: 1440, height: 900 });
+  });
+
+  it('preserves unspecified viewport and clears an explicitly null viewport', () => {
+    useControlStore.getState().setViewport({ width: 800, height: 600 });
+    const state: DebugPlaywrightState = { isOpen: true, url: null, title: null, status: 'ready' };
+    applyPlaywrightStatus(state);
+    expect(useControlStore.getState().viewport).toEqual({ width: 800, height: 600 });
+    applyPlaywrightStatus({ ...state, viewport: null });
+    expect(useControlStore.getState().viewport).toBeNull();
   });
 });
