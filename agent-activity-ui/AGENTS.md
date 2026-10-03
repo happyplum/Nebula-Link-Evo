@@ -2,7 +2,7 @@
 
 ## Overview
 
-Stateless frontend library `@nebula-link-evo/agent-activity-ui`. Consumes the Agent Stream v1 contract from `@nebula-link-evo/shared` and provides the single shared reducer plus React renderer used by `debug-ui` (chat) and `ai-e2e/ui` (authoring/run activity). Build-only package: no port, no dev server, no backend.
+Stateless frontend library `@nebula-link-evo/agent-activity-ui`. Consumes the Agent Stream v1 contract from `@nebula-link-evo/shared` and re-exports the pure shared replay core and provides the React renderer used by `debug-ui` (chat) and `ai-e2e/ui` (authoring/run activity). Build-only package: no port, no dev server, no backend.
 
 ## Commands
 
@@ -18,7 +18,7 @@ pnpm test:coverage  # Vitest + coverage gates
 | Area      | Path                       | Notes                                                       |
 | --------- | -------------------------- | ----------------------------------------------------------- |
 | Public API | `src/index.ts`             | `createEmptyAgentStream` / `reduceAgentStream` / `replayAgentStream` + `AgentStreamRenderer` |
-| Reducer   | `src/reducer.ts`           | Single pure reducer over Agent Stream snapshot/event         |
+| Replay core | `@nebula-link-evo/shared` → `src/index.ts` | Direct re-export; implementation and reducer tests live in shared |
 | Renderer  | `src/renderer.tsx`         | 32 activity groups, compact/comfortable density, business slots (`renderMarkdown` / `renderDecisionAction` / `renderArtifact`) |
 | Styles    | `src/styles.css`           | Theme CSS, copied to `dist/styles.css` by the build script   |
 

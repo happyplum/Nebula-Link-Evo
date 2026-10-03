@@ -284,6 +284,7 @@ interface CreateAgentTaskRequestV1 {
 ### 4.2 Agent Stream 呈现契约
 
 - `AgentStreamSnapshotV1/EventV1/TurnV1/SectionV1` 由 shared 定义；event 必须携带稳定 `streamId/turnId/sectionId/seq/occurredAt`。
+- shared 唯一纯回放核心 `createEmptyAgentStream/reduceAgentStream/replayAgentStream` 供两后端直接使用，由公共 UI 入口直接重导出。核心 copy-on-write、不修改输入；跨 stream/非递增 seq 原样忽略、允许 seq 间隙，同 sectionId 替换。Chat 消息映射及持久 state/当前时间、ai-e2e 业务投影及 activity state/最后事件时间仍由各自业务边界持有。
 - Activity kind 为 `skill/tool/browser/agent/evidence/read/search/edit/command/mcp`；状态为 `queued/running/completed/failed/blocked/cancelled/skipped/outcome_unknown`。
 - 投影必须先持久化 DSH/Task 事实再广播，不能把未提交 provider chunk 直接发送给 UI。
 - reasoning 默认只输出确定性阶段摘要；只有明确 `visibility=public` 才能包含正文，否则为 `summary` 或 `redacted`。

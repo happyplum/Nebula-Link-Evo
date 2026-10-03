@@ -6,3 +6,5 @@
 
 export { createFrameCounter } from './frame-counter.js';
 export type { FrameCounter, FrameCounterSummary } from './frame-counter.js';
+
+export { createEmptyAgentStream, reduceAgentStream, replayAgentStream } from './agent-stream.js';

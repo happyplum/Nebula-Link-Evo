@@ -49,6 +49,34 @@ describe('AgentStreamRenderer', () => {
     expect(screen.getByText('Agent 活动')).toBeInTheDocument();
   });
 
+  it.each([
+    ['running', '1 项进行中'],
+    ['failed', '1 项失败'],
+  ] as const)(
+    'opens activity groups for %s items and preserves public metadata',
+    (state, label) => {
+      const sections: AgentStreamSectionV1[] = [
+        {
+          ...activity(1),
+          state,
+          summary: '已锁定版本',
+          version: '1.0.0',
+          artifactRefs: ['artifact:1'],
+        },
+        { ...activity(2), contentHash: 'sha256:public' },
+      ];
+      const { container } = render(
+        <AgentStreamRenderer snapshot={snapshot(sections)} slots={{}} />
+      );
+      expect(container.querySelector('details')).toHaveAttribute('open');
+      expect(screen.getByText(label)).toBeInTheDocument();
+      expect(screen.getByText('已锁定版本')).toBeInTheDocument();
+      expect(screen.getByText('版本 1.0.0')).toBeInTheDocument();
+      expect(screen.getByText('哈希 sha256:public')).toBeInTheDocument();
+      expect(screen.getByText('artifact:1')).toBeInTheDocument();
+    }
+  );
+
   it('does not group across semantic boundaries and caps groups at 32', () => {
     const sections: AgentStreamSectionV1[] = [
       ...Array.from({ length: 33 }, (_, index) => activity(index)),

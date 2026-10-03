@@ -74,7 +74,7 @@ Browser ←→ Debug UI (:5173 dev)
 | `debug-ui`                             | :5173 | 实时调试监控面板（chat SSE → :3001, browser/debug → :3000）                                              |
 | `ai-e2e`                               | :3002 | 纯 semantic E2E 业务编排；通过 AgentTaskClient 与 SemanticBrowserClient 消费两个基础服务                 |
 | `shared`                               | —     | 共享类型和工具库                                                                                         |
-| `agent-activity-ui`                    | —     | 无状态 Agent 活动 reducer + React renderer 库（debug-ui 与 ai-e2e/ui 共用）                               |
+| `agent-activity-ui`                    | —     | 无状态 React renderer 与 shared Agent Stream 回放重导出（debug-ui 与 ai-e2e/ui 共用）                               |
 | `integrations/browser-control-client`  | —     | 受控 HTTP/MCP 客户端、自动会话控制器与 `nebula-browser` CLI                                              |
 | `integrations/deepseek-harness-plugin` | —     | 仅暴露 observe/act 的 DeepSeek Harness bundle；act 逐次审批                                              |
 
@@ -148,7 +148,7 @@ ai-chat-service/    # AI chat backend (Fastify, conversation, chat SSE, provider
 ai-e2e/             # E2E automation orchestrator (consumes proxy-adapter and ai-chat-service HTTP APIs)
   ui/               #   Nested workspace — React SPA served at /ai-e2e/ (:5174 dev)
 shared/             # Shared types & utils (@nebula-link-evo/shared)
-agent-activity-ui/  # Stateless Agent-activity reducer + React renderer (@nebula-link-evo/agent-activity-ui)
+agent-activity-ui/  # Stateless React renderer + shared Agent Stream replay exports (@nebula-link-evo/agent-activity-ui)
 integrations/       # Local controlled clients and harness adapters
 patches/            # pnpm patchedDependencies patch files
 docs/               # Documentation
@@ -235,7 +235,7 @@ AGPL 允许个人和企业使用、修改与分发软件，但必须遵守其开
 
 ### Debug Chat Rendering
 
-- `@nebula-link-evo/agent-activity-ui` is the only Agent activity reducer/renderer used by debug-ui and ai-e2e; it exposes compact/comfortable density and business slots without owning API, SSE, store or permissions.
+- `@nebula-link-evo/shared` owns the pure Agent Stream replay core used by both backends; `@nebula-link-evo/agent-activity-ui` directly re-exports it and provides the React renderer used by debug-ui and ai-e2e/ui. The UI library exposes compact/comfortable density and business slots without owning API, SSE, store or permissions.
 - `/#/chat` uses `agent_stream.snapshot` + `agent_stream.event` as the only visible history/live source. The public message-history GET and bespoke Message/Thinking/Tool cards do not exist.
 - Optimistic user turns reconcile with server turns even when the snapshot arrives before the message POST response; live events are RAF-batched and remain bound to their originating session.
 - Authoring uses the compact renderer with a repair composer; formal Run uses the same compact renderer read-only. Structured amendments, decisions and run state remain authoritative business facts.

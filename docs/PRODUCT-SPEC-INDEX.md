@@ -10,7 +10,7 @@
 | 包                                     | 端口            | 角色                                    | PRODUCT-SPEC                                                                                                      | 包级 AGENTS                                                 |
 | -------------------------------------- | --------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
 | `shared`                               | —（库）         | 共享类型与工具（依赖图最底层）          | [`shared/PRODUCT-SPEC.md`](../shared/PRODUCT-SPEC.md)                                                             | [`shared/AGENTS.md`](../shared/AGENTS.md)                   |
-| `agent-activity-ui`                    | —（UI 库）      | 统一 Agent 活动 reducer 与 React renderer | [`agent-activity-ui/PRODUCT-SPEC.md`](../agent-activity-ui/PRODUCT-SPEC.md)                                       | [`agent-activity-ui/AGENTS.md`](../agent-activity-ui/AGENTS.md)                             |
+| `agent-activity-ui`                    | —（UI 库）      | Agent 活动 React renderer 与 shared 回放重导出 | [`agent-activity-ui/PRODUCT-SPEC.md`](../agent-activity-ui/PRODUCT-SPEC.md)                                       | [`agent-activity-ui/AGENTS.md`](../agent-activity-ui/AGENTS.md)                             |
 | `proxy-adapter`                        | `:3000`         | 纯浏览器 MCP 网关                       | [`proxy-adapter/PRODUCT-SPEC.md`](../proxy-adapter/PRODUCT-SPEC.md)                                               | [`proxy-adapter/AGENTS.md`](../proxy-adapter/AGENTS.md)     |
 | `ai-chat-service`                      | `:3001`         | AI 对话服务（provider 编排 + Chat SSE） | [`ai-chat-service/PRODUCT-SPEC.md`](../ai-chat-service/PRODUCT-SPEC.md)                                           | [`ai-chat-service/AGENTS.md`](../ai-chat-service/AGENTS.md) |
 | `debug-ui`                             | `:5173`（dev）  | 主调试监控面板（前端 SPA）              | [`debug-ui/PRODUCT-SPEC.md`](../debug-ui/PRODUCT-SPEC.md)                                                         | [`debug-ui/AGENTS.md`](../debug-ui/AGENTS.md)               |
@@ -150,6 +150,7 @@ debug-ui  ←──  （仅被用户消费）
 | Debug 事件                       | `types/debug-events.ts`      | `proxy-adapter`、`debug-ui`                                                             |
 | 视觉标记                         | `types/vision-marker.ts`     | `proxy-adapter`、`debug-ui`                                                             |
 | 常量                             | `types/constants.ts`         | 全部                                                                                    |
+| Agent Stream 纯回放              | `utils/agent-stream.ts`     | `ai-chat-service`、`ai-e2e`、`agent-activity-ui`（直接重导出供 `debug-ui`、`ai-e2e/ui` 使用） |
 | Frame counter                    | `utils/frame-counter.ts`     | `proxy-adapter`、`debug-ui`                                                             |
 | 测试 mocks                       | `test-utils/mocks/*`         | 各包测试                                                                                |
 
@@ -162,7 +163,9 @@ debug-ui  ←──  （仅被用户消费）
 - Tool/Skill 只公开脱敏名称、状态、摘要、版本/hash、预算与 artifact 引用；摘要最多 4 KiB，不嵌入原始 Skill 指令、secret、lease token 或超大 Tool 结果。
 - Chat SSE 与 Agent Task activity SSE 只发送 `agent_stream.snapshot` 和 `agent_stream.event`。Task `/events`/`event-log` 继续作为控制面审计，不能被 UI 呈现流替代。
 - `debug-ui` 使用 comfortable、ai-e2e Authoring/Run 使用 compact 公共 renderer；业务操作通过 slots 注入。公共 UI 包不拥有 API、SSE、store、router 或权限。
-- reducer 负责 seq 去重、稳定 section 更新、snapshot/live 恢复；UI 连接层以 RAF 批处理 live 更新，乐观 user turn 必须与服务端 turn 去重。
+- shared `utils/agent-stream.ts` 唯一持有 `createEmptyAgentStream/reduceAgentStream/replayAgentStream`，经 root/`./utils` 导出；copy-on-write 不修改输入，跨 stream 和非递增 seq 原样忽略，允许间隙，同 sectionId 异 type 后 content delta 替换旧 section，empty generatedAt 固定 epoch。UI 入口直接重导出保持既有 API，两个后端直接调用 shared，不依赖 React；
+- Chat 保留消息→turn 映射、持久 state 覆盖与当前 generatedAt；ai-e2e 保留业务事件投影、本地 seq 去重、activity 顶层 state 聚合和最后事件/空流当前时间。纯核心不含业务策略；
+- shared reducer 负责 seq 去重、稳定 section 更新、snapshot/live 恢复；UI 连接层以 RAF 批处理 live 更新，乐观 user turn 必须与服务端 turn 去重。
 - ai-e2e 使用独立 activity cursor 消费 Agent Task activity-log，并以 additive 表保存 Authoring/Run 本地单调呈现序列；不得复用控制面游标或从活动文本推断业务状态。
 
 ### 3.6 浏览器目标定位与视觉标记契约（`proxy-adapter` 内部）

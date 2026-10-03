@@ -4,7 +4,7 @@ import {
   type AgentStreamSectionV1,
   type AgentStreamSnapshotV1,
   type AgentStreamTurnV1,
-} from '@nebula-link-evo/shared';
+} from '../types/agent-stream.js';
 
 export function createEmptyAgentStream(streamId: string): AgentStreamSnapshotV1 {
   return {

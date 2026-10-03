@@ -16,6 +16,7 @@
 - [shipped] 生产浏览器中心 UI：左上下文/TODO、中间持续挂载浏览器、右侧 PRD/模块/场景/Diff/影响/决策/证据和常驻 Chat；模块切换不导航，显式定位才创建 navigation-only task。
 - [shipped] additive migration 020 新增 Authoring/Run Agent 活动事件与独立外部 activity cursor；保留既有 semantic 数据库和历史记录，不复用控制面 `last_external_seq`，不执行破坏性迁移。
 - [shipped] ai-e2e 从 Agent Task `activity-log` 聚合多页面 Agent 活动，并将 authoring/run 生命周期、候选、审批、浏览器验证、激活、失败、依赖跳过和未知结果投影到各业务上下文的本地单调活动序列。
+- [shipped] `AgentActivityRepository.snapshot` 直接调用 shared 唯一纯 replay，本地 applyEvent 已退出；先保留控制面/消息投影和 source seq 去重，再从 activity 聚合顶层 state，不受外部 stream.state 覆盖；generatedAt 使用最后事件/空流当前时间。UI 通过公共 UI 入口重导出同一核心，后端不依赖 React。
 - [shipped] `GET /api/v1/authoring-jobs/:jobId/{activity,activity-log}` 与 `GET /api/v1/runs/:runId/{activity,activity-log}` 提供 snapshot-first SSE 和持久呈现日志；跨 context 数据不可见，刷新与服务重启后按 seq 恢复且不重复。
 - [shipped] Authoring 使用 compact 公共 renderer 和 repair Composer 串联用户意见、候选、Skill/Tool、审批、验证与激活；Run 使用同一 compact 只读流，资产修改必须返回 Authoring。结构化 amendment/decision 始终是业务事实。
 - [shipped] 公开 authoring context message 查询/提交路径已移除；内部消息审计记录保留并作为活动投影来源，不清理历史数据库。

@@ -2,12 +2,12 @@ import { EventEmitter } from 'node:events';
 import type Database from 'better-sqlite3';
 import {
   AGENT_STREAM_EVENT_SCHEMA,
-  AGENT_STREAM_SNAPSHOT_SCHEMA,
+  createEmptyAgentStream,
+  replayAgentStream,
   type AgentStreamEventV1,
   type AgentStreamSectionV1,
   type AgentStreamSnapshotV1,
-  type AgentStreamTurnV1,
-} from '@nebula-link-evo/shared/types/agent-stream';
+} from '@nebula-link-evo/shared';
 
 export type ActivityContext = { type: 'authoring' | 'run'; id: string };
 
@@ -210,9 +210,8 @@ export class AgentActivityRepository {
       if (batch.length < 1000) break;
       afterSeq = batch[batch.length - 1].seq;
     }
-    const turns = new Map<string, AgentStreamTurnV1>();
-    for (const event of events) applyEvent(turns, event);
-    const sections = [...turns.values()].flatMap((turn) => turn.sections);
+    const snapshot = replayAgentStream(createEmptyAgentStream(context.id), events);
+    const sections = snapshot.turns.flatMap((turn) => turn.sections);
     const activities = sections.filter(
       (section): section is Extract<AgentStreamSectionV1, { type: 'activity' }> =>
         section.type === 'activity'
@@ -231,12 +230,9 @@ export class AgentActivityRepository {
               ? 'completed'
               : 'idle';
     return {
-      schema: AGENT_STREAM_SNAPSHOT_SCHEMA,
-      streamId: context.id,
-      seq: events.at(-1)?.seq ?? 0,
+      ...snapshot,
       state,
       generatedAt: events.at(-1)?.occurredAt ?? new Date().toISOString(),
-      turns: [...turns.values()],
     };
   }
 
@@ -554,52 +550,6 @@ function decisionRejected(payload: Record<string, unknown>): boolean {
   return (
     payload.answer === 'reject' || payload.answerKey === 'reject' || payload.answerKey === 'fail'
   );
-}
-
-function applyEvent(turns: Map<string, AgentStreamTurnV1>, event: AgentStreamEventV1): void {
-  if (event.type === 'stream.state') return;
-  if (event.type === 'turn.upsert') {
-    turns.set(event.turnId, event.turn);
-    return;
-  }
-  const current = turns.get(event.turnId) ?? {
-    turnId: event.turnId,
-    role: 'assistant',
-    state: 'streaming',
-    createdAt: event.occurredAt,
-    updatedAt: event.occurredAt,
-    sections: [],
-  };
-  if (event.type === 'section.upsert') {
-    const sections = [...current.sections];
-    const index = sections.findIndex((section) => section.sectionId === event.sectionId);
-    if (index < 0) sections.push(event.section);
-    else sections[index] = event.section;
-    turns.set(event.turnId, { ...current, updatedAt: event.occurredAt, sections });
-  } else if (event.type === 'section.remove') {
-    turns.set(event.turnId, {
-      ...current,
-      updatedAt: event.occurredAt,
-      sections: current.sections.filter((section) => section.sectionId !== event.sectionId),
-    });
-  } else if (event.type === 'turn.completed') {
-    turns.set(event.turnId, { ...current, state: event.state, updatedAt: event.occurredAt });
-  } else if (event.type === 'content.delta') {
-    const sections = [...current.sections];
-    const index = sections.findIndex((section) => section.sectionId === event.sectionId);
-    const existing = index >= 0 ? sections[index] : undefined;
-    const content: AgentStreamSectionV1 = {
-      type: 'content',
-      sectionId: event.sectionId,
-      createdAt: existing?.createdAt ?? event.occurredAt,
-      updatedAt: event.occurredAt,
-      markdown: `${existing?.type === 'content' ? existing.markdown : ''}${event.delta}`,
-      streaming: true,
-    };
-    if (index < 0) sections.push(content);
-    else sections[index] = content;
-    turns.set(event.turnId, { ...current, updatedAt: event.occurredAt, sections });
-  }
 }
 
 function key(context: ActivityContext): string {
