@@ -17,7 +17,7 @@
 | Owns                                                                                                      | Consumes         | Does NOT own                                  |
 | --------------------------------------------------------------------------------------------------------- | ---------------- | --------------------------------------------- |
 | 运行时类型（browser-execution / browser-operation-result / browser-target / agent-task / vision-snapshot / agent-stream / vision-marker / debug-events / constants） | TypeBox（现有 catalog 版本） | 业务逻辑、浏览器引擎、AI provider、数据库访问 |
-| 运行时工具（frame-counter、agent-stream）                                                                            |                  | 任何 `dist/` 产物（直接编辑源码）             |
+| 运行时工具（frame-counter、agent-stream、agent-stream-state、sse-frame、snapshot-first-sse）                             |                  | 任何 `dist/` 产物（直接编辑源码）             |
 | 源码级测试辅助（test-utils/，含 mocks、service-lifecycle）                                                |                  |                                               |
 
 ### 硬约束
@@ -37,7 +37,7 @@
 | Agent Task 协议 | `types/agent-task.ts` | shipped | TypeBox schema + Static 派生创建、脱敏持久请求、视图、状态、命令、审计事件、真实浏览器步骤 | 仅 `./types/agent-task`；领域政策和 Harness 上下文留服务 |
 | 浏览器目标协议 | `types/browser-target.ts` | shipped | canonical target/locator schema + Static | 仅 `./types/browser-target` 运行时导出；browser-execution 保留既有 type 入口 |
 | 操作结果协议 | `types/browser-operation-result.ts` | shipped | TypeBox schema + Static 派生 operation record/status、artifact、resolved target 与 problem | 显式 `./types/browser-operation-result`；复用 observe/act 词表与 locator strategy，旧 browser-execution type-only 重导出；root 不加载 schema |
-| 运行时工具  | `utils/`           | shipped | frame-counter、agent-stream、index 纯函数                                                                 | 必须纯函数，无副作用                                                                                |
+| 运行时工具  | `utils/`           | shipped | frame-counter、agent-stream、agent-stream-state、snapshot-first-sse、index | 框架中立；SSE 生命周期通过显式 start/close 管理，wire framing、timer、buffer 与状态词表由调用方参数化 |
 | 测试辅助    | `test-utils/`      | shipped | mocks（BrowserContext、debug-event）、service-lifecycle、index                               | **不进 `tsc -b` 构建产物**；消费方按源码相对路径引用                                                |
 | Vitest 配置 | `vitest.config.ts` | shipped | shared 包测试与覆盖率防回退门禁                                                               | 仅统计运行时入口、类型与工具；`test-utils/` 不计入生产覆盖率                                        |
 
@@ -72,6 +72,9 @@
 | 视觉标记契约            | `types/vision-marker.ts`     | shipped | 截图契约测试                                         | types/                                                                                                              |
 | 截图契约                | —                            | shipped | `__tests__/screenshot-contract.test.ts`              | types/                                                                                                              |
 | Frame 计数器工具        | `utils/frame-counter.ts`     | shipped | `utils/__tests__/frame-counter.test.ts`              | utils/                                                                                                              |
+| SSE JSON 帧编码 | `utils/sse-frame.ts` | shipped | `utils/__tests__/snapshot-first-sse.test.ts` | event/id/retry/data 顺序按调用方配置；保留空 id 字段与精确换行 |
+| Snapshot-first SSE writer | `utils/snapshot-first-sse.ts` | shipped | `utils/__tests__/snapshot-first-sse.test.ts` | subscribe/poll feed、预快照缓冲溢出关闭、snapshot-first replay、序号去重、heartbeat、timeout 与 close/abort 清理 |
+| Agent Stream 状态映射 | `utils/agent-stream-state.ts` | shipped | `utils/__tests__/agent-stream-state.test.ts` | Chat runtime、Agent Task、semantic activity 状态词表和 ai-e2e activity snapshot heuristic 保留各自现有语义 |
 | 测试 mock 工厂          | `test-utils/mocks/`          | shipped | `test-utils/__tests__/mocks.test.ts`                 | test-utils/                                                                                                         |
 
 ---
