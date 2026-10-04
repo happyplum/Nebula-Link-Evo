@@ -159,6 +159,8 @@ debug-ui  ←──  （仅被用户消费）
 | 视觉标记                         | `types/vision-marker.ts`     | `proxy-adapter`、`debug-ui`                                                             |
 | 常量                             | `types/constants.ts`         | 全部                                                                                    |
 | Agent Stream 纯回放              | `utils/agent-stream.ts`     | `ai-chat-service`、`ai-e2e`、`agent-activity-ui`（直接重导出供 `debug-ui`、`ai-e2e/ui` 使用） |
+| 域状态→AgentStreamState 映射     | `utils/agent-stream-state.ts` | `ai-chat-service`、`ai-e2e`                                                            |
+| Snapshot-first SSE 写入器/帧编码 | `utils/snapshot-first-sse.ts`、`utils/sse-frame.ts` | `ai-chat-service`、`proxy-adapter`、`ai-e2e`                              |
 | Frame counter                    | `utils/frame-counter.ts`     | `proxy-adapter`、`debug-ui`                                                             |
 | 测试 mocks                       | `test-utils/mocks/*`         | 各包测试                                                                                |
 

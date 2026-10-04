@@ -229,7 +229,7 @@ Client connects ──▶ SessionEventHub.subscribe()
 
 ### Debug API
 
-> 以下路由由 proxy-adapter 提供（见 `proxy-adapter/src/plugins/routes/debug/`）；AI provider 连通性测试已迁至 ai-chat-service 的 `POST /api/v1/test-ai`。受控浏览器会话活动期间，写入/直接页面采集类 debug 路由会被仲裁并以 409 `browser_busy` 拒绝。
+> 以下路由由 proxy-adapter 提供（见 `proxy-adapter/src/plugins/routes/debug.ts` 与 `debug-stream.ts`）；AI provider 连通性测试已迁至 ai-chat-service 的 `POST /api/v1/test-ai`。受控浏览器会话活动期间，写入/直接页面采集类 debug 路由会被仲裁并以 409 `browser_busy` 拒绝。
 
 | Method | Path                                          | Description                     |
 | ------ | --------------------------------------------- | ------------------------------- |
