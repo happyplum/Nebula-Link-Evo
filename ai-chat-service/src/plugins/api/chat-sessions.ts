@@ -5,14 +5,14 @@
 import { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import { Type, Static } from '@sinclair/typebox';
 import { randomUUID } from 'node:crypto';
-import type { ChatHandler } from '../../../../conversation/chat-handler.js';
-import type { ConversationManager } from '../../../../conversation/manager.js';
-import { ConversationJobQueue } from '../../../../services/conversation-job-queue.js';
-import { ServiceUnavailableError } from '../../../../errors/http-errors.js';
+import type { ChatHandler } from '../../conversation/chat-handler.js';
+import type { ConversationManager } from '../../conversation/manager.js';
+import { ConversationJobQueue } from '../../services/conversation-job-queue.js';
+import { ServiceUnavailableError } from '../../errors/http-errors.js';
 import { MAX_SCREENSHOT_SIZE_BYTES } from '@nebula-link-evo/shared';
-import { validateProviderModel } from '../../../../config/validator.js';
-import { AgentStateSchema, SessionStatusSchema } from './runtime-state.js';
-import type { HarnessDeletionService } from '../../../../harness/deletion-service.js';
+import { validateProviderModel } from '../../config/validator.js';
+import { AgentStateSchema, SessionStatusSchema } from './chat-runtime-state.js';
+import type { HarnessDeletionService } from '../../harness/deletion-service.js';
 
 // Schemas
 const SessionResponseSchema = Type.Object({
@@ -312,7 +312,7 @@ const sessionRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           };
         }
 
-        const updateParams: import('../../../../conversation/types.js').UpdateSessionParams = {};
+        const updateParams: import('../../conversation/types.js').UpdateSessionParams = {};
         if (decision?.provider) updateParams.provider = decision.provider;
         if (decision?.model) updateParams.model = decision.model;
 

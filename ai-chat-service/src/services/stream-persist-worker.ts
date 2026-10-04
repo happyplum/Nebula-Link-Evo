@@ -48,12 +48,12 @@ class StreamPersistWorker extends EventEmitter {
   }
 
   private getWorkerPath(): string {
-    const compiledPath = path.join(__dirname, '../workers/stream-persist-worker.js');
+    const compiledPath = path.join(__dirname, '../stream-persist-worker.js');
     if (existsSync(compiledPath)) {
       return compiledPath;
     }
 
-    return path.join(__dirname, '../workers/stream-persist-worker.ts');
+    return path.join(__dirname, '../stream-persist-worker.ts');
   }
 
   private initializeWorker(): void {

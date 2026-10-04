@@ -8,7 +8,7 @@ import {
   buildAnalyzePagePrompt,
   buildElementsContext,
   buildFindingPrompt,
-} from './prompts/element-finding.js';
+} from './element-finding.js';
 
 export class VisionAnalyzer {
   private model: LanguageModelV4;

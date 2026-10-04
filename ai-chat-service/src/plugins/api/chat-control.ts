@@ -4,10 +4,10 @@
  */
 import { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import { Type } from '@sinclair/typebox';
-import type { ChatHandler } from '../../../../conversation/chat-handler.js';
-import type { ConversationManager } from '../../../../conversation/manager.js';
-import { SessionNotFoundError } from '../../../../services/chat-session-controller.js';
-import { AgentStateSchema, SessionStatusSchema } from './runtime-state.js';
+import type { ChatHandler } from '../../conversation/chat-handler.js';
+import type { ConversationManager } from '../../conversation/manager.js';
+import { SessionNotFoundError } from '../../services/chat-session-controller.js';
+import { AgentStateSchema, SessionStatusSchema } from './chat-runtime-state.js';
 
 // Schemas
 const SessionIdParams = Type.Object({

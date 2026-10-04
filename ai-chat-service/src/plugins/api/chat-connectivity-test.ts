@@ -4,7 +4,7 @@
  */
 import { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import { Type, Static } from '@sinclair/typebox';
-import { testConnectivity } from '../../../../services/connectivity-test.js';
+import { testConnectivity } from '../../services/connectivity-test.js';
 
 const ConnectivityTestBodySchema = Type.Object({
   provider: Type.Optional(Type.String()),

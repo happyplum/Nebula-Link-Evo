@@ -15,13 +15,28 @@ import {
   type AgentTaskCommandRequest,
   type AgentTaskEventRecord,
 } from '@nebula-link-evo/shared/types/agent-task';
-import { AgentTaskError } from '../../../agent-tasks/errors.js';
-import type { AgentTaskService } from '../../../agent-tasks/service.js';
+import { AgentTaskError } from '../../agent-tasks/errors.js';
+import type { AgentTaskService } from '../../agent-tasks/service.js';
 
-import { buildAgentTaskCapabilities } from '../../../agent-tasks/capabilities.js';
-import type { SkillCatalogEntry } from '../../../skills/runtime.js';
-import { BoundedSseWriter } from '../../../services/sse-writer.js';
-import type { AgentStreamEventV1 } from '@nebula-link-evo/shared/types/agent-stream';
+import { buildAgentTaskCapabilities } from '../../agent-tasks/capabilities.js';
+import type { SkillCatalogEntry } from '../../skills/runtime.js';
+import {
+  SnapshotFirstSseWriter,
+  encodeSseJsonFrame,
+} from '@nebula-link-evo/shared';
+import type {
+  AgentStreamEventV1,
+  AgentStreamSnapshotV1,
+} from '@nebula-link-evo/shared/types/agent-stream';
+
+const SSE_HEADERS = {
+  'Content-Type': 'text/event-stream',
+  'Cache-Control': 'no-cache',
+  Connection: 'keep-alive',
+  'X-Accel-Buffering': 'no',
+} as const;
+const MAX_BUFFERED_EVENTS = 256;
+const HEARTBEAT_INTERVAL_MS = 15_000;
 
 const ErrorSchema = Type.Object({ error: AgentTaskProblemSchema }, { additionalProperties: false });
 
@@ -315,59 +330,36 @@ const agentTaskRoutes: FastifyPluginAsyncTypebox<AgentTaskRoutesOptions> = async
       },
     },
     async (request, reply) => {
-      const buffered: AgentStreamEventV1[] = [];
-      let bootstrapComplete = false;
-      let lastSeq = 0;
-      let unsubscribe = (): void => {};
-      const writer = new BoundedSseWriter(reply.raw, { onClose: () => unsubscribe() });
-      unsubscribe = options.service.subscribeActivity(request.params.taskId, (event) => {
-        try {
-          if (!bootstrapComplete) {
-            if (buffered.length >= 256) {
-              writer.close('overflow', true);
-              return;
-            }
-            buffered.push(event);
-            return;
-          }
-          if (event.seq <= lastSeq) return;
-          writeSse(writer, 'agent_stream.event', event.seq, event);
-          lastSeq = event.seq;
-        } catch {
-          // The close handler releases the subscription.
-        }
+      const writer = new SnapshotFirstSseWriter<AgentStreamSnapshotV1, AgentStreamEventV1>({
+        target: reply.raw,
+        statusCode: 200,
+        headers: SSE_HEADERS,
+        getSnapshot: () => options.service.getActivitySnapshot(request.params.taskId),
+        getSnapshotSeq: (snapshot) => snapshot.seq,
+        getEventSeq: (event) => event.seq,
+        encodeSnapshot: (snapshot) =>
+          encodeSseJsonFrame({
+            event: 'agent_stream.snapshot',
+            id: String(snapshot.seq),
+            data: snapshot,
+          }),
+        encodeEvent: (event) =>
+          encodeSseJsonFrame({ event: 'agent_stream.event', id: String(event.seq), data: event }),
+        feed: {
+          subscribe: (listener) =>
+            options.service.subscribeActivity(request.params.taskId, listener),
+        },
+        maxBufferedEvents: MAX_BUFFERED_EVENTS,
+        deduplicate: true,
+        heartbeat: {
+          intervalMs: HEARTBEAT_INTERVAL_MS,
+          createChunk: () => ': keepalive\n\n',
+        },
       });
-      try {
-        reply.raw.writeHead(200, {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          Connection: 'keep-alive',
-          'X-Accel-Buffering': 'no',
-        });
-        const snapshot = options.service.getActivitySnapshot(request.params.taskId);
-        writeSse(writer, 'agent_stream.snapshot', snapshot.seq, snapshot);
-        lastSeq = snapshot.seq;
-        bootstrapComplete = true;
-        for (const event of buffered) {
-          if (event.seq <= lastSeq) continue;
-          writeSse(writer, 'agent_stream.event', event.seq, event);
-          lastSeq = event.seq;
-        }
-      } catch (error) {
-        unsubscribe();
-        throw error;
-      }
-      const heartbeat = setInterval(() => {
-        try {
-          writer.push(': keepalive\n\n');
-        } catch {
-          clearInterval(heartbeat);
-        }
-      }, 15_000);
+      await writer.start();
+
       return new Promise<void>((resolve) => {
         request.raw.on('close', () => {
-          clearInterval(heartbeat);
-          unsubscribe();
           writer.close();
           resolve();
         });
@@ -386,59 +378,34 @@ const agentTaskRoutes: FastifyPluginAsyncTypebox<AgentTaskRoutesOptions> = async
       },
     },
     async (request, reply) => {
-      const bufferedEvents: AgentTaskEventRecord[] = [];
-      let bootstrapComplete = false;
-      let lastSeq = 0;
-      let unsubscribe = (): void => {};
-      const writer = new BoundedSseWriter(reply.raw, { onClose: () => unsubscribe() });
-      unsubscribe = options.service.subscribeEvents(request.params.taskId, (event) => {
-        try {
-          if (!bootstrapComplete) {
-            if (bufferedEvents.length >= 256) {
-              writer.close('overflow', true);
-              return;
-            }
-            bufferedEvents.push(event);
-            return;
-          }
-          if (event.seq <= lastSeq) return;
-          writeSse(writer, event.type, event.seq, event);
-          lastSeq = event.seq;
-        } catch {
-          // The close handler releases the subscription.
-        }
+      const writer = new SnapshotFirstSseWriter<
+        Awaited<ReturnType<typeof options.service.getSnapshot>>,
+        AgentTaskEventRecord
+      >({
+        target: reply.raw,
+        statusCode: 200,
+        headers: SSE_HEADERS,
+        getSnapshot: () => options.service.getSnapshot(request.params.taskId),
+        getSnapshotSeq: (snapshot) => snapshot.seq,
+        getEventSeq: (event) => event.seq,
+        encodeSnapshot: (snapshot) =>
+          encodeSseJsonFrame({ event: snapshot.type, id: String(snapshot.seq), data: snapshot }),
+        encodeEvent: (event) =>
+          encodeSseJsonFrame({ event: event.type, id: String(event.seq), data: event }),
+        feed: {
+          subscribe: (listener) => options.service.subscribeEvents(request.params.taskId, listener),
+        },
+        maxBufferedEvents: MAX_BUFFERED_EVENTS,
+        deduplicate: true,
+        heartbeat: {
+          intervalMs: HEARTBEAT_INTERVAL_MS,
+          createChunk: () => ': keepalive\n\n',
+        },
       });
-      try {
-        reply.raw.writeHead(200, {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          Connection: 'keep-alive',
-          'X-Accel-Buffering': 'no',
-        });
-        const snapshot = options.service.getSnapshot(request.params.taskId);
-        writeSse(writer, snapshot.type, snapshot.seq, snapshot);
-        lastSeq = snapshot.seq;
-        bootstrapComplete = true;
-        for (const event of bufferedEvents) {
-          if (event.seq <= lastSeq) continue;
-          writeSse(writer, event.type, event.seq, event);
-          lastSeq = event.seq;
-        }
-      } catch (error) {
-        unsubscribe();
-        throw error;
-      }
-      const heartbeat = setInterval(() => {
-        try {
-          writer.push(': keepalive\n\n');
-        } catch {
-          clearInterval(heartbeat);
-        }
-      }, 15_000);
+      await writer.start();
+
       return new Promise<void>((resolve) => {
         request.raw.on('close', () => {
-          clearInterval(heartbeat);
-          unsubscribe();
           writer.close();
           resolve();
         });
@@ -448,7 +415,3 @@ const agentTaskRoutes: FastifyPluginAsyncTypebox<AgentTaskRoutesOptions> = async
 };
 
 export default agentTaskRoutes;
-
-function writeSse(writer: BoundedSseWriter, type: string, seq: number, data: unknown): void {
-  writer.push(`event: ${type}\nid: ${seq}\ndata: ${JSON.stringify(data)}\n\n`);
-}

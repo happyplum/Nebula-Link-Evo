@@ -13,7 +13,7 @@ Agent Chat 会话状态机与互斥锁。保证同一会话同一时间只有一
 - [shipped] Session 事件 DAO + 事件 hub：`ai-chat-service/src/conversation/session-events-dao.ts`、`session-event-hub.ts`。
 - [shipped] SessionEvents 清理：`ai-chat-service/src/db/SessionEventsCleanup.ts`。
 - [shipped] 会话状态查询随 `GET /api/v1/chat/sessions/:id` 和 `GET /api/v1/chat/sessions/:id/status` 返回；`runtime-state.ts` 只登记响应 schema；路由直接查询本应用 controller 的持久状态，不合并内存状态。
-- [shipped] 连通性测试路由：`POST /api/v1/chat/connectivity-test`。入口：`ai-chat-service/src/plugins/routes/api/chat/connectivity-test.ts` + `ai-chat-service/src/services/connectivity-test.ts`。
+- [shipped] 连通性测试路由：`POST /api/v1/chat/connectivity-test`。入口：`ai-chat-service/src/plugins/api/chat-connectivity-test.ts` + `ai-chat-service/src/services/connectivity-test.ts`。
 - [shipped] 连接性 gate：`ai-chat-service/src/services/connectivity-gate-service.ts`。
 - [shipped] canonical DB 迁移链：`ai-chat-service/src/conversation/migrations/`（008 harness projection、009 deletion saga、010 scheduler）；全新数据库不执行旧结构迁移或兼容转换。
 - [shipped] E2E 页面任务复用 Agent 会话控制基础，但 Agent pause/interrupt/cancel 不等同于浏览器操作回滚，也不替代 ai-e2e 的 TODO/尝试状态；恢复前必须查询未决操作并重新检查页面与副作用。

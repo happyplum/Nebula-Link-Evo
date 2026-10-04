@@ -1,6 +1,6 @@
 import Fastify from 'fastify';
 import { describe, expect, it, vi } from 'vitest';
-import type { HarnessRuntime } from '../../../harness/index.js';
+import type { HarnessRuntime } from '../../harness/index.js';
 import aiServiceRoutes from './ai-service.js';
 
 describe('AI service Harness route', () => {

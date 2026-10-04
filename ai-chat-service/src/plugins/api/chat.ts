@@ -3,10 +3,10 @@
  * Registers all chat sub-plugins with appropriate prefixes
  */
 import { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
-import sessionRoutes from './sessions.js';
-import controlRoutes from './control.js';
-import streamRoutes from './stream.js';
-import connectivityTestRoutes from './connectivity-test.js';
+import sessionRoutes from './chat-sessions.js';
+import controlRoutes from './chat-control.js';
+import streamRoutes from './chat-stream.js';
+import connectivityTestRoutes from './chat-connectivity-test.js';
 
 const chatRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
   // Register session routes at /sessions prefix

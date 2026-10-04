@@ -1,9 +1,9 @@
 import Fastify from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { isAgentStreamEvent } from '@nebula-link-evo/shared/types/agent-stream';
-import { AgentTaskRepository } from '../../../agent-tasks/repository.js';
-import { AgentTaskService } from '../../../agent-tasks/service.js';
-import type { AgentTaskExecutor } from '../../../agent-tasks/types.js';
+import { AgentTaskRepository } from '../../agent-tasks/repository.js';
+import { AgentTaskService } from '../../agent-tasks/service.js';
+import type { AgentTaskExecutor } from '../../agent-tasks/types.js';
 import agentTaskRoutes from './agent-tasks.js';
 import type { CreateAgentTaskRequest } from '@nebula-link-evo/shared/types/agent-task';
 

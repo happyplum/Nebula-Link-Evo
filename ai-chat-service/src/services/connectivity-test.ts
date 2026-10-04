@@ -1,6 +1,6 @@
 import axios, { AxiosRequestConfig } from 'axios';
 import crypto from 'crypto';
-import { loadConfig } from '../config/index.js';
+import { loadConfig } from '../config/loader.js';
 import type { ResolvedProvider } from '../config/schema.js';
 
 export interface ConnectivityTestRequest {

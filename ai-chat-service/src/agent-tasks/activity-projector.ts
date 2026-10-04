@@ -4,8 +4,8 @@ import {
   type AgentStreamActivityState,
   type AgentStreamEventV1,
   type AgentStreamSnapshotV1,
-  type AgentStreamState,
 } from '@nebula-link-evo/shared/types/agent-stream';
+import { mapAgentTaskStatusToAgentStreamState } from '@nebula-link-evo/shared';
 import type {
   AgentTaskEventRecord,
   AgentTaskStatus,
@@ -57,7 +57,7 @@ export function projectAgentTaskEvent(event: AgentTaskEventRecord): AgentStreamE
       append({
         type: 'stream.state',
         sectionId: `${turnId}:state`,
-        state: streamState(status),
+        state: mapAgentTaskStatusToAgentStreamState(status),
       });
       break;
     }
@@ -202,7 +202,7 @@ export function buildAgentTaskActivitySnapshot(
     schema: AGENT_STREAM_SNAPSHOT_SCHEMA,
     streamId: task.taskId,
     seq: projected.at(-1)?.seq ?? 0,
-    state: streamState(task.status),
+    state: mapAgentTaskStatusToAgentStreamState(task.status),
     generatedAt: now,
     turns: [
       {
@@ -272,15 +272,6 @@ function activityState(status: AgentTaskStatus): AgentStreamActivityState {
   if (status === 'blocked') return 'blocked';
   if (status === 'cancelled') return 'cancelled';
   return 'outcome_unknown';
-}
-
-function streamState(status: AgentTaskStatus): AgentStreamState {
-  if (status === 'running' || status === 'created') return 'streaming';
-  if (status === 'completed') return 'completed';
-  if (status === 'failed') return 'failed';
-  if (status === 'cancelled') return 'cancelled';
-  if (status === 'paused' || status === 'blocked') return 'paused';
-  return 'recovering';
 }
 
 function stateSummary(status: AgentTaskStatus): string {

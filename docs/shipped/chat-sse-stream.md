@@ -6,7 +6,7 @@ ai-chat-service 从已持久 DSH 事实投影统一、脱敏、可恢复的 Agen
 - [shipped] provider chunk、Skill/Tool 生命周期和中间答复必须先进入 durable DSH/SQLite 投影，再由 SessionEventHub 广播；未提交 chunk 不进入 UI。公开事件 allocator 在投影提交后从最后 committed seq + 1 继续，旧 seq 通知不回退计数，queue 收尾事件与 DSH 投影共享单调序号。
 - [shipped] snapshot 先由消息映射用户/assistant turns，再直接调用 shared 纯 replay 重建 content、reasoning 摘要、activity 与终态；最终持久 state 覆盖顶层状态、generatedAt 使用当前时间，本地 applyEvent 已退出；连接期间以 bootstrap buffer 消除 snapshot/live 竞态。
 - [shipped] reasoning 默认只输出确定性阶段摘要；Tool/Skill 只输出脱敏名称、状态、摘要、固定版本/hash、预算和 artifact 引用。摘要最多 4 KiB，不输出原始 Skill 指令、secret、lease token 或超大 Tool 结果。
-- [shipped] live 订阅者队列最多 256 条、单次写超时 5 秒；溢出或超时后断连，客户端重新从 snapshot 建立状态。
+- [shipped] 连接由 shared `SnapshotFirstSseWriter` 驱动：bootstrap 期最多缓冲 256 条事件，溢出即关闭连接（客户端从 snapshot 重建）；live 阶段按 seq 去重，15s 心跳 `:heartbeat`，连接 5 分钟超时主动断开，不再保留本地每写 5 秒超时的 `services/sse-writer.ts`。
 - [shipped] 公开消息历史读取入口不存在；POST 仍异步提交用户消息。会话 CRUD、删除 saga 与 pause/resume/interrupt/cancel 保持 canonical 路由；列表/详情/status/snapshot 直接消费本应用 controller 读取的 sessions_state，无内存优先状态合并。
 - [shipped] Chat 只由 controller 转换持久生命周期，queue-owned Handler 将错误原样交给队列统一重试/结算，直接 resume 经同一 scheduler/admission；cleanup 不改变 paused/interrupted/cancelled/completed/blocked，旧运行回调不能覆盖新 job/handle。
 - [shipped] Chat 与 Agent Task 共用 DSH Agent Loop，并产生相同 shared Agent Stream 事件结构；控制面审计事件不作为 UI 兼容输入。

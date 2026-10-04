@@ -1,7 +1,7 @@
 import { createUserMessage } from '@deepseek-ai/dsh-llm';
 import type { FinishReason, StreamChunk, TokenUsage } from '@deepseek-ai/dsh-llm';
 import type { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
-import type { HarnessModelRoute, HarnessRuntime } from '../../../harness/index.js';
+import type { HarnessModelRoute, HarnessRuntime } from '../../harness/index.js';
 
 interface GenerateBody {
   prompt: string;

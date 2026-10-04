@@ -1,6 +1,7 @@
 import { generateText } from 'ai';
 import type { Logger } from 'pino';
-import { loadConfig, validateConfig } from '../config/index.js';
+import { loadConfig } from '../config/loader.js';
+import { validateConfig } from '../config/validator.js';
 import type { ResolvedConfig } from '../config/schema.js';
 import { ProviderRegistry } from './provider/registry.js';
 import type { ProviderConfig } from './provider/types.js';
