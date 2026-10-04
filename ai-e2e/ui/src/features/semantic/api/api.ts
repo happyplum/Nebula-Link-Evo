@@ -3,8 +3,8 @@ import type {
   FormalRunCreationResult,
   RunCommandRequest,
   RunDecisionAnswerRequest,
-} from '../../../../src/contracts/semantic-run.js';
-import type { BusinessVersion } from '../../../../src/contracts/business-version.js';
+} from '../../../../../src/contracts/semantic-run.js';
+import type { BusinessVersion } from '../../../../../src/contracts/business-version.js';
 import type {
   AmendmentRecord as AuthoringAmendment,
   CreateAuthoringJobRequest,
@@ -13,14 +13,14 @@ import type {
   AuthoringCommandResult,
   AmendmentCommandRequest,
   AmendmentDecisionAnswerRequest,
-} from '../../../../src/contracts/semantic-authoring.js';
+} from '../../../../../src/contracts/semantic-authoring.js';
 import type {
   AuthoringSnapshotV1 as AuthoringSnapshot,
   RunSnapshotV1 as RunSnapshot,
   SemanticWorkspaceV1 as SemanticWorkspace,
-} from '../../../../src/contracts/semantic-control.js';
+} from '../../../../../src/contracts/semantic-control.js';
 
-import { requestJson } from '../../shared/api/request.js';
+import { requestJson } from '../../../shared/api/request.js';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await requestJson<T>(path, init)).data;

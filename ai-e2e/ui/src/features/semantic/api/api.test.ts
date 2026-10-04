@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { semanticApi } from './api.js';
-import { fetchProjects } from '../project/store/projectApi.js';
-import { requestJson } from '../../shared/api/request.js';
+import { fetchProjects } from '../../project/store/projectApi.js';
+import { requestJson } from '../../../shared/api/request.js';
 
 afterEach(() => vi.unstubAllGlobals());
 

@@ -1,13 +1,13 @@
 import type {
   AssetRevision,
   AssetReadinessStatus,
-} from '../../../../src/contracts/business-version.js';
+} from '../../../../../src/contracts/business-version.js';
 import type {
   AuthoringSnapshotV1 as AuthoringSnapshot,
   RunSnapshotV1 as RunSnapshot,
   SemanticWorkspaceV1 as SemanticWorkspace,
-} from '../../../../src/contracts/semantic-control.js';
-import type { AmendmentRecord as AuthoringAmendment } from '../../../../src/contracts/semantic-authoring.js';
+} from '../../../../../src/contracts/semantic-control.js';
+import type { AmendmentRecord as AuthoringAmendment } from '../../../../../src/contracts/semantic-authoring.js';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -29,7 +29,7 @@ const api = vi.hoisted(() => ({
   resumeTodo: vi.fn(),
 }));
 
-vi.mock('./api.js', () => ({ semanticApi: api }));
+vi.mock('../api/api.js', () => ({ semanticApi: api }));
 
 const stream = vi.hoisted(() => {
   const state = { authoring: 'idle', run: 'idle' };
@@ -41,8 +41,8 @@ const stream = vi.hoisted(() => {
   };
 });
 
-vi.mock('./useSemanticEventStream.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./useSemanticEventStream.js')>();
+vi.mock('../hooks/useSemanticEventStream.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../hooks/useSemanticEventStream.js')>();
   return { ...actual, useSemanticEventStream: stream.useSemanticEventStream };
 });
 

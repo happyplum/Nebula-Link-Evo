@@ -2,8 +2,8 @@ import type {
   AuthoringSnapshotV1 as AuthoringSnapshot,
   RunSnapshotV1 as RunSnapshot,
   SemanticWorkspaceV1 as SemanticWorkspace,
-} from '../../../../src/contracts/semantic-control.js';
-import type { AmendmentRecord as AuthoringAmendment } from '../../../../src/contracts/semantic-authoring.js';
+} from '../../../../../src/contracts/semantic-control.js';
+import type { AmendmentRecord as AuthoringAmendment } from '../../../../../src/contracts/semantic-authoring.js';
 import {
   useEffect,
   useMemo,
@@ -34,15 +34,15 @@ import {
 } from 'lucide-react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { semanticApi } from './api.js';
+import { semanticApi } from '../api/api.js';
 import { BrowserStage } from './BrowserStage.js';
 import { AgentActivityPanel } from './AgentActivityPanel.js';
 import { ContextTree } from './ContextTree.js';
 import { InspectorPanel, type ContextPreview, type InspectorTab } from './InspectorPanel.js';
-import type { LayoutPreferences } from './types.js';
-import { record, text } from './types.js';
-import { useSemanticEventStream } from './useSemanticEventStream.js';
-import { useAgentActivityStream } from './useAgentActivityStream.js';
+import type { LayoutPreferences } from '../types.js';
+import { record, text } from '../types.js';
+import { useSemanticEventStream } from '../hooks/useSemanticEventStream.js';
+import { useAgentActivityStream } from '../hooks/useAgentActivityStream.js';
 import './semantic.css';
 
 const STORAGE_KEY = 'ai-e2e.semantic.layout.v1';

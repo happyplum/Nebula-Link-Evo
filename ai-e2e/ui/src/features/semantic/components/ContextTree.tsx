@@ -1,4 +1,4 @@
-import type { SemanticWorkspaceV1 as SemanticWorkspace } from '../../../../src/contracts/semantic-control.js';
+import type { SemanticWorkspaceV1 as SemanticWorkspace } from '../../../../../src/contracts/semantic-control.js';
 import {
   CheckCircle2,
   Circle,
@@ -11,7 +11,7 @@ import {
   XCircle,
 } from 'lucide-react';
 
-import { text } from './types.js';
+import { text } from '../types.js';
 
 function assetName(payload: Record<string, unknown>, fallback: string) {
   return text(payload.name, fallback);

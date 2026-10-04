@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, Boxes, CircleCheck, GitBranch, MonitorUp } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
-import { semanticApi } from './api.js';
+import { semanticApi } from '../api/api.js';
 
 export function SemanticHomePage() {
   const { projectId = '' } = useParams<{ projectId: string }>();

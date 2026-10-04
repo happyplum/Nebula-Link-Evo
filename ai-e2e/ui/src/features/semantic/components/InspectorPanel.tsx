@@ -1,8 +1,8 @@
 import type {
   RunSnapshotV1 as RunSnapshot,
   SemanticWorkspaceV1 as SemanticWorkspace,
-} from '../../../../src/contracts/semantic-control.js';
-import type { AmendmentRecord as AuthoringAmendment } from '../../../../src/contracts/semantic-authoring.js';
+} from '../../../../../src/contracts/semantic-control.js';
+import type { AmendmentRecord as AuthoringAmendment } from '../../../../../src/contracts/semantic-authoring.js';
 import {
   AlertTriangle,
   ArrowDown,
@@ -17,7 +17,7 @@ import {
   X,
 } from 'lucide-react';
 
-import { list, record, text } from './types.js';
+import { list, record, text } from '../types.js';
 
 export type InspectorTab = 'context' | 'diff' | 'evidence';
 export type ContextPreview = 'prd' | 'module' | 'scenario';

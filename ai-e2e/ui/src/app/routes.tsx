@@ -1,8 +1,8 @@
 import { Routes as RouterRoutes, Route } from 'react-router-dom';
 import { Layout } from './layout.js';
 import { HomePage } from './pages/HomePage.js';
-import { SemanticHomePage } from '../features/semantic/SemanticHomePage.js';
-import { SemanticAuthoringPage, SemanticRunPage } from '../features/semantic/SemanticWorkbench.js';
+import { SemanticHomePage } from '../features/semantic/components/SemanticHomePage.js';
+import { SemanticAuthoringPage, SemanticRunPage } from '../features/semantic/components/SemanticWorkbench.js';
 
 const NotFoundPage = () => (
   <div className="flex h-full items-center justify-center">
