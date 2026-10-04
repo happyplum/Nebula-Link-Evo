@@ -1,7 +1,11 @@
 import type { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import { Type, type Static } from '@sinclair/typebox';
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import type { AgentStreamEventV1 } from '@nebula-link-evo/shared/types/agent-stream';
+import { SnapshotFirstSseWriter, encodeSseJsonFrame } from '@nebula-link-evo/shared';
+import type {
+  AgentStreamEventV1,
+  AgentStreamSnapshotV1,
+} from '@nebula-link-evo/shared/types/agent-stream';
 import type { ApiSuccess } from '../../contracts/semantic-control.js';
 import type {
   ActivityContext,
@@ -59,7 +63,7 @@ const agentActivityRoutes: FastifyPluginAsyncTypebox<AgentActivityRoutesOptions>
       async (request, reply) => {
         const repository = requireRepository();
         const context = requireContext(repository, descriptor.type, request.params.contextId);
-        openActivityStream(request, reply, repository, context);
+        await openActivityStream(request, reply, repository, context);
       }
     );
   }
@@ -76,58 +80,52 @@ function requireContext(
   return context;
 }
 
-function openActivityStream(
+async function openActivityStream(
   request: FastifyRequest,
   reply: FastifyReply,
   repository: AgentActivityRepository,
   context: ActivityContext
-): void {
-  const buffered: AgentStreamEventV1[] = [];
-  let bootstrapComplete = false;
-  let closed = false;
-  let lastSeq = 0;
-  const unsubscribe = repository.subscribe(context, (event) => {
-    if (closed) return;
-    if (!bootstrapComplete) {
-      buffered.push(event);
-      return;
-    }
-    if (event.seq <= lastSeq) return;
-    write(reply, 'agent_stream.event', event.seq, event);
-    lastSeq = event.seq;
-  });
+): Promise<void> {
   reply.hijack();
-  reply.raw.writeHead(200, {
-    'content-type': 'text/event-stream; charset=utf-8',
-    'cache-control': 'no-cache, no-transform',
-    connection: 'keep-alive',
-    'x-accel-buffering': 'no',
+  const writer = new SnapshotFirstSseWriter<AgentStreamSnapshotV1, AgentStreamEventV1>({
+    target: reply.raw,
+    lifecycleTargets: [request.raw],
+    statusCode: 200,
+    headers: {
+      'content-type': 'text/event-stream; charset=utf-8',
+      'cache-control': 'no-cache, no-transform',
+      connection: 'keep-alive',
+      'x-accel-buffering': 'no',
+    },
+    getSnapshot: () => repository.snapshot(context),
+    getSnapshotSeq: (snapshot) => snapshot.seq,
+    getEventSeq: (event) => event.seq,
+    encodeSnapshot: (snapshot) =>
+      encodeSseJsonFrame({
+        event: 'agent_stream.snapshot',
+        id: String(snapshot.seq),
+        data: snapshot,
+        fieldOrder: ['event', 'id', 'data'],
+      }),
+    encodeEvent: (event) =>
+      encodeSseJsonFrame({
+        event: 'agent_stream.event',
+        id: String(event.seq),
+        data: event,
+        fieldOrder: ['event', 'id', 'data'],
+      }),
+    feed: {
+      subscribe: (listener) => repository.subscribe(context, listener),
+      poll: {
+        intervalMs: 500,
+        read: (afterSeq) => repository.list(context, afterSeq),
+      },
+    },
+    maxBufferedEvents: null,
+    deduplicate: true,
+    heartbeat: { intervalMs: 15_000, createChunk: () => ': heartbeat\n\n' },
   });
-  const snapshot = repository.snapshot(context);
-  write(reply, 'agent_stream.snapshot', snapshot.seq, snapshot);
-  lastSeq = snapshot.seq;
-  bootstrapComplete = true;
-  for (const event of buffered) {
-    if (event.seq <= lastSeq) continue;
-    write(reply, 'agent_stream.event', event.seq, event);
-    lastSeq = event.seq;
-  }
-  const projection = setInterval(() => {
-    if (!closed) repository.syncControlEvents(context);
-  }, 500);
-  const heartbeat = setInterval(() => {
-    if (!closed) reply.raw.write(': heartbeat\n\n');
-  }, 15_000);
-  request.raw.on('close', () => {
-    closed = true;
-    clearInterval(projection);
-    clearInterval(heartbeat);
-    unsubscribe();
-  });
-}
-
-function write(reply: FastifyReply, event: string, seq: number, data: unknown): void {
-  reply.raw.write(`event: ${event}\nid: ${seq}\ndata: ${JSON.stringify(data)}\n\n`);
+  await writer.start();
 }
 
 function success<T>(request: FastifyRequest, data: T): ApiSuccess<T> {

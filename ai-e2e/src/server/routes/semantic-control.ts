@@ -1,6 +1,7 @@
 import type { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import { Type, type Static } from '@sinclair/typebox';
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import { SnapshotFirstSseWriter, encodeSseJsonFrame } from '@nebula-link-evo/shared';
 import type { SemanticQueryService } from '../../services/semantic-query-service.js';
 import { ServiceError } from '../../services/service-error.js';
 import type { ApiSuccess, SemanticEventV1 } from '../../contracts/semantic-control.js';
@@ -43,6 +44,7 @@ const EventLogSuccessSchema = apiSuccessSchema(
     { additionalProperties: false }
   )
 );
+const SNAPSHOT_FIRST_FRAME_ORDER = ['id', 'event', 'retry', 'data'] as const;
 const ErrorResponses = {
   400: ApiProblemSchema,
   404: ApiProblemSchema,
@@ -199,7 +201,7 @@ const semanticControlRoutes: FastifyPluginAsyncTypebox<SemanticControlRoutesOpti
     async (request, reply) => {
       const service = requireService();
       const snapshot = service.getAuthoringSnapshot(request.params.jobId);
-      openSnapshotFirstStream(request, reply, 'authoring.snapshot', snapshot, (afterSeq) =>
+      await openSnapshotFirstStream(request, reply, 'authoring.snapshot', snapshot, (afterSeq) =>
         service.listAuthoringEvents(request.params.jobId, afterSeq, 500)
       );
     }
@@ -250,7 +252,7 @@ const semanticControlRoutes: FastifyPluginAsyncTypebox<SemanticControlRoutesOpti
     async (request, reply) => {
       const service = requireService();
       const snapshot = service.getRunSnapshot(request.params.runId);
-      openSnapshotFirstStream(request, reply, 'run.snapshot', snapshot, (afterSeq) =>
+      await openSnapshotFirstStream(request, reply, 'run.snapshot', snapshot, (afterSeq) =>
         service.listRunEvents(request.params.runId, afterSeq, 500)
       );
     }
@@ -327,86 +329,67 @@ const semanticControlRoutes: FastifyPluginAsyncTypebox<SemanticControlRoutesOpti
 
 type Snapshot = { seq: number; stateVersion: number; schema: string };
 
-function openSnapshotFirstStream<T extends Snapshot>(
+async function openSnapshotFirstStream<T extends Snapshot>(
   request: FastifyRequest,
   reply: FastifyReply,
   snapshotEvent: 'authoring.snapshot' | 'run.snapshot',
   snapshot: T,
   listEvents: (afterSeq: number) => SemanticEventV1[]
-): void {
+): Promise<void> {
   reply.hijack();
-  reply.raw.writeHead(200, {
-    'content-type': 'text/event-stream; charset=utf-8',
-    'cache-control': 'no-cache, no-transform',
-    connection: 'keep-alive',
-    'x-accel-buffering': 'no',
-  });
-  reply.raw.write(
-    encodeSseEvent({
-      id: String(snapshot.seq),
-      event: snapshotEvent,
-      retry: 1_000,
-      data: {
-        schema: 'nebula.ai-e2e.snapshot-event/1.0',
-        seq: snapshot.seq,
-        stateVersion: snapshot.stateVersion,
-        snapshot,
+  const writer = new SnapshotFirstSseWriter<T, SemanticEventV1>({
+    target: reply.raw,
+    lifecycleTargets: [request.raw],
+    statusCode: 200,
+    headers: {
+      'content-type': 'text/event-stream; charset=utf-8',
+      'cache-control': 'no-cache, no-transform',
+      connection: 'keep-alive',
+      'x-accel-buffering': 'no',
+    },
+    getSnapshot: () => snapshot,
+    getSnapshotSeq: (value) => value.seq,
+    getEventSeq: (event) => event.seq,
+    encodeSnapshot: (value) =>
+      encodeSseJsonFrame({
+        id: String(value.seq),
+        event: snapshotEvent,
+        retry: 1_000,
+        data: {
+          schema: 'nebula.ai-e2e.snapshot-event/1.0',
+          seq: value.seq,
+          stateVersion: value.stateVersion,
+          snapshot: value,
+        },
+        fieldOrder: SNAPSHOT_FIRST_FRAME_ORDER,
+      }),
+    encodeEvent: (event) =>
+      encodeSseJsonFrame({
+        id: String(event.seq),
+        event: event.type,
+        data: event,
+        fieldOrder: SNAPSHOT_FIRST_FRAME_ORDER,
+      }),
+    feed: {
+      poll: {
+        intervalMs: 500,
+        read: listEvents,
+        encodeError: (error) =>
+          encodeSseJsonFrame({
+            event: 'stream.error',
+            data: {
+              retryable: true,
+              message: error instanceof Error ? error.message : 'Event stream failed',
+            },
+            fieldOrder: SNAPSHOT_FIRST_FRAME_ORDER,
+          }),
       },
-    })
-  );
-
-  let afterSeq = snapshot.seq;
-  let closed = false;
-  const poll = setInterval(() => {
-    if (closed) return;
-    try {
-      const events = listEvents(afterSeq);
-      for (const event of events) {
-        reply.raw.write(encodeSseEvent({ id: String(event.seq), event: event.type, data: event }));
-        afterSeq = event.seq;
-      }
-    } catch (error) {
-      reply.raw.write(
-        encodeSseEvent({
-          event: 'stream.error',
-          data: {
-            retryable: true,
-            message: error instanceof Error ? error.message : 'Event stream failed',
-          },
-        })
-      );
-      cleanup();
-      reply.raw.end();
-    }
-  }, 500);
-  const heartbeat = setInterval(() => {
-    if (!closed) reply.raw.write(': heartbeat\n\n');
-  }, 15_000);
-
-  const cleanup = () => {
-    if (closed) return;
-    closed = true;
-    clearInterval(poll);
-    clearInterval(heartbeat);
-  };
-  request.raw.once('close', cleanup);
-  reply.raw.once('close', cleanup);
-}
-
-export function encodeSseEvent(input: {
-  id?: string;
-  event: string;
-  retry?: number;
-  data: unknown;
-}): string {
-  return [
-    ...(input.id ? [`id: ${input.id}`] : []),
-    `event: ${input.event}`,
-    ...(input.retry ? [`retry: ${input.retry}`] : []),
-    `data: ${JSON.stringify(input.data)}`,
-    '',
-    '',
-  ].join('\n');
+    },
+    maxBufferedEvents: null,
+    deduplicate: false,
+    heartbeat: { intervalMs: 15_000, createChunk: () => ': heartbeat\n\n' },
+  });
+  await writer.start();
 }
 
 function success<T>(

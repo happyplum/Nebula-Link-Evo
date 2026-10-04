@@ -309,4 +309,50 @@ describe('Agent activity routes', () => {
     });
     expect(missing.statusCode).toBe(404);
   });
+
+  it('按原始 wire 顺序发送 activity snapshot 与 SSE 响应头', async () => {
+    const { repository } = setupDatabase();
+    const context = { type: 'authoring' as const, id: 'job-1' };
+    repository.append(context, 'external-a', activityEvent('external-a', 4));
+    const snapshot = repository.snapshot(context);
+    const app = Fastify({ logger: false });
+    apps.push(app);
+    await app.register(errorHandlerPlugin);
+    await app.register(agentActivityRoutes, { prefix: '/api/v1', repository });
+    const serverUrl = await app.listen({ port: 0, host: '127.0.0.1' });
+    const controller = new AbortController();
+
+    try {
+      const response = await fetch(new URL('/api/v1/authoring-jobs/job-1/activity', serverUrl), {
+        signal: controller.signal,
+      });
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('Activity SSE response has no body');
+      let frame = '';
+      const decoder = new TextDecoder();
+      while (!frame.endsWith('\n\n')) {
+        const chunk = await reader.read();
+        if (chunk.done) throw new Error('Activity SSE response ended before its snapshot');
+        frame += decoder.decode(chunk.value, { stream: true });
+      }
+
+      expect(response.status).toBe(200);
+      expect({
+        contentType: response.headers.get('content-type'),
+        cacheControl: response.headers.get('cache-control'),
+        connection: response.headers.get('connection'),
+        buffering: response.headers.get('x-accel-buffering'),
+      }).toEqual({
+        contentType: 'text/event-stream; charset=utf-8',
+        cacheControl: 'no-cache, no-transform',
+        connection: 'keep-alive',
+        buffering: 'no',
+      });
+      expect(frame).toBe(
+        `event: agent_stream.snapshot\nid: ${snapshot.seq}\ndata: ${JSON.stringify(snapshot)}\n\n`
+      );
+    } finally {
+      controller.abort();
+    }
+  });
 });

@@ -17,12 +17,12 @@
 - [shipped] 全局 FIFO 与恢复：单 active browser session/context/control actor，Authoring 与 Run 共享安全边界，重启恢复 dispatching outbox，未知副作用不盲目重放。
 - [shipped] Authoring 租约一次性 token 丢失恢复：活动旧租约等待 `expiresAt + 1s`；失效后先持久化 `${原意图ID}:recovery:${旧lease.sequence}` 的 `authoring_browser_lease.create`，再以旧 lease ID 确认原意图。新意图保留原 context、authoring task、payload/endpoint，不携旧 secret；稳定 key 支持重启重放和连续恢复，派发仍重验取消与授权，避免重复 Agent/attempt 和活动控制权。
 - [shipped] 生产浏览器中心 UI：左上下文/TODO、中间持续挂载浏览器、右侧 PRD/模块/场景/Diff/影响/决策/证据和常驻 Chat；模块切换不导航，显式定位才创建 navigation-only task。
-- [shipped] UI 基础组件收敛为 `ui/src/shared/components/` 的 Button、Input、Card、Modal；`ui/src/components/ui/` 只保留 Sonner Toaster 适配，`components.json` 只作为生成配置保留。无调用的 18 个替代组件（含旧向导 Stepper）、Stepper 专属测试、Table/Tree/CodeEditor 与 3 项索引导出已删除，11 个 Radix 直接依赖与 class-variance-authority 已退出；产品组件、样式/token 与 Modal 动画依赖保持。
+- [shipped] UI 基础组件收敛为 `ui/src/shared/ui/` flat 布局的 Button、Input、Card、Modal，Sonner Toaster 适配同为该目录文件，`components.json` 只作为生成配置保留。无调用的 18 个替代组件（含旧向导 Stepper）、Stepper 专属测试、Table/Tree/CodeEditor 与 3 项索引导出已删除，11 个 Radix 直接依赖与 class-variance-authority 已退出；产品组件、样式/token 与 Modal 动画依赖保持。
 - [shipped] additive migration 020 新增 Authoring/Run Agent 活动事件与独立外部 activity cursor；保留既有 semantic 数据库和历史记录，不复用控制面 `last_external_seq`，不执行破坏性迁移。
 - [shipped] ai-e2e 从 Agent Task `activity-log` 聚合多页面 Agent 活动，并将 authoring/run 生命周期、候选、审批、浏览器验证、激活、失败、依赖跳过和未知结果投影到各业务上下文的本地单调活动序列。
-- [shipped] `AgentActivityRepository.snapshot` 直接调用 shared 唯一纯 replay，本地 applyEvent 已退出；先保留控制面/消息投影和 source seq 去重，再从 activity 聚合顶层 state，不受外部 stream.state 覆盖；generatedAt 使用最后事件/空流当前时间。UI 通过公共 UI 入口重导出同一核心，后端不依赖 React。
+- [shipped] `AgentActivityRepository.snapshot` 直接调用 shared 唯一纯 replay，本地 applyEvent 已退出；`mapSemanticStatusToActivityState` 与 `mapAgentActivitySnapshotState` 分别承接原状态词汇映射和聚合优先级。先保留控制面/消息投影和 source seq 去重，不受外部 stream.state 覆盖；generatedAt 使用最后事件/空流当前时间。UI 通过公共 UI 入口重导出同一核心，后端不依赖 React。
 - [shipped] 三服务 E2E 旅程夹具将证据与加密 secret store 显式注入仓库 `.tmp` 唯一运行目录；与 coverage 共用该夹具，实际 artifact storage key 和密钥路径均有回归，退出后随本轮目录清理，不写默认 data。
-- [shipped] `GET /api/v1/authoring-jobs/:jobId/{activity,activity-log}` 与 `GET /api/v1/runs/:runId/{activity,activity-log}` 提供 snapshot-first SSE 和持久呈现日志；跨 context 数据不可见，刷新与服务重启后按 seq 恢复且不重复。
+- [shipped] `GET /api/v1/authoring-jobs/:jobId/{activity,activity-log}` 与 `GET /api/v1/runs/:runId/{activity,activity-log}` 提供 snapshot-first SSE 和持久呈现日志；SSE 使用 shared `SnapshotFirstSseWriter`/`encodeSseJsonFrame`，保持 `agent_stream.snapshot`/`agent_stream.event` 的 `event:id:data` 字节顺序、ID 与响应头，并由每连接 500ms poll 继续触发控制事件和 Authoring 消息投影；跨 context 数据不可见，刷新与服务重启后按 seq 恢复且不重复。
 - [shipped] Authoring 使用 compact 公共 renderer 和 repair Composer 串联用户意见、候选、Skill/Tool、审批、验证与激活；Run 使用同一 compact 只读流，资产修改必须返回 Authoring。结构化 amendment/decision 始终是业务事实。
 - [shipped] 公开 authoring context message 查询/提交路径已移除；内部消息审计记录保留并作为活动投影来源，不清理历史数据库。
 - [shipped] `BrowserStage` 的 zoom 仅在实际图像可用时作用于画面；空态/图像错误后的“重试实时画面”不缩放，默认 90% zoom 下仍有 44px 热区。组件错误/重试回归与真实生产 UI 的 image error/transform/boundingBox 验收锁住边界。
@@ -31,7 +31,7 @@
 - [shipped] 浏览器中心工作台完成低噪声冷蓝视觉重构：三栏改为有留白的浮动工作区表面，中间浏览器以独立深色画布和工具条成为主舞台；左侧上下文树以树线、状态点、细强调轨和渐隐背景表达页面/模块/场景层级，消除父子嵌套的大面积选中卡片；右侧检查器、Diff 与 Agent 活动形成清晰上下层级。浅色/深色、1440/1920、44px 热区和键盘 `focus-visible` 均纳入真实生产 UI E2E 门禁。
 - [shipped] 冷启动性能基线固定于 [`docs/performance/ui-performance-baseline.md`](../performance/ui-performance-baseline.md)：Fast 3G + CPU 4× 条件下首屏 LCP 为 2,529 ms、JS/CSS 传输为 143,334 B；对话框交互的 40.2 ms second-rAF 仅作为实验室代理值，不冒充 INP。
 - [shipped] 新项目通过 `bootstrap=1` 深链接只自动创建一次 bootstrap Agent task；起始脚本/场景保持 `unverified`，不能伪装成可运行版本。
-- [shipped] API/SSE 统一 `{ data, meta }`、`ApiProblem`、snapshot-first + 单调 seq；UI 断线从权威 snapshot 恢复。
+- [shipped] API/SSE 统一 `{ data, meta }`、`ApiProblem`、snapshot-first + 单调 seq；Authoring/Run 控制面 `/events` 使用 shared `SnapshotFirstSseWriter`/`encodeSseJsonFrame` 和 500ms afterSeq poll，保持 `authoring.snapshot`/`run.snapshot`、`nebula.ai-e2e.snapshot-event/1.0` 信封、`id:event:retry:data` 顺序、ID、响应头及 heartbeat 字节。UI 断线从权威 snapshot 恢复。
 - [shipped] canonical control-plane 跨服务 E2E 使用真实 HTTP、MCP 与 Chromium 验证 ai-e2e 客户端到 ai-chat-service Agent task、proxy-adapter session/lease/operation 的契约，覆盖导航、填写、点击、文本读取、截图/DOM artifact、operation 查询/取消错误，并断言旧路径保持 404。
 - [shipped] 三服务 semantic 产品旅程 E2E 使用真实 proxy、ai-chat Agent Task HTTP、ai-e2e HTTP 与 Chromium 覆盖结构化候选、浏览器验证、原子激活、正式运行和证据封存；同时断言未验证版本拒绝运行、`outcome_unknown` 进入 open decision 且不重放。
 - [shipped] 功能脚本 v1 只使用 canonical `pageScope.entryPageId`；协调器为 authoring 生命周期持有隐藏 control lease，但向 Agent 注入的 `browserBinding.access` 仍按冻结步骤收窄，并在终态用该租约关闭自有 session。

@@ -3,6 +3,8 @@ import type Database from 'better-sqlite3';
 import {
   AGENT_STREAM_EVENT_SCHEMA,
   createEmptyAgentStream,
+  mapAgentActivitySnapshotState,
+  mapSemanticStatusToActivityState,
   replayAgentStream,
   type AgentStreamEventV1,
   type AgentStreamSectionV1,
@@ -216,19 +218,10 @@ export class AgentActivityRepository {
       (section): section is Extract<AgentStreamSectionV1, { type: 'activity' }> =>
         section.type === 'activity'
     );
-    const state = activities.some(
-      (activity) => activity.state === 'running' || activity.state === 'queued'
-    )
-      ? 'streaming'
-      : activities.some((activity) => activity.state === 'blocked')
-        ? 'paused'
-        : activities.some((activity) => activity.state === 'outcome_unknown')
-          ? 'recovering'
-          : activities.some((activity) => activity.state === 'failed')
-            ? 'failed'
-            : events.length
-              ? 'completed'
-              : 'idle';
+    const state = mapAgentActivitySnapshotState(
+      activities.map((activity) => activity.state),
+      events.length
+    );
     return {
       ...snapshot,
       state,
@@ -381,7 +374,7 @@ function projectControlEvent(
         base,
         sectionId,
         'agent',
-        stateFromValue(payload.state),
+        mapSemanticStatusToActivityState(payload.state),
         '编排任务已创建'
       );
     }
@@ -390,7 +383,7 @@ function projectControlEvent(
         base,
         sectionId,
         'agent',
-        stateFromValue(payload.to),
+        mapSemanticStatusToActivityState(payload.to),
         '编排任务状态已更新'
       );
     }
@@ -399,7 +392,7 @@ function projectControlEvent(
         base,
         sectionId,
         'agent',
-        stateFromValue(payload.taskState ?? payload.status),
+        mapSemanticStatusToActivityState(payload.taskState ?? payload.status),
         '编排尝试已结算'
       );
     }
@@ -411,7 +404,7 @@ function projectControlEvent(
         base,
         sectionId,
         'agent',
-        stateFromValue(payload.to ?? payload.lifecycle),
+        mapSemanticStatusToActivityState(payload.to ?? payload.lifecycle),
         '编排作业状态已更新'
       );
     }
@@ -426,10 +419,22 @@ function projectControlEvent(
     return activityEvent(base, sectionId, 'agent', 'queued', '运行已创建');
   }
   if (row.type === 'run.lifecycle_changed') {
-    return activityEvent(base, sectionId, 'agent', stateFromValue(payload.to), '运行状态已更新');
+    return activityEvent(
+      base,
+      sectionId,
+      'agent',
+      mapSemanticStatusToActivityState(payload.to),
+      '运行状态已更新'
+    );
   }
   if (row.type === 'run.completed') {
-    return activityEvent(base, sectionId, 'agent', stateFromValue(payload.lifecycle), '运行已结算');
+    return activityEvent(
+      base,
+      sectionId,
+      'agent',
+      mapSemanticStatusToActivityState(payload.lifecycle),
+      '运行已结算'
+    );
   }
   if (row.type === 'page_task.started') {
     return activityEvent(base, sectionId, 'agent', 'running', '页面 Agent 已开始执行');
@@ -439,7 +444,7 @@ function projectControlEvent(
       base,
       sectionId,
       'agent',
-      stateFromValue(payload.to),
+      mapSemanticStatusToActivityState(payload.to),
       '运行 TODO 状态已更新',
       stringValue(payload.to)
     );
@@ -449,7 +454,7 @@ function projectControlEvent(
       base,
       sectionId,
       'evidence',
-      stateFromValue(payload.todoState ?? payload.result),
+      mapSemanticStatusToActivityState(payload.todoState ?? payload.result),
       '执行尝试已结算'
     );
   }
@@ -508,27 +513,6 @@ function noticeEvent(
       title,
     },
   };
-}
-
-function stateFromValue(
-  value: unknown
-): Extract<AgentStreamSectionV1, { type: 'activity' }>['state'] {
-  if (
-    value === 'created' ||
-    value === 'ready' ||
-    value === 'pending' ||
-    value === 'waiting_dependencies'
-  )
-    return 'queued';
-  if (value === 'running' || value === 'verifying') return 'running';
-  if (value === 'completed' || value === 'passed' || value === 'succeeded' || value === 'activated')
-    return 'completed';
-  if (value === 'failed' || value === 'invalid') return 'failed';
-  if (value === 'paused' || value === 'blocked' || value === 'waiting_decision') return 'blocked';
-  if (value === 'cancelled' || value === 'cancelling' || value === 'rejected') return 'cancelled';
-  if (value === 'skipped') return 'skipped';
-  if (value === 'interrupted' || value === 'outcome_unknown') return 'outcome_unknown';
-  return 'completed';
 }
 
 function parsePayload(value: string): Record<string, unknown> {

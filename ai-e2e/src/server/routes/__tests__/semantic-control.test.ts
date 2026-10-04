@@ -12,7 +12,7 @@ import { SemanticQueryRepository } from '../../../database/repositories/semantic
 import { SemanticWorkflowRepository } from '../../../database/repositories/semantic-workflow-repository.js';
 import { SemanticQueryService } from '../../../services/semantic-query-service.js';
 import errorHandlerPlugin from '../../plugins/error-handler.js';
-import semanticControlRoutes, { encodeSseEvent } from '../semantic-control.js';
+import semanticControlRoutes from '../semantic-control.js';
 import { functionalScriptFixture } from '../../../test-support/functional-script-fixture.js';
 
 const HASH_A = 'a'.repeat(64);
@@ -205,17 +205,92 @@ describe('semantic control read routes', () => {
     });
   });
 
-  it('encodes snapshot-first SSE frames with resumable sequence metadata', () => {
-    expect(
-      encodeSseEvent({
-        id: '7',
-        event: 'run.snapshot',
-        retry: 1_000,
-        data: { schema: 'nebula.ai-e2e.snapshot-event/1.0', seq: 7, stateVersion: 3 },
-      })
-    ).toBe(
-      'id: 7\nevent: run.snapshot\nretry: 1000\ndata: {"schema":"nebula.ai-e2e.snapshot-event/1.0","seq":7,"stateVersion":3}\n\n'
+  it('preserves authoring and run snapshot-first SSE wire bytes and headers', async () => {
+    const authoring = workflows.createAuthoringJob({
+      projectId: 'project-1',
+      businessVersionId: fixture.versionId,
+      mode: 'repair',
+      idempotencyKey: 'wire-frame',
+      stage: 'repair_script',
+      strategyVersion: 'semantic-v1',
+      sourceFingerprint: 'wire-frame',
+      input: { scriptId: fixture.scriptId },
+      createdBy: 'user-1',
+    });
+    const run = workflows.createRun({
+      projectId: 'project-1',
+      businessVersionId: fixture.versionId,
+      clientRunId: 'wire-frame-run',
+      purpose: 'authoring_verification',
+      authoringJobId: authoring.id,
+      scenarioRevisionId: fixture.scenarioRevisionId,
+      deploymentRevisionId: 'deployment-revision',
+      sideEffectPolicyVersion: 'policy-v1',
+      sideEffectProjection: { environment: 'test', effects: [] },
+      planSchemaId: 'nebula.ai-e2e.run-plan/1.0',
+      plan: { calls: [] },
+      todos: [],
+      dependencies: [],
+    });
+    const authoringSnapshot = (await app.inject({
+      method: 'GET',
+      url: `/api/v1/authoring-jobs/${authoring.id}`,
+    })).json().data as { seq: number; stateVersion: number; [key: string]: unknown };
+    const runSnapshot = (await app.inject({
+      method: 'GET',
+      url: `/api/v1/runs/${run.id}`,
+    })).json().data as { seq: number; stateVersion: number; [key: string]: unknown };
+    const serverUrl = await app.listen({ port: 0, host: '127.0.0.1' });
+
+    const readFirstFrame = async (path: string) => {
+      const controller = new AbortController();
+      try {
+        const response = await fetch(new URL(path, serverUrl), { signal: controller.signal });
+        const reader = response.body?.getReader();
+        if (!reader) throw new Error('Semantic SSE response has no body');
+        let frame = '';
+        const decoder = new TextDecoder();
+        while (!frame.endsWith('\n\n')) {
+          const chunk = await reader.read();
+          if (chunk.done) throw new Error('Semantic SSE response ended before its snapshot');
+          frame += decoder.decode(chunk.value, { stream: true });
+        }
+        return { response, frame };
+      } finally {
+        controller.abort();
+      }
+    };
+    const authoringStream = await readFirstFrame(
+      `/api/v1/authoring-jobs/${authoring.id}/events`
     );
+    const runStream = await readFirstFrame(`/api/v1/runs/${run.id}/events`);
+    const expectedFrame = (
+      event: 'authoring.snapshot' | 'run.snapshot',
+      snapshot: { seq: number; stateVersion: number; [key: string]: unknown }
+    ) =>
+      `id: ${snapshot.seq}\nevent: ${event}\nretry: 1000\ndata: ${JSON.stringify({
+        schema: 'nebula.ai-e2e.snapshot-event/1.0',
+        seq: snapshot.seq,
+        stateVersion: snapshot.stateVersion,
+        snapshot,
+      })}\n\n`;
+
+    for (const response of [authoringStream.response, runStream.response]) {
+      expect(response.status).toBe(200);
+      expect({
+        contentType: response.headers.get('content-type'),
+        cacheControl: response.headers.get('cache-control'),
+        connection: response.headers.get('connection'),
+        buffering: response.headers.get('x-accel-buffering'),
+      }).toEqual({
+        contentType: 'text/event-stream; charset=utf-8',
+        cacheControl: 'no-cache, no-transform',
+        connection: 'keep-alive',
+        buffering: 'no',
+      });
+    }
+    expect(authoringStream.frame).toBe(expectedFrame('authoring.snapshot', authoringSnapshot));
+    expect(runStream.frame).toBe(expectedFrame('run.snapshot', runSnapshot));
   });
 });
 
