@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { AgentStreamRenderer } from '@nebula-link-evo/agent-activity-ui';
 import type { AgentStreamSnapshotV1 } from '@nebula-link-evo/shared/types/agent-stream';
 import type { AgentStreamConnectionStatus } from '@nebula-link-evo/agent-stream-client';
-import { Button } from '@/shared/components/index.js';
+import { Button } from '@/shared/ui/index.js';
 
 export function AgentActivityPanel({
   collapsed,

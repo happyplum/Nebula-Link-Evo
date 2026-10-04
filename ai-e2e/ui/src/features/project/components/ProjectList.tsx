@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Button } from '@/shared/components';
+import { Button } from '@/shared/ui';
 import { useProjects } from '../store/projectApi.js';
 import { ProjectCard } from './ProjectCard.js';
 import { CreateProjectDialog } from './CreateProjectDialog.js';
