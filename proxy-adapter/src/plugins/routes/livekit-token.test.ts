@@ -22,7 +22,7 @@ describe('GET /api/v1/livekit-token (inline signing)', () => {
 
   it('signs a token inline and returns the full response shape', async () => {
     const Fastify = (await import('fastify')).default;
-    const livekitTokenRoute = (await import('../plugins/routes/api/livekit-token.js')).default;
+    const livekitTokenRoute = (await import('./livekit-token.js')).default;
     const app = Fastify();
     await app.register(livekitTokenRoute, { prefix: '/api/v1' });
     await app.ready();
@@ -46,7 +46,7 @@ describe('GET /api/v1/livekit-token (inline signing)', () => {
     delete process.env.LIVEKIT_API_SECRET;
 
     const Fastify = (await import('fastify')).default;
-    const livekitTokenRoute = (await import('../plugins/routes/api/livekit-token.js')).default;
+    const livekitTokenRoute = (await import('./livekit-token.js')).default;
     const app = Fastify();
     await app.register(livekitTokenRoute, { prefix: '/api/v1' });
     await app.ready();

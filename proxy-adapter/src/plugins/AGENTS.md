@@ -12,8 +12,9 @@ plugins/
     ├── health.ts               # GET /api/v1/health
     ├── capabilities.ts         # GET /api/v1/capabilities
     ├── browser-execution.ts    # /api/v1/browser-execution/*
-    ├── api/livekit-token.ts    # GET /api/v1/livekit-token
-    └── debug/                  # /debug/* arbitrated diagnostics and live streams
+    ├── livekit-token.ts        # GET /api/v1/livekit-token
+    ├── debug.ts                # /debug/* arbitrated diagnostics
+    └── debug-stream.ts         # GET /debug/api/stream
 ```
 
 ## Working Rules

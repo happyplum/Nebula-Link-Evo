@@ -6,21 +6,20 @@ Browser MCP gateway source — Playwright engine, tool providers, browser sessio
 
 ## Where To Look
 
-| Area             | Path            | Notes                                                          |
-| ---------------- | --------------- | -------------------------------------------------------------- |
-| Server bootstrap | `server.ts`     | Route registration, service init                               |
-| Services         | `services/`     | Browser session mgmt, action execution, logging, diagnostics   |
-| Plugins          | `plugins/`      | Fastify plugins and route modules                              |
-| Tool registry    | `tools/`        | ToolRegistry + browser-execution tools provider + MCP Server adapters |
-| Browser engine   | `browser-engine/` | Playwright Chromium lifecycle                                |
-| Browser client   | `browser-client.ts` | Shared browser page/context accessor                       |
-| Browser execution | `browser-execution/` | Session, lease, operation, artifact and event control plane |
-| MCP Server       | `mcp-server/`   | StreamableHTTP plugin + transport                              |
-| Errors           | `errors/`       | Typed error classes                                            |
-| Schemas          | `schemas/`      | TypeBox request/response schemas                               |
-| Types            | `types/`        | Fastify and node-sqlite type augmentations                     |
-| Utils            | `utils/`        | DB backup helper                                               |
-| Tests            | `__tests__/`    | Unit, integration, e2e                                         |
+| Area              | Path                                 | Notes                                                                 |
+| ----------------- | ------------------------------------ | --------------------------------------------------------------------- |
+| Server bootstrap  | `server.ts`                          | Route registration, service init                                      |
+| Services          | `services/`                          | Browser session mgmt, action execution, logging, diagnostics          |
+| Plugins           | `plugins/`                           | Fastify plugins and route modules                                     |
+| Tool registry     | `tools/`                             | ToolRegistry + browser-execution tools provider + MCP Server adapters |
+| Browser engine    | `browser-engine/`                    | Playwright Chromium lifecycle                                         |
+| Browser client    | `browser-client.ts`                  | Shared browser page/context accessor                                  |
+| Browser execution | `browser-execution/`                 | Session, lease, operation, artifact and event control plane           |
+| MCP Server        | `mcp-server/`                        | StreamableHTTP plugin + transport                                     |
+| Errors            | `errors/`                            | Typed error classes                                                   |
+| DB backup         | `db-backup.ts`                       | SQLite backup helper                                                  |
+| Types             | `types/`                             | Fastify and node-sqlite type augmentations                            |
+| Tests             | `__tests__/` + colocated `*.test.ts` | Unit, integration, e2e coverage                                       |
 
 ## Working Rules
 

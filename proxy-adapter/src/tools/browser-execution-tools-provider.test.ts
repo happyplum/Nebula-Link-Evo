@@ -10,11 +10,11 @@ import {
 import { BrowserExecutionError } from '../browser-execution/errors.js';
 import type { BrowserExecutionService } from '../browser-execution/service.js';
 import { BrowserClient } from '../browser-client.js';
-import { BrowserExecutionToolsProvider } from '../tools/providers/browser-execution-tools-provider.js';
-import type { GatewayTool } from '../tools/types.js';
+import { BrowserExecutionToolsProvider } from './browser-execution-tools-provider.js';
+import type { GatewayTool } from './types.js';
 import { BrowserTargetRefV1Schema } from '@nebula-link-evo/shared/types/browser-target';
-import { jsonPropertyToZod } from '../tools/adapters/json-schema-to-zod.js';
-import { registerGatewayToolsToMcpServer } from '../tools/adapters/mcp-server.js';
+import { jsonPropertyToZod } from './adapters/json-schema-to-zod.js';
+import { registerGatewayToolsToMcpServer } from './adapters/mcp-server.js';
 
 function requireTool(provider: BrowserExecutionToolsProvider, suffix: string): GatewayTool {
   const tool = provider.getTools().find((candidate) => candidate.name.endsWith(suffix));

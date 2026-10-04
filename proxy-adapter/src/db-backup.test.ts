@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { DatabaseBackup, initializeWithBackup } from '../utils/db-backup.js';
+import { DatabaseBackup, initializeWithBackup } from './db-backup.js';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 

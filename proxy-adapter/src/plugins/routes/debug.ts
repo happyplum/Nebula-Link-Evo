@@ -1,12 +1,12 @@
 import { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
-import { browserClient } from '../../../browser-client.js';
-import { screencastManager } from '../../../browser-engine/screencast.js';
-import { BrowserService } from '../../../browser-engine/services/browser-service.js';
-import { AppService } from '../../../services/index.js';
-import { DebugDatabaseManager } from '../../../debug-db.js';
-import debugStreamRoutes from './stream.js';
-import { debugEventHub } from '../../../services/debug-event-hub.js';
-import type { BrowserExecutionService } from '../../../browser-execution/service.js';
+import { browserClient } from '../../browser-client.js';
+import { screencastManager } from '../../browser-engine/screencast.js';
+import { BrowserService } from '../../browser-engine/services/browser-service.js';
+import { AppService } from '../../services/index.js';
+import { DebugDatabaseManager } from '../../debug-db.js';
+import debugStreamRoutes from './debug-stream.js';
+import { debugEventHub } from '../../services/debug-event-hub.js';
+import type { BrowserExecutionService } from '../../browser-execution/service.js';
 
 interface InteractionQuery {
   limit?: number;

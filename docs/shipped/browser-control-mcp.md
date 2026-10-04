@@ -3,7 +3,7 @@
 proxy-adapter 通过 MCP Server (StreamableHTTP) 只对外暴露受控 `browser-control.operation_execute/get/cancel`，是 Nebula 受控浏览器执行的网关。
 
 - [shipped] MCP Server 传输层：`proxy-adapter/src/mcp-server/`（index / transport），`POST /mcp` 提供无状态 JSON StreamableHTTP；可选 `GET /mcp` SSE 通道返回 405，使标准客户端回退到 POST 响应而不触发重连。
-- [shipped] ToolRegistry + browser-execution provider：`proxy-adapter/src/tools/`（registry / types / providers/browser-execution-tools-provider / adapters/mcp-server / adapters/json-schema-to-zod）。JSON Schema 编译为 strict validator，不支持的 schema 拒绝注册。
+- [shipped] ToolRegistry + browser-execution provider：`proxy-adapter/src/tools/`（registry / types / browser-execution-tools-provider / adapters/mcp-server / adapters/json-schema-to-zod）。JSON Schema 编译为 strict validator，不支持的 schema 拒绝注册。
 - [shipped] MCP target/locator Schema 直接引用 `shared/types/browser-target.ts` canonical TypeBox schema，原 provider `targetSchema/valueCandidate` 退出；七种 locator strategy、字段、长度与 strict 拒绝语义保持，与 Agent Task 使用同一结构源。
 - [shipped] 三个 MCP 操作输出直接引用 `shared/types/browser-operation-result.ts` canonical TypeBox `BrowserOperationRecordSchema`，Static 派生 record/status、artifact、resolved target 与 problem；旧 browser-execution type-only 重导出且 root 不构造 schema。原 provider `operationRecordSchema()`、shared 手写结果接口、chat 本地完整 record 与全量状态副本退出；chat 仅扩展 Vision binding。复用既有操作词表和 locator strategy，operation 不再接受任意字符串，其余 required/optional、SHA-256、size/snapshotId 与 target 整数约束保持；shared 契约矩阵、真实 JSON Schema→Zod/MCP SDK 与 Chromium E2E 为验收面。
 - [shipped] MCP 工具集仅 3 个受控原子工具 `browser-control.operation_execute/get/cancel`；旧 15 个 browser-control 工具、BrowserToolsProvider、ToolConsumer/exposeTo、action executor 和参数/结果适配层已物理删除。

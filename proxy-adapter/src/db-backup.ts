@@ -1,6 +1,6 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { createWorkerLogger } from '../services/logger.js';
+import { createWorkerLogger } from './services/logger.js';
 import type { Logger } from 'pino';
 
 const logger = createWorkerLogger('db-backup');

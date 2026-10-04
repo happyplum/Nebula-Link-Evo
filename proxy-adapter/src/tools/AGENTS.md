@@ -11,12 +11,10 @@ tools/
 ├── index.ts                                # Barrel export
 ├── registry.ts                             # ToolRegistry — provider lifecycle and inventory
 ├── types.ts                                # ToolProvider and GatewayTool types
-├── adapters/
-│   ├── mcp-server.ts                       # registerGatewayToolsToMcpServer — GatewayTool → McpServer
-│   ├── json-schema-to-zod.ts               # JSON Schema → Zod schema conversion
-│   └── index.ts                            # Adapter barrel
-└── providers/
-    └── browser-execution-tools-provider.ts # execute/get/cancel over BrowserExecutionService
+├── browser-execution-tools-provider.ts     # execute/get/cancel over BrowserExecutionService
+└── adapters/
+    ├── mcp-server.ts                       # registerGatewayToolsToMcpServer — GatewayTool → McpServer
+    └── json-schema-to-zod.ts               # JSON Schema → Zod schema conversion
 ```
 
 ## Providers

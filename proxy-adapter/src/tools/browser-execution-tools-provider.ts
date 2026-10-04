@@ -1,17 +1,14 @@
 import { BrowserOperationRecordSchema } from '@nebula-link-evo/shared/types/browser-operation-result';
 import { BrowserTargetRefV1Schema } from '@nebula-link-evo/shared/types/browser-target';
 import { EventEmitter } from 'node:events';
-import type { BrowserExecutionService } from '../../browser-execution/service.js';
-import {
-  BrowserExecutionError,
-  toBrowserExecutionProblem,
-} from '../../browser-execution/errors.js';
+import type { BrowserExecutionService } from '../browser-execution/service.js';
+import { BrowserExecutionError, toBrowserExecutionProblem } from '../browser-execution/errors.js';
 import type {
   BrowserExecutionCredentials,
   BrowserOperationRequestV1,
   ExecuteBrowserOperationInput,
-} from '../../browser-execution/types.js';
-import type { GatewayTool, ToolProvider, ToolProviderStatus } from '../types.js';
+} from '../browser-execution/types.js';
+import type { GatewayTool, ToolProvider, ToolProviderStatus } from './types.js';
 
 const DEFINITIONS: ReadonlyArray<{
   name: string;

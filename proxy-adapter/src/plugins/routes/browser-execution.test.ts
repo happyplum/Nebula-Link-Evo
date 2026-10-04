@@ -14,9 +14,9 @@ import type {
   BrowserTabSummary,
   ExecuteBrowserOperationInput,
 } from '../../browser-execution/types.js';
-import browserExecutionRoutes from '../../plugins/routes/browser-execution.js';
-import capabilitiesRoutes from '../../plugins/routes/capabilities.js';
-import debugRoutes from '../../plugins/routes/debug/index.js';
+import browserExecutionRoutes from './browser-execution.js';
+import capabilitiesRoutes from './capabilities.js';
+import debugRoutes from './debug.js';
 
 class RouteTestBrowser implements BrowserExecutionBrowser {
   readonly open = vi.fn(async () => undefined);
@@ -292,11 +292,23 @@ describe('browser execution HTTP contract', () => {
     );
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toContain('text/event-stream');
+    expect(response.headers.get('cache-control')).toBe('no-cache');
+    expect(response.headers.get('connection')).toBe('keep-alive');
+    expect(response.headers.get('x-accel-buffering')).toBe('no');
     if (!response.body) throw new Error('browser session SSE response must have a body');
     const reader = response.body.getReader();
     const firstChunk = await reader.read();
     controller.abort();
-    expect(new TextDecoder().decode(firstChunk.value)).toContain('event: browser_session.snapshot');
+    const snapshotFrame = new TextDecoder().decode(firstChunk.value);
+    expect(snapshotFrame.startsWith('event: browser_session.snapshot\nid: ')).toBe(true);
+    const snapshot = JSON.parse(snapshotFrame.split('\n')[2]?.slice('data: '.length) ?? '') as {
+      type: string;
+      seq: number;
+    };
+    expect(snapshot.type).toBe('browser_session.snapshot');
+    expect(snapshotFrame).toBe(
+      `event: ${snapshot.type}\nid: ${snapshot.seq}\ndata: ${JSON.stringify(snapshot)}\n\n`
+    );
   });
 
   it('returns browser_busy when direct debug mutation or capture would bypass a controlled session', async () => {

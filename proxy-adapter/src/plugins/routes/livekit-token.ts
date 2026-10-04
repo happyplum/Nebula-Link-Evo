@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { AccessToken } from 'livekit-server-sdk';
-import { BrowserService } from '../../../browser-engine/services/browser-service.js';
-import { isPublisherActive, startPublisher } from '../../../services/livekit-publisher.js';
+import { BrowserService } from '../../browser-engine/services/browser-service.js';
+import { isPublisherActive, startPublisher } from '../../services/livekit-publisher.js';
 
 // Env vars are read at call sites, not module level, to ensure dotenv has loaded.
 

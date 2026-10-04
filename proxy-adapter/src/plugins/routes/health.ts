@@ -1,7 +1,25 @@
 import { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
-import { HealthResponseSchema } from '../../schemas/health.js';
+import { Type } from '@sinclair/typebox';
 import { browserClient } from '../../browser-client.js';
 import { AppService } from '../../services/index.js';
+
+const MCPServerSchema = Type.Object({
+  name: Type.String(),
+  running: Type.Boolean(),
+  toolsCount: Type.Number(),
+});
+
+const HealthResponseSchema = Type.Object({
+  status: Type.String(),
+  mcp: Type.Object({
+    enabled: Type.Boolean(),
+    servers: Type.Array(MCPServerSchema),
+  }),
+  services: Type.Object({
+    playwright: Type.String(),
+  }),
+});
+
 const healthRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
   fastify.get(
     '/',

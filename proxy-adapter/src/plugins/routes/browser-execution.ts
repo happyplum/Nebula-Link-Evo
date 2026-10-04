@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
+import { encodeSseJsonFrame, SnapshotFirstSseWriter } from '@nebula-link-evo/shared';
 import { Type } from '@sinclair/typebox';
 import {
   BrowserExecutionError,
@@ -171,61 +172,44 @@ const browserExecutionRoutes: FastifyPluginAsync<BrowserExecutionRoutesOptions> 
       },
     },
     async (request, reply) => {
-      const bufferedEvents: BrowserSessionEventRecord[] = [];
-      let bootstrapComplete = false;
-      let lastSeq = 0;
-      const unsubscribe = browserExecutionService.subscribeSessionEvents(
-        request.params.sessionId,
-        (event) => {
-          try {
-            if (!bootstrapComplete) {
-              bufferedEvents.push(event);
-              return;
-            }
-            if (event.seq <= lastSeq) return;
-            writeSse(reply, event.type, event.seq, event);
-            lastSeq = event.seq;
-          } catch {
-            // The close handler releases the subscription.
-          }
-        }
-      );
-
-      try {
-        reply.raw.writeHead(200, {
+      const writer = new SnapshotFirstSseWriter<
+        Awaited<ReturnType<BrowserExecutionService['getSessionEventSnapshot']>>,
+        BrowserSessionEventRecord
+      >({
+        target: reply.raw,
+        lifecycleTargets: [request.raw],
+        statusCode: 200,
+        headers: {
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
           Connection: 'keep-alive',
           'X-Accel-Buffering': 'no',
-        });
-        const snapshot = await browserExecutionService.getSessionEventSnapshot(
-          request.params.sessionId
-        );
-        writeSse(reply, snapshot.type, snapshot.seq, snapshot);
-        lastSeq = snapshot.seq;
-        bootstrapComplete = true;
-        for (const event of bufferedEvents) {
-          if (event.seq <= lastSeq) continue;
-          writeSse(reply, event.type, event.seq, event);
-          lastSeq = event.seq;
-        }
-      } catch (error) {
-        unsubscribe();
-        throw error;
-      }
-
-      const heartbeat = setInterval(() => {
-        try {
-          reply.raw.write(': keepalive\n\n');
-        } catch {
-          clearInterval(heartbeat);
-        }
-      }, 15_000);
+        },
+        getSnapshot: () =>
+          browserExecutionService.getSessionEventSnapshot(request.params.sessionId),
+        getSnapshotSeq: (snapshot) => snapshot.seq,
+        getEventSeq: (event) => event.seq,
+        encodeSnapshot: (snapshot) =>
+          encodeSseJsonFrame({
+            event: snapshot.type,
+            id: String(snapshot.seq),
+            data: snapshot,
+          }),
+        encodeEvent: (event) =>
+          encodeSseJsonFrame({ event: event.type, id: String(event.seq), data: event }),
+        feed: {
+          subscribe: (listener) =>
+            browserExecutionService.subscribeSessionEvents(request.params.sessionId, listener),
+        },
+        maxBufferedEvents: null,
+        deduplicate: true,
+        heartbeat: { intervalMs: 15_000, createChunk: () => ': keepalive\n\n' },
+      });
+      await writer.start();
 
       return new Promise<void>((resolve) => {
         request.raw.on('close', () => {
-          clearInterval(heartbeat);
-          unsubscribe();
+          writer.close();
           resolve();
         });
       });
@@ -424,12 +408,3 @@ function idempotencyKeyFrom(
 }
 
 export default browserExecutionRoutes;
-
-function writeSse(
-  reply: { raw: { write: (chunk: string) => void } },
-  type: string,
-  seq: number,
-  data: unknown
-): void {
-  reply.raw.write(`event: ${type}\nid: ${seq}\ndata: ${JSON.stringify(data)}\n\n`);
-}
