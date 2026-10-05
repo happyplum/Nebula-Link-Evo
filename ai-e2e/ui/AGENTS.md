@@ -4,7 +4,7 @@
 
 - UI 只提供 semantic 项目首页、业务版本入口、Authoring 工作台和 Run 工作台。
 - 禁止恢复旧四步向导、旧项目 API、旧 Agent 浮窗或开发 fixtures 路由。
-- Agent 活动连接复用 `@nebula-link-evo/agent-stream-client`；局部 snapshot 带 endpoint/真实 job 或 run id，切换首 render 不显示旧内容。连接状态与立即重连只恢复观察，Run 不发命令、不解锁编辑。独立 semantic event invalidation 流保持原契约。
+- Agent 活动连接与独立 semantic event invalidation 流均复用 `@nebula-link-evo/agent-stream-client`（活动流使用 `useAgentStreamConnection`，semantic 业务事件流通过 `useSnapshotEventConnection` 接入并保留 snapshot 缓存替换与事件 invalidation 契约，支持共享指数退避）；局部 snapshot 带 endpoint/真实 job 或 run id，切换首 render 不显示旧内容。连接状态与立即重连只恢复观察，Run 不发命令、不解锁编辑。
 - 权威状态来自 v1 workspace/snapshot、持久 event-log 与 snapshot-first SSE；Chat 文本本身不是状态。
 - 公开 wire DTO 直接 `import type` 自 `../../src/contracts/` 的对应模块，不维护 UI DTO 副本，也不导入后端服务/仓储实现。`features/semantic/types.ts` 只保留 UI 布局和展示 helper。
 - JSON 请求统一使用 `shared/api/request.ts`；成功保留 `{ data, meta }`，错误保留 HTTP status 及 ApiProblem 的 code/message/retryable/correlationId/details，非 JSON 错误使用安全通用文案。

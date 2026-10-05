@@ -74,7 +74,7 @@ The UI keeps two thin fetch clients: `src/features/project/store/projectApi.ts`�
 
 Two independent snapshot-first streams feed the workbench (`src/features/semantic/`):
 
-- **`useSemanticEventStream`** — fetch-based SSE reader for `GET /api/v1/authoring-jobs/:id/events` (snapshot event `authoring.snapshot`) and `GET /api/v1/runs/:id/events` (snapshot event `run.snapshot`). A snapshot payload replaces the TanStack Query cache directly; any other event invalidates the query so it refetches from the authoritative snapshot. It reconnects after ~1s and reports `idle | connecting | live | reconnecting`.
+- **`useSemanticEventStream`** — thin wrapper over `useSnapshotEventConnection` from `@nebula-link-evo/agent-stream-client` for `GET /api/v1/authoring-jobs/:id/events` (snapshot event `authoring.snapshot`) and `GET /api/v1/runs/:id/events` (snapshot event `run.snapshot`). A defined snapshot payload replaces the TanStack Query cache directly; any other event (except `stream.error`) invalidates the query so it refetches from the authoritative snapshot. It reconnects with shared exponential backoff (1s→×2→30s cap) and reports `idle | connecting | live | reconnecting`.
 - **`useAgentActivityStream`** — `EventSource` on `GET /api/v1/{runs,authoring-jobs}/:id/activity` carrying the shared Agent Stream events `agent_stream.snapshot` / `agent_stream.event`. Events are reduced through `reduceAgentStream` from `@nebula-link-evo/agent-activity-ui` with `requestAnimationFrame` batching, and rendered by `AgentStreamRenderer` (compact density) inside `AgentActivityPanel`.
 
 There is no legacy typed-SSE hook (`src/hooks/use-sse.ts` and the `prd.analysis_*` / `exploration.*` / `execution.*` / `ai.diagnosis` event groups no longer exist).
