@@ -7,6 +7,8 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { up as migrateAgentActivity } from '../../migrations/020-agent-activity.js';
 import { AgentActivityRepository } from '../agent-activity-repository.js';
+import type { SemanticEventV1 } from '../../../contracts/semantic-control.js';
+import { SemanticControlEventHub } from '../../../services/semantic-control-event-hub.js';
 import errorHandlerPlugin from '../../../server/plugins/error-handler.js';
 import agentActivityRoutes from '../../../server/routes/agent-activity.js';
 
@@ -270,6 +272,118 @@ describe('AgentActivityRepository', () => {
     ]);
     expect(second).toHaveLength(1);
     expect(repository.snapshot(context).turns).toEqual([expect.objectContaining({ role: 'user' })]);
+  });
+
+  it('按独立 control/message 水位增量投影，并静默推进未映射事件', () => {
+    const { repository } = setupDatabase();
+    const context = { type: 'authoring' as const, id: 'job-1' };
+    const controlEvent = (seq: number, type: string): SemanticEventV1 => ({
+      id: `control-${seq}`,
+      seq,
+      schemaVersion: 1,
+      type,
+      entityType: 'decision',
+      entityId: 'decision-1',
+      payload: {},
+      occurredAt,
+    });
+    const message = {
+      seq: 1,
+      id: 'message-1',
+      role: 'user' as const,
+      content: '重新编排登录模块',
+      created_at: occurredAt,
+    };
+
+    repository.ingestControlEvent(context, controlEvent(1, 'decision.requested'));
+    repository.ingestAuthoringMessage(context, message);
+    repository.ingestControlEvent(context, controlEvent(1, 'decision.applied'));
+    repository.ingestControlEvent(context, controlEvent(2, 'unmapped.event'));
+    repository.ingestControlEvent(context, controlEvent(1, 'decision.requested'));
+    repository.ingestControlEvent(context, controlEvent(3, 'decision.applied'));
+
+    expect(repository.cursor(context, 'semantic-control:authoring')).toBe(3);
+    expect(repository.cursor(context, 'semantic-authoring-messages')).toBe(1);
+    expect(repository.listSynced(context).map((event) => event.seq)).toEqual([1, 2, 3]);
+    expect(repository.listSynced(context).map((event) => event.type)).toEqual([
+      'section.upsert',
+      'turn.upsert',
+      'section.upsert',
+    ]);
+  });
+
+  it('经 control hub 实时投影到 snapshot-first activity SSE', async () => {
+    const { repository } = setupDatabase();
+    const hub = new SemanticControlEventHub();
+    const context = { type: 'authoring' as const, id: 'job-1' };
+    const snapshot = repository.snapshot(context);
+    const app = Fastify({ logger: false });
+    apps.push(app);
+    await app.register(errorHandlerPlugin);
+    await app.register(agentActivityRoutes, {
+      prefix: '/api/v1',
+      repository,
+      eventHub: hub,
+    });
+    const serverUrl = await app.listen({ port: 0, host: '127.0.0.1' });
+    const controller = new AbortController();
+
+    try {
+      const response = await fetch(new URL('/api/v1/authoring-jobs/job-1/activity', serverUrl), {
+        signal: controller.signal,
+      });
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('Activity SSE response has no body');
+      const decoder = new TextDecoder();
+      const readFrame = async () => {
+        let frame = '';
+        while (!frame.endsWith('\n\n')) {
+          const chunk = await reader.read();
+          if (chunk.done) throw new Error('Activity SSE response ended before the next frame');
+          frame += decoder.decode(chunk.value, { stream: true });
+        }
+        return frame;
+      };
+
+      const snapshotFrame = await readFrame();
+      const snapshotDataLine = snapshotFrame.split('\n')[2] ?? '';
+      const receivedSnapshot = JSON.parse(snapshotDataLine.slice('data: '.length)) as {
+        schema: string;
+        streamId: string;
+        seq: number;
+        state: string;
+        turns: unknown[];
+      };
+      expect(snapshotFrame.split('\n').slice(0, 2)).toEqual([
+        'event: agent_stream.snapshot',
+        `id: ${snapshot.seq}`,
+      ]);
+      expect(receivedSnapshot).toMatchObject({
+        schema: snapshot.schema,
+        streamId: snapshot.streamId,
+        seq: snapshot.seq,
+        state: snapshot.state,
+        turns: snapshot.turns,
+      });
+      hub.publishControlEvent('authoring', context.id, {
+        id: 'control-1',
+        seq: 1,
+        schemaVersion: 1,
+        type: 'decision.requested',
+        entityType: 'decision',
+        entityId: 'decision-1',
+        payload: {},
+        occurredAt,
+      });
+      const projectedEvent = repository.listSynced(context)[0];
+
+      expect(response.status).toBe(200);
+      expect(await readFrame()).toBe(
+        `event: agent_stream.event\nid: ${projectedEvent?.seq}\ndata: ${JSON.stringify(projectedEvent)}\n\n`
+      );
+    } finally {
+      controller.abort();
+    }
   });
 });
 

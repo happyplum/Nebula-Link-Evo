@@ -11,6 +11,7 @@ import { BusinessVersionRepository } from '../../../database/repositories/busine
 import { SemanticQueryRepository } from '../../../database/repositories/semantic-query-repository.js';
 import { SemanticWorkflowRepository } from '../../../database/repositories/semantic-workflow-repository.js';
 import { SemanticQueryService } from '../../../services/semantic-query-service.js';
+import { SemanticControlEventHub } from '../../../services/semantic-control-event-hub.js';
 import errorHandlerPlugin from '../../plugins/error-handler.js';
 import semanticControlRoutes from '../semantic-control.js';
 import { functionalScriptFixture } from '../../../test-support/functional-script-fixture.js';
@@ -23,6 +24,7 @@ describe('semantic control read routes', () => {
   let app: FastifyInstance;
   let versions: BusinessVersionRepository;
   let workflows: SemanticWorkflowRepository;
+  let eventHub: SemanticControlEventHub;
   let fixture: ReturnType<typeof createFixture>;
 
   beforeEach(async () => {
@@ -35,13 +37,14 @@ describe('semantic control read routes', () => {
     up016(db);
     up017(db);
     up018(db);
+    eventHub = new SemanticControlEventHub();
     versions = new BusinessVersionRepository(db);
-    workflows = new SemanticWorkflowRepository(db);
+    workflows = new SemanticWorkflowRepository(db, eventHub);
     fixture = createFixture(db, versions);
     const service = new SemanticQueryService(new SemanticQueryRepository(db, versions));
     app = Fastify().withTypeProvider<TypeBoxTypeProvider>();
     app.register(errorHandlerPlugin);
-    app.register(semanticControlRoutes, { prefix: '/api/v1', service });
+    app.register(semanticControlRoutes, { prefix: '/api/v1', service, eventHub });
     await app.ready();
   });
 
@@ -291,6 +294,62 @@ describe('semantic control read routes', () => {
     }
     expect(authoringStream.frame).toBe(expectedFrame('authoring.snapshot', authoringSnapshot));
     expect(runStream.frame).toBe(expectedFrame('run.snapshot', runSnapshot));
+  });
+
+  it('streams subscribed control events in the existing CH4 frame format', async () => {
+    const authoring = workflows.createAuthoringJob({
+      projectId: 'project-1',
+      businessVersionId: fixture.versionId,
+      mode: 'repair',
+      idempotencyKey: 'subscribed-event',
+      stage: 'repair_script',
+      strategyVersion: 'semantic-v1',
+      sourceFingerprint: 'subscribed-event',
+      input: { scriptId: fixture.scriptId },
+      createdBy: 'user-1',
+    });
+    const serverUrl = await app.listen({ port: 0, host: '127.0.0.1' });
+    const controller = new AbortController();
+
+    try {
+      const response = await fetch(
+        new URL(`/api/v1/authoring-jobs/${authoring.id}/events`, serverUrl),
+        { signal: controller.signal }
+      );
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('Semantic SSE response has no body');
+      const decoder = new TextDecoder();
+      const readFrame = async () => {
+        let frame = '';
+        while (!frame.endsWith('\n\n')) {
+          const chunk = await reader.read();
+          if (chunk.done) throw new Error('Semantic SSE response ended before the next frame');
+          frame += decoder.decode(chunk.value, { stream: true });
+        }
+        return frame;
+      };
+      const snapshotFrame = await readFrame();
+      const event = {
+        id: 'live-authoring-event',
+        seq: 2,
+        schemaVersion: 1 as const,
+        type: 'authoring.state_changed',
+        entityType: 'authoring_job',
+        entityId: authoring.id,
+        stateVersion: 2,
+        payload: { to: 'running' },
+        occurredAt: new Date().toISOString(),
+      };
+      eventHub.publishControlEvent('authoring', authoring.id, event);
+
+      expect(response.status).toBe(200);
+      expect(snapshotFrame).toContain('event: authoring.snapshot\n');
+      expect(await readFrame()).toBe(
+        `id: ${event.seq}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`
+      );
+    } finally {
+      controller.abort();
+    }
   });
 });
 

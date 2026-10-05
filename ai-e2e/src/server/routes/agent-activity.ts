@@ -11,6 +11,7 @@ import type {
   ActivityContext,
   AgentActivityRepository,
 } from '../../database/repositories/agent-activity-repository.js';
+import type { SemanticControlEventHubPort } from '../../services/semantic-control-event-hub.js';
 import { ServiceError } from '../../services/service-error.js';
 import fp from '../plugins/fastify-plugin.js';
 
@@ -26,6 +27,7 @@ const QuerySchema = Type.Object(
 
 export interface AgentActivityRoutesOptions {
   repository?: AgentActivityRepository;
+  eventHub?: SemanticControlEventHubPort;
 }
 
 const agentActivityRoutes: FastifyPluginAsyncTypebox<AgentActivityRoutesOptions> = async (
@@ -63,7 +65,7 @@ const agentActivityRoutes: FastifyPluginAsyncTypebox<AgentActivityRoutesOptions>
       async (request, reply) => {
         const repository = requireRepository();
         const context = requireContext(repository, descriptor.type, request.params.contextId);
-        await openActivityStream(request, reply, repository, context);
+        await openActivityStream(request, reply, repository, context, options.eventHub);
       }
     );
   }
@@ -84,7 +86,8 @@ async function openActivityStream(
   request: FastifyRequest,
   reply: FastifyReply,
   repository: AgentActivityRepository,
-  context: ActivityContext
+  context: ActivityContext,
+  eventHub?: SemanticControlEventHubPort
 ): Promise<void> {
   reply.hijack();
   const writer = new SnapshotFirstSseWriter<AgentStreamSnapshotV1, AgentStreamEventV1>({
@@ -115,10 +118,26 @@ async function openActivityStream(
         fieldOrder: ['event', 'id', 'data'],
       }),
     feed: {
-      subscribe: (listener) => repository.subscribe(context, listener),
+      subscribe: (listener) => {
+        const unsubscribeActivity = repository.subscribe(context, listener);
+        const unsubscribeControl = eventHub?.subscribe(context.type, context.id, (message) => {
+          if (message.kind === 'control') {
+            repository.ingestControlEvent(context, message.event);
+          } else if (context.type === 'authoring') {
+            repository.ingestAuthoringMessage(context, message.message);
+          }
+        });
+        return () => {
+          unsubscribeActivity();
+          unsubscribeControl?.();
+        };
+      },
       poll: {
-        intervalMs: 500,
-        read: (afterSeq) => repository.list(context, afterSeq),
+        intervalMs: 5_000,
+        read: (afterSeq) => {
+          repository.syncControlEvents(context);
+          return repository.listSynced(context, afterSeq);
+        },
       },
     },
     maxBufferedEvents: null,

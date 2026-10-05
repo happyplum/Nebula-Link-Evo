@@ -10,8 +10,29 @@ import type {
 } from '@nebula-link-evo/shared/types/agent-task';
 import {
   isAgentStreamEvent,
+  isAgentStreamSnapshot,
   type AgentStreamEventV1,
+  type AgentStreamSnapshotV1,
 } from '@nebula-link-evo/shared/types/agent-stream';
+
+export interface AgentTaskActivityStreamHandlers {
+  onSnapshot(snapshot: AgentStreamSnapshotV1): void | Promise<void>;
+  onEvent(event: AgentStreamEventV1): void;
+}
+
+export interface AgentTaskActivitySource {
+  listTaskActivity(
+    taskId: string,
+    afterSeq?: number,
+    limit?: number,
+    signal?: AbortSignal
+  ): Promise<AgentStreamEventV1[]>;
+  streamTaskActivity(
+    taskId: string,
+    signal: AbortSignal,
+    handlers: AgentTaskActivityStreamHandlers
+  ): Promise<void>;
+}
 
 export interface AgentTaskClientPort {
   getCapabilities(): Promise<Record<string, unknown>>;
@@ -25,8 +46,14 @@ export interface AgentTaskClientPort {
   listTaskActivity?(
     taskId: string,
     afterSeq?: number,
-    limit?: number
+    limit?: number,
+    signal?: AbortSignal
   ): Promise<AgentStreamEventV1[]>;
+  streamTaskActivity?(
+    taskId: string,
+    signal: AbortSignal,
+    handlers: AgentTaskActivityStreamHandlers
+  ): Promise<void>;
   commandTask(taskId: string, input: AgentTaskCommandRequest): Promise<AgentTaskCommandResult>;
 }
 
@@ -39,6 +66,7 @@ const DEFAULT_BASE_URL = 'http://127.0.0.1:3001';
 
 export class AgentTaskClient implements AgentTaskClientPort {
   private readonly client: AxiosInstance;
+  private readonly baseUrl: string;
   private readonly timeoutMs: number;
 
   constructor(config: AgentTaskClientConfig = {}) {
@@ -52,8 +80,9 @@ export class AgentTaskClient implements AgentTaskClientPort {
       );
     }
     this.timeoutMs = config.timeoutMs ?? 30_000;
+    this.baseUrl = configured.replace(/\/$/, '');
     this.client = axios.create({
-      baseURL: configured.replace(/\/$/, ''),
+      baseURL: this.baseUrl,
       headers: { 'Content-Type': 'application/json' },
     });
   }
@@ -92,10 +121,16 @@ export class AgentTaskClient implements AgentTaskClientPort {
     );
   }
 
-  async listTaskActivity(taskId: string, afterSeq = 0, limit = 500): Promise<AgentStreamEventV1[]> {
+  async listTaskActivity(
+    taskId: string,
+    afterSeq = 0,
+    limit = 500,
+    signal?: AbortSignal
+  ): Promise<AgentStreamEventV1[]> {
     const result = await this.request<unknown>(() =>
       this.client.get(`/api/v1/agent-tasks/${encodeURIComponent(taskId)}/activity-log`, {
         timeout: this.timeoutMs,
+        signal,
         headers: headers(),
         params: { afterSeq, limit },
       })
@@ -109,6 +144,56 @@ export class AgentTaskClient implements AgentTaskClientPort {
       );
     }
     return result;
+  }
+
+  async streamTaskActivity(
+    taskId: string,
+    signal: AbortSignal,
+    handlers: AgentTaskActivityStreamHandlers
+  ): Promise<void> {
+    let response: Response;
+    try {
+      response = await fetch(
+        `${this.baseUrl}/api/v1/agent-tasks/${encodeURIComponent(taskId)}/activity`,
+        {
+          headers: headers({ Accept: 'text/event-stream' }),
+          signal,
+        }
+      );
+    } catch (error) {
+      if (signal.aborted) return;
+      throw mapError(error);
+    }
+
+    if (!response.ok) {
+      throw new IntegrationClientError(
+        'ai-chat-service',
+        `http_${response.status}`,
+        'ai-chat-service Agent activity stream request failed',
+        response.status >= 500,
+        response.status
+      );
+    }
+    if (!response.headers.get('content-type')?.toLowerCase().startsWith('text/event-stream')) {
+      throw new IntegrationClientError(
+        'ai-chat-service',
+        'invalid_response',
+        'ai-chat-service returned an invalid Agent activity stream content type',
+        false,
+        response.status
+      );
+    }
+    if (!response.body) {
+      throw new IntegrationClientError(
+        'ai-chat-service',
+        'invalid_response',
+        'ai-chat-service returned an empty Agent activity stream',
+        false,
+        response.status
+      );
+    }
+
+    await readAgentActivityStream(response.body, signal, handlers);
   }
 
   async commandTask(
@@ -130,6 +215,91 @@ export class AgentTaskClient implements AgentTaskClientPort {
       throw mapError(error);
     }
   }
+}
+
+async function readAgentActivityStream(
+  body: ReadableStream<Uint8Array>,
+  signal: AbortSignal,
+  handlers: AgentTaskActivityStreamHandlers
+): Promise<void> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  try {
+    while (!signal.aborted) {
+      const { done, value } = await reader.read();
+      buffer += decoder.decode(value, { stream: !done });
+
+      while (true) {
+        const delimiter = /\r?\n\r?\n/u.exec(buffer);
+        if (!delimiter || delimiter.index === undefined) break;
+        const frame = buffer.slice(0, delimiter.index);
+        buffer = buffer.slice(delimiter.index + delimiter[0].length);
+        await dispatchAgentActivityFrame(frame, handlers);
+        if (signal.aborted) return;
+      }
+
+      if (done) {
+        if (buffer.trim()) await dispatchAgentActivityFrame(buffer, handlers);
+        return;
+      }
+    }
+  } catch (error) {
+    if (signal.aborted) return;
+    throw error;
+  } finally {
+    if (signal.aborted) await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
+  }
+}
+
+async function dispatchAgentActivityFrame(
+  frame: string,
+  handlers: AgentTaskActivityStreamHandlers
+): Promise<void> {
+  let eventName = '';
+  const data: string[] = [];
+  for (const line of frame.split(/\r?\n/u)) {
+    if (!line || line.startsWith(':')) continue;
+    const separator = line.indexOf(':');
+    const field = separator < 0 ? line : line.slice(0, separator);
+    const value = separator < 0 ? '' : line.slice(separator + 1).replace(/^ /u, '');
+    if (field === 'event') eventName = value;
+    if (field === 'data') data.push(value);
+  }
+  if (data.length === 0) return;
+
+  let payload: unknown;
+  try {
+    payload = JSON.parse(data.join('\n')) as unknown;
+  } catch (error) {
+    throw new IntegrationClientError(
+      'ai-chat-service',
+      'invalid_response',
+      'ai-chat-service returned invalid Agent activity stream JSON',
+      false,
+      undefined,
+      undefined,
+      undefined,
+      { cause: error }
+    );
+  }
+
+  if (eventName === 'agent_stream.snapshot' && isAgentStreamSnapshot(payload)) {
+    await handlers.onSnapshot(payload);
+    return;
+  }
+  if (eventName === 'agent_stream.event' && isAgentStreamEvent(payload)) {
+    handlers.onEvent(payload);
+    return;
+  }
+  throw new IntegrationClientError(
+    'ai-chat-service',
+    'invalid_response',
+    `ai-chat-service returned an invalid ${eventName || 'unnamed'} Agent activity frame`,
+    false
+  );
 }
 
 function headers(extra: Record<string, string> = {}): Record<string, string> {

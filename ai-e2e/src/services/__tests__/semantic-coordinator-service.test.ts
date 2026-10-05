@@ -17,7 +17,6 @@ import { up as up016 } from '../../database/migrations/016-semantic-workflow-fou
 import { up as up017 } from '../../database/migrations/017-semantic-evidence-integration-foundation.js';
 import { up as up018 } from '../../database/migrations/018-authoring-amendments.js';
 import { AuthoringAmendmentRepository } from '../../database/repositories/authoring-amendment-repository.js';
-import type { AgentActivityRepository } from '../../database/repositories/agent-activity-repository.js';
 import { BusinessVersionRepository } from '../../database/repositories/business-version-repository.js';
 import { SemanticAssetRepository } from '../../database/repositories/semantic-asset-repository.js';
 import { SemanticCoordinatorRepository } from '../../database/repositories/semantic-coordinator-repository.js';
@@ -47,10 +46,6 @@ import {
 } from '../semantic-coordinator-service.js';
 import { SemanticAuthoringCandidateService } from '../semantic-authoring-candidate-service.js';
 import { SemanticAuthoringService } from '../semantic-authoring-service.js';
-import {
-  AGENT_STREAM_EVENT_SCHEMA,
-  type AgentStreamEventV1,
-} from '@nebula-link-evo/shared/types/agent-stream';
 
 const HASH_A = 'a'.repeat(64);
 const HASH_B = 'b'.repeat(64);
@@ -1254,13 +1249,10 @@ describe('SemanticCoordinatorService', () => {
       mimeType: 'image/png',
       bytes: Buffer.from('image'),
     };
-    const projectedActivities: AgentStreamEventV1[] = [];
-    const activity: Pick<AgentActivityRepository, 'cursor' | 'append'> = {
-      cursor: () => 0,
-      append: (_context, _taskId, event) => {
-        projectedActivities.push(event);
-        return event;
-      },
+    const activityIngester = {
+      start: vi.fn(),
+      stop: vi.fn(),
+      onceIdle: vi.fn(async () => undefined),
     };
     const coordinator = new SemanticCoordinatorService({
       repository: new SemanticCoordinatorRepository(db),
@@ -1269,7 +1261,7 @@ describe('SemanticCoordinatorService', () => {
       runs,
       agentTasks: agent,
       browser,
-      activity: activity as AgentActivityRepository,
+      activityIngester,
       secretStore: new MemoryCoordinatorSecretStore(),
       artifactStore: { persist: async () => ({ storageKey: 'unused', sizeBytes: 0 }) } as never,
     });
@@ -1316,11 +1308,15 @@ describe('SemanticCoordinatorService', () => {
         .prepare('SELECT sensitivity, redaction_status FROM artifact_objects WHERE id IS NOT NULL')
         .get()
     ).toEqual({ sensitivity: 'restricted', redaction_status: 'pending' });
-    expect(projectedActivities).toEqual([
-      expect.objectContaining({
-        section: expect.objectContaining({ type: 'activity', kind: 'agent' }),
-      }),
-    ]);
+    expect(activityIngester.start).toHaveBeenCalledWith(
+      'agent-task-1',
+      { type: 'run', id: created.id },
+      expect.objectContaining({ pageTaskId: expect.any(String), todoId: expect.any(String) })
+    );
+    expect(activityIngester.stop).toHaveBeenCalledWith('agent-task-1', {
+      type: 'run',
+      id: created.id,
+    });
   });
 
   it('把重启遗留的 dispatching outbox 恢复为可幂等重放', () => {
@@ -1761,11 +1757,11 @@ describe('SemanticCoordinatorService', () => {
           } satisfies AgentTaskEventRecord,
         ];
       });
-      const activity: Pick<AgentActivityRepository, 'cursor' | 'append'> = {
-        cursor: vi.fn(() => 0),
-        append: vi.fn((_context, _taskId, event) => event),
+      const activityIngester = {
+        start: vi.fn(),
+        stop: vi.fn(),
+        onceIdle: vi.fn(async () => undefined),
       };
-      const listTaskActivity = vi.spyOn(agent, 'listTaskActivity');
       const commandTask = vi.spyOn(agent, 'commandTask');
       const coordinator = new SemanticCoordinatorService({
         repository: new SemanticCoordinatorRepository(db),
@@ -1774,7 +1770,7 @@ describe('SemanticCoordinatorService', () => {
         runs,
         agentTasks: Object.assign(agent, { listTaskEvents }),
         browser: new FakeBrowserClient(),
-        activity: activity as AgentActivityRepository,
+        activityIngester,
         secretStore: new MemoryCoordinatorSecretStore(),
         authoringCandidates: new SemanticAuthoringCandidateService(
           new SemanticQueryRepository(db, versions),
@@ -1803,13 +1799,12 @@ describe('SemanticCoordinatorService', () => {
       expect(link[contextType === 'run' ? 'authoring_task_id' : 'page_task_id']).toBeNull();
       expect(listTaskEvents).toHaveBeenCalledWith('agent-task-1', 3, 500);
       expect(listTaskEvents).toHaveBeenCalledWith('agent-task-1', 6, 500);
-      expect(listTaskActivity).toHaveBeenCalledWith('agent-task-1', 0, 500);
-      expect(activity.append).toHaveBeenCalledWith(
-        context,
+      expect(activityIngester.start).toHaveBeenCalledWith(
         'agent-task-1',
-        expect.any(Object),
+        context,
         contextType === 'run' ? { ...association, todoId: expect.any(String) } : association
       );
+      expect(activityIngester.stop).not.toHaveBeenCalledWith('agent-task-1', context);
       const task = await agent.getTask('agent-task-1');
       for (const [index, action] of ['pause', 'resume', 'cancel'].entries()) {
         if (action === 'resume') task.eventSeq = 8;
@@ -1881,6 +1876,7 @@ describe('SemanticCoordinatorService', () => {
         result_sha256: hashValue(output),
         terminal_at: expect.any(String),
       });
+      expect(activityIngester.stop).toHaveBeenCalledWith('agent-task-1', context);
       expect(agent.commands).toEqual(['pause', 'resume', 'cancel']);
     }
   );
@@ -2830,30 +2826,6 @@ class FakeAgentTaskClient implements AgentTaskClientPort {
     const task = this.tasks.get(taskId);
     if (!task) throw new Error('task not created');
     return task;
-  }
-
-  async listTaskActivity(taskId: string, afterSeq = 0) {
-    if (afterSeq >= 1) return [];
-    return [
-      {
-        schema: AGENT_STREAM_EVENT_SCHEMA,
-        streamId: taskId,
-        turnId: `task:${taskId}`,
-        sectionId: `task:${taskId}:agent`,
-        seq: 1,
-        occurredAt: new Date().toISOString(),
-        type: 'section.upsert' as const,
-        section: {
-          type: 'activity' as const,
-          sectionId: `task:${taskId}:agent`,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          kind: 'agent' as const,
-          state: 'completed' as const,
-          title: '页面 Agent 已完成',
-        },
-      },
-    ];
   }
 
   async commandTask(

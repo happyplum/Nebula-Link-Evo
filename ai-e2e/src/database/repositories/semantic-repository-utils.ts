@@ -16,6 +16,8 @@ export interface DatabaseLike {
 
 export type SupportedDatabase = Database.Database | DatabaseSync;
 
+const afterCommitCallbacks = new WeakMap<DatabaseLike, Array<() => void>>();
+
 export function stableStringify(value: unknown): string {
   return JSON.stringify(sortJson(value));
 }
@@ -44,19 +46,31 @@ export function collectArtifactObjectIds(value: unknown): string[] {
 }
 
 export function inImmediateTransaction<T>(db: DatabaseLike, work: () => T): T {
-  db.exec('BEGIN IMMEDIATE');
+  const callbacks: Array<() => void> = [];
+  afterCommitCallbacks.set(db, callbacks);
+  let result: T;
   try {
-    const result = work();
+    db.exec('BEGIN IMMEDIATE');
+    result = work();
     db.exec('COMMIT');
-    return result;
   } catch (error) {
     try {
       db.exec('ROLLBACK');
     } catch {
       // The original failure remains authoritative.
     }
+    afterCommitCallbacks.delete(db);
     throw error;
   }
+  afterCommitCallbacks.delete(db);
+  for (const callback of callbacks) callback();
+  return result;
+}
+
+export function afterImmediateTransactionCommit(db: DatabaseLike, callback: () => void): void {
+  const callbacks = afterCommitCallbacks.get(db);
+  if (callbacks) callbacks.push(callback);
+  else callback();
 }
 
 function sortJson(value: unknown): unknown {

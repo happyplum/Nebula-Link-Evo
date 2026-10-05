@@ -3,6 +3,8 @@ import type { FormalRunCreationResult, RunCommandResult } from '../../contracts/
 import { DomainError } from '../../services/service-error.js';
 import { randomUUID } from 'node:crypto';
 import { SemanticPolicyRepository } from './semantic-policy-repository.js';
+import type { SemanticControlEventHubPort } from '../../services/semantic-control-event-hub.js';
+import { publishPersistedSemanticControlEvent } from './semantic-control-event-utils.js';
 import {
   evaluateSideEffectPolicy,
   collectSideEffects,
@@ -97,7 +99,8 @@ export class SemanticRunControlRepository {
     database: SupportedDatabase,
     private readonly workflows: SemanticWorkflowRepository,
     private readonly evidence: SemanticEvidenceRepository,
-    policy: SemanticPolicyRepository = new SemanticPolicyRepository(database)
+    policy: SemanticPolicyRepository = new SemanticPolicyRepository(database),
+    private readonly eventHub?: SemanticControlEventHubPort
   ) {
     this.db = database as unknown as DatabaseLike;
     this.policy = policy;
@@ -1481,6 +1484,7 @@ export class SemanticRunControlRepository {
         now,
         now
       );
+    publishPersistedSemanticControlEvent(this.db, this.eventHub, 'run', runId, seq);
   }
 }
 

@@ -18,7 +18,9 @@ import { SemanticRunService } from '../services/semantic-run-service.js';
 import { AgentTaskClient } from '../infrastructure/agent-task-client.js';
 import { SemanticBrowserClient } from '../infrastructure/semantic-browser-client.js';
 import { SemanticCoordinatorService } from '../services/semantic-coordinator-service.js';
+import { AgentActivityIngester } from '../services/agent-activity-ingester.js';
 import { SemanticAuthoringCandidateService } from '../services/semantic-authoring-candidate-service.js';
+import type { SemanticControlEventHubPort } from '../services/semantic-control-event-hub.js';
 import semanticProjectRoutes from './routes/semantic-projects.js';
 import { SemanticProjectService } from '../services/semantic-project-service.js';
 import { SemanticEvidenceRetentionService } from '../services/semantic-evidence-retention-service.js';
@@ -60,6 +62,7 @@ export interface ServerOptions {
   semanticAuthoringService?: SemanticAuthoringService;
   semanticRunService?: SemanticRunService;
   agentActivityRepository?: AgentActivityRepository;
+  semanticControlEventHub?: SemanticControlEventHubPort;
 }
 
 export function createServer(options: Partial<ServerOptions> = {}) {
@@ -84,6 +87,7 @@ export function createServer(options: Partial<ServerOptions> = {}) {
   app.register(semanticControlRoutes, {
     prefix: '/api/v1',
     service: options.semanticQueryService,
+    eventHub: options.semanticControlEventHub,
   });
   app.register(semanticAuthoringRoutes, {
     prefix: '/api/v1',
@@ -97,6 +101,7 @@ export function createServer(options: Partial<ServerOptions> = {}) {
   app.register(agentActivityRoutes, {
     prefix: '/api/v1',
     repository: options.agentActivityRepository,
+    eventHub: options.semanticControlEventHub,
   });
 
   // Serve built frontend (ui/dist/) at /ai-e2e/ prefix
@@ -188,14 +193,17 @@ export async function start() {
     databaseManager.getBusinessVersionRepo()
   );
   const semanticRunService = new SemanticRunService(databaseManager.getSemanticRunControlRepo());
+  const agentTasks = new AgentTaskClient();
+  const agentActivityRepository = databaseManager.getAgentActivityRepo();
+  const activityIngester = new AgentActivityIngester(agentTasks, agentActivityRepository);
   const semanticCoordinator = new SemanticCoordinatorService({
     repository: databaseManager.getSemanticCoordinatorRepo(),
     workflows: databaseManager.getSemanticWorkflowRepo(),
     evidence: databaseManager.getSemanticEvidenceRepo(),
     runs: databaseManager.getSemanticRunControlRepo(),
-    agentTasks: new AgentTaskClient(),
+    agentTasks,
     browser: new SemanticBrowserClient(),
-    activity: databaseManager.getAgentActivityRepo(),
+    activityIngester,
     authoringCandidates: new SemanticAuthoringCandidateService(
       databaseManager.getSemanticQueryRepo(),
       databaseManager.getSemanticAssetRepo(),
@@ -208,7 +216,8 @@ export async function start() {
     semanticQueryService,
     semanticAuthoringService,
     semanticRunService,
-    agentActivityRepository: databaseManager.getAgentActivityRepo(),
+    agentActivityRepository,
+    semanticControlEventHub: databaseManager.getSemanticControlEventHub(),
   });
   try {
     const evidenceRetention = new SemanticEvidenceRetentionService({
@@ -275,7 +284,10 @@ function startCoordinatorLoop(app: AppServer, coordinator: SemanticCoordinatorSe
   };
   const timer = setInterval(() => void run(), intervalMs);
   timer.unref();
-  app.addHook('onClose', async () => clearInterval(timer));
+  app.addHook('onClose', async () => {
+    clearInterval(timer);
+    await coordinator.close();
+  });
   void run();
 }
 

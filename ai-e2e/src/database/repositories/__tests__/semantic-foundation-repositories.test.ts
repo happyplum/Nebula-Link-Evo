@@ -14,6 +14,7 @@ import { SemanticEvidenceRepository } from '../semantic-evidence-repository.js';
 import { hashValue } from '../semantic-repository-utils.js';
 import { SemanticWorkflowRepository } from '../semantic-workflow-repository.js';
 import { functionalScriptFixture } from '../../../test-support/functional-script-fixture.js';
+import type { SemanticControlEventHubPort } from '../../../services/semantic-control-event-hub.js';
 
 const HASH_A = 'a'.repeat(64);
 const HASH_B = 'b'.repeat(64);
@@ -41,6 +42,40 @@ describe('semantic v1 data foundation repositories', () => {
   });
 
   afterEach(() => db.close());
+
+  it('publishes the persisted authoring row through the injected hub after commit', () => {
+    const fixture = createFixture(db, versions);
+    const published: Array<{ type: string; contextId: string; seq: number; eventId: string }> = [];
+    const eventHub: SemanticControlEventHubPort = {
+      publishControlEvent(type, contextId, event) {
+        db.exec('BEGIN IMMEDIATE');
+        db.exec('ROLLBACK');
+        published.push({ type, contextId, seq: event.seq, eventId: event.id });
+      },
+      publishAuthoringMessage() {},
+      subscribe() {
+        return () => {};
+      },
+    };
+    const workflow = new SemanticWorkflowRepository(db, eventHub);
+    const job = workflow.createAuthoringJob({
+      projectId: 'project-1',
+      businessVersionId: fixture.versionId,
+      mode: 'repair',
+      idempotencyKey: 'event-hub-commit',
+      stage: 'repair_script',
+      strategyVersion: 'semantic-v1',
+      sourceFingerprint: 'event-hub-commit',
+      input: { scriptId: fixture.scriptId },
+      createdBy: 'main-agent',
+    });
+
+    expect(published).toHaveLength(1);
+    expect(published[0]).toMatchObject({ type: 'authoring', contextId: job.id, seq: 1 });
+    expect(
+      db.prepare('SELECT id FROM authoring_events WHERE job_id = ? AND seq = ?').get(job.id, 1)
+    ).toEqual({ id: published[0]?.eventId });
+  });
 
   it('activates a verified executable revision and invalidates the exact version validation atomically', () => {
     const fixture = createFixture(db, versions);

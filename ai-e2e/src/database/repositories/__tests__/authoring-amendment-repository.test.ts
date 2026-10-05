@@ -12,6 +12,7 @@ import { SemanticAssetRepository } from '../semantic-asset-repository.js';
 import { hashValue } from '../semantic-repository-utils.js';
 import { SemanticWorkflowRepository } from '../semantic-workflow-repository.js';
 import { functionalScriptFixture } from '../../../test-support/functional-script-fixture.js';
+import type { SemanticControlEventHubPort } from '../../../services/semantic-control-event-hub.js';
 
 const HASH_A = 'a'.repeat(64);
 
@@ -39,6 +40,46 @@ describe('authoring amendment repository', () => {
   });
 
   afterEach(() => db.close());
+
+  it('publishes the inserted chat row only after its transaction commits', () => {
+    const published: Array<{
+      contextId: string;
+      seq: number;
+      id: string;
+      role: string;
+      content: string;
+      created_at: string;
+    }> = [];
+    const eventHub: SemanticControlEventHubPort = {
+      publishControlEvent() {},
+      publishAuthoringMessage(contextId, message) {
+        db.exec('BEGIN IMMEDIATE');
+        db.exec('ROLLBACK');
+        published.push({ contextId, ...message });
+      },
+      subscribe() {
+        return () => {};
+      },
+    };
+    amendments = new AuthoringAmendmentRepository(db, assets, undefined, eventHub);
+    const thread = createThread(amendments, fixture);
+    const result = amendments.addChatMessage({
+      threadId: thread.id,
+      role: 'user',
+      content: '修复失败的提交步骤',
+      createdBy: 'user-1',
+    });
+
+    expect(published).toHaveLength(1);
+    expect(published[0]).toMatchObject({
+      contextId: fixture.jobId,
+      id: result.id,
+      role: 'user',
+      content: '修复失败的提交步骤',
+    });
+    expect(published[0]?.seq).toBeGreaterThan(0);
+    expect(published[0]?.created_at).toBeTruthy();
+  });
 
   it.each(sideEffectPolicyCases)(
     'Authoring matrix $environment $kind => $result',

@@ -12,10 +12,7 @@ import type {
 } from '../database/repositories/semantic-evidence-repository.js';
 import { hashValue } from '../database/repositories/semantic-repository-utils.js';
 import type { SemanticRunControlRepository } from '../database/repositories/semantic-run-control-repository.js';
-import type {
-  AgentActivityRepository,
-  ActivityContext,
-} from '../database/repositories/agent-activity-repository.js';
+import type { ActivityContext } from '../database/repositories/agent-activity-repository.js';
 import type { SemanticWorkflowRepository } from '../database/repositories/semantic-workflow-repository.js';
 import type {
   AgentTaskView,
@@ -38,6 +35,7 @@ import {
 import { buildRunTaskProjection } from './semantic-task-projection.js';
 import { SemanticAuthoringCandidateService } from './semantic-authoring-candidate-service.js';
 import { completionFromTask, desiredAgentCommand } from './semantic-agent-task-completion.js';
+import type { AgentActivityIngesterPort } from './agent-activity-ingester.js';
 
 export { desiredAgentCommand };
 
@@ -54,7 +52,7 @@ export interface SemanticCoordinatorOptions {
   runs: SemanticRunControlRepository;
   agentTasks: AgentTaskClientPort;
   browser: SemanticBrowserClientPort;
-  activity?: AgentActivityRepository;
+  activityIngester?: AgentActivityIngesterPort;
   artifactStore?: SemanticArtifactStore;
   secretStore?: CoordinatorSecretStorePort;
   authoringCandidates?: SemanticAuthoringCandidateService;
@@ -90,6 +88,7 @@ export class SemanticCoordinatorService {
   private readonly now: () => Date;
   private initialized = false;
   private ticking = false;
+  private closed = false;
   private capabilitySnapshot?: { checkedAt: number; sha256: string };
 
   constructor(private readonly options: SemanticCoordinatorOptions) {
@@ -106,6 +105,12 @@ export class SemanticCoordinatorService {
       this.options.logger?.warn({ recoveredOutbox }, '已恢复协调器重启前的 dispatching outbox');
     }
     return { recoveredOutbox };
+  }
+
+  async close(): Promise<void> {
+    this.closed = true;
+    this.options.activityIngester?.stop();
+    await this.options.activityIngester?.onceIdle();
   }
 
   async tick(): Promise<{ action: string }> {
@@ -1194,13 +1199,23 @@ export class SemanticCoordinatorService {
     todoId?: string;
   }): Promise<{ task: AgentTaskView; queuedCommand: ReturnType<typeof desiredAgentCommand> }> {
     const eventSeq = await this.reconcileAgentTaskEvents(
-      input.context,
       input.externalId,
-      { ...input.association, ...(input.todoId ? { todoId: input.todoId } : {}) },
       input.afterSeq
     );
     const task = await this.options.agentTasks.getTask(input.externalId);
     const terminal = TERMINAL_AGENT_STATES.has(task.status);
+    if (this.options.activityIngester) {
+      if (this.closed) {
+        this.options.activityIngester.stop(task.taskId, input.context);
+      } else {
+        this.options.activityIngester.start(
+          task.taskId,
+          input.context,
+          { ...input.association, ...(input.todoId ? { todoId: input.todoId } : {}) }
+        );
+        if (terminal) this.options.activityIngester.stop(task.taskId, input.context);
+      }
+    }
     this.options.evidence.linkExternalTask({
       context: input.context,
       ...input.association,
@@ -1231,16 +1246,9 @@ export class SemanticCoordinatorService {
   }
 
   private async reconcileAgentTaskEvents(
-    context: ActivityContext,
     taskId: string,
-    links: { pageTaskId?: string; authoringTaskId?: string; todoId?: string },
     afterSeq = 0
   ): Promise<number> {
-    if (this.options.activity && this.options.agentTasks.listTaskActivity) {
-      const cursor = this.options.activity.cursor(context, taskId);
-      const activity = await this.options.agentTasks.listTaskActivity(taskId, cursor, 500);
-      for (const event of activity) this.options.activity.append(context, taskId, event, links);
-    }
     if (!this.options.agentTasks.listTaskEvents) return afterSeq;
     const events = await this.options.agentTasks.listTaskEvents(taskId, afterSeq, 500);
     return events.at(-1)?.seq ?? afterSeq;

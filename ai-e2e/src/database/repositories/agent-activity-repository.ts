@@ -10,6 +10,8 @@ import {
   type AgentStreamSectionV1,
   type AgentStreamSnapshotV1,
 } from '@nebula-link-evo/shared';
+import type { SemanticEventV1 } from '../../contracts/semantic-control.js';
+import type { SemanticAuthoringMessage } from '../../services/semantic-control-event-hub.js';
 
 export type ActivityContext = { type: 'authoring' | 'run'; id: string };
 
@@ -176,18 +178,38 @@ export class AgentActivityRepository {
     );
     for (const item of pending) {
       if (item.kind === 'message') {
-        this.append(context, item.sourceId, projectAuthoringMessage(context, item.row));
+        if (context.type === 'authoring') this.ingestAuthoringMessage(context, item.row);
         continue;
       }
-      const projected = projectControlEvent(context, item.row);
-      if (projected) this.append(context, item.sourceId, projected);
-      else this.advanceCursor(context, item.sourceId, item.sourceSeq, item.occurredAt);
+      this.ingestControlEventRow(context, item.sourceId, item.row);
     }
     return pending.length;
   }
 
+  ingestControlEvent(context: ActivityContext, event: SemanticEventV1): void {
+    const sourceId = `${CONTROL_SOURCE_PREFIX}:${context.type}`;
+    this.ingestControlEventRow(context, sourceId, {
+      seq: event.seq,
+      type: event.type,
+      entity_type: event.entityType,
+      entity_id: event.entityId,
+      payload_json: JSON.stringify(event.payload),
+      occurred_at: event.occurredAt,
+    });
+  }
+
+  ingestAuthoringMessage(context: ActivityContext, message: SemanticAuthoringMessage): void {
+    if (context.type !== 'authoring') return;
+    if (message.seq <= this.cursor(context, MESSAGE_SOURCE_ID)) return;
+    this.append(context, MESSAGE_SOURCE_ID, projectAuthoringMessage(context, message));
+  }
+
   list(context: ActivityContext, afterSeq = 0, limit = 500): AgentStreamEventV1[] {
     this.syncControlEvents(context);
+    return this.listSynced(context, afterSeq, limit);
+  }
+
+  listSynced(context: ActivityContext, afterSeq = 0, limit = 500): AgentStreamEventV1[] {
     return (
       this.db
         .prepare(
@@ -251,6 +273,17 @@ export class AgentActivityRepository {
            updated_at = excluded.updated_at`
       )
       .run(context.type, context.id, sourceTaskId, sourceSeq, occurredAt);
+  }
+
+  private ingestControlEventRow(
+    context: ActivityContext,
+    sourceId: string,
+    row: ControlEventRow
+  ): void {
+    if (row.seq <= this.cursor(context, sourceId)) return;
+    const projected = projectControlEvent(context, row);
+    if (projected) this.append(context, sourceId, projected);
+    else this.advanceCursor(context, sourceId, row.seq, row.occurred_at);
   }
 }
 

@@ -43,6 +43,7 @@ import { SemanticRunControlRepository } from './repositories/semantic-run-contro
 import { SemanticCoordinatorRepository } from './repositories/semantic-coordinator-repository.js';
 import { SemanticProjectRepository } from './repositories/semantic-project-repository.js';
 import { AgentActivityRepository } from './repositories/agent-activity-repository.js';
+import { SemanticControlEventHub } from '../services/semantic-control-event-hub.js';
 
 export function generateId(): string {
   return randomBytes(8).toString('hex');
@@ -63,6 +64,7 @@ class DatabaseManager {
   private semanticRunControlRepo: SemanticRunControlRepository | null = null;
   private semanticCoordinatorRepo: SemanticCoordinatorRepository | null = null;
   private agentActivityRepo: AgentActivityRepository | null = null;
+  private readonly semanticControlEventHub = new SemanticControlEventHub();
 
   private constructor() {}
 
@@ -122,17 +124,30 @@ class DatabaseManager {
     if (!this.db) throw new Error('Database not initialized');
     this.semanticProjectRepo = new SemanticProjectRepository(this.db);
     this.businessVersionRepo = new BusinessVersionRepository(this.db);
-    this.semanticAssetRepo = new SemanticAssetRepository(this.db);
-    this.semanticWorkflowRepo = new SemanticWorkflowRepository(this.db);
+    this.semanticAssetRepo = new SemanticAssetRepository(this.db, this.semanticControlEventHub);
+    this.semanticWorkflowRepo = new SemanticWorkflowRepository(
+      this.db,
+      this.semanticControlEventHub
+    );
     this.semanticEvidenceRepo = new SemanticEvidenceRepository(this.db);
     this.semanticQueryRepo = new SemanticQueryRepository(this.db, this.businessVersionRepo);
-    this.authoringAmendmentRepo = new AuthoringAmendmentRepository(this.db, this.semanticAssetRepo);
+    this.authoringAmendmentRepo = new AuthoringAmendmentRepository(
+      this.db,
+      this.semanticAssetRepo,
+      undefined,
+      this.semanticControlEventHub
+    );
     this.semanticRunControlRepo = new SemanticRunControlRepository(
       this.db,
       this.semanticWorkflowRepo,
-      this.semanticEvidenceRepo
+      this.semanticEvidenceRepo,
+      undefined,
+      this.semanticControlEventHub
     );
-    this.semanticCoordinatorRepo = new SemanticCoordinatorRepository(this.db);
+    this.semanticCoordinatorRepo = new SemanticCoordinatorRepository(
+      this.db,
+      this.semanticControlEventHub
+    );
     this.agentActivityRepo = new AgentActivityRepository(this.db);
   }
 
@@ -198,6 +213,9 @@ class DatabaseManager {
   getAgentActivityRepo(): AgentActivityRepository {
     if (!this.agentActivityRepo) throw new Error('Database not initialized');
     return this.agentActivityRepo;
+  }
+  getSemanticControlEventHub(): SemanticControlEventHub {
+    return this.semanticControlEventHub;
   }
 }
 

@@ -1,5 +1,7 @@
 import { SemanticPolicyRepository } from './semantic-policy-repository.js';
 import { randomUUID } from 'node:crypto';
+import type { SemanticControlEventHubPort } from '../../services/semantic-control-event-hub.js';
+import { publishPersistedSemanticControlEvent } from './semantic-control-event-utils.js';
 import {
   inImmediateTransaction,
   stableStringify,
@@ -93,7 +95,10 @@ export class SemanticCoordinatorRepository {
   private readonly db: DatabaseLike;
   private readonly policy: SemanticPolicyRepository;
 
-  constructor(database: SupportedDatabase) {
+  constructor(
+    database: SupportedDatabase,
+    private readonly eventHub?: SemanticControlEventHubPort
+  ) {
     this.db = database as unknown as DatabaseLike;
     this.policy = new SemanticPolicyRepository(database);
   }
@@ -183,6 +188,7 @@ export class SemanticCoordinatorRepository {
               now,
               now
             );
+          publishPersistedSemanticControlEvent(this.db, this.eventHub, 'run', job.contextId, seq);
         }
       }
     });
@@ -432,6 +438,7 @@ export class SemanticCoordinatorRepository {
            VALUES (?, ?, ?, 1, 'run.coordinator_paused', 'run', ?, ?, ?, ?, ?)`
         )
         .run(randomUUID(), runId, seq, runId, nextVersion, stableStringify(reason), now, now);
+      publishPersistedSemanticControlEvent(this.db, this.eventHub, 'run', runId, seq);
     });
   }
 }

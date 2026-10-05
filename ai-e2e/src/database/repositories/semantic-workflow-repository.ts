@@ -3,6 +3,8 @@ import type { RunLifecycle, SemanticRunResult } from '../../contracts/semantic-r
 import type { AuthoringLifecycle, AuthoringJobResult } from '../../contracts/semantic-authoring.js';
 import { DomainError } from '../../services/service-error.js';
 import { randomUUID } from 'node:crypto';
+import type { SemanticControlEventHubPort } from '../../services/semantic-control-event-hub.js';
+import { publishPersistedSemanticControlEvent } from './semantic-control-event-utils.js';
 import {
   assertNoInlineSecrets,
   hashValue,
@@ -173,7 +175,10 @@ export class SemanticWorkflowRepository {
   private readonly db: DatabaseLike;
   readonly policy: SemanticPolicyRepository;
 
-  constructor(db: SupportedDatabase) {
+  constructor(
+    db: SupportedDatabase,
+    private readonly eventHub?: SemanticControlEventHubPort
+  ) {
     this.db = db as unknown as DatabaseLike;
     this.policy = new SemanticPolicyRepository(db);
   }
@@ -1495,6 +1500,7 @@ export class SemanticWorkflowRepository {
         now,
         now
       );
+    publishPersistedSemanticControlEvent(this.db, this.eventHub, 'run', runId, seq);
   }
 
   private insertAuthoringEvent(
@@ -1530,6 +1536,7 @@ export class SemanticWorkflowRepository {
         now,
         now
       );
+    publishPersistedSemanticControlEvent(this.db, this.eventHub, 'authoring', jobId, seq);
   }
 
   private bumpAuthoringEvent(

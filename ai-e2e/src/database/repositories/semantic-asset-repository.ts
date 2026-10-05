@@ -1,6 +1,8 @@
 import type { SemanticAssetType } from '../../contracts/semantic-control.js';
 import { DomainError } from '../../services/service-error.js';
+import type { SemanticControlEventHubPort } from '../../services/semantic-control-event-hub.js';
 import { randomUUID } from 'node:crypto';
+import { publishPersistedSemanticControlEvent } from './semantic-control-event-utils.js';
 import {
   assertNoInlineSecrets,
   collectArtifactObjectIds,
@@ -13,7 +15,6 @@ import {
 } from './semantic-repository-utils.js';
 import { validateFunctionalScriptV1 } from '../../validation/functional-script-validator.js';
 import { assertScenarioCallSupport } from './business-version-repository.js';
-
 
 export type SemanticActorType = 'user' | 'main_agent' | 'child_agent' | 'system' | 'migration';
 
@@ -208,7 +209,10 @@ function identityOrder(assetType: CreateSemanticAssetIdentityParams['assetType']
 export class SemanticAssetRepository {
   private readonly db: DatabaseLike;
 
-  constructor(db: SupportedDatabase) {
+  constructor(
+    db: SupportedDatabase,
+    private readonly eventHub?: SemanticControlEventHubPort
+  ) {
     this.db = db as unknown as DatabaseLike;
   }
 
@@ -850,5 +854,6 @@ export class SemanticAssetRepository {
         now,
         now
       );
+    publishPersistedSemanticControlEvent(this.db, this.eventHub, 'authoring', jobId, seq);
   }
 }

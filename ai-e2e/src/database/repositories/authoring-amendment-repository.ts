@@ -2,6 +2,10 @@ import { SemanticPolicyRepository } from './semantic-policy-repository.js';
 import type { SemanticAssetType } from '../../contracts/semantic-control.js';
 import { DomainError } from '../../services/service-error.js';
 import type {
+  SemanticAuthoringMessage,
+  SemanticControlEventHubPort,
+} from '../../services/semantic-control-event-hub.js';
+import type {
   AmendmentState,
   AmendmentCategory,
   AmendmentRecord,
@@ -13,6 +17,7 @@ import type {
   SemanticDependencyEdge,
 } from './semantic-asset-repository.js';
 import {
+  afterImmediateTransactionCommit,
   assertNoInlineSecrets,
   hashValue,
   inImmediateTransaction,
@@ -21,6 +26,7 @@ import {
   type DatabaseLike,
   type SupportedDatabase,
 } from './semantic-repository-utils.js';
+import { publishPersistedSemanticControlEvent } from './semantic-control-event-utils.js';
 
 export interface AuthoringContextScope {
   currentUrl: string;
@@ -109,7 +115,8 @@ export class AuthoringAmendmentRepository {
   constructor(
     database: SupportedDatabase,
     private readonly assets: SemanticAssetRepository,
-    readonly policy: SemanticPolicyRepository = new SemanticPolicyRepository(database)
+    readonly policy: SemanticPolicyRepository = new SemanticPolicyRepository(database),
+    private readonly eventHub?: SemanticControlEventHubPort
   ) {
     this.db = database as unknown as DatabaseLike;
   }
@@ -440,6 +447,17 @@ export class AuthoringAmendmentRepository {
           params.createdBy,
           new Date().toISOString()
         );
+      if (this.eventHub) {
+        const message = this.db
+          .prepare(
+            `SELECT rowid AS seq, id, role, content, created_at
+             FROM authoring_chat_messages WHERE id = ?`
+          )
+          .get(id) as SemanticAuthoringMessage;
+        afterImmediateTransactionCommit(this.db, () =>
+          this.eventHub?.publishAuthoringMessage(thread.job_id, message)
+        );
+      }
       return { id };
     });
   }
@@ -1244,6 +1262,7 @@ export class AuthoringAmendmentRepository {
         now,
         now
       );
+    publishPersistedSemanticControlEvent(this.db, this.eventHub, 'authoring', jobId, seq);
   }
 }
 

@@ -5,6 +5,10 @@ import { SnapshotFirstSseWriter, encodeSseJsonFrame } from '@nebula-link-evo/sha
 import type { SemanticQueryService } from '../../services/semantic-query-service.js';
 import { ServiceError } from '../../services/service-error.js';
 import type { ApiSuccess, SemanticEventV1 } from '../../contracts/semantic-control.js';
+import type {
+  SemanticControlEventHubPort,
+  SemanticControlEventType,
+} from '../../services/semantic-control-event-hub.js';
 import {
   ApiProblemSchema,
   SemanticAssetTypeSchema,
@@ -54,6 +58,7 @@ const ErrorResponses = {
 
 export interface SemanticControlRoutesOptions {
   service?: SemanticQueryService;
+  eventHub?: SemanticControlEventHubPort;
 }
 
 const semanticControlRoutes: FastifyPluginAsyncTypebox<SemanticControlRoutesOptions> = async (
@@ -201,8 +206,15 @@ const semanticControlRoutes: FastifyPluginAsyncTypebox<SemanticControlRoutesOpti
     async (request, reply) => {
       const service = requireService();
       const snapshot = service.getAuthoringSnapshot(request.params.jobId);
-      await openSnapshotFirstStream(request, reply, 'authoring.snapshot', snapshot, (afterSeq) =>
-        service.listAuthoringEvents(request.params.jobId, afterSeq, 500)
+      await openSnapshotFirstStream(
+        request,
+        reply,
+        'authoring.snapshot',
+        snapshot,
+        'authoring',
+        request.params.jobId,
+        (afterSeq) => service.listAuthoringEvents(request.params.jobId, afterSeq, 500),
+        options.eventHub
       );
     }
   );
@@ -252,8 +264,15 @@ const semanticControlRoutes: FastifyPluginAsyncTypebox<SemanticControlRoutesOpti
     async (request, reply) => {
       const service = requireService();
       const snapshot = service.getRunSnapshot(request.params.runId);
-      await openSnapshotFirstStream(request, reply, 'run.snapshot', snapshot, (afterSeq) =>
-        service.listRunEvents(request.params.runId, afterSeq, 500)
+      await openSnapshotFirstStream(
+        request,
+        reply,
+        'run.snapshot',
+        snapshot,
+        'run',
+        request.params.runId,
+        (afterSeq) => service.listRunEvents(request.params.runId, afterSeq, 500),
+        options.eventHub
       );
     }
   );
@@ -334,7 +353,10 @@ async function openSnapshotFirstStream<T extends Snapshot>(
   reply: FastifyReply,
   snapshotEvent: 'authoring.snapshot' | 'run.snapshot',
   snapshot: T,
-  listEvents: (afterSeq: number) => SemanticEventV1[]
+  type: SemanticControlEventType,
+  contextId: string,
+  listEvents: (afterSeq: number) => SemanticEventV1[],
+  eventHub?: SemanticControlEventHubPort
 ): Promise<void> {
   reply.hijack();
   const writer = new SnapshotFirstSseWriter<T, SemanticEventV1>({
@@ -371,8 +393,16 @@ async function openSnapshotFirstStream<T extends Snapshot>(
         fieldOrder: SNAPSHOT_FIRST_FRAME_ORDER,
       }),
     feed: {
+      ...(eventHub
+        ? {
+            subscribe: (listener: (event: SemanticEventV1) => void) =>
+              eventHub.subscribe(type, contextId, (message) => {
+                if (message.kind === 'control') listener(message.event);
+              }),
+          }
+        : {}),
       poll: {
-        intervalMs: 500,
+        intervalMs: 5_000,
         read: listEvents,
         encodeError: (error) =>
           encodeSseJsonFrame({
@@ -386,7 +416,7 @@ async function openSnapshotFirstStream<T extends Snapshot>(
       },
     },
     maxBufferedEvents: null,
-    deduplicate: false,
+    deduplicate: true,
     heartbeat: { intervalMs: 15_000, createChunk: () => ': heartbeat\n\n' },
   });
   await writer.start();
