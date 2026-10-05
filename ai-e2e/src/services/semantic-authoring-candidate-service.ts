@@ -39,6 +39,8 @@ const CANDIDATE_ASSET_TYPES = new Set<SemanticAssetType>([
   'module_requirement',
 ]);
 
+const AUTHORING_PROPOSAL_OPERATIONS = ['create', 'revise'] as const;
+
 export interface AuthoringCandidateResult {
   status: 'candidate_ready' | 'no_change' | 'blocked';
   summary: string;
@@ -138,7 +140,21 @@ export class SemanticAuthoringCandidateService {
             type: 'string',
             enum: [...AMENDMENT_CATEGORIES],
           },
-          proposalsJson: { type: 'string' },
+          proposalsJson: {
+            type: 'string',
+            description: JSON.stringify({
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  operation: {
+                    type: 'string',
+                    enum: [...AUTHORING_PROPOSAL_OPERATIONS],
+                  },
+                },
+              },
+            }),
+          },
           validationPlanJson: { type: 'string' },
           potentialSideEffectsJson: { type: 'string' },
         },
@@ -712,8 +728,12 @@ function validateProposal(
   queries: SemanticQueryRepository
 ): ValidatedProposal {
   const proposal = objectValue(value);
-  const operation = (stringValue(proposal.operation) ?? 'revise') as 'create' | 'revise';
-  if (!['create', 'revise'].includes(operation)) throw new Error('proposal.operation 无效');
+  const operation = AUTHORING_PROPOSAL_OPERATIONS.find(
+    (candidate) => candidate === (stringValue(proposal.operation) ?? 'revise')
+  );
+  if (!operation) {
+    throw new Error('proposal.operation 无效');
+  }
   if (operation === 'create' && task.type !== 'ingest_prd') {
     throw new Error('只有 PRD bootstrap 任务可以创建新资产');
   }

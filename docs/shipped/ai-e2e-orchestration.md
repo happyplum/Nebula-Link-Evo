@@ -7,6 +7,7 @@
 - [shipped] 业务版本与 semantic 资产图：页面→业务模块→功能模块→多个功能脚本→场景 DAG，稳定身份、不可变修订、copy 引用重建和验证失效。BusinessVersion 仓储直接复用 `semantic-repository-utils.ts` 的 `stableStringify/hashValue/sha256`，私有 `stableStringify/canonicalize/hashValue/sha256` 已退出；递归对象键排序、数组原序、幂等请求哈希及 copy 引用改写后的持久 JSON 字节和哈希保持既有行为。
 - [shipped] Authoring `bootstrap/recheck/repair`：持久 job/task/attempt/event、结构化 amendment、Chat scope、同页/跨 URL 影响审批、安全边界排队、真实浏览器验证与原子激活。
 - [shipped] PRD 多资产 bootstrap：`ingest_prd` Agent 可在单个结构化 amendment 中创建页面、业务模块、功能模块、功能脚本和场景的稳定身份与 draft revision；候选期不进入 workspace，但可在原上下文一次应用其跨模块新建资产，已有资产修订仍受当前模块与基础修订锁约束。审批与真实浏览器验证成功后新建与修订候选一起原子激活。repair/recheck 保持 revision-only，不能借此扩展资产身份。
+- [shipped] Authoring Agent request 保持 `proposalsJson` 为 string；其模型可见 schema description 描述 proposal item 的 `operation.enum`（`create`/`revise`），并与候选 validator 共用同一操作常量，Agent Task DTO 不变。
 - [shipped] Authoring 作业控制：`pause/resume/cancel` 使用幂等命令与 `If-Match` 乐观并发；协调器在原子操作安全边界向 Agent task 传播控制，重复扫描已存在命令时继续派发 outbox 而不饥饿，暂停保留会话，取消收敛 attempt/job 并关闭自有会话。
 - [shipped] Authoring 验证接入 ai-chat-service Vision v2；candidate 构建时冻结实际脚本/声明/验证步骤与 deployment，script ID 去重、每个一次（不展开 scenario repeat）。Run/Authoring 共用 `src/policy/side-effect-policy.ts` evaluator；`SemanticPolicyRepository` 唯一创建、查询、失效 017 evaluation/grant，旧 Run evaluator、evidence policy API、分散 grant SQL 与 Authoring 假 grant 退出。
 - [shipped] 正式 Run：exact valid version/deployment/scenario 冻结 plan/TODO/DAG/变量，支持 start/pause/resume/cancel、依赖跳过、可恢复中断、结果未知决策和 close-browser。

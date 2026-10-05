@@ -1413,6 +1413,22 @@ describe('SemanticCoordinatorService', () => {
 
     for (let index = 0; index < 16; index += 1) await coordinator.tick();
 
+    expect(agent.createdRequest?.responseSchema).toMatchObject({
+      properties: {
+        proposalsJson: {
+          type: 'string',
+          description: JSON.stringify({
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                operation: { type: 'string', enum: ['create', 'revise'] },
+              },
+            },
+          }),
+        },
+      },
+    });
     expect(db.prepare('SELECT lifecycle FROM authoring_jobs WHERE id = ?').get(job.id)).toEqual({
       lifecycle: 'paused',
     });

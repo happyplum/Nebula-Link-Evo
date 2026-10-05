@@ -58,6 +58,7 @@ UI 路由：`/`、`/semantic/:projectId`、`/semantic/:projectId/authoring/:vers
 - 项目输入可包含入口 pathname；部署只保存无凭据 origin 与 `basePath`，工作台深链接和起始页面不得把 `/debug/` 等入口路径折叠成 `/`。
 - 模块/场景切换不导航浏览器；显式定位使用冻结 URL 的 navigation-only task。
 - Agent 输出必须转成结构化候选；同页其他模块与跨 URL 修改必须审批，stale/错误模块候选不可应用。
+- Authoring Agent request 的 `responseSchema.properties.proposalsJson` 保持 `string`，其模型可见 `description` 嵌入 proposal item JSON Schema 并列出 `operation.enum` 的 `create/revise`；候选 validator 与该 enum 共用唯一操作常量。
 - 只有 bootstrap `ingest_prd` Agent task 可提出稳定新资产；新身份在候选期没有 current revision，工作区不可见，但整版本 bootstrap 候选可在原上下文中一次应用跨模块新建资产；已有资产修订仍必须命中当前模块与基础修订锁。验证成功后新建与修订候选一起原子激活。repair/recheck 不得创建资产。
 - 功能脚本 v1 页面入口只读取 `pageScope.entryPageId`，不兼容旧根字段；正式运行必须冻结该页面的 current revision。
 - 候选浏览器验证成功后记录 executable revision verification；只有全部当前脚本/场景覆盖时版本才为 `valid`。
