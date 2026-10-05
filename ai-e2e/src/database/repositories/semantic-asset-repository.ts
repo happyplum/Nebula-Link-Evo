@@ -340,7 +340,8 @@ export class SemanticAssetRepository {
     }
     if (params.validationErrors !== undefined) assertNoInlineSecrets(params.validationErrors);
     if (params.assetType === 'page_definition') {
-      if (!params.pageSignatureSha256) throw new DomainError('validation_error', 'pageSignatureSha256 is required');
+      if (!params.pageSignatureSha256)
+        throw new DomainError('validation_error', 'pageSignatureSha256 is required');
       requireSha256(params.pageSignatureSha256, 'pageSignatureSha256');
     }
     const spec = REVISION_SPECS[params.assetType];
@@ -350,7 +351,10 @@ export class SemanticAssetRepository {
         .prepare(`SELECT business_version_id FROM ${spec.assetTable} WHERE id = ?`)
         .get(params.assetId) as { business_version_id: string } | undefined;
       if (!asset || asset.business_version_id !== params.businessVersionId) {
-        throw new DomainError('not_found', `${params.assetType} does not belong to the business version`);
+        throw new DomainError(
+          'not_found',
+          `${params.assetType} does not belong to the business version`
+        );
       }
       const payloadJson = stableStringify(params.payload);
       const contentSha256 = sha256(payloadJson);
@@ -378,7 +382,8 @@ export class SemanticAssetRepository {
             revisionNo: Number(existing.revision_no),
             lifecycle: existing.lifecycle as SemanticRevisionRecord['lifecycle'],
             contentSha256,
-            validationStatus: existing.validation_status as SemanticRevisionRecord['validationStatus'],
+            validationStatus:
+              existing.validation_status as SemanticRevisionRecord['validationStatus'],
           };
         }
       }
@@ -511,8 +516,7 @@ export class SemanticAssetRepository {
            FROM ${spec.table} WHERE id = ?`
         )
         .get(params.assetRevisionId) as
-        | { business_version_id: string; asset_id: string }
-        | undefined;
+        { business_version_id: string; asset_id: string } | undefined;
       if (
         !revision ||
         revision.business_version_id !== params.businessVersionId ||
@@ -747,8 +751,7 @@ export class SemanticAssetRepository {
            WHERE business_version_id = ? AND deployment_revision_id = ?`
         )
         .get(params.businessVersionId, params.deploymentRevisionId) as
-        | { is_default: number | bigint }
-        | undefined;
+        { is_default: number | bigint } | undefined;
       if (!binding) throw new Error('Deployment revision is not bound to the business version');
       if (this.db.prepare('SELECT id FROM business_version_validations WHERE id = ?').get(id)) {
         throw new Error('Business version validation id already exists');
@@ -830,7 +833,8 @@ export class SemanticAssetRepository {
          WHERE id = ? AND business_version_id = ?`
       )
       .get(jobId, businessVersionId) as { next_event_seq: number | bigint } | undefined;
-    if (!job) throw new DomainError('not_found', 'Authoring job does not belong to the business version');
+    if (!job)
+      throw new DomainError('not_found', 'Authoring job does not belong to the business version');
     const seq = Number(job.next_event_seq);
     this.db
       .prepare('UPDATE authoring_jobs SET next_event_seq = next_event_seq + 1 WHERE id = ?')

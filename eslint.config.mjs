@@ -134,6 +134,16 @@ export default tseslint.config(
     },
   },
   {
+    files: ['ai-e2e/ui/src/**/*.ts', 'ai-e2e/ui/src/**/*.tsx'],
+    languageOptions: {
+      parserOptions: {
+        projectService: false,
+        project: ['./ai-e2e/ui/tsconfig.lint.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+  },
+  {
     files: ['**/*.mjs'],
     languageOptions: {
       globals: {

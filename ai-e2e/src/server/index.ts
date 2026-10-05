@@ -121,8 +121,8 @@ export function createServer(options: Partial<ServerOptions> = {}) {
     }
     const correlationHeader = request.headers['x-correlation-id'];
     const correlationId = Array.isArray(correlationHeader)
-      ? correlationHeader[0] ?? request.id
-      : correlationHeader ?? request.id;
+      ? (correlationHeader[0] ?? request.id)
+      : (correlationHeader ?? request.id);
     reply.code(404).send({
       code: 'not_found',
       message: `No route for ${request.method} ${request.url}`,

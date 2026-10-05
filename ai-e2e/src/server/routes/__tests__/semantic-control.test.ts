@@ -235,14 +235,18 @@ describe('semantic control read routes', () => {
       todos: [],
       dependencies: [],
     });
-    const authoringSnapshot = (await app.inject({
-      method: 'GET',
-      url: `/api/v1/authoring-jobs/${authoring.id}`,
-    })).json().data as { seq: number; stateVersion: number; [key: string]: unknown };
-    const runSnapshot = (await app.inject({
-      method: 'GET',
-      url: `/api/v1/runs/${run.id}`,
-    })).json().data as { seq: number; stateVersion: number; [key: string]: unknown };
+    const authoringSnapshot = (
+      await app.inject({
+        method: 'GET',
+        url: `/api/v1/authoring-jobs/${authoring.id}`,
+      })
+    ).json().data as { seq: number; stateVersion: number; [key: string]: unknown };
+    const runSnapshot = (
+      await app.inject({
+        method: 'GET',
+        url: `/api/v1/runs/${run.id}`,
+      })
+    ).json().data as { seq: number; stateVersion: number; [key: string]: unknown };
     const serverUrl = await app.listen({ port: 0, host: '127.0.0.1' });
 
     const readFirstFrame = async (path: string) => {
@@ -263,9 +267,7 @@ describe('semantic control read routes', () => {
         controller.abort();
       }
     };
-    const authoringStream = await readFirstFrame(
-      `/api/v1/authoring-jobs/${authoring.id}/events`
-    );
+    const authoringStream = await readFirstFrame(`/api/v1/authoring-jobs/${authoring.id}/events`);
     const runStream = await readFirstFrame(`/api/v1/runs/${run.id}/events`);
     const expectedFrame = (
       event: 'authoring.snapshot' | 'run.snapshot',

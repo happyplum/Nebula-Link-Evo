@@ -2,7 +2,7 @@ import { act, cleanup, renderHook } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useSemanticEventStream, type StreamState } from './useSemanticEventStream.js';
+import { useSemanticEventStream } from './useSemanticEventStream.js';
 
 interface TestStream {
   readonly readable: ReadableStream<Uint8Array>;
@@ -181,7 +181,7 @@ describe('useSemanticEventStream', () => {
     const queryKey = ['semantic-authoring', 'job-1'];
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
 
-    const { result } = renderHook(
+    renderHook(
       () =>
         useSemanticEventStream({
           enabled: true,
@@ -207,7 +207,7 @@ describe('useSemanticEventStream', () => {
     const queryKey = ['semantic-run', 'run-1'];
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
 
-    const { result } = renderHook(
+    renderHook(
       () =>
         useSemanticEventStream({
           enabled: true,
