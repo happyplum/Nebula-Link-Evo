@@ -65,7 +65,21 @@ const agentActivityRoutes: FastifyPluginAsyncTypebox<AgentActivityRoutesOptions>
       async (request, reply) => {
         const repository = requireRepository();
         const context = requireContext(repository, descriptor.type, request.params.contextId);
-        await openActivityStream(request, reply, repository, context, options.eventHub);
+        await openActivityStream(request, reply, {
+          repository,
+          context,
+          eventHub: options.eventHub,
+          reportProjectionFailure() {
+            fastify.log.warn(
+              {
+                code: 'agent_activity_projection_failed',
+                contextType: context.type,
+                contextId: context.id,
+              },
+              'Agent activity projection failed; will retry'
+            );
+          },
+        });
       }
     );
   }
@@ -85,10 +99,26 @@ function requireContext(
 async function openActivityStream(
   request: FastifyRequest,
   reply: FastifyReply,
-  repository: AgentActivityRepository,
-  context: ActivityContext,
-  eventHub?: SemanticControlEventHubPort
+  options: {
+    readonly repository: AgentActivityRepository;
+    readonly context: ActivityContext;
+    readonly eventHub?: SemanticControlEventHubPort;
+    readonly reportProjectionFailure: () => void;
+  }
 ): Promise<void> {
+  const { repository, context, eventHub } = options;
+  const syncControlEvents = (): void => {
+    try {
+      repository.syncControlEvents(context);
+    } catch {
+      try {
+        options.reportProjectionFailure();
+      } catch {
+        return;
+      }
+    }
+  };
+
   reply.hijack();
   const writer = new SnapshotFirstSseWriter<AgentStreamSnapshotV1, AgentStreamEventV1>({
     target: reply.raw,
@@ -120,13 +150,9 @@ async function openActivityStream(
     feed: {
       subscribe: (listener) => {
         const unsubscribeActivity = repository.subscribe(context, listener);
-        const unsubscribeControl = eventHub?.subscribe(context.type, context.id, (message) => {
-          if (message.kind === 'control') {
-            repository.ingestControlEvent(context, message.event);
-          } else if (context.type === 'authoring') {
-            repository.ingestAuthoringMessage(context, message.message);
-          }
-        });
+        const unsubscribeControl = eventHub?.subscribe(context.type, context.id, () =>
+          syncControlEvents()
+        );
         return () => {
           unsubscribeActivity();
           unsubscribeControl?.();
@@ -135,7 +161,7 @@ async function openActivityStream(
       poll: {
         intervalMs: 5_000,
         read: (afterSeq) => {
-          repository.syncControlEvents(context);
+          syncControlEvents();
           return repository.listSynced(context, afterSeq);
         },
       },

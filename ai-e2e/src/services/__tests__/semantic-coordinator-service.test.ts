@@ -21,7 +21,12 @@ import { BusinessVersionRepository } from '../../database/repositories/business-
 import { SemanticAssetRepository } from '../../database/repositories/semantic-asset-repository.js';
 import { SemanticCoordinatorRepository } from '../../database/repositories/semantic-coordinator-repository.js';
 import { SemanticEvidenceRepository } from '../../database/repositories/semantic-evidence-repository.js';
-import { hashValue } from '../../database/repositories/semantic-repository-utils.js';
+import {
+  bindAfterCommitErrorReporter,
+  hashValue,
+  unbindAfterCommitErrorReporter,
+  type AfterCommitCallbackFailure,
+} from '../../database/repositories/semantic-repository-utils.js';
 import { SemanticRunControlRepository } from '../../database/repositories/semantic-run-control-repository.js';
 import { SemanticQueryRepository } from '../../database/repositories/semantic-query-repository.js';
 import { SemanticWorkflowRepository } from '../../database/repositories/semantic-workflow-repository.js';
@@ -46,6 +51,7 @@ import {
 } from '../semantic-coordinator-service.js';
 import { SemanticAuthoringCandidateService } from '../semantic-authoring-candidate-service.js';
 import { SemanticAuthoringService } from '../semantic-authoring-service.js';
+import { SemanticControlEventHub } from '../semantic-control-event-hub.js';
 
 const HASH_A = 'a'.repeat(64);
 const HASH_B = 'b'.repeat(64);
@@ -78,6 +84,7 @@ describe('SemanticCoordinatorService', () => {
   });
 
   afterEach(async () => {
+    unbindAfterCommitErrorReporter(db);
     db.close();
     if (evidencePath) await rm(evidencePath, { recursive: true, force: true });
     evidencePath = undefined;
@@ -1357,9 +1364,13 @@ describe('SemanticCoordinatorService', () => {
   });
 
   it('将模块修复输出固化为结构化候选且不直接覆盖当前 revision', async () => {
+    const eventHub = new SemanticControlEventHub();
+    assets = new SemanticAssetRepository(db, eventHub);
+    workflows = new SemanticWorkflowRepository(db, eventHub);
+    runs = new SemanticRunControlRepository(db, workflows, evidence, undefined, eventHub);
     const fixture = createFixture(db, assets);
     const versions = new BusinessVersionRepository(db);
-    const amendments = new AuthoringAmendmentRepository(db, assets);
+    const amendments = new AuthoringAmendmentRepository(db, assets, undefined, eventHub);
     const authoring = new SemanticAuthoringService(workflows, assets, amendments, versions);
     const job = authoring.createJob({
       businessVersionId: fixture.versionId,
@@ -1370,6 +1381,20 @@ describe('SemanticCoordinatorService', () => {
       currentUrl: 'https://test.example/account',
       reason: '补充账号模块目标',
       createdBy: 'operator',
+    });
+    const callbackFailures: AfterCommitCallbackFailure[] = [];
+    const failedNotifications = new Set<string>();
+    bindAfterCommitErrorReporter(db, (failure) => callbackFailures.push(failure));
+    eventHub.subscribe('authoring', job.id, (message) => {
+      if (message.kind !== 'control') return;
+      const eventType = message.event.type;
+      if (
+        !['asset.candidate_created', 'asset.candidate_activated'].includes(eventType) ||
+        failedNotifications.has(eventType)
+      )
+        return;
+      failedNotifications.add(eventType);
+      throw new Error('private notification payload');
     });
     const candidatePayload = {
       ...fixture.modulePayload,
@@ -1413,6 +1438,15 @@ describe('SemanticCoordinatorService', () => {
 
     for (let index = 0; index < 16; index += 1) await coordinator.tick();
 
+    expect([...failedNotifications]).toEqual(['asset.candidate_created']);
+    expect(callbackFailures).toHaveLength(1);
+    expect(callbackFailures[0]).toMatchObject({
+      code: 'after_commit_callback_failed',
+      phase: 'post-commit-drain',
+    });
+    expect(db.prepare('SELECT status FROM authoring_attempts WHERE task_id = ?').get(job.taskId)).toEqual({
+      status: 'succeeded',
+    });
     expect(agent.createdRequest?.responseSchema).toMatchObject({
       properties: {
         proposalsJson: {
@@ -1473,6 +1507,14 @@ describe('SemanticCoordinatorService', () => {
       lifecycle: 'completed',
       outcome: 'succeeded',
     });
+    expect([...failedNotifications]).toEqual([
+      'asset.candidate_created',
+      'asset.candidate_activated',
+    ]);
+    expect(callbackFailures).toHaveLength(2);
+    expect(
+      db.prepare("SELECT COUNT(*) AS count FROM authoring_attempts WHERE job_id = ? AND status = 'failed'").get(job.id)
+    ).toEqual({ count: 0 });
     expect(
       db
         .prepare(

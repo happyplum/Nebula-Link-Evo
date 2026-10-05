@@ -9,7 +9,12 @@ import { up as up018 } from '../../migrations/018-authoring-amendments.js';
 import { AuthoringAmendmentRepository } from '../authoring-amendment-repository.js';
 import { BusinessVersionRepository } from '../business-version-repository.js';
 import { SemanticAssetRepository } from '../semantic-asset-repository.js';
-import { hashValue } from '../semantic-repository-utils.js';
+import {
+  bindAfterCommitErrorReporter,
+  hashValue,
+  unbindAfterCommitErrorReporter,
+  type AfterCommitCallbackFailure,
+} from '../semantic-repository-utils.js';
 import { SemanticWorkflowRepository } from '../semantic-workflow-repository.js';
 import { functionalScriptFixture } from '../../../test-support/functional-script-fixture.js';
 import type { SemanticControlEventHubPort } from '../../../services/semantic-control-event-hub.js';
@@ -39,7 +44,10 @@ describe('authoring amendment repository', () => {
     fixture = createFixture(db, versions);
   });
 
-  afterEach(() => db.close());
+  afterEach(() => {
+    unbindAfterCommitErrorReporter(db);
+    db.close();
+  });
 
   it('publishes the inserted chat row only after its transaction commits', () => {
     const published: Array<{
@@ -79,6 +87,46 @@ describe('authoring amendment repository', () => {
     });
     expect(published[0]?.seq).toBeGreaterThan(0);
     expect(published[0]?.created_at).toBeTruthy();
+  });
+
+  it('returns the persisted message id when the after-commit chat publisher throws', () => {
+    const reports: AfterCommitCallbackFailure[] = [];
+    bindAfterCommitErrorReporter(db, (failure) => reports.push(failure));
+    const eventHub: SemanticControlEventHubPort = {
+      publishControlEvent() {},
+      publishAuthoringMessage() {
+        throw new Error('private chat content');
+      },
+      subscribe() {
+        return () => {};
+      },
+    };
+    amendments = new AuthoringAmendmentRepository(db, assets, undefined, eventHub);
+    const thread = createThread(amendments, fixture);
+
+    const result = amendments.addChatMessage({
+      threadId: thread.id,
+      role: 'user',
+      content: '修复失败的提交步骤',
+      createdBy: 'user-1',
+    });
+
+    expect(result.id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(
+      db
+        .prepare('SELECT id, content FROM authoring_chat_messages WHERE id = ?')
+        .get(result.id)
+    ).toEqual({ id: result.id, content: '修复失败的提交步骤' });
+    expect(reports).toEqual([
+      {
+        code: 'after_commit_callback_failed',
+        phase: 'post-commit-drain',
+        callbackIndex: 0,
+        errorName: 'Error',
+        errorConstructor: 'Error',
+      },
+    ]);
+    expect(JSON.stringify(reports)).not.toContain('private chat content');
   });
 
   it.each(sideEffectPolicyCases)(

@@ -44,6 +44,7 @@ import { SemanticCoordinatorRepository } from './repositories/semantic-coordinat
 import { SemanticProjectRepository } from './repositories/semantic-project-repository.js';
 import { AgentActivityRepository } from './repositories/agent-activity-repository.js';
 import { SemanticControlEventHub } from '../services/semantic-control-event-hub.js';
+import { unbindAfterCommitErrorReporter } from './repositories/semantic-repository-utils.js';
 
 export function generateId(): string {
   return randomBytes(8).toString('hex');
@@ -158,6 +159,7 @@ class DatabaseManager {
 
   close(): void {
     if (this.db) {
+      unbindAfterCommitErrorReporter(this.db);
       this.db.close();
       this.db = null;
       this.isInitialized = false;

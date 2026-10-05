@@ -1,8 +1,10 @@
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DatabaseManager } from '../db.js';
+import { afterImmediateTransactionCommit } from '../repositories/semantic-repository-utils.js';
+import { createServer, bindAfterCommitErrorLogging } from '../../server/index.js';
 
 describe('DatabaseManager runtime invariants', () => {
   const roots: string[] = [];
@@ -75,5 +77,53 @@ describe('DatabaseManager runtime invariants', () => {
         .prepare("SELECT next_queue_seq FROM browser_job_queue_meta WHERE key = 'global'")
         .get()
     ).toEqual({ next_queue_seq: 8 });
+  });
+
+  it('binds callback failures to the application logger and unbinds before database close', async () => {
+    const temporaryRoot = resolve('..', '.tmp');
+    mkdirSync(temporaryRoot, { recursive: true });
+    const root = mkdtempSync(join(temporaryRoot, 't8-after-commit-logger-'));
+    roots.push(root);
+    const manager = DatabaseManager.getInstance();
+    manager.init(join(root, 'semantic.sqlite'));
+    const database = manager.getDatabase();
+    const app = createServer({ logger: false });
+    const warning = vi.spyOn(app.log, 'warn');
+    const stderr = vi.spyOn(console, 'error').mockImplementation(() => {});
+    bindAfterCommitErrorLogging(database, app.log);
+
+    afterImmediateTransactionCommit(database, () => {
+      throw new Error('private callback payload');
+    });
+
+    expect(warning).toHaveBeenCalledWith(
+      {
+        code: 'after_commit_callback_failed',
+        phase: 'no-transaction',
+        callbackIndex: 0,
+        errorName: 'Error',
+        errorConstructor: 'Error',
+      },
+      'After-commit notification callback failed'
+    );
+    expect(stderr).not.toHaveBeenCalled();
+
+    manager.close();
+    afterImmediateTransactionCommit(database, () => {
+      throw new Error('private callback payload');
+    });
+
+    expect(warning).toHaveBeenCalledOnce();
+    expect(stderr).toHaveBeenCalledWith(
+      {
+        code: 'after_commit_callback_failed',
+        phase: 'no-transaction',
+        callbackIndex: 0,
+        errorName: 'Error',
+        errorConstructor: 'Error',
+      },
+      'After-commit notification callback failed'
+    );
+    await app.close();
   });
 });

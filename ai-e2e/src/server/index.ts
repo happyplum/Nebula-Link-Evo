@@ -26,6 +26,10 @@ import { SemanticProjectService } from '../services/semantic-project-service.js'
 import { SemanticEvidenceRetentionService } from '../services/semantic-evidence-retention-service.js';
 import agentActivityRoutes from './routes/agent-activity.js';
 import type { AgentActivityRepository } from '../database/repositories/agent-activity-repository.js';
+import {
+  bindAfterCommitErrorReporter,
+  type DatabaseLike,
+} from '../database/repositories/semantic-repository-utils.js';
 
 const envLocalPath = path.join(process.cwd(), '.env.local');
 const envRootPath = path.join(process.cwd(), '..', '.env');
@@ -136,6 +140,15 @@ export function createServer(options: Partial<ServerOptions> = {}) {
 
 type AppServer = ReturnType<typeof createServer>;
 
+export function bindAfterCommitErrorLogging(
+  database: DatabaseLike,
+  logger: AppServer['log']
+): void {
+  bindAfterCommitErrorReporter(database, (failure) =>
+    logger.warn(failure, 'After-commit notification callback failed')
+  );
+}
+
 function registerGracefulShutdown(app: AppServer, databaseManager: DatabaseManager): void {
   if (shutdownHandlersRegistered) {
     return;
@@ -204,24 +217,25 @@ export async function start() {
     agentActivityRepository,
     semanticControlEventHub: databaseManager.getSemanticControlEventHub(),
   });
-  const activityIngester = new AgentActivityIngester(agentTasks, agentActivityRepository, {
-    logger: app.log.child({ module: 'agent-activity-ingester' }),
-  });
-  const semanticCoordinator = new SemanticCoordinatorService({
-    repository: databaseManager.getSemanticCoordinatorRepo(),
-    workflows: databaseManager.getSemanticWorkflowRepo(),
-    evidence: databaseManager.getSemanticEvidenceRepo(),
-    runs: databaseManager.getSemanticRunControlRepo(),
-    agentTasks,
-    browser: new SemanticBrowserClient(),
-    activityIngester,
-    authoringCandidates: new SemanticAuthoringCandidateService(
-      databaseManager.getSemanticQueryRepo(),
-      databaseManager.getSemanticAssetRepo(),
-      databaseManager.getAuthoringAmendmentRepo()
-    ),
-  });
   try {
+    bindAfterCommitErrorLogging(databaseManager.getDatabase(), app.log);
+    const activityIngester = new AgentActivityIngester(agentTasks, agentActivityRepository, {
+      logger: app.log.child({ module: 'agent-activity-ingester' }),
+    });
+    const semanticCoordinator = new SemanticCoordinatorService({
+      repository: databaseManager.getSemanticCoordinatorRepo(),
+      workflows: databaseManager.getSemanticWorkflowRepo(),
+      evidence: databaseManager.getSemanticEvidenceRepo(),
+      runs: databaseManager.getSemanticRunControlRepo(),
+      agentTasks,
+      browser: new SemanticBrowserClient(),
+      activityIngester,
+      authoringCandidates: new SemanticAuthoringCandidateService(
+        databaseManager.getSemanticQueryRepo(),
+        databaseManager.getSemanticAssetRepo(),
+        databaseManager.getAuthoringAmendmentRepo()
+      ),
+    });
     const evidenceRetention = new SemanticEvidenceRetentionService({
       repository: databaseManager.getSemanticEvidenceRepo(),
       successRetentionDays: readPositiveIntegerEnvironment(

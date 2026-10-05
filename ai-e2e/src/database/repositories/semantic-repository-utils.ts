@@ -17,6 +17,24 @@ export interface DatabaseLike {
 export type SupportedDatabase = Database.Database | DatabaseSync;
 
 const afterCommitCallbacks = new WeakMap<DatabaseLike, Array<() => void>>();
+const afterCommitErrorReporters = new WeakMap<DatabaseLike, AfterCommitErrorReporter>();
+
+export type AfterCommitCallbackFailure =
+  | {
+      readonly code: 'after_commit_callback_failed';
+      readonly phase: 'post-commit-drain' | 'no-transaction';
+      readonly callbackIndex: number;
+      readonly errorName: string;
+      readonly errorConstructor: string;
+    }
+  | {
+      readonly code: 'after_commit_callback_failed';
+      readonly phase: 'post-commit-drain' | 'no-transaction';
+      readonly callbackIndex: number;
+      readonly thrownType: string;
+    };
+
+export type AfterCommitErrorReporter = (failure: AfterCommitCallbackFailure) => void;
 
 export function stableStringify(value: unknown): string {
   return JSON.stringify(sortJson(value));
@@ -63,14 +81,95 @@ export function inImmediateTransaction<T>(db: DatabaseLike, work: () => T): T {
     throw error;
   }
   afterCommitCallbacks.delete(db);
-  for (const callback of callbacks) callback();
+  executeAfterCommitCallbacks(db, callbacks, 'post-commit-drain');
   return result;
 }
 
 export function afterImmediateTransactionCommit(db: DatabaseLike, callback: () => void): void {
   const callbacks = afterCommitCallbacks.get(db);
   if (callbacks) callbacks.push(callback);
-  else callback();
+  else executeAfterCommitCallbacks(db, [callback], 'no-transaction');
+}
+
+export function bindAfterCommitErrorReporter(
+  db: DatabaseLike,
+  reporter: AfterCommitErrorReporter
+): void {
+  afterCommitErrorReporters.set(db, reporter);
+}
+
+export function unbindAfterCommitErrorReporter(db: DatabaseLike): void {
+  afterCommitErrorReporters.delete(db);
+}
+
+/**
+ * Work and COMMIT failures still propagate unchanged. After a successful COMMIT, registered
+ * notification failures are only reported: they cannot alter the result, roll back, or block
+ * later callbacks. This isolates registered callbacks, not individual listeners inside a hub emit.
+ */
+function executeAfterCommitCallbacks(
+  db: DatabaseLike,
+  callbacks: readonly (() => void)[],
+  phase: AfterCommitCallbackFailure['phase']
+): void {
+  callbacks.forEach((callback, callbackIndex) => {
+    try {
+      callback();
+    } catch (error) {
+      reportAfterCommitCallbackFailure(db, classifyAfterCommitFailure(error, phase, callbackIndex));
+    }
+  });
+}
+
+function classifyAfterCommitFailure(
+  error: unknown,
+  phase: AfterCommitCallbackFailure['phase'],
+  callbackIndex: number
+): AfterCommitCallbackFailure {
+  const common = {
+    code: 'after_commit_callback_failed' as const,
+    phase,
+    callbackIndex,
+  };
+  try {
+    if (!(error instanceof Error)) return { ...common, thrownType: typeof error };
+    return {
+      ...common,
+      errorName: sanitizeErrorClassification(error.name),
+      errorConstructor: sanitizeErrorClassification(error.constructor.name),
+    };
+  } catch {
+    return { ...common, thrownType: typeof error };
+  }
+}
+
+function sanitizeErrorClassification(value: string): string {
+  return value.replace(/[^A-Za-z0-9_$.-]/g, '').slice(0, 80) || 'Error';
+}
+
+function reportAfterCommitCallbackFailure(
+  db: DatabaseLike,
+  failure: AfterCommitCallbackFailure
+): void {
+  const reporter = afterCommitErrorReporters.get(db);
+  if (!reporter) {
+    reportToStderr(failure);
+    return;
+  }
+  try {
+    reporter(failure);
+  } catch {
+    reportToStderr(failure);
+  }
+}
+
+/** Fallback for databases without a bound app logger; only classified fields are written. */
+function reportToStderr(failure: AfterCommitCallbackFailure): void {
+  try {
+    console.error({ ...failure }, 'After-commit notification callback failed');
+  } catch {
+    return;
+  }
 }
 
 function sortJson(value: unknown): unknown {

@@ -5,12 +5,21 @@ import {
   type AgentStreamEventV1,
 } from '@nebula-link-evo/shared/types/agent-stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type {
+  AuthoringSnapshotV1,
+  SemanticEventV1,
+} from '../../../contracts/semantic-control.js';
 import { up as migrateAgentActivity } from '../../migrations/020-agent-activity.js';
+import { BusinessVersionRepository } from '../business-version-repository.js';
 import { AgentActivityRepository } from '../agent-activity-repository.js';
-import type { SemanticEventV1 } from '../../../contracts/semantic-control.js';
+import { publishPersistedSemanticControlEvent } from '../semantic-control-event-utils.js';
+import { inImmediateTransaction } from '../semantic-repository-utils.js';
+import { SemanticQueryRepository } from '../semantic-query-repository.js';
+import { SemanticQueryService } from '../../../services/semantic-query-service.js';
 import { SemanticControlEventHub } from '../../../services/semantic-control-event-hub.js';
 import errorHandlerPlugin from '../../../server/plugins/error-handler.js';
 import agentActivityRoutes from '../../../server/routes/agent-activity.js';
+import semanticControlRoutes from '../../../server/routes/semantic-control.js';
 
 const occurredAt = '2026-08-27T08:00:00.000Z';
 const databases: Database.Database[] = [];
@@ -36,20 +45,28 @@ function setupDatabase() {
       created_at TEXT NOT NULL
     );
     CREATE TABLE authoring_events (
+      id TEXT,
       job_id TEXT NOT NULL,
       seq INTEGER NOT NULL,
       type TEXT NOT NULL,
       entity_type TEXT NOT NULL,
       entity_id TEXT NOT NULL,
+      state_version INTEGER,
+      correlation_id TEXT,
+      causation_id TEXT,
       payload_json TEXT NOT NULL,
       occurred_at TEXT NOT NULL
     );
     CREATE TABLE run_events (
+      id TEXT,
       run_id TEXT NOT NULL,
       seq INTEGER NOT NULL,
       type TEXT NOT NULL,
       entity_type TEXT NOT NULL,
       entity_id TEXT NOT NULL,
+      state_version INTEGER,
+      correlation_id TEXT,
+      causation_id TEXT,
       payload_json TEXT NOT NULL,
       occurred_at TEXT NOT NULL
     );
@@ -312,77 +329,327 @@ describe('AgentActivityRepository', () => {
     ]);
   });
 
-  it('经 control hub 实时投影到 snapshot-first activity SSE', async () => {
-    const { repository } = setupDatabase();
+  it.each([
+    { source: 'control', failureAt: 'activity-event-insert' },
+    { source: 'control', failureAt: 'cursor-upsert' },
+    { source: 'message', failureAt: 'activity-event-insert' },
+    { source: 'message', failureAt: 'cursor-upsert' },
+  ] as const)(
+    'keeps the $source source cursor at the failed event after a $failureAt failure',
+    ({ source, failureAt }) => {
+      const { db, repository } = setupDatabase();
+      const context = { type: 'authoring' as const, id: 'job-1' };
+      const sourceId =
+        source === 'control' ? 'semantic-control:authoring' : 'semantic-authoring-messages';
+      const triggerName = `fail_${failureAt.replaceAll('-', '_')}`;
+      const targetTable =
+        failureAt === 'activity-event-insert'
+          ? 'semantic_agent_activity_events'
+          : 'semantic_agent_activity_cursors';
+      db.exec(
+        `CREATE TRIGGER ${triggerName} BEFORE INSERT ON ${targetTable}
+         WHEN NEW.source_task_id = '${sourceId}'
+         BEGIN SELECT RAISE(ABORT, 'injected projection failure'); END;`
+      );
+
+      const persistSourceEvent = (seq: number) => {
+        if (source === 'control') {
+          db.prepare(
+            `INSERT INTO authoring_events
+              (id, job_id, seq, type, entity_type, entity_id, payload_json, occurred_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+          ).run(
+            `control-${seq}`,
+            context.id,
+            seq,
+            'decision.requested',
+            'decision',
+            'decision-1',
+            '{}',
+            occurredAt
+          );
+          return;
+        }
+        db.prepare(
+          `INSERT INTO authoring_chat_messages(id, thread_id, role, content, created_at)
+           VALUES (?, 'thread-1', 'user', ?, ?)`
+        ).run(`message-${seq}`, `message content ${seq}`, occurredAt);
+      };
+
+      persistSourceEvent(1);
+      expect(() => repository.syncControlEvents(context)).toThrow();
+      expect(repository.cursor(context, sourceId)).toBe(0);
+      expect(
+        db
+          .prepare(
+            'SELECT COUNT(*) AS count FROM semantic_agent_activity_events WHERE source_task_id = ?'
+          )
+          .get(sourceId)
+      ).toEqual({ count: 0 });
+      expect(
+        db
+          .prepare(
+            'SELECT COUNT(*) AS count FROM semantic_agent_activity_cursors WHERE source_task_id = ?'
+          )
+          .get(sourceId)
+      ).toEqual({ count: 0 });
+
+      persistSourceEvent(2);
+      db.exec(`DROP TRIGGER ${triggerName}`);
+      expect(repository.syncControlEvents(context)).toBe(2);
+      expect(repository.cursor(context, sourceId)).toBe(2);
+      expect(
+        db
+          .prepare(
+            `SELECT source_seq FROM semantic_agent_activity_events
+             WHERE source_task_id = ? ORDER BY source_seq`
+          )
+          .all(sourceId)
+      ).toEqual([{ source_seq: 1 }, { source_seq: 2 }]);
+    }
+  );
+
+  it('keeps lower control seq ahead of a later seq even when its occurredAt is later', () => {
+    const { db, repository } = setupDatabase();
+    const context = { type: 'authoring' as const, id: 'job-1' };
+    const laterTimestamp = '2026-08-27T10:00:00.000Z';
+    const earlierTimestamp = '2026-08-27T08:00:00.000Z';
+    const insertEvent = db.prepare(
+      `INSERT INTO authoring_events
+        (id, job_id, seq, type, entity_type, entity_id, payload_json, occurred_at)
+       VALUES (?, ?, ?, 'decision.requested', 'decision', 'decision-1', '{}', ?)`
+    );
+    insertEvent.run('control-1', context.id, 1, laterTimestamp);
+    insertEvent.run('control-2', context.id, 2, earlierTimestamp);
+
+    expect(repository.syncControlEvents(context)).toBe(2);
+    expect(repository.cursor(context, 'semantic-control:authoring')).toBe(2);
+    expect(repository.listSynced(context).map((event) => event.occurredAt)).toEqual([
+      laterTimestamp,
+      earlierTimestamp,
+    ]);
+    expect(
+      db
+        .prepare(
+          `SELECT source_seq FROM semantic_agent_activity_events
+           WHERE source_task_id = 'semantic-control:authoring' ORDER BY seq`
+        )
+        .all()
+    ).toEqual([{ source_seq: 1 }, { source_seq: 2 }]);
+  });
+
+  it('catches up CH3 from durable events without blocking CH4 when live projection fails', async () => {
+    const { db, repository } = setupDatabase();
     const hub = new SemanticControlEventHub();
     const context = { type: 'authoring' as const, id: 'job-1' };
-    const snapshot = repository.snapshot(context);
+    const activitySnapshot = repository.snapshot(context);
+    vi.spyOn(repository, 'snapshot').mockReturnValue(activitySnapshot);
+    const authoringSnapshot: AuthoringSnapshotV1 = {
+      schema: 'nebula.ai-e2e.authoring-snapshot/1.0',
+      job: { id: context.id },
+      tasks: [],
+      attempts: [],
+      decisions: [],
+      contextThreads: [],
+      amendments: [],
+      seq: 0,
+      stateVersion: 1,
+    };
+    const queryService = new SemanticQueryService(
+      new SemanticQueryRepository(db, new BusinessVersionRepository(db))
+    );
+    vi.spyOn(queryService, 'getAuthoringSnapshot').mockReturnValue(authoringSnapshot);
     const app = Fastify({ logger: false });
     apps.push(app);
     await app.register(errorHandlerPlugin);
+    await app.register(semanticControlRoutes, {
+      prefix: '/api/v1',
+      service: queryService,
+      eventHub: hub,
+    });
     await app.register(agentActivityRoutes, {
       prefix: '/api/v1',
       repository,
       eventHub: hub,
     });
     const serverUrl = await app.listen({ port: 0, host: '127.0.0.1' });
-    const controller = new AbortController();
+    const activityController = new AbortController();
+    const controlController = new AbortController();
+    const projectedEventOrder: number[] = [];
+    const unsubscribeProjection = repository.subscribe(context, (event) =>
+      projectedEventOrder.push(event.seq)
+    );
 
     try {
-      const response = await fetch(new URL('/api/v1/authoring-jobs/job-1/activity', serverUrl), {
-        signal: controller.signal,
-      });
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error('Activity SSE response has no body');
-      const decoder = new TextDecoder();
-      const readFrame = async () => {
-        let frame = '';
-        while (!frame.endsWith('\n\n')) {
-          const chunk = await reader.read();
-          if (chunk.done) throw new Error('Activity SSE response ended before the next frame');
-          frame += decoder.decode(chunk.value, { stream: true });
-        }
-        return frame;
+      const activityResponse = await fetch(
+        new URL('/api/v1/authoring-jobs/job-1/activity', serverUrl),
+        { signal: activityController.signal }
+      );
+      const activityReader = activityResponse.body?.getReader();
+      if (!activityReader) throw new Error('Activity SSE response has no body');
+      const controlResponse = await fetch(
+        new URL('/api/v1/authoring-jobs/job-1/events', serverUrl),
+        { signal: controlController.signal }
+      );
+      const controlReader = controlResponse.body?.getReader();
+      if (!controlReader) throw new Error('Control SSE response has no body');
+      const activityDecoder = new TextDecoder();
+      const controlDecoder = new TextDecoder();
+      const createFrameReader = (
+        reader: ReadableStreamDefaultReader<Uint8Array>,
+        decoder: TextDecoder
+      ) => {
+        let bufferedData = '';
+        return async () => {
+          while (true) {
+            const frameEnd = bufferedData.indexOf('\n\n');
+            if (frameEnd !== -1) {
+              const frame = bufferedData.slice(0, frameEnd + 2);
+              bufferedData = bufferedData.slice(frameEnd + 2);
+              return frame;
+            }
+            const chunk = await reader.read();
+            if (chunk.done) throw new Error('SSE response ended before the next frame');
+            bufferedData += decoder.decode(chunk.value, { stream: true });
+          }
+        };
       };
+      const readActivityFrame = createFrameReader(activityReader, activityDecoder);
+      const readControlFrame = createFrameReader(controlReader, controlDecoder);
 
-      const snapshotFrame = await readFrame();
-      const snapshotDataLine = snapshotFrame.split('\n')[2] ?? '';
-      const receivedSnapshot = JSON.parse(snapshotDataLine.slice('data: '.length)) as {
-        schema: string;
-        streamId: string;
-        seq: number;
-        state: string;
-        turns: unknown[];
-      };
-      expect(snapshotFrame.split('\n').slice(0, 2)).toEqual([
-        'event: agent_stream.snapshot',
-        `id: ${snapshot.seq}`,
-      ]);
-      expect(receivedSnapshot).toMatchObject({
-        schema: snapshot.schema,
-        streamId: snapshot.streamId,
-        seq: snapshot.seq,
-        state: snapshot.state,
-        turns: snapshot.turns,
+      const activitySnapshotFrame = await readActivityFrame();
+      const controlSnapshotFrame = await readControlFrame();
+      expect(activityResponse.status).toBe(200);
+      expect(controlResponse.status).toBe(200);
+      expect(activitySnapshotFrame).toBe(
+        `event: agent_stream.snapshot\nid: ${activitySnapshot.seq}\ndata: ${JSON.stringify(activitySnapshot)}\n\n`
+      );
+      expect(controlSnapshotFrame).toBe(
+        `id: ${authoringSnapshot.seq}\nevent: authoring.snapshot\nretry: 1000\ndata: ${JSON.stringify({
+          schema: 'nebula.ai-e2e.snapshot-event/1.0',
+          seq: authoringSnapshot.seq,
+          stateVersion: authoringSnapshot.stateVersion,
+          snapshot: authoringSnapshot,
+        })}\n\n`
+      );
+
+      db.exec(`CREATE TRIGGER fail_activity_projection
+        BEFORE INSERT ON semantic_agent_activity_events
+        BEGIN SELECT RAISE(ABORT, 'injected projection failure'); END`);
+      const businessWriteResult = inImmediateTransaction(db, () => {
+        db.prepare(
+          `INSERT INTO authoring_events
+            (id, job_id, seq, type, entity_type, entity_id, state_version,
+             correlation_id, causation_id, payload_json, occurred_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ).run(
+          'control-1',
+          context.id,
+          1,
+          'decision.requested',
+          'decision',
+          'decision-1',
+          1,
+          null,
+          null,
+          '{}',
+          occurredAt
+        );
+        publishPersistedSemanticControlEvent(db, hub, 'authoring', context.id, 1);
+        return 'business-write-committed';
       });
-      hub.publishControlEvent('authoring', context.id, {
+      expect(businessWriteResult).toBe('business-write-committed');
+      expect(db.prepare('SELECT id FROM authoring_events WHERE seq = 1').get()).toEqual({
+        id: 'control-1',
+      });
+      expect(repository.cursor(context, 'semantic-control:authoring')).toBe(0);
+      expect(repository.listSynced(context)).toEqual([]);
+      const firstActivityEventFrame = readActivityFrame();
+
+      const controlEvent: SemanticEventV1 = {
         id: 'control-1',
         seq: 1,
         schemaVersion: 1,
         type: 'decision.requested',
         entityType: 'decision',
         entityId: 'decision-1',
+        stateVersion: 1,
         payload: {},
         occurredAt,
+      };
+      let controlTimeout: ReturnType<typeof setTimeout> | undefined;
+      const controlEventFrame = await Promise.race([
+        readControlFrame(),
+        new Promise<never>((_, reject) => {
+          controlTimeout = setTimeout(
+            () => reject(new Error('CH4 did not receive the live control event')),
+            1_000
+          );
+        }),
+      ]).finally(() => {
+        if (controlTimeout) clearTimeout(controlTimeout);
       });
-      const projectedEvent = repository.listSynced(context)[0];
-
-      expect(response.status).toBe(200);
-      expect(await readFrame()).toBe(
-        `event: agent_stream.event\nid: ${projectedEvent?.seq}\ndata: ${JSON.stringify(projectedEvent)}\n\n`
+      expect(controlEventFrame).toBe(
+        `id: ${controlEvent.seq}\nevent: ${controlEvent.type}\ndata: ${JSON.stringify(controlEvent)}\n\n`
       );
+
+      db.exec('DROP TRIGGER fail_activity_projection');
+      const recoveryEvent: SemanticEventV1 = {
+        id: 'control-2',
+        seq: 2,
+        schemaVersion: 1,
+        type: 'decision.applied',
+        entityType: 'decision',
+        entityId: 'decision-1',
+        stateVersion: 2,
+        payload: { decisionId: 'decision-1' },
+        occurredAt,
+      };
+      expect(
+        inImmediateTransaction(db, () => {
+          db.prepare(
+            `INSERT INTO authoring_events
+              (id, job_id, seq, type, entity_type, entity_id, state_version,
+               correlation_id, causation_id, payload_json, occurred_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          ).run(
+            recoveryEvent.id,
+            context.id,
+            recoveryEvent.seq,
+            recoveryEvent.type,
+            recoveryEvent.entityType,
+            recoveryEvent.entityId,
+            recoveryEvent.stateVersion,
+            null,
+            null,
+            JSON.stringify(recoveryEvent.payload),
+            recoveryEvent.occurredAt
+          );
+          publishPersistedSemanticControlEvent(db, hub, 'authoring', context.id, recoveryEvent.seq);
+          return 'recovery-write-committed';
+        })
+      ).toBe('recovery-write-committed');
+      expect(await readControlFrame()).toBe(
+        `id: ${recoveryEvent.seq}\nevent: ${recoveryEvent.type}\ndata: ${JSON.stringify(recoveryEvent)}\n\n`
+      );
+
+      const projectedEvents = repository.listSynced(context);
+      expect(projectedEvents.map((event) => event.seq)).toEqual([1, 2]);
+      expect(projectedEventOrder).toEqual([1, 2]);
+      const [firstProjectedEvent, ...remainingProjectedEvents] = projectedEvents;
+      if (!firstProjectedEvent) throw new Error('Recovered projection is missing its first event');
+      expect(await firstActivityEventFrame).toBe(
+        `event: agent_stream.event\nid: ${firstProjectedEvent.seq}\ndata: ${JSON.stringify(firstProjectedEvent)}\n\n`
+      );
+      for (const projectedEvent of remainingProjectedEvents) {
+        expect(await readActivityFrame()).toBe(
+          `event: agent_stream.event\nid: ${projectedEvent.seq}\ndata: ${JSON.stringify(projectedEvent)}\n\n`
+        );
+      }
     } finally {
-      controller.abort();
+      unsubscribeProjection();
+      activityController.abort();
+      controlController.abort();
     }
   });
 });

@@ -156,34 +156,32 @@ export class AgentActivityRepository {
             )
             .all(context.id, this.cursor(context, MESSAGE_SOURCE_ID)) as AuthoringMessageRow[])
         : [];
-    const pending = [
-      ...controlRows.map((row) => ({
-        kind: 'control' as const,
-        sourceId: controlSourceId,
-        sourceSeq: row.seq,
-        occurredAt: row.occurred_at,
-        row,
-      })),
-      ...messageRows.map((row) => ({
-        kind: 'message' as const,
-        sourceId: MESSAGE_SOURCE_ID,
-        sourceSeq: row.seq,
-        occurredAt: row.created_at,
-        row,
-      })),
-    ].sort((left, right) =>
-      left.occurredAt === right.occurredAt
-        ? left.sourceId.localeCompare(right.sourceId) || left.sourceSeq - right.sourceSeq
-        : left.occurredAt.localeCompare(right.occurredAt)
-    );
-    for (const item of pending) {
-      if (item.kind === 'message') {
-        if (context.type === 'authoring') this.ingestAuthoringMessage(context, item.row);
-        continue;
+    let controlIndex = 0;
+    let messageIndex = 0;
+    let synchronized = 0;
+    while (controlIndex < controlRows.length || messageIndex < messageRows.length) {
+      const controlRow = controlRows[controlIndex];
+      const messageRow = messageRows[messageIndex];
+      const controlPrecedesMessage =
+        controlRow !== undefined &&
+        (messageRow === undefined ||
+          controlRow.occurred_at.localeCompare(messageRow.created_at) < 0 ||
+          (controlRow.occurred_at === messageRow.created_at &&
+            controlSourceId.localeCompare(MESSAGE_SOURCE_ID) < 0));
+
+      if (controlPrecedesMessage && controlRow) {
+        this.ingestControlEventRow(context, controlSourceId, controlRow);
+        controlIndex += 1;
+      } else if (messageRow && context.type === 'authoring') {
+        this.ingestAuthoringMessage(context, messageRow);
+        messageIndex += 1;
+      } else if (controlRow) {
+        this.ingestControlEventRow(context, controlSourceId, controlRow);
+        controlIndex += 1;
       }
-      this.ingestControlEventRow(context, item.sourceId, item.row);
+      synchronized += 1;
     }
-    return pending.length;
+    return synchronized;
   }
 
   ingestControlEvent(context: ActivityContext, event: SemanticEventV1): void {
