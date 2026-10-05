@@ -14,6 +14,7 @@ import {
   type AgentTaskActivitySource,
   type AgentTaskActivityStreamHandlers,
 } from '../../infrastructure/agent-task-client.js';
+import { IntegrationClientError } from '../../infrastructure/integration-client-error.js';
 import { AgentActivityIngester } from '../agent-activity-ingester.js';
 
 const RUN_CONTEXT: ActivityContext = { type: 'run', id: 'run-1' };
@@ -160,6 +161,251 @@ describe('AgentActivityIngester', () => {
     ingester.stop();
     await ingester.onceIdle();
   });
+
+  it('logs only actual subscription start and stop transitions with a reason', async () => {
+    const taskId = 'agent-task-lifecycle-logs';
+    const source = new FakeAgentTaskActivitySource();
+    source.plans.set(taskId, [{ snapshot: activitySnapshot(taskId, 0) }]);
+    const { logger, entries } = createLoggerSpy();
+    const ingester = new AgentActivityIngester(source, new MemoryActivityRepository(), { logger });
+
+    ingester.start(taskId, RUN_CONTEXT);
+    ingester.start(taskId, RUN_CONTEXT);
+    await vi.waitFor(() => {
+      expect(
+        entries.some((entry) => entry.message === 'Agent activity subscription connected')
+      ).toBe(true);
+    });
+    ingester.stop();
+    ingester.stop();
+    await ingester.onceIdle();
+
+    expect(
+      entries.filter((entry) => entry.message === 'Agent activity subscription started')
+    ).toHaveLength(1);
+    expect(
+      entries.filter((entry) => entry.message === 'Agent activity subscription stopped')
+    ).toEqual([
+      expect.objectContaining({
+        fields: expect.objectContaining({ reason: 'explicit_global_stop' }),
+      }),
+    ]);
+  });
+
+  it('summarizes catch-up pages, entries read, cursors, and trigger', async () => {
+    const taskId = 'agent-task-catch-up-logs';
+    const source = new FakeAgentTaskActivitySource();
+    source.history.set(taskId, [activityEvent(taskId, 1)]);
+    source.plans.set(taskId, [{ snapshot: activitySnapshot(taskId, 1) }]);
+    const { logger, entries } = createLoggerSpy();
+    const ingester = new AgentActivityIngester(source, new MemoryActivityRepository(), { logger });
+
+    ingester.start(taskId, RUN_CONTEXT);
+    await vi.waitFor(() => {
+      expect(
+        entries.filter((entry) => entry.message === 'Agent activity catch-up completed')
+      ).toHaveLength(2);
+    });
+    ingester.stop();
+    await ingester.onceIdle();
+
+    const summaries = entries.filter(
+      (entry) => entry.message === 'Agent activity catch-up completed'
+    );
+    expect(summaries[0]?.fields).toMatchObject({
+      trigger: 'initial-connect',
+      pagesRequested: 1,
+      entriesRead: 1,
+      startCursor: 0,
+      endCursor: 1,
+    });
+    expect(summaries[1]?.fields).toMatchObject({
+      trigger: 'post-snapshot-bridge',
+      pagesRequested: 1,
+      entriesRead: 0,
+      startCursor: 1,
+      endCursor: 1,
+    });
+    expect(summaries.every((entry) => typeof entry.fields.durationMs === 'number')).toBe(true);
+  });
+
+  it('logs clean EOF reconnects with the next retry delay', async () => {
+    const taskId = 'agent-task-clean-eof-logs';
+    const source = new FakeAgentTaskActivitySource();
+    source.history.set(taskId, []);
+    source.plans.set(taskId, [
+      { snapshot: activitySnapshot(taskId, 0), closeAfterEvents: true },
+      { snapshot: activitySnapshot(taskId, 0) },
+    ]);
+    const retryGate = deferred<void>();
+    const retryWait = vi.fn(async (_milliseconds: number, signal: AbortSignal) => {
+      await Promise.race([
+        retryGate.promise,
+        new Promise<void>((resolve) =>
+          signal.addEventListener('abort', () => resolve(), { once: true })
+        ),
+      ]);
+    });
+    const { logger, entries } = createLoggerSpy();
+    const ingester = new AgentActivityIngester(source, new MemoryActivityRepository(), {
+      wait: retryWait,
+      logger,
+    });
+
+    ingester.start(taskId, RUN_CONTEXT);
+    await vi.waitFor(() => {
+      expect(
+        entries.some((entry) => entry.message === 'Agent activity subscription retry scheduled')
+      ).toBe(true);
+    });
+
+    expect(retryWait).toHaveBeenCalledWith(1_000, expect.any(AbortSignal));
+    expect(
+      entries.find((entry) => entry.message === 'Agent activity subscription retry scheduled')
+        ?.fields
+    ).toMatchObject({
+      stage: 'stream',
+      classification: 'clean_eof',
+      retryCount: 1,
+      nextDelayMs: 1_000,
+    });
+    retryGate.resolve();
+    await vi.waitFor(() => expect(source.connectionTaskIds).toHaveLength(2));
+    ingester.stop();
+    await ingester.onceIdle();
+  });
+
+  it('logs connection success only after receiving the stream snapshot', async () => {
+    const taskId = 'agent-task-snapshot-anchor';
+    const source = new FakeAgentTaskActivitySource();
+    source.history.set(taskId, []);
+    const snapshotGate = deferred<void>();
+    source.plans.set(taskId, [
+      {
+        snapshot: activitySnapshot(taskId, 4),
+        beforeSnapshot: () => snapshotGate.promise,
+      },
+    ]);
+    const { logger, entries } = createLoggerSpy();
+    const ingester = new AgentActivityIngester(source, new MemoryActivityRepository(), { logger });
+
+    ingester.start(taskId, RUN_CONTEXT);
+    await vi.waitFor(() => expect(source.connectionTaskIds).toHaveLength(1));
+    expect(
+      entries.some((entry) => entry.message === 'Agent activity subscription connected')
+    ).toBe(false);
+
+    snapshotGate.resolve();
+    await vi.waitFor(() => {
+      expect(
+        entries.some((entry) => entry.message === 'Agent activity subscription connected')
+      ).toBe(true);
+    });
+    expect(
+      entries.find((entry) => entry.message === 'Agent activity subscription connected')?.fields
+    ).toMatchObject({ stage: 'snapshot-received', sourceSeq: 4 });
+    ingester.stop();
+    await ingester.onceIdle();
+  });
+
+  it('classifies retryable client errors without logging raw messages', async () => {
+    const taskId = 'agent-task-safe-error-logs';
+    const source = new FakeAgentTaskActivitySource();
+    source.history.set(taskId, []);
+    source.plans.set(taskId, [
+      {
+        snapshot: activitySnapshot(taskId, 0),
+        error: new IntegrationClientError(
+          'ai-chat-service',
+          'dependency_unavailable',
+          'secret-bearing raw error text',
+          true,
+          503
+        ),
+      },
+      { snapshot: activitySnapshot(taskId, 0) },
+    ]);
+    const retryGate = deferred<void>();
+    const retryWait = vi.fn(async (_milliseconds: number, signal: AbortSignal) => {
+      await Promise.race([
+        retryGate.promise,
+        new Promise<void>((resolve) =>
+          signal.addEventListener('abort', () => resolve(), { once: true })
+        ),
+      ]);
+    });
+    const { logger, entries } = createLoggerSpy();
+    const ingester = new AgentActivityIngester(source, new MemoryActivityRepository(), {
+      wait: retryWait,
+      logger,
+    });
+
+    ingester.start(taskId, RUN_CONTEXT);
+    await vi.waitFor(() => {
+      expect(
+        entries.some((entry) => entry.message === 'Agent activity subscription retry scheduled')
+      ).toBe(true);
+    });
+
+    const retry = entries.find(
+      (entry) => entry.message === 'Agent activity subscription retry scheduled'
+    );
+    expect(retry?.fields).toMatchObject({
+      stage: 'stream',
+      classification: 'retryable',
+      errorName: 'IntegrationClientError',
+      detail: 'service=ai-chat-service status=503',
+      retryCount: 1,
+      nextDelayMs: 1_000,
+    });
+    expect(JSON.stringify(entries)).not.toContain('secret-bearing raw error text');
+    retryGate.resolve();
+    await vi.waitFor(() => expect(source.connectionTaskIds).toHaveLength(2));
+    ingester.stop();
+    await ingester.onceIdle();
+  });
+
+  it('stops on a known terminal client error without scheduling a retry', async () => {
+    const taskId = 'agent-task-terminal-error-logs';
+    const source = new FakeAgentTaskActivitySource();
+    source.history.set(taskId, []);
+    source.plans.set(taskId, [
+      {
+        snapshot: activitySnapshot(taskId, 0),
+        error: new IntegrationClientError(
+          'ai-chat-service',
+          'invalid_response',
+          'invalid response detail is not logged',
+          false,
+          502
+        ),
+      },
+    ]);
+    const retryWait = vi.fn(async () => undefined);
+    const { logger, entries } = createLoggerSpy();
+    const ingester = new AgentActivityIngester(source, new MemoryActivityRepository(), {
+      wait: retryWait,
+      logger,
+    });
+
+    ingester.start(taskId, RUN_CONTEXT);
+    await ingester.onceIdle();
+
+    expect(retryWait).not.toHaveBeenCalled();
+    expect(
+      entries.find(
+        (entry) => entry.message === 'Agent activity subscription stopped after terminal error'
+      )?.fields
+    ).toMatchObject({
+      stage: 'stream',
+      classification: 'terminal',
+      errorName: 'IntegrationClientError',
+      detail: 'service=ai-chat-service status=502',
+    });
+    expect(
+      entries.find((entry) => entry.message === 'Agent activity subscription stopped')?.fields
+    ).toMatchObject({ reason: 'terminal_error' });
+  });
 });
 
 describe('AgentTaskClient Agent activity SSE', () => {
@@ -232,7 +478,8 @@ class FakeAgentTaskActivitySource implements AgentTaskActivitySource {
     this.connectionTaskIds.push(taskId);
     const plan = this.plans.get(taskId)?.shift();
     if (!plan) throw new Error(`No stream plan for ${taskId}`);
-    plan.beforeSnapshot?.();
+    if (plan.error) throw plan.error;
+    await plan.beforeSnapshot?.();
     await handlers.onSnapshot(plan.snapshot);
     if (signal.aborted) return;
     for (const event of plan.events ?? []) {
@@ -246,9 +493,10 @@ class FakeAgentTaskActivitySource implements AgentTaskActivitySource {
 
 interface ConnectionPlan {
   snapshot: AgentStreamSnapshotV1;
-  beforeSnapshot?: () => void;
+  beforeSnapshot?: () => void | Promise<void>;
   events?: AgentStreamEventV1[];
   closeAfterEvents?: boolean;
+  error?: Error;
 }
 
 class MemoryActivityRepository implements Pick<AgentActivityRepository, 'cursor' | 'append'> {
@@ -336,4 +584,19 @@ function deferred<T>(): { promise: Promise<T>; resolve(value: T): void } {
 function waitForAbort(signal: AbortSignal): Promise<void> {
   if (signal.aborted) return Promise.resolve();
   return new Promise((resolve) => signal.addEventListener('abort', () => resolve(), { once: true }));
+}
+
+function createLoggerSpy() {
+  const entries: Array<{
+    level: 'info' | 'warn';
+    fields: Record<string, string | number>;
+    message: string;
+  }> = [];
+  const info = vi.fn((fields: Record<string, string | number>, message: string) => {
+    entries.push({ level: 'info', fields, message });
+  });
+  const warn = vi.fn((fields: Record<string, string | number>, message: string) => {
+    entries.push({ level: 'warn', fields, message });
+  });
+  return { entries, logger: { info, warn } };
 }

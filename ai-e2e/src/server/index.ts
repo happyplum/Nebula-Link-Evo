@@ -195,7 +195,18 @@ export async function start() {
   const semanticRunService = new SemanticRunService(databaseManager.getSemanticRunControlRepo());
   const agentTasks = new AgentTaskClient();
   const agentActivityRepository = databaseManager.getAgentActivityRepo();
-  const activityIngester = new AgentActivityIngester(agentTasks, agentActivityRepository);
+  const app = createServer({
+    semanticProjectService,
+    businessVersionService,
+    semanticQueryService,
+    semanticAuthoringService,
+    semanticRunService,
+    agentActivityRepository,
+    semanticControlEventHub: databaseManager.getSemanticControlEventHub(),
+  });
+  const activityIngester = new AgentActivityIngester(agentTasks, agentActivityRepository, {
+    logger: app.log.child({ module: 'agent-activity-ingester' }),
+  });
   const semanticCoordinator = new SemanticCoordinatorService({
     repository: databaseManager.getSemanticCoordinatorRepo(),
     workflows: databaseManager.getSemanticWorkflowRepo(),
@@ -209,15 +220,6 @@ export async function start() {
       databaseManager.getSemanticAssetRepo(),
       databaseManager.getAuthoringAmendmentRepo()
     ),
-  });
-  const app = createServer({
-    semanticProjectService,
-    businessVersionService,
-    semanticQueryService,
-    semanticAuthoringService,
-    semanticRunService,
-    agentActivityRepository,
-    semanticControlEventHub: databaseManager.getSemanticControlEventHub(),
   });
   try {
     const evidenceRetention = new SemanticEvidenceRetentionService({
