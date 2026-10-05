@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo } from 'react';
 import {
   isAgentStreamEvent,
   isAgentStreamSnapshot,
@@ -6,7 +6,14 @@ import {
   type AgentStreamSnapshotV1,
 } from '@nebula-link-evo/shared/types/agent-stream';
 
-export type AgentStreamConnectionStatus = 'disconnected' | 'connecting' | 'reconnecting' | 'live';
+import {
+  useConnectionCore,
+  type ConnectionStatus,
+  type DecodedValue,
+} from './connection-core.js';
+import { createFetchSseTransport } from './sse-transport.js';
+
+export type AgentStreamConnectionStatus = ConnectionStatus;
 
 export interface AgentStreamConnectionOptions {
   endpoint: string;
@@ -22,7 +29,32 @@ export interface AgentStreamConnection {
   disconnect: () => void;
 }
 
-/** Owns transport resources only. The consumer owns snapshots, replay and business state. */
+export interface SnapshotEventConnectionOptions<TSnapshot, TEvent = unknown> {
+  readonly endpoint: string;
+  readonly contextKey?: string;
+  readonly enabled?: boolean;
+  readonly snapshotEvent: string;
+  readonly eventFilter?: (eventName: string) => boolean;
+  readonly onSnapshot: (snapshot: TSnapshot) => void;
+  readonly onEvent?: (eventName: string, data: TEvent) => void;
+  readonly validateSnapshot?: (value: unknown) => value is TSnapshot;
+}
+
+export interface SnapshotEventConnection {
+  readonly status: ConnectionStatus;
+  readonly reconnect: () => void;
+  readonly disconnect: () => void;
+}
+
+interface SnapshotEvent<TEvent> {
+  readonly eventName: string;
+  readonly data: TEvent;
+}
+
+const DEFAULT_EVENT_FILTER = (eventName: string) =>
+  eventName !== 'heartbeat' && eventName !== 'comment';
+
+/** Owns the Agent Stream transport while the host owns replay and business state. */
 export function useAgentStreamConnection({
   endpoint,
   streamId,
@@ -30,132 +62,82 @@ export function useAgentStreamConnection({
   onSnapshot,
   onEvents,
 }: AgentStreamConnectionOptions): AgentStreamConnection {
-  const contextKey = useMemo(
+  const connectionKey = useMemo(
     () => ({ endpoint, streamId, enabled }),
     [endpoint, streamId, enabled]
   );
-  const current = useRef({ contextKey, onSnapshot, onEvents });
-  current.current = { contextKey, onSnapshot, onEvents };
-  const controls = useRef<{ reconnect: () => void; disconnect: () => void } | null>(null);
-  const [connection, setConnection] = useState<{
-    contextKey: typeof contextKey;
-    status: AgentStreamConnectionStatus;
-  } | null>(null);
-
-  useEffect(() => {
-    if (!enabled || !streamId || typeof EventSource === 'undefined') return;
-    let disposed = false;
-    let generation = 0;
-    let source: EventSource | null = null;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    let frame: number | null = null;
-    let frameGeneration = 0;
-    let pending: AgentStreamEventV1[] = [];
-    let nextDelay = 1000;
-
-    const isCurrent = () => !disposed && current.current.contextKey === contextKey;
-    const setStatus = (status: AgentStreamConnectionStatus) => {
-      if (isCurrent()) setConnection({ contextKey, status });
-    };
-    const clearBatch = () => {
-      frameGeneration += 1;
-      if (frame !== null) cancelAnimationFrame(frame);
-      frame = null;
-      pending = [];
-    };
-    const stop = () => {
-      generation += 1;
-      clearBatch();
-      if (timer !== null) clearTimeout(timer);
-      timer = null;
-      source?.close();
-      source = null;
-    };
-    const connect = (reconnecting: boolean) => {
-      stop();
-      if (!isCurrent()) return;
-      setStatus(reconnecting ? 'reconnecting' : 'connecting');
-      const activeGeneration = generation;
-      const activeSource = new EventSource(endpoint);
-      source = activeSource;
-      let hasSnapshot = false;
-      const isActive = () =>
-        isCurrent() && generation === activeGeneration && source === activeSource;
-      activeSource.addEventListener('agent_stream.snapshot', (raw: MessageEvent) => {
-        if (!isActive()) return;
-        const payload = parseEventData(raw.data);
-        if (!isAgentStreamSnapshot(payload) || payload.streamId !== streamId) return;
-        clearBatch();
-        hasSnapshot = true;
-        nextDelay = 1000;
-        current.current.onSnapshot(payload);
-        setStatus('live');
-      });
-      activeSource.addEventListener('agent_stream.event', (raw: MessageEvent) => {
-        if (!isActive() || !hasSnapshot) return;
-        const payload = parseEventData(raw.data);
-        if (!isAgentStreamEvent(payload) || payload.streamId !== streamId) return;
-        pending.push(payload);
-        if (frame !== null) return;
-        const activeFrameGeneration = frameGeneration;
-        frame = requestAnimationFrame(() => {
-          if (!isActive() || frameGeneration !== activeFrameGeneration) return;
-          frame = null;
-          const events = pending;
-          pending = [];
-          current.current.onEvents(events);
-        });
-      });
-      // EventSource.onopen is not bootstrap evidence; only a matching snapshot becomes live.
-      activeSource.onerror = () => {
-        if (!isActive()) return;
-        stop();
-        setStatus('reconnecting');
-        const retryGeneration = generation;
-        const delay = nextDelay;
-        nextDelay = Math.min(nextDelay * 2, 30_000);
-        timer = setTimeout(() => {
-          if (!isCurrent() || generation !== retryGeneration) return;
-          timer = null;
-          connect(true);
-        }, delay);
-      };
-    };
-    const activeControls = {
-      reconnect: () => {
-        if (!isCurrent()) return;
-        connect(true);
-      },
-      disconnect: () => {
-        stop();
-        setStatus('disconnected');
-      },
-    };
-    controls.current = activeControls;
-    connect(false);
-    return () => {
-      disposed = true;
-      stop();
-      if (controls.current === activeControls) controls.current = null;
-    };
-  }, [contextKey, enabled, endpoint, streamId]);
-
-  const reconnect = useCallback(() => controls.current?.reconnect(), []);
-  const disconnect = useCallback(() => controls.current?.disconnect(), []);
-  const available = enabled && Boolean(streamId) && typeof EventSource !== 'undefined';
-  const status = !available
-    ? 'disconnected'
-    : connection?.contextKey === contextKey
-      ? connection.status
-      : 'connecting';
-  return { status, reconnect, disconnect };
+  return useConnectionCore({
+    endpoint,
+    connectionKey,
+    enabled,
+    available: enabled && Boolean(streamId) && typeof EventSource !== 'undefined',
+    snapshotEvent: 'agent_stream.snapshot',
+    eventNames: ['agent_stream.snapshot', 'agent_stream.event'],
+    surfaceEventsBeforeSnapshot: false,
+    batchEvents: true,
+    decodeSnapshot: (value): DecodedValue<AgentStreamSnapshotV1> =>
+      isAgentStreamSnapshot(value) && value.streamId === streamId
+        ? { accepted: true, value }
+        : { accepted: false },
+    decodeEvent: (eventName, value): DecodedValue<AgentStreamEventV1> =>
+      eventName === 'agent_stream.event' &&
+      isAgentStreamEvent(value) &&
+      value.streamId === streamId
+        ? { accepted: true, value }
+        : { accepted: false },
+    onSnapshot,
+    onEvents,
+  });
 }
 
-function parseEventData(data: unknown): unknown {
-  if (typeof data !== 'string') return null;
-  try {
-    return JSON.parse(data) as unknown;
-  } catch {
-    return null;
-  }
+/** Connects to generic named-event SSE protocols with snapshot-first status gating. */
+export function useSnapshotEventConnection<TSnapshot, TEvent = unknown>(
+  options: SnapshotEventConnectionOptions<TSnapshot, TEvent>
+): SnapshotEventConnection {
+  const {
+    endpoint,
+    contextKey = endpoint,
+    enabled = true,
+    snapshotEvent,
+    eventFilter = DEFAULT_EVENT_FILTER,
+    onSnapshot,
+    onEvent,
+    validateSnapshot,
+  } = options;
+  const connectionKey = useMemo(
+    () => ({ endpoint, contextKey, enabled, snapshotEvent }),
+    [endpoint, contextKey, enabled, snapshotEvent]
+  );
+
+  return useConnectionCore<TSnapshot, SnapshotEvent<TEvent>>({
+    endpoint,
+    connectionKey,
+    enabled,
+    available: enabled && typeof fetch !== 'undefined',
+    snapshotEvent,
+    eventNames: [],
+    transportFactory: createFetchSseTransport,
+    surfaceEventsBeforeSnapshot: true,
+    batchEvents: false,
+    decodeSnapshot: (value) => {
+      if (!isRecord(value) || !Object.hasOwn(value, 'snapshot')) {
+        return { accepted: false };
+      }
+      const snapshot = value.snapshot;
+      if (validateSnapshot && !validateSnapshot(snapshot)) {
+        return { accepted: false, retry: true };
+      }
+      return { accepted: true, value: snapshot as TSnapshot };
+    },
+    decodeEvent: (eventName, value) =>
+      eventFilter(eventName)
+        ? { accepted: true, value: { eventName, data: value as TEvent } }
+        : { accepted: false },
+    onSnapshot,
+    onEvent: (event) => onEvent?.(event.eventName, event.data),
+  });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
