@@ -1,6 +1,6 @@
 # browser-control-cli
 
-- [shipped] `shared/types/browser-execution.ts` 提供 capability/session/lease/operation/target/problem/envelope 公共线协议和 observe/act 常量；proxy 内部 persistence/token hash 类型继续留在 `proxy-adapter/src/browser-execution/types.ts`。
+- [shipped] `libs/shared/types/browser-execution.ts` 提供 capability/session/lease/operation/target/problem/envelope 公共线协议和 observe/act 常量；proxy 内部 persistence/token hash 类型继续留在 `services/proxy-adapter/src/browser-execution/types.ts`。
 - [shipped] `integrations/browser-control-client/src/client.ts` 只接受 loopback base URL；HTTP 管理 capability/session/event-log/lease/artifact/operation ledger，现有 `/mcp` 执行 execute/cancel，不新增 proxy 路由或工具。`listSessionEvents` 保留完整事件及 afterSeq/limit；`closeSession(sessionId,idempotencyKey,credentials?,signal?)` 支持非活动会话无证关闭，Controlled session/CLI 自有活动会话带证关闭。
 - [shipped] HTTP `BrowserControlError` 保留 statusCode 和标准裸 Problem 的全部字段；非标准 HTTP 失败为 dependency_unavailable，非法成功 JSON/envelope、网络/超时/取消同码，存在底层异常时保留 cause。每 request 使用 X-Correlation-ID；ai-e2e 复用 HTTP 方法，不接管其业务 FIFO/outbox。
 - [shipped] `ControlledBrowserSession` 首次调用校验协议 major 1、创建或显式 attach session、选择活动 Tab、签发最长 300 秒 control lease；token 仅在闭包对象内，公开 state 不含 token。

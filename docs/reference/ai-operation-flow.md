@@ -34,7 +34,7 @@
 │  └────────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
 
-浏览器工具经 DSH harness 的 MCP client（`ai-chat-service/src/harness/runtime.ts` 装配 `dsh-mcp-client`，`gateway-tool-bridge.ts` 把准入的产品工具投影进模型 ToolRuntime）通过 loopback `/mcp` 消费 proxy-adapter (:3000)，后者内进程运行 Playwright 引擎控制 Chromium。旧 `MCPSDKClient/MCPClientProvider` 双 transport 已删除。
+浏览器工具经 DSH harness 的 MCP client（`services/ai-chat-service/src/harness/runtime.ts` 装配 `dsh-mcp-client`，`gateway-tool-bridge.ts` 把准入的产品工具投影进模型 ToolRuntime）通过 loopback `/mcp` 消费 proxy-adapter (:3000)，后者内进程运行 Playwright 引擎控制 Chromium。旧 `MCPSDKClient/MCPClientProvider` 双 transport 已删除。
 ```
 
 ---
@@ -99,7 +99,7 @@ proxy-adapter
 - 创建 semantic run 前核对三服务 `/api/v1/capabilities`；能力不满足时返回可判定失败且不派发任务。
 - v1 控制面只允许 loopback/local 单用户部署；远程或多用户使用必须先实现统一认证、授权和租户隔离。
 
-完整需求见 `ai-e2e/docs/requirements-baseline.md`；资产生成/修复、功能脚本、场景编排、代理浏览器执行、运行状态/证据、跨服务 API/事件和双模型/Skills 分别见 `ai-e2e/docs/asset-authoring-repair-contract.md`、`ai-e2e/docs/functional-script-contract.md`、`ai-e2e/docs/scenario-orchestration-contract.md`、`ai-e2e/docs/agent-browser-execution-contract.md`、`ai-e2e/docs/run-state-decision-evidence-contract.md`、`ai-e2e/docs/service-api-event-contract.md`、`ai-e2e/docs/ai-model-skill-contract.md`。
+完整需求见 `services/ai-e2e/docs/requirements-baseline.md`；资产生成/修复、功能脚本、场景编排、代理浏览器执行、运行状态/证据、跨服务 API/事件和双模型/Skills 分别见 `services/ai-e2e/docs/asset-authoring-repair-contract.md`、`services/ai-e2e/docs/functional-script-contract.md`、`services/ai-e2e/docs/scenario-orchestration-contract.md`、`services/ai-e2e/docs/agent-browser-execution-contract.md`、`services/ai-e2e/docs/run-state-decision-evidence-contract.md`、`services/ai-e2e/docs/service-api-event-contract.md`、`services/ai-e2e/docs/ai-model-skill-contract.md`。
 
 ---
 
@@ -161,7 +161,7 @@ Client connects ──▶ SessionEventHub.subscribe()
 
 ## Session State Machine
 
-权威口径为六态：`idle / running / paused / interrupted / cancelled / completed`（见 `docs/shipped/session-state-machine.md` 与 `ai-chat-service/PRODUCT-SPEC.md` §4）。
+权威口径为六态：`idle / running / paused / interrupted / cancelled / completed`（见 `docs/shipped/session-state-machine.md` 与 `services/ai-chat-service/PRODUCT-SPEC.md` §4）。
 
 ```
          ┌──────────┐  message
@@ -229,7 +229,7 @@ Client connects ──▶ SessionEventHub.subscribe()
 
 ### Debug API
 
-> 以下路由由 proxy-adapter 提供（见 `proxy-adapter/src/plugins/routes/debug.ts` 与 `debug-stream.ts`）；AI provider 连通性测试已迁至 ai-chat-service 的 `POST /api/v1/test-ai`。受控浏览器会话活动期间，写入/直接页面采集类 debug 路由会被仲裁并以 409 `browser_busy` 拒绝。
+> 以下路由由 proxy-adapter 提供（见 `services/proxy-adapter/src/plugins/routes/debug.ts` 与 `debug-stream.ts`）；AI provider 连通性测试已迁至 ai-chat-service 的 `POST /api/v1/test-ai`。受控浏览器会话活动期间，写入/直接页面采集类 debug 路由会被仲裁并以 409 `browser_busy` 拒绝。
 
 | Method | Path                                          | Description                     |
 | ------ | --------------------------------------------- | ------------------------------- |

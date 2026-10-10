@@ -2,7 +2,7 @@
 
 ## Scope
 
-- This directory is for operator-facing AI/provider payloads. Runtime resolution and validation live under `ai-chat-service/src/config/`; `proxy-adapter` uses process environment only and does not read these files.
+- This directory is for operator-facing AI/provider payloads. Runtime resolution and validation live under `services/ai-chat-service/src/config/`; `proxy-adapter` uses process environment only and does not read these files.
 
 ## Non-obvious constraints
 
@@ -13,4 +13,4 @@
 ## Editing traps
 
 - Do not commit real API keys here.
-- Do not “clean up” placeholder strings, defaults, model capabilities, or provider blocks without checking `ai-chat-service/src/config/{resolver,validator}.ts`, Harness mapping and startup preflight.
+- Do not “clean up” placeholder strings, defaults, model capabilities, or provider blocks without checking `services/ai-chat-service/src/config/{resolver,validator}.ts`, Harness mapping and startup preflight.

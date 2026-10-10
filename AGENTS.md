@@ -7,15 +7,15 @@ AI-assisted browser automation platform. `proxy-adapter` is the browser capabili
 ## Structure
 
 ```text
-shared/             Shared types and utilities (no src/ dir — source at package root)
-agent-activity-ui/  Stateless React renderer + shared Agent Stream replay exports shared by debug-ui and ai-e2e/ui (build-only, no port, not in pnpm dev)
-agent-stream-client/ Shared React Agent Stream transport (build-only, no port, not in pnpm dev)
-proxy-adapter/      Browser MCP gateway — MCP Server, Playwright control, debug streams (:3000)
+libs/shared/             Shared types and utilities (no src/ dir — source at package root)
+libs/agent-activity-ui/  Stateless React renderer + shared Agent Stream replay exports shared by debug-ui and services/ai-e2e/ui (build-only, no port, not in pnpm dev)
+libs/agent-stream-client/ Shared React Agent Stream transport (build-only, no port, not in pnpm dev)
+services/proxy-adapter/  Browser MCP gateway — MCP Server, Playwright control, debug streams (:3000)
   src/mcp-server/   MCP Server transport (StreamableHTTP)
   src/tools/        ToolRegistry + providers + MCP Server adapter
-ai-chat-service/    AI chat backend — conversation, provider orchestration, Chat SSE (:3001)
-debug-ui/           Primary web UI — React SPA, Vite (:5173 dev)
-ai-e2e/             AI E2E test orchestration (:3002)
+services/ai-chat-service/ AI chat backend — conversation, provider orchestration, Chat SSE (:3001)
+apps/debug-ui/          Primary web UI — React SPA, Vite (:5173 dev)
+services/ai-e2e/         AI E2E test orchestration (:3002)
   ui/               Nested workspace — React SPA served at /ai-e2e/ (:5174 dev)
 integrations/        Local controlled consumers (no browser engine ownership)
   browser-control-client/    Shared HTTP/MCP client + nebula-browser CLI
@@ -36,8 +36,8 @@ docs/               Architecture docs, API references, shipped manifests (not a 
 - `ai-e2e` reuses only the HTTP control-plane methods of `integrations/browser-control-client` through its domain-error/Buffer adapter; its FIFO, outbox, lease and operation lifecycle remain owned by the E2E coordinator. It does not use `ControlledBrowserSession` or the client's MCP execute/cancel methods.
 - Target agent orchestration is page-scoped: the main AI owns flow/TODO dependencies, shared run variables, decisions and dispatch; each child AI executes only its assigned page-scene fragment. Every dispatch defaults to a clean child context; resuming an interrupted context after explicit state and side-effect checks is the planned extension (pending, see `docs/PRODUCT-SPEC-INDEX.md` §3.9).
 - The E2E authority is a structured semantic script executed visibly through `proxy-adapter`; ai-e2e no longer contains a TypeScript subprocess executor or debug-browser path.
-- The ai-e2e main agent is a durable workflow coordinator backed by authoring job/task/attempt/event state, not a long-lived model conversation. Bootstrap, recheck and repair separate candidate generation, validation, real browser verification and atomic activation; see `ai-e2e/docs/asset-authoring-repair-contract.md`.
-- Cross-service APIs, scoped Agent tasks, browser operation tools, snapshot-first events, idempotency and recovery are fixed in `ai-e2e/docs/service-api-event-contract.md`; dual-model and declarative Skill rules are fixed in `ai-e2e/docs/ai-model-skill-contract.md`. Proxy session/lease/operation、截图/DOM 与 browser events，ai-chat-service Agent task/Skill/Vision v2/逐 effect 授权，以及 ai-e2e Project/Authoring/Run API、outbox 协调、可视语义执行、证据提升和生产工作台均已交付。
+- The ai-e2e main agent is a durable workflow coordinator backed by authoring job/task/attempt/event state, not a long-lived model conversation. Bootstrap, recheck and repair separate candidate generation, validation, real browser verification and atomic activation; see `services/ai-e2e/docs/asset-authoring-repair-contract.md`.
+- Cross-service APIs, scoped Agent tasks, browser operation tools, snapshot-first events, idempotency and recovery are fixed in `services/ai-e2e/docs/service-api-event-contract.md`; dual-model and declarative Skill rules are fixed in `services/ai-e2e/docs/ai-model-skill-contract.md`. Proxy session/lease/operation、截图/DOM 与 browser events，ai-chat-service Agent task/Skill/Vision v2/逐 effect 授权，以及 ai-e2e Project/Authoring/Run API、outbox 协调、可视语义执行、证据提升和生产工作台均已交付。
 - v1 has one active browser execution session per `proxy-adapter` process. Authoring verification and test runs share one FIFO; the main agent may observe only at atomic-operation safe boundaries, only the active child holds control, and the live UI is read-only.
 - ai-e2e is a clean semantic cut: the service uses `ai-e2e-semantic.sqlite`, does not read/import old tables, and exposes only canonical `/api/v1` product routes.
 
@@ -47,14 +47,14 @@ docs/               Architecture docs, API references, shipped manifests (not a 
 pnpm dev            # predev starts LiveKit → shared/renderer/client build → parallel dev for shared/debug-ui/proxy-adapter/ai-chat-service
 pnpm build          # shared → agent-activity-ui → agent-stream-client → integrations → debug-ui → proxy-adapter → ai-chat-service → ai-e2e
 pnpm test           # Node launcher lifecycle tests → pnpm -r test (vitest everywhere)
-pnpm lint           # eslint across debug-ui / ai-e2e/ui / proxy-adapter / ai-chat-service / shared / integrations / agent-activity-ui / agent-stream-client
-pnpm format         # prettier --write debug-ui/src proxy-adapter/src ai-chat-service/src
+pnpm lint           # eslint across apps/debug-ui / services/ai-e2e/ui / services/proxy-adapter / services/ai-chat-service / libs/shared / integrations / libs/agent-activity-ui / libs/agent-stream-client
+pnpm format         # prettier --write apps/debug-ui/src services/proxy-adapter/src services/ai-chat-service/src
 ```
 
 ## Scope & routing
 
-- Root `AGENTS.md` only covers repo-wide landmines. Prefer nearer docs when working in `debug-ui/`, `proxy-adapter/`, `ai-chat-service/`, `shared/`, `ai-e2e/`, `integrations/`, `config/`, or `tools/`.
-- `debug-ui/` owns all frontend code. Do not revive `proxy-adapter/src/static/debug/` or move frontend source back under the backend package.
+- Root `AGENTS.md` only covers repo-wide landmines. Prefer nearer docs when working in `apps/debug-ui/`, `services/proxy-adapter/`, `services/ai-chat-service/`, `libs/shared/`, `services/ai-e2e/`, `integrations/`, `config/`, or `tools/`.
+- `apps/debug-ui/` owns all frontend code. Do not revive `services/proxy-adapter/src/static/debug/` or move frontend source back under the backend package.
 - Cross-package imports use `@nebula-link-evo/shared`. Do not reintroduce stale `@shared/*` aliases.
 
 ## Hidden runtime order
@@ -64,8 +64,8 @@ pnpm format         # prettier --write debug-ui/src proxy-adapter/src ai-chat-se
 - `proxy-adapter` startup order matters: env load → DB backup init outside tests → browser-execution service init → tool provider registration (`ToolRegistry.registerProvider`) → HTTP routes → MCP/debug surfaces. `AppService` is only a tool/MCP inventory facade (`setToolRegistry`) and no longer owns browser lifecycle.
 - UI 独立 dev/build/test:e2e 通过 pnpm 依赖闭包构建 shared、agent-activity-ui 和 agent-stream-client；start.bat 的 ai-e2e build 同样准备这些 dist。
 - Chat reconnect always reboots from a fresh `agent_stream.snapshot` and then accepts only `agent_stream.event`; there is no parallel Chat wire contract.
-- `ai-chat-service` 配置加载器只按工作目录依次搜索 `config/config.json`、`../config/config.json`、`../../config/config.json`、`nebula-link-evo/config/config.json`（显式 `configPath` 优先）；不会自动搜索包内配置。`proxy-adapter` 不读取 AI provider 配置。
-- 环境文件按进程入口独立加载且入口是本进程唯一 owner：`proxy-adapter/src/server.ts` 与 `ai-chat-service/src/server.ts` 依次尝试工作目录 `.env`、父目录 `.env`；`ai-e2e/src/server/index.ts` 依次尝试工作目录 `.env.local`、父目录 `.env`，二者均不存在时由 dotenv 回退工作目录 `.env`。均以既有 `process.env` 为最高优先级。不得在 `shared` 或可复用 `buildApp()` 中增加 dotenv 副作用。
+- `ai-chat-service` 配置加载器按进程工作目录依次搜索 `config/config.json`、`../config/config.json`、`../../config/config.json`、`nebula-link-evo/config/config.json`（显式 `configPath` 优先）；从 `services/ai-chat-service` 启动时，`../../config/config.json` 指向仓库根目录下的配置文件，不会自动搜索包内配置。`proxy-adapter` 不读取 AI provider 配置。
+- 环境文件由进程入口独立加载且入口是本进程唯一 owner：`services/proxy-adapter/src/server.ts` 与 `services/ai-chat-service/src/server.ts` 按各自服务目录的工作目录依次尝试 `.env`、`../.env`、`../../.env`；`services/ai-e2e/src/server/index.ts` 依次尝试 `.env.local`、`../.env`、`../../.env`，全部缺失时由 dotenv 回退工作目录 `.env`。均以既有 `process.env` 为最高优先级。不得在 `libs/shared` 或可复用 `buildApp()` 中增加 dotenv 副作用。
 - 升级被 `pnpm-workspace.yaml#patchedDependencies` 覆盖的依赖时，必须同步评估对应 patch：上游已包含所需行为时删除 patch 配置与文件，否则针对新版本重建 patch；两种情况都必须重新生成并校验 lockfile、Harness BOM/patch hash 及相关持久化测试，不得留下失效或无引用 patch。
 - pnpm 11 依赖安装保留默认 24 小时 `minimumReleaseAge` 与显式 `allowBuilds`；不得全局关闭供应链冷却或放宽构建脚本，确需立即采用的新版本只能在核验后按精确版本加入 `minimumReleaseAgeExclude`。
 - TypeScript 构建与类型检查由 `@typescript/native` alias 提供的 7.x 原生 `tsc` 执行；`typescript` alias 固定指向 `@typescript/typescript6`，只为 `typescript-eslint` 等编译器 API 消费方提供兼容层。两者必须并存，并通过 `pnpm exec tsc --version`、`pnpm exec tsc6 --version` 与 `pnpm peers check` 验证。
@@ -96,16 +96,16 @@ pnpm format         # prettier --write debug-ui/src proxy-adapter/src ai-chat-se
 
 ## Local AGENTS
 
-Package-level entries (nested `AGENTS.md` under `debug-ui/src/**`, `debug-ui/e2e/`, `proxy-adapter/src/**` follow the nearest-doc principle and are not individually listed here):
+Package-level entries (nested `AGENTS.md` under `apps/debug-ui/src/**`, `apps/debug-ui/e2e/`, `services/proxy-adapter/src/**` follow the nearest-doc principle and are not individually listed here):
 
-- `agent-activity-ui/AGENTS.md`
-- `agent-stream-client/AGENTS.md`
-- `debug-ui/AGENTS.md`
-- `proxy-adapter/AGENTS.md`
-- `ai-chat-service/AGENTS.md`
-- `shared/AGENTS.md`
-- `ai-e2e/AGENTS.md`
-- `ai-e2e/ui/AGENTS.md`
+- `libs/agent-activity-ui/AGENTS.md`
+- `libs/agent-stream-client/AGENTS.md`
+- `apps/debug-ui/AGENTS.md`
+- `services/proxy-adapter/AGENTS.md`
+- `services/ai-chat-service/AGENTS.md`
+- `libs/shared/AGENTS.md`
+- `services/ai-e2e/AGENTS.md`
+- `services/ai-e2e/ui/AGENTS.md`
 - `integrations/AGENTS.md`
 - `config/AGENTS.md`
 - `tools/AGENTS.md`
@@ -125,13 +125,13 @@ Package-level entries (nested `AGENTS.md` under `debug-ui/src/**`, `debug-ui/e2e
 ### PRODUCT-SPEC 文件清单
 
 - `docs/PRODUCT-SPEC-INDEX.md` — 根索引 + 跨包契约 + 全局修改维护协议
-- `shared/PRODUCT-SPEC.md`
-- `agent-activity-ui/PRODUCT-SPEC.md`
-- `agent-stream-client/PRODUCT-SPEC.md`
-- `proxy-adapter/PRODUCT-SPEC.md`
-- `ai-chat-service/PRODUCT-SPEC.md`
-- `debug-ui/PRODUCT-SPEC.md`
-- `ai-e2e/PRODUCT-SPEC.md`
+- `libs/shared/PRODUCT-SPEC.md`
+- `libs/agent-activity-ui/PRODUCT-SPEC.md`
+- `libs/agent-stream-client/PRODUCT-SPEC.md`
+- `services/proxy-adapter/PRODUCT-SPEC.md`
+- `services/ai-chat-service/PRODUCT-SPEC.md`
+- `apps/debug-ui/PRODUCT-SPEC.md`
+- `services/ai-e2e/PRODUCT-SPEC.md`
 - `integrations/browser-control-client/PRODUCT-SPEC.md`
 - `integrations/deepseek-harness-plugin/PRODUCT-SPEC.md`
 

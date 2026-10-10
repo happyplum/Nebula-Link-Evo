@@ -1,6 +1,6 @@
 # UI 性能基线
 
-本基线用于比较 `debug-ui` 与 `ai-e2e/ui` 的生产构建首屏表现。它是可复现的本地实验室参考，不是线上 CrUX 数据，也不是 CI 硬阈值。
+本基线用于比较 `debug-ui` 与 `services/ai-e2e/ui` 的生产构建首屏表现。它是可复现的本地实验室参考，不是线上 CrUX 数据，也不是 CI 硬阈值。
 
 ## 测量环境
 
@@ -21,11 +21,11 @@
 | ----------------------------- | -------: | --: | ---------------: | --------------------------: |
 | `debug-ui` LiveKit 优化前     | 4,039 ms |   0 |        305,941 B |          184 ms EventTiming |
 | `debug-ui` LiveKit 按需加载后 | 3,133 ms |   0 |        172,078 B |          184 ms EventTiming |
-| `ai-e2e/ui` 当前基线          | 2,529 ms |   0 |        143,334 B | 40.2 ms click-to-second-rAF |
+| `services/ai-e2e/ui` 当前基线 | 2,529 ms |   0 |        143,334 B | 40.2 ms click-to-second-rAF |
 
 `debug-ui` 首屏减少 133,863 B（43.8%），同条件 LCP 缩短 906 ms（22.4%）。优化后的首屏不再请求 LiveKit；切换到 WebRTC 时才加载 `LiveKitView` 与 `vendor-livekit`，加载期间继续显示 MJPEG。
 
-`ai-e2e/ui` 的 40.2 ms 是“打开新建项目对话框”从点击到第二个 `requestAnimationFrame` 的实验室代理值，不等同于 INP。该次 DevTools trace 没有产生可用的非零 EventTiming interaction candidate。
+`services/ai-e2e/ui` 的 40.2 ms 是“打开新建项目对话框”从点击到第二个 `requestAnimationFrame` 的实验室代理值，不等同于 INP。该次 DevTools trace 没有产生可用的非零 EventTiming interaction candidate。
 
 ## 首屏传输明细
 
@@ -33,7 +33,7 @@
 | ----------------- | --------: | ---------: | -----------: | -------------: | -------: | --------: |
 | `debug-ui` 优化前 | 102,834 B |    1,016 B |     59,241 B |      132,555 B | 10,295 B | 305,941 B |
 | `debug-ui` 优化后 | 101,574 B |    1,016 B |     59,241 B |            0 B | 10,247 B | 172,078 B |
-| `ai-e2e/ui`       |  66,664 B |      889 B |     59,253 B |              — | 16,528 B | 143,334 B |
+| `services/ai-e2e/ui` |  66,664 B |      889 B |     59,253 B |              — | 16,528 B | 143,334 B |
 
 ## 复测流程
 

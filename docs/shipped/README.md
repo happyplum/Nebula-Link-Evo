@@ -40,7 +40,7 @@
 | ai-provider-system | ai-chat-service | [ai-provider-system.md](ai-provider-system.md) |
 | agent-tasks | ai-chat-service + proxy-adapter | [agent-tasks.md](agent-tasks.md) |
 | vision-analysis | ai-chat-service | [vision-analysis.md](vision-analysis.md) |
-| agent-stream-client | agent-stream-client + debug-ui + ai-e2e/ui | [agent-stream-client.md](agent-stream-client.md) |
+| agent-stream-client | agent-stream-client + debug-ui + services/ai-e2e/ui | [agent-stream-client.md](agent-stream-client.md) |
 | chat-rendering | debug-ui | [chat-rendering.md](chat-rendering.md) |
 | debug-ui-panels | debug-ui | [debug-ui-panels.md](debug-ui-panels.md) |
 | liveview-system | debug-ui + proxy-adapter | [liveview-system.md](liveview-system.md) |

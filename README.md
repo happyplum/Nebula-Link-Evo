@@ -52,7 +52,7 @@ Browser ←→ Debug UI (:5173 dev)
 
 **元素选择器**：鼠标悬停高亮显示页面元素，点击即可查看元素详情和可执行操作。
 
-**交互分析**：后端 `/api/interactions` 支持按操作类型、执行状态、策略类型、时间范围过滤历史交互记录；对应过滤 UI 视图规划中（见 `debug-ui/PRODUCT-SPEC.md` 第 6 节）。
+**交互分析**：后端 `/api/interactions` 支持按操作类型、执行状态、策略类型、时间范围过滤历史交互记录；对应过滤 UI 视图规划中（见 `apps/debug-ui/PRODUCT-SPEC.md` 第 6 节）。
 
 ## Tech Stack
 
@@ -67,16 +67,16 @@ Browser ←→ Debug UI (:5173 dev)
 
 ## Packages
 
-| Package                                | Port  | Role                                                                                                     |
-| -------------------------------------- | ----- | -------------------------------------------------------------------------------------------------------- |
-| `proxy-adapter`                        | :3000 | 浏览器能力网关（3 个受控 operation MCP 工具、browser-execution 控制面、受仲裁调试流、LiveKit、健康检查） |
-| `ai-chat-service`                      | :3001 | 唯一 AI 驱动核心（统一 Harness、Chat/Agent Task、模型、Vision、MCP/Skills、预算、持久化与插件装配）      |
-| `debug-ui`                             | :5173 | 实时调试监控面板（chat SSE → :3001, browser/debug → :3000）                                              |
-| `ai-e2e`                               | :3002 | 纯 semantic E2E 业务编排；通过 AgentTaskClient 与 SemanticBrowserClient 消费两个基础服务                 |
-| `shared`                               | —     | 共享类型和工具库                                                                                         |
-| `agent-activity-ui`                    | —     | 无状态 React renderer 与 shared Agent Stream 回放重导出（debug-ui 与 ai-e2e/ui 共用）                               |
-| `integrations/browser-control-client`  | —     | 受控 HTTP/MCP 客户端、自动会话控制器与 `nebula-browser` CLI                                              |
-| `integrations/deepseek-harness-plugin` | —     | 仅暴露 observe/act 的 DeepSeek Harness bundle；act 逐次审批                                              |
+| Package                                | Directory                                  | Port  | Role                                                                                                     |
+| -------------------------------------- | ------------------------------------------ | ----- | -------------------------------------------------------------------------------------------------------- |
+| `proxy-adapter`                        | `services/proxy-adapter`                   | :3000 | 浏览器能力网关（3 个受控 operation MCP 工具、browser-execution 控制面、受仲裁调试流、LiveKit、健康检查） |
+| `ai-chat-service`                      | `services/ai-chat-service`                 | :3001 | 唯一 AI 驱动核心（统一 Harness、Chat/Agent Task、模型、Vision、MCP/Skills、预算、持久化与插件装配）      |
+| `debug-ui`                             | `apps/debug-ui`                            | :5173 | 实时调试监控面板（chat SSE → :3001, browser/debug → :3000）                                              |
+| `ai-e2e`                               | `services/ai-e2e`                          | :3002 | 纯 semantic E2E 业务编排；通过 AgentTaskClient 与 SemanticBrowserClient 消费两个基础服务                 |
+| `shared`                               | `libs/shared`                              | —     | 共享类型和工具库                                                                                         |
+| `agent-activity-ui`                    | `libs/agent-activity-ui`                   | —     | 无状态 React renderer 与 shared Agent Stream 回放重导出（debug-ui 与 services/ai-e2e/ui 共用）           |
+| `integrations/browser-control-client`  | `integrations/browser-control-client`      | —     | 受控 HTTP/MCP 客户端、自动会话控制器与 `nebula-browser` CLI                                              |
+| `integrations/deepseek-harness-plugin` | `integrations/deepseek-harness-plugin`     | —     | 仅暴露 observe/act 的 DeepSeek Harness bundle；act 逐次审批                                              |
 
 ## Quick Start
 
@@ -99,7 +99,7 @@ copy .env.example .env
 # 编辑 .env 文件，设置 AI provider API key
 ```
 
-环境文件由各后端进程的可执行入口加载，`shared` 与可复用应用工厂不加载 dotenv：`proxy-adapter`、`ai-chat-service` 按当前工作目录 `.env` → 父目录 `.env` 查找；`ai-e2e` 按当前工作目录 `.env.local` → 父目录 `.env` 查找，二者都不存在时回退当前目录 `.env`。启动进程已有的环境变量优先，不由文件覆盖。AI provider 的 `config/config.json` 搜索是独立配置链，不等同于 dotenv 搜索。
+环境文件由各后端进程的可执行入口加载，`libs/shared` 与可复用应用工厂不加载 dotenv。服务进程从各自的 `services/<package>` 目录启动：`proxy-adapter`、`ai-chat-service` 依次尝试当前目录 `.env`、`../.env`、`../../.env`；`ai-e2e` 依次尝试当前目录 `.env.local`、`../.env`、`../../.env`，全部缺失时回退当前目录 `.env`。启动进程已有的环境变量优先，不由文件覆盖。AI provider 的 `config/config.json` 搜索是独立配置链，按 `ai-chat-service` 进程工作目录解析，不等同于 dotenv 搜索。
 
 **启动开发模式**：
 
@@ -132,7 +132,7 @@ pnpm test:coverage  # 全工作区串行覆盖率门禁
 pnpm test:e2e       # proxy/Agent/semantic/CLI/Harness/Debug UI/ai-e2e UI 真实 Chromium E2E
 pnpm type-check     # 全工作区 TypeScript 7 原生静态检查
 pnpm lint           # 根级源码与测试 lint
-pnpm format:check   # debug-ui/proxy/ai-chat 源码格式门禁
+pnpm format:check   # apps/debug-ui, services/proxy-adapter, services/ai-chat-service 源码格式门禁
 ```
 
 工作区使用 TypeScript 7 的原生 `tsc` 执行构建与类型检查，同时通过 `typescript` npm alias 提供 `@typescript/typescript6` API，供 `typescript-eslint` 等仍需编译器 API 的工具使用；不得移除任一侧或用 peer override 替代该兼容机制。
@@ -140,15 +140,16 @@ pnpm format:check   # debug-ui/proxy/ai-chat 源码格式门禁
 ## Project Structure
 
 ```
-debug-ui/           # Frontend (React 19 + TypeScript + Vite)
-proxy-adapter/      # Browser MCP gateway (Fastify, MCP Server, Playwright control)
+apps/debug-ui/      # Frontend (React 19 + TypeScript + Vite)
+services/proxy-adapter/      # Browser MCP gateway (Fastify, MCP Server, Playwright control)
   src/mcp-server/   #   MCP Server transport (StreamableHTTP)
   src/tools/        #   ToolRegistry + browser-execution provider
-ai-chat-service/    # AI chat backend (Fastify, conversation, chat SSE, provider orchestration)
-ai-e2e/             # E2E automation orchestrator (consumes proxy-adapter and ai-chat-service HTTP APIs)
+services/ai-chat-service/    # AI chat backend (Fastify, conversation, chat SSE, provider orchestration)
+services/ai-e2e/             # E2E automation orchestrator (consumes proxy-adapter and ai-chat-service HTTP APIs)
   ui/               #   Nested workspace — React SPA served at /ai-e2e/ (:5174 dev)
-shared/             # Shared types & utils (@nebula-link-evo/shared)
-agent-activity-ui/  # Stateless React renderer + shared Agent Stream replay exports (@nebula-link-evo/agent-activity-ui)
+libs/shared/             # Shared types & utils (@nebula-link-evo/shared)
+libs/agent-activity-ui/  # Stateless React renderer + shared Agent Stream replay exports (@nebula-link-evo/agent-activity-ui)
+libs/agent-stream-client/ # Shared React Agent Stream transport
 integrations/       # Local controlled clients and harness adapters
 patches/            # pnpm patchedDependencies patch files
 docs/               # Documentation
@@ -171,10 +172,10 @@ docs/               # Documentation
 - [Product Spec Index](docs/PRODUCT-SPEC-INDEX.md) — 跨包产品规格索引（端口、API、SSE、MCP、shared 类型、依赖方向、强制维护协议）
 - [Browser Control Client](integrations/browser-control-client/README.md) — `nebula-browser` CLI、NDJSON 与受控会话语义
 - [DeepSeek Harness Plugin](integrations/deepseek-harness-plugin/README.md) — bundle 安装、审批与安全边界
-- [AI E2E Service API & Events](ai-e2e/docs/service-api-event-contract.md) — 三服务目标 API、MCP 原子操作、事件、幂等与恢复
-- [AI Models & Skills](ai-e2e/docs/ai-model-skill-contract.md) — 双模型、单次视觉分析、受限 Agent task 与声明式 Skills
-- [AI E2E Asset Authoring & Repair](ai-e2e/docs/asset-authoring-repair-contract.md) — 从零生成、复核、真实验证、影响分析与局部修复
-- [AI E2E Environment & Side Effects](ai-e2e/docs/environment-side-effect-policy-contract.md) — 环境矩阵、副作用风险投影、计划级审批与执行门禁
+- [AI E2E Service API & Events](services/ai-e2e/docs/service-api-event-contract.md) — 三服务目标 API、MCP 原子操作、事件、幂等与恢复
+- [AI Models & Skills](services/ai-e2e/docs/ai-model-skill-contract.md) — 双模型、单次视觉分析、受限 Agent task 与声明式 Skills
+- [AI E2E Asset Authoring & Repair](services/ai-e2e/docs/asset-authoring-repair-contract.md) — 从零生成、复核、真实验证、影响分析与局部修复
+- [AI E2E Environment & Side Effects](services/ai-e2e/docs/environment-side-effect-policy-contract.md) — 环境矩阵、副作用风险投影、计划级审批与执行门禁
 - [UI Performance Baseline](docs/performance/ui-performance-baseline.md) — Debug UI 与 AI E2E UI 的冷启动 LCP、传输量和复测方法
 
 ## Contributing and Security
@@ -206,11 +207,11 @@ AGPL 允许个人和企业使用、修改与分发软件，但必须遵守其开
 
 **领域层级**：逻辑页面由不含部署 Origin 的规范化路由模板与身份参数约束标识；实际运行再绑定部署、动态参数和参考基线。一个页面包含多个功能模块，一个模块包含多个可复用、可独立验证和修复的功能脚本。首期脚本采用显式输入、线性步骤、硬业务断言、成功后输出和声明副作用；场景使用无环调用图负责跨模块/页面的顺序、重复、分支、依赖和数据传递。PRD 形成场景定义与 TODO 模板，每次执行冻结独立运行计划并产生运行 TODO 和执行尝试。
 
-**代理、资产生成与执行（shipped）**：`proxy-adapter` session/lease/operation 与截图/DOM，`ai-chat-service` 受限 Agent task/Skill/Vision runtime，以及 `ai-e2e` Project/Authoring/Run API/SSE、outbox 确定性协调器和语义执行已接通。主代理由持久状态驱动，不依赖长模型对话；bootstrap/recheck/repair 形成结构化 candidate，经范围审批、安全边界和真实浏览器验证后才原子激活。每个 proxy 进程最多一个活动 session，Authoring 与 Run 共用 FIFO；每个 session 固定单 Context/actor，短期租约和一次性 token 不进入模型或数据库明文。冻结 target/args 与逐 effect 授权闭环已覆盖正式 Run 和 Authoring 验证。目标协议见 [`ai-e2e/docs/asset-authoring-repair-contract.md`](ai-e2e/docs/asset-authoring-repair-contract.md)、[`ai-e2e/docs/service-api-event-contract.md`](ai-e2e/docs/service-api-event-contract.md) 与 [`ai-e2e/docs/ai-model-skill-contract.md`](ai-e2e/docs/ai-model-skill-contract.md)。
+**代理、资产生成与执行（shipped）**：`proxy-adapter` session/lease/operation 与截图/DOM，`ai-chat-service` 受限 Agent task/Skill/Vision runtime，以及 `ai-e2e` Project/Authoring/Run API/SSE、outbox 确定性协调器和语义执行已接通。主代理由持久状态驱动，不依赖长模型对话；bootstrap/recheck/repair 形成结构化 candidate，经范围审批、安全边界和真实浏览器验证后才原子激活。每个 proxy 进程最多一个活动 session，Authoring 与 Run 共用 FIFO；每个 session 固定单 Context/actor，短期租约和一次性 token 不进入模型或数据库明文。冻结 target/args 与逐 effect 授权闭环已覆盖正式 Run 和 Authoring 验证。目标协议见 [`services/ai-e2e/docs/asset-authoring-repair-contract.md`](services/ai-e2e/docs/asset-authoring-repair-contract.md)、[`services/ai-e2e/docs/service-api-event-contract.md`](services/ai-e2e/docs/service-api-event-contract.md) 与 [`services/ai-e2e/docs/ai-model-skill-contract.md`](services/ai-e2e/docs/ai-model-skill-contract.md)。
 
 **状态、决策与证据（shipped）**：Run/计划/TODO/依赖/页面任务/尝试/变量/决策/命令/事件、执行协调、依赖传播、决策应用、公开 Run API/SSE、proxy operation/截图/DOM 证据提升、proxy 短期原始产物 TTL/hold 清理和 ai-e2e 长期原始证据 7/30 天保留清理已交付。登出中断、前置阻塞、待决策、依赖跳过、取消和业务失败保持独立语义；失败证据缺失只降低完整度。未按项目规则处理的截图/DOM 以 `restricted/pending` 保存；v1 依赖本机单用户边界与保留清理，不承诺通用自动脱敏。开放证据外发、共享、远程/多用户访问或项目级隐私策略前，必须先定义可验证的脱敏与权限规则并完成实现。完整契约见 [`ai-e2e/docs/run-state-decision-evidence-contract.md`](ai-e2e/docs/run-state-decision-evidence-contract.md)。
 
-**环境与副作用安全目标（shipped）**：正式 Run 与 Authoring 验证均确定性冻结部署环境和精确副作用投影，完成 policy evaluation、staging 计划级审批/active grant 原子应用、production 业务写拒绝，以及逐 effectId/数量/grant 的跨服务运行时门禁。local/test 自动执行已声明、有界副作用；staging 的单项非不可逆 create/update 自动，删除、批量、不可逆和上传在 browser job/control 前审批；production 只允许显式认证会话变化、导航、只读观测和断言，业务写入与上传硬拒绝。`ai-e2e` 持有策略/审批，`ai-chat-service` 逐工具校验授权交集，`proxy-adapter` 保持通用浏览器网关。完整契约见 [`ai-e2e/docs/environment-side-effect-policy-contract.md`](ai-e2e/docs/environment-side-effect-policy-contract.md)。
+**环境与副作用安全目标（shipped）**：正式 Run 与 Authoring 验证均确定性冻结部署环境和精确副作用投影，完成 policy evaluation、staging 计划级审批/active grant 原子应用、production 业务写拒绝，以及逐 effectId/数量/grant 的跨服务运行时门禁。local/test 自动执行已声明、有界副作用；staging 的单项非不可逆 create/update 自动，删除、批量、不可逆和上传在 browser job/control 前审批；production 只允许显式认证会话变化、导航、只读观测和断言，业务写入与上传硬拒绝。`ai-e2e` 持有策略/审批，`ai-chat-service` 逐工具校验授权交集，`proxy-adapter` 保持通用浏览器网关。完整契约见 [`services/ai-e2e/docs/environment-side-effect-policy-contract.md`](services/ai-e2e/docs/environment-side-effect-policy-contract.md)。
 
 **semantic 产品面（shipped）**：ai-e2e 使用独立的 `ai-e2e-semantic.sqlite`、结构化 semantic 资产和 canonical `/api/v1/*`，Authoring 与 Run 均通过受控 Agent/browser 执行链完成。
 
@@ -220,22 +221,22 @@ AGPL 允许个人和企业使用、修改与分发软件，但必须遵守其开
 - `ai-e2e` 只通过 `AgentTaskClient` 消费 `ai-chat-service` Agent/Vision/授权控制面，只通过 `SemanticBrowserClient` 消费 `proxy-adapter` browser-execution 控制面；不得直连 provider、Playwright、CDP 或 debug API。
 - 主链路为：纯 semantic 项目初始化 → bootstrap/recheck/repair Authoring → 结构化候选与影响审批 → 真实浏览器验证与原子激活 → formal Run/TODO/恢复/证据。
 - 当前目标与历史资料见：
-  - `ai-e2e/docs/requirements-baseline.md`
-  - `ai-e2e/docs/functional-script-contract.md`
-  - `ai-e2e/docs/scenario-orchestration-contract.md`
-  - `ai-e2e/docs/version-page-asset-contract.md`
-  - `ai-e2e/docs/agent-browser-execution-contract.md`
-  - `ai-e2e/docs/run-state-decision-evidence-contract.md`
-  - `ai-e2e/docs/semantic-script-schema.md`
-  - `ai-e2e/docs/target-data-model.md`
-  - `ai-e2e/docs/service-api-event-contract.md`
-  - `ai-e2e/docs/ai-model-skill-contract.md`
-  - `ai-e2e/docs/asset-authoring-repair-contract.md`
-  - `ai-e2e/docs/environment-side-effect-policy-contract.md`
+  - `services/ai-e2e/docs/requirements-baseline.md`
+  - `services/ai-e2e/docs/functional-script-contract.md`
+  - `services/ai-e2e/docs/scenario-orchestration-contract.md`
+  - `services/ai-e2e/docs/version-page-asset-contract.md`
+  - `services/ai-e2e/docs/agent-browser-execution-contract.md`
+  - `services/ai-e2e/docs/run-state-decision-evidence-contract.md`
+  - `services/ai-e2e/docs/semantic-script-schema.md`
+  - `services/ai-e2e/docs/target-data-model.md`
+  - `services/ai-e2e/docs/service-api-event-contract.md`
+  - `services/ai-e2e/docs/ai-model-skill-contract.md`
+  - `services/ai-e2e/docs/asset-authoring-repair-contract.md`
+  - `services/ai-e2e/docs/environment-side-effect-policy-contract.md`
 
 ### Debug Chat Rendering
 
-- `@nebula-link-evo/shared` owns the pure Agent Stream replay core used by both backends; `@nebula-link-evo/agent-activity-ui` directly re-exports it and provides the React renderer used by debug-ui and ai-e2e/ui. The UI library exposes compact/comfortable density and business slots without owning API, SSE, store or permissions.
+- `@nebula-link-evo/shared` owns the pure Agent Stream replay core used by both backends; `@nebula-link-evo/agent-activity-ui` directly re-exports it and provides the React renderer used by debug-ui and services/ai-e2e/ui. The UI library exposes compact/comfortable density and business slots without owning API, SSE, store or permissions.
 - `/#/chat` uses `agent_stream.snapshot` + `agent_stream.event` as the only visible history/live source. The public message-history GET and bespoke Message/Thinking/Tool cards do not exist.
 - Optimistic user turns reconcile with server turns even when the snapshot arrives before the message POST response; live events are RAF-batched and remain bound to their originating session.
 - Authoring uses the compact renderer with a repair composer; formal Run uses the same compact renderer read-only. Structured amendments, decisions and run state remain authoritative business facts.

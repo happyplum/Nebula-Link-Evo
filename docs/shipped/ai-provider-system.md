@@ -2,7 +2,7 @@
 
 多 AI provider 编排子系统：Agent loop 常规模型通过 DSH Pi adapter、GLM 通过 Nebula JWT adapter；canonical provider/model 配置驱动启动 preflight，`/api/v1/ai/generate` 为无 session/tool 的单次 DSH LLM stream。
 
-- [shipped] Provider 注册与加载：`ai-chat-service/src/services/provider/`（registry / resolver / loader / preflight / errors / error-classifier / token-estimator / adapters/glm / types）；统一使用 AI SDK 7 的 `LanguageModelV4` 契约。
+- [shipped] Provider 注册与加载：`services/ai-chat-service/src/services/provider/`（registry / resolver / loader / preflight / errors / error-classifier / token-estimator / adapters/glm / types）；统一使用 AI SDK 7 的 `LanguageModelV4` 契约。
 - [shipped] Provider 别名与 SDK 包名规范化（I/O 前完成）：
   - `normalizeNpmPackage()`：bare names（如 `openai`）→ `@ai-sdk/openai`；省略 → `@ai-sdk/openai-compatible`；invalid → `ProviderError(CONFIG_INVALID)`。
   - `parseProviderModel('provider/model/variant')`：保留首个 `/` 后所有 model 段。
@@ -13,14 +13,14 @@
 - [shipped] API 边界：未知 provider → 400；不可用 provider → 503（含 error detail）。
 - [shipped] 启动 preflight（异步）：逐个探测 provider 真实就绪状态；部分失败仅 warning，全部不可用才阻断。
 - [shipped] 启动 preflight 状态探测路由只有 `POST /api/v1/test-ai`；返回 provider/model 与 gateway capability 状态，不暴露 key 预览。另有一条按需的 `POST /api/v1/chat/connectivity-test` 用于单 provider 连通性测试，不属于 preflight 状态探测。
-- [shipped] Token 估算：`ai-chat-service/src/services/provider/token-estimator.ts`。
+- [shipped] Token 估算：`services/ai-chat-service/src/services/provider/token-estimator.ts`。
 - [shipped] 双模型角色配置：`defaults.decision` 是分析/决策模型，负责理解需求与浏览器证据并规划动作；`defaults.vision` 是视觉模型，为无原生视觉能力的分析模型提供视觉/DOM 定位证据。provider/model 名仅是角色实现配置。
 - [shipped] 主代理与子代理均可调用视觉模型；视觉模型只处理单次、完整且经 proxy binding 校验的不可变 snapshot，不持有连续任务状态、不调度脚本、不调用 MCP、不操作浏览器。
 - [shipped] 内部视觉工具仅为 `vision.analyze_page` 与 `vision.resolve_target`：输入 `VisionSnapshotBindingV1`，输出页面/DOM 摘要或可序列化 locator candidates；所有环境均无旧视觉定位工具。
 - [shipped] MCP transport 的 `HarnessRuntime.callTool` 直接复用上游公开 `McpResult` 类型，返回已由 DSH 验证的原始 envelope；浏览器 schema 只由 Chat 内共享结果入口校验，通用 transport 不强制浏览器结果。MCP transport、启动期一次性 ToolRegistry product projection 与 DSH ToolRuntime 位于 ai-chat-service；产品工具通过 `src/harness/gateway-tool-bridge.ts` 使用原始 JSON Schema，Chat/Agent Task 共用唯一 DSH Agent Loop，raw proxy operation 仅存在于模型不可见 child scope，运行期不热同步组合树。未使用的 `src/tools/adapters/{vercel-ai,json-schema-to-zod,index}.ts` 及其导出已退出；`ai` 仍用于 Vision/provider 连通性和错误分类，`zod` 保留为 AI SDK 必需 peer。
-- [shipped] `ai-chat-service/src/harness/model-tool-name.ts#modelToolName` 是模型工具安全名的唯一纯函数，GatewayToolBridge 与 Agent Task executor 的本地命名副本已退出。保留 `nebula__` 前缀、连续非法字符→`__`、连续横杠→`_`；归一名超过 64 字符时使用前 51 字符、`_`、原始产品名 SHA-256 前 12 位。bridge 仍拒绝 `Product tool safe-name collision`，模型安全名不替代业务产品名。
+- [shipped] `services/ai-chat-service/src/harness/model-tool-name.ts#modelToolName` 是模型工具安全名的唯一纯函数，GatewayToolBridge 与 Agent Task executor 的本地命名副本已退出。保留 `nebula__` 前缀、连续非法字符→`__`、连续横杠→`_`；归一名超过 64 字符时使用前 51 字符、`_`、原始产品名 SHA-256 前 12 位。bridge 仍拒绝 `Product tool safe-name collision`，模型安全名不替代业务产品名。
 - [shipped] ai-chat-service 已提供通用受限 Agent 任务核心，按任务约束精确工具白名单、预算和不透明关联信息，并以 decision model 返回调用方 Schema 校验后的结构化结果；与 Chat 共用 loop、分离 session/tool scope 与公开控制面。
-- [shipped] `POST/GET /api/v1/agent-tasks*`、乐观 commands、安全 checkpoint、snapshot-first events/event-log 和 `GET /api/v1/capabilities` 已实现；browser binding 对模型、普通日志、持久请求和 HTTP 响应不可见。完整契约见 `ai-e2e/docs/service-api-event-contract.md`。
+- [shipped] `POST/GET /api/v1/agent-tasks*`、乐观 commands、安全 checkpoint、snapshot-first events/event-log 和 `GET /api/v1/capabilities` 已实现；browser binding 对模型、普通日志、持久请求和 HTTP 响应不可见。完整契约见 `services/ai-e2e/docs/service-api-event-contract.md`。
 - [shipped] Agent task 是一次有界执行，不是 ai-e2e 的持久主代理；authoring 阶段、candidate、coverage、decision、actor/认证状态和激活留在 ai-e2e。browser binding 区分 `observe/control`（ai-e2e 协调器已按主代理 observe / 执行型页面子代理 control 派发），ai-chat-service 不切换 BrowserContext/storage state，也不授权子代理自行登录。
 - [shipped] E2E Agent task 接收 ai-e2e 冻结的 policy evaluation、风险投影 hash、当前语义步骤/effectId/数量边界和可选 grant 引用；工具 wrapper 每次调用求权限交集。ai-chat-service 不决定 environment、不签发审批，模型/Skill/页面内容不能扩大授权。
 - [shipped] Skills runtime 归属 ai-chat-service；v1 从 `AI_SKILLS_DIRS` 加载本地只读、按 id/version/hash 固定的声明式指令包，每个 Agent task 最多精确 pin 一个当前 Skill，并对工具和预算继续缩权；不执行附带代码、不联网安装、不扩大 task 权限。

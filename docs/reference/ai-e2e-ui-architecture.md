@@ -1,10 +1,10 @@
 # AI E2E UI Architecture
 
-> Source: rewritten against the shipped semantic workbench; component ownership verified against `ai-e2e/ui` code reality on 2026-10-03.
+> Source: rewritten against the shipped semantic workbench; component ownership verified against `services/ai-e2e/ui` code reality on 2026-10-03.
 
 ## Purpose
 
-`ai-e2e/ui` is the React SPA for the semantic E2E orchestration product. In production it is served by the `ai-e2e` Fastify server (:3002) from `ui/dist` at the `/ai-e2e/` prefix (with an SPA catch-all for unmatched navigation requests), and it uses `HashRouter` internally so the backend serves one static entrypoint.
+`services/ai-e2e/ui` is the React SPA for the semantic E2E orchestration product. In production it is served by the `ai-e2e` Fastify server (:3002) from `ui/dist` at the `/ai-e2e/` prefix (with an SPA catch-all for unmatched navigation requests), and it uses `HashRouter` internally so the backend serves one static entrypoint.
 
 This document preserves the durable UI architecture facts that should survive cleanup of one-off implementation plans or specs.
 
@@ -24,7 +24,7 @@ Workbench state is not held in a global store: server state lives in TanStack Qu
 
 - Vite dev server runs on port **5174** (`vite --host --port 5174`); `base: '/ai-e2e/'`.
 - In dev, `/api` is proxied to the `ai-e2e` backend at `http://localhost:3002`.
-- In production, `ai-e2e/src/server/index.ts` registers `@fastify/static` with prefix `/ai-e2e/` over `ui/dist` and serves `index.html` for unmatched `/ai-e2e/*` navigation requests; UI entry is `http://localhost:3002/ai-e2e/`.
+- In production, `services/ai-e2e/src/server/index.ts` registers `@fastify/static` with prefix `/ai-e2e/` over `ui/dist` and serves `index.html` for unmatched `/ai-e2e/*` navigation requests; UI entry is `http://localhost:3002/ai-e2e/`.
 
 ## Routing and Layout
 
