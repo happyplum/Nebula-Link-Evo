@@ -15,11 +15,11 @@
     "resolveJsonModule": true,
     "paths": {
       "@nebula-link-evo/browser-control-client": ["../browser-control-client/src/index.ts"],
-      "@nebula-link-evo/shared": ["../../shared/index.ts"],
-      "@nebula-link-evo/shared/*": ["../../shared/*"]
+      "@nebula-link-evo/shared": ["../../libs/shared/index.ts"],
+      "@nebula-link-evo/shared/*": ["../../libs/shared/*"]
     }
   },
-  "references": [{ "path": "../../shared" }, { "path": "../browser-control-client" }],
+  "references": [{ "path": "../../libs/shared" }, { "path": "../browser-control-client" }],
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "src/**/*.test.ts"]
 }

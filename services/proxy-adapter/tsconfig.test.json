@@ -1,24 +1,20 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
     "lib": ["ES2022", "DOM"],
     "types": ["node"],
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "outDir": "./dist",
-    "rootDir": "./src",
-    "declaration": true,
-    "composite": true,
+    "noEmit": true,
     "resolveJsonModule": true,
+    "rootDirs": ["./src", "../../libs/shared"],
     "paths": {
       "@nebula-link-evo/shared": ["../../libs/shared/index.ts"],
       "@nebula-link-evo/shared/*": ["../../libs/shared/*"]
     }
   },
-  "references": [{ "path": "../../libs/shared" }],
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "src/**/*.test.ts"]
+  "include": ["src/**/*", "src/__tests__/**/*", "src/**/*.test.ts", "playwright.config.ts"]
 }

@@ -21,7 +21,7 @@ test('all ai-e2e runtime stores stay inside the run root', async () => {
   await withE2EResources({ workspaceRoot, name: 'config-test' }, async (scope) => {
     const environment = {
       NEBULA_E2E_RUN_ROOT: scope.root,
-      AI_E2E_UI_PACKAGE_DIR: join(workspaceRoot, 'ai-e2e/ui'),
+      AI_E2E_UI_PACKAGE_DIR: join(workspaceRoot, 'services/ai-e2e/ui'),
       AI_E2E_UI_TEST_PORT: '54321',
       AI_E2E_UI_TEST_DB_PATH: join(scope.root, 'ai-e2e.sqlite'),
     };
@@ -30,7 +30,7 @@ test('all ai-e2e runtime stores stay inside the run root', async () => {
     );
     Object.assign(process.env, environment);
     try {
-      const { default: config } = await import('../ai-e2e/ui/playwright.config.ts');
+      const { default: config } = await import('../services/ai-e2e/ui/playwright.config.ts');
       assert.equal(config.webServer.env.AI_E2E_DB_PATH, join(scope.root, 'ai-e2e.sqlite'));
       assert.equal(
         config.webServer.env.AI_E2E_EVIDENCE_PATH,
@@ -41,7 +41,7 @@ test('all ai-e2e runtime stores stay inside the run root', async () => {
         join(scope.root, 'semantic-secrets')
       );
       assert.equal(config.outputDir, join(scope.root, 'test-results'));
-      assert.equal(config.webServer.cwd, join(workspaceRoot, 'ai-e2e/ui'));
+      assert.equal(config.webServer.cwd, join(workspaceRoot, 'services/ai-e2e/ui'));
     } finally {
       for (const [key, value] of Object.entries(previous)) {
         if (value === undefined) delete process.env[key];

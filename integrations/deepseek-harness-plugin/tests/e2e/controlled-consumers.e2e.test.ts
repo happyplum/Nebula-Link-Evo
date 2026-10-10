@@ -10,7 +10,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { buildApp as buildProxyApp } from '../../../../proxy-adapter/src/server.js';
+import { buildApp as buildProxyApp } from '../../../../services/proxy-adapter/src/server.js';
 import { runCli } from '../../../browser-control-client/src/cli.js';
 import { createDeepSeekBrowserPlugin } from '../../src/index.js';
 
