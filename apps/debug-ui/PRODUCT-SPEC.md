@@ -21,13 +21,13 @@
 | 全部前端代码（React 19 + Vite + CSS Modules + Zustand + TanStack Query）              | `ai-chat-service` :3001 的 Chat SSE 与 control API                            | 后端逻辑                                             |
 | 6 大 feature 模块（layout / runtime / chat / playwright-control / config / liveview） | `proxy-adapter` :3000 的 browser debug REST + MJPEG + DOM 快照 + debug stream | 浏览器引擎、AI provider、MCP Server                  |
 | E2E 测试（`e2e/`，Playwright）                                                        | `@nebula-link-evo/shared` 类型                                                | 任何后端业务逻辑                                     |
-| App Shell（HashRouter、routes、layout）                                               |                                                                               | `proxy-adapter/src/static/debug/` 历史路径（已废弃） |
+| App Shell（HashRouter、routes、layout）                                               |                                                                               | `services/proxy-adapter/src/static/debug/` 历史路径（已废弃） |
 | Zustand stores（layout / runtime / chat / playwright-control）                        |                                                                               | Tailwind / CSS-in-JS（仅用 CSS Modules）             |
 |                                                                                       |                                                                               | SSR / server components / 宽泛路由或组件代码分割     |
 
 ### 硬约束
 
-- **不**把前端代码放回 `proxy-adapter/src/static/debug/`。
+- **不**把前端代码放回 `services/proxy-adapter/src/static/debug/`。
 - **不**在 module 代码中硬编码 `localhost` URL（用 same-origin `/api`、`/debug/api`）。
 - **不**在后端验证已在 UI 中重复实现。
 - **不**使用 CSS-in-JS 或 Tailwind。
@@ -162,11 +162,11 @@
 
 ## 7. 关联文档
 
-- `debug-ui/AGENTS.md` — 开发约束与目录指引
-- `debug-ui/src/features/AGENTS.md` — feature 级约束
-- `debug-ui/src/features/{chat,config,runtime,liveview,playwright-control}/AGENTS.md` — feature 子约束
-- `debug-ui/src/shared/AGENTS.md` — 共享约束
-- `debug-ui/e2e/AGENTS.md` — E2E 规则
+- `apps/debug-ui/AGENTS.md` — 开发约束与目录指引
+- `apps/debug-ui/src/features/AGENTS.md` — feature 级约束
+- `apps/debug-ui/src/features/{chat,config,runtime,liveview,playwright-control}/AGENTS.md` — feature 子约束
+- `apps/debug-ui/src/shared/AGENTS.md` — 共享约束
+- `apps/debug-ui/e2e/AGENTS.md` — E2E 规则
 - `docs/PRODUCT-SPEC-INDEX.md` — 跨包契约与全局索引
 - 根 `README.md` 的 "Debug Chat Rendering" 与 "Debug UI Monitor Sidebar" 章节 — Chat 渲染与监控面板契约
 - 根 `AGENTS.md` — 仓库范围约束

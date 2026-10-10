@@ -104,7 +104,7 @@ UI 路由：
 ## 目录
 
 ```text
-ai-e2e/
+services/ai-e2e/
 ├── src/
 │   ├── server/          Fastify、canonical v1 路由与静态 UI
 │   ├── services/        Project、Version、Authoring、Run 与 Coordinator

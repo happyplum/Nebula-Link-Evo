@@ -18,7 +18,7 @@
 | 场景 fail-closed    | shipped | `runWhen` 与 `repeat.for_each` 在场景写入（`createScenario`、`validateGraph` 与 test_scenario revision 创建）时显式拒绝，不静默退化；固定次数 repeat（1–100）正常展开                                                                                                                                                              |
 | 浏览器中心 UI       | shipped | 项目首页、Authoring/Run 三栏工作台、轻量分层上下文树、深链接上下文、显式定位、Diff/审批/证据/Chat、布局与主题偏好；工作台采用低噪声冷蓝视觉体系、浮动面板和渐隐选中轨，突出持续挂载的浏览器主舞台；Playwright 使用真实生产 bundle/API 验证完整旅程                                                                                 |
 
-- 浏览器 operation record/status、artifact、resolved target 与 problem 由 `shared/types/browser-operation-result.ts` 的 TypeBox schema 唯一派生，既有 `browser-execution` type 入口保持。E2E 通过共享 HTTP 客户端消费相同 DTO，不新增 HTTP 响应校验或迁移数据库。
+- 浏览器 operation record/status、artifact、resolved target 与 problem 由 `libs/shared/types/browser-operation-result.ts` 的 TypeBox schema 唯一派生，既有 `browser-execution` type 入口保持。E2E 通过共享 HTTP 客户端消费相同 DTO，不新增 HTTP 响应校验或迁移数据库。
 
 ## 2. 服务与模块
 
@@ -73,7 +73,7 @@ UI 路由：`/`、`/semantic/:projectId`、`/semantic/:projectId/authoring/:vers
 - Project 与 semantic 工作台统一 JSON 请求入口；完整保留成功 data/meta、HTTP status 与 ApiProblem 的 code/message/retryable/correlationId/details（含未知嵌套内容），非 JSON 失败不展示服务端 HTML。
 - `BrowserStage` 的 zoom 仅在实际图像可用时作用于画面；空态/图像错误后的“重试实时画面”不缩放，默认 90% zoom 下仍有 44px 热区。组件错误/重试回归与真实生产 UI 的 image error/transform/boundingBox 验收锁住边界。
 - UI Agent 活动与 semantic event invalidation 均由 `@nebula-link-evo/agent-stream-client` 统一传输：`useSemanticEventStream` 淘汰手写 fetch-SSE 解析器，作为薄封装复用 `useSnapshotEventConnection`，保持 snapshot 缓存覆盖、非 error 事件 invalidateQueries 与 `idle | connecting | live | reconnecting` 状态契约不变，重连策略升级为共享指数退避（1s→×2→30s 封顶）与手动重连能力；局部 snapshot 带 endpoint/真实 job/run id，切换首 render 即隐藏旧内容。断线保留内容、持续恢复、合法 snapshot 后 live；header 的立即重连只恢复观察，Run 不发命令/不解锁 composer。公共 Button 新增 touch=44px 尺寸，旧 header 样式仅指向 toggle；没有独立组件 Gallery，产品/test/真实主题尺寸浏览器为验收面。宿主独立 dev/build/test:e2e 准备公共依赖 dist。
-- UI 基础组件唯一 owner 为 `ui/src/shared/ui/`（flat 文件布局，与 debug-ui `shared/ui/` 约定一致），公共入口仅导出产品使用的 Button、Input、Card、Modal；Sonner Toaster 适配同为该目录 flat 文件，`components.json` 保留生成配置。无调用的 shadcn/Radix 替代组件、旧向导 Stepper 及专属测试、Table/Tree/CodeEditor 与索引导出已退出，对应 11 个 Radix 直接依赖和 class-variance-authority 已移除；保留产品样式、token 与 Modal 使用的 tailwindcss-animate。
+- UI 基础组件唯一 owner 为 `ui/src/shared/ui/`（flat 文件布局，与 `apps/debug-ui` 的 `src/shared/ui/` 约定一致），公共入口仅导出产品使用的 Button、Input、Card、Modal；Sonner Toaster 适配同为该目录 flat 文件，`components.json` 保留生成配置。无调用的 shadcn/Radix 替代组件、旧向导 Stepper 及专属测试、Table/Tree/CodeEditor 与索引导出已退出，对应 11 个 Radix 直接依赖和 class-variance-authority 已移除；保留产品样式、token 与 Modal 使用的 tailwindcss-animate。
 - Run/Authoring 业务拒绝由产生处的领域 kind/code 或 repository reason 决定，API 边界集中映射既有状态；文案、动态 callKey 不参与分类。五个 `side_effect_*` wire code 与状态保持不变。
 - Agent Activity snapshot 调用 shared 纯 replay 归并 turns/sections/seq；本包先投影业务事件并按 source seq 去重，再由 shared `mapSemanticStatusToActivityState` 与 `mapAgentActivitySnapshotState` 保持原有状态映射和聚合优先级，不受外部 stream.state 覆盖；generatedAt 使用最后事件时间，空流使用当前时间。所有 authoring/run event 与 Authoring Chat message 写入提交后从持久化行发布到进程内 `SemanticControlEventHub`；Hub 通知只是 CH3 唤醒，listener 与 5 秒 poll 均调用 `syncControlEvents` catch-up。control 与 message 各自按 source seq 升序处理并在本源首个投影失败处停止；跨源只比较各自队首的 occurredAt（相同时间稳定按 source id），活动行与 cursor 同事务提交，未映射 control event 有意推进 cursor。一次同步失败被记录并吸收，下一次 Hub 唤醒或 poll 从最后成功 cursor 重试。`/activity` 与 Authoring/Run `/events` 均由 shared `SnapshotFirstSseWriter`、`encodeSseJsonFrame` 传输，保持既有事件名、帧字段顺序、ID、响应头、heartbeat 与 snapshot 信封字节；控制流订阅同一 Hub，并保留 5 秒 afterSeq 安全轮询。UI 继续通过公共 UI 包重导出的同一 shared 核心恢复 live；仓储不依赖 React。
 - Agent Task 创建／查询／命令／审计事件使用 shared TypeBox schema 派生类型；view 保留真实 modelRole、脱敏 request、usage 等服务字段，BrowserStep 保留 videoSegment（true 仍由服务 capability 政策拒绝）。
@@ -113,7 +113,7 @@ UI 路由：`/`、`/semantic/:projectId`、`/semantic/:projectId/authoring/:vers
 
 ## 7. 已知缺口与技术债
 
-当前无与本次 PRD 多资产 bootstrap 交付直接相关的已知缺口。跨文档登记的 pending/in-progress 项见 `docs/PRODUCT-SPEC-INDEX.md` §3.9（页面锚点运行匹配与基线采集、页面任务上下文续接、生产 UI 恢复、DOM 变化局部修复）、`ai-e2e/docs/service-api-event-contract.md` §3（版本作用域写路由、validate、通用资产 revision 写与 activation、deployment-profiles 管理路由）及 `ai-e2e/docs/target-data-model.md` §16（通用自动脱敏与 UI 证据时间线）。
+当前无与本次 PRD 多资产 bootstrap 交付直接相关的已知缺口。跨文档登记的 pending/in-progress 项见 `docs/PRODUCT-SPEC-INDEX.md` §3.9（页面锚点运行匹配与基线采集、页面任务上下文续接、生产 UI 恢复、DOM 变化局部修复）、`services/ai-e2e/docs/service-api-event-contract.md` §3（版本作用域写路由、validate、通用资产 revision 写与 activation、deployment-profiles 管理路由）及 `services/ai-e2e/docs/target-data-model.md` §16（通用自动脱敏与 UI 证据时间线）。
 
 - Amendment `reject` 命令入口存在既有校验缺口：默认 Ajv 在 `AmendmentCommandBodySchema` 的第一个 `anyOf` 分支剥离 `reason`，第二个 reject 分支因此缺必填字段；合法形状 `{ action: 'reject', reason }` 当前返回 `400 fst_err_validation`，尚未到达业务服务。真实 HTTP 测试锁住此事实，仓储→服务测试独立验证终态/CAS 拒绝仍为 typed conflict；修复入口须另行裁决校验策略，本轮不改变 schema 或全局 Ajv。
 

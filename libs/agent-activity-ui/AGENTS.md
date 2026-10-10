@@ -2,7 +2,7 @@
 
 ## Overview
 
-Stateless frontend library `@nebula-link-evo/agent-activity-ui`. Consumes the Agent Stream v1 contract from `@nebula-link-evo/shared` and re-exports the pure shared replay core and provides the React renderer used by `debug-ui` (chat) and `ai-e2e/ui` (authoring/run activity). Build-only package: no port, no dev server, no backend.
+Stateless frontend library `@nebula-link-evo/agent-activity-ui`. Consumes the Agent Stream v1 contract from `@nebula-link-evo/shared` and re-exports the pure shared replay core and provides the React renderer used by `debug-ui` (chat) and `services/ai-e2e/ui` (authoring/run activity). Build-only package: no port, no dev server, no backend.
 
 ## Commands
 
@@ -26,12 +26,12 @@ pnpm test:coverage  # Vitest + coverage gates
 
 - Depends only on `@nebula-link-evo/shared` + React. No API clients, no SSE connections, no stores, no permissions logic — consumers own those.
 - Renders only what the Agent Stream contract carries; control-plane state must not leak into this library.
-- Both consumers (debug-ui, ai-e2e/ui) must keep using this package instead of forking local renderers.
+- Both consumers (debug-ui, services/ai-e2e/ui) must keep using this package instead of forking local renderers.
 
 ## Conventions
 
 - Local TS imports keep the `.js` extension.
-- Changes to grouping, density behavior, or slot signatures are cross-package contract changes: update `agent-activity-ui/PRODUCT-SPEC.md`, `docs/PRODUCT-SPEC-INDEX.md`, and both consumers' PRODUCT-SPEC.
+- Changes to grouping, density behavior, or slot signatures are cross-package contract changes: update `libs/agent-activity-ui/PRODUCT-SPEC.md`, `docs/PRODUCT-SPEC-INDEX.md`, and both consumers' PRODUCT-SPEC.
 
 ## Anti-Patterns
 

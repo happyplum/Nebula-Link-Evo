@@ -22,7 +22,7 @@
 | `ai-chat-service` | Agent 会话、模型消息、工具调用过程、Skills 与工具授权的运行态                                                    | 分析/决策模型与单次视觉模型调用、页面子代理 tool loop、工具/Skill 白名单、暂停/中断传播 | 业务运行计划、业务断言最终裁决、浏览器生命周期       |
 | `proxy-adapter`   | 浏览器进程、Context/Page、Tab、原子浏览器操作、原始观测、实时画面和浏览器侧产物                                  | 通用会话/Tab 控制、目标解析、Playwright 动作、操作结果、浏览器事件与原始证据            | PRD、场景依赖、脚本修复、登录编排、业务通过/失败裁决 |
 
-Agent Task 的公开 DTO/schema 单源归 `shared/types/agent-task.ts`，浏览器目标结构归 `shared/types/browser-target.ts`；服务私有 Harness/executor 上下文不进入 shared。创建 HTTP 只校验一次结构，服务派生步骤并在同一进程的 pause/resume 中复用；重启按持久控制面收敛为 interrupted，不从脱敏 request 恢复租约执行。
+Agent Task 的公开 DTO/schema 单源归 `libs/shared/types/agent-task.ts`，浏览器目标结构归 `libs/shared/types/browser-target.ts`；服务私有 Harness/executor 上下文不进入 shared。创建 HTTP 只校验一次结构，服务派生步骤并在同一进程的 pause/resume 中复用；重启按持久控制面收敛为 interrupted，不从脱敏 request 恢复租约执行。
 
 模型对话不是业务状态源。Agent 会话丢失时，系统必须能仅依赖 `ai-e2e` 的任务包、检查点、运行变量和已固化证据重建执行上下文。
 

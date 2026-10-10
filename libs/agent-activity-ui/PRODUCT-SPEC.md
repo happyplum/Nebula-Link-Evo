@@ -24,7 +24,7 @@
 
 - 单个 Activity 直接展示，连续多个 Activity 自动分组；reasoning、content、decision、plan、media、file 等 section 构成分组边界。
 - `visibility=redacted` 不渲染原始 reasoning；只有 `visibility=public` 才允许渲染正文。
-- `src/index.test.ts` 验证回放导出与 shared 函数引用相同；纯回放测试位于 `shared/utils/__tests__/agent-stream.test.ts`。
+- `src/index.test.ts` 验证回放导出与 shared 函数引用相同；纯回放测试位于 `libs/shared/utils/__tests__/agent-stream.test.ts`。
 - snapshot 和任意 live event 前缀重放结果确定；重复 seq、跨 stream 事件和旧 seq 不改变状态。
 - `renderMarkdown`、`renderDecisionAction`、`renderArtifact` 是唯一业务扩展口，组件本身不执行操作。
 - 验收命令：`pnpm --filter @nebula-link-evo/agent-activity-ui type-check test test:coverage build`。

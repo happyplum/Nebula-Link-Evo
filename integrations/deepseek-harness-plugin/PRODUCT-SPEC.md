@@ -15,9 +15,9 @@
 - 同一实例只允许一个 Harness session 持有浏览器，不共享隐藏 binding。
 - 同 profile 不得同时挂载指向同 proxy 的官方通用 MCP bridge。
 
-- 浏览器 target/locator 公共类型由 `shared/types/browser-target.ts` 的 TypeBox schema + Static 唯一维护，`shared/types/browser-execution.ts` 保留既有 type 导出；proxy MCP 与 Agent Task 直接引用同一 target schema，wire 字段和消费者调用方式保持。
+- 浏览器 target/locator 公共类型由 `libs/shared/types/browser-target.ts` 的 TypeBox schema + Static 唯一维护，`libs/shared/types/browser-execution.ts` 保留既有 type 导出；proxy MCP 与 Agent Task 直接引用同一 target schema，wire 字段和消费者调用方式保持。
 
-- 操作结果与嵌套 artifact/target/problem 直接消费 shared schema 派生类型，`browser-execution` 保留原 type 入口；底层三个 MCP 操作共用 `shared/types/browser-operation-result.ts` 输出 schema，不改变本插件审批、工具与展示语义。
+- 操作结果与嵌套 artifact/target/problem 直接消费 shared schema 派生类型，`browser-execution` 保留原 type 入口；底层三个 MCP 操作共用 `libs/shared/types/browser-operation-result.ts` 输出 schema，不改变本插件审批、工具与展示语义。
 
 ## 2. 模块清单
 

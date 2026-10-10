@@ -221,7 +221,7 @@ import type { CreateAgentTaskRequest, AgentTaskView, AgentTaskCommandRequest, Ag
   from '@nebula-link-evo/shared/types/agent-task';
 ```
 
-公开字段与结构校验的唯一权威源是 `shared/types/agent-task.ts` 的 TypeBox schema；HTTP create/commands 使用局部 compiler 校验一次，服务保留领域政策并派生 browserSteps，executor/pause/resume 复用内存 map。创建绑定含租约 token；持久/public view 引用独立脱敏 request schema，不允许 token。
+公开字段与结构校验的唯一权威源是 `libs/shared/types/agent-task.ts` 的 TypeBox schema；HTTP create/commands 使用局部 compiler 校验一次，服务保留领域政策并派生 browserSteps，executor/pause/resume 复用内存 map。创建绑定含租约 token；持久/public view 引用独立脱敏 request schema，不允许 token。
 
 约束：
 

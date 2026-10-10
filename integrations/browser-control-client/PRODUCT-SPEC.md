@@ -16,9 +16,9 @@
 - 操作必须串行；结果不确定时核查 ledger，不能证明终态则禁止重放。
 - `ai-e2e` 仅复用 `BrowserControlClient` HTTP 方法；其业务 FIFO、outbox、租约和操作生命周期不由受控会话控制器接管。
 
-- 浏览器 target/locator 公共类型由 `shared/types/browser-target.ts` 的 TypeBox schema + Static 唯一维护，`shared/types/browser-execution.ts` 保留既有 type 导出；proxy MCP 与 Agent Task 直接引用同一 target schema，wire 字段和消费者调用方式保持。
+- 浏览器 target/locator 公共类型由 `libs/shared/types/browser-target.ts` 的 TypeBox schema + Static 唯一维护，`libs/shared/types/browser-execution.ts` 保留既有 type 导出；proxy MCP 与 Agent Task 直接引用同一 target schema，wire 字段和消费者调用方式保持。
 
-- operation record/status、artifact、resolved target 与 problem 类型由 `shared/types/browser-operation-result.ts` 的 canonical TypeBox schema 派生，原 `browser-execution` type-only 导出保持兼容；三个 MCP 操作输出直接使用该 schema，客户端 HTTP/MCP 调用与错误映射保持。
+- operation record/status、artifact、resolved target 与 problem 类型由 `libs/shared/types/browser-operation-result.ts` 的 canonical TypeBox schema 派生，原 `browser-execution` type-only 导出保持兼容；三个 MCP 操作输出直接使用该 schema，客户端 HTTP/MCP 调用与错误映射保持。
 
 ## 2. 模块清单
 
@@ -50,7 +50,7 @@
 | event-log 游标、可选关闭凭证、artifact 字节与错误元数据 | shipped | `client.test.ts`、E2E adapter/协调器测试 |
 | token 脱敏、act 门禁、JSON/NDJSON              | shipped | `cli.test.ts`                                  |
 | 租约轮换、串行、稳定 operationId、未知结果恢复 | shipped | `controlled-session.test.ts`                   |
-| kind/operation 判别参数请求                    | shipped | shared/client/proxy 类型检查 + 操作集成测试    |
+| kind/operation 判别参数请求                    | shipped | shared、client、proxy 类型检查 + 操作集成测试 |
 | attach/自有 session 清理差异                   | shipped | `controlled-session.test.ts`                   |
 | CLI 真实 navigate/click/text 与失败关闭        | shipped | `controlled-consumers.e2e.test.ts`             |
 

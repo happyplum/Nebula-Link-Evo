@@ -67,7 +67,7 @@ pnpm type-check   # tsc --noEmit
 
 ## Anti-Patterns
 
-- No frontend code back under `proxy-adapter/src/static/debug/`.
+- No frontend code back under `services/proxy-adapter/src/static/debug/`.
 - No hardcoded `localhost` URLs in module code.
 - No duplicating backend validation in the UI.
 - No CSS-in-JS or Tailwind (CSS Modules only).

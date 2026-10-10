@@ -28,7 +28,7 @@
 - 失败先关闭旧 source，以 1/2/4/8/16/30 秒封顶持续重试，无次数上限。仅有效快照重置退避；手动立即重连并清旧 timer。
 - endpoint/stream/enabled 生命周期使用独立身份，旧 open/error/snapshot/event/RAF/timer 不污染新上下文；重新启用同上下文也须重新 bootstrap。
 - 两个 Hook 共用 `src/connection-core.ts`：仅有效 snapshot 重置 1/2/4/8/16/30 秒封顶退避；手动重连不重置退避；source、timer、RAF 与 context 切换统一隔离和清理。Agent 继续使用原生 EventSource 与 RAF batch；通用 Hook 使用内部 SSE parser 以接收任意命名事件（原生 EventSource 无 wildcard event listener）。
-- `useSnapshotEventConnection` 面向后续 semantic invalidation 迁移；本次不修改 ai-e2e/ui 的现有消费方。
+- `useSnapshotEventConnection` 面向后续 semantic invalidation 迁移；本次不修改 services/ai-e2e/ui 的现有消费方。
 - disconnect、禁用、卸载、切换清理 source/timer/frame，丢弃 pending；保留已显示内容归宿主负责。
 - `build/type-check/test/test:coverage`；覆盖率最低 statements/functions/lines 80%、branches 70%。
 

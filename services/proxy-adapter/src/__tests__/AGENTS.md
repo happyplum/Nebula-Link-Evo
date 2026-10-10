@@ -25,7 +25,7 @@ pnpm test:e2e      # Playwright e2e
 
 - Prefer real request lifecycles (`app.inject()`, fetch) for route/proxy regressions.
 - No tautological tests that restate constants or path strings.
-- Use `shared/test-utils/` carefully — not part of normal shared build output.
+- Use `libs/shared/test-utils/` carefully — not part of normal shared build output.
 
 ## Anti-Patterns
 

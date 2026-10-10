@@ -21,7 +21,7 @@
 - 提供 provider preflight、持久 FIFO/容量门、token reservation、loop guard、JSONL durable projection、删除 saga、配额/留存与可校验全量备份。
 - 提供可复用 Skills Runtime：从 `AI_SKILLS_DIRS` 配置的本地只读目录加载固定 id/version/hash 的声明式指令包，完成 manifest/hash/Schema/目录边界校验、task 精确 pin、指令装载、预算与工具权限收缩及审计事件；不执行附带代码、不联网安装。
 - 提供 `/api/v1/agent-tasks` 通用受限任务执行核心：调用方传入不可变任务输入、工具白名单、可选单 Skill 精确 pin、预算和模型不可见浏览器 binding，服务异步执行决策模型并返回 Schema 校验后的结构化结果；命令、snapshot-first SSE、event-log、checkpoint 安全暂停/恢复与 Skill 执行已交付，不持有调用方业务运行计划。
-- Agent 工具包装层逐次求 task/Skill/budget/冻结步骤/effectId/单项数量/browser binding/lease 的交集，并在 dispatch 前持久化 canonical args、request hash、数量投影与授权快照；policy evaluation/active grant 的签发、撤销与跨服务核验仍由 ai-e2e/proxy 权威边界承担。
+- Agent 工具包装层逐次求 task/Skill/budget/冻结步骤/effectId/单项数量/browser binding/lease 的交集，并在 dispatch 前持久化 canonical args、request hash、数量投影与授权快照；policy evaluation/active grant 的签发、撤销与跨服务核验仍由 ai-e2e 与 proxy-adapter 权威边界承担。
 
 ### 边界
 
@@ -66,7 +66,7 @@
 
 ---
 
-- Agent Task 公开结构由 `shared/types/agent-task.ts` 的 TypeBox schema 唯一维护，DTO/status/command/event 由 Static 派生；create/commands HTTP 路由局部使用 TypeBoxValidatorCompiler，拒绝顶层/嵌套未知字段和 body 类型强转，不改变其他路由的 AJV。服务仅做预算、secret、result schema、Skill、授权及派生步骤语义；执行器直接消费内存 browserSteps，暂停恢复复用，重启不从脱敏持久请求重新执行。创建 browserBinding 可携带必需租约 token，持久请求与公开 view 的独立 schema 不含 token。
+- Agent Task 公开结构由 `libs/shared/types/agent-task.ts` 的 TypeBox schema 唯一维护，DTO/status/command/event 由 Static 派生；create/commands HTTP 路由局部使用 TypeBoxValidatorCompiler，拒绝顶层/嵌套未知字段和 body 类型强转，不改变其他路由的 AJV。服务仅做预算、secret、result schema、Skill、授权及派生步骤语义；执行器直接消费内存 browserSteps，暂停恢复复用，重启不从脱敏持久请求重新执行。创建 browserBinding 可携带必需租约 token，持久请求与公开 view 的独立 schema 不含 token。
 
 - `HarnessRuntime.callTool` 返回上游公开 `McpResult` 原始 envelope；通用 transport 不引入浏览器 schema。`src/tools/browser-operation-result.ts#readBrowserOperationResult` 是 browser wrapper 与 VisionSnapshotLoader 共用的唯一浏览器结果入口，只读取 `structuredContent` 并用 shared `BrowserOperationRecordSchema` 校验一次后返回 canonical record。`parsed`、顶层 text、content JSON、raw record fallback 与调用方重复结构检查已退出；各调用方保留 durable identity、租约和授权/恢复语义，wrapper 只在取得 canonical record 后追加内部 `VisionSnapshotBindingV1`。
 
@@ -189,10 +189,10 @@
 | 新增 HTTP 路由                               | 路由登记 + 功能清单                                                                                                                                                                                                                                                             |
 | 新增 DB migration                            | 模块清单（按编号登记） + 功能清单                                                                                                                                                                                                                                               |
 | 新增 provider adapter                        | 模块清单（services/provider/adapters） + 功能清单 + Provider 错误分类说明                                                                                                                                                                                                       |
-| 修改双模型职责或视觉输出边界                 | 双模型与扩展能力契约 + 功能清单 + `ai-e2e/docs/ai-model-skill-contract.md` + `docs/PRODUCT-SPEC-INDEX.md` + 根 README                                                                                                                                                           |
-| 新增或修改 Skills runtime                    | 双模型与扩展能力契约 + 模块清单 + 功能清单 + 已知缺口 + `ai-e2e/docs/ai-model-skill-contract.md` + `docs/PRODUCT-SPEC-INDEX.md`                                                                                                                                                 |
-| 新增或修改受限 Agent 任务执行                | 包级目标与边界 + 双模型与扩展能力契约 + 功能清单 + `ai-e2e/docs/agent-browser-execution-contract.md` + `ai-e2e/docs/service-api-event-contract.md` + 消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md`                                                                         |
-| 修改副作用授权包装层                         | 包级目标与边界 + 双模型与扩展能力契约 + 功能清单 + 已知缺口 + `ai-e2e/docs/environment-side-effect-policy-contract.md` + `ai-e2e/docs/ai-model-skill-contract.md` + `ai-e2e/docs/service-api-event-contract.md` + `docs/PRODUCT-SPEC-INDEX.md`                                  |
+| 修改双模型职责或视觉输出边界                 | 双模型与扩展能力契约 + 功能清单 + `services/ai-e2e/docs/ai-model-skill-contract.md` + `docs/PRODUCT-SPEC-INDEX.md` + 根 README                                                                                                                                                           |
+| 新增或修改 Skills runtime                    | 双模型与扩展能力契约 + 模块清单 + 功能清单 + 已知缺口 + `services/ai-e2e/docs/ai-model-skill-contract.md` + `docs/PRODUCT-SPEC-INDEX.md`                                                                                                                                                 |
+| 新增或修改受限 Agent 任务执行                | 包级目标与边界 + 双模型与扩展能力契约 + 功能清单 + `services/ai-e2e/docs/agent-browser-execution-contract.md` + `services/ai-e2e/docs/service-api-event-contract.md` + 消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md`                                                                         |
+| 修改副作用授权包装层                         | 包级目标与边界 + 双模型与扩展能力契约 + 功能清单 + 已知缺口 + `services/ai-e2e/docs/environment-side-effect-policy-contract.md` + `services/ai-e2e/docs/ai-model-skill-contract.md` + `services/ai-e2e/docs/service-api-event-contract.md` + `docs/PRODUCT-SPEC-INDEX.md`                                  |
 | 修改或升级 Harness persistence/插件/BOM 依赖 | 先判定上游是否已覆盖本地 patch 行为：已覆盖则删除 `patchedDependencies` 与 patch 文件，未覆盖则按新版本重建 patch；同步更新模块清单 + 功能清单 + shipped 清单 + THIRD_PARTY_NOTICES + lockfile + Harness BOM/patch hash，并验证 persistence/projection/purge/retention 相关测试 |
 | 修改 Chat SSE 行为                           | 包级目标与边界 + 功能清单（Chat SSE 条目） + `debug-ui` 的 PRODUCT-SPEC                                                                                                                                                                                                         |
 | 跨包契约变更（端口、MCP 路径、SSE 事件）     | 本文件 + 所有消费方 PRODUCT-SPEC + `docs/PRODUCT-SPEC-INDEX.md`                                                                                                                                                                                                                 |
@@ -201,20 +201,20 @@
 
 ## 6. 已知缺口与技术债
 
-包内无已登记缺口；跨包追踪的 pending 项（如操作动画 `presentation.animation`）登记在 `docs/shipped/agent-tasks.md` 与 `proxy-adapter/PRODUCT-SPEC.md` 第 6 节。
+包内无已登记缺口；跨包追踪的 pending 项（如操作动画 `presentation.animation`）登记在 `docs/shipped/agent-tasks.md` 与 `services/proxy-adapter/PRODUCT-SPEC.md` 第 6 节。
 
 ---
 
 ## 7. 关联文档
 
-- `ai-chat-service/AGENTS.md` — 开发约束与边界
+- `services/ai-chat-service/AGENTS.md` — 开发约束与边界
 - `docs/PRODUCT-SPEC-INDEX.md` — 跨包契约与全局索引
 - `docs/architecture.md` — 系统架构
-- `ai-e2e/docs/agent-browser-execution-contract.md` — E2E 页面任务消费本包通用 Agent 能力时的所有权与控制边界
-- `ai-e2e/docs/run-state-decision-evidence-contract.md` — Agent 会话审计与 E2E 业务状态/决策/长期证据的所有权边界
-- `ai-e2e/docs/service-api-event-contract.md` — Agent task API、事件、浏览器 binding 与跨服务恢复
-- `ai-e2e/docs/ai-model-skill-contract.md` — 双模型、单次视觉 Schema、Skill manifest 与权限隔离
-- `ai-e2e/docs/asset-authoring-repair-contract.md` — ai-e2e 持久 authoring 主代理与本包有界 Agent task 的边界
-- `ai-e2e/docs/environment-side-effect-policy-contract.md` — 调用方环境策略、计划级审批与本包逐工具授权边界
+- `services/ai-e2e/docs/agent-browser-execution-contract.md` — E2E 页面任务消费本包通用 Agent 能力时的所有权与控制边界
+- `services/ai-e2e/docs/run-state-decision-evidence-contract.md` — Agent 会话审计与 E2E 业务状态/决策/长期证据的所有权边界
+- `services/ai-e2e/docs/service-api-event-contract.md` — Agent task API、事件、浏览器 binding 与跨服务恢复
+- `services/ai-e2e/docs/ai-model-skill-contract.md` — 双模型、单次视觉 Schema、Skill manifest 与权限隔离
+- `services/ai-e2e/docs/asset-authoring-repair-contract.md` — ai-e2e 持久 authoring 主代理与本包有界 Agent task 的边界
+- `services/ai-e2e/docs/environment-side-effect-policy-contract.md` — 调用方环境策略、计划级审批与本包逐工具授权边界
 - 根 `AGENTS.md` — 仓库范围约束
 - 根 `README.md` 的 "AI Provider System" 与 "Agent Chat 会话" 章节 — provider 加载契约与会话行为

@@ -115,6 +115,6 @@
 
 ## 6. 关联文档
 
-- `shared/AGENTS.md` — 开发约束与导出规则
+- `libs/shared/AGENTS.md` — 开发约束与导出规则
 - `docs/PRODUCT-SPEC-INDEX.md` — 跨包契约与全局索引
 - 根 `AGENTS.md` — 仓库范围约束

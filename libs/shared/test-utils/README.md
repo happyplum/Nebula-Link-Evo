@@ -15,7 +15,7 @@ import {
   waitForPort,
   startService,
   stopService,
-} from '../shared/test-utils/service-lifecycle.js';
+} from '../libs/shared/test-utils/service-lifecycle.js';
 
 // Check if a port is available
 const available = await isPortAvailable(3000);
@@ -46,7 +46,7 @@ await stop(service);
 ### Service Names
 
 The `startService` function accepts service names that map to actual server paths:
-- `'proxy'` → `proxy-adapter/src/server.js`
+- `'proxy'` → `services/proxy-adapter/src/server.js`
 
 ### TEST_MODE Behavior
 

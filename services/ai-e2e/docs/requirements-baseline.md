@@ -2,7 +2,7 @@
 
 > 状态：已确认目标需求，尚未全部实现。
 > 更新时间：2026-08-20。
-> 本文记录产品边界与验收语义，不规定数据库表、接口字段、脚本 DSL 语法或实施顺序。当前实现状态以代码和 `ai-e2e/PRODUCT-SPEC.md` 为准。
+> 本文记录产品边界与验收语义，不规定数据库表、接口字段、脚本 DSL 语法或实施顺序。当前实现状态以代码和 `services/ai-e2e/PRODUCT-SPEC.md` 为准。
 
 ## 1. 产品定位
 
@@ -296,19 +296,19 @@
 
 ## 12. 关联文档
 
-- `ai-e2e/PRODUCT-SPEC.md`：当前实现、目标能力状态和缺口。
-- `ai-e2e/docs/functional-script-contract.md`：功能脚本的输入、步骤、断言、输出、副作用与恢复契约。
-- `ai-e2e/docs/scenario-orchestration-contract.md`：场景调用图、运行计划、TODO、尝试和依赖传播契约。
-- `ai-e2e/docs/version-page-asset-contract.md`：业务版本 copy、部署、页面锚点、参数和基线变体契约。
-- `ai-e2e/docs/agent-browser-execution-contract.md`：页面任务包、浏览器控制租约、原子操作、可视事件与恢复契约。
-- `ai-e2e/docs/run-state-decision-evidence-contract.md`：分层状态、失败传播、决策、证据与人工控制契约。
-- `ai-e2e/docs/semantic-script-schema.md`：首期语义脚本 JSON Schema、动作/断言、目标与引用契约。
-- `ai-e2e/docs/target-data-model.md`：目标关系表、不可变修订、copy 事务、页面匹配、运行事件与证据存储。
-- `ai-e2e/docs/service-api-event-contract.md`：三服务目标 API、MCP 原子操作、事件信封、幂等与重启恢复。
-- `ai-e2e/docs/ai-model-skill-contract.md`：分析/决策模型、单次视觉模型、受限 Agent task 与 Skills runtime。
-- `ai-e2e/docs/environment-side-effect-policy-contract.md`：环境矩阵、风险投影、计划级审批与跨服务门禁。
-- `ai-e2e/docs/asset-authoring-repair-contract.md`：从零生成、复核、真实验证、影响分析和局部修复。
-- `ai-e2e/AGENTS.md`：开发边界与运行时事实。
+- `services/ai-e2e/PRODUCT-SPEC.md`：当前实现、目标能力状态和缺口。
+- `services/ai-e2e/docs/functional-script-contract.md`：功能脚本的输入、步骤、断言、输出、副作用与恢复契约。
+- `services/ai-e2e/docs/scenario-orchestration-contract.md`：场景调用图、运行计划、TODO、尝试和依赖传播契约。
+- `services/ai-e2e/docs/version-page-asset-contract.md`：业务版本 copy、部署、页面锚点、参数和基线变体契约。
+- `services/ai-e2e/docs/agent-browser-execution-contract.md`：页面任务包、浏览器控制租约、原子操作、可视事件与恢复契约。
+- `services/ai-e2e/docs/run-state-decision-evidence-contract.md`：分层状态、失败传播、决策、证据与人工控制契约。
+- `services/ai-e2e/docs/semantic-script-schema.md`：首期语义脚本 JSON Schema、动作/断言、目标与引用契约。
+- `services/ai-e2e/docs/target-data-model.md`：目标关系表、不可变修订、copy 事务、页面匹配、运行事件与证据存储。
+- `services/ai-e2e/docs/service-api-event-contract.md`：三服务目标 API、MCP 原子操作、事件信封、幂等与重启恢复。
+- `services/ai-e2e/docs/ai-model-skill-contract.md`：分析/决策模型、单次视觉模型、受限 Agent task 与 Skills runtime。
+- `services/ai-e2e/docs/environment-side-effect-policy-contract.md`：环境矩阵、风险投影、计划级审批与跨服务门禁。
+- `services/ai-e2e/docs/asset-authoring-repair-contract.md`：从零生成、复核、真实验证、影响分析和局部修复。
+- `services/ai-e2e/AGENTS.md`：开发边界与运行时事实。
 - `docs/PRODUCT-SPEC-INDEX.md`：跨包契约索引。
 - `docs/architecture.md`：系统分层与服务拓扑。
 - `docs/shipped/ai-e2e-orchestration.md`：已交付事实与已设计目标清单。

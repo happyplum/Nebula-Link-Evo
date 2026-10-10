@@ -23,7 +23,7 @@ Tests in this directory verify the Debug UI functionality including:
 # From repo root: run all Debug UI E2E tests
 pnpm --filter debug-ui test:e2e
 
-# From debug-ui/: run all Debug UI E2E tests
+# From apps/debug-ui/: run all Debug UI E2E tests
 pnpm test:e2e
 
 # Run specific test file
