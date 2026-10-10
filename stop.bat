@@ -8,10 +8,10 @@ echo   Stopping Nebula-Link Evo Services
 echo ==========================================
 echo.
 
-cmd /c ai-e2e\stop.bat
-cmd /c debug-ui\stop.bat
-cmd /c proxy-adapter\stop.bat
-cmd /c ai-chat-service\stop.bat
+cmd /c services\ai-e2e\stop.bat
+cmd /c apps\debug-ui\stop.bat
+cmd /c services\proxy-adapter\stop.bat
+cmd /c services\ai-chat-service\stop.bat
 cmd /c tools\livekit\stop.bat
 
 echo.

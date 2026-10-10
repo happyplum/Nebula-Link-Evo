@@ -24,7 +24,7 @@ REM ============================================
 REM Step 1: Build shared package
 REM ============================================
 echo [INFO] Building shared package...
-cmd /c shared\build.bat
+cmd /c libs\shared\build.bat
 if %errorlevel% neq 0 (
     echo [ERROR] Shared package build failed.
     exit /b 1
@@ -73,21 +73,21 @@ REM ============================================
 REM Step 4: Build packages sequentially
 REM ============================================
 echo [INFO] Building proxy-adapter...
-cmd /c "cd /d ""%~dp0proxy-adapter"" && pnpm build"
+cmd /c "cd /d ""%~dp0services\proxy-adapter"" && pnpm build"
 if %errorlevel% neq 0 (
     echo [ERROR] proxy-adapter build failed.
     exit /b 1
 )
 
 echo [INFO] Building ai-chat-service...
-cmd /c "cd /d ""%~dp0ai-chat-service"" && pnpm build"
+cmd /c "cd /d ""%~dp0services\ai-chat-service"" && pnpm build"
 if %errorlevel% neq 0 (
     echo [ERROR] ai-chat-service build failed.
     exit /b 1
 )
 
 echo [INFO] Building ai-e2e...
-cmd /c "cd /d ""%~dp0ai-e2e"" && pnpm build"
+cmd /c "cd /d ""%~dp0services\ai-e2e"" && pnpm build"
 if %errorlevel% neq 0 (
     echo [ERROR] ai-e2e build failed.
     exit /b 1
@@ -100,20 +100,20 @@ REM ============================================
 REM Step 5: Verify build artifacts
 REM ============================================
 echo [INFO] Verifying build artifacts...
-if not exist "shared\dist\index.js" (
-    echo [ERROR] shared\dist\index.js not found.
+if not exist "libs\shared\dist\index.js" (
+    echo [ERROR] libs\shared\dist\index.js not found.
     exit /b 1
 )
-if not exist "proxy-adapter\dist\server.js" (
-    echo [ERROR] proxy-adapter\dist\server.js not found.
+if not exist "services\proxy-adapter\dist\server.js" (
+    echo [ERROR] services\proxy-adapter\dist\server.js not found.
     exit /b 1
 )
-if not exist "ai-chat-service\dist\server.js" (
-    echo [ERROR] ai-chat-service\dist\server.js not found.
+if not exist "services\ai-chat-service\dist\server.js" (
+    echo [ERROR] services\ai-chat-service\dist\server.js not found.
     exit /b 1
 )
-if not exist "ai-e2e\dist\server.js" (
-    echo [ERROR] ai-e2e\dist\server.js not found.
+if not exist "services\ai-e2e\dist\server.js" (
+    echo [ERROR] services\ai-e2e\dist\server.js not found.
     exit /b 1
 )
 echo [OK] All build artifacts verified.
@@ -125,19 +125,19 @@ REM ============================================
 echo [INFO] Starting services...
 echo.
 
-cmd /c proxy-adapter\start.bat --skip-build
+cmd /c services\proxy-adapter\start.bat --skip-build
 if %errorlevel% neq 0 (
     echo [ERROR] Proxy Adapter failed to start.
     exit /b 1
 )
 
-cmd /c ai-chat-service\start.bat --skip-build
+cmd /c services\ai-chat-service\start.bat --skip-build
 if %errorlevel% neq 0 (
     echo [ERROR] AI Chat Service failed to start.
     exit /b 1
 )
 
-cmd /c ai-e2e\start.bat --skip-build
+cmd /c services\ai-e2e\start.bat --skip-build
 if %errorlevel% neq 0 (
     echo [ERROR] AI E2E failed to start.
     exit /b 1

@@ -8,10 +8,10 @@ build/
 *.tsbuildinfo
 
 # Compiled TypeScript files in source directories (not in dist)
-shared/**/*.js
-shared/**/*.d.ts
-!shared/**/*.config.js
-!shared/**/*.test.js
+libs/shared/**/*.js
+libs/shared/**/*.d.ts
+!libs/shared/**/*.config.js
+!libs/shared/**/*.test.js
 
 # IDE
 .idea/
@@ -47,7 +47,7 @@ yolov8n.pt
 *.sqlite
 
 # AI chat verified runtime backups
-ai-chat-service/data/**/backups/harness-*/
+services/ai-chat-service/data/**/backups/harness-*/
 
 # Project specific
 .temp/
@@ -76,7 +76,7 @@ test-task.json
 .trae/documents
 nul
 .trae/specs
-proxy-adapter/tests/output/
+services/proxy-adapter/tests/output/
 $null
 .sisyphus
 .worktrees/
@@ -86,11 +86,11 @@ Playwright
 playwright-report/
 test-results/
 
-proxy-adapter/test-conversations-persistence.sqlite-shm
+services/proxy-adapter/test-conversations-persistence.sqlite-shm
 docs/superpowers/plans
 .opencode
 
 # ai-e2e runtime artifacts
-ai-e2e/exports/
-ai-e2e/screenshot-*.png
+services/ai-e2e/exports/
+services/ai-e2e/screenshot-*.png
 .omo

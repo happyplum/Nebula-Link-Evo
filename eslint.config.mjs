@@ -30,61 +30,61 @@ export default tseslint.config(
     },
   },
   {
-    files: ['ai-chat-service/src/**/*.ts'],
+    files: ['services/ai-chat-service/src/**/*.ts'],
     languageOptions: {
       parserOptions: {
         projectService: false,
-        project: ['./ai-chat-service/tsconfig.eslint.json'],
+        project: ['./services/ai-chat-service/tsconfig.eslint.json'],
         tsconfigRootDir: import.meta.dirname,
       },
     },
   },
   {
-    files: ['ai-chat-service/tests/**/*.ts', 'ai-chat-service/*.config.ts'],
+    files: ['services/ai-chat-service/tests/**/*.ts', 'services/ai-chat-service/*.config.ts'],
     languageOptions: {
       parserOptions: {
         projectService: false,
-        project: ['./ai-chat-service/tsconfig.eslint.json'],
+        project: ['./services/ai-chat-service/tsconfig.eslint.json'],
         tsconfigRootDir: import.meta.dirname,
       },
     },
   },
   {
-    files: ['proxy-adapter/src/**/*.ts'],
+    files: ['services/proxy-adapter/src/**/*.ts'],
     languageOptions: {
       parserOptions: {
         projectService: false,
-        project: ['./proxy-adapter/tsconfig.test.json'],
+        project: ['./services/proxy-adapter/tsconfig.test.json'],
         tsconfigRootDir: import.meta.dirname,
       },
     },
   },
   {
-    files: ['proxy-adapter/tests/**/*.ts'],
+    files: ['services/proxy-adapter/tests/**/*.ts'],
     languageOptions: {
       parserOptions: {
         projectService: false,
-        project: ['./proxy-adapter/tsconfig.tests.json'],
+        project: ['./services/proxy-adapter/tsconfig.tests.json'],
         tsconfigRootDir: import.meta.dirname,
       },
     },
   },
   {
-    files: ['debug-ui/e2e/**/*.ts', 'debug-ui/playwright*.config.ts', 'debug-ui/vite.config.ts'],
+    files: ['apps/debug-ui/e2e/**/*.ts', 'apps/debug-ui/playwright*.config.ts', 'apps/debug-ui/vite.config.ts'],
     languageOptions: {
       parserOptions: {
         projectService: false,
-        project: ['./debug-ui/tsconfig.playwright.json'],
+        project: ['./apps/debug-ui/tsconfig.playwright.json'],
         tsconfigRootDir: import.meta.dirname,
       },
     },
   },
   {
-    files: ['shared/**/*.ts'],
+    files: ['libs/shared/**/*.ts'],
     languageOptions: {
       parserOptions: {
         projectService: false,
-        project: ['./shared/tsconfig.lint.json'],
+        project: ['./libs/shared/tsconfig.lint.json'],
         tsconfigRootDir: import.meta.dirname,
       },
     },
@@ -110,35 +110,35 @@ export default tseslint.config(
     },
   },
   {
-    files: ['agent-activity-ui/src/**/*.ts', 'agent-activity-ui/src/**/*.tsx'],
+    files: ['libs/agent-activity-ui/src/**/*.ts', 'libs/agent-activity-ui/src/**/*.tsx'],
     languageOptions: {
       parserOptions: {
         projectService: false,
-        project: ['./agent-activity-ui/tsconfig.lint.json'],
+        project: ['./libs/agent-activity-ui/tsconfig.lint.json'],
         tsconfigRootDir: import.meta.dirname,
       },
     },
   },
   {
-    files: ['agent-stream-client/src/**/*.ts'],
-    languageOptions: { parserOptions: { projectService: false, project: ['./agent-stream-client/tsconfig.lint.json'], tsconfigRootDir: import.meta.dirname } },
+    files: ['libs/agent-stream-client/src/**/*.ts'],
+    languageOptions: { parserOptions: { projectService: false, project: ['./libs/agent-stream-client/tsconfig.lint.json'], tsconfigRootDir: import.meta.dirname } },
   },
   {
-    files: ['ai-e2e/ui/e2e/**/*.ts', 'ai-e2e/ui/playwright.config.ts'],
+    files: ['services/ai-e2e/ui/e2e/**/*.ts', 'services/ai-e2e/ui/playwright.config.ts'],
     languageOptions: {
       parserOptions: {
         projectService: false,
-        project: ['./ai-e2e/ui/tsconfig.playwright.json'],
+        project: ['./services/ai-e2e/ui/tsconfig.playwright.json'],
         tsconfigRootDir: import.meta.dirname,
       },
     },
   },
   {
-    files: ['ai-e2e/ui/src/**/*.ts', 'ai-e2e/ui/src/**/*.tsx'],
+    files: ['services/ai-e2e/ui/src/**/*.ts', 'services/ai-e2e/ui/src/**/*.tsx'],
     languageOptions: {
       parserOptions: {
         projectService: false,
-        project: ['./ai-e2e/ui/tsconfig.lint.json'],
+        project: ['./services/ai-e2e/ui/tsconfig.lint.json'],
         tsconfigRootDir: import.meta.dirname,
       },
     },

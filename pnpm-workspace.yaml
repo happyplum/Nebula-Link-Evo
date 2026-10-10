@@ -1,12 +1,8 @@
 packages:
-  - debug-ui
-  - shared
-  - agent-activity-ui
-  - agent-stream-client
-  - proxy-adapter
-  - ai-chat-service
-  - ai-e2e
-  - ai-e2e/ui
+  - apps/*
+  - services/*
+  - services/ai-e2e/ui
+  - libs/*
   - integrations/*
 
 catalog:

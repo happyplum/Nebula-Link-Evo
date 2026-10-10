@@ -22,7 +22,7 @@ if %errorlevel% neq 0 (
 REM Step 2: Start Debug UI dev server
 echo.
 echo [2/2] Starting Debug UI dev server...
-cmd /c debug-ui\start.bat
+cmd /c apps\debug-ui\start.bat
 if %errorlevel% neq 0 (
     echo [ERROR] Debug UI failed to start.
     exit /b 1
